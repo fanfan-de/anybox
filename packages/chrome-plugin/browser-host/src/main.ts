@@ -12,9 +12,12 @@ import { randomUUID } from "node:crypto"
 import { browserRuntimePaths } from "@anybox/chrome-shared/runtime-paths"
 import { BROWSER_IPC_PROTOCOL_VERSION } from "@anybox/chrome-shared/browser-ipc"
 import { BrowserIpcGateway } from "./ipc-gateway.ts"
+import { browserExtensionBridge } from "./bridge.ts"
+import * as Log from "./log.ts"
 
-const BROWSER_HOST_VERSION = "0.1.0"
+const BROWSER_HOST_VERSION = "0.11.0"
 const IDLE_TIMEOUT_MS = 15 * 60_000
+const log = Log.create({ service: "browser-host" })
 
 const runtimeBootstrapPath = path.resolve(
   process.env.ANYBOX_BROWSER_HOST_BOOTSTRAP_PATH?.trim()
@@ -77,11 +80,13 @@ async function stop(exitCode = 0) {
 
 await gateway.start()
 writeRuntimeBootstrap()
-process.stderr.write(
-  `[anybox-chrome:browser-host] ready ${gateway.transport}\n`,
-)
+log.info("ready", {
+  transport: gateway.transport,
+  hostVersion: BROWSER_HOST_VERSION,
+})
 
 const idleTimer = setInterval(() => {
+  browserExtensionBridge.heartbeat()
   const status = gateway.status()
   if (status.runtimeConnections > 0 || status.nativeHostConnections > 0) {
     lastConnectedAt = Date.now()
@@ -99,19 +104,11 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 }
 
 process.on("uncaughtException", (error) => {
-  process.stderr.write(
-    `[anybox-chrome:browser-host] fatal ${
-      error instanceof Error ? error.stack ?? error.message : String(error)
-    }\n`,
-  )
+  log.error("uncaught-exception", { error })
   void stop(1)
 })
 
 process.on("unhandledRejection", (error) => {
-  process.stderr.write(
-    `[anybox-chrome:browser-host] fatal ${
-      error instanceof Error ? error.stack ?? error.message : String(error)
-    }\n`,
-  )
+  log.error("unhandled-rejection", { error })
   void stop(1)
 })

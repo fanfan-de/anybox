@@ -97,6 +97,10 @@ let handleBrowserCommand: (
     | "page.executeScript"
     | "cdp.send",
   params?: unknown,
+  options?: {
+    contractVersion?: number
+    signal?: AbortSignal
+  },
 ) => Promise<unknown>
 
 beforeAll(async () => {
@@ -162,6 +166,33 @@ describe("browser command contract defense", () => {
     queriedTabs = [{ id: 0, active: true }]
     await expect(handleBrowserCommand("tabs.list")).rejects.toMatchObject({
       code: "INVALID_COMMAND_RESULT",
+    })
+  })
+
+  test("keeps the legacy Extension envelope read-only", async () => {
+    await expect(handleBrowserCommand("tabs.open", {
+      url: "https://fixture.invalid/write",
+    })).rejects.toMatchObject({
+      code: "BACKEND_UPDATE_REQUIRED",
+      retryable: false,
+    })
+  })
+
+  test("aborts an in-flight wait when the Browser Host connection closes", async () => {
+    const controller = new AbortController()
+    const pending = handleBrowserCommand("page.waitFor", {
+      tabId: 7,
+      urlIncludes: "never-matches",
+      timeoutMs: 5_000,
+    }, {
+      contractVersion: 1,
+      signal: controller.signal,
+    })
+    setTimeout(() => controller.abort(), 20)
+
+    await expect(pending).rejects.toMatchObject({
+      code: "BACKEND_UNAVAILABLE",
+      retryable: true,
     })
   })
 

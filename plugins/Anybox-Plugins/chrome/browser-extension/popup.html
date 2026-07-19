@@ -6,7 +6,7 @@
     <title>Anybox Chrome</title>
     <script type="module" crossorigin src="/popup.js"></script>
     <link rel="modulepreload" crossorigin href="/chunks/status-D5415wll.js">
-    <link rel="stylesheet" crossorigin href="/assets/popup-v8wrkja9.css">
+    <link rel="stylesheet" crossorigin href="/assets/popup-da6n0uX-.css">
   </head>
   <body>
     <main class="popup-shell">
@@ -23,6 +23,20 @@
           <strong id="status-label">Checking</strong>
         </div>
         <p id="status-detail">Connecting to Anybox Browser Host...</p>
+        <dl id="status-metrics" class="status-metrics" hidden>
+          <div>
+            <dt>Protocol</dt>
+            <dd id="status-protocol">—</dd>
+          </div>
+          <div>
+            <dt>Reconnects</dt>
+            <dd id="status-reconnects">0</dd>
+          </div>
+          <div>
+            <dt>Last cleanup</dt>
+            <dd id="status-cleanup">—</dd>
+          </div>
+        </dl>
       </section>
       <button id="reconnect-button" type="button">Reconnect</button>
     </main>

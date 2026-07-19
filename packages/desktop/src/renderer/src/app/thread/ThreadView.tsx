@@ -1414,7 +1414,12 @@ function MessageDiffCard({
   )
 }
 
-const primaryPermissionDecisions: PermissionDecision[] = ["deny", "allow"]
+const primaryPermissionDecisions: PermissionDecision[] = [
+  "deny",
+  "allow-once",
+  "allow-session",
+  "allow",
+]
 
 type PermissionRequestDetailKey = "rationale" | "workdir" | "command" | "paths" | "body"
 type PermissionTextLocale = Parameters<typeof translateLiteral>[0]
@@ -1428,6 +1433,8 @@ const permissionRiskTranslationKeys = {
 
 const permissionDecisionTranslationKeys = {
   allow: "thread.permission.action.allow",
+  "allow-once": "thread.permission.action.allowOnce",
+  "allow-session": "thread.permission.action.allowSession",
   deny: "thread.permission.action.deny",
 } satisfies Record<PermissionDecision, TranslationKey>
 
@@ -5141,7 +5148,7 @@ function PermissionRequestCard({
             return (
               <button
                 key={decision}
-                className={decision === "allow" ? "primary-button" : "secondary-button"}
+                className={decision === request.prompt.recommendedDecision ? "primary-button" : "secondary-button"}
                 aria-label={t("thread.permission.decisionAria", { decision: decisionLabel, title })}
                 disabled={isResolving}
                 onClick={() => handleRespond(decision)}

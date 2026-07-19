@@ -81,6 +81,8 @@ export const viVN = {
   "thread.permission.note": "Đang chờ quyết định của bạn.",
   "thread.permission.applying": "Đang áp dụng...",
   "thread.permission.action.allow": "Cho phép",
+  "thread.permission.action.allowOnce": "Chỉ cho phép một lần",
+  "thread.permission.action.allowSession": "Cho phép trong phiên này",
   "thread.permission.action.deny": "Từ chối",
   "thread.permission.decisionAria": "{decision}: {title}",
   "thread.permission.risk.low": "Rủi ro thấp",

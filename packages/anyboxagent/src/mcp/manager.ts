@@ -6,6 +6,7 @@ import z from "zod"
 import * as Config from "#config/config.ts"
 import { Instance } from "#project/instance.ts"
 import * as Tool from "#tool/tool.ts"
+import * as EventStore from "#session/runtime/event-store.ts"
 import * as Log from "#util/log.ts"
 import {
   McpClient,
@@ -266,14 +267,57 @@ function toAttachments(result: McpToolCallResult): Tool.ToolAttachment[] | undef
 export class McpManager {
   private readonly handles = new Map<string, ManagedServer>()
   private readonly projectID: string
+  private readonly unsubscribeLifecycle: () => void
 
   constructor(projectID: string) {
     this.projectID = projectID
+    this.unsubscribeLifecycle = EventStore.subscribe((event) => {
+      if (
+        event.type !== "turn.completed"
+        && event.type !== "turn.failed"
+        && event.type !== "turn.cancelled"
+      ) {
+        return
+      }
+      const client = this.handles.get("connector.node-repl.default")?.client
+      if (!client) return
+      void client.notifyLifecycle({
+        type: "turn-end",
+        context: {
+          sessionID: event.sessionID,
+          turnID: event.turnID,
+        },
+        detail: {
+          terminalEvent: event.type,
+        },
+      }).catch((error) => {
+        log.warn("failed to notify node repl lifecycle", {
+          sessionID: event.sessionID,
+          turnID: event.turnID,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      })
+    })
   }
 
   async dispose() {
+    this.unsubscribeLifecycle()
     await Promise.all(Array.from(this.handles.values()).map((handle) => handle.client?.dispose()))
     this.handles.clear()
+  }
+
+  async notifyNodeReplLifecycleIfConnected(input: {
+    type: string
+    context: {
+      sessionID: string
+      turnID: string
+    }
+    detail?: Record<string, unknown>
+  }) {
+    const client = this.handles.get("connector.node-repl.default")?.client
+    if (!client) return false
+    await client.notifyLifecycle(input)
+    return true
   }
 
   async tools(): Promise<Tool.ToolInfo[]> {
@@ -640,7 +684,7 @@ export class McpManager {
     toolName: string,
     args: Record<string, unknown>,
     abort?: AbortSignal,
-    context?: Pick<Tool.Context, "sessionID" | "messageID" | "toolCallID">,
+    context?: Pick<Tool.Context, "sessionID" | "turnID" | "messageID" | "toolCallID">,
   ) {
     const handle = this.handles.get(serverID)
     if (!handle) {
@@ -883,6 +927,17 @@ const managerState = Instance.state(
 
 export async function tools() {
   return await managerState().tools()
+}
+
+export async function notifyNodeReplLifecycleIfConnected(input: {
+  type: string
+  context: {
+    sessionID: string
+    turnID: string
+  }
+  detail?: Record<string, unknown>
+}) {
+  return managerState().notifyNodeReplLifecycleIfConnected(input)
 }
 
 export async function diagnose(serverID: string) {

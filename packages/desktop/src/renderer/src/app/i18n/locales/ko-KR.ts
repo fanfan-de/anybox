@@ -81,6 +81,8 @@ export const koKR = {
   "thread.permission.note": "결정을 기다리는 중입니다.",
   "thread.permission.applying": "적용 중...",
   "thread.permission.action.allow": "허용",
+  "thread.permission.action.allowOnce": "한 번 허용",
+  "thread.permission.action.allowSession": "이 세션에서 허용",
   "thread.permission.action.deny": "거부",
   "thread.permission.decisionAria": "{decision}: {title}",
   "thread.permission.risk.low": "낮은 위험",

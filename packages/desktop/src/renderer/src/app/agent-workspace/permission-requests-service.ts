@@ -133,6 +133,7 @@ export async function respondPermissionRequest({
 
   permissionRequestsRequestRef.current[input.sessionID] = (permissionRequestsRequestRef.current[input.sessionID] ?? 0) + 1
   const canStreamResume = agentSession.canResumeStream
+  const isInProcess = input.request.continuation === "in-process"
   const knownPendingRequests = pendingPermissionRequestsBySession[input.sessionID] ?? []
   const knownRemainingRequests = pendingRequestsAfterResolving(knownPendingRequests, input.request.id)
   let requestResolved = false
@@ -144,7 +145,7 @@ export async function respondPermissionRequest({
       requestID: input.request.id,
       decision: input.decision,
       note: input.note?.trim() || undefined,
-      resume: !canStreamResume && knownRemainingRequests.length === 0,
+      resume: !isInProcess && !canStreamResume && knownRemainingRequests.length === 0,
     })
     requestResolved = true
     let localRemainingRequests = knownRemainingRequests
@@ -190,7 +191,7 @@ export async function respondPermissionRequest({
 
     const remainingPendingRequests = refreshedPendingRequests ?? localRemainingRequests
 
-    if (canStreamResume && remainingPendingRequests.length === 0) {
+    if (!isInProcess && canStreamResume && remainingPendingRequests.length === 0) {
       const streamID = createID("stream")
       const streamingMessage = buildStreamingAssistantThreadMessage(
         input.decision === "deny" ? "Continue after denial" : "Continue after approval",

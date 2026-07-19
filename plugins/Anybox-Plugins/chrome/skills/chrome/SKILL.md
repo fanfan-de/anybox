@@ -97,7 +97,7 @@ Prefer the highest-level operation that can complete the task:
 - Use `tab.interactiveSnapshot()` before element actions, then pass a current `elementId` to `tab.clickElement()` or `tab.fill()`.
 - Use `tab.waitFor()` with a concrete URL, text, selector, or element condition after navigation or page-changing actions.
 - Use `tab.click()` for coordinates only when element-based interaction is unavailable.
-- Selector-driven click/fill adapters, page JavaScript, and CDP are disabled until Anybox can enforce permission at the command boundary. Bounded `waitForSelector()` remains available.
+- Structured locators are available only when advertised by the connected Extension. Raw page JavaScript and unrestricted CDP are disabled.
 
 Interactive element IDs can become stale after DOM changes. Take a new interactive snapshot instead of retrying an old ID.
 

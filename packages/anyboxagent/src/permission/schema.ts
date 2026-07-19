@@ -8,19 +8,33 @@ export type Action = z.infer<typeof Action>
 
 export const Decision = z.preprocess((value) => {
   if (
-    value === "allow-once" ||
-    value === "allow-session" ||
     value === "allow-project" ||
     value === "allow-forever"
   ) {
-    return "allow"
+    return "allow-session"
   }
 
   return value
-}, z.enum(["allow", "deny"])).meta({
+}, z.enum(["allow", "allow-once", "allow-session", "deny"])).meta({
   ref: "PermissionDecision",
 })
 export type Decision = z.output<typeof Decision>
+
+export const Continuation = z.enum(["tool-retry", "in-process"]).meta({
+  ref: "PermissionContinuation",
+})
+export type Continuation = z.infer<typeof Continuation>
+
+export const Scope = z.object({
+  kind: z.literal("browser-origin"),
+  sessionID: Identifier.schema("session"),
+  extensionInstanceID: z.string().trim().min(1).max(256),
+  origin: z.string().trim().min(1).max(2_048),
+  browserID: z.string().trim().min(1).max(256).optional(),
+}).strict().meta({
+  ref: "PermissionScope",
+})
+export type Scope = z.infer<typeof Scope>
 
 export const RequestStatus = z.enum(["pending", "approved", "denied", "expired"]).meta({
   ref: "PermissionRequestStatus",
@@ -103,6 +117,10 @@ export const Request = z
     title: z.string().optional(),
     risk: Risk,
     status: RequestStatus,
+    turnID: Identifier.schema("turn").optional(),
+    continuation: Continuation.optional(),
+    scope: Scope.optional(),
+    grantID: z.string().trim().min(1).max(256).optional(),
     input: z.record(z.string(), z.any()),
     resource: RequestResource.optional(),
     prompt: RequestPrompt.optional(),
@@ -138,6 +156,10 @@ export const RequestPromptView = z
     agent: z.string(),
     status: RequestStatus,
     createdAt: z.number(),
+    turnID: Identifier.schema("turn").optional(),
+    continuation: Continuation,
+    scope: Scope.optional(),
+    grantID: z.string().trim().min(1).max(256).optional(),
     prompt: RequestPrompt,
     resolution: RequestResolutionRecord.optional(),
   })

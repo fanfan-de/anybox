@@ -3,6 +3,8 @@ import { describe, expect, test } from "vitest"
 import {
   BROWSER_CONTRACT_COMMAND_METHODS,
   BROWSER_CONTRACT_ERROR_CODES,
+  BROWSER_CONTRACT_V1_COMMAND_METHODS,
+  BROWSER_CONTRACT_V1_VERSION,
   BROWSER_CONTRACT_VERSION,
   BrowserBackendInfo,
   BrowserContractCommandMethod,
@@ -29,9 +31,13 @@ const tab = {
 
 const validParams = {
   "tabs.list": {},
+  "tabs.listUser": {},
   "tabs.open": { url: "https://example.com/", active: true },
+  "tabs.claim": { tabId: 7 },
   "tabs.activate": { tabId: 7 },
   "tabs.release": { tabId: 7 },
+  "tabs.markDeliverable": { tabId: 7 },
+  "tabs.finalize": { reason: "turn-end" },
   "page.snapshot": { tabId: 7, maxTextChars: 20_000 },
   "page.interactiveSnapshot": { tabId: 7, maxElements: 200 },
   "page.domTree": {
@@ -67,13 +73,45 @@ const validParams = {
   "page.type": { tabId: 7, text: "hello" },
   "page.scroll": { tabId: 7, scrollX: 0, scrollY: 500 },
   "page.waitFor": { tabId: 7, text: "Ready", timeoutMs: 10_000 },
+  "locator.click": {
+    tabId: 7,
+    locator: { role: "button", name: "Save" },
+  },
+  "locator.fill": {
+    tabId: 7,
+    locator: { label: "Email" },
+    text: "a@example.com",
+  },
+  "locator.textContent": {
+    tabId: 7,
+    locator: { css: "#status" },
+  },
+  "locator.inputValue": {
+    tabId: 7,
+    locator: { label: "Email" },
+  },
+  "locator.waitFor": {
+    tabId: 7,
+    locator: { text: "Ready" },
+    state: "visible",
+  },
 } as const satisfies Record<BrowserContractCommandMethodValue, unknown>
 
 const validResults = {
   "tabs.list": { tabs: [tab] },
+  "tabs.listUser": { tabs: [tab] },
   "tabs.open": tab,
+  "tabs.claim": tab,
   "tabs.activate": tab,
   "tabs.release": { tabId: 7, released: true },
+  "tabs.markDeliverable": { tabId: 7, state: "deliverable" },
+  "tabs.finalize": {
+    sessionID: "session-test",
+    closedTabIds: [],
+    releasedTabIds: [7],
+    retainedTabIds: [],
+    detachedTabIds: [7],
+  },
   "page.snapshot": {
     tabId: 7,
     url: tab.url,
@@ -159,17 +197,58 @@ const validResults = {
     matched: true,
     reason: "Text appeared.",
   },
+  "locator.click": {
+    tabId: 7,
+    elementId: "locator-1",
+    url: tab.url,
+    title: tab.title,
+  },
+  "locator.fill": {
+    tabId: 7,
+    elementId: "locator-2",
+    textLength: 13,
+    url: tab.url,
+    title: tab.title,
+  },
+  "locator.textContent": {
+    tabId: 7,
+    value: "Ready",
+    url: tab.url,
+    title: tab.title,
+  },
+  "locator.inputValue": {
+    tabId: 7,
+    value: "a@example.com",
+    url: tab.url,
+    title: tab.title,
+  },
+  "locator.waitFor": {
+    tabId: 7,
+    url: tab.url,
+    title: tab.title,
+    matched: true,
+    reason: "Locator is visible.",
+  },
 } as const satisfies Record<BrowserContractCommandMethodValue, unknown>
 
 describe("Browser Contract command registry", () => {
-  test("is the single registry for the 15 safe commands", () => {
-    expect(BROWSER_CONTRACT_VERSION).toBe(1)
-    expect(BROWSER_CONTRACT_COMMAND_METHODS).toHaveLength(15)
+  test("keeps immutable v1 and publishes the additive v2 registry", () => {
+    expect(BROWSER_CONTRACT_V1_VERSION).toBe(1)
+    expect(BROWSER_CONTRACT_VERSION).toBe(2)
+    expect(BROWSER_CONTRACT_V1_COMMAND_METHODS).toHaveLength(15)
+    expect(BROWSER_CONTRACT_COMMAND_METHODS).toHaveLength(24)
     expect(Object.keys(BrowserContractCommandRegistry))
       .toEqual([...BROWSER_CONTRACT_COMMAND_METHODS])
     expect(BrowserContractCommandMethod.safeParse("page.executeScript").success)
       .toBe(false)
     expect(BrowserContractCommandMethod.safeParse("cdp.send").success).toBe(false)
+    expect(() => parseBrowserCommandParams(
+      "tabs.claim",
+      { tabId: 7 },
+      BROWSER_CONTRACT_V1_VERSION,
+    )).toThrowError(expect.objectContaining({
+      code: "COMMAND_NOT_SUPPORTED",
+    }))
   })
 
   test.each(BROWSER_CONTRACT_COMMAND_METHODS)(
@@ -325,7 +404,7 @@ describe("Browser Contract capabilities and manifests", () => {
 
   test("generates serializable JSON Schema for all commands, including DOM and waitFor", () => {
     const manifest = createBrowserApiManifest()
-    expect(manifest.commands).toHaveLength(15)
+    expect(manifest.commands).toHaveLength(24)
     expect(manifest.commands.map((entry) => entry.method))
       .toEqual([...BROWSER_CONTRACT_COMMAND_METHODS])
 
@@ -388,7 +467,7 @@ describe("Browser Contract capabilities and manifests", () => {
     expect(BrowserBackendInfo.parse(backend)).toEqual(backend)
     expect(BrowserGetInfoResult.parse(info)).toEqual(info)
     expect(info.backend).toMatchObject({
-      contractVersion: 1,
+      contractVersion: 2,
       browserId: "extension",
       kind: "extension",
       connected: true,

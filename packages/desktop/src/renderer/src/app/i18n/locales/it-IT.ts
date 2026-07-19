@@ -81,6 +81,8 @@ export const itIT = {
   "thread.permission.note": "In attesa della tua decisione.",
   "thread.permission.applying": "Applicazione in corso...",
   "thread.permission.action.allow": "Consenti",
+  "thread.permission.action.allowOnce": "Consenti una volta",
+  "thread.permission.action.allowSession": "Consenti per la sessione",
   "thread.permission.action.deny": "Nega",
   "thread.permission.decisionAria": "{decision}: {title}",
   "thread.permission.risk.low": "Rischio basso",

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import {
   BROWSER_CONTRACT_COMMAND_METHODS,
+  BROWSER_CONTRACT_V1_VERSION,
   BROWSER_CONTRACT_VERSION,
   createBrowserBackendInfo,
 } from "@anybox/chrome-shared/browser-contract"
@@ -38,7 +39,7 @@ function bridgeStub(input: {
       return { tabs: [] }
     },
     releaseOwnedTab: (tabId: number, sessionID?: string) => {
-      events.push("bridge:tabs.release")
+      events.push("ownership:release")
       return input.releaseOwnedTab?.(tabId, sessionID) ?? false
     },
     markOwnedTab: () => events.push("ownership:mark"),
@@ -74,7 +75,7 @@ describe("Browser command gateway contract and policy order", () => {
     })
 
     await expect(runBrowserRuntimeCommand({
-      contractVersion: BROWSER_CONTRACT_VERSION,
+      contractVersion: BROWSER_CONTRACT_V1_VERSION,
       method: "tabs.list",
       params: {},
     }, bridge, recordingPolicy(events))).resolves.toEqual({
@@ -97,7 +98,7 @@ describe("Browser command gateway contract and policy order", () => {
     const bridge = bridgeStub({ events })
 
     await expect(runBrowserRuntimeCommand({
-      contractVersion: BROWSER_CONTRACT_VERSION,
+      contractVersion: BROWSER_CONTRACT_V1_VERSION,
       method: "tabs.list",
       params: { unexpected: true },
     }, bridge, recordingPolicy(events))).rejects.toMatchObject({
@@ -130,7 +131,7 @@ describe("Browser command gateway contract and policy order", () => {
     })
 
     await expect(runBrowserRuntimeCommand({
-      contractVersion: BROWSER_CONTRACT_VERSION,
+      contractVersion: BROWSER_CONTRACT_V1_VERSION,
       method: "tabs.list",
       params: {},
     }, bridge, recordingPolicy(events))).rejects.toMatchObject({
@@ -145,7 +146,7 @@ describe("Browser command gateway contract and policy order", () => {
   test("authoritatively rejects unavailable capabilities and disconnected backends", async () => {
     const noCapabilityEvents: string[] = []
     await expect(runBrowserRuntimeCommand({
-      contractVersion: BROWSER_CONTRACT_VERSION,
+      contractVersion: BROWSER_CONTRACT_V1_VERSION,
       method: "tabs.list",
       params: {},
     }, bridgeStub({
@@ -159,7 +160,7 @@ describe("Browser command gateway contract and policy order", () => {
 
     const disconnectedEvents: string[] = []
     await expect(runBrowserRuntimeCommand({
-      contractVersion: BROWSER_CONTRACT_VERSION,
+      contractVersion: BROWSER_CONTRACT_V1_VERSION,
       method: "tabs.list",
       params: {},
     }, bridgeStub({
@@ -175,7 +176,7 @@ describe("Browser command gateway contract and policy order", () => {
   test("rejects raw JavaScript at the Browser Host contract boundary", async () => {
     const events: string[] = []
     const request = {
-      contractVersion: BROWSER_CONTRACT_VERSION,
+      contractVersion: BROWSER_CONTRACT_V1_VERSION,
       method: "page.executeScript",
       params: { tabId: 7, script: "document.title" },
     } as never
@@ -193,7 +194,7 @@ describe("Browser command gateway contract and policy order", () => {
   test("keeps the legacy optional-tab adapter while v1 requires tabId", async () => {
     const v1Events: string[] = []
     await expect(runBrowserRuntimeCommand({
-      contractVersion: BROWSER_CONTRACT_VERSION,
+      contractVersion: BROWSER_CONTRACT_V1_VERSION,
       method: "page.screenshot",
       params: {},
     }, bridgeStub({ events: v1Events }), recordingPolicy(v1Events))).rejects.toMatchObject({
@@ -242,62 +243,26 @@ describe("Browser command gateway contract and policy order", () => {
     ])
   })
 
-  test("uses the legacy session-preferred tab without an active-tab lookup", async () => {
-    const events: string[] = []
-    const bridge = bridgeStub({
-      events,
-      preferredTabID: 12,
-      sendCommand: async (method, params) => {
-        expect(method).toBe("page.type")
-        expect(params).toEqual({ tabId: 12, text: "hello" })
-        return { tabId: 12, textLength: 5 }
-      },
-    })
-
-    await expect(runBrowserRuntimeCommand({
-      method: "page.type",
-      params: { text: "hello" },
-      context: { sessionID: "legacy-session" },
-    }, bridge, recordingPolicy(events))).resolves.toEqual({
-      tabId: 12,
-      textLength: 5,
-    })
-    expect(events).toEqual([
-      "policy:page.type",
-      "bridge:page.type",
-      "ownership:touch",
-    ])
-  })
-
-  test("keeps legacy tabs.activate optional-tab behavior", async () => {
-    const events: string[] = []
-    const bridge = bridgeStub({
-      events,
-      preferredTabID: 12,
-      sendCommand: async (method, params) => {
-        expect(method).toBe("tabs.activate")
-        expect(params).toEqual({ tabId: 12 })
-        return {
-          id: 12,
-          active: true,
-          title: "Legacy current tab",
-        }
-      },
-    })
-
-    await expect(runBrowserRuntimeCommand({
-      method: "tabs.activate",
-      params: {},
-      context: { sessionID: "legacy-session" },
-    }, bridge, recordingPolicy(events))).resolves.toMatchObject({
-      id: 12,
-      active: true,
-    })
-    expect(events).toEqual([
-      "policy:tabs.activate",
-      "bridge:tabs.activate",
-      "ownership:touch",
-    ])
+  test("never treats a v1 diagnostic fallback as write authorization", async () => {
+    for (const [method, params] of [
+      ["page.type", { text: "hello" }],
+      ["tabs.activate", {}],
+      ["tabs.release", { tabId: 42 }],
+    ] as const) {
+      const events: string[] = []
+      await expect(runBrowserRuntimeCommand({
+        method,
+        params,
+        context: { sessionID: "legacy-session" },
+      }, bridgeStub({
+        events,
+        preferredTabID: 12,
+      }), recordingPolicy(events))).rejects.toMatchObject({
+        code: "BACKEND_UPDATE_REQUIRED",
+        retryable: false,
+      })
+      expect(events).toEqual([])
+    }
   })
 
   test("preserves stable errors from the legacy active-tab lookup", async () => {
@@ -331,28 +296,25 @@ describe("Browser command gateway contract and policy order", () => {
     ])
   })
 
-  test("applies policy before the Browser Host tabs.release implementation", async () => {
+  test("rejects an explicit v1 release before touching Host ownership", async () => {
     const events: string[] = []
     const bridge = bridgeStub({
       events,
+      sendCommand: async () => ({ tabId: 42, released: true }),
       releaseOwnedTab: (tabId, sessionID) =>
         tabId === 42 && sessionID === "session-a",
     })
 
     await expect(runBrowserRuntimeCommand({
-      contractVersion: BROWSER_CONTRACT_VERSION,
+      contractVersion: BROWSER_CONTRACT_V1_VERSION,
       method: "tabs.release",
       params: { tabId: 42 },
       context: { sessionID: "session-a" },
-    }, bridge, recordingPolicy(events))).resolves.toEqual({
-      tabId: 42,
-      released: true,
+    }, bridge, recordingPolicy(events))).rejects.toMatchObject({
+      code: "BACKEND_UPDATE_REQUIRED",
+      retryable: false,
     })
-    expect(events).toEqual([
-      "policy:tabs.release",
-      "bridge:tabs.release",
-      "ownership:touch",
-    ])
+    expect(events).toEqual([])
   })
 
   test("policy decisions state the enforcement that is and is not present", () => {
@@ -364,12 +326,15 @@ describe("Browser command gateway contract and policy order", () => {
         commands: ["page.screenshot"],
       }),
     })
-    expect(decision).toEqual({
+    expect(decision).toMatchObject({
       method: "page.screenshot",
       security: "page-content-read",
       capabilityChecked: true,
-      ownershipEnforced: false,
-      perActionApprovalEnforced: false,
+      ownershipEnforced: true,
+      perActionApprovalEnforced: true,
+      permissionAction: "allow",
+      risk: "low",
+      sensitive: false,
     })
   })
 
@@ -382,7 +347,7 @@ describe("Browser command gateway contract and policy order", () => {
 
     try {
       await runBrowserRuntimeCommand({
-        contractVersion: BROWSER_CONTRACT_VERSION,
+        contractVersion: BROWSER_CONTRACT_V1_VERSION,
         method: "tabs.list",
         params: {},
       }, bridge, new BrowserPolicyEngine())
@@ -411,7 +376,7 @@ describe("Browser command gateway contract and policy order", () => {
     })
 
     await expect(runBrowserRuntimeCommand({
-      contractVersion: BROWSER_CONTRACT_VERSION,
+      contractVersion: BROWSER_CONTRACT_V1_VERSION,
       method: "tabs.list",
       params: {},
     }, bridge, new BrowserPolicyEngine())).rejects.toMatchObject({
@@ -431,7 +396,7 @@ describe("Browser command gateway contract and policy order", () => {
     })
 
     await expect(runBrowserRuntimeCommand({
-      contractVersion: BROWSER_CONTRACT_VERSION,
+      contractVersion: BROWSER_CONTRACT_V1_VERSION,
       method: "tabs.list",
       params: {},
     }, bridge, new BrowserPolicyEngine())).rejects.toMatchObject({

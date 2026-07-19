@@ -181,7 +181,8 @@ export function SessionRoutes(options: { ptyRegistry: PtyRegistry }) {
     return ok(c, SessionUseCase.answerSessionQuestion(c.req.param("id"), payload))
   })
 
-  app.delete("/:id", (c) => ok(c, SessionUseCase.deleteSession(c.req.param("id"), options)))
+  app.delete("/:id", async (c) =>
+    ok(c, await SessionUseCase.deleteSession(c.req.param("id"), options)))
 
   app.get("/:id/events/stream", (c) =>
     SessionUseCase.createEventStreamResponse({

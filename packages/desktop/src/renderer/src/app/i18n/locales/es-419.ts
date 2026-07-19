@@ -81,6 +81,8 @@ export const es419 = {
   "thread.permission.note": "Esperando tu decisión.",
   "thread.permission.applying": "Aplicando...",
   "thread.permission.action.allow": "Permitir",
+  "thread.permission.action.allowOnce": "Permitir una vez",
+  "thread.permission.action.allowSession": "Permitir durante la sesión",
   "thread.permission.action.deny": "Denegar",
   "thread.permission.decisionAria": "{decision}: {title}",
   "thread.permission.risk.low": "Riesgo bajo",

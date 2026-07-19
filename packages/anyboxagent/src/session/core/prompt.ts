@@ -688,6 +688,7 @@ async function runLoop(input: LoopRuntimeInput): Promise<RunLoopResult> {
             const toolPlan = await resolveToolPlan({
                 agent,
                 sessionID,
+                turnID: turn.turnID,
                 messageID: assistantMessageID,
                 abort,
                 messages,

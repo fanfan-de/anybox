@@ -81,6 +81,8 @@ export const trTR = {
   "thread.permission.note": "Kararınızı bekliyor.",
   "thread.permission.applying": "Uygulanıyor...",
   "thread.permission.action.allow": "İzin Ver",
+  "thread.permission.action.allowOnce": "Bir kez izin ver",
+  "thread.permission.action.allowSession": "Bu oturum için izin ver",
   "thread.permission.action.deny": "Reddet",
   "thread.permission.decisionAria": "{decision}: {title}",
   "thread.permission.risk.low": "Düşük risk",

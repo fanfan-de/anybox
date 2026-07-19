@@ -7,9 +7,13 @@ export const ANYBOX_CHROME_NATIVE_HOST_NAME = "com.anybox.browser"
 
 export const BrowserExtensionCommandMethod = z.enum([
   "tabs.list",
+  "tabs.listUser",
   "tabs.open",
+  "tabs.claim",
   "tabs.activate",
   "tabs.release",
+  "tabs.markDeliverable",
+  "tabs.finalize",
   "page.snapshot",
   "page.interactiveSnapshot",
   "page.domTree",
@@ -21,6 +25,11 @@ export const BrowserExtensionCommandMethod = z.enum([
   "page.type",
   "page.scroll",
   "page.waitFor",
+  "locator.click",
+  "locator.fill",
+  "locator.textContent",
+  "locator.inputValue",
+  "locator.waitFor",
   "page.executeScript",
   "cdp.send",
 ])
@@ -28,6 +37,7 @@ export type BrowserExtensionCommandMethod = z.infer<typeof BrowserExtensionComma
 
 export const BrowserExtensionCapabilities = z.object({
   contractVersion: z.number().int().positive(),
+  contractVersions: z.array(z.number().int().positive()).min(1).optional(),
   commands: z.array(z.string().min(1).max(128)).max(256),
 }).strict()
 export type BrowserExtensionCapabilities = z.infer<
@@ -36,8 +46,11 @@ export type BrowserExtensionCapabilities = z.infer<
 
 export const BrowserExtensionCommandContext = z.object({
   sessionID: z.string().trim().min(1).max(256).optional(),
+  turnID: z.string().trim().min(1).max(256).optional(),
   messageID: z.string().trim().min(1).max(256).optional(),
   toolCallID: z.string().trim().min(1).max(256).optional(),
+  browserID: z.string().trim().min(1).max(256).optional(),
+  extensionInstanceID: z.string().trim().min(1).max(256).optional(),
 }).strict()
 export type BrowserExtensionCommandContext = z.infer<typeof BrowserExtensionCommandContext>
 
@@ -104,6 +117,19 @@ export const BrowserExtensionCommandMessage = z.object({
 })
 export type BrowserExtensionCommandMessage = z.infer<typeof BrowserExtensionCommandMessage>
 
+export const BrowserExtensionHelloAckMessage = z.object({
+  type: z.literal("helloAck"),
+  protocolVersion: z.literal(BROWSER_EXTENSION_PROTOCOL_VERSION),
+  contractVersion: z.number().int().positive(),
+  browserID: z.string().min(1),
+  extensionInstanceID: z.string().min(1),
+  heartbeatIntervalMs: z.number().int().positive(),
+  heartbeatTimeoutMs: z.number().int().positive(),
+}).strict()
+export type BrowserExtensionHelloAckMessage = z.infer<
+  typeof BrowserExtensionHelloAckMessage
+>
+
 export const BrowserExtensionPingMessage = z.object({
   type: z.literal("ping"),
   nonce: z.string().optional(),
@@ -111,6 +137,7 @@ export const BrowserExtensionPingMessage = z.object({
 export type BrowserExtensionPingMessage = z.infer<typeof BrowserExtensionPingMessage>
 
 export const BrowserExtensionServerMessage = z.union([
+  BrowserExtensionHelloAckMessage,
   BrowserExtensionCommandMessage,
   BrowserExtensionPingMessage,
 ])
@@ -122,6 +149,15 @@ export const BrowserExtensionTabSummary = z.object({
   title: z.string().optional(),
   url: z.string().optional(),
   active: z.boolean().optional(),
+  lease: z.object({
+    source: z.enum(["user", "agent"]),
+    sessionID: z.string().min(1),
+    turnID: z.string().min(1),
+    state: z.enum(["active", "deliverable", "handoff", "released"]),
+    retained: z.boolean().optional(),
+    extensionInstanceID: z.string().min(1),
+    expiresAt: z.number().int().positive(),
+  }).strict().optional(),
 }).strict()
 export type BrowserExtensionTabSummary = z.infer<typeof BrowserExtensionTabSummary>
 
@@ -309,3 +345,32 @@ export const BrowserExtensionTabsReleaseResult = z.object({
   released: z.boolean(),
 }).strict()
 export type BrowserExtensionTabsReleaseResult = z.infer<typeof BrowserExtensionTabsReleaseResult>
+
+export const BrowserExtensionTabsMarkDeliverableResult = z.object({
+  tabId: z.number().int().positive(),
+  state: z.literal("deliverable"),
+}).strict()
+export type BrowserExtensionTabsMarkDeliverableResult = z.infer<
+  typeof BrowserExtensionTabsMarkDeliverableResult
+>
+
+export const BrowserExtensionTabsFinalizeResult = z.object({
+  sessionID: z.string().min(1),
+  closedTabIds: z.array(z.number().int().positive()),
+  releasedTabIds: z.array(z.number().int().positive()),
+  retainedTabIds: z.array(z.number().int().positive()),
+  detachedTabIds: z.array(z.number().int().positive()),
+}).strict()
+export type BrowserExtensionTabsFinalizeResult = z.infer<
+  typeof BrowserExtensionTabsFinalizeResult
+>
+
+export const BrowserExtensionLocatorValueResult = z.object({
+  tabId: z.number().int().positive(),
+  value: z.string().nullable(),
+  url: z.string().optional(),
+  title: z.string().optional(),
+}).strict()
+export type BrowserExtensionLocatorValueResult = z.infer<
+  typeof BrowserExtensionLocatorValueResult
+>

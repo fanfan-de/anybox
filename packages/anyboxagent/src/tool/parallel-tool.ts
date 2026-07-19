@@ -94,6 +94,7 @@ async function runChildCall(input: {
   index: number
   agent: Agent.AgentInfo
   sessionID: string
+  turnID?: string
   messageID: string
   abort: AbortSignal
   parentToolCallID: string
@@ -154,6 +155,7 @@ async function runChildCall(input: {
       item,
       agent: input.agent,
       sessionID: input.sessionID,
+      turnID: input.turnID,
       messageID: input.messageID,
       abort: input.abort,
     })
@@ -221,6 +223,7 @@ export const ParallelTool = Tool.define(
               index,
               agent,
               sessionID: ctx.sessionID,
+              turnID: ctx.turnID,
               messageID: ctx.messageID,
               abort: ctx.abort ?? new AbortController().signal,
               parentToolCallID,

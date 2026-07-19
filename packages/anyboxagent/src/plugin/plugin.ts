@@ -16,6 +16,13 @@ import { toCreateTableSQL, withPrimaryKey, zodObjectToColumnDefs } from "#databa
 import * as Mcp from "#mcp/manager.ts"
 import { getProcessEnvValue } from "#env/compat.ts"
 import * as Log from "#util/log.ts"
+import {
+  PlatformArtifactError,
+  PlatformArtifactOwnershipReceipt,
+  PluginPlatformArtifact,
+  installPlatformArtifacts,
+  removePlatformArtifacts,
+} from "./platform-artifacts.ts"
 
 const log = Log.create({ service: "plugin" })
 const INSTALLED_PLUGINS_TABLE = "installed_plugins"
@@ -159,6 +166,7 @@ export type PluginErrorCode =
   | "PLUGIN_PACKAGE_UNAVAILABLE"
   | "PLUGIN_PACKAGE_DOWNLOAD_FAILED"
   | "PLUGIN_PACKAGE_INVALID"
+  | "PLUGIN_PLATFORM_ARTIFACT_FAILED"
 
 export class PluginError extends Error {
   readonly code: PluginErrorCode
@@ -613,6 +621,7 @@ export const PluginManifest = z
     apps: z.array(PluginAppConnector).optional(),
     commands: z.union([z.string(), z.array(z.string())]).optional(),
     agents: z.union([z.string(), z.array(z.string())]).optional(),
+    platformArtifacts: z.array(PluginPlatformArtifact).optional(),
   })
   .strict()
 export type PluginManifest = z.infer<typeof PluginManifest>
@@ -754,13 +763,16 @@ export const InstalledPlugin = z
     updatedAt: z.number().int().positive(),
     lastDiagnostic: PluginDiagnostic.optional(),
     lastConnectorDiagnostics: z.record(z.string(), PluginDiagnostic).optional(),
+    platformArtifactReceipts: z.array(
+      PlatformArtifactOwnershipReceipt,
+    ).optional(),
     packageRoot: z.string().min(1).optional(),
     missingPackage: z.boolean().optional(),
   })
   .strict()
 export type InstalledPlugin = Omit<
   z.infer<typeof InstalledPlugin>,
-  "mcpServerIDs" | "mcpServerEnabled" | "skillIDs" | "connectorIDs" | "connectorRequirementIDs" | "lastConnectorDiagnostics"
+  "mcpServerIDs" | "mcpServerEnabled" | "skillIDs" | "connectorIDs" | "connectorRequirementIDs" | "lastConnectorDiagnostics" | "platformArtifactReceipts"
 > & {
   mcpServerIDs: string[]
   mcpServerEnabled: Record<string, boolean>
@@ -768,6 +780,7 @@ export type InstalledPlugin = Omit<
   connectorIDs: string[]
   connectorRequirementIDs: string[]
   lastConnectorDiagnostics?: Record<string, PluginDiagnostic>
+  platformArtifactReceipts: PlatformArtifactOwnershipReceipt[]
 }
 
 export const InstallPluginInput = z
@@ -2451,6 +2464,7 @@ function normalizeInstalledRecord(record: z.infer<typeof InstalledPlugin> | null
     connectorIDs,
     connectorRequirementIDs,
     lastConnectorDiagnostics: record.lastConnectorDiagnostics ?? {},
+    platformArtifactReceipts: record.platformArtifactReceipts ?? [],
     packageRoot: packageSource?.packageRoot,
     missingPackage: !packageSource,
   }
@@ -2791,6 +2805,17 @@ export async function reconcileInstalledRuntimeBindings() {
     if (currentInstalled.missingPackage) continue
     const plugin = assertPackagePlugin(currentInstalled.pluginID)
     const installed = await migrateInstalledMcpServerEnabled(plugin, currentInstalled)
+    const source = getPackageManifestSource(currentInstalled.pluginID)
+    if (!source) {
+      throw new PluginError(
+        "PLUGIN_PACKAGE_UNAVAILABLE",
+        `Plugin '${currentInstalled.pluginID}' package is unavailable.`,
+      )
+    }
+    const platformArtifactReceipts = await syncPluginPlatformArtifacts(
+      source,
+      installed,
+    )
     const mcpServerIDs = generatedMcpServerIDs(plugin)
     const reconciled = await writeInstalled({
       ...installed,
@@ -2801,6 +2826,7 @@ export async function reconcileInstalledRuntimeBindings() {
       skillIDs: generatedSkillIDs(plugin),
       connectorIDs: generatedConnectorIDs(plugin),
       connectorRequirementIDs: generatedConnectorRequirementIDs(plugin),
+      platformArtifactReceipts,
     })
     for (const serverID of reconciled.mcpServerIDs) {
       desiredServerIDs.add(serverID)
@@ -3574,14 +3600,62 @@ async function ensurePluginPackageAvailable(pluginID: string) {
   return installedSource
 }
 
+async function syncPluginPlatformArtifacts(
+  source: PluginManifestSource,
+  existing: InstalledPlugin | null,
+) {
+  const declared = source.manifest.platformArtifacts ?? []
+  const previous = existing?.platformArtifactReceipts ?? []
+  try {
+    if (declared.length > 0 && !source.packageRoot) {
+      throw new PlatformArtifactError(
+        "PLATFORM_ARTIFACT_INVALID",
+        `Plugin '${normalizeManifestID(source.manifest.name)}' has platform artifacts but no package root.`,
+      )
+    }
+    const next = declared.length > 0
+      ? await installPlatformArtifacts({
+          pluginID: normalizeManifestID(source.manifest.name),
+          pluginVersion: source.manifest.version,
+          packageRoot: source.packageRoot!,
+          artifacts: declared,
+          existingReceipts: previous,
+        })
+      : []
+    const desiredIDs = new Set(next.map((receipt) => receipt.artifactID))
+    const stale = previous.filter(
+      (receipt) => !desiredIDs.has(receipt.artifactID),
+    )
+    if (stale.length > 0) {
+      await removePlatformArtifacts({
+        pluginID: normalizeManifestID(source.manifest.name),
+        receipts: stale,
+      })
+    }
+    return next
+  } catch (error) {
+    if (error instanceof PlatformArtifactError) {
+      throw new PluginError(
+        "PLUGIN_PLATFORM_ARTIFACT_FAILED",
+        error.message,
+      )
+    }
+    throw error
+  }
+}
+
 export async function install(pluginID: string, input: InstallPluginInput) {
-  await ensurePluginPackageAvailable(pluginID)
+  const source = await ensurePluginPackageAvailable(pluginID)
   const plugin = assertPackagePlugin(pluginID)
   const existingRecord = readInstalled(plugin.id)
   const existing = existingRecord
     ? await migrateInstalledMcpServerEnabled(plugin, existingRecord)
     : null
   const mcpServerIDs = generatedMcpServerIDs(plugin)
+  const platformArtifactReceipts = await syncPluginPlatformArtifacts(
+    source,
+    existing,
+  )
   const timestamp = now()
   const record: InstalledPlugin = {
     pluginID: plugin.id,
@@ -3598,6 +3672,7 @@ export async function install(pluginID: string, input: InstallPluginInput) {
     updatedAt: timestamp,
     lastDiagnostic: existing?.lastDiagnostic,
     lastConnectorDiagnostics: existing?.lastConnectorDiagnostics,
+    platformArtifactReceipts,
   }
 
   return writeInstalled(record)
@@ -3611,6 +3686,17 @@ export async function update(pluginID: string, input: UpdateInstalledPluginInput
   }
   const existing = await migrateInstalledMcpServerEnabled(plugin, existingRecord)
   const mcpServerIDs = generatedMcpServerIDs(plugin)
+  const source = getPackageManifestSource(plugin.id)
+  if (!source) {
+    throw new PluginError(
+      "PLUGIN_PACKAGE_UNAVAILABLE",
+      `Plugin '${plugin.id}' package is unavailable.`,
+    )
+  }
+  const platformArtifactReceipts = await syncPluginPlatformArtifacts(
+    source,
+    existing,
+  )
 
   const record: InstalledPlugin = {
     ...existing,
@@ -3624,6 +3710,7 @@ export async function update(pluginID: string, input: UpdateInstalledPluginInput
     connectorRequirementIDs: generatedConnectorRequirementIDs(plugin),
     config: normalizeConfig(plugin, input.config ?? existing.config),
     updatedAt: now(),
+    platformArtifactReceipts,
   }
 
   return writeInstalled(record)
@@ -3736,6 +3823,12 @@ export async function remove(pluginID: string) {
   const connectorIDs = existing?.connectorIDs ?? (plugin ? generatedConnectorIDs(plugin) : [])
   const legacyMcpServerIDs = plugin ? plugin.apps.map((app) => legacyMcpServerIDForPluginApp(plugin.id, app.appID)) : []
   const legacyConnectorIDs = plugin ? plugin.apps.map((app) => legacyConnectorIDForPluginApp(plugin.id, app.appID)) : []
+  const platformArtifactCleanup = existing
+    ? await removePlatformArtifacts({
+        pluginID: normalizedPluginID,
+        receipts: existing.platformArtifactReceipts,
+      })
+    : { removed: [], skipped: [] }
 
   ensureInstalledPluginsTable()
   const removedCount = existing ? db.deleteById(INSTALLED_PLUGINS_TABLE, normalizedPluginID, "pluginID") : 0
@@ -3750,6 +3843,7 @@ export async function remove(pluginID: string) {
     mcpServerID: mcpServerIDs[0],
     mcpServerIDs,
     connectorIDs,
+    platformArtifactCleanup,
     removed: removedCount > 0,
   }
 }

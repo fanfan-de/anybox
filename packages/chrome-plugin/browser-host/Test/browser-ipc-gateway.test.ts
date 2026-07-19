@@ -17,6 +17,7 @@ import {
 } from "@anybox/chrome-shared/browser-extension"
 import {
   BROWSER_IPC_PROTOCOL_VERSION,
+  MAX_BROWSER_IPC_CHUNK_BYTES,
   BrowserIpcFrameDecoder,
   browserIpcProofTranscript,
   encodeBrowserIpcFrame,
@@ -319,7 +320,7 @@ describe("Browser IPC Gateway transport and authentication", () => {
       role: "runtime",
       applicationCapabilities: {
         runtimeOperations: ["status", "getInfo", "command"],
-        browserContractVersions: [1],
+        browserContractVersions: [1, 2],
       },
     })
 
@@ -389,7 +390,17 @@ describe("Browser IPC Gateway transport and authentication", () => {
 
     const first = await authenticateNative(gateway, original)
     expect(first.response).toMatchObject({ type: "ready", role: "native-host" })
-    expect(existsSync(bootstrapPath)).toBe(false)
+    await waitFor(() => existsSync(bootstrapPath))
+    const rotated = JSON.parse(readFileSync(bootstrapPath, "utf8")) as JsonRecord
+    expect(rotated.proof).not.toBe(original.proof)
+
+    const second = await authenticateNative(gateway, rotated)
+    expect(second.response).toMatchObject({ type: "ready", role: "native-host" })
+    expect(gateway.status().nativeHostConnections).toBe(2)
+    await waitFor(() => {
+      const current = JSON.parse(readFileSync(bootstrapPath, "utf8")) as JsonRecord
+      return current.proof !== rotated.proof
+    })
 
     const replay = await authenticateNative(gateway, original)
     expect(replay.response).toMatchObject({
@@ -398,9 +409,9 @@ describe("Browser IPC Gateway transport and authentication", () => {
     })
 
     first.client.close()
+    second.client.close()
     await waitFor(() => existsSync(bootstrapPath))
-    const rotated = JSON.parse(readFileSync(bootstrapPath, "utf8")) as JsonRecord
-    expect(rotated.proof).not.toBe(original.proof)
+    const expiring = JSON.parse(readFileSync(bootstrapPath, "utf8")) as JsonRecord
 
     const expiringClient = await connect(gateway.nativeHostEndpoint)
     const challenge = await expiringClient.next() as unknown as BrowserIpcChallengeMessage
@@ -416,7 +427,7 @@ describe("Browser IPC Gateway transport and authentication", () => {
       type: "hello",
       protocolVersion: BROWSER_IPC_PROTOCOL_VERSION,
       ...proofInput,
-      proof: proofFor(String(rotated.proof), proofInput),
+      proof: proofFor(String(expiring.proof), proofInput),
       nativeHostName: ANYBOX_CHROME_NATIVE_HOST_NAME,
       extensionID: ANYBOX_CHROME_EXTENSION_ID,
     })
@@ -426,7 +437,86 @@ describe("Browser IPC Gateway transport and authentication", () => {
     })
   })
 
-  test("routes runtime commands through the plugin Browser Host with context and ownership", async () => {
+  test("reassembles native payloads across bounded 4 MB IPC frames", async () => {
+    const { bridge, gateway } = gatewayFixture()
+    await gateway.start()
+    const native = await authenticateNative(gateway)
+    expect(native.response.type).toBe("ready")
+
+    const helloPayload = Buffer.from(JSON.stringify({
+      type: "hello",
+      protocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
+      extensionInstanceID: "extension-chunked",
+      extensionID: ANYBOX_CHROME_EXTENSION_ID,
+      version: "0.1.1",
+    }))
+    const split = Math.ceil(helloPayload.byteLength / 2)
+    const helloChunks = [
+      helloPayload.subarray(0, split),
+      helloPayload.subarray(split),
+    ]
+    for (const [index, bytes] of helloChunks.entries()) {
+      native.client.send({
+        type: "native.chunk",
+        transferID: "chunked-extension-hello",
+        index,
+        total: helloChunks.length,
+        totalBytes: helloPayload.byteLength,
+        data: bytes.toString("base64"),
+      })
+    }
+    await waitFor(() => bridge.status().connected)
+
+    const largeText = "x".repeat(MAX_BROWSER_IPC_CHUNK_BYTES + 1_024)
+    const commandPromise = bridge.sendCommand(
+      "page.type",
+      { tabId: 7, text: largeText },
+      { contractVersion: 1, trusted: true },
+    )
+    const received: Buffer[] = []
+    let expectedTotal = 0
+    let commandID = ""
+    while (expectedTotal === 0 || received.filter(Boolean).length < expectedTotal) {
+      const frame = await native.client.next()
+      expect(frame.type).toBe("native.chunk")
+      const index = Number(frame.index)
+      const total = Number(frame.total)
+      if (expectedTotal === 0) {
+        expectedTotal = total
+        received.length = total
+      }
+      received[index] = Buffer.from(String(frame.data), "base64")
+      if (received.filter(Boolean).length === total) {
+        const command = JSON.parse(
+          Buffer.concat(received).toString("utf8"),
+        ) as JsonRecord
+        commandID = String(command.commandID)
+        expect(command).toMatchObject({
+          type: "command",
+          method: "page.type",
+        })
+        const params = command.params as JsonRecord
+        expect(params.tabId).toBe(7)
+        expect(String(params.text).length).toBe(largeText.length)
+        break
+      }
+    }
+    native.client.send({
+      type: "native.message",
+      message: {
+        type: "result",
+        commandID,
+        ok: true,
+        data: { tabId: 7, textLength: largeText.length },
+      },
+    })
+    await expect(commandPromise).resolves.toEqual({
+      tabId: 7,
+      textLength: largeText.length,
+    })
+  })
+
+  test("routes runtime status and blocks v1 writes at the plugin Browser Host", async () => {
     const { bridge, gateway } = gatewayFixture()
     await gateway.start()
     const native = await authenticateNative(gateway)
@@ -492,7 +582,7 @@ describe("Browser IPC Gateway transport and authentication", () => {
       data: {
         backend: {
           contractVersion: 1,
-          browserId: "extension",
+          browserId: "extension:extension-profile-a",
           kind: "extension",
           connected: true,
           protocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
@@ -528,6 +618,10 @@ describe("Browser IPC Gateway transport and authentication", () => {
     expect((documentationManifest.entries as JsonRecord[]).map((entry) => entry.method))
       .toEqual(advertisedMethods)
     expect(advertisedMethods).toContain("tabs.list")
+    expect(advertisedMethods).not.toContain("tabs.open")
+    expect(advertisedMethods).not.toContain("tabs.activate")
+    expect(advertisedMethods).not.toContain("page.click")
+    expect(advertisedMethods).not.toContain("page.fill")
     expect(advertisedMethods).not.toContain("page.executeScript")
     expect(advertisedMethods).not.toContain("cdp.send")
 
@@ -535,7 +629,7 @@ describe("Browser IPC Gateway transport and authentication", () => {
       type: "runtime.request",
       requestID: "future-runtime-info",
       operation: "getInfo",
-      contractVersion: 2,
+      contractVersion: 3,
     })
     expect(await runtime.client.next()).toMatchObject({
       type: "runtime.response",
@@ -560,54 +654,19 @@ describe("Browser IPC Gateway transport and authentication", () => {
       },
     })
 
-    const forwarded = await native.client.next()
-    expect(forwarded).toMatchObject({
-      type: "native.message",
-      message: {
-        type: "command",
-        method: "tabs.open",
-        params: { url: "https://example.com/" },
-        context: {
-          sessionID: "session-1",
-          messageID: "message-1",
-          toolCallID: "tool-1",
-        },
-      },
-    })
-    const command = forwarded.message as JsonRecord
-    native.client.send({
-      type: "native.message",
-      message: {
-        type: "result",
-        commandID: command.commandID,
-        ok: true,
-        data: {
-          id: 42,
-          title: "Example",
-          url: "https://example.com/",
-        },
-      },
-    })
-
     expect(await runtime.client.next()).toMatchObject({
       type: "runtime.response",
       requestID: "open-tab",
-      ok: true,
-      data: { id: 42 },
+      ok: false,
+      error: {
+        code: "BACKEND_UPDATE_REQUIRED",
+        retryable: false,
+      },
     })
     expect(bridge.status()).toMatchObject({
-      activeSessionID: "session-1",
-      ownedTabs: [{
-        tabId: 42,
-        sessionID: "session-1",
-      }],
-      lastCommand: {
-        method: "tabs.open",
-        sessionID: "session-1",
-        messageID: "message-1",
-        toolCallID: "tool-1",
-        ok: true,
-      },
+      activeSessionID: undefined,
+      ownedTabs: [],
+      lastCommand: undefined,
     })
   })
 
@@ -664,7 +723,7 @@ describe("Browser IPC Gateway transport and authentication", () => {
         extensionID: ANYBOX_CHROME_EXTENSION_ID,
         version: "0.2.0",
         capabilities: {
-          contractVersion: 2,
+          contractVersion: 3,
           commands: ["tabs.list"],
         },
       },
@@ -715,7 +774,7 @@ describe("Browser IPC Gateway transport and authentication", () => {
       type: "runtime.request",
       requestID: "future-contract-version",
       operation: "command",
-      contractVersion: 2,
+      contractVersion: 3,
       method: "tabs.list",
       params: {},
     })

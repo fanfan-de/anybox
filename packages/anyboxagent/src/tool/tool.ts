@@ -37,6 +37,9 @@ export interface InitContext {
 
 export interface Context {
   sessionID: string
+  // Optional for legacy direct callers during the v1/v2 migration. Production
+  // turn execution always supplies it and Browser Contract v2 requires it.
+  turnID?: string
   messageID: string
   cwd?: string
   worktree?: string

@@ -81,6 +81,8 @@ export const jaJP = {
   "thread.permission.note": "あなたの判断を待っています。",
   "thread.permission.applying": "適用中...",
   "thread.permission.action.allow": "許可",
+  "thread.permission.action.allowOnce": "今回のみ許可",
+  "thread.permission.action.allowSession": "このセッションで許可",
   "thread.permission.action.deny": "拒否",
   "thread.permission.decisionAria": "{decision}: {title}",
   "thread.permission.risk.low": "低リスク",

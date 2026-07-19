@@ -27,12 +27,19 @@ import {
   ANYBOX_CHROME_EXTENSION_ID,
   ANYBOX_CHROME_NATIVE_HOST_NAME,
 } from "@anybox/chrome-shared/browser-extension"
-import { BROWSER_CONTRACT_VERSION } from "@anybox/chrome-shared/browser-contract"
+import {
+  BROWSER_CONTRACT_SUPPORTED_VERSIONS,
+  BROWSER_CONTRACT_V1_VERSION,
+  BROWSER_CONTRACT_VERSION,
+} from "@anybox/chrome-shared/browser-contract"
 import {
   BROWSER_IPC_HANDSHAKE_TIMEOUT_MS,
   BROWSER_IPC_PROTOCOL_VERSION,
+  MAX_BROWSER_IPC_CHUNK_BYTES,
   MAX_BROWSER_IPC_FRAME_BYTES,
+  MAX_BROWSER_IPC_MESSAGE_BYTES,
   BrowserIpcFrameDecoder,
+  BrowserIpcNativeChunkMessage,
   BrowserIpcNativeHostHelloMessage,
   BrowserIpcNativeMessage,
   BrowserIpcProtocolError,
@@ -96,7 +103,18 @@ type GatewayConnection = {
   clientVersion?: string
   handshakeTimer: ReturnType<typeof setTimeout>
   requestIDs: Set<string>
+  nativeChunks: Map<string, NativeChunkTransfer>
+  nativeChunkBytes: number
+  completedNativeTransferIDs: Set<string>
   closing: boolean
+}
+
+type NativeChunkTransfer = {
+  total: number
+  totalBytes: number
+  chunks: Map<number, Buffer>
+  receivedBytes: number
+  timer: ReturnType<typeof setTimeout>
 }
 
 type NativeBootstrap = {
@@ -244,6 +262,12 @@ export class BrowserIpcGateway {
   private listenerStartResolve: (() => void) | undefined
   private listenerStartReject: ((error: Error) => void) | undefined
   private listenerStopResolve: (() => void) | undefined
+  private readonly metrics = {
+    approvalChallenges: 0,
+    authorizedCommands: 0,
+    permissionDenials: 0,
+    leaseErrors: 0,
+  }
 
   constructor(options: BrowserIpcGatewayOptions = {}) {
     this.platform = options.platform ?? process.platform
@@ -300,6 +324,10 @@ export class BrowserIpcGateway {
         ? "process-token default DACL; no all-users read/write grant"
         : "socket directory 0700 and socket mode 0600",
       peerProcessIdentityVerified: false,
+      metrics: {
+        ...this.metrics,
+        reconnectCount: this.bridge.status().reconnectCount,
+      },
     }
   }
 
@@ -610,6 +638,9 @@ export class BrowserIpcGateway {
         this.fail(connection, "HANDSHAKE_EXPIRED", "Browser IPC hello timed out.")
       }, this.handshakeTimeoutMs),
       requestIDs: new Set(),
+      nativeChunks: new Map(),
+      nativeChunkBytes: 0,
+      completedNativeTransferIDs: new Set(),
       closing: false,
     }
     this.connections.set(connectionID, connection)
@@ -652,23 +683,140 @@ export class BrowserIpcGateway {
       return
     }
 
-    if (value.type !== "native.message") {
+    if (value.type !== "native.message" && value.type !== "native.chunk") {
       throw new BrowserIpcProtocolError(
         value.type === "runtime.request" ? "ROLE_FORBIDDEN" : "UNKNOWN_MESSAGE_TYPE",
-        "Native Host IPC clients may send only native.message messages.",
+        "Native Host IPC clients may send only native.message or native.chunk messages.",
       )
     }
-    const message = BrowserIpcNativeMessage.parse(value)
     if (!connection.bridgeConnectionID) {
       throw new BrowserIpcProtocolError(
         "INTERNAL_ERROR",
         "Native Host bridge connection is not initialized.",
       )
     }
+    const rawMessage = value.type === "native.message"
+      ? JSON.stringify(BrowserIpcNativeMessage.parse(value).message)
+      : this.acceptNativeChunk(
+          connection,
+          BrowserIpcNativeChunkMessage.parse(value),
+        )
+    if (rawMessage === undefined) return
     this.bridge.handleRawMessage(
       connection.bridgeConnectionID,
-      message.message,
+      JSON.parse(rawMessage),
     )
+  }
+
+  private acceptNativeChunk(
+    connection: GatewayConnection,
+    chunk: ReturnType<typeof BrowserIpcNativeChunkMessage.parse>,
+  ) {
+    if (connection.completedNativeTransferIDs.has(chunk.transferID)) {
+      throw new BrowserIpcProtocolError(
+        "DUPLICATE_REQUEST",
+        "Browser IPC native transfer was already completed.",
+      )
+    }
+    let transfer = connection.nativeChunks.get(chunk.transferID)
+    if (!transfer) {
+      if (
+        connection.nativeChunkBytes + chunk.totalBytes
+        > MAX_BROWSER_IPC_MESSAGE_BYTES
+      ) {
+        throw new BrowserIpcProtocolError(
+          "FRAME_TOO_LARGE",
+          "Browser IPC in-flight native messages exceed the 64 MB limit.",
+        )
+      }
+      const timer = setTimeout(() => {
+        const pending = connection.nativeChunks.get(chunk.transferID)
+        if (!pending) return
+        connection.nativeChunks.delete(chunk.transferID)
+        connection.nativeChunkBytes -= pending.totalBytes
+        this.fail(
+          connection,
+          "FRAME_TRUNCATED",
+          "Browser IPC native message chunk transfer timed out.",
+        )
+      }, 30_000)
+      timer.unref?.()
+      transfer = {
+        total: chunk.total,
+        totalBytes: chunk.totalBytes,
+        chunks: new Map(),
+        receivedBytes: 0,
+        timer,
+      }
+      connection.nativeChunks.set(chunk.transferID, transfer)
+      connection.nativeChunkBytes += chunk.totalBytes
+    } else if (
+      transfer.total !== chunk.total
+      || transfer.totalBytes !== chunk.totalBytes
+    ) {
+      throw new BrowserIpcProtocolError(
+        "INVALID_MESSAGE",
+        "Browser IPC native chunk metadata changed during transfer.",
+      )
+    }
+    if (transfer.chunks.has(chunk.index)) {
+      throw new BrowserIpcProtocolError(
+        "DUPLICATE_REQUEST",
+        "Browser IPC native chunk index was received more than once.",
+      )
+    }
+    const bytes = Buffer.from(chunk.data, "base64")
+    if (
+      bytes.byteLength === 0
+      || bytes.byteLength > MAX_BROWSER_IPC_CHUNK_BYTES
+      || bytes.toString("base64") !== chunk.data
+      || transfer.receivedBytes + bytes.byteLength > transfer.totalBytes
+    ) {
+      throw new BrowserIpcProtocolError(
+        "INVALID_MESSAGE",
+        "Browser IPC native chunk data is invalid.",
+      )
+    }
+    transfer.chunks.set(chunk.index, bytes)
+    transfer.receivedBytes += bytes.byteLength
+    if (transfer.chunks.size < transfer.total) return undefined
+
+    clearTimeout(transfer.timer)
+    connection.nativeChunks.delete(chunk.transferID)
+    connection.nativeChunkBytes -= transfer.totalBytes
+    if (transfer.receivedBytes !== transfer.totalBytes) {
+      throw new BrowserIpcProtocolError(
+        "FRAME_TRUNCATED",
+        "Browser IPC native chunks do not match the declared message size.",
+      )
+    }
+    const ordered: Buffer[] = []
+    for (let index = 0; index < transfer.total; index += 1) {
+      const bytesAtIndex = transfer.chunks.get(index)
+      if (!bytesAtIndex) {
+        throw new BrowserIpcProtocolError(
+          "FRAME_TRUNCATED",
+          "Browser IPC native chunk sequence is incomplete.",
+        )
+      }
+      ordered.push(bytesAtIndex)
+    }
+    connection.completedNativeTransferIDs.add(chunk.transferID)
+    if (connection.completedNativeTransferIDs.size > 256) {
+      const oldest = connection.completedNativeTransferIDs.values().next().value
+      if (typeof oldest === "string") {
+        connection.completedNativeTransferIDs.delete(oldest)
+      }
+    }
+    const payload = Buffer.concat(ordered, transfer.totalBytes)
+    try {
+      return new TextDecoder("utf-8", { fatal: true }).decode(payload)
+    } catch {
+      throw new BrowserIpcProtocolError(
+        "FRAME_MALFORMED_JSON",
+        "Browser IPC native message must contain valid UTF-8 JSON.",
+      )
+    }
   }
 
   private handleHello(connection: GatewayConnection, value: unknown) {
@@ -752,11 +900,13 @@ export class BrowserIpcGateway {
       this.nativeBootstrap = undefined
       this.clearNativeBootstrapTimer()
       this.removeBootstrapIfOwned()
+      // Rotate before completing this handshake so another Chrome profile can
+      // immediately start with a distinct single-use credential.
+      this.provisionNativeBootstrap()
       connection.bridgeConnectionID = this.bridge.register(
         {
           send: (data) => {
-            const message = JSON.parse(data)
-            this.write(connection, { type: "native.message", message })
+            this.writeNativePayload(connection, data)
           },
           close: () => this.endConnection(connection),
         },
@@ -776,7 +926,18 @@ export class BrowserIpcGateway {
         ? {
             applicationCapabilities: {
               runtimeOperations: ["status", "getInfo", "command"],
-              browserContractVersions: [BROWSER_CONTRACT_VERSION],
+              browserContractVersions: [...BROWSER_CONTRACT_SUPPORTED_VERSIONS]
+                .filter((version) => {
+                  const maximum = Number(
+                    process.env.ANYBOX_BROWSER_CONTRACT_MAX_VERSION
+                    ?? BROWSER_CONTRACT_VERSION,
+                  )
+                  return version <= (
+                    Number.isInteger(maximum)
+                      ? maximum
+                      : BROWSER_CONTRACT_VERSION
+                  )
+                }),
             },
           }
         : {}),
@@ -811,8 +972,17 @@ export class BrowserIpcGateway {
       const data = request.operation === "status"
         ? this.runtimeStatus()
         : request.operation === "getInfo"
-          ? this.runtimeGetInfo(request.contractVersion)
+          ? this.runtimeGetInfo(request.contractVersion, request.browserID)
           : await runBrowserRuntimeCommand(request, this.bridge, this.policy)
+      if (
+        request.operation === "command"
+        && request.authorization?.value
+      ) {
+        this.metrics.authorizedCommands += 1
+        log.info("authorization-accepted", {
+          count: this.metrics.authorizedCommands,
+        })
+      }
       if (!this.isConnectionOpen(connection)) return
       this.write(connection, {
         type: "runtime.response",
@@ -825,6 +995,27 @@ export class BrowserIpcGateway {
       const code = error instanceof BrowserCommandGatewayError
         ? error.code
         : "INTERNAL_ERROR"
+      if (code === "APPROVAL_REQUIRED") {
+        this.metrics.approvalChallenges += 1
+        log.info("approval-required", {
+          count: this.metrics.approvalChallenges,
+        })
+      } else if (code === "PERMISSION_DENIED") {
+        this.metrics.permissionDenials += 1
+        log.info("permission-denied", {
+          count: this.metrics.permissionDenials,
+        })
+      } else if (
+        code === "TAB_NOT_OWNED"
+        || code === "TAB_CLAIM_REQUIRED"
+        || code === "LEASE_EXPIRED"
+      ) {
+        this.metrics.leaseErrors += 1
+        log.warn("lease-error", {
+          code,
+          count: this.metrics.leaseErrors,
+        })
+      }
       this.write(connection, {
         type: "runtime.response",
         requestID: request.requestID,
@@ -836,6 +1027,9 @@ export class BrowserIpcGateway {
             : "The Chrome plugin Browser Host could not complete the browser request.",
           ...(error instanceof BrowserCommandGatewayError
             ? { retryable: error.retryable }
+            : {}),
+          ...(error instanceof BrowserCommandGatewayError && error.details
+            ? { details: error.details }
             : {}),
         },
       })
@@ -857,11 +1051,21 @@ export class BrowserIpcGateway {
       runtimeConnections: ipcStatus.runtimeConnections,
       nativeHostConnections: ipcStatus.nativeHostConnections,
       peerProcessIdentityVerified: ipcStatus.peerProcessIdentityVerified,
+      backends: bridgeStatus.backends,
+      metrics: {
+        ...ipcStatus.metrics,
+        lastCleanup: bridgeStatus.lastCleanup,
+      },
     }
   }
 
-  private runtimeGetInfo(requestedContractVersion: number) {
-    if (requestedContractVersion !== BROWSER_CONTRACT_VERSION) {
+  private runtimeGetInfo(
+    requestedContractVersion: number,
+    browserID?: string,
+  ) {
+    if (!BROWSER_CONTRACT_SUPPORTED_VERSIONS.includes(
+      requestedContractVersion as (typeof BROWSER_CONTRACT_SUPPORTED_VERSIONS)[number],
+    )) {
       throw new BrowserCommandGatewayError(
         "CONTRACT_VERSION_UNSUPPORTED",
         `Browser Contract version '${requestedContractVersion}' is not supported.`,
@@ -874,7 +1078,12 @@ export class BrowserIpcGateway {
         "The connected Chrome extension uses an incompatible Browser Contract.",
       )
     }
-    return this.bridge.getInfo()
+    return this.bridge.getInfo(
+      browserID,
+      requestedContractVersion as
+        | typeof BROWSER_CONTRACT_V1_VERSION
+        | typeof BROWSER_CONTRACT_VERSION,
+    )
   }
 
   private write(connection: GatewayConnection, message: unknown) {
@@ -888,6 +1097,42 @@ export class BrowserIpcGateway {
       },
       frame,
     )
+  }
+
+  private writeNativePayload(connection: GatewayConnection, data: string) {
+    const payload = Buffer.from(data, "utf8")
+    if (payload.byteLength > MAX_BROWSER_IPC_MESSAGE_BYTES) {
+      throw new BrowserIpcProtocolError(
+        "FRAME_TOO_LARGE",
+        "Browser IPC native message exceeds the 64 MB limit.",
+      )
+    }
+    if (payload.byteLength <= MAX_BROWSER_IPC_CHUNK_BYTES) {
+      this.write(connection, {
+        type: "native.message",
+        message: JSON.parse(data),
+      })
+      return
+    }
+    const transferID = randomUUID()
+    const total = Math.ceil(
+      payload.byteLength / MAX_BROWSER_IPC_CHUNK_BYTES,
+    )
+    for (let index = 0; index < total; index += 1) {
+      const start = index * MAX_BROWSER_IPC_CHUNK_BYTES
+      const end = Math.min(
+        start + MAX_BROWSER_IPC_CHUNK_BYTES,
+        payload.byteLength,
+      )
+      this.write(connection, {
+        type: "native.chunk",
+        transferID,
+        index,
+        total,
+        totalBytes: payload.byteLength,
+        data: payload.subarray(start, end).toString("base64"),
+      })
+    }
   }
 
   private isConnectionOpen(connection: GatewayConnection) {
@@ -930,6 +1175,11 @@ export class BrowserIpcGateway {
   private cleanupConnection(connection: GatewayConnection) {
     if (!this.connections.delete(connection.connectionID)) return
     clearTimeout(connection.handshakeTimer)
+    for (const transfer of connection.nativeChunks.values()) {
+      clearTimeout(transfer.timer)
+    }
+    connection.nativeChunks.clear()
+    connection.nativeChunkBytes = 0
     if (connection.bridgeConnectionID) {
       this.bridge.unregister(connection.bridgeConnectionID)
     }

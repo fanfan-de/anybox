@@ -24,6 +24,7 @@ import {
   normalizeAppearanceRuntimeState,
 } from "../shared/appearance"
 import type { AppLocale, LocaleConfigDocument } from "../shared/locale"
+import type { PermissionResolveInput } from "../shared/permission"
 import type {
   DesktopIpcChannel,
   DesktopIpcEventChannel,
@@ -6487,12 +6488,7 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
     "desktop:agent-session-respond-permission-request",
     async (
       _event,
-      input: {
-        requestID: string
-        decision: "allow" | "deny"
-        note?: string
-        resume?: boolean
-      },
+      input: PermissionResolveInput,
     ) => {
       const requestID = input.requestID.trim()
       const result = await requestAgentJSON<AgentPermissionResolveResult>(

@@ -17,6 +17,7 @@ import type {
   BrowserContractCommandResult,
   BrowserContractErrorCode,
   BrowserDocumentationManifest,
+  BrowserLocator as BrowserLocatorInput,
 } from "@anybox/chrome-shared/browser-contract"
 import type {
   BrowserExtensionAccessibilityTreeResult,
@@ -25,22 +26,23 @@ import type {
   BrowserExtensionElementActionResult,
   BrowserExtensionFillResult,
   BrowserExtensionInteractiveSnapshotResult,
+  BrowserExtensionLocatorValueResult,
   BrowserExtensionScreenshotResult,
   BrowserExtensionScrollResult,
   BrowserExtensionSnapshotResult,
   BrowserExtensionTabSummary,
   BrowserExtensionTabsListResult,
+  BrowserExtensionTabsFinalizeResult,
+  BrowserExtensionTabsMarkDeliverableResult,
   BrowserExtensionTabsReleaseResult,
   BrowserExtensionTypeResult,
   BrowserExtensionWaitForResult,
 } from "@anybox/chrome-shared/browser-extension"
 import {
+  BrowserHostClientError,
   ensureBrowserHostRuntime,
   requestBrowserHost,
 } from "./browser-host-client.ts"
-
-type BrowserCommandParams = Record<string, unknown>
-type PageFunction<TResult = unknown> = (...args: any[]) => TResult
 
 const NATIVE_INSTALL_ENV = "ANYBOX_BROWSER_NATIVE_INSTALL"
 let nativeMessagingHostReady: Promise<void> | undefined
@@ -74,6 +76,22 @@ type FillOptions = Omit<
 >
 type ScrollOptions = Omit<BrowserContractCommandParams<"page.scroll">, "tabId">
 type WaitForOptions = Omit<BrowserContractCommandParams<"page.waitFor">, "tabId">
+type LocatorClickOptions = Omit<
+  BrowserContractCommandParams<"locator.click">,
+  "tabId" | "locator"
+>
+type LocatorFillOptions = Omit<
+  BrowserContractCommandParams<"locator.fill">,
+  "tabId" | "locator" | "text"
+>
+type LocatorReadOptions = Omit<
+  BrowserContractCommandParams<"locator.textContent">,
+  "tabId" | "locator"
+>
+type LocatorWaitOptions = Omit<
+  BrowserContractCommandParams<"locator.waitFor">,
+  "tabId" | "locator"
+>
 
 interface BrowserCommandOptions {
   timeoutMs?: number
@@ -84,12 +102,14 @@ export type BrowserRuntimeTransportRequest =
   | {
       type: "getInfo"
       contractVersion: typeof BROWSER_CONTRACT_VERSION
+      browserID?: string
     }
   | {
       type: "command"
       contractVersion: typeof BROWSER_CONTRACT_VERSION
       method: BrowserContractCommandMethod
       params: unknown
+      browserID: string
       timeoutMs?: number
     }
 
@@ -99,47 +119,19 @@ export type BrowserRuntimeTransport = <TResult = unknown>(
 
 export interface BrowserRuntimeStatus extends Record<string, unknown> {
   connected: boolean
+  backends?: BrowserBackendInfo[]
 }
 
-interface CdpAdapter {
-  send<TResult = unknown>(
-    method: string,
-    params?: BrowserCommandParams,
-  ): Promise<TResult>
-}
-
-interface PlaywrightAdapter {
-  locator(selector: string): BrowserLocator
-  evaluate<TResult = unknown>(
-    pageFunction: PageFunction<TResult> | string,
-    ...args: unknown[]
-  ): Promise<TResult>
-  screenshot(options?: ScreenshotOptions): Promise<BrowserExtensionScreenshotResult>
-  waitForSelector(
-    selector: string,
-    options?: { timeout?: number },
-  ): Promise<BrowserExtensionWaitForResult>
-  click(selector: string, options?: BrowserCommandParams): Promise<BrowserCommandParams>
-  fill(
-    selector: string,
-    value: unknown,
-    options?: BrowserCommandParams,
-  ): Promise<BrowserCommandParams>
-  keyboard: {
-    type(text: string): Promise<BrowserExtensionTypeResult>
-  }
-  mouse: {
-    click(
-      x: number,
-      y: number,
-      options?: ClickOptions,
-    ): Promise<BrowserExtensionClickResult>
-  }
+export type BrowserSelection = {
+  browserID?: string
+  extensionInstanceID?: string
+  preferredWindowId?: number
+  url?: string | URL
 }
 
 export interface BrowserCollection {
   list(): Promise<BrowserContext[]>
-  get(name?: string): Promise<BrowserContext>
+  get(selection?: string | BrowserSelection): Promise<BrowserContext>
   getDefault(): Promise<BrowserContext>
   getForUrl(url: string | URL): Promise<BrowserContext>
 }
@@ -153,9 +145,26 @@ export interface BrowserRuntimeGlobals extends Record<string, unknown> {
   nodeRepl?: {
     readonly requestMeta?: {
       sessionID?: string
+      turnID?: string
       messageID?: string
       toolCallID?: string
     }
+    requestPermission?(input: Record<string, unknown>): Promise<{
+      allowed: boolean
+      decision: "deny" | "allow-once" | "allow-session"
+      authorization?: string
+      grantID?: string
+    }>
+    addLifecycleHook?(
+      hook: (event: {
+        type: string
+        context?: {
+          sessionID?: string
+          turnID?: string
+        }
+      }) => void | Promise<void>,
+    ): () => void
+    setResponseMeta?(value: Record<string, unknown>): void
   }
   setupBrowserRuntime?: typeof setupBrowserRuntime
 }
@@ -206,18 +215,139 @@ function pluginBrowserTransport(
       return requestBrowserHost<TResult>({
         operation: "getInfo",
         contractVersion: request.contractVersion,
+        browserID: request.browserID,
       })
     }
-    return requestBrowserHost<TResult>({
+    const requestMeta = globals.nodeRepl?.requestMeta
+    if (
+      !requestMeta?.sessionID
+      || !requestMeta.turnID
+      || !requestMeta.messageID
+      || !requestMeta.toolCallID
+    ) {
+      throw new BrowserRuntimeError(
+        "SESSION_REQUIRED",
+        "Browser Contract v2 requires active Node REPL session, turn, message, and tool-call metadata.",
+      )
+    }
+    const context = {
+      ...requestMeta,
+      browserID: request.browserID,
+    }
+    const hostRequest = {
       operation: "command",
       contractVersion: request.contractVersion,
       method: request.method,
       params: request.params,
       ...(request.timeoutMs ? { timeoutMs: request.timeoutMs } : {}),
-      ...(globals.nodeRepl?.requestMeta
-        ? { context: globals.nodeRepl.requestMeta }
-        : {}),
-    })
+      context,
+    } as const
+    const recordResponseMeta = (result: unknown) => {
+      if (typeof globals.nodeRepl?.setResponseMeta !== "function") return
+      const record = isRecord(result) ? result : {}
+      globals.nodeRepl.setResponseMeta({
+        browser: {
+          backend: request.browserID,
+          method: request.method,
+          openTabCount: Array.isArray(record.tabs) ? record.tabs.length : undefined,
+          currentOrigin: typeof record.url === "string"
+            ? (() => {
+                try {
+                  return new URL(record.url).origin
+                } catch {
+                  return undefined
+                }
+              })()
+            : undefined,
+          cleanup: request.method === "tabs.finalize"
+            ? {
+                closed: Array.isArray(record.closedTabIds)
+                  ? record.closedTabIds.length
+                  : 0,
+                released: Array.isArray(record.releasedTabIds)
+                  ? record.releasedTabIds.length
+                  : 0,
+                retained: Array.isArray(record.retainedTabIds)
+                  ? record.retainedTabIds.length
+                  : 0,
+              }
+            : undefined,
+          screenshot: request.method === "page.screenshot"
+            ? {
+                tabId: record.tabId,
+                mime: record.mime,
+                byteLength: typeof record.data === "string"
+                  ? Math.trunc(record.data.length * 0.75)
+                  : undefined,
+              }
+            : undefined,
+        },
+      })
+    }
+    try {
+      const result = await requestBrowserHost<TResult>(hostRequest)
+      recordResponseMeta(result)
+      return result
+    } catch (error) {
+      if (
+        !(error instanceof BrowserHostClientError)
+        || error.code !== "APPROVAL_REQUIRED"
+      ) {
+        throw error
+      }
+      const challenge = isRecord(error.details?.challenge)
+        ? error.details.challenge
+        : undefined
+      if (!challenge || typeof globals.nodeRepl?.requestPermission !== "function") {
+        throw new BrowserRuntimeError(
+          "PERMISSION_DENIED",
+          "The browser action requires approval, but in-process permission elicitation is unavailable.",
+          { cause: error },
+        )
+      }
+      const method = typeof challenge.method === "string"
+        ? challenge.method
+        : request.method
+      const origin = typeof challenge.origin === "string"
+        ? challenge.origin
+        : "browser://unknown"
+      const tabTitle = typeof challenge.tabTitle === "string"
+        ? challenge.tabTitle
+        : "Untitled tab"
+      const permission = await globals.nodeRepl.requestPermission({
+        message: `${method} on ${origin} in “${tabTitle}”`,
+        challenge,
+        grantID: challenge.grantID,
+        method,
+        tabID: typeof challenge.tabId === "number" ? challenge.tabId : undefined,
+        tabTitle,
+        risk: challenge.risk,
+        sensitive: challenge.sensitive === true,
+        action: challenge.permissionAction,
+        rationale: challenge.rationale,
+        scope: {
+          kind: "browser-origin",
+          sessionID: requestMeta.sessionID,
+          extensionInstanceID: challenge.extensionInstanceID,
+          browserID: request.browserID,
+          origin,
+        },
+      })
+      if (!permission.allowed || !permission.authorization) {
+        throw new BrowserRuntimeError(
+          "PERMISSION_DENIED",
+          `Browser command '${request.method}' was not approved.`,
+        )
+      }
+      const result = await requestBrowserHost<TResult>({
+        ...hostRequest,
+        authorization: {
+          value: permission.authorization,
+        },
+      })
+      recordResponseMeta(result)
+      return result
+    }
   }
 }
 
@@ -243,9 +373,17 @@ async function ensureNativeMessagingHost(): Promise<void> {
   })().catch((cause) => {
     nativeMessagingHostReady = undefined
     throw new BrowserRuntimeError(
-      "BACKEND_UNAVAILABLE",
+      "NATIVE_HOST_INSTALL_FAILED",
       "Chrome Native Messaging Host setup failed.",
-      { retryable: true, cause },
+      {
+        retryable: true,
+        details: {
+          installError: cause instanceof Error
+            ? cause.message
+            : String(cause),
+        },
+        cause,
+      },
     )
   })
   await nativeMessagingHostReady
@@ -329,15 +467,6 @@ function parseStatus(value: unknown): BrowserRuntimeStatus {
   return value as BrowserRuntimeStatus
 }
 
-function disabledAdvancedCapability(name: string): Promise<never> {
-  return Promise.reject(
-    new BrowserRuntimeError(
-      "CAPABILITY_UNAVAILABLE",
-      `${name} is disabled until Anybox can enforce command-level capability and permission policy.`,
-    ),
-  )
-}
-
 function validateBrowserUrl(value: string | URL): URL {
   try {
     const url = value instanceof URL ? value.href : value
@@ -357,19 +486,22 @@ function validateTabId(value: number): number {
 
 export class BackendTransport {
   readonly #transport: BrowserRuntimeTransport
+  readonly #browserID?: string
 
-  constructor(transport: BrowserRuntimeTransport) {
+  constructor(transport: BrowserRuntimeTransport, browserID?: string) {
     this.#transport = transport
+    this.#browserID = browserID
   }
 
   async status(): Promise<BrowserRuntimeStatus> {
     return parseStatus(await this.#transport({ type: "status" }))
   }
 
-  async getInfo(): Promise<BrowserGetInfoResult> {
+  async getInfo(browserID = this.#browserID): Promise<BrowserGetInfoResult> {
     return validateGetInfo(await this.#transport({
       type: "getInfo",
       contractVersion: BROWSER_CONTRACT_VERSION,
+      ...(browserID ? { browserID } : {}),
     }))
   }
 
@@ -383,6 +515,7 @@ export class BackendTransport {
       contractVersion: BROWSER_CONTRACT_VERSION,
       method,
       params,
+      browserID: this.#browserID ?? "extension",
       ...(options.timeoutMs ? { timeoutMs: options.timeoutMs } : {}),
     })
   }
@@ -428,56 +561,83 @@ export class CommandRouter {
 export class BrowserLocator {
   constructor(
     private readonly tab: BrowserTab,
-    readonly selector: string,
+    readonly descriptor: BrowserLocatorInput,
   ) {}
 
-  async click(options: BrowserCommandParams = {}): Promise<BrowserCommandParams> {
-    return this.tab.playwright.click(this.selector, options)
-  }
-
-  async fill(
-    value: unknown,
-    options: BrowserCommandParams = {},
-  ): Promise<BrowserCommandParams> {
-    return this.tab.playwright.fill(this.selector, value, options)
-  }
-
-  async textContent(): Promise<string | null> {
-    return this.tab.evaluate(
-      (selector) => document.querySelector(selector)?.textContent ?? null,
-      this.selector,
+  async click(
+    options: LocatorClickOptions = {},
+  ): Promise<BrowserExtensionElementActionResult> {
+    return this.tab.runLocator(
+      "locator.click",
+      { ...options, locator: this.descriptor },
     )
   }
 
-  async inputValue(): Promise<string | null> {
-    return this.tab.evaluate((selector) => {
-      const element = document.querySelector(selector)
-      return element && "value" in element
-        ? (element as HTMLInputElement).value
-        : null
-    }, this.selector)
+  async fill(
+    text: string,
+    options: LocatorFillOptions = {},
+  ): Promise<BrowserExtensionFillResult> {
+    return this.tab.runLocator(
+      "locator.fill",
+      { ...options, locator: this.descriptor, text },
+    )
+  }
+
+  async textContent(options: LocatorReadOptions = {}): Promise<string | null> {
+    const result = await this.tab.runLocator(
+      "locator.textContent",
+      { ...options, locator: this.descriptor },
+    )
+    return result.value
+  }
+
+  async inputValue(options: LocatorReadOptions = {}): Promise<string | null> {
+    const result = await this.tab.runLocator(
+      "locator.inputValue",
+      { ...options, locator: this.descriptor },
+    )
+    return result.value
+  }
+
+  async waitFor(
+    options: LocatorWaitOptions = {},
+  ): Promise<BrowserExtensionWaitForResult> {
+    return this.tab.runLocator(
+      "locator.waitFor",
+      { ...options, locator: this.descriptor },
+    )
   }
 }
 
 export class BrowserTab {
   readonly #router: CommandRouter
   tabId: number
-  readonly cdp: CdpAdapter
-  readonly playwright: PlaywrightAdapter
 
   constructor(tabId: number, router: CommandRouter) {
     this.#router = router
     this.tabId = validateTabId(tabId)
-    this.cdp = {
-      send: <TResult = unknown>(
-        _method: string,
-        _params: BrowserCommandParams = {},
-      ) => disabledAdvancedCapability("Raw CDP") as Promise<TResult>,
+    if (!router.supports("locator.click")) {
+      return new Proxy(this, {
+        get(target, property) {
+          if (property === "locator") return undefined
+          const value = Reflect.get(target, property, target)
+          return typeof value === "function" ? value.bind(target) : value
+        },
+        has(target, property) {
+          if (property === "locator") return false
+          return Reflect.has(target, property)
+        },
+        getOwnPropertyDescriptor(target, property) {
+          if (property === "locator") return undefined
+          return Reflect.getOwnPropertyDescriptor(target, property)
+        },
+      })
     }
-    this.playwright = createPlaywrightAdapter(this)
   }
 
-  private withTabId(params: BrowserCommandParams = {}): BrowserCommandParams {
+  private withTabId(
+    params: Record<string, unknown> = {},
+  ): Record<string, unknown> {
     return { ...params, tabId: this.tabId }
   }
 
@@ -572,10 +732,13 @@ export class BrowserTab {
     )
   }
 
-  async type(text: string): Promise<BrowserExtensionTypeResult> {
+  async type(
+    text: string,
+    options: { sensitive?: boolean } = {},
+  ): Promise<BrowserExtensionTypeResult> {
     return this.#router.run(
       "page.type",
-      this.withTabId({ text }),
+      this.withTabId({ text, ...options }),
     )
   }
 
@@ -605,59 +768,49 @@ export class BrowserTab {
     return this.#router.run("tabs.release", { tabId: this.tabId })
   }
 
-  async evaluate<TResult = unknown>(
-    _pageFunction: PageFunction<TResult> | string,
-    ..._args: unknown[]
-  ): Promise<TResult> {
-    return disabledAdvancedCapability("Page evaluation") as Promise<TResult>
+  async markDeliverable(): Promise<BrowserExtensionTabsMarkDeliverableResult> {
+    return this.#router.run("tabs.markDeliverable", { tabId: this.tabId })
   }
 
-  locator(selector: string): BrowserLocator {
-    return new BrowserLocator(this, selector)
+  locator(descriptor: BrowserLocatorInput): BrowserLocator {
+    if (!this.#router.supports("locator.click")) {
+      throw new BrowserRuntimeError(
+        "CAPABILITY_UNAVAILABLE",
+        "Structured locators are unavailable on this browser backend.",
+      )
+    }
+    return new BrowserLocator(this, descriptor)
   }
-}
 
-function createPlaywrightAdapter(tab: BrowserTab): PlaywrightAdapter {
-  return {
-    locator: (selector) => new BrowserLocator(tab, selector),
-    evaluate: (pageFunction, ...args) => tab.evaluate(pageFunction, ...args),
-    screenshot: (options = {}) => tab.screenshot(options),
-    waitForSelector: (selector, options = {}) =>
-      tab.waitFor({ selector, timeoutMs: options.timeout }),
-    click: async (selector, options = {}) => {
-      await tab.evaluate((query) => {
-        const element = document.querySelector(query)
-        if (!element) throw new Error(`Selector '${query}' was not found.`)
-        element.scrollIntoView({ block: "center", inline: "center" })
-        element.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }))
-        element.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
-        element.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }))
-        element.dispatchEvent(new MouseEvent("click", { bubbles: true }))
-      }, selector)
-      return { selector, ...options }
-    },
-    fill: async (selector, value, options = {}) => {
-      await tab.evaluate((query, nextValue) => {
-        const element = document.querySelector(query)
-        if (!element) throw new Error(`Selector '${query}' was not found.`)
-        element.scrollIntoView({ block: "center", inline: "center" })
-        ;(element as HTMLElement).focus()
-        if ("value" in element) {
-          ;(element as HTMLInputElement).value = String(nextValue)
-        } else {
-          element.textContent = String(nextValue)
-        }
-        element.dispatchEvent(new Event("input", { bubbles: true }))
-        element.dispatchEvent(new Event("change", { bubbles: true }))
-      }, selector, value)
-      return { selector, textLength: String(value).length, ...options }
-    },
-    keyboard: {
-      type: (text) => tab.type(text),
-    },
-    mouse: {
-      click: (x, y, options = {}) => tab.click(x, y, options),
-    },
+  runLocator(
+    method: "locator.click",
+    params: Omit<BrowserContractCommandParams<"locator.click">, "tabId">,
+  ): Promise<BrowserExtensionElementActionResult>
+  runLocator(
+    method: "locator.fill",
+    params: Omit<BrowserContractCommandParams<"locator.fill">, "tabId">,
+  ): Promise<BrowserExtensionFillResult>
+  runLocator(
+    method: "locator.textContent" | "locator.inputValue",
+    params: Omit<
+      BrowserContractCommandParams<"locator.textContent">,
+      "tabId"
+    >,
+  ): Promise<BrowserExtensionLocatorValueResult>
+  runLocator(
+    method: "locator.waitFor",
+    params: Omit<BrowserContractCommandParams<"locator.waitFor">, "tabId">,
+  ): Promise<BrowserExtensionWaitForResult>
+  runLocator(
+    method:
+      | "locator.click"
+      | "locator.fill"
+      | "locator.textContent"
+      | "locator.inputValue"
+      | "locator.waitFor",
+    params: Record<string, unknown>,
+  ) {
+    return this.#router.run(method, this.withTabId(params))
   }
 }
 
@@ -698,10 +851,15 @@ export class BrowserContext {
   readonly info: BrowserBackendInfo
   readonly tabs: {
     list(): Promise<Array<BrowserExtensionTabSummary & { runtime: BrowserTab }>>
+    listUser(): Promise<Array<BrowserExtensionTabSummary & { runtime: BrowserTab }>>
     open(url: string, options?: TabsOpenOptions): Promise<BrowserTab>
+    claim(tabId: number): Promise<BrowserTab>
     activate(tabId: number): Promise<BrowserTab>
     get(tabId: number): Promise<BrowserTab>
     current(): Promise<BrowserTab>
+    finalize(options?: BrowserContractCommandParams<"tabs.finalize">): Promise<
+      BrowserExtensionTabsFinalizeResult
+    >
   }
   readonly #backend: BackendTransport
   readonly #router: CommandRouter
@@ -730,11 +888,22 @@ export class BrowserContext {
           runtime: new BrowserTab(tab.id, this.#router),
         }))
       },
+      listUser: async () => {
+        const result = await this.#router.run("tabs.listUser", {})
+        return result.tabs.map((tab) => ({
+          ...tab,
+          runtime: new BrowserTab(tab.id, this.#router),
+        }))
+      },
       open: async (url, options = {}) => {
         const tab = await this.#router.run(
           "tabs.open",
           { ...options, url },
         )
+        return new BrowserTab(tab.id, this.#router)
+      },
+      claim: async (tabId) => {
+        const tab = await this.#router.run("tabs.claim", { tabId })
         return new BrowserTab(tab.id, this.#router)
       },
       activate: async (tabId) => {
@@ -759,6 +928,8 @@ export class BrowserContext {
         }
         return new BrowserTab(current.id, this.#router)
       },
+      finalize: async (options = {}) =>
+        this.#router.run("tabs.finalize", options),
     }
   }
 
@@ -772,25 +943,65 @@ export class BrowserContext {
 }
 
 export class BrowserManager implements BrowserCollection {
+  readonly #transport: BrowserRuntimeTransport
   readonly #backend: BackendTransport
 
   constructor(transport: BrowserRuntimeTransport) {
+    this.#transport = transport
     this.#backend = new BackendTransport(transport)
   }
 
   async list(): Promise<BrowserContext[]> {
-    return [await this.get("extension")]
+    const status = await this.#backend.status()
+    const backends = Array.isArray(status.backends)
+      ? status.backends.filter((backend) => backend.connected)
+      : []
+    if (backends.length === 0) return [await this.getDefault()]
+    return Promise.all(
+      backends.map((backend) => this.get(backend.browserId)),
+    )
   }
 
-  async get(name = "extension"): Promise<BrowserContext> {
-    if (name !== "extension") {
+  async get(
+    selection: string | BrowserSelection = "extension",
+  ): Promise<BrowserContext> {
+    if (typeof selection !== "string") {
+      const requestedID = selection.browserID
+        ?? selection.extensionInstanceID
+      if (requestedID) return this.get(requestedID)
+      if (selection.url) return this.getForUrl(selection.url)
+      if (
+        Number.isInteger(selection.preferredWindowId)
+        && Number(selection.preferredWindowId) > 0
+      ) {
+        const preferredWindowId = Number(selection.preferredWindowId)
+        const browsers = await this.list()
+        for (const browser of browsers) {
+          const tabs = await this.routingTabs(browser)
+          if (tabs.some((tab) => tab.windowId === preferredWindowId)) {
+            return browser
+          }
+        }
+      }
+      return this.getDefault()
+    }
+    const name = selection
+    const requestedBrowserID = name === "extension" ? undefined : name
+    const info = await this.#backend.getInfo(requestedBrowserID)
+    if (
+      requestedBrowserID
+      && info.backend.browserId !== requestedBrowserID
+      && info.backend.instanceID !== requestedBrowserID
+    ) {
       throw new BrowserRuntimeError(
         "BACKEND_UNAVAILABLE",
         `Unknown browser runtime '${name}'.`,
       )
     }
-    const info = await this.#backend.getInfo()
-    return new BrowserContext(this.#backend, info)
+    return new BrowserContext(
+      new BackendTransport(this.#transport, info.backend.browserId),
+      info,
+    )
   }
 
   async getDefault(): Promise<BrowserContext> {
@@ -798,8 +1009,44 @@ export class BrowserManager implements BrowserCollection {
   }
 
   async getForUrl(url: string | URL): Promise<BrowserContext> {
-    validateBrowserUrl(url)
-    return this.getDefault()
+    const target = validateBrowserUrl(url)
+    const browsers = await this.list()
+    for (const browser of browsers) {
+      const tabs = await this.routingTabs(browser)
+      if (tabs.some((tab) => {
+        try {
+          return tab.url ? new URL(tab.url).origin === target.origin : false
+        } catch {
+          return false
+        }
+      })) {
+        return browser
+      }
+    }
+    return browsers[0] ?? this.getDefault()
+  }
+
+  private async routingTabs(browser: BrowserContext) {
+    const methods = [
+      browser.capabilities.commands.includes("tabs.list")
+        ? browser.tabs.list()
+        : Promise.resolve([]),
+      browser.capabilities.commands.includes("tabs.listUser")
+        ? browser.tabs.listUser()
+        : Promise.resolve([]),
+    ]
+    return (await Promise.all(methods)).flat()
+  }
+
+  async finalizeAll(reason: BrowserContractCommandParams<"tabs.finalize">["reason"]) {
+    const browsers = await this.list()
+    return Promise.all(
+      browsers.map((browser) =>
+        browser.capabilities.commands.includes("tabs.finalize")
+          ? browser.tabs.finalize({ reason })
+          : Promise.resolve(undefined)
+      ),
+    )
   }
 }
 
@@ -814,8 +1061,19 @@ export async function setupBrowserRuntime(
     ? globals.agent as BrowserRuntimeAgent
     : {} as BrowserRuntimeAgent
 
-  agent.browsers = new BrowserManager(transport)
+  const browsers = new BrowserManager(transport)
+  agent.browsers = browsers
   globals.agent = agent
   globals.setupBrowserRuntime = setupBrowserRuntime
+  globals.nodeRepl?.addLifecycleHook?.(async (event) => {
+    const reason = event.type === "reset"
+      ? "node-repl-reset"
+      : event.type === "session-end"
+        ? "session-end"
+        : event.type === "transport-close"
+          ? "native-disconnect"
+          : "turn-end"
+    await browsers.finalizeAll(reason).catch(() => undefined)
+  })
   return agent
 }

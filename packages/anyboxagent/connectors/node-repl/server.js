@@ -15,8 +15,14 @@ let sandbox
 let writes
 let images
 let responseMeta
+let outboundRequestSequence = 0
+let lastRequestContext
 const nodeModuleDirs = []
 const requestContext = new AsyncLocalStorage()
+const executionTimeoutContext = new AsyncLocalStorage()
+const pendingClientRequests = new Map()
+const lifecycleHooks = new Set()
+const afterSubmittedCodeHooks = new Set()
 
 const tools = [
   {
@@ -72,6 +78,51 @@ const tools = [
 
 function send(payload) {
   process.stdout.write(`${JSON.stringify(payload)}\n`)
+}
+
+function requestClient(method, params, timeout = MAX_TIMEOUT_MS) {
+  const id = `anybox-node-repl:${++outboundRequestSequence}`
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      pendingClientRequests.delete(id)
+      const error = new Error(`${method} timed out after ${timeout}ms.`)
+      error.code = "ELICITATION_TIMEOUT"
+      reject(error)
+    }, timeout)
+    timer.unref?.()
+    pendingClientRequests.set(id, {
+      resolve(value) {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      reject(error) {
+        clearTimeout(timer)
+        reject(error)
+      },
+    })
+    send({ jsonrpc: "2.0", id, method, params })
+  })
+}
+
+function settleClientResponse(message) {
+  if (!message || message.method !== undefined || message.id === undefined) {
+    return false
+  }
+  const pending = pendingClientRequests.get(message.id)
+  if (!pending) return false
+  pendingClientRequests.delete(message.id)
+  if (message.error) {
+    const error = new Error(
+      typeof message.error.message === "string"
+        ? message.error.message
+        : "MCP client request failed.",
+    )
+    error.code = "ELICITATION_FAILED"
+    pending.reject(error)
+  } else {
+    pending.resolve(message.result)
+  }
+  return true
 }
 
 function textBlock(text) {
@@ -134,10 +185,67 @@ function publicRequestMeta() {
   const context = requestContext.getStore()
   if (!context) return undefined
   const result = {}
-  for (const key of ["sessionID", "messageID", "toolCallID"]) {
+  for (const key of ["sessionID", "turnID", "messageID", "toolCallID"]) {
     if (typeof context[key] === "string" && context[key]) result[key] = context[key]
   }
   return Object.keys(result).length > 0 ? Object.freeze(result) : undefined
+}
+
+async function runHookSet(hooks, payload) {
+  const failures = []
+  for (const hook of [...hooks]) {
+    try {
+      await hook(payload)
+    } catch (error) {
+      failures.push(error instanceof Error ? error.message : String(error))
+    }
+  }
+  if (failures.length > 0) {
+    process.stderr.write(`[anybox-node-repl] lifecycle hook failed: ${failures.join("; ")}\n`)
+  }
+}
+
+async function emitLifecycle(type, context = lastRequestContext, detail) {
+  const effectiveContext = lastRequestContext || context
+    ? { ...(lastRequestContext || {}), ...(context || {}) }
+    : undefined
+  const payload = Object.freeze({
+    type,
+    context: effectiveContext
+      ? Object.freeze({ ...effectiveContext })
+      : undefined,
+    detail,
+    timestamp: Date.now(),
+  })
+  if (effectiveContext) {
+    await requestContext.run(
+      effectiveContext,
+      () => runHookSet(lifecycleHooks, payload),
+    )
+    return
+  }
+  await runHookSet(lifecycleHooks, payload)
+}
+
+async function notifyContextTransition(nextContext) {
+  const previous = lastRequestContext
+  if (
+    previous?.turnID
+    && nextContext?.turnID
+    && previous.turnID !== nextContext.turnID
+  ) {
+    await emitLifecycle("turn-end", previous, { nextTurnID: nextContext.turnID })
+  }
+  if (
+    previous?.sessionID
+    && nextContext?.sessionID
+    && previous.sessionID !== nextContext.sessionID
+  ) {
+    await emitLifecycle("session-end", previous, {
+      nextSessionID: nextContext.sessionID,
+    })
+  }
+  lastRequestContext = nextContext ? { ...nextContext } : undefined
 }
 
 function resetKernel() {
@@ -191,6 +299,90 @@ function resetKernel() {
       images.push(image)
       return image
     },
+    async requestPermission(input) {
+      if (!input || typeof input !== "object" || Array.isArray(input)) {
+        throw new Error("requestPermission expects an object.")
+      }
+      const context = publicRequestMeta()
+      if (!context?.sessionID || !context?.turnID || !context?.messageID || !context?.toolCallID) {
+        const error = new Error(
+          "requestPermission requires sessionID, turnID, messageID, and toolCallID metadata.",
+        )
+        error.code = "PERMISSION_CONTEXT_REQUIRED"
+        throw error
+      }
+      const timeout = timeoutMs(input.timeoutMs ?? MAX_TIMEOUT_MS)
+      const execution = executionTimeoutContext.getStore()
+      execution?.pause()
+      let result
+      try {
+        result = await requestClient("elicitation/create", {
+          mode: "form",
+          message: typeof input.message === "string" && input.message.trim()
+            ? input.message.trim().slice(0, 1_000)
+            : "Allow this action?",
+          requestedSchema: {
+            type: "object",
+            properties: {
+              decision: {
+                type: "string",
+                title: "Decision",
+                oneOf: [
+                  { const: "deny", title: "Deny" },
+                  { const: "allow-once", title: "Allow once" },
+                  { const: "allow-session", title: "Allow for this session" },
+                ],
+                default: "allow-once",
+              },
+            },
+            required: ["decision"],
+          },
+          _meta: {
+            "anybox/permission": {
+              ...input,
+              timeoutMs: timeout,
+              continuation: "in-process",
+              context,
+            },
+          },
+        }, timeout)
+      } finally {
+        execution?.resume()
+      }
+      if (!result || typeof result !== "object") {
+        throw new Error("The permission client returned an invalid response.")
+      }
+      const content = result.content && typeof result.content === "object"
+        ? result.content
+        : {}
+      const decision = result.action === "accept"
+        && ["allow-once", "allow-session"].includes(content.decision)
+        ? content.decision
+        : "deny"
+      return Object.freeze({
+        allowed: decision !== "deny",
+        decision,
+        action: result.action,
+        grantID: typeof content.grantID === "string" ? content.grantID : undefined,
+        authorization: typeof content.authorization === "string"
+          ? content.authorization
+          : undefined,
+      })
+    },
+    addLifecycleHook(hook) {
+      if (typeof hook !== "function") {
+        throw new Error("addLifecycleHook expects a function.")
+      }
+      lifecycleHooks.add(hook)
+      return () => lifecycleHooks.delete(hook)
+    },
+    addAfterSubmittedCodeHook(hook) {
+      if (typeof hook !== "function") {
+        throw new Error("addAfterSubmittedCodeHook expects a function.")
+      }
+      afterSubmittedCodeHooks.add(hook)
+      return () => afterSubmittedCodeHooks.delete(hook)
+    },
   }
   Object.defineProperty(nodeRepl, "requestMeta", {
     enumerable: true,
@@ -236,17 +428,65 @@ function timeoutMs(value) {
   return Math.min(Math.trunc(parsed), MAX_TIMEOUT_MS)
 }
 
-async function runWithTimeout(promise, ms) {
+function executionTimeoutBudget(ms) {
+  let remaining = ms
+  let lastActiveAt = Date.now()
+  let pauseDepth = 0
+  let changed
+  const consume = () => {
+    if (pauseDepth > 0) return
+    const current = Date.now()
+    remaining -= current - lastActiveAt
+    lastActiveAt = current
+  }
+  return {
+    remaining() {
+      consume()
+      return remaining
+    },
+    pause() {
+      consume()
+      pauseDepth += 1
+      changed?.()
+    },
+    resume() {
+      if (pauseDepth === 0) return
+      pauseDepth -= 1
+      lastActiveAt = Date.now()
+      changed?.()
+    },
+    paused() {
+      return pauseDepth > 0
+    },
+    onChanged(callback) {
+      changed = callback
+    },
+  }
+}
+
+async function runWithTimeout(promise, ms, budget) {
   let timer
+  let settled = false
+  const timeoutPromise = new Promise((_, reject) => {
+    const schedule = () => {
+      clearTimeout(timer)
+      if (settled || budget.paused()) return
+      const remaining = budget.remaining()
+      if (remaining <= 0) {
+        reject(new Error(`Execution timed out after ${ms}ms.`))
+        return
+      }
+      timer = setTimeout(schedule, remaining)
+    }
+    budget.onChanged(schedule)
+    schedule()
+  })
   try {
-    return await Promise.race([
-      promise,
-      new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error(`Execution timed out after ${ms}ms.`)), ms)
-      }),
-    ])
+    return await Promise.race([promise, timeoutPromise])
   } finally {
+    settled = true
     clearTimeout(timer)
+    budget.onChanged(undefined)
   }
 }
 
@@ -259,10 +499,29 @@ async function runJavaScript(code, ms) {
     "nodeRepl",
     `with (sandbox) { return await (async () => {\n${code}\n})() }`,
   )
-  const value = await runWithTimeout(
-    fn.call(sandbox, sandbox, sandbox.nodeRepl),
-    ms,
-  )
+  let value
+  let failure
+  try {
+    const budget = executionTimeoutBudget(ms)
+    value = await runWithTimeout(
+      executionTimeoutContext.run(
+        budget,
+        () => fn.call(sandbox, sandbox, sandbox.nodeRepl),
+      ),
+      ms,
+      budget,
+    )
+  } catch (error) {
+    failure = error
+    throw error
+  } finally {
+    await runHookSet(afterSubmittedCodeHooks, Object.freeze({
+      context: publicRequestMeta(),
+      ok: !failure,
+      error: failure instanceof Error ? failure.message : failure ? String(failure) : undefined,
+      timestamp: Date.now(),
+    }))
+  }
 
   const textParts = [...writes]
   const printed = printable(value)
@@ -291,6 +550,10 @@ async function callTool(name, args, context) {
   }[name] || name
 
   if (normalizedName === "js_reset") {
+    await emitLifecycle("reset")
+    lifecycleHooks.clear()
+    afterSubmittedCodeHooks.clear()
+    lastRequestContext = undefined
     resetKernel()
     return textResult("Node REPL reset.", { reset: true })
   }
@@ -303,6 +566,7 @@ async function callTool(name, args, context) {
   if (normalizedName === "js") {
     const code = args && typeof args.code === "string" ? args.code : ""
     if (!code.trim()) throw new Error("js requires code.")
+    await notifyContextTransition(context)
     return requestContext.run(
       context,
       () => runJavaScript(code, timeoutMs(args && args.timeoutMs)),
@@ -318,6 +582,7 @@ function readRequestContext(message) {
   const context = {}
   const aliases = {
     sessionID: ["sessionID", "sessionId", "anybox/sessionID"],
+    turnID: ["turnID", "turnId", "anybox/turnID"],
     messageID: ["messageID", "messageId", "anybox/messageID"],
     toolCallID: ["toolCallID", "toolCallId", "anybox/toolCallID"],
   }
@@ -340,6 +605,7 @@ rl.on("line", (line) => {
     if (!line.trim()) return
     const message = JSON.parse(line)
     requestID = message.id ?? null
+    if (settleClientResponse(message)) return
 
     if (message.method === "initialize") {
       send({
@@ -351,6 +617,21 @@ rl.on("line", (line) => {
           serverInfo: { name: "anybox-node-repl", version: "0.1.0" },
         },
       })
+      return
+    }
+
+    if (message.method === "notifications/anybox/lifecycle") {
+      const params = message.params && typeof message.params === "object"
+        ? message.params
+        : {}
+      const context = params.context && typeof params.context === "object"
+        ? params.context
+        : undefined
+      await emitLifecycle(
+        typeof params.type === "string" ? params.type : "turn-end",
+        context,
+        params.detail,
+      )
       return
     }
 
@@ -405,5 +686,13 @@ rl.on("line", (line) => {
 })
 
 rl.on("close", () => {
-  process.exit(0)
+  void emitLifecycle("transport-close").finally(() => {
+    for (const pending of pendingClientRequests.values()) {
+      const error = new Error("MCP transport closed during an in-process request.")
+      error.code = "CONNECTION_CLOSED"
+      pending.reject(error)
+    }
+    pendingClientRequests.clear()
+    process.exit(0)
+  })
 })

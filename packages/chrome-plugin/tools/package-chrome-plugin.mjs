@@ -412,11 +412,11 @@ export async function validateChromePluginPackage(packageRoot) {
       "utf8",
     )
     if (
-      !/Selector-driven click\/fill adapters, page JavaScript, and CDP are disabled/i.test(skill)
+      !/Structured locators are available only when advertised/i.test(skill)
+      || !/Raw page JavaScript and unrestricted CDP are disabled/i.test(skill)
       || !/\bbrowser-client\.mjs\b/.test(skill)
       || !/\bpathToFileURL\b/.test(skill)
       || !/connector_node_repl_default/.test(skill)
-      || !/disabled until Anybox can enforce command-level capability/i.test(browserRuntime)
       || !/\bsetupBrowserRuntime\b/.test(browserRuntime)
       || /\brequestHost\b/.test(browserRuntime)
       || !/\bbrowser-host\.mjs\b/.test(browserRuntime)
@@ -424,6 +424,8 @@ export async function validateChromePluginPackage(packageRoot) {
       || !/\bcontractVersion\b/.test(browserRuntime)
       || !/\barbitraryJavaScript\b/.test(browserRuntime)
       || !/\bfullCdp\b/.test(browserRuntime)
+      || !/\blocator\.click\b/.test(browserRuntime)
+      || !/\blocator\.fill\b/.test(browserRuntime)
       || !/\bCAPABILITY_UNAVAILABLE\b/.test(browserRuntime)
       || !/\bBrowser Host\b/.test(browserHost)
       || !/\bruntime\.request\b/.test(browserHost)

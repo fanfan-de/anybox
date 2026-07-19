@@ -81,6 +81,8 @@ export const zhTW = {
   "thread.permission.note": "等待你的決定。",
   "thread.permission.applying": "處理中...",
   "thread.permission.action.allow": "允許",
+  "thread.permission.action.allowOnce": "僅允許一次",
+  "thread.permission.action.allowSession": "本工作階段允許",
   "thread.permission.action.deny": "拒絕",
   "thread.permission.decisionAria": "{decision}：{title}",
   "thread.permission.risk.low": "低風險",

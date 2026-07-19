@@ -6,15 +6,23 @@ import {
   BrowserExtensionCommandContext,
 } from "./browser-extension"
 import {
+  BrowserAuthorizationReceipt,
   BROWSER_CONTRACT_ERROR_CODES,
   BrowserGetInfoResult,
 } from "./browser-contract"
 
 export const BROWSER_IPC_PROTOCOL_VERSION = 1 as const
-export const MAX_BROWSER_IPC_FRAME_BYTES = 16 * 1024 * 1024
+export const MAX_BROWSER_IPC_FRAME_BYTES = 4 * 1024 * 1024
+export const MAX_BROWSER_IPC_MESSAGE_BYTES = 64 * 1024 * 1024
+// Base64-encoded chunks remain safely below Chrome's 1 MiB
+// Native Host -> Extension message ceiling.
+export const MAX_BROWSER_IPC_CHUNK_BYTES = 512 * 1024
+export const MAX_BROWSER_IPC_CHUNKS = Math.ceil(
+  MAX_BROWSER_IPC_MESSAGE_BYTES / MAX_BROWSER_IPC_CHUNK_BYTES,
+)
 export const BROWSER_IPC_HANDSHAKE_TIMEOUT_MS = 5_000
-export const BROWSER_IPC_RUNTIME_CLIENT_VERSION = "0.4.0"
-export const BROWSER_IPC_NATIVE_HOST_VERSION = "0.3.0"
+export const BROWSER_IPC_RUNTIME_CLIENT_VERSION = "0.11.0"
+export const BROWSER_IPC_NATIVE_HOST_VERSION = "0.11.0"
 
 export const BrowserIpcRole = z.enum(["runtime", "native-host"])
 export type BrowserIpcRole = z.infer<typeof BrowserIpcRole>
@@ -136,6 +144,7 @@ export const BrowserIpcRuntimeGetInfoRequest = z.object({
   requestID: z.string().min(1),
   operation: z.literal("getInfo"),
   contractVersion: z.number().int().positive(),
+  browserID: z.string().trim().min(1).max(256).optional(),
 }).strict()
 export type BrowserIpcRuntimeGetInfoRequest = z.infer<
   typeof BrowserIpcRuntimeGetInfoRequest
@@ -152,6 +161,7 @@ export const BrowserIpcRuntimeCommandRequest = z.object({
   method: BrowserIpcRuntimeCommandMethod,
   params: z.unknown().optional(),
   context: BrowserExtensionCommandContext.optional(),
+  authorization: BrowserAuthorizationReceipt.optional(),
   timeoutMs: z.number().int().positive().max(120_000).optional(),
 }).strict()
 export type BrowserIpcRuntimeCommandRequest = z.infer<typeof BrowserIpcRuntimeCommandRequest>
@@ -200,6 +210,23 @@ export const BrowserIpcNativeMessage = z.object({
 }).strict()
 export type BrowserIpcNativeMessage = z.infer<typeof BrowserIpcNativeMessage>
 
+export const BrowserIpcNativeChunkMessage = z.object({
+  type: z.literal("native.chunk"),
+  transferID: z.string().min(1).max(128),
+  index: z.number().int().nonnegative().max(MAX_BROWSER_IPC_CHUNKS - 1),
+  total: z.number().int().positive().max(MAX_BROWSER_IPC_CHUNKS),
+  totalBytes: z.number().int().positive().max(MAX_BROWSER_IPC_MESSAGE_BYTES),
+  data: z.string().regex(/^[A-Za-z0-9+/]*={0,2}$/u).max(
+    Math.ceil(MAX_BROWSER_IPC_CHUNK_BYTES / 3) * 4,
+  ),
+}).strict().refine(
+  (value) => value.index < value.total,
+  "Native chunk index must be smaller than its total.",
+)
+export type BrowserIpcNativeChunkMessage = z.infer<
+  typeof BrowserIpcNativeChunkMessage
+>
+
 export const BrowserIpcPingMessage = z.object({
   type: z.literal("ping"),
   nonce: z.string().min(1),
@@ -214,6 +241,7 @@ export const BrowserIpcClientMessage = z.union([
   BrowserIpcHelloMessage,
   BrowserIpcRuntimeRequest,
   BrowserIpcNativeMessage,
+  BrowserIpcNativeChunkMessage,
   BrowserIpcPongMessage,
 ])
 export type BrowserIpcClientMessage = z.infer<typeof BrowserIpcClientMessage>
@@ -224,6 +252,7 @@ export const BrowserIpcServerMessage = z.union([
   BrowserIpcErrorMessage,
   BrowserIpcRuntimeResponse,
   BrowserIpcNativeMessage,
+  BrowserIpcNativeChunkMessage,
   BrowserIpcPingMessage,
 ])
 export type BrowserIpcServerMessage = z.infer<typeof BrowserIpcServerMessage>

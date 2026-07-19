@@ -8,11 +8,57 @@ import { Instance } from "#project/instance.ts"
 import * as Identifier from "#id/id.ts"
 import * as Config from "#config/config.ts"
 import * as Permission from "#permission/permission.ts"
+import {
+  getBrowserAuthorizationEnvironment,
+  signBrowserAuthorizationReceipt,
+  verifyBrowserAuthorizationReceiptForTest,
+} from "#permission/authorization-receipt.ts"
 import * as Message from "#session/core/message.ts"
 import * as Session from "#session/core/session.ts"
 import * as EventStore from "#session/runtime/event-store.ts"
 import * as RuntimeEvent from "#session/runtime/runtime-event.ts"
+import * as Orchestrator from "#session/runtime/orchestrator.ts"
 import * as db from "#database/Sqlite.ts"
+
+test("browser authorization exposes only an asymmetric verification key", () => {
+  const environment = getBrowserAuthorizationEnvironment()
+  expect(Object.keys(environment)).toEqual([
+    "ANYBOX_BROWSER_AUTH_PUBLIC_KEY",
+  ])
+  expect(environment).not.toHaveProperty("ANYBOX_BROWSER_AUTH_SECRET")
+
+  const context = {
+    sessionID: "session-public-key",
+    turnID: "turn-public-key",
+    messageID: "message-public-key",
+    toolCallID: "tool-public-key",
+  }
+  const now = Date.now()
+  const receipt = signBrowserAuthorizationReceipt({
+    context,
+    decision: "allow-once",
+    challenge: {
+      challengeID: "challenge-public-key",
+      nonce: "challenge-nonce",
+      grantID: "grant-public-key",
+      method: "tabs.open",
+      security: "target-url",
+      ...context,
+      browserID: "extension:profile-public-key",
+      extensionInstanceID: "profile-public-key",
+      origin: "https://example.com",
+      sensitive: false,
+      issuedAt: now,
+      expiresAt: now + 60_000,
+    },
+  })
+
+  expect(verifyBrowserAuthorizationReceiptForTest(receipt)).toMatchObject({
+    method: "tabs.open",
+    origin: "https://example.com",
+    ...context,
+  })
+})
 
 async function createGitRepo(root: string, seed: string) {
   await mkdir(root, { recursive: true })
@@ -23,6 +69,220 @@ async function createGitRepo(root: string, seed: string) {
   await $`git add README.md`.cwd(root).quiet()
   await $`git commit -m init`.cwd(root).quiet()
 }
+
+async function waitForPendingBrowserPermission(
+  sessionID: string,
+  toolCallID: string,
+) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const request = (await Permission.listRequests({
+      sessionID,
+      status: "pending",
+    })).find((candidate) => candidate.toolCallID === toolCallID)
+    if (request) return request
+    await Bun.sleep(5)
+  }
+  throw new Error(`Pending browser permission '${toolCallID}' was not created.`)
+}
+
+test("in-process browser permissions scope session grants and fail closed", async () => {
+  const repositoryRoot = await mkdtemp(
+    path.join(tmpdir(), "anybox-permission-browser-origin-"),
+  )
+
+  try {
+    await createGitRepo(repositoryRoot, "browser-origin-permission")
+    await Instance.provide({
+      directory: repositoryRoot,
+      async fn() {
+        await Config.setPermissionMode(Config.GLOBAL_CONFIG_ID, "default")
+        const session = await Session.createSession({
+          directory: Instance.directory,
+          projectID: Instance.project.id,
+        })
+        const assistant: Message.Assistant = {
+          id: Identifier.ascending("message"),
+          sessionID: session.id,
+          role: "assistant",
+          created: Date.now(),
+          parentID: "",
+          modelID: "test-model",
+          providerID: "test-provider",
+          agent: "default",
+          path: {
+            cwd: Instance.directory,
+            root: Instance.worktree,
+          },
+          cost: 0,
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: {
+              read: 0,
+              write: 0,
+            },
+          },
+        }
+        Session.DataBaseCreate("messages", assistant)
+        const turn = Orchestrator.startTurn({ sessionID: session.id })
+        const scope = {
+          kind: "browser-origin" as const,
+          sessionID: session.id,
+          extensionInstanceID: "extension-profile-a",
+          origin: "https://example.com",
+          browserID: "browser-profile-a",
+        }
+        const request = (
+          toolCallID: string,
+          overrides: Partial<Permission.InProcessPermissionInput> = {},
+        ) => Permission.requestInProcessPermission({
+          context: {
+            sessionID: session.id,
+            turnID: turn.turnID,
+            messageID: assistant.id,
+            toolCallID,
+          },
+          scope,
+          method: "page.click",
+          tabID: 42,
+          tabTitle: "Example",
+          risk: "medium",
+          action: "ask",
+          ...overrides,
+        })
+
+        try {
+          const firstResult = request("browser_first")
+          const first = await waitForPendingBrowserPermission(
+            session.id,
+            "browser_first",
+          )
+          expect(first.prompt?.allowedDecisions).toEqual([
+            "deny",
+            "allow-once",
+            "allow-session",
+          ])
+          await Permission.resolveRequest(first.id, {
+            decision: "allow-session",
+          })
+          await expect(firstResult).resolves.toMatchObject({
+            decision: "allow-session",
+            grantID: first.grantID,
+          })
+
+          const duplicate = await Permission.resolveRequest(first.id, {
+            decision: "deny",
+          })
+          expect(duplicate.request.resolution?.decision).toBe("allow-session")
+
+          await expect(request("browser_reused")).resolves.toMatchObject({
+            decision: "allow-session",
+            grantID: first.grantID,
+          })
+
+          const sensitiveResult = request("browser_sensitive", {
+            method: "locator.fill",
+            sensitive: true,
+            risk: "high",
+          })
+          const sensitive = await waitForPendingBrowserPermission(
+            session.id,
+            "browser_sensitive",
+          )
+          expect(sensitive.prompt?.allowedDecisions).toEqual([
+            "deny",
+            "allow-once",
+          ])
+          await expect(Permission.resolveRequest(sensitive.id, {
+            decision: "allow-session",
+          })).rejects.toThrow("is not allowed")
+          await Permission.resolveRequest(sensitive.id, {
+            decision: "allow-once",
+          })
+          await expect(sensitiveResult).resolves.toMatchObject({
+            decision: "allow-once",
+          })
+
+          const otherOriginResult = request("browser_other_origin", {
+            scope: {
+              ...scope,
+              origin: "https://other.example",
+            },
+          })
+          const otherOrigin = await waitForPendingBrowserPermission(
+            session.id,
+            "browser_other_origin",
+          )
+          await Permission.resolveRequest(otherOrigin.id, {
+            decision: "deny",
+          })
+          await expect(otherOriginResult).resolves.toMatchObject({
+            decision: "deny",
+          })
+
+          const cancelledResult = request("browser_cancelled", {
+            scope: {
+              ...scope,
+              origin: "https://cancel.example",
+            },
+          })
+          const cancelled = await waitForPendingBrowserPermission(
+            session.id,
+            "browser_cancelled",
+          )
+          await Permission.clearInProcessPermissionSession(session.id)
+          await expect(cancelledResult).resolves.toMatchObject({
+            decision: "deny",
+          })
+          expect((await Permission.getRequest(cancelled.id))?.status).toBe(
+            "denied",
+          )
+
+          const timeoutResult = request("browser_timeout", {
+            scope: {
+              ...scope,
+              origin: "https://timeout.example",
+            },
+            timeoutMs: 1_000,
+          })
+          const timedOut = await waitForPendingBrowserPermission(
+            session.id,
+            "browser_timeout",
+          )
+          await expect(Promise.race([
+            timeoutResult,
+            Bun.sleep(2_500).then(() => {
+              throw new Error("Browser permission timeout did not settle.")
+            }),
+          ])).resolves.toMatchObject({
+            decision: "deny",
+          })
+          expect((await Permission.getRequest(timedOut.id))?.status).toBe(
+            "expired",
+          )
+
+          const audits = db.findManyWithSchema(
+            "permission_audits",
+            Permission.Audit,
+            {
+              where: [{ column: "sessionID", value: session.id }],
+            },
+          )
+          expect(audits.some((audit) => audit.action === "ask")).toBe(true)
+          expect(audits.some((audit) => audit.action === "allow")).toBe(true)
+          expect(audits.some((audit) => audit.action === "deny")).toBe(true)
+          expect(JSON.stringify(audits)).not.toContain("fill text")
+        } finally {
+          await Permission.clearInProcessPermissionSession(session.id)
+          Orchestrator.finishTurn(turn)
+        }
+      },
+    })
+  } finally {
+    await rm(repositoryRoot, { recursive: true, force: true })
+  }
+}, 120000)
 
 test("permission defaults auto-run safe reads and writes while honoring tool deny intents", async () => {
   const repositoryRoot = await mkdtemp(path.join(tmpdir(), "anybox-permission-defaults-"))

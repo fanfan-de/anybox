@@ -472,6 +472,7 @@ export const ExecTool = Tool.define(
                   item,
                   agent,
                   sessionID: ctx.sessionID,
+                  turnID: ctx.turnID,
                   messageID: ctx.messageID,
                   abort: combinedAbort.signal,
                 })

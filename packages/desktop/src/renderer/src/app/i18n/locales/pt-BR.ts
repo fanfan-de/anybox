@@ -81,6 +81,8 @@ export const ptBR = {
   "thread.permission.note": "Aguardando sua decisão.",
   "thread.permission.applying": "Aplicando...",
   "thread.permission.action.allow": "Permitir",
+  "thread.permission.action.allowOnce": "Permitir uma vez",
+  "thread.permission.action.allowSession": "Permitir nesta sessão",
   "thread.permission.action.deny": "Negar",
   "thread.permission.decisionAria": "{decision}: {title}",
   "thread.permission.risk.low": "Baixo risco",

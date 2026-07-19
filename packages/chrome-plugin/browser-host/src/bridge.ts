@@ -4,6 +4,7 @@ import {
   BrowserExtensionClientMessage,
   BrowserExtensionCommandMethod,
   BrowserExtensionServerMessage,
+  BrowserExtensionTabsListResult,
   type BrowserExtensionClientMessage as BrowserExtensionClientMessageValue,
   type BrowserExtensionCommandContext,
   type BrowserExtensionCommandMethod as BrowserExtensionCommandMethodValue,
@@ -11,6 +12,9 @@ import {
 } from "@anybox/chrome-shared/browser-extension"
 import {
   BROWSER_CONTRACT_COMMAND_METHODS,
+  BROWSER_CONTRACT_SUPPORTED_VERSIONS,
+  BROWSER_CONTRACT_V1_COMMAND_METHODS,
+  BROWSER_CONTRACT_V1_VERSION,
   BROWSER_CONTRACT_VERSION,
   BrowserContractCommandMethod,
   createBrowserBackendInfo,
@@ -20,6 +24,15 @@ import {
 import * as Log from "./log.ts"
 
 const DEFAULT_COMMAND_TIMEOUT_MS = 15_000
+const V1_SAFE_READ_METHODS = new Set<BrowserContractCommandMethodValue>([
+  "tabs.list",
+  "page.snapshot",
+  "page.interactiveSnapshot",
+  "page.domTree",
+  "page.accessibilityTree",
+  "page.screenshot",
+  "page.waitFor",
+])
 
 type SocketLike = {
   send(data: string): void
@@ -37,8 +50,10 @@ type Connection = {
   hostName?: string
   lastTransportError?: string
   browserCommands?: BrowserContractCommandMethodValue[]
+  advertisedBrowserContractVersion?: number
   browserContractVersion?: number
   browserContractCompatible?: boolean
+  browserID?: string
   connectedAt: number
   lastSeenAt: number
 }
@@ -68,7 +83,9 @@ type LastCommand = {
   method: BrowserExtensionCommandMethodValue
   sessionID?: string
   messageID?: string
+  turnID?: string
   toolCallID?: string
+  browserID?: string
   startedAt: number
   completedAt?: number
   ok?: boolean
@@ -85,6 +102,8 @@ type SendCommandOptions = {
   timeoutMs?: number
   context?: BrowserExtensionCommandContext
   trusted?: boolean
+  browserID?: string
+  contractVersion?: number
 }
 
 const log = Log.create({ service: "browser-extension" })
@@ -98,6 +117,24 @@ function normalizeError(error: unknown) {
   return new Error(typeof error === "string" ? error : String(error))
 }
 
+function configuredContractMaxVersion() {
+  const parsed = Number(process.env.ANYBOX_BROWSER_CONTRACT_MAX_VERSION)
+  return Number.isInteger(parsed) && parsed > 0
+    ? Math.min(parsed, BROWSER_CONTRACT_VERSION)
+    : BROWSER_CONTRACT_VERSION
+}
+
+function negotiatedContractVersion(advertised: readonly number[]) {
+  const maximum = configuredContractMaxVersion()
+  return [...BROWSER_CONTRACT_SUPPORTED_VERSIONS]
+    .filter((version) => version <= maximum && advertised.includes(version))
+    .sort((left, right) => right - left)[0]
+}
+
+function browserIDForInstance(extensionInstanceID: string) {
+  return `extension:${extensionInstanceID}`
+}
+
 export class BrowserExtensionBridge {
   private readonly connections = new Map<string, Connection>()
   private readonly pending = new Map<string, PendingCommand>()
@@ -105,6 +142,16 @@ export class BrowserExtensionBridge {
   private activeConnectionID: string | undefined
   private activeSessionID: string | undefined
   private lastCommand: LastCommand | undefined
+  private readonly seenExtensionInstances = new Set<string>()
+  private reconnectCount = 0
+  private lastCleanup: {
+    sessionID?: string
+    closed: number
+    released: number
+    retained: number
+    detached: number
+    completedAt: number
+  } | undefined
 
   status() {
     const active = this.activeConnection()
@@ -124,24 +171,73 @@ export class BrowserExtensionBridge {
           }
         : null,
       connectionCount: this.connections.size,
+      backends: this.backendInfos(),
       activeSessionID: this.activeSessionID,
       ownedTabs: [...this.ownedTabs.values()].sort((left, right) => right.lastUsedAt - left.lastUsedAt),
       lastCommand: this.lastCommand,
+      reconnectCount: this.reconnectCount,
+      lastCleanup: this.lastCleanup,
     }
   }
 
-  backendInfo() {
-    const active = this.activeConnection()
+  backendInfo(browserID?: string) {
+    const active = this.activeConnection(browserID)
     return createBrowserBackendInfo({
       connected: Boolean(active),
+      contractVersion: active?.browserContractVersion === BROWSER_CONTRACT_V1_VERSION
+        ? BROWSER_CONTRACT_V1_VERSION
+        : BROWSER_CONTRACT_VERSION,
+      browserId: active?.browserID ?? browserID ?? "extension",
+      instanceID: active?.extensionInstanceID,
       protocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
       backendVersion: active?.version,
       commands: active?.browserCommands ?? [],
+      features: {
+        ownership: active?.browserContractVersion === BROWSER_CONTRACT_VERSION,
+        claim: active?.browserContractVersion === BROWSER_CONTRACT_VERSION,
+        locator: active?.browserCommands?.some((method) =>
+          method.startsWith("locator.")
+        ) ?? false,
+        cancel: false,
+      },
     })
   }
 
-  getInfo() {
-    return createBrowserGetInfoResult(this.backendInfo())
+  backendInfos() {
+    return [...this.connections.values()]
+      .filter((connection) =>
+        connection.ready && connection.browserContractCompatible === true
+      )
+      .map((connection) => this.backendInfo(connection.browserID))
+  }
+
+  getInfo(
+    browserID?: string,
+    contractVersion: typeof BROWSER_CONTRACT_V1_VERSION
+      | typeof BROWSER_CONTRACT_VERSION = BROWSER_CONTRACT_VERSION,
+  ) {
+    const backend = this.backendInfo(browserID)
+    const publicBackend = contractVersion === BROWSER_CONTRACT_V1_VERSION
+      ? {
+          ...backend,
+          capabilities: {
+            ...backend.capabilities,
+            commands: backend.capabilities.commands.filter((method) =>
+              V1_SAFE_READ_METHODS.has(method)
+            ),
+            features: {
+              ...backend.capabilities.features,
+              ownership: false,
+              claim: false,
+              locator: false,
+            },
+          },
+        }
+      : backend
+    return createBrowserGetInfoResult(
+      publicBackend,
+      contractVersion,
+    )
   }
 
   browserContractCompatibility() {
@@ -155,7 +251,8 @@ export class BrowserExtensionBridge {
       connected: Boolean(active ?? incompatible),
       compatible: Boolean(active) || !incompatible,
       advertisedVersion:
-        active?.browserContractVersion ?? incompatible?.browserContractVersion,
+        active?.advertisedBrowserContractVersion
+          ?? incompatible?.advertisedBrowserContractVersion,
     }
   }
 
@@ -267,7 +364,9 @@ export class BrowserExtensionBridge {
     options: SendCommandOptions = {},
   ) {
     BrowserExtensionCommandMethod.parse(method)
-    const connection = this.activeConnection()
+    const connection = this.activeConnection(
+      options.browserID ?? options.context?.browserID,
+    )
     if (!connection) {
       throw new Error("No Chrome extension is connected to Anybox.")
     }
@@ -288,12 +387,19 @@ export class BrowserExtensionBridge {
     const commandID = crypto.randomUUID()
     const timeoutMs = options.timeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS
     if (options.context?.sessionID) this.activeSessionID = options.context.sessionID
+    const commandContext: BrowserExtensionCommandContext = {
+      ...options.context,
+      browserID: connection.browserID,
+      extensionInstanceID: connection.extensionInstanceID,
+    }
     this.lastCommand = {
       commandID,
       method,
-      sessionID: options.context?.sessionID,
-      messageID: options.context?.messageID,
-      toolCallID: options.context?.toolCallID,
+      sessionID: commandContext.sessionID,
+      turnID: commandContext.turnID,
+      messageID: commandContext.messageID,
+      toolCallID: commandContext.toolCallID,
+      browserID: connection.browserID,
       startedAt: Date.now(),
       trusted: options.trusted,
     }
@@ -305,9 +411,11 @@ export class BrowserExtensionBridge {
           ...(this.lastCommand?.commandID === commandID ? this.lastCommand : {
             commandID,
             method,
-            sessionID: options.context?.sessionID,
-            messageID: options.context?.messageID,
-            toolCallID: options.context?.toolCallID,
+            sessionID: commandContext.sessionID,
+            turnID: commandContext.turnID,
+            messageID: commandContext.messageID,
+            toolCallID: commandContext.toolCallID,
+            browserID: connection.browserID,
             startedAt: Date.now(),
             trusted: options.trusted,
           }),
@@ -330,7 +438,7 @@ export class BrowserExtensionBridge {
         commandID,
         connectionID: connection.connectionID,
         method,
-        context: options.context,
+        context: commandContext,
         trusted: options.trusted,
         resolve,
         reject,
@@ -341,10 +449,13 @@ export class BrowserExtensionBridge {
         send(connection.socket, {
           type: "command",
           commandID,
-          contractVersion: BROWSER_CONTRACT_VERSION,
+          contractVersion:
+            options.contractVersion
+            ?? connection.browserContractVersion
+            ?? BROWSER_CONTRACT_VERSION,
           method,
           params,
-          context: options.context,
+          context: commandContext,
         })
       } catch (error) {
         clearTimeout(timer)
@@ -353,9 +464,11 @@ export class BrowserExtensionBridge {
           ...(this.lastCommand?.commandID === commandID ? this.lastCommand : {
             commandID,
             method,
-            sessionID: options.context?.sessionID,
-            messageID: options.context?.messageID,
-            toolCallID: options.context?.toolCallID,
+            sessionID: commandContext.sessionID,
+            turnID: commandContext.turnID,
+            messageID: commandContext.messageID,
+            toolCallID: commandContext.toolCallID,
+            browserID: connection.browserID,
             startedAt: Date.now(),
             trusted: options.trusted,
           }),
@@ -379,7 +492,70 @@ export class BrowserExtensionBridge {
     return true
   }
 
-  private activeConnection() {
+  async describeTab(
+    tabId: number,
+    options: SendCommandOptions = {},
+  ) {
+    const connection = this.activeConnection(
+      options.browserID ?? options.context?.browserID,
+    )
+    if (!connection) return undefined
+    const methods: BrowserExtensionCommandMethodValue[] =
+      connection.browserContractVersion === BROWSER_CONTRACT_VERSION
+        ? ["tabs.list", "tabs.listUser"]
+        : ["tabs.list"]
+    for (const method of methods) {
+      if (!connection.browserCommands?.includes(
+        method as BrowserContractCommandMethodValue,
+      )) {
+        continue
+      }
+      const result = BrowserExtensionTabsListResult.safeParse(
+        await this.sendCommand(method, {}, {
+          ...options,
+          trusted: true,
+          contractVersion: connection.browserContractVersion,
+        }),
+      )
+      const tab = result.success
+        ? result.data.tabs.find((candidate) => candidate.id === tabId)
+        : undefined
+      if (tab) return tab
+    }
+    return undefined
+  }
+
+  heartbeat(now = Date.now()) {
+    let pinged = 0
+    let disconnected = 0
+    for (const connection of [...this.connections.values()]) {
+      if (!connection.ready) continue
+      if (now - connection.lastSeenAt > 40_000) {
+        disconnected += 1
+        connection.socket.close(1011, "Browser extension heartbeat timed out.")
+        this.unregister(connection.connectionID)
+        continue
+      }
+      send(connection.socket, {
+        type: "ping",
+        nonce: crypto.randomUUID(),
+      })
+      pinged += 1
+    }
+    return { pinged, disconnected }
+  }
+
+  private activeConnection(browserID?: string) {
+    if (browserID) {
+      return [...this.connections.values()].find((connection) =>
+        connection.ready
+        && connection.browserContractCompatible === true
+        && (
+          connection.browserID === browserID
+          || connection.extensionInstanceID === browserID
+        )
+      )
+    }
     if (this.activeConnectionID) {
       const active = this.connections.get(this.activeConnectionID)
       if (active?.ready && active.browserContractCompatible === true) {
@@ -408,26 +584,42 @@ export class BrowserExtensionBridge {
           return
         }
         connection.extensionInstanceID = message.extensionInstanceID
+        if (this.seenExtensionInstances.has(message.extensionInstanceID)) {
+          this.reconnectCount += 1
+        } else {
+          this.seenExtensionInstances.add(message.extensionInstanceID)
+        }
+        connection.browserID = browserIDForInstance(message.extensionInstanceID)
         connection.extensionID = message.extensionID
         connection.version = message.version
         connection.lastTransportError = message.lastTransportError
         const legacyContractV1 =
           !message.capabilities && /^0\.1\./.test(message.version)
-        connection.browserContractVersion =
-          message.capabilities?.contractVersion
-          ?? (legacyContractV1 ? BROWSER_CONTRACT_VERSION : undefined)
-        connection.browserContractCompatible =
-          message.capabilities
-            ? message.capabilities.contractVersion === BROWSER_CONTRACT_VERSION
+        const advertisedVersions = message.capabilities?.contractVersions
+          ?? (message.capabilities
+            ? [message.capabilities.contractVersion]
             : legacyContractV1
+              ? [BROWSER_CONTRACT_V1_VERSION]
+              : [])
+        connection.advertisedBrowserContractVersion = advertisedVersions
+          .filter((version) => Number.isInteger(version))
+          .sort((left, right) => right - left)[0]
+        connection.browserContractVersion =
+          negotiatedContractVersion(advertisedVersions)
+        connection.browserContractCompatible =
+          connection.browserContractVersion !== undefined
+        const contractCommands =
+          connection.browserContractVersion === BROWSER_CONTRACT_VERSION
+            ? BROWSER_CONTRACT_COMMAND_METHODS
+            : BROWSER_CONTRACT_V1_COMMAND_METHODS
         connection.browserCommands = message.capabilities
           ? connection.browserContractCompatible
-            ? BROWSER_CONTRACT_COMMAND_METHODS.filter((method) =>
+            ? contractCommands.filter((method) =>
                 message.capabilities?.commands.includes(method)
               )
             : []
           : legacyContractV1
-            ? [...BROWSER_CONTRACT_COMMAND_METHODS]
+            ? [...BROWSER_CONTRACT_V1_COMMAND_METHODS]
             : []
         connection.ready = true
         const active = this.activeConnectionID
@@ -438,6 +630,20 @@ export class BrowserExtensionBridge {
           && (!active?.ready || active.browserContractCompatible !== true)
         ) {
           this.activeConnectionID = connection.connectionID
+        }
+        if (
+          connection.browserContractCompatible
+          && message.capabilities?.contractVersions
+        ) {
+          send(connection.socket, {
+            type: "helloAck",
+            protocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
+            contractVersion: connection.browserContractVersion,
+            browserID: connection.browserID,
+            extensionInstanceID: message.extensionInstanceID,
+            heartbeatIntervalMs: 30_000,
+            heartbeatTimeoutMs: 10_000,
+          })
         }
         log.info("hello", {
           connectionID: connection.connectionID,
@@ -458,8 +664,10 @@ export class BrowserExtensionBridge {
           commandID: pending.commandID,
           method: pending.method,
           sessionID: pending.context?.sessionID,
+          turnID: pending.context?.turnID,
           messageID: pending.context?.messageID,
           toolCallID: pending.context?.toolCallID,
+          browserID: pending.context?.browserID,
           startedAt: this.lastCommand?.commandID === pending.commandID ? this.lastCommand.startedAt : Date.now(),
           completedAt: Date.now(),
           ok: message.ok,
@@ -467,6 +675,31 @@ export class BrowserExtensionBridge {
           trusted: pending.trusted,
         }
         if (message.ok) {
+          if (
+            pending.method === "tabs.finalize"
+            && message.data
+            && typeof message.data === "object"
+            && !Array.isArray(message.data)
+          ) {
+            const cleanup = message.data as Record<string, unknown>
+            this.lastCleanup = {
+              sessionID: pending.context?.sessionID,
+              closed: Array.isArray(cleanup.closedTabIds)
+                ? cleanup.closedTabIds.length
+                : 0,
+              released: Array.isArray(cleanup.releasedTabIds)
+                ? cleanup.releasedTabIds.length
+                : 0,
+              retained: Array.isArray(cleanup.retainedTabIds)
+                ? cleanup.retainedTabIds.length
+                : 0,
+              detached: Array.isArray(cleanup.detachedTabIds)
+                ? cleanup.detachedTabIds.length
+                : 0,
+              completedAt: Date.now(),
+            }
+            log.info("lease-cleanup", this.lastCleanup)
+          }
           pending.resolve(message.data)
         } else {
           const error = new Error(

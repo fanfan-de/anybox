@@ -167,6 +167,7 @@ test("installs a plugin-owned Windows host and replaces legacy token config", as
   const runtimeEndpoint = "\\\\.\\pipe\\runtime-install-test"
   const nativeHostEndpoint = "\\\\.\\pipe\\native-install-test"
   const bootstrapPath = path.join(tempRoot, "state", "bootstrap.json")
+  const dataDir = path.join(tempRoot, "managed-data")
 
   try {
     const paths = resolveNativeMessagingPaths({
@@ -194,6 +195,7 @@ test("installs a plugin-owned Windows host and replaces legacy token config", as
       homeDir: path.join(tempRoot, "home"),
       platform: "win32",
       pluginRoot,
+      dataDir,
       registerWindowsHost: async (input) => {
         registryCalls.push(input)
         return `HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\${input.extensionHostName}`
@@ -206,7 +208,12 @@ test("installs a plugin-owned Windows host and replaces legacy token config", as
       "native-messaging",
       "com.anybox.browser.json",
     )
-    assert.equal(result.extensionHostPath, hostPath)
+    assert.notEqual(result.extensionHostPath, hostPath)
+    assert.equal(
+      result.extensionHostPath.startsWith(`${path.resolve(dataDir)}${path.sep}`),
+      true,
+    )
+    assert.equal(await fsp.readFile(result.extensionHostPath, "utf8"), "native-host")
     assert.deepEqual(result.manifestPaths, [manifestPath])
     assert.deepEqual(registryCalls, [{
       extensionHostName: "com.anybox.browser",
@@ -214,7 +221,7 @@ test("installs a plugin-owned Windows host and replaces legacy token config", as
     }])
 
     const manifest = JSON.parse(await fsp.readFile(manifestPath, "utf8"))
-    assert.equal(manifest.path, hostPath)
+    assert.equal(manifest.path, result.extensionHostPath)
     assert.deepEqual(manifest.allowed_origins, [
       "chrome-extension://hjbejdmgpifdjjlpgmdfmbmbhkedgnjc/",
     ])
@@ -237,9 +244,41 @@ test("installs a plugin-owned Windows host and replaces legacy token config", as
       },
     )
     assert.equal(typeof runtimeConfig.updatedAt, "string")
+    assert.equal(typeof runtimeConfig.ownershipID, "string")
     assert.equal(runtimeConfig.agentBaseURL, undefined)
     assert.equal(runtimeConfig.browserTransportToken, undefined)
     assert.equal(JSON.stringify(runtimeConfig).includes("must-not-be-persisted"), false)
+
+    const ownership = JSON.parse(
+      await fsp.readFile(
+        path.join(result.managedRoot, "ownership.json"),
+        "utf8",
+      ),
+    )
+    assert.equal(ownership.pluginID, "chrome")
+    assert.equal(ownership.artifactID, "chrome-native-host")
+    assert.equal(ownership.executablePath, result.extensionHostPath)
+
+    const reused = await install({
+      architecture: "x64",
+      dataDir,
+      env: {
+        APPDATA: appData,
+        ANYBOX_BROWSER_IPC_RUNTIME_ENDPOINT: runtimeEndpoint,
+        ANYBOX_BROWSER_IPC_NATIVE_ENDPOINT: nativeHostEndpoint,
+        ANYBOX_BROWSER_IPC_BOOTSTRAP_PATH: bootstrapPath,
+      },
+      homeDir: path.join(tempRoot, "home"),
+      platform: "win32",
+      pluginRoot,
+      registerWindowsHost: async (input) => {
+        registryCalls.push(input)
+        return `HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\${input.extensionHostName}`
+      },
+    })
+    assert.equal(reused.reused, true)
+    assert.equal(reused.extensionHostPath, result.extensionHostPath)
+    assert.equal(registryCalls.length, 2)
   } finally {
     await fsp.rm(tempRoot, { recursive: true, force: true })
   }

@@ -10,7 +10,8 @@ export type PermissionToolKind =
   | "interaction"
   | "delegation"
   | "other"
-export type PermissionDecision = "allow" | "deny"
+export type PermissionDecision = "allow" | "allow-once" | "allow-session" | "deny"
+export type PermissionContinuation = "tool-retry" | "in-process"
 
 export interface PermissionPromptDetails {
   paths?: string[]
@@ -47,6 +48,16 @@ export interface PermissionRequestPrompt {
   agent: string
   status: PermissionRequestStatus
   createdAt: number
+  turnID?: string
+  continuation?: PermissionContinuation
+  scope?: {
+    kind: "browser-origin"
+    sessionID: string
+    extensionInstanceID: string
+    origin: string
+    browserID?: string
+  }
+  grantID?: string
   prompt: PermissionPromptSnapshot
   resolution?: PermissionRequestResolutionRecord
 }
@@ -75,6 +86,10 @@ export function getPermissionDecisionLabel(decision: PermissionDecision) {
   switch (decision) {
     case "allow":
       return "Allow"
+    case "allow-once":
+      return "Allow once"
+    case "allow-session":
+      return "Allow for session"
     case "deny":
       return "Deny"
   }

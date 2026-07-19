@@ -68,7 +68,7 @@ async function createFixture(projectRoot) {
     projectRoot,
     path.join("runtime", "skills", "chrome", "SKILL.md"),
     [
-      "Selector-driven click/fill adapters, page JavaScript, and CDP are disabled.",
+      "Structured locators are available only when advertised. Raw page JavaScript and unrestricted CDP are disabled.",
       "Use mcp__connector_node_repl_default__js.",
       "Import scripts/browser-client.mjs with pathToFileURL.",
       "",
@@ -82,12 +82,12 @@ async function createFixture(projectRoot) {
     projectRoot,
     path.join("browser-runtime", "dist", "browser-client.mjs"),
     [
-      "// disabled until Anybox can enforce command-level capability",
       "export function setupBrowserRuntime() {}",
       "new URL('./browser-host.mjs', import.meta.url)",
       "new URL('./native-host-bootstrap.js', import.meta.url)",
       "const contractVersion = 1",
       "const capabilities = { arbitraryJavaScript: false, fullCdp: false }",
+      "const locatorMethods = ['locator.click', 'locator.fill']",
       "const unavailable = 'CAPABILITY_UNAVAILABLE'",
       "",
     ].join("\n"),

@@ -1,5 +1,11 @@
-import { connectAnybox, getBridgeStatusStorageKey } from "./anybox-client"
+import {
+  connectAnybox,
+  getBridgeStatusStorageKey,
+  getExtensionInstanceID,
+} from "./anybox-client"
+import { installLeaseInheritance } from "./lease-store"
 
+installLeaseInheritance(getExtensionInstanceID)
 connectAnybox()
 
 chrome.runtime.onInstalled.addListener(() => {

@@ -7,7 +7,9 @@ import * as Config from "#config/config.ts"
 import * as ModelRegistry from "#model/registry.ts"
 import * as ModelSelection from "#model/selection.ts"
 import type { PublicModel } from "#model/types.ts"
+import * as Mcp from "#mcp/manager.ts"
 import * as Project from "#project/project.ts"
+import { clearInProcessPermissionSession } from "#permission/permission.ts"
 import type { PtyRegistry } from "#pty/registry.ts"
 import { Instance } from "#project/instance.ts"
 import { ApiError } from "#server/error.ts"
@@ -878,11 +880,25 @@ export function updateSessionWorkflow(
   return mapSessionSummary(updated)
 }
 
-export function deleteSession(sessionID: string, options?: { ptyRegistry?: PtyRegistry }) {
-  const session = Session.removeSession(sessionID)
-  if (!session) {
-    throw new ApiError(404, "SESSION_NOT_FOUND", `Session '${sessionID}' not found`)
-  }
+export async function deleteSession(sessionID: string, options?: { ptyRegistry?: PtyRegistry }) {
+  const session = requireSession(sessionID)
+  await Instance.provide({
+    directory: session.directory,
+    async fn() {
+      await Mcp.notifyNodeReplLifecycleIfConnected({
+        type: "session-end",
+        context: {
+          sessionID,
+          turnID: `session-end-${sessionID}`,
+        },
+        detail: {
+          reason: "session-deleted",
+        },
+      }).catch(() => false)
+      await clearInProcessPermissionSession(sessionID)
+    },
+  })
+  Session.removeSession(sessionID)
   options?.ptyRegistry?.deleteBySession(sessionID)
 
   return {

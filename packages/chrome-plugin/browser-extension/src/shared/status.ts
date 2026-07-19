@@ -7,4 +7,15 @@ export type BridgeStatus = {
   transport?: "native"
   hostName?: string
   error?: string
+  protocolVersion?: number
+  contractVersion?: number
+  browserID?: string
+  reconnectCount?: number
+  cleanup?: {
+    closed: number
+    released: number
+    retained: number
+    detached: number
+    completedAt: number
+  }
 }

@@ -52,7 +52,7 @@ function importRuntime(label) {
 function getInfo(commands = ["tabs.list"]) {
   return {
     backend: {
-      contractVersion: 1,
+      contractVersion: 2,
       browserId: "extension",
       name: "Anybox Chrome Extension",
       kind: "extension",
@@ -74,7 +74,7 @@ function getInfo(commands = ["tabs.list"]) {
       },
     },
     apiManifest: {
-      contractVersion: 1,
+      contractVersion: 2,
       commands: commands.map((method) => ({
         method,
         apiPath: COMMAND_METADATA[method].apiPath,
@@ -86,7 +86,7 @@ function getInfo(commands = ["tabs.list"]) {
       })),
     },
     documentationManifest: {
-      contractVersion: 1,
+      contractVersion: 2,
       title: "Anybox Browser Client Runtime",
       entries: commands.map((method) => ({
         method,
@@ -112,6 +112,7 @@ function backendTransport({
       return { connected: true, connectionCount: 1 }
     }
     if (command) return command(request)
+    if (request.method === "tabs.list") return { tabs: [] }
     throw new Error(`Unexpected command: ${request.method}`)
   }
 }
@@ -141,12 +142,13 @@ test("installs a discovery-backed BrowserManager on the provided globals", async
   assert.equal(fallback.capabilities.commands[0], "tabs.list")
   assert.equal(forUrl.browserId, "extension")
   assert.equal(
-    requests.every((request) =>
-      request.type === "getInfo" && request.contractVersion === 1
+    requests.filter(({ type }) => type === "getInfo").every((request) =>
+      request.contractVersion === 2
     ),
     true,
   )
-  assert.equal(requests.length, 4)
+  assert.equal(requests.filter(({ type }) => type === "getInfo").length, 4)
+  assert.equal(requests.filter(({ type }) => type === "command").length, 1)
 
   await assert.rejects(
     agent.browsers.get("unknown"),
@@ -183,6 +185,64 @@ test("does not depend on a reverse host-service API in nodeRepl", async () => {
     if (previous === undefined) delete process.env.ANYBOX_BROWSER_HOST
     else process.env.ANYBOX_BROWSER_HOST = previous
   }
+})
+
+test("routes multiple Chrome profiles by instance, preferred window, and URL", async () => {
+  const backends = ["extension:profile-a", "extension:profile-b"].map(
+    (browserId) => ({
+      ...getInfo(["tabs.list"]).backend,
+      browserId,
+      instanceID: browserId.replace("extension:", ""),
+    }),
+  )
+  const transport = async (request) => {
+    if (request.type === "status") {
+      return { connected: true, backends }
+    }
+    if (request.type === "getInfo") {
+      const backend = backends.find((candidate) =>
+        candidate.browserId === request.browserID
+        || candidate.instanceID === request.browserID
+      ) ?? backends[0]
+      return {
+        ...getInfo(["tabs.list"]),
+        backend,
+      }
+    }
+    if (request.method === "tabs.list") {
+      const profileB = request.browserID === "extension:profile-b"
+      return {
+        tabs: [{
+          id: profileB ? 22 : 11,
+          windowId: profileB ? 202 : 101,
+          url: profileB
+            ? "https://profile-b.example/work"
+            : "https://profile-a.example/home",
+          active: true,
+        }],
+      }
+    }
+    throw new Error(`Unexpected request: ${JSON.stringify(request)}`)
+  }
+  const { setupBrowserRuntime } = await importRuntime("multi-profile-routing")
+  const agent = await setupBrowserRuntime({ globals: {}, transport })
+
+  assert.equal(
+    (await agent.browsers.get({
+      extensionInstanceID: "profile-b",
+    })).browserId,
+    "extension:profile-b",
+  )
+  assert.equal(
+    (await agent.browsers.get({ preferredWindowId: 202 })).browserId,
+    "extension:profile-b",
+  )
+  assert.equal(
+    (await agent.browsers.getForUrl(
+      "https://profile-b.example/another-path",
+    )).browserId,
+    "extension:profile-b",
+  )
 })
 
 test("filters API manifests and documentation from backend capabilities", async () => {
@@ -275,27 +335,30 @@ test("routes legacy tabs and Tab APIs through one versioned CommandRouter", asyn
   const commandRequests = requests.filter(({ type }) => type === "command")
   assert.deepEqual(commandRequests[0], {
     type: "command",
-    contractVersion: 1,
+    contractVersion: 2,
     method: "tabs.list",
     params: {},
+    browserID: "extension",
   })
   assert.deepEqual(commandRequests[1], {
     type: "command",
-    contractVersion: 1,
+    contractVersion: 2,
     method: "tabs.open",
     params: {
       url: "https://example.com/open",
       active: false,
     },
+    browserID: "extension",
   })
   assert.deepEqual(commandRequests[2], {
     type: "command",
-    contractVersion: 1,
+    contractVersion: 2,
     method: "page.screenshot",
     params: {
       tabId: 43,
       fullPage: true,
     },
+    browserID: "extension",
   })
   assert.deepEqual(commandRequests.at(-1)?.params, { tabId: 42 })
 
@@ -393,7 +456,7 @@ test("keeps the Browser Host transport out of model-visible runtime properties",
   assert.equal(JSON.stringify({ browser, tab }).includes("transport"), false)
 })
 
-test("keeps raw page evaluation, selector execution, and CDP locally denied", async () => {
+test("does not expose unavailable evaluate, CDP, or locator members", async () => {
   const requests = []
   const { setupBrowserRuntime } = await importRuntime("raw-denied")
   const agent = await setupBrowserRuntime({
@@ -403,18 +466,15 @@ test("keeps raw page evaluation, selector execution, and CDP locally denied", as
   const browser = await agent.browsers.get()
   const tab = await browser.tabs.get(7)
 
-  await assert.rejects(
-    tab.evaluate((value) => value + 1, 2),
-    (error) => error.code === "CAPABILITY_UNAVAILABLE",
-  )
-  await assert.rejects(
-    tab.cdp.send("Runtime.evaluate", { expression: "1 + 1" }),
-    (error) => error.code === "CAPABILITY_UNAVAILABLE",
-  )
-  await assert.rejects(
-    tab.locator("button").click(),
-    (error) => error.code === "CAPABILITY_UNAVAILABLE",
-  )
+  assert.equal(tab.evaluate, undefined)
+  assert.equal(tab.cdp, undefined)
+  assert.equal(tab.playwright, undefined)
+  assert.equal(tab.locator, undefined)
+  assert.equal("evaluate" in tab, false)
+  assert.equal("cdp" in tab, false)
+  assert.equal("playwright" in tab, false)
+  assert.equal("locator" in tab, false)
+  assert.equal(Object.prototype.hasOwnProperty.call(tab, "locator"), false)
   assert.equal(requests.filter(({ type }) => type === "command").length, 0)
 })
 

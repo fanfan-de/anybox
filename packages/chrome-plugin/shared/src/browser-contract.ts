@@ -7,19 +7,27 @@ import {
   BrowserExtensionElementActionResult,
   BrowserExtensionFillResult,
   BrowserExtensionInteractiveSnapshotResult,
+  BrowserExtensionLocatorValueResult,
   BrowserExtensionScreenshotResult,
   BrowserExtensionScrollResult,
   BrowserExtensionSnapshotResult,
   BrowserExtensionTabSummary,
   BrowserExtensionTabsListResult,
+  BrowserExtensionTabsFinalizeResult,
+  BrowserExtensionTabsMarkDeliverableResult,
   BrowserExtensionTabsReleaseResult,
   BrowserExtensionTypeResult,
   BrowserExtensionWaitForResult,
 } from "./browser-extension"
 
-export const BROWSER_CONTRACT_VERSION = 1 as const
+export const BROWSER_CONTRACT_V1_VERSION = 1 as const
+export const BROWSER_CONTRACT_VERSION = 2 as const
+export const BROWSER_CONTRACT_SUPPORTED_VERSIONS = [
+  BROWSER_CONTRACT_V1_VERSION,
+  BROWSER_CONTRACT_VERSION,
+] as const
 
-export const BROWSER_CONTRACT_COMMAND_METHODS = [
+export const BROWSER_CONTRACT_V1_COMMAND_METHODS = [
   "tabs.list",
   "tabs.open",
   "tabs.activate",
@@ -36,6 +44,21 @@ export const BROWSER_CONTRACT_COMMAND_METHODS = [
   "page.scroll",
   "page.waitFor",
 ] as const
+export type BrowserContractV1CommandMethod =
+  (typeof BROWSER_CONTRACT_V1_COMMAND_METHODS)[number]
+
+export const BROWSER_CONTRACT_COMMAND_METHODS = [
+  ...BROWSER_CONTRACT_V1_COMMAND_METHODS,
+  "tabs.listUser",
+  "tabs.claim",
+  "tabs.markDeliverable",
+  "tabs.finalize",
+  "locator.click",
+  "locator.fill",
+  "locator.textContent",
+  "locator.inputValue",
+  "locator.waitFor",
+] as const
 
 export const BrowserContractCommandMethod = z.enum(
   BROWSER_CONTRACT_COMMAND_METHODS,
@@ -50,14 +73,21 @@ export const BROWSER_CONTRACT_ERROR_CODES = [
   "INVALID_COMMAND_PARAMS",
   "INVALID_COMMAND_RESULT",
   "BACKEND_UNAVAILABLE",
+  "NATIVE_HOST_INSTALL_FAILED",
   "CAPABILITY_UNAVAILABLE",
   "PERMISSION_DENIED",
+  "APPROVAL_REQUIRED",
+  "AUTHORIZATION_INVALID",
+  "AUTHORIZATION_EXPIRED",
+  "AUTHORIZATION_REPLAYED",
+  "BACKEND_UPDATE_REQUIRED",
   "SESSION_REQUIRED",
   "SESSION_ENDED",
   "TURN_ENDED",
   "TAB_NOT_FOUND",
   "TAB_NOT_OWNED",
   "TAB_CLAIM_REQUIRED",
+  "LEASE_EXPIRED",
   "DEADLINE_EXCEEDED",
   "CANCELLED",
   "COMMAND_FAILED",
@@ -94,6 +124,53 @@ export class BrowserContractValidationError extends Error {
 
 const RequiredTabID = z.number().int().positive()
 const MouseButton = z.enum(["left", "right", "middle"])
+const RequiredContextID = z.string().trim().min(1).max(256)
+
+export const BrowserCommandExecutionContextV2 = z.object({
+  sessionID: RequiredContextID,
+  turnID: RequiredContextID,
+  messageID: RequiredContextID,
+  toolCallID: RequiredContextID,
+  browserID: RequiredContextID,
+  extensionInstanceID: RequiredContextID.optional(),
+}).strict()
+export type BrowserCommandExecutionContextV2 = z.infer<
+  typeof BrowserCommandExecutionContextV2
+>
+
+export const BrowserAuthorizationReceipt = z.object({
+  value: z.string().trim().min(32).max(16_384),
+}).strict()
+export type BrowserAuthorizationReceipt = z.infer<
+  typeof BrowserAuthorizationReceipt
+>
+
+export const BrowserAuthorizationChallenge = z.object({
+  grantID: z.string().trim().min(1).max(256),
+  challengeID: z.string().uuid(),
+  nonce: z.string().trim().min(16).max(256),
+  method: BrowserContractCommandMethod,
+  security: z.string().trim().min(1).max(128),
+  permissionAction: z.enum(["allow", "ask", "deny"]),
+  risk: z.enum(["low", "medium", "high", "critical"]),
+  rationale: z.string().trim().min(1).max(500),
+  sessionID: RequiredContextID,
+  turnID: RequiredContextID,
+  messageID: RequiredContextID,
+  toolCallID: RequiredContextID,
+  browserID: RequiredContextID,
+  extensionInstanceID: RequiredContextID,
+  origin: z.string().trim().min(1).max(2_048),
+  tabId: RequiredTabID.optional(),
+  tabTitle: z.string().max(200).optional(),
+  sensitive: z.boolean(),
+  issuedAt: z.number().int().nonnegative(),
+  expiresAt: z.number().int().positive(),
+}).strict()
+export type BrowserAuthorizationChallenge = z.infer<
+  typeof BrowserAuthorizationChallenge
+>
+
 const BrowserTargetUrl = z.string()
   .regex(
     /^(?!\s*(?:[jJ][aA][vV][aA][sS][cC][rR][iI][pP][tT]|[dD][aA][tT][aA]|[vV][bB][sS][cC][rR][iI][pP][tT]):)/,
@@ -114,6 +191,7 @@ const BrowserTargetUrl = z.string()
   )
 
 export const BrowserTabsListParams = z.object({}).strict()
+export const BrowserTabsListUserParams = z.object({}).strict()
 
 export const BrowserTabsOpenParams = z.object({
   url: BrowserTargetUrl,
@@ -126,6 +204,73 @@ export const BrowserTabsActivateParams = z.object({
 
 export const BrowserTabsReleaseParams = z.object({
   tabId: RequiredTabID,
+}).strict()
+
+export const BrowserTabsClaimParams = z.object({
+  tabId: RequiredTabID,
+}).strict()
+
+export const BrowserTabsMarkDeliverableParams = z.object({
+  tabId: RequiredTabID,
+}).strict()
+
+export const BrowserTabsFinalizeParams = z.object({
+  reason: z.enum([
+    "turn-end",
+    "session-end",
+    "agent-terminated",
+    "node-repl-reset",
+    "native-disconnect",
+    "lease-timeout",
+    "manual",
+  ]).optional(),
+}).strict()
+
+export const BrowserLocator = z.object({
+  role: z.string().trim().min(1).max(128).optional(),
+  name: z.string().trim().min(1).max(512).optional(),
+  text: z.string().trim().min(1).max(2_000).optional(),
+  label: z.string().trim().min(1).max(512).optional(),
+  placeholder: z.string().trim().min(1).max(512).optional(),
+  css: z.string().trim().min(1).max(2_000).optional(),
+  testId: z.string().trim().min(1).max(512).optional(),
+  exact: z.boolean().optional(),
+}).strict().refine(
+  (value) => Object.entries(value).some(([key, item]) =>
+    key !== "exact" && typeof item === "string" && item.length > 0
+  ),
+  "A structured locator requires role, name, text, label, placeholder, css, or testId.",
+)
+export type BrowserLocator = z.infer<typeof BrowserLocator>
+
+const BrowserLocatorBaseParams = {
+  tabId: RequiredTabID,
+  locator: BrowserLocator,
+  timeoutMs: z.number().int().positive().max(60_000).optional(),
+} as const
+
+export const BrowserLocatorClickParams = z.object({
+  ...BrowserLocatorBaseParams,
+  button: MouseButton.optional(),
+}).strict()
+
+export const BrowserLocatorFillParams = z.object({
+  ...BrowserLocatorBaseParams,
+  text: z.string(),
+  sensitive: z.boolean().optional(),
+}).strict()
+
+export const BrowserLocatorTextContentParams = z.object({
+  ...BrowserLocatorBaseParams,
+}).strict()
+
+export const BrowserLocatorInputValueParams = z.object({
+  ...BrowserLocatorBaseParams,
+}).strict()
+
+export const BrowserLocatorWaitForParams = z.object({
+  ...BrowserLocatorBaseParams,
+  state: z.enum(["attached", "visible", "hidden", "enabled"]).optional(),
 }).strict()
 
 export const BrowserPageSnapshotParams = z.object({
@@ -185,6 +330,7 @@ export const BrowserPageFillParams = z.object({
 export const BrowserPageTypeParams = z.object({
   tabId: RequiredTabID,
   text: z.string().min(1),
+  sensitive: z.boolean().optional(),
 }).strict()
 
 export const BrowserPageScrollParams = z.object({
@@ -252,7 +398,7 @@ type BrowserContractCommandDefinition<
   result: TResult
 }
 
-export const BrowserContractCommandRegistry = {
+export const BrowserContractV1CommandRegistry = Object.freeze({
   "tabs.list": {
     method: "tabs.list",
     apiPath: "browser.tabs.list",
@@ -389,6 +535,98 @@ export const BrowserContractCommandRegistry = {
     result: BrowserExtensionWaitForResult,
   },
 } as const satisfies Record<
+  BrowserContractV1CommandMethod,
+  BrowserContractCommandDefinition
+>)
+
+export const BrowserContractCommandRegistry = {
+  ...BrowserContractV1CommandRegistry,
+  "tabs.listUser": {
+    method: "tabs.listUser",
+    apiPath: "browser.tabs.listUser",
+    signature: "browser.tabs.listUser()",
+    summary: "List user tabs that may be explicitly claimed.",
+    security: "browser-metadata-read",
+    params: BrowserTabsListUserParams,
+    result: BrowserExtensionTabsListResult,
+  },
+  "tabs.claim": {
+    method: "tabs.claim",
+    apiPath: "browser.tabs.claim",
+    signature: "browser.tabs.claim(tabId)",
+    summary: "Claim a user-created tab for the current browser session.",
+    security: "tab-lifecycle",
+    params: BrowserTabsClaimParams,
+    result: BrowserExtensionTabSummary,
+  },
+  "tabs.markDeliverable": {
+    method: "tabs.markDeliverable",
+    apiPath: "tab.markDeliverable",
+    signature: "tab.markDeliverable()",
+    summary: "Retain a leased tab as a user deliverable during finalization.",
+    security: "tab-lifecycle",
+    params: BrowserTabsMarkDeliverableParams,
+    result: BrowserExtensionTabsMarkDeliverableResult,
+  },
+  "tabs.finalize": {
+    method: "tabs.finalize",
+    apiPath: "browser.tabs.finalize",
+    signature: "browser.tabs.finalize(options?)",
+    summary: "Finalize all tab leases for the current session.",
+    security: "tab-lifecycle",
+    params: BrowserTabsFinalizeParams,
+    result: BrowserExtensionTabsFinalizeResult,
+  },
+  "page.scroll": {
+    ...BrowserContractV1CommandRegistry["page.scroll"],
+    security: "page-content-read",
+  },
+  "locator.click": {
+    method: "locator.click",
+    apiPath: "tab.locator(locator).click",
+    signature: "tab.locator(locator).click(options?)",
+    summary: "Relocate and click a structured locator target.",
+    security: "page-interaction",
+    params: BrowserLocatorClickParams,
+    result: BrowserExtensionElementActionResult,
+  },
+  "locator.fill": {
+    method: "locator.fill",
+    apiPath: "tab.locator(locator).fill",
+    signature: "tab.locator(locator).fill(text, options?)",
+    summary: "Relocate and fill a structured locator target.",
+    security: "page-interaction",
+    params: BrowserLocatorFillParams,
+    result: BrowserExtensionFillResult,
+  },
+  "locator.textContent": {
+    method: "locator.textContent",
+    apiPath: "tab.locator(locator).textContent",
+    signature: "tab.locator(locator).textContent(options?)",
+    summary: "Read redacted text from a structured locator target.",
+    security: "page-content-read",
+    params: BrowserLocatorTextContentParams,
+    result: BrowserExtensionLocatorValueResult,
+  },
+  "locator.inputValue": {
+    method: "locator.inputValue",
+    apiPath: "tab.locator(locator).inputValue",
+    signature: "tab.locator(locator).inputValue(options?)",
+    summary: "Read a non-sensitive value from a structured locator target.",
+    security: "page-content-read",
+    params: BrowserLocatorInputValueParams,
+    result: BrowserExtensionLocatorValueResult,
+  },
+  "locator.waitFor": {
+    method: "locator.waitFor",
+    apiPath: "tab.locator(locator).waitFor",
+    signature: "tab.locator(locator).waitFor(options?)",
+    summary: "Wait for a structured locator state with bounded retries.",
+    security: "page-content-read",
+    params: BrowserLocatorWaitForParams,
+    result: BrowserExtensionWaitForResult,
+  },
+} as const satisfies Record<
   BrowserContractCommandMethod,
   BrowserContractCommandDefinition
 >
@@ -401,13 +639,32 @@ export type BrowserContractCommandResult<
   TMethod extends BrowserContractCommandMethod,
 > = z.output<(typeof BrowserContractCommandRegistry)[TMethod]["result"]>
 
-function commandDefinition(method: unknown) {
-  const parsed = BrowserContractCommandMethod.safeParse(method)
-  if (!parsed.success) {
+function commandDefinition(
+  method: unknown,
+  contractVersion: number = BROWSER_CONTRACT_VERSION,
+) {
+  if (!BROWSER_CONTRACT_SUPPORTED_VERSIONS.includes(
+    contractVersion as (typeof BROWSER_CONTRACT_SUPPORTED_VERSIONS)[number],
+  )) {
     throw new BrowserContractValidationError(
       "COMMAND_NOT_SUPPORTED",
-      `Browser command '${String(method)}' is not supported by contract v${BROWSER_CONTRACT_VERSION}.`,
-      { cause: parsed.error },
+      `Browser contract version '${contractVersion}' is not supported.`,
+    )
+  }
+  const parsed = BrowserContractCommandMethod.safeParse(method)
+  if (
+    !parsed.success
+    || (
+      contractVersion === BROWSER_CONTRACT_V1_VERSION
+      && !BROWSER_CONTRACT_V1_COMMAND_METHODS.includes(
+        parsed.data as BrowserContractV1CommandMethod,
+      )
+    )
+  ) {
+    throw new BrowserContractValidationError(
+      "COMMAND_NOT_SUPPORTED",
+      `Browser command '${String(method)}' is not supported by contract v${contractVersion}.`,
+      { cause: parsed.success ? undefined : parsed.error },
     )
   }
   return BrowserContractCommandRegistry[parsed.data]
@@ -418,13 +675,14 @@ export function parseBrowserCommandParams<
 >(
   method: TMethod,
   value: unknown,
+  contractVersion: number = BROWSER_CONTRACT_VERSION,
 ): BrowserContractCommandParams<TMethod> {
-  const definition = commandDefinition(method)
+  const definition = commandDefinition(method, contractVersion)
   const parsed = definition.params.safeParse(value === undefined ? {} : value)
   if (!parsed.success) {
     throw new BrowserContractValidationError(
       "INVALID_COMMAND_PARAMS",
-      `Browser command '${method}' parameters do not match contract v${BROWSER_CONTRACT_VERSION}.`,
+      `Browser command '${method}' parameters do not match contract v${contractVersion}.`,
       { cause: parsed.error },
     )
   }
@@ -436,13 +694,14 @@ export function parseBrowserCommandResult<
 >(
   method: TMethod,
   value: unknown,
+  contractVersion: number = BROWSER_CONTRACT_VERSION,
 ): BrowserContractCommandResult<TMethod> {
-  const definition = commandDefinition(method)
+  const definition = commandDefinition(method, contractVersion)
   const parsed = definition.result.safeParse(value)
   if (!parsed.success) {
     throw new BrowserContractValidationError(
       "INVALID_COMMAND_RESULT",
-      `Browser command '${method}' result does not match contract v${BROWSER_CONTRACT_VERSION}.`,
+      `Browser command '${method}' result does not match contract v${contractVersion}.`,
       { cause: parsed.error },
     )
   }
@@ -506,7 +765,10 @@ export const BrowserBackendKind = z.enum(["extension", "iab", "cdp"])
 export type BrowserBackendKind = z.infer<typeof BrowserBackendKind>
 
 export const BrowserBackendInfo = z.object({
-  contractVersion: z.literal(BROWSER_CONTRACT_VERSION),
+  contractVersion: z.union([
+    z.literal(BROWSER_CONTRACT_V1_VERSION),
+    z.literal(BROWSER_CONTRACT_VERSION),
+  ]),
   browserId: z.string().min(1),
   name: z.string().min(1),
   kind: BrowserBackendKind,
@@ -546,6 +808,7 @@ export function createBrowserBackendCapabilities(input: {
 
 export function createBrowserBackendInfo(input: {
   connected: boolean
+  contractVersion?: typeof BROWSER_CONTRACT_V1_VERSION | typeof BROWSER_CONTRACT_VERSION
   browserId?: string
   name?: string
   kind?: BrowserBackendKind
@@ -556,7 +819,7 @@ export function createBrowserBackendInfo(input: {
   features?: Partial<BrowserCapabilityFeatures>
 }): BrowserBackendInfo {
   return BrowserBackendInfo.parse({
-    contractVersion: BROWSER_CONTRACT_VERSION,
+    contractVersion: input.contractVersion ?? BROWSER_CONTRACT_VERSION,
     browserId: input.browserId ?? "extension",
     name: input.name ?? "Anybox Chrome Extension",
     kind: input.kind ?? "extension",
@@ -597,7 +860,10 @@ export type BrowserApiManifestCommand = z.infer<
 >
 
 export const BrowserApiManifest = z.object({
-  contractVersion: z.literal(BROWSER_CONTRACT_VERSION),
+  contractVersion: z.union([
+    z.literal(BROWSER_CONTRACT_V1_VERSION),
+    z.literal(BROWSER_CONTRACT_VERSION),
+  ]),
   commands: z.array(BrowserApiManifestCommand),
 }).strict()
 export type BrowserApiManifest = z.infer<typeof BrowserApiManifest>
@@ -614,7 +880,10 @@ export type BrowserDocumentationManifestEntry = z.infer<
 >
 
 export const BrowserDocumentationManifest = z.object({
-  contractVersion: z.literal(BROWSER_CONTRACT_VERSION),
+  contractVersion: z.union([
+    z.literal(BROWSER_CONTRACT_V1_VERSION),
+    z.literal(BROWSER_CONTRACT_VERSION),
+  ]),
   title: z.string().min(1),
   entries: z.array(BrowserDocumentationManifestEntry),
 }).strict()
@@ -634,8 +903,11 @@ function publicReceiver(
   method: BrowserContractCommandMethod,
 ): BrowserApiReceiver {
   return method === "tabs.list"
+    || method === "tabs.listUser"
     || method === "tabs.open"
+    || method === "tabs.claim"
     || method === "tabs.activate"
+    || method === "tabs.finalize"
     ? "browser"
     : "tab"
 }
@@ -643,8 +915,14 @@ function publicReceiver(
 function publicResult(
   method: BrowserContractCommandMethod,
 ): BrowserApiPublicResult {
-  if (method === "tabs.list") return "tab-list-with-runtime-handles"
-  if (method === "tabs.open" || method === "tabs.activate") {
+  if (method === "tabs.list" || method === "tabs.listUser") {
+    return "tab-list-with-runtime-handles"
+  }
+  if (
+    method === "tabs.open"
+    || method === "tabs.claim"
+    || method === "tabs.activate"
+  ) {
     return "tab-runtime-handle"
   }
   return "command-result"
@@ -653,11 +931,18 @@ function publicResult(
 export function createBrowserApiManifest(
   commands: readonly BrowserContractCommandMethod[] =
     BROWSER_CONTRACT_COMMAND_METHODS,
+  contractVersion: typeof BROWSER_CONTRACT_V1_VERSION
+    | typeof BROWSER_CONTRACT_VERSION = BROWSER_CONTRACT_VERSION,
 ): BrowserApiManifest {
+  const available = contractVersion === BROWSER_CONTRACT_V1_VERSION
+    ? new Set<BrowserContractCommandMethod>(BROWSER_CONTRACT_V1_COMMAND_METHODS)
+    : new Set<BrowserContractCommandMethod>(BROWSER_CONTRACT_COMMAND_METHODS)
   return BrowserApiManifest.parse({
-    contractVersion: BROWSER_CONTRACT_VERSION,
-    commands: normalizeCommands(commands).map((method) => {
-      const definition = BrowserContractCommandRegistry[method]
+    contractVersion,
+    commands: normalizeCommands(commands).filter((method) =>
+      available.has(method)
+    ).map((method) => {
+      const definition = commandDefinition(method, contractVersion)
       return {
         method,
         apiPath: definition.apiPath,
@@ -674,12 +959,19 @@ export function createBrowserApiManifest(
 export function createBrowserDocumentationManifest(
   commands: readonly BrowserContractCommandMethod[] =
     BROWSER_CONTRACT_COMMAND_METHODS,
+  contractVersion: typeof BROWSER_CONTRACT_V1_VERSION
+    | typeof BROWSER_CONTRACT_VERSION = BROWSER_CONTRACT_VERSION,
 ): BrowserDocumentationManifest {
+  const available = contractVersion === BROWSER_CONTRACT_V1_VERSION
+    ? new Set<BrowserContractCommandMethod>(BROWSER_CONTRACT_V1_COMMAND_METHODS)
+    : new Set<BrowserContractCommandMethod>(BROWSER_CONTRACT_COMMAND_METHODS)
   return BrowserDocumentationManifest.parse({
-    contractVersion: BROWSER_CONTRACT_VERSION,
+    contractVersion,
     title: "Anybox Browser Client Runtime",
-    entries: normalizeCommands(commands).map((method) => {
-      const definition = BrowserContractCommandRegistry[method]
+    entries: normalizeCommands(commands).filter((method) =>
+      available.has(method)
+    ).map((method) => {
+      const definition = commandDefinition(method, contractVersion)
       return {
         method,
         apiPath: definition.apiPath,
@@ -704,12 +996,17 @@ export type BrowserGetInfoResult = z.infer<typeof BrowserGetInfoResult>
 
 export function createBrowserGetInfoResult(
   backend: BrowserBackendInfo,
+  contractVersion: typeof BROWSER_CONTRACT_V1_VERSION
+    | typeof BROWSER_CONTRACT_VERSION = BROWSER_CONTRACT_VERSION,
 ): BrowserGetInfoResult {
   const parsedBackend = BrowserBackendInfo.parse(backend)
   const commands = parsedBackend.capabilities.commands
   return BrowserGetInfoResult.parse({
     backend: parsedBackend,
-    apiManifest: createBrowserApiManifest(commands),
-    documentationManifest: createBrowserDocumentationManifest(commands),
+    apiManifest: createBrowserApiManifest(commands, contractVersion),
+    documentationManifest: createBrowserDocumentationManifest(
+      commands,
+      contractVersion,
+    ),
   })
 }

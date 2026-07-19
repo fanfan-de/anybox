@@ -95,6 +95,41 @@ body[data-state="disconnected"] .status-dot {
   line-height: 17px;
 }
 
+.status-metrics {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid #e5e5e5;
+}
+
+.status-metrics[hidden] {
+  display: none;
+}
+
+.status-metrics div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.status-metrics dt,
+.status-metrics dd {
+  margin: 0;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.status-metrics dt {
+  color: #737373;
+}
+
+.status-metrics dd {
+  color: #262626;
+  text-align: right;
+}
+
 button {
   width: 100%;
   margin-top: 12px;

@@ -34,6 +34,7 @@ function ensurePermissionTables() {
 export {
   Action,
   Audit,
+  Continuation,
   Decision,
   Request,
   RequestPrompt,
@@ -43,6 +44,7 @@ export {
   RequestStatus,
   RequestResource,
   Risk,
+  Scope,
   ToolKind,
 } from "#permission/schema.ts"
 
@@ -50,6 +52,44 @@ type Request = Schema.Request
 type Risk = Schema.Risk
 type Action = Schema.Action
 type Decision = Schema.Decision
+
+export type InProcessPermissionInput = {
+  context: {
+    sessionID: string
+    turnID: string
+    messageID: string
+    toolCallID: string
+  }
+  scope: Schema.Scope
+  grantID?: string
+  method: string
+  tabID?: number
+  tabTitle?: string
+  risk?: Risk
+  sensitive?: boolean
+  action?: "allow" | "ask" | "deny"
+  rationale?: string
+  timeoutMs?: number
+}
+
+export type InProcessPermissionResult = {
+  decision: Decision
+  grantID: string
+}
+
+type InProcessWaiter = {
+  resolve: (result: InProcessPermissionResult) => void
+  timer: ReturnType<typeof setTimeout>
+}
+
+const inProcessWaiters = new Map<string, InProcessWaiter>()
+const sessionOriginGrants = new Map<string, {
+  grantID: string
+  sessionID: string
+  extensionInstanceID: string
+  origin: string
+  createdAt: number
+}>()
 
 type ToolDescriptor = {
   id: string
@@ -320,6 +360,362 @@ function deriveRisk(input: EvaluationInput, derivedPaths: string[]) {
 
 function decisionToApproved(decision: Decision) {
   return decision !== "deny"
+}
+
+function inProcessGrantKey(scope: Schema.Scope) {
+  return [
+    scope.sessionID,
+    scope.extensionInstanceID,
+    scope.origin,
+  ].join("\u0000")
+}
+
+function safeDisplayText(value: string | undefined, fallback: string, max = 200) {
+  const normalized = value
+    ?.replace(/[\u0000-\u001f\u007f]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+  return (normalized || fallback).slice(0, max)
+}
+
+function upsertPermissionRequestDirect(request: Request) {
+  const existing = db.findById("permission_requests", Schema.Request, request.id)
+  if (existing) {
+    db.updateByIdWithSchema("permission_requests", request.id, request, Schema.Request)
+  } else {
+    db.insertOneWithSchema("permission_requests", request, Schema.Request)
+  }
+}
+
+async function auditInProcess(
+  input: InProcessPermissionInput,
+  action: Action,
+  reason: string,
+  risk: Risk,
+) {
+  ensurePermissionTables()
+  const record = Schema.Audit.parse({
+    id: Identifier.ascending("permission"),
+    sessionID: input.context.sessionID,
+    messageID: input.context.messageID,
+    toolCallID: input.context.toolCallID,
+    projectID: Instance.project.id,
+    tool: `browser.${safeDisplayText(input.method, "unknown", 128)}`,
+    action,
+    reason,
+    risk,
+    inputSummary: JSON.stringify({
+      method: safeDisplayText(input.method, "unknown", 128),
+      origin: input.scope.origin,
+      tabID: input.tabID,
+      sensitive: input.sensitive === true,
+    }),
+    createdAt: Date.now(),
+  })
+  db.insertOneWithSchema("permission_audits", record, Schema.Audit)
+}
+
+function emitOrPersistPermissionEvent(
+  type: "permission.requested" | "permission.resolved",
+  request: Request,
+  part: Message.PermissionPart,
+) {
+  const active = Orchestrator.activeTurn(request.sessionID)
+  if (active && active.turnID === request.turnID) {
+    active.emit(type, { request, part })
+    return
+  }
+  upsertPermissionRequestDirect(request)
+  Session.upsertPart(part)
+}
+
+async function expireInProcessRequest(requestID: string) {
+  const waiter = inProcessWaiters.get(requestID)
+  if (!waiter) return
+  inProcessWaiters.delete(requestID)
+  let grantID = requestID
+  try {
+    const existing = await getRequest(requestID)
+    grantID = existing?.grantID ?? existing?.approvalID ?? requestID
+    if (!existing || existing.status !== "pending") return
+    const now = Date.now()
+    const next = Schema.Request.parse({
+      ...existing,
+      status: "expired",
+      resolvedAt: now,
+      resolutionReason: "The in-process permission request timed out.",
+      resolution: {
+        decision: "deny",
+        approved: false,
+        resolvedAt: now,
+        note: "The in-process permission request timed out.",
+      },
+    })
+    const part = createPermissionPart({
+      sessionID: next.sessionID,
+      messageID: next.messageID,
+      approvalID: next.approvalID,
+      toolCallID: next.toolCallID,
+      tool: next.tool,
+      action: "deny",
+      reason: next.resolutionReason,
+    })
+    emitOrPersistPermissionEvent("permission.resolved", next, part)
+    await auditInProcess({
+      context: {
+        sessionID: next.sessionID,
+        turnID: next.turnID ?? "",
+        messageID: next.messageID,
+        toolCallID: next.toolCallID,
+      },
+      scope: next.scope!,
+      grantID: next.grantID,
+      method: next.input.method as string,
+      tabID: typeof next.input.tabID === "number" ? next.input.tabID : undefined,
+      sensitive: next.input.sensitive === true,
+    }, "deny", next.resolutionReason!, next.risk)
+  } catch (error) {
+    log.error("failed to persist expired in-process permission", {
+      requestID,
+      error,
+    })
+  } finally {
+    waiter.resolve({
+      decision: "deny",
+      grantID,
+    })
+  }
+}
+
+export async function clearInProcessPermissionSession(sessionID: string) {
+  for (const [key, grant] of sessionOriginGrants) {
+    if (grant.sessionID === sessionID) sessionOriginGrants.delete(key)
+  }
+  for (const [requestID, waiter] of inProcessWaiters) {
+    const request = db.findById("permission_requests", Schema.Request, requestID)
+    if (request?.sessionID !== sessionID) continue
+    clearTimeout(waiter.timer)
+    inProcessWaiters.delete(requestID)
+    try {
+      if (request.status !== "pending") continue
+      const now = Date.now()
+      const reason = "The in-process permission request was cancelled because the session ended."
+      const next = Schema.Request.parse({
+        ...request,
+        status: "denied",
+        resolvedAt: now,
+        resolutionReason: reason,
+        resolution: {
+          decision: "deny",
+          approved: false,
+          resolvedAt: now,
+          note: reason,
+        },
+      })
+      const part = createPermissionPart({
+        sessionID: next.sessionID,
+        messageID: next.messageID,
+        approvalID: next.approvalID,
+        toolCallID: next.toolCallID,
+        tool: next.tool,
+        action: "deny",
+        reason,
+      })
+      emitOrPersistPermissionEvent("permission.resolved", next, part)
+      await auditInProcess({
+        context: {
+          sessionID: next.sessionID,
+          turnID: next.turnID ?? "",
+          messageID: next.messageID,
+          toolCallID: next.toolCallID,
+        },
+        scope: next.scope!,
+        grantID: next.grantID,
+        method: typeof next.input.method === "string"
+          ? next.input.method
+          : next.tool,
+        tabID: typeof next.input.tabID === "number"
+          ? next.input.tabID
+          : undefined,
+        sensitive: next.input.sensitive === true,
+      }, "deny", reason, next.risk)
+    } catch (error) {
+      log.error("failed to persist cancelled in-process permission", {
+        requestID,
+        error,
+      })
+    } finally {
+      waiter.resolve({
+        decision: "deny",
+        grantID: request.grantID ?? request.approvalID,
+      })
+    }
+  }
+}
+
+export async function requestInProcessPermission(
+  rawInput: InProcessPermissionInput,
+): Promise<InProcessPermissionResult> {
+  ensurePermissionTables()
+  const context = {
+    sessionID: Identifier.schema("session").parse(rawInput.context.sessionID),
+    turnID: Identifier.schema("turn").parse(rawInput.context.turnID),
+    messageID: Identifier.schema("message").parse(rawInput.context.messageID),
+    toolCallID: z.string().trim().min(1).max(256).parse(rawInput.context.toolCallID),
+  }
+  const scope = Schema.Scope.parse({
+    ...rawInput.scope,
+    sessionID: rawInput.context.sessionID,
+  })
+  const input: InProcessPermissionInput = {
+    ...rawInput,
+    context,
+    scope,
+    method: z.string().trim().min(1).max(128).parse(rawInput.method),
+    tabID: rawInput.tabID === undefined
+      ? undefined
+      : z.number().int().positive().parse(rawInput.tabID),
+    tabTitle: rawInput.tabTitle === undefined
+      ? undefined
+      : safeDisplayText(rawInput.tabTitle, "Untitled tab"),
+    risk: rawInput.risk ?? "medium",
+  }
+  if (scope.sessionID !== context.sessionID) {
+    throw new Error("Permission scope session does not match the active tool context.")
+  }
+
+  const grantID = safeDisplayText(
+    input.grantID,
+    Identifier.ascending("permission"),
+    256,
+  )
+  const risk = Schema.Risk.parse(input.risk)
+  const grant = sessionOriginGrants.get(inProcessGrantKey(scope))
+  const forceSingle = input.sensitive === true
+
+  if (input.action === "deny") {
+    const reason = input.rationale?.trim() || "The browser action is prohibited by policy."
+    await auditInProcess(input, "deny", reason, risk)
+    return { decision: "deny", grantID }
+  }
+
+  if (!forceSingle && grant) {
+    const reason = "The browser origin is allowed for the current session."
+    await auditInProcess(input, "allow", reason, risk)
+    return { decision: "allow-session", grantID: grant.grantID }
+  }
+
+  const permissionMode = await Config.getPermissionMode(Config.GLOBAL_CONFIG_ID)
+  if (!forceSingle && (input.action === "allow" || permissionMode.mode === "full_access")) {
+    const reason = input.action === "allow"
+      ? "The browser action is allowed by the safe-read policy."
+      : "The browser action is allowed by full access mode."
+    await auditInProcess(input, "allow", reason, risk)
+    return { decision: "allow-once", grantID }
+  }
+
+  const active = Orchestrator.activeTurn(context.sessionID)
+  if (!active || active.turnID !== context.turnID) {
+    throw new Error("The browser permission request no longer belongs to an active turn.")
+  }
+
+  const method = safeDisplayText(input.method, "browser action", 128)
+  const origin = safeDisplayText(scope.origin, "unknown origin", 2_048)
+  const tabTitle = safeDisplayText(input.tabTitle, "Untitled tab")
+  const rationale = safeDisplayText(
+    input.rationale,
+    forceSingle
+      ? "This action may enter a sensitive value and always requires a one-time decision."
+      : "This origin has not been authorized for the current session.",
+    500,
+  )
+  const requestID = Identifier.ascending("permission")
+  const prompt = buildPromptSnapshot({
+    descriptor: {
+      title: `Browser permission: ${method}`,
+      summary: `${method} on ${origin} in “${tabTitle}”.`,
+    },
+    rationale,
+    risk,
+    derived: {
+      paths: [],
+      workdir: undefined,
+      command: undefined,
+      body: undefined,
+    },
+    allowedDecisions: forceSingle
+      ? ["deny", "allow-once"]
+      : ["deny", "allow-once", "allow-session"],
+    recommendedDecision: "allow-once",
+  })
+  const record = Schema.Request.parse({
+    id: requestID,
+    approvalID: grantID,
+    sessionID: context.sessionID,
+    turnID: context.turnID,
+    messageID: context.messageID,
+    toolCallID: context.toolCallID,
+    projectID: Instance.project.id,
+    agent: "default",
+    tool: `browser.${method}`,
+    toolKind: "interaction",
+    title: prompt.title,
+    risk,
+    status: "pending",
+    continuation: "in-process",
+    scope,
+    grantID,
+    input: {
+      method,
+      origin,
+      tabID: input.tabID,
+      tabTitle,
+      sensitive: forceSingle,
+    },
+    prompt,
+    runtime: {
+      tool: `browser.${method}`,
+      toolKind: "interaction",
+      input: {
+        method,
+        origin,
+        tabID: input.tabID,
+        sensitive: forceSingle,
+      },
+    },
+    createdAt: Date.now(),
+  })
+  const part = createPermissionPart({
+    sessionID: record.sessionID,
+    messageID: record.messageID,
+    approvalID: record.approvalID,
+    toolCallID: record.toolCallID,
+    tool: record.tool,
+    action: "ask",
+    reason: rationale,
+  })
+  const timeout = Math.min(
+    Math.max(Math.trunc(input.timeoutMs ?? 120_000), 1_000),
+    120_000,
+  )
+  const result = new Promise<InProcessPermissionResult>((resolve) => {
+    const timer = setTimeout(() => {
+      void expireInProcessRequest(requestID)
+    }, timeout)
+    inProcessWaiters.set(requestID, { resolve, timer })
+  })
+  try {
+    emitOrPersistPermissionEvent("permission.requested", record, part)
+    await auditInProcess(input, "ask", rationale, risk)
+  } catch (error) {
+    const waiter = inProcessWaiters.get(requestID)
+    if (waiter) {
+      clearTimeout(waiter.timer)
+      inProcessWaiters.delete(requestID)
+    }
+    throw error
+  }
+  return await result
 }
 
 function summarizeDerivedTarget(derived: EvaluationResult["derived"]) {
@@ -781,6 +1177,9 @@ export async function registerApprovalRequest(input: {
   const runtime = toolInfo ? await toolInfo.init({ agent: agentInfo }) : undefined
   const runtimeContext: Tool.Context = {
     sessionID: input.assistant.sessionID,
+    turnID: input.turn?.turnID
+      ?? Orchestrator.activeTurn(input.assistant.sessionID)?.turnID
+      ?? input.toolPart.state.approvalID,
     messageID: input.assistant.id,
     cwd: input.assistant.path.cwd,
     worktree: input.assistant.path.root,
@@ -855,6 +1254,9 @@ export async function registerApprovalRequest(input: {
     title: input.toolPart.state.title,
     risk: decision.risk,
     status: "pending",
+    turnID: input.turn?.turnID
+      ?? Orchestrator.activeTurn(input.assistant.sessionID)?.turnID,
+    continuation: "tool-retry",
     input: input.toolPart.state.input,
     resource: {
       paths: decision.derived.paths.length > 0 ? decision.derived.paths : undefined,
@@ -965,6 +1367,10 @@ function toRequestPromptView(request: Request): Schema.RequestPromptView {
     agent: request.agent,
     status: request.status,
     createdAt: request.createdAt,
+    turnID: request.turnID,
+    continuation: request.continuation ?? "tool-retry",
+    scope: request.scope,
+    grantID: request.grantID,
     prompt: ensureRequestPrompt(request),
     resolution: ensureRequestResolutionRecord(request),
   })
@@ -1023,6 +1429,8 @@ async function completeApprovedRequest(
 
       const agentInfo = (await Agent.get(request.agent)) ?? Agent.planAgent
       const runtime = await toolInfo.init({ agent: agentInfo })
+      const startedAt = existing.state.time.start
+      const runningTitle = existing.state.title
       const running = Message.ToolPart.parse({
         ...existing,
         state: {
@@ -1032,7 +1440,7 @@ async function completeApprovedRequest(
           title: existing.state.title,
           metadata: existing.state.metadata,
           time: {
-            start: existing.state.time.start,
+            start: startedAt,
           },
         },
       })
@@ -1049,6 +1457,7 @@ async function completeApprovedRequest(
         const output = Tool.normalizeToolOutput(
           await runtime.execute(request.input, {
             sessionID: request.sessionID,
+            turnID: turn?.turnID ?? request.approvalID,
             messageID: request.messageID,
             cwd: session.directory,
             worktree: Instance.worktree,
@@ -1068,10 +1477,10 @@ async function completeApprovedRequest(
             input: running.state.input,
             raw: running.state.raw,
             output: output.text,
-            title: output.title ?? running.state.title ?? running.tool,
+            title: output.title ?? runningTitle ?? running.tool,
             metadata: output.metadata ?? {},
             time: {
-              start: running.state.time.start,
+              start: startedAt,
               end: Date.now(),
             },
             attachments: attachments.length > 0 ? attachments : undefined,
@@ -1096,7 +1505,7 @@ async function completeApprovedRequest(
             error: normalizeExecutionError(error),
             metadata: {},
             time: {
-              start: running.state.time.start,
+              start: startedAt,
               end: Date.now(),
             },
           },
@@ -1161,6 +1570,13 @@ export async function resolveRequest(id: string, resolution: Schema.RequestResol
     }
   }
 
+  const allowedDecisions = ensureRequestPrompt(existing).allowedDecisions
+  if (!allowedDecisions.includes(resolution.decision)) {
+    throw new Error(
+      `Decision '${resolution.decision}' is not allowed for permission request '${id}'.`,
+    )
+  }
+
   const approved = decisionToApproved(resolution.decision)
 
   let next = Schema.Request.parse({
@@ -1185,6 +1601,46 @@ export async function resolveRequest(id: string, resolution: Schema.RequestResol
     action: approved ? "allow" : "deny",
     reason: resolution.note,
   })
+
+  if ((existing.continuation ?? "tool-retry") === "in-process") {
+    const waiter = inProcessWaiters.get(existing.id)
+    if (waiter) {
+      clearTimeout(waiter.timer)
+      inProcessWaiters.delete(existing.id)
+    }
+    if (resolution.decision === "allow-session" && next.scope) {
+      sessionOriginGrants.set(inProcessGrantKey(next.scope), {
+        grantID: next.grantID ?? next.approvalID,
+        sessionID: next.scope.sessionID,
+        extensionInstanceID: next.scope.extensionInstanceID,
+        origin: next.scope.origin,
+        createdAt: Date.now(),
+      })
+    }
+    emitOrPersistPermissionEvent("permission.resolved", next, part)
+    await auditInProcess({
+      context: {
+        sessionID: next.sessionID,
+        turnID: next.turnID ?? "",
+        messageID: next.messageID,
+        toolCallID: next.toolCallID,
+      },
+      scope: next.scope!,
+      grantID: next.grantID,
+      method: typeof next.input.method === "string" ? next.input.method : next.tool,
+      tabID: typeof next.input.tabID === "number" ? next.input.tabID : undefined,
+      sensitive: next.input.sensitive === true,
+    }, approved ? "allow" : "deny", resolution.note?.trim() || (
+      approved ? "The browser action was approved by the user." : "The browser action was denied by the user."
+    ), next.risk)
+    waiter?.resolve({
+      decision: resolution.decision,
+      grantID: next.grantID ?? next.approvalID,
+    })
+    return {
+      request: next,
+    }
+  }
 
   if (!approved) {
     updatePlanWorkflowForDeniedRequest(next)

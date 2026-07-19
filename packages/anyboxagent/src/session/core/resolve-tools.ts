@@ -45,6 +45,7 @@ export type ResolvedToolPlan = {
 export type ResolveToolsInput = {
   agent: Agent.AgentInfo
   sessionID: string
+  turnID?: string
   messageID: string
   abort: AbortSignal
   messages?: Message.WithParts[]
@@ -246,6 +247,7 @@ export async function resolveToolPlan(input: ResolveToolsInput): Promise<Resolve
         item,
         agent: input.agent,
         sessionID: input.sessionID,
+        turnID: input.turnID,
         messageID: input.messageID,
         abort: input.abort,
       })

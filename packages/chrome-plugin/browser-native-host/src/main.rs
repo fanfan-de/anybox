@@ -1,5 +1,5 @@
 use base64::Engine;
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
 use hmac::{Hmac, Mac};
 use interprocess::TryClone;
 #[cfg(unix)]
@@ -8,10 +8,13 @@ use interprocess::local_socket::{GenericNamespaced, Stream as LocalSocketStream,
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::Sha256;
+#[cfg(test)]
+use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -23,7 +26,12 @@ const NATIVE_HOST_NAME: &str = "com.anybox.browser";
 const RUNTIME_CONFIG_ENV: &str = "ANYBOX_BROWSER_NATIVE_CONFIG";
 const RUNTIME_CONFIG_FILENAME: &str = "com.anybox.browser.runtime.json";
 const MAX_NATIVE_MESSAGE_BYTES: usize = 64 * 1024 * 1024;
-const MAX_IPC_FRAME_BYTES: usize = 16 * 1024 * 1024;
+const MAX_NATIVE_OUTPUT_MESSAGE_BYTES: usize = 1024 * 1024;
+const MAX_IPC_FRAME_BYTES: usize = 4 * 1024 * 1024;
+const MAX_IPC_CHUNK_BYTES: usize = 512 * 1024;
+const MAX_IPC_CHUNKS: usize = 128;
+
+static TRANSFER_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -70,6 +78,126 @@ enum BridgeInput {
     BrowserHostMessage(Value),
     BrowserHostEnd,
     BrowserHostError(String),
+}
+
+#[cfg(test)]
+struct IncomingNativeTransfer {
+    total: usize,
+    total_bytes: usize,
+    chunks: Vec<Option<Vec<u8>>>,
+    received_bytes: usize,
+}
+
+#[cfg(test)]
+#[derive(Default)]
+struct NativeChunkReassembler {
+    transfers: HashMap<String, IncomingNativeTransfer>,
+    reserved_bytes: usize,
+}
+
+#[cfg(test)]
+impl NativeChunkReassembler {
+    fn push(&mut self, message: &Value) -> Result<Option<Vec<u8>>, String> {
+        let transfer_id = message
+            .get("transferID")
+            .and_then(Value::as_str)
+            .filter(|value| !value.is_empty() && value.len() <= 128)
+            .ok_or_else(|| "Browser IPC native chunk has an invalid transfer ID".to_string())?;
+        let index = usize::try_from(
+            message
+                .get("index")
+                .and_then(Value::as_u64)
+                .ok_or_else(|| "Browser IPC native chunk is missing its index".to_string())?,
+        )
+        .map_err(|_| "Browser IPC native chunk index is out of range".to_string())?;
+        let total = usize::try_from(
+            message
+                .get("total")
+                .and_then(Value::as_u64)
+                .ok_or_else(|| "Browser IPC native chunk is missing its total".to_string())?,
+        )
+        .map_err(|_| "Browser IPC native chunk total is out of range".to_string())?;
+        let total_bytes = usize::try_from(
+            message
+                .get("totalBytes")
+                .and_then(Value::as_u64)
+                .ok_or_else(|| "Browser IPC native chunk is missing its size".to_string())?,
+        )
+        .map_err(|_| "Browser IPC native chunk size is out of range".to_string())?;
+        if total == 0
+            || total > MAX_IPC_CHUNKS
+            || index >= total
+            || total_bytes == 0
+            || total_bytes > MAX_NATIVE_MESSAGE_BYTES
+        {
+            return Err("Browser IPC native chunk metadata is outside its limits".to_string());
+        }
+        if !self.transfers.contains_key(transfer_id) {
+            if self.reserved_bytes.saturating_add(total_bytes) > MAX_NATIVE_MESSAGE_BYTES {
+                return Err(
+                    "Browser IPC in-flight native messages exceed the 64 MB limit".to_string(),
+                );
+            }
+            self.reserved_bytes += total_bytes;
+            self.transfers.insert(
+                transfer_id.to_string(),
+                IncomingNativeTransfer {
+                    total,
+                    total_bytes,
+                    chunks: vec![None; total],
+                    received_bytes: 0,
+                },
+            );
+        }
+        let transfer = self
+            .transfers
+            .get_mut(transfer_id)
+            .ok_or_else(|| "Browser IPC native transfer disappeared".to_string())?;
+        if transfer.total != total || transfer.total_bytes != total_bytes {
+            return Err("Browser IPC native chunk metadata changed during transfer".to_string());
+        }
+        if transfer.chunks[index].is_some() {
+            return Err("Browser IPC native chunk index was received twice".to_string());
+        }
+        let encoded = message
+            .get("data")
+            .and_then(Value::as_str)
+            .ok_or_else(|| "Browser IPC native chunk is missing its data".to_string())?;
+        let bytes = STANDARD
+            .decode(encoded)
+            .map_err(|_| "Browser IPC native chunk is not valid base64".to_string())?;
+        if bytes.is_empty()
+            || bytes.len() > MAX_IPC_CHUNK_BYTES
+            || STANDARD.encode(&bytes) != encoded
+            || transfer.received_bytes.saturating_add(bytes.len()) > transfer.total_bytes
+        {
+            return Err("Browser IPC native chunk data is invalid".to_string());
+        }
+        transfer.received_bytes += bytes.len();
+        transfer.chunks[index] = Some(bytes);
+        if transfer.chunks.iter().any(Option::is_none) {
+            return Ok(None);
+        }
+
+        let completed = self
+            .transfers
+            .remove(transfer_id)
+            .ok_or_else(|| "Browser IPC native transfer disappeared".to_string())?;
+        self.reserved_bytes = self.reserved_bytes.saturating_sub(completed.total_bytes);
+        if completed.received_bytes != completed.total_bytes {
+            return Err(
+                "Browser IPC native chunks do not match the declared message size".to_string(),
+            );
+        }
+        let mut payload = Vec::with_capacity(completed.total_bytes);
+        for chunk in completed.chunks {
+            payload
+                .extend(chunk.ok_or_else(|| {
+                    "Browser IPC native chunk sequence is incomplete".to_string()
+                })?);
+        }
+        Ok(Some(payload))
+    }
 }
 
 fn main() {
@@ -149,14 +277,8 @@ fn run() -> Result<(), String> {
                 let message = serde_json::from_slice::<Value>(&payload).map_err(|_| {
                     "Chrome sent a Native Messaging payload that is not valid JSON".to_string()
                 })?;
-                write_ipc_json(
-                    &mut stream,
-                    &json!({
-                        "type": "native.message",
-                        "message": message,
-                    }),
-                )
-                .map_err(|error| format!("failed to forward a Chrome message: {error}"))?;
+                write_native_payload_to_ipc(&mut stream, &payload, message)
+                    .map_err(|error| format!("failed to forward a Chrome message: {error}"))?;
             }
             BridgeInput::ChromeEnd => return Ok(()),
             BridgeInput::ChromeError(error) => {
@@ -165,7 +287,11 @@ fn run() -> Result<(), String> {
                 ));
             }
             BridgeInput::BrowserHostMessage(message) => {
-                handle_browser_host_message(&mut stream, &mut output, message)?;
+                handle_browser_host_message(
+                    &mut stream,
+                    &mut output,
+                    message,
+                )?;
             }
             BridgeInput::BrowserHostEnd => return Ok(()),
             BridgeInput::BrowserHostError(error) => {
@@ -196,6 +322,15 @@ fn handle_browser_host_message(
             write_native_message(output, &payload)
                 .map_err(|error| format!("failed to forward a Browser Host message: {error}"))
         }
+        "native.chunk" => {
+            // Keep Host -> Extension transfers chunked through Chrome Native
+            // Messaging. Reassembling here could exceed Chrome's 1 MiB
+            // Native Host output ceiling.
+            let payload = serde_json::to_vec(&message)
+                .map_err(|error| format!("failed to encode a Browser Host chunk: {error}"))?;
+            write_native_message(output, &payload)
+                .map_err(|error| format!("failed to forward a Browser Host chunk: {error}"))
+        }
         "ping" => {
             let nonce = message
                 .get("nonce")
@@ -221,6 +356,59 @@ fn handle_browser_host_message(
             "Anybox Browser IPC sent unsupported message type '{other}'"
         )),
     }
+}
+
+fn write_native_payload_to_ipc<W: Write>(
+    stream: &mut W,
+    payload: &[u8],
+    message: Value,
+) -> io::Result<()> {
+    if payload.is_empty() || payload.len() > MAX_NATIVE_MESSAGE_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "native message size {} is outside 1..={MAX_NATIVE_MESSAGE_BYTES}",
+                payload.len()
+            ),
+        ));
+    }
+    if payload.len() <= MAX_IPC_CHUNK_BYTES {
+        return write_ipc_json(
+            stream,
+            &json!({
+                "type": "native.message",
+                "message": message,
+            }),
+        );
+    }
+
+    let total = payload.len().div_ceil(MAX_IPC_CHUNK_BYTES);
+    if total > MAX_IPC_CHUNKS {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "native message needs too many Browser IPC chunks",
+        ));
+    }
+    let transfer_id = format!(
+        "native-{}-{}-{}",
+        std::process::id(),
+        unix_time_millis().unwrap_or_default(),
+        TRANSFER_SEQUENCE.fetch_add(1, Ordering::Relaxed),
+    );
+    for (index, chunk) in payload.chunks(MAX_IPC_CHUNK_BYTES).enumerate() {
+        write_ipc_json(
+            stream,
+            &json!({
+                "type": "native.chunk",
+                "transferID": transfer_id,
+                "index": index,
+                "total": total,
+                "totalBytes": payload.len(),
+                "data": STANDARD.encode(chunk),
+            }),
+        )?;
+    }
+    Ok(())
 }
 
 fn authenticate(stream: &mut LocalSocketStream, bootstrap: &BootstrapConfig) -> Result<(), String> {
@@ -460,7 +648,12 @@ fn read_native_message<R: Read>(reader: &mut R) -> io::Result<Option<Vec<u8>>> {
 }
 
 fn write_native_message<W: Write>(writer: &mut W, payload: &[u8]) -> io::Result<()> {
-    write_length_prefixed(writer, payload, true, MAX_NATIVE_MESSAGE_BYTES)
+    write_length_prefixed(
+        writer,
+        payload,
+        true,
+        MAX_NATIVE_OUTPUT_MESSAGE_BYTES,
+    )
 }
 
 fn read_length_prefixed<R: Read>(
@@ -749,5 +942,69 @@ mod tests {
                 .join("native-messaging")
                 .join(RUNTIME_CONFIG_FILENAME)
         );
+    }
+
+    #[test]
+    fn chunks_and_reassembles_native_messages_under_the_64_mb_limit() {
+        let message = json!({
+            "type": "large",
+            "data": "x".repeat(MAX_IPC_CHUNK_BYTES + 1024),
+        });
+        let payload = serde_json::to_vec(&message).unwrap();
+        let mut framed = Vec::new();
+        write_native_payload_to_ipc(&mut framed, &payload, message).unwrap();
+
+        let mut cursor = Cursor::new(framed);
+        let mut reassembler = NativeChunkReassembler::default();
+        let mut reconstructed = None;
+        let mut frames = 0;
+        while let Some(frame) = read_ipc_json(&mut cursor).unwrap() {
+            assert_eq!(
+                frame.get("type").and_then(Value::as_str),
+                Some("native.chunk")
+            );
+            reconstructed = reassembler.push(&frame).unwrap().or(reconstructed);
+            frames += 1;
+        }
+        assert!(frames > 1);
+        assert_eq!(reconstructed.unwrap(), payload);
+    }
+
+    #[test]
+    fn rejects_native_chunk_transfers_over_the_total_message_limit() {
+        let mut reassembler = NativeChunkReassembler::default();
+        let message = json!({
+            "type": "native.chunk",
+            "transferID": "oversized",
+            "index": 0,
+            "total": 1,
+            "totalBytes": MAX_NATIVE_MESSAGE_BYTES + 1,
+            "data": STANDARD.encode(b"x"),
+        });
+        assert!(
+            reassembler
+                .push(&message)
+                .unwrap_err()
+                .contains("outside its limits")
+        );
+    }
+
+    #[test]
+    fn browser_host_chunks_fit_chrome_native_output_limit() {
+        let message = json!({
+            "type": "native.chunk",
+            "transferID": "host-output",
+            "index": 0,
+            "total": 1,
+            "totalBytes": MAX_IPC_CHUNK_BYTES,
+            "data": STANDARD.encode(vec![b'x'; MAX_IPC_CHUNK_BYTES]),
+        });
+        let payload = serde_json::to_vec(&message).unwrap();
+        assert!(payload.len() < MAX_NATIVE_OUTPUT_MESSAGE_BYTES);
+
+        let mut framed = Vec::new();
+        write_native_message(&mut framed, &payload).unwrap();
+        let declared = u32::from_le_bytes(framed[..4].try_into().unwrap()) as usize;
+        assert_eq!(declared, payload.len());
     }
 }

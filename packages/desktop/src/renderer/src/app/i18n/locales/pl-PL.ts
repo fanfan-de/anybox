@@ -81,6 +81,8 @@ export const plPL = {
   "thread.permission.note": "Oczekiwanie na decyzję.",
   "thread.permission.applying": "Stosowanie...",
   "thread.permission.action.allow": "Zezwól",
+  "thread.permission.action.allowOnce": "Zezwól raz",
+  "thread.permission.action.allowSession": "Zezwól w tej sesji",
   "thread.permission.action.deny": "Odmów",
   "thread.permission.decisionAria": "{decision}: {title}",
   "thread.permission.risk.low": "Niskie ryzyko",

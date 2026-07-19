@@ -333,6 +333,7 @@ let previousGmailOAuthClientID: string | undefined
 let previousGmailOAuthClientSecret: string | undefined
 let previousLegacyGmailOAuthClientID: string | undefined
 let previousLegacyGmailOAuthClientSecret: string | undefined
+let previousAnyboxTestHome: string | undefined
 let previousFetch: typeof fetch | undefined
 const tinyPngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
 
@@ -363,12 +364,14 @@ async function useTempDatabase() {
   previousGmailOAuthClientSecret = process.env.ANYBOX_GMAIL_OAUTH_CLIENT_SECRET
   previousLegacyGmailOAuthClientID = process.env.GOOGLE_OAUTH_CLIENT_ID
   previousLegacyGmailOAuthClientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET
+  previousAnyboxTestHome = process.env.ANYBOX_TEST_HOME
   previousFetch = globalThis.fetch
   process.env.ANYBOX_PLUGIN_LOCAL_DIR = join(activeRoot, "local-plugins")
   process.env.ANYBOX_PLUGIN_INSTALL_DIR = join(activeRoot, "installed-plugins")
   process.env.ANYBOX_PLUGIN_REGISTRY_INDEX_URL = "off"
   process.env.ANYBOX_PLUGIN_REGISTRY_CACHE_DIR = join(activeRoot, "registry-cache")
   process.env.ANYBOX_PLUGIN_IMPORTED_REGISTRY_FILE = join(activeRoot, "imported-plugin-registry.json")
+  process.env.ANYBOX_TEST_HOME = activeRoot
   delete process.env.ANYBOX_CONNECTOR_REGISTRY_FILES
   delete process.env.ANYBOX_CONNECTOR_BUILD_CONFIG
   delete process.env.ANYBOX_GMAIL_OAUTH_CLIENT_ID
@@ -1272,6 +1275,11 @@ afterEach(async () => {
   } else {
     process.env.GOOGLE_OAUTH_CLIENT_SECRET = previousLegacyGmailOAuthClientSecret
   }
+  if (previousAnyboxTestHome === undefined) {
+    delete process.env.ANYBOX_TEST_HOME
+  } else {
+    process.env.ANYBOX_TEST_HOME = previousAnyboxTestHome
+  }
   if (previousFetch) {
     globalThis.fetch = previousFetch
   }
@@ -1286,6 +1294,7 @@ afterEach(async () => {
   previousGmailOAuthClientSecret = undefined
   previousLegacyGmailOAuthClientID = undefined
   previousLegacyGmailOAuthClientSecret = undefined
+  previousAnyboxTestHome = undefined
   previousFetch = undefined
   Sqlite.closeDatabase()
   Sqlite.setDatabaseFile()
@@ -3543,8 +3552,8 @@ describe("plugin marketplace API", () => {
     await Plugin.reconcileInstalledRuntimeBindings()
 
     const migrated = Plugin.getInstalled("chrome")
-    expect(migrated?.version).toBe("0.9.0")
-    expect(migrated?.packageRoot).toBe(join(pluginInstallRoot(), "chrome", "0.9.0"))
+    expect(migrated?.version).toBe("0.10.0")
+    expect(migrated?.packageRoot).toBe(join(pluginInstallRoot(), "chrome", "0.10.0"))
     expect(migrated?.mcpServerIDs).toEqual([])
     expect(migrated?.connectorRequirementIDs).toEqual([
       "connector:node-repl:default",
@@ -3617,7 +3626,7 @@ describe("plugin marketplace API", () => {
         permissions: [
           "Reads and controls Chrome tabs through the Anybox Chrome extension, including navigation, page inspection, screenshots, clicks, scrolling, typing, and form filling.",
           "Uses a versioned Browser Contract and backend capabilities; the plugin-owned Browser Host revalidates every browser command before forwarding it.",
-          "Raw page JavaScript, selector-driven click/fill adapters, and Chrome DevTools Protocol commands are disabled at both the Browser Client and plugin-owned Browser Host boundaries; bounded selector waits remain available.",
+          "Raw page JavaScript and unrestricted Chrome DevTools Protocol commands are disabled; bounded structured locators are exposed only when the connected Extension advertises their implemented capability.",
           "Registers and runs the plugin-bundled Native Messaging Host for the current user.",
           "Requires the Anybox Chrome extension to be installed, enabled, and connected.",
         ],

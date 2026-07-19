@@ -81,6 +81,8 @@ export const idID = {
   "thread.permission.note": "Menunggu keputusan Anda.",
   "thread.permission.applying": "Menerapkan...",
   "thread.permission.action.allow": "Izinkan",
+  "thread.permission.action.allowOnce": "Izinkan sekali",
+  "thread.permission.action.allowSession": "Izinkan untuk sesi ini",
   "thread.permission.action.deny": "Tolak",
   "thread.permission.decisionAria": "{decision}: {title}",
   "thread.permission.risk.low": "Risiko Rendah",

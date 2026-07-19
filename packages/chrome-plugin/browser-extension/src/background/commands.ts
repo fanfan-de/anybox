@@ -1,13 +1,71 @@
-import type { BrowserExtensionCommandMethod } from "@anybox/chrome-shared/browser-extension"
+import type {
+  BrowserExtensionCommandContext,
+  BrowserExtensionCommandMethod,
+} from "@anybox/chrome-shared/browser-extension"
 import {
+  BROWSER_CONTRACT_V1_VERSION,
+  BROWSER_CONTRACT_VERSION,
   BrowserContractCommandMethod,
   BrowserContractValidationError,
   parseBrowserCommandParams,
   parseBrowserCommandResult,
   type BrowserContractCommandMethod as BrowserContractCommandMethodValue,
 } from "@anybox/chrome-shared/browser-contract"
+import {
+  createLease,
+  finalizeAllLeases,
+  finalizeExpiredLeases,
+  finalizeSessionLeases,
+  finalizeTurnLeases,
+  listLeases,
+  markDeliverable,
+  releaseLease,
+  requireLease,
+} from "./lease-store"
 
 const attachedTabs = new Set<number>()
+const V1_SAFE_READ_METHODS = new Set<BrowserContractCommandMethodValue>([
+  "tabs.list",
+  "page.snapshot",
+  "page.interactiveSnapshot",
+  "page.domTree",
+  "page.accessibilityTree",
+  "page.screenshot",
+  "page.waitFor",
+])
+
+function commandAbortedError() {
+  return Object.assign(
+    new Error("The browser command was cancelled because the Browser Host connection closed."),
+    {
+      code: "BACKEND_UNAVAILABLE",
+      retryable: true,
+    },
+  )
+}
+
+function throwIfCommandAborted(signal?: AbortSignal) {
+  if (signal?.aborted) throw commandAbortedError()
+}
+
+function waitForCommandDelay(delayMs: number, signal?: AbortSignal) {
+  if (!signal) {
+    return new Promise<void>((resolve) => setTimeout(resolve, delayMs))
+  }
+  throwIfCommandAborted(signal)
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort)
+      resolve()
+    }, delayMs)
+    const onAbort = () => {
+      clearTimeout(timer)
+      signal.removeEventListener("abort", onAbort)
+      reject(commandAbortedError())
+    }
+    signal.addEventListener("abort", onAbort, { once: true })
+  })
+}
 
 type TabSummary = {
   id: number
@@ -15,6 +73,15 @@ type TabSummary = {
   title?: string
   url?: string
   active?: boolean
+  lease?: {
+    source: "user" | "agent"
+    sessionID: string
+    turnID: string
+    state: "active" | "deliverable" | "handoff" | "released"
+    retained?: boolean
+    extensionInstanceID: string
+    expiresAt: number
+  }
 }
 
 type InteractiveElement = {
@@ -244,21 +311,81 @@ async function attachDebugger(tabId: number) {
   }
 }
 
-async function sendCdp(tabId: number, method: string, commandParams?: Record<string, unknown>) {
+export async function detachTabDebugger(tabId: number) {
+  if (!attachedTabs.has(tabId)) return false
+  try {
+    await chrome.debugger.detach({ tabId })
+  } catch {
+    // Chrome may already have detached during navigation or tab teardown.
+  } finally {
+    attachedTabs.delete(tabId)
+  }
+  return true
+}
+
+export async function detachAllDebuggers() {
+  const tabIds = [...attachedTabs]
+  await Promise.all(tabIds.map((tabId) => detachTabDebugger(tabId)))
+  return tabIds
+}
+
+async function sendCdp(
+  tabId: number,
+  method: string,
+  commandParams?: Record<string, unknown>,
+  signal?: AbortSignal,
+) {
+  throwIfCommandAborted(signal)
   await attachDebugger(tabId)
+  if (signal?.aborted) {
+    await detachTabDebugger(tabId)
+    throw commandAbortedError()
+  }
   return await chrome.debugger.sendCommand({ tabId }, method, commandParams)
 }
 
-async function runInPage<T>(tabId: number, func: (...args: any[]) => T, args: unknown[] = []) {
+async function runInPage<T>(
+  tabId: number,
+  func: (...args: any[]) => T,
+  args: unknown[] = [],
+  signal?: AbortSignal,
+) {
+  throwIfCommandAborted(signal)
   const [result] = await chrome.scripting.executeScript({
     target: { tabId },
     func,
     args,
   })
+  throwIfCommandAborted(signal)
   return result?.result as T
 }
 
-async function listTabs() {
+async function showBrowserOverlay(tabId: number, action?: string) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["content.js"],
+    })
+    await chrome.tabs.sendMessage(tabId, {
+      type: "ANYBOX_BROWSER_BRIDGE_ACTIVE",
+      action,
+    })
+  } catch {
+    // Restricted pages can reject injection. The advisory overlay must not
+    // turn a completed browser command into a failure.
+  }
+}
+
+async function removeBrowserOverlay(tabId: number) {
+  await chrome.tabs.sendMessage(tabId, {
+    type: "ANYBOX_BROWSER_BRIDGE_REMOVE",
+  }).catch(() => undefined)
+}
+
+async function listTabs(
+  context?: BrowserExtensionCommandContext,
+  mode: "all" | "owned" | "user" = "all",
+) {
   const [tabs, selectedTabs] = await Promise.all([
     chrome.tabs.query({}),
     chrome.tabs.query({ active: true, currentWindow: true }),
@@ -266,9 +393,41 @@ async function listTabs() {
   const selectedTabId = selectedTabs.find(
     (tab: any) => typeof tab.id === "number",
   )?.id
-  const summaries = tabs
+  const leases = mode === "all" ? [] : await listLeases()
+  const leasesByTab = new Map(leases.map((lease) => [lease.tabId, lease]))
+  let summaries: TabSummary[] = tabs
     .filter((tab: any) => typeof tab.id === "number")
-    .map(toTabSummary)
+    .map((tab: any) => {
+      const summary = toTabSummary(tab)
+      const lease = leasesByTab.get(summary.id)
+      return lease
+        ? {
+            ...summary,
+            lease: {
+              source: lease.source,
+              sessionID: lease.sessionID,
+              turnID: lease.turnID,
+              state: lease.state,
+              retained: lease.retained,
+              extensionInstanceID: lease.extensionInstanceID,
+              expiresAt: lease.expiresAt,
+            },
+          }
+        : summary
+    })
+  if (mode === "owned") {
+    summaries = summaries.filter((tab) =>
+      tab.lease?.sessionID === context?.sessionID
+      && tab.lease?.extensionInstanceID === context?.extensionInstanceID
+      && tab.lease?.state !== "released"
+    )
+  } else if (mode === "user") {
+    summaries = summaries.filter((tab) =>
+      !tab.lease
+      || tab.lease.source === "user"
+      || (tab.lease.state === "released" && tab.lease.retained === true)
+    )
+  }
   if (typeof selectedTabId === "number") {
     summaries.sort((left: TabSummary, right: TabSummary) =>
       Number(right.id === selectedTabId) - Number(left.id === selectedTabId)
@@ -279,17 +438,65 @@ async function listTabs() {
   }
 }
 
-async function openTab(params: unknown) {
+async function openTab(
+  params: unknown,
+  context?: BrowserExtensionCommandContext,
+  signal?: AbortSignal,
+) {
   const input = readRecord(params)
   const url = readString(input.url)
   if (!url) throw new Error("tabs.open requires a URL.")
+  throwIfCommandAborted(signal)
   const tab = await chrome.tabs.create({ url, active: input.active !== false })
+  try {
+    throwIfCommandAborted(signal)
+    if (typeof tab.id === "number" && context?.extensionInstanceID) {
+      await createLease({
+        tabId: tab.id,
+        source: "agent",
+        context,
+        extensionInstanceID: context.extensionInstanceID,
+        openerTabId: typeof tab.openerTabId === "number" ? tab.openerTabId : undefined,
+      })
+    }
+  } catch (error) {
+    if (signal?.aborted && typeof tab.id === "number") {
+      await chrome.tabs.remove(tab.id).catch(() => undefined)
+    }
+    throw error
+  }
   return toTabSummary(tab)
 }
 
-async function activateTab(params: unknown) {
+async function claimTab(
+  params: unknown,
+  context?: BrowserExtensionCommandContext,
+  signal?: AbortSignal,
+) {
+  const tabId = readNumber(readRecord(params).tabId)
+  if (!tabId || !context?.extensionInstanceID) {
+    throw Object.assign(
+      new Error("tabs.claim requires a tab and Browser Contract v2 context."),
+      { code: "SESSION_REQUIRED", retryable: false },
+    )
+  }
+  throwIfCommandAborted(signal)
+  const tab = await chrome.tabs.get(tabId)
+  throwIfCommandAborted(signal)
+  await createLease({
+    tabId,
+    source: "user",
+    context,
+    extensionInstanceID: context.extensionInstanceID,
+    openerTabId: typeof tab.openerTabId === "number" ? tab.openerTabId : undefined,
+  })
+  return toTabSummary(tab)
+}
+
+async function activateTab(params: unknown, signal?: AbortSignal) {
   const input = readRecord(params)
   const tabId = await activeTabId(input.tabId)
+  throwIfCommandAborted(signal)
   const tab = await chrome.tabs.update(tabId, { active: true })
   if (typeof tab.windowId === "number") {
     await chrome.windows.update(tab.windowId, { focused: true }).catch(() => undefined)
@@ -297,7 +504,7 @@ async function activateTab(params: unknown) {
   return toTabSummary(tab)
 }
 
-async function snapshot(params: unknown) {
+async function snapshot(params: unknown, signal?: AbortSignal) {
   const input = readRecord(params)
   const tabId = await activeTabId(input.tabId)
   const maxTextChars = Math.min(readNumber(input.maxTextChars, 20_000) ?? 20_000, 100_000)
@@ -404,7 +611,7 @@ async function snapshot(params: unknown) {
       inputs,
       truncated: text.length > limit,
     }
-  }, [maxTextChars, SENSITIVE_VALUE_PATTERN.source])
+  }, [maxTextChars, SENSITIVE_VALUE_PATTERN.source], signal)
 
   return {
     tabId,
@@ -418,7 +625,7 @@ async function snapshot(params: unknown) {
   }
 }
 
-async function interactiveSnapshot(params: unknown) {
+async function interactiveSnapshot(params: unknown, signal?: AbortSignal) {
   const input = readRecord(params)
   const tabId = await activeTabId(input.tabId)
   const maxElements = Math.min(Math.max(readNumber(input.maxElements, 200) ?? 200, 1), 500)
@@ -596,7 +803,7 @@ async function interactiveSnapshot(params: unknown) {
       elements,
       truncated: elements.length >= limit && nodes.length > elements.length,
     }
-  }, [maxElements, SENSITIVE_VALUE_PATTERN.source])
+  }, [maxElements, SENSITIVE_VALUE_PATTERN.source], signal)
 
   return {
     tabId,
@@ -780,7 +987,7 @@ function appendDomChildren(
   }
 }
 
-async function domTree(params: unknown) {
+async function domTree(params: unknown, signal?: AbortSignal) {
   const input = readRecord(params)
   const tabId = await activeTabId(input.tabId)
   const maxDepth = readClampedInteger(input.maxDepth, 6, 0, 20)
@@ -790,11 +997,11 @@ async function domTree(params: unknown) {
   const includeAttributes = readBoolean(input.includeAttributes, true)
   const tab = await tabInfo(tabId)
 
-  await sendCdp(tabId, "DOM.enable", {})
+  await sendCdp(tabId, "DOM.enable", {}, signal)
   const documentTree = await sendCdp(tabId, "DOM.getDocument", {
     depth: maxDepth,
     pierce,
-  }) as { root?: any }
+  }, signal) as { root?: any }
   if (!documentTree.root) throw new Error("Chrome did not return a DOM document root.")
 
   let nodeCount = 0
@@ -935,7 +1142,7 @@ function redactAccessibilityNode(node: AccessibilityTreeNode) {
   }
 }
 
-async function accessibilityTree(params: unknown) {
+async function accessibilityTree(params: unknown, signal?: AbortSignal) {
   const input = readRecord(params)
   const tabId = await activeTabId(input.tabId)
   const maxDepth = readClampedInteger(input.maxDepth, 8, 0, 30)
@@ -943,18 +1150,18 @@ async function accessibilityTree(params: unknown) {
   const includeIgnored = readBoolean(input.includeIgnored, false)
   const tab = await tabInfo(tabId)
 
-  await sendCdp(tabId, "Accessibility.enable", {})
+  await sendCdp(tabId, "Accessibility.enable", {}, signal)
   const rawTree = await sendCdp(tabId, "Accessibility.getFullAXTree", {
     depth: maxDepth,
-  }) as { nodes?: any[] }
+  }, signal) as { nodes?: any[] }
   const rawNodes = Array.isArray(rawTree.nodes) ? rawTree.nodes : []
   let domMetadataByBackendId = new Map<number, DomSensitivityMetadata>()
   try {
-    await sendCdp(tabId, "DOM.enable", {})
+    await sendCdp(tabId, "DOM.enable", {}, signal)
     const documentTree = await sendCdp(tabId, "DOM.getDocument", {
       depth: maxDepth,
       pierce: true,
-    }) as { root?: any }
+    }, signal) as { root?: any }
     domMetadataByBackendId = collectDomSensitivityMetadata(documentTree?.root, maxNodes * 5)
   } catch {
     // Some pages do not expose a DOM tree for every accessibility target. In that
@@ -1067,7 +1274,7 @@ async function accessibilityTree(params: unknown) {
   }
 }
 
-async function screenshot(params: unknown) {
+async function screenshot(params: unknown, signal?: AbortSignal) {
   const input = readRecord(params)
   const tabId = await activeTabId(input.tabId)
   const fullPage = readBoolean(input.fullPage)
@@ -1075,7 +1282,7 @@ async function screenshot(params: unknown) {
     format: "png",
     fromSurface: true,
     captureBeyondViewport: fullPage,
-  }) as { data?: string }
+  }, signal) as { data?: string }
   if (!result.data) throw new Error("Chrome did not return screenshot data.")
   return {
     tabId,
@@ -1084,7 +1291,7 @@ async function screenshot(params: unknown) {
   }
 }
 
-async function click(params: unknown) {
+async function click(params: unknown, signal?: AbortSignal) {
   const input = readRecord(params)
   const tabId = await activeTabId(input.tabId)
   const x = readNumber(input.x)
@@ -1097,19 +1304,19 @@ async function click(params: unknown) {
     y,
     button,
     clickCount: 1,
-  })
+  }, signal)
   await sendCdp(tabId, "Input.dispatchMouseEvent", {
     type: "mouseReleased",
     x,
     y,
     button,
     clickCount: 1,
-  })
-  await chrome.tabs.sendMessage(tabId, { type: "ANYBOX_BROWSER_BRIDGE_ACTIVE" }).catch(() => undefined)
+  }, signal)
+  await showBrowserOverlay(tabId, "Clicking")
   return { tabId, x, y, button }
 }
 
-async function clickElement(params: unknown) {
+async function clickElement(params: unknown, signal?: AbortSignal) {
   const input = readRecord(params)
   const tabId = await activeTabId(input.tabId)
   const elementId = readString(input.elementId)
@@ -1130,7 +1337,7 @@ async function clickElement(params: unknown) {
       x: rect.left + rect.width / 2,
       y: rect.top + rect.height / 2,
     }
-  }, [elementId]) as { ok: boolean; error?: string; x?: number; y?: number }
+  }, [elementId], signal) as { ok: boolean; error?: string; x?: number; y?: number }
 
   if (!target.ok || target.x === undefined || target.y === undefined) {
     throw new Error(target.error || `Element '${elementId}' could not be clicked.`)
@@ -1141,39 +1348,62 @@ async function clickElement(params: unknown) {
     x: target.x,
     y: target.y,
     button,
-  })
+  }, signal)
   await sendCdp(tabId, "Input.dispatchMouseEvent", {
     type: "mousePressed",
     x: target.x,
     y: target.y,
     button,
     clickCount: 1,
-  })
+  }, signal)
   await sendCdp(tabId, "Input.dispatchMouseEvent", {
     type: "mouseReleased",
     x: target.x,
     y: target.y,
     button,
     clickCount: 1,
-  })
-  await chrome.tabs.sendMessage(tabId, { type: "ANYBOX_BROWSER_BRIDGE_ACTIVE", action: "Clicking" }).catch(() => undefined)
+  }, signal)
+  await showBrowserOverlay(tabId, "Clicking")
   const tab = await tabInfo(tabId)
   return { tabId, elementId, url: tab.url, title: tab.title }
 }
 
-async function fill(params: unknown) {
+async function fill(params: unknown, signal?: AbortSignal) {
   const input = readRecord(params)
   const tabId = await activeTabId(input.tabId)
   const elementId = readString(input.elementId)
   const text = readString(input.text)
   if (!elementId) throw new Error("page.fill requires elementId.")
-  const result = await runInPage(tabId, (id: string, nextValue: string) => {
+  const result = await runInPage(tabId, (
+    id: string,
+    nextValue: string,
+    sensitiveApproved: boolean,
+    sensitivePatternSource: string,
+  ) => {
     const ATTR = "data-anybox-element-id"
     const elements = Array.from(document.querySelectorAll(`[${ATTR}]`))
     const element = elements.find((node) => node.getAttribute(ATTR) === id) as HTMLElement | undefined
     if (!element) return { ok: false, error: `Element '${id}' was not found. Run browser_interactive_snapshot again.` }
     if ((element as HTMLInputElement).disabled || element.getAttribute("aria-disabled") === "true") {
       return { ok: false, error: `Element '${id}' is disabled.` }
+    }
+    const sensitivePattern = new RegExp(sensitivePatternSource, "i")
+    const metadata = [
+      element.getAttribute("type"),
+      element.getAttribute("name"),
+      element.getAttribute("id"),
+      element.getAttribute("autocomplete"),
+      element.getAttribute("aria-label"),
+      element.getAttribute("placeholder"),
+    ].filter(Boolean).join("-")
+    const sensitive = sensitivePattern.test(metadata)
+      || element.getAttribute("type")?.toLowerCase() === "password"
+    if (sensitive && !sensitiveApproved) {
+      return {
+        ok: false,
+        sensitive: true,
+        error: `Element '${id}' is sensitive; retry with sensitive: true to request one-time approval.`,
+      }
     }
 
     element.scrollIntoView({ block: "center", inline: "center" })
@@ -1201,25 +1431,62 @@ async function fill(params: unknown) {
       return { ok: true }
     }
     return { ok: false, error: `Element '${id}' is not fillable.` }
-  }, [elementId, text]) as { ok: boolean; error?: string }
+  }, [
+    elementId,
+    text,
+    input.sensitive === true,
+    SENSITIVE_VALUE_PATTERN.source,
+  ], signal) as { ok: boolean; error?: string; sensitive?: boolean }
 
-  if (!result.ok) throw new Error(result.error || `Element '${elementId}' could not be filled.`)
-  await chrome.tabs.sendMessage(tabId, { type: "ANYBOX_BROWSER_BRIDGE_ACTIVE", action: "Typing" }).catch(() => undefined)
+  if (!result.ok) {
+    throw Object.assign(
+      new Error(result.error || `Element '${elementId}' could not be filled.`),
+      result.sensitive
+        ? { code: "PERMISSION_DENIED", retryable: false }
+        : {},
+    )
+  }
+  await showBrowserOverlay(tabId, "Typing")
   const tab = await tabInfo(tabId)
   return { tabId, elementId, textLength: text.length, url: tab.url, title: tab.title }
 }
 
-async function typeText(params: unknown) {
+async function typeText(params: unknown, signal?: AbortSignal) {
   const input = readRecord(params)
   const tabId = await activeTabId(input.tabId)
   const text = readString(input.text)
   if (!text) throw new Error("page.type requires text.")
-  await sendCdp(tabId, "Input.insertText", { text })
-  await chrome.tabs.sendMessage(tabId, { type: "ANYBOX_BROWSER_BRIDGE_ACTIVE" }).catch(() => undefined)
+  const focused = await runInPage(tabId, (sensitivePatternSource: string) => {
+    const element = document.activeElement
+    if (!element) return { sensitive: false }
+    const sensitivePattern = new RegExp(sensitivePatternSource, "i")
+    const metadata = [
+      element.getAttribute("type"),
+      element.getAttribute("name"),
+      element.getAttribute("id"),
+      element.getAttribute("autocomplete"),
+      element.getAttribute("aria-label"),
+      element.getAttribute("placeholder"),
+    ].filter(Boolean).join("-")
+    return {
+      sensitive: sensitivePattern.test(metadata)
+        || element.getAttribute("type")?.toLowerCase() === "password",
+    }
+  }, [SENSITIVE_VALUE_PATTERN.source], signal)
+  if (focused?.sensitive && input.sensitive !== true) {
+    throw Object.assign(
+      new Error(
+        "The focused field is sensitive; retry with sensitive: true to request one-time approval.",
+      ),
+      { code: "PERMISSION_DENIED", retryable: false },
+    )
+  }
+  await sendCdp(tabId, "Input.insertText", { text }, signal)
+  await showBrowserOverlay(tabId, "Typing")
   return { tabId, textLength: text.length }
 }
 
-async function scroll(params: unknown) {
+async function scroll(params: unknown, signal?: AbortSignal) {
   const input = readRecord(params)
   const tabId = await activeTabId(input.tabId)
   const scrollX = readNumber(input.scrollX, 0) ?? 0
@@ -1227,12 +1494,12 @@ async function scroll(params: unknown) {
   const position = await runInPage(tabId, (x: number, y: number) => {
     window.scrollBy(x, y)
     return { scrollX: window.scrollX, scrollY: window.scrollY }
-  }, [scrollX, scrollY])
-  await chrome.tabs.sendMessage(tabId, { type: "ANYBOX_BROWSER_BRIDGE_ACTIVE" }).catch(() => undefined)
+  }, [scrollX, scrollY], signal)
+  await showBrowserOverlay(tabId, "Scrolling")
   return { tabId, scrollX, scrollY, position }
 }
 
-async function waitFor(params: unknown) {
+async function waitFor(params: unknown, signal?: AbortSignal) {
   const input = readRecord(params)
   const tabId = await activeTabId(input.tabId)
   const timeoutMs = Math.min(Math.max(readNumber(input.timeoutMs, 10_000) ?? 10_000, 250), 60_000)
@@ -1247,6 +1514,7 @@ async function waitFor(params: unknown) {
   const started = Date.now()
   let reason = "Timed out."
   while (Date.now() - started <= timeoutMs) {
+    throwIfCommandAborted(signal)
     const rawTab = await chrome.tabs.get(tabId)
     if (urlIncludes && rawTab.url?.includes(urlIncludes)) {
       const tab = toTabSummary(rawTab)
@@ -1268,73 +1536,710 @@ async function waitFor(params: unknown) {
         }
       }
       return ""
-    }, [{ text, selector, elementId }])
+    }, [{ text, selector, elementId }], signal)
 
     if (matched) {
       const latest = await tabInfo(tabId)
       return { tabId, url: latest.url, title: latest.title, matched: true, reason: matched }
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 250))
+    await waitForCommandDelay(250, signal)
   }
 
   const tab = await tabInfo(tabId)
   return { tabId, url: tab.url, title: tab.title, matched: false, reason }
 }
 
-async function handleContractCommand(
-  method: BrowserContractCommandMethodValue,
-  params: unknown,
-) {
-  switch (method) {
-    case "tabs.list":
-      return await listTabs()
-    case "tabs.open":
-      return await openTab(params)
-    case "tabs.activate":
-      return await activateTab(params)
-    case "tabs.release":
-      return {
-        tabId: readNumber(readRecord(params).tabId)!,
-        released: false,
+type LocatorAction =
+  | "click"
+  | "fill"
+  | "textContent"
+  | "inputValue"
+  | "waitFor"
+
+type LocatorProbe = {
+  found: boolean
+  visible: boolean
+  enabled: boolean
+  receivesPointer: boolean
+  stable: boolean
+  text: string | null
+  value: string | null
+  sensitive: boolean
+  reason?: string
+}
+
+async function probeLocator(
+  tabId: number,
+  locator: Record<string, unknown>,
+  action: LocatorAction,
+  value?: string,
+  button = "left",
+  sensitiveApproved = false,
+  signal?: AbortSignal,
+): Promise<LocatorProbe> {
+  return await runInPage(tabId, async (
+    query: Record<string, unknown>,
+    requestedAction: LocatorAction,
+    nextValue: string | undefined,
+    mouseButton: string,
+    allowSensitive: boolean,
+    sensitivePatternSource: string,
+  ) => {
+    const normalize = (item: unknown) =>
+      String(item ?? "").replace(/\s+/g, " ").trim()
+    const exact = query.exact === true
+    const matchesText = (actual: unknown, expected: unknown) => {
+      const left = normalize(actual)
+      const right = normalize(expected)
+      if (!right) return true
+      return exact ? left === right : left.toLowerCase().includes(right.toLowerCase())
+    }
+    const implicitRole = (element: Element) => {
+      const explicit = element.getAttribute("role")
+      if (explicit) return explicit
+      const tag = element.tagName.toLowerCase()
+      if (tag === "button") return "button"
+      if (tag === "a" && element.hasAttribute("href")) return "link"
+      if (tag === "textarea") return "textbox"
+      if (tag === "select") return "combobox"
+      if (tag === "input") {
+        const type = (element.getAttribute("type") || "text").toLowerCase()
+        if (type === "checkbox") return "checkbox"
+        if (type === "radio") return "radio"
+        if (["button", "submit", "reset"].includes(type)) return "button"
+        return "textbox"
       }
-    case "page.snapshot":
-      return await snapshot(params)
-    case "page.interactiveSnapshot":
-      return await interactiveSnapshot(params)
-    case "page.domTree":
-      return await domTree(params)
-    case "page.accessibilityTree":
-      return await accessibilityTree(params)
-    case "page.screenshot":
-      return await screenshot(params)
-    case "page.click":
-      return await click(params)
-    case "page.clickElement":
-      return await clickElement(params)
-    case "page.fill":
-      return await fill(params)
-    case "page.type":
-      return await typeText(params)
-    case "page.scroll":
-      return await scroll(params)
-    case "page.waitFor":
-      return await waitFor(params)
+      return ""
+    }
+    const accessibleName = (element: Element) => {
+      const root = element.getRootNode() as Document | ShadowRoot
+      const findById = (id: string) =>
+        root.querySelector(`#${CSS.escape(id)}`)
+      const labelledBy = element.getAttribute("aria-labelledby")
+      const labelled = labelledBy
+        ? labelledBy.split(/\s+/)
+            .map((id) => findById(id)?.textContent ?? "")
+            .join(" ")
+        : ""
+      const htmlElement = element as HTMLElement
+      const id = element.getAttribute("id")
+      const label = id
+        ? root.querySelector(`label[for="${CSS.escape(id)}"]`)?.textContent
+        : element.closest("label")?.textContent
+      return normalize(
+        element.getAttribute("aria-label")
+        || labelled
+        || label
+        || element.getAttribute("alt")
+        || element.getAttribute("title")
+        || htmlElement.innerText
+        || element.textContent,
+      )
+    }
+    const elements: Element[] = []
+    const seen = new Set<Element>()
+    const visitRoot = (root: Document | ShadowRoot) => {
+      let rootElements: Element[] = []
+      let candidates: Element[] = []
+      try {
+        rootElements = Array.from(root.querySelectorAll("*"))
+        candidates = query.css
+          ? Array.from(root.querySelectorAll(String(query.css)))
+          : rootElements
+      } catch {
+        return
+      }
+      for (const element of candidates) {
+        if (!seen.has(element)) {
+          seen.add(element)
+          elements.push(element)
+        }
+      }
+      for (const element of rootElements) {
+        const shadow = (element as HTMLElement).shadowRoot
+        if (shadow) visitRoot(shadow)
+        if (element.tagName.toLowerCase() === "iframe") {
+          try {
+            const frameDocument = (element as HTMLIFrameElement).contentDocument
+            if (frameDocument) visitRoot(frameDocument)
+          } catch {
+            // Cross-origin frames are an explicit unsupported boundary.
+          }
+        }
+        if (elements.length >= 20_000) return
+      }
+    }
+    visitRoot(document)
+    const candidate = elements.find((element) => {
+      if (query.testId && element.getAttribute("data-testid") !== query.testId) {
+        return false
+      }
+      if (query.role && implicitRole(element) !== query.role) return false
+      if (query.name && !matchesText(accessibleName(element), query.name)) return false
+      if (query.text && !matchesText(
+        (element as HTMLElement).innerText || element.textContent,
+        query.text,
+      )) {
+        return false
+      }
+      if (query.label) {
+        const root = element.getRootNode() as Document | ShadowRoot
+        const id = element.getAttribute("id")
+        const label = id
+          ? root.querySelector(`label[for="${CSS.escape(id)}"]`)?.textContent
+          : element.closest("label")?.textContent
+        if (!matchesText(label, query.label)) return false
+      }
+      if (
+        query.placeholder
+        && !matchesText(element.getAttribute("placeholder"), query.placeholder)
+      ) {
+        return false
+      }
+      return true
+    })
+    if (!candidate) {
+      return {
+        found: false,
+        visible: false,
+        enabled: false,
+        receivesPointer: false,
+        stable: false,
+        text: null,
+        value: null,
+        sensitive: false,
+        reason: "No matching element was found in the main document, open shadow roots, or same-origin frames.",
+      }
+    }
+
+    const html = candidate as HTMLElement
+    const view = candidate.ownerDocument.defaultView ?? window
+    html.scrollIntoView({ block: "center", inline: "center" })
+    const before = html.getBoundingClientRect()
+    await new Promise<void>((resolve) =>
+      view.requestAnimationFrame(() =>
+        view.requestAnimationFrame(() => resolve())
+      )
+    )
+    const rect = html.getBoundingClientRect()
+    const style = view.getComputedStyle(html)
+    const visible = rect.width > 0
+      && rect.height > 0
+      && style.visibility !== "hidden"
+      && style.display !== "none"
+      && Number(style.opacity || "1") > 0
+    const disabled = (
+      (candidate as HTMLInputElement).disabled === true
+      || candidate.getAttribute("aria-disabled") === "true"
+      || candidate.hasAttribute("inert")
+    )
+    const centerX = Math.max(
+      0,
+      Math.min(view.innerWidth - 1, rect.left + rect.width / 2),
+    )
+    const centerY = Math.max(
+      0,
+      Math.min(view.innerHeight - 1, rect.top + rect.height / 2),
+    )
+    const root = candidate.getRootNode() as Document | ShadowRoot
+    const pointerTarget = root.elementFromPoint(centerX, centerY)
+    const receivesPointer = Boolean(
+      pointerTarget
+      && (pointerTarget === candidate || candidate.contains(pointerTarget)),
+    )
+    const stable = Math.abs(before.x - rect.x) < 0.5
+      && Math.abs(before.y - rect.y) < 0.5
+      && Math.abs(before.width - rect.width) < 0.5
+      && Math.abs(before.height - rect.height) < 0.5
+    const sensitivePattern = new RegExp(sensitivePatternSource, "i")
+    const metadata = [
+      candidate.getAttribute("type"),
+      candidate.getAttribute("name"),
+      candidate.getAttribute("id"),
+      candidate.getAttribute("autocomplete"),
+      candidate.getAttribute("aria-label"),
+      candidate.getAttribute("placeholder"),
+    ].filter(Boolean).join("-")
+    const sensitive = sensitivePattern.test(metadata)
+      || candidate.getAttribute("type")?.toLowerCase() === "password"
+
+    if (requestedAction === "fill" && sensitive && !allowSensitive) {
+      return {
+        found: true,
+        visible,
+        enabled: !disabled,
+        receivesPointer,
+        stable,
+        text: null,
+        value: null,
+        sensitive,
+        reason: "The matching element is sensitive; retry with sensitive: true to request one-time approval.",
+      }
+    }
+
+    if (
+      requestedAction === "click"
+      || requestedAction === "fill"
+    ) {
+      if (!visible || disabled || !receivesPointer || !stable) {
+        return {
+          found: true,
+          visible,
+          enabled: !disabled,
+          receivesPointer,
+          stable,
+          text: null,
+          value: null,
+          sensitive,
+          reason: !visible
+            ? "The matching element is not visible."
+            : disabled
+              ? "The matching element is disabled."
+              : !receivesPointer
+                ? "The matching element is covered by another element."
+                : "The matching element is not stable.",
+        }
+      }
+      html.focus()
+    }
+
+    if (requestedAction === "click") {
+      const eventButton = mouseButton === "right"
+        ? 2
+        : mouseButton === "middle"
+          ? 1
+          : 0
+      for (const type of ["pointerover", "pointerdown", "mousedown", "mouseup", "click"]) {
+        candidate.dispatchEvent(new view.MouseEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          clientX: centerX,
+          clientY: centerY,
+          button: eventButton,
+        }))
+      }
+    } else if (requestedAction === "fill") {
+      const text = String(nextValue ?? "")
+      const tag = candidate.tagName.toLowerCase()
+      if (tag === "input") {
+        const setter = Object.getOwnPropertyDescriptor(
+          view.HTMLInputElement.prototype,
+          "value",
+        )?.set
+        setter?.call(candidate, text)
+      } else if (tag === "textarea") {
+        const setter = Object.getOwnPropertyDescriptor(
+          view.HTMLTextAreaElement.prototype,
+          "value",
+        )?.set
+        setter?.call(candidate, text)
+      } else if ((candidate as HTMLElement).isContentEditable) {
+        candidate.textContent = text
+      } else {
+        return {
+          found: true,
+          visible,
+          enabled: !disabled,
+          receivesPointer,
+          stable,
+          text: null,
+          value: null,
+          sensitive,
+          reason: "The matching element cannot receive text.",
+        }
+      }
+      candidate.dispatchEvent(new view.InputEvent("input", {
+        bubbles: true,
+        inputType: "insertText",
+        data: null,
+      }))
+      candidate.dispatchEvent(new view.Event("change", { bubbles: true }))
+    }
+
+    const rawValue = "value" in candidate
+      ? String((candidate as HTMLInputElement).value ?? "")
+      : null
+    return {
+      found: true,
+      visible,
+      enabled: !disabled,
+      receivesPointer,
+      stable,
+      text: sensitive ? null : normalize(html.innerText || candidate.textContent) || null,
+      value: sensitive ? null : rawValue,
+      sensitive,
+    }
+  }, [
+    locator,
+    action,
+    value,
+    button,
+    sensitiveApproved,
+    SENSITIVE_VALUE_PATTERN.source,
+  ], signal)
+}
+
+async function locatorCommand(
+  params: unknown,
+  action: LocatorAction,
+  signal?: AbortSignal,
+) {
+  const input = readRecord(params)
+  const tabId = await activeTabId(input.tabId)
+  const locator = readRecord(input.locator)
+  const timeout = readClampedInteger(input.timeoutMs, 10_000, 1, 60_000)
+  const deadline = Date.now() + timeout
+  const desiredState = readString(input.state, "visible")
+  let lastProbe: LocatorProbe | undefined
+
+  do {
+    throwIfCommandAborted(signal)
+    try {
+      lastProbe = await probeLocator(
+        tabId,
+        locator,
+        action,
+        typeof input.text === "string" ? input.text : undefined,
+        readString(input.button, "left"),
+        input.sensitive === true,
+        signal,
+      )
+    } catch (error) {
+      throwIfCommandAborted(signal)
+      lastProbe = {
+        found: false,
+        visible: false,
+        enabled: false,
+        receivesPointer: false,
+        stable: false,
+        text: null,
+        value: null,
+        sensitive: false,
+        reason: `The page changed while resolving the locator: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      }
+    }
+    const waitMatched = action === "waitFor" && (
+      desiredState === "hidden"
+        ? !lastProbe.found || !lastProbe.visible
+        : desiredState === "attached"
+          ? lastProbe.found
+          : desiredState === "enabled"
+            ? lastProbe.found && lastProbe.enabled
+            : lastProbe.found && lastProbe.visible
+    )
+    const actionMatched = action === "textContent" || action === "inputValue"
+      ? lastProbe.found
+      : lastProbe.found
+        && lastProbe.visible
+        && lastProbe.enabled
+        && lastProbe.receivesPointer
+        && lastProbe.stable
+    if (waitMatched || (action !== "waitFor" && actionMatched)) break
+    await waitForCommandDelay(100, signal)
+  } while (Date.now() < deadline)
+
+  const tab = await tabInfo(tabId)
+  if (
+    action === "fill"
+    && lastProbe?.sensitive
+    && input.sensitive !== true
+  ) {
+    throw Object.assign(
+      new Error(lastProbe.reason || "Sensitive locator input requires one-time approval."),
+      { code: "PERMISSION_DENIED", retryable: false },
+    )
+  }
+  if (action === "waitFor") {
+    const matched = desiredState === "hidden"
+      ? !lastProbe?.found || !lastProbe.visible
+      : desiredState === "attached"
+        ? lastProbe?.found === true
+        : desiredState === "enabled"
+          ? lastProbe?.found === true && lastProbe.enabled
+          : lastProbe?.found === true && lastProbe.visible
+    return {
+      tabId,
+      url: tab.url,
+      title: tab.title,
+      matched,
+      reason: matched ? `Locator reached state '${desiredState}'.` : lastProbe?.reason,
+    }
+  }
+  if (
+    !lastProbe?.found
+    || (
+      action !== "textContent"
+      && action !== "inputValue"
+      && (
+        !lastProbe.visible
+        || !lastProbe.enabled
+        || !lastProbe.receivesPointer
+        || !lastProbe.stable
+      )
+    )
+  ) {
+    throw Object.assign(
+      new Error(lastProbe?.reason || "The structured locator timed out."),
+      { code: "COMMAND_FAILED", retryable: true },
+    )
+  }
+  if (action === "textContent" || action === "inputValue") {
+    return {
+      tabId,
+      url: tab.url,
+      title: tab.title,
+      value: action === "textContent" ? lastProbe.text : lastProbe.value,
+    }
+  }
+  if (action === "fill") {
+    await showBrowserOverlay(tabId, "Typing")
+    return {
+      tabId,
+      elementId: "locator",
+      url: tab.url,
+      title: tab.title,
+      textLength: typeof input.text === "string" ? input.text.length : 0,
+    }
+  }
+  await showBrowserOverlay(tabId, "Clicking")
+  return {
+    tabId,
+    elementId: "locator",
+    url: tab.url,
+    title: tab.title,
   }
 }
 
-export async function handleBrowserCommand(method: BrowserExtensionCommandMethod, params?: unknown) {
+async function releaseTab(
+  params: unknown,
+  context?: BrowserExtensionCommandContext,
+) {
+  const tabId = readNumber(readRecord(params).tabId)
+  if (!tabId) throw new Error("tabs.release requires a tabId.")
+  await releaseLease(tabId, context)
+  await removeBrowserOverlay(tabId)
+  await detachTabDebugger(tabId)
+  return { tabId, released: true }
+}
+
+async function markTabDeliverable(
+  params: unknown,
+  context?: BrowserExtensionCommandContext,
+) {
+  const tabId = readNumber(readRecord(params).tabId)
+  if (!tabId) throw new Error("tabs.markDeliverable requires a tabId.")
+  await markDeliverable(tabId, context)
+  return { tabId, state: "deliverable" as const }
+}
+
+async function finalizeTabs(
+  params: unknown,
+  context?: BrowserExtensionCommandContext,
+) {
+  if (!context?.sessionID || !context.turnID) {
+    throw Object.assign(
+      new Error("tabs.finalize requires an active session."),
+      { code: "SESSION_REQUIRED", retryable: false },
+    )
+  }
+  const reason = readString(readRecord(params).reason, "manual")
+  const result = reason === "turn-end"
+    ? await finalizeTurnLeases(context.sessionID, context.turnID)
+    : await finalizeSessionLeases(context.sessionID)
+  return executeLeaseCleanup(result, context.sessionID)
+}
+
+async function executeLeaseCleanup(
+  result: {
+    closeTabIds: number[]
+    releaseTabIds: number[]
+    retainTabIds: number[]
+  },
+  sessionID = "all",
+) {
+  const allTabIds = [
+    ...result.closeTabIds,
+    ...result.releaseTabIds,
+    ...result.retainTabIds,
+  ]
+  await Promise.all(allTabIds.map((tabId) => removeBrowserOverlay(tabId)))
+  await Promise.all(allTabIds.map((tabId) => detachTabDebugger(tabId)))
+  if (result.closeTabIds.length > 0) {
+    await chrome.tabs.remove(result.closeTabIds).catch(() => undefined)
+  }
+  return {
+    sessionID,
+    closedTabIds: result.closeTabIds,
+    releasedTabIds: result.releaseTabIds,
+    retainedTabIds: result.retainTabIds,
+    detachedTabIds: allTabIds,
+  }
+}
+
+export async function finalizeExpiredTabLeases() {
+  return executeLeaseCleanup(await finalizeExpiredLeases(), "expired")
+}
+
+export async function finalizeDisconnectedTabLeases() {
+  return executeLeaseCleanup(await finalizeAllLeases(), "disconnected")
+}
+
+const LEASED_TAB_METHODS = new Set<BrowserContractCommandMethodValue>([
+  "tabs.activate",
+  "tabs.release",
+  "tabs.markDeliverable",
+  "page.snapshot",
+  "page.interactiveSnapshot",
+  "page.domTree",
+  "page.accessibilityTree",
+  "page.screenshot",
+  "page.click",
+  "page.clickElement",
+  "page.fill",
+  "page.type",
+  "page.scroll",
+  "page.waitFor",
+  "locator.click",
+  "locator.fill",
+  "locator.textContent",
+  "locator.inputValue",
+  "locator.waitFor",
+])
+
+async function enforceTabLease(
+  method: BrowserContractCommandMethodValue,
+  params: unknown,
+  context?: BrowserExtensionCommandContext,
+) {
+  if (!LEASED_TAB_METHODS.has(method)) return
+  const tabId = readNumber(readRecord(params).tabId)
+  if (!tabId) {
+    throw Object.assign(
+      new Error(`Browser command '${method}' requires a leased tabId.`),
+      { code: "TAB_CLAIM_REQUIRED", retryable: false },
+    )
+  }
+  await requireLease(tabId, context)
+}
+
+async function handleContractCommand(
+  method: BrowserContractCommandMethodValue,
+  params: unknown,
+  context?: BrowserExtensionCommandContext,
+  contractVersion: number = BROWSER_CONTRACT_VERSION,
+  signal?: AbortSignal,
+) {
+  throwIfCommandAborted(signal)
+  if (contractVersion === BROWSER_CONTRACT_VERSION) {
+    await enforceTabLease(method, params, context)
+  }
+  throwIfCommandAborted(signal)
+  switch (method) {
+    case "tabs.list":
+      return await listTabs(
+        context,
+        contractVersion === BROWSER_CONTRACT_VERSION ? "owned" : "all",
+      )
+    case "tabs.listUser":
+      return await listTabs(context, "user")
+    case "tabs.open":
+      return await openTab(params, context, signal)
+    case "tabs.claim":
+      return await claimTab(params, context, signal)
+    case "tabs.activate":
+      return await activateTab(params, signal)
+    case "tabs.release":
+      return contractVersion === BROWSER_CONTRACT_V1_VERSION
+        ? {
+            tabId: readNumber(readRecord(params).tabId)!,
+            released: await detachTabDebugger(readNumber(readRecord(params).tabId)!),
+          }
+        : await releaseTab(params, context)
+    case "tabs.markDeliverable":
+      return await markTabDeliverable(params, context)
+    case "tabs.finalize":
+      return await finalizeTabs(params, context)
+    case "page.snapshot":
+      return await snapshot(params, signal)
+    case "page.interactiveSnapshot":
+      return await interactiveSnapshot(params, signal)
+    case "page.domTree":
+      return await domTree(params, signal)
+    case "page.accessibilityTree":
+      return await accessibilityTree(params, signal)
+    case "page.screenshot":
+      return await screenshot(params, signal)
+    case "page.click":
+      return await click(params, signal)
+    case "page.clickElement":
+      return await clickElement(params, signal)
+    case "page.fill":
+      return await fill(params, signal)
+    case "page.type":
+      return await typeText(params, signal)
+    case "page.scroll":
+      return await scroll(params, signal)
+    case "page.waitFor":
+      return await waitFor(params, signal)
+    case "locator.click":
+      return await locatorCommand(params, "click", signal)
+    case "locator.fill":
+      return await locatorCommand(params, "fill", signal)
+    case "locator.textContent":
+      return await locatorCommand(params, "textContent", signal)
+    case "locator.inputValue":
+      return await locatorCommand(params, "inputValue", signal)
+    case "locator.waitFor":
+      return await locatorCommand(params, "waitFor", signal)
+  }
+}
+
+export async function handleBrowserCommand(
+  method: BrowserExtensionCommandMethod,
+  params?: unknown,
+  options: {
+    context?: BrowserExtensionCommandContext
+    contractVersion?: number
+    signal?: AbortSignal
+  } = {},
+) {
+  throwIfCommandAborted(options.signal)
   const contractMethod = BrowserContractCommandMethod.safeParse(method)
   if (contractMethod.success) {
+    // An omitted version is the legacy Extension envelope. New Hosts always
+    // negotiate and send an explicit version.
+    const contractVersion = options.contractVersion ?? BROWSER_CONTRACT_V1_VERSION
     const parsedParams = parseBrowserCommandParams(
       contractMethod.data,
       params,
+      contractVersion,
     )
+    if (
+      contractVersion === BROWSER_CONTRACT_V1_VERSION
+      && !V1_SAFE_READ_METHODS.has(contractMethod.data)
+    ) {
+      throw Object.assign(
+        new Error(
+          `Browser extension command '${contractMethod.data}' requires Browser Contract v2 authorization and tab leasing.`,
+        ),
+        {
+          code: "BACKEND_UPDATE_REQUIRED",
+          retryable: false,
+        },
+      )
+    }
     const result = await handleContractCommand(
       contractMethod.data,
       parsedParams,
+      options.context,
+      contractVersion,
+      options.signal,
     )
-    return parseBrowserCommandResult(contractMethod.data, result)
+    throwIfCommandAborted(options.signal)
+    return parseBrowserCommandResult(contractMethod.data, result, contractVersion)
   }
 
   switch (method) {

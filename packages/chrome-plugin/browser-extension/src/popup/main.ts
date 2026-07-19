@@ -4,6 +4,10 @@ import "./style.css"
 const statusDot = document.querySelector<HTMLSpanElement>("#status-dot")
 const statusLabel = document.querySelector<HTMLElement>("#status-label")
 const statusDetail = document.querySelector<HTMLElement>("#status-detail")
+const statusMetrics = document.querySelector<HTMLElement>("#status-metrics")
+const statusProtocol = document.querySelector<HTMLElement>("#status-protocol")
+const statusReconnects = document.querySelector<HTMLElement>("#status-reconnects")
+const statusCleanup = document.querySelector<HTMLElement>("#status-cleanup")
 const reconnectButton = document.querySelector<HTMLButtonElement>("#reconnect-button")
 
 type Status = {
@@ -12,6 +16,16 @@ type Status = {
   hostName?: string
   error?: string
   lastChecked?: number
+  protocolVersion?: number
+  contractVersion?: number
+  reconnectCount?: number
+  cleanup?: {
+    closed: number
+    released: number
+    retained: number
+    detached: number
+    completedAt: number
+  }
 }
 
 function renderStatus(status: Status | null | undefined) {
@@ -34,6 +48,25 @@ function renderStatus(status: Status | null | undefined) {
   }
   if (statusDot) {
     statusDot.title = state
+  }
+  if (statusMetrics) {
+    statusMetrics.hidden = !status
+  }
+  if (statusProtocol) {
+    statusProtocol.textContent = status?.protocolVersion
+      ? `IPC v${status.protocolVersion}${
+          status.contractVersion ? ` · Contract v${status.contractVersion}` : ""
+        }`
+      : "—"
+  }
+  if (statusReconnects) {
+    statusReconnects.textContent = String(status?.reconnectCount ?? 0)
+  }
+  if (statusCleanup) {
+    const cleanup = status?.cleanup
+    statusCleanup.textContent = cleanup
+      ? `${cleanup.closed} closed · ${cleanup.released} released · ${cleanup.retained} kept`
+      : "—"
   }
 }
 

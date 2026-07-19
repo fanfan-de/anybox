@@ -1,6 +1,15 @@
 import { execFile } from "node:child_process"
-import { createHash } from "node:crypto"
-import { access, chmod, mkdir, readFile, writeFile } from "node:fs/promises"
+import { createHash, randomUUID } from "node:crypto"
+import {
+  access,
+  chmod,
+  copyFile,
+  mkdir,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { promisify } from "node:util"
@@ -8,6 +17,8 @@ import { promisify } from "node:util"
 const execFileAsync = promisify(execFile)
 const EXTENSION_CONFIG_FILENAME = "extension-id.json"
 const RUNTIME_CONFIG_SUFFIX = ".runtime.json"
+const OWNERSHIP_FILENAME = "ownership.json"
+const CURRENT_POINTER_FILENAME = "current.json"
 export const BROWSER_IPC_PROTOCOL_VERSION = 1
 
 const platformDirectories = {
@@ -44,6 +55,31 @@ function defaultIpcStateDirectory(homeDir, env) {
     ? path.resolve(env.XDG_STATE_HOME)
     : path.join(path.resolve(homeDir), ".local", "state")
   return path.join(stateHome, "anybox", "browser-ipc")
+}
+
+function defaultManagedDataDirectory(homeDir, env) {
+  const managedAgentDataDir = env.ANYBOX_AGENT_DATA_DIR?.trim()
+  if (managedAgentDataDir) {
+    return path.join(path.resolve(managedAgentDataDir), "data")
+  }
+  const dataHome = env.XDG_DATA_HOME?.trim()
+    ? path.resolve(env.XDG_DATA_HOME)
+    : path.join(path.resolve(homeDir), ".local", "share")
+  return path.join(dataHome, "anybox")
+}
+
+function safeSegment(value) {
+  const readable = value.toLowerCase().replace(/[^a-z0-9._-]+/gu, "-")
+    .replace(/^-+|-+$/gu, "")
+    .slice(0, 48) || "artifact"
+  const suffix = createHash("sha256").update(value).digest("hex").slice(0, 12)
+  return `${readable}-${suffix}`
+}
+
+async function sha256(filePath) {
+  return createHash("sha256")
+    .update(await readFile(filePath))
+    .digest("hex")
 }
 
 function normalizeIpcEndpoint(value, label, platform) {
@@ -207,9 +243,130 @@ async function readExtensionConfig(pluginRoot) {
   }
 }
 
+async function readPluginVersion(pluginRoot, executableHash) {
+  try {
+    const parsed = JSON.parse(
+      await readFile(
+        path.join(pluginRoot, ".anybox-plugin", "plugin.json"),
+        "utf8",
+      ),
+    )
+    return requiredString(parsed.version, "plugin version")
+  } catch {
+    return `host-${executableHash.slice(0, 12)}`
+  }
+}
+
+async function readJson(filePath) {
+  try {
+    return JSON.parse(await readFile(filePath, "utf8"))
+  } catch {
+    return undefined
+  }
+}
+
 async function writeJson(filePath, value) {
   await mkdir(path.dirname(filePath), { recursive: true })
-  await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8")
+  const temporaryPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`
+  await writeFile(
+    temporaryPath,
+    `${JSON.stringify(value, null, 2)}\n`,
+    { encoding: "utf8", mode: 0o600 },
+  )
+  if (process.platform !== "win32") await chmod(temporaryPath, 0o600)
+  await rename(temporaryPath, filePath)
+}
+
+async function installManagedExecutable(input) {
+  const executableName = input.platform === "win32"
+    ? "extension-host.exe"
+    : "extension-host"
+  const versionDirectory = path.join(
+    input.managedRoot,
+    "versions",
+    safeSegment(input.version),
+    `${input.platform}-${input.architecture}`,
+  )
+  await mkdir(versionDirectory, { recursive: true })
+  const versionExecutable = path.join(versionDirectory, executableName)
+  await copyFile(input.source, versionExecutable)
+  if (input.platform !== "win32") await chmod(versionExecutable, 0o755)
+
+  const currentDirectory = path.join(input.managedRoot, "current")
+  const stagingDirectory = path.join(
+    input.managedRoot,
+    `.current-${process.pid}-${randomUUID()}`,
+  )
+  const backupDirectory = path.join(
+    input.managedRoot,
+    `.previous-${process.pid}-${randomUUID()}`,
+  )
+  await mkdir(stagingDirectory, { recursive: true })
+  const stagedExecutable = path.join(stagingDirectory, executableName)
+  await copyFile(versionExecutable, stagedExecutable)
+  if (input.platform !== "win32") await chmod(stagedExecutable, 0o755)
+
+  let movedCurrent = false
+  try {
+    await access(currentDirectory)
+    await rename(currentDirectory, backupDirectory)
+    movedCurrent = true
+  } catch {
+    // A first installation has no current directory.
+  }
+  try {
+    await rename(stagingDirectory, currentDirectory)
+  } catch (error) {
+    if (movedCurrent) {
+      await rename(backupDirectory, currentDirectory).catch(() => undefined)
+    }
+    await rm(stagingDirectory, { recursive: true, force: true })
+    throw error
+  }
+  if (movedCurrent) {
+    await rm(backupDirectory, { recursive: true, force: true })
+  }
+
+  return {
+    executablePath: path.join(currentDirectory, executableName),
+    versionExecutable,
+  }
+}
+
+async function validManagedBinding(input) {
+  const manifest = await readJson(input.manifestPath)
+  const runtimeConfig = await readJson(input.runtimeConfigPath)
+  if (
+    manifest?.name !== input.hostName
+    || manifest?.type !== "stdio"
+    || !Array.isArray(manifest.allowed_origins)
+    || !manifest.allowed_origins.includes(
+      `chrome-extension://${input.extensionId}/`,
+    )
+    || typeof manifest.path !== "string"
+    || !path.resolve(manifest.path).startsWith(
+      `${path.resolve(input.managedRoot)}${path.sep}`,
+    )
+    || runtimeConfig?.transport !== input.runtimeConfig.transport
+    || runtimeConfig?.protocolVersion !== input.runtimeConfig.protocolVersion
+    || runtimeConfig?.runtimeEndpoint !== input.runtimeConfig.runtimeEndpoint
+    || runtimeConfig?.nativeHostEndpoint
+      !== input.runtimeConfig.nativeHostEndpoint
+    || runtimeConfig?.bootstrapPath !== input.runtimeConfig.bootstrapPath
+  ) {
+    return undefined
+  }
+  try {
+    await access(path.resolve(manifest.path))
+    return {
+      executablePath: path.resolve(manifest.path),
+      ownershipID: typeof runtimeConfig.ownershipID === "string"
+        ? runtimeConfig.ownershipID
+        : undefined,
+    }
+  } catch {
+    return undefined
+  }
 }
 
 async function registerWindowsHost({ extensionHostName, manifestPath }) {
@@ -236,9 +393,12 @@ export async function install(options = {}) {
   )
   const extensionConfig = await readExtensionConfig(pluginRoot)
   const extensionId = env.ANYBOX_BROWSER_EXTENSION_ID?.trim() || extensionConfig.extensionId
-  const extensionHostPath = resolveBundledExtensionHost(pluginRoot, platform, architecture)
-  await access(extensionHostPath)
-  if (platform !== "win32") await chmod(extensionHostPath, 0o755)
+  const bundledExtensionHostPath = resolveBundledExtensionHost(
+    pluginRoot,
+    platform,
+    architecture,
+  )
+  await access(bundledExtensionHostPath)
 
   const paths = resolveNativeMessagingPaths({
     env,
@@ -246,18 +406,85 @@ export async function install(options = {}) {
     homeDir,
     platform,
   })
-  const manifest = nativeMessagingManifest({
-    extensionHostName: extensionConfig.extensionHostName,
-    extensionHostPath,
-    extensionId,
-  })
-  const runtimeConfig = {
+  const runtimeConfigBase = {
     ...resolveBrowserIpcRuntimeConfig({
       env,
       extensionHostName: extensionConfig.extensionHostName,
       homeDir,
       platform,
     }),
+  }
+  const dataDir = path.resolve(
+    options.dataDir ?? defaultManagedDataDirectory(homeDir, env),
+  )
+  const managedRoot = path.join(
+    dataDir,
+    "platform-artifacts",
+    safeSegment("chrome"),
+    safeSegment("chrome-native-host"),
+  )
+  const existing = await validManagedBinding({
+    extensionId,
+    hostName: extensionConfig.extensionHostName,
+    managedRoot,
+    manifestPath: paths.manifestPaths[0],
+    runtimeConfig: runtimeConfigBase,
+    runtimeConfigPath: paths.runtimeConfigPath,
+  })
+  if (existing) {
+    let registryKey
+    if (platform === "win32") {
+      const register = options.registerWindowsHost ?? registerWindowsHost
+      registryKey = await register({
+        extensionHostName: extensionConfig.extensionHostName,
+        manifestPath: paths.manifestPaths[0],
+      })
+    }
+    return {
+      extensionHostPath: existing.executablePath,
+      extensionId,
+      managedRoot,
+      manifestPaths: paths.manifestPaths,
+      registryKey,
+      reused: true,
+      runtimeConfigPath: paths.runtimeConfigPath,
+    }
+  }
+
+  const executableHash = await sha256(bundledExtensionHostPath)
+  const pluginVersion = await readPluginVersion(pluginRoot, executableHash)
+  const ownershipPath = path.join(managedRoot, OWNERSHIP_FILENAME)
+  const previousOwnership = await readJson(ownershipPath)
+  const ownershipID =
+    previousOwnership?.pluginID === "chrome"
+      && previousOwnership?.artifactID === "chrome-native-host"
+      && typeof previousOwnership?.ownershipID === "string"
+      ? previousOwnership.ownershipID
+      : randomUUID()
+  const { executablePath: extensionHostPath, versionExecutable } =
+    await installManagedExecutable({
+      architecture,
+      managedRoot,
+      platform,
+      source: bundledExtensionHostPath,
+      version: pluginVersion,
+    })
+  const currentPointerPath = path.join(managedRoot, CURRENT_POINTER_FILENAME)
+  await writeJson(currentPointerPath, {
+    schemaVersion: 1,
+    ownershipID,
+    pluginVersion,
+    target: path.relative(managedRoot, versionExecutable),
+  })
+  const manifest = nativeMessagingManifest({
+    extensionHostName: extensionConfig.extensionHostName,
+    extensionHostPath,
+    extensionId,
+  })
+  const installedAt = Date.now()
+  const runtimeConfig = {
+    ...runtimeConfigBase,
+    ownershipID,
     updatedAt: new Date().toISOString(),
   }
 
@@ -274,9 +501,31 @@ export async function install(options = {}) {
     })
   }
 
+  await writeJson(ownershipPath, {
+    schemaVersion: 1,
+    artifactID: "chrome-native-host",
+    type: "chrome-native-messaging-host",
+    pluginID: "chrome",
+    pluginVersion,
+    ownershipID,
+    hostName: extensionConfig.extensionHostName,
+    platform,
+    architecture,
+    managedRoot,
+    executablePath: extensionHostPath,
+    executableSha256: await sha256(extensionHostPath),
+    currentPointerPath,
+    manifestPaths: paths.manifestPaths,
+    runtimeConfigPath: paths.runtimeConfigPath,
+    ownershipPath,
+    registryKeys: registryKey ? [registryKey] : [],
+    installedAt,
+  })
+
   return {
     extensionHostPath,
     extensionId,
+    managedRoot,
     manifestPaths: paths.manifestPaths,
     registryKey,
     runtimeConfigPath: paths.runtimeConfigPath,

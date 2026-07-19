@@ -12,6 +12,7 @@ import {
 } from "@anybox/chrome-shared/browser-ipc"
 import { browserRuntimePaths } from "@anybox/chrome-shared/runtime-paths"
 import type {
+  BrowserAuthorizationReceipt,
   BrowserContractCommandMethod,
   BrowserContractErrorCode,
 } from "@anybox/chrome-shared/browser-contract"
@@ -19,7 +20,7 @@ import type {
   BrowserExtensionCommandContext,
 } from "@anybox/chrome-shared/browser-extension"
 
-const BROWSER_HOST_CLIENT_VERSION = "0.1.0"
+const BROWSER_HOST_CLIENT_VERSION = "0.11.0"
 const DEFAULT_CONNECT_TIMEOUT_MS = 5_000
 const HOST_START_TIMEOUT_MS = 8_000
 
@@ -30,6 +31,7 @@ export type BrowserHostRequest =
   | {
       operation: "getInfo"
       contractVersion: number
+      browserID?: string
     }
   | {
       operation: "command"
@@ -37,6 +39,7 @@ export type BrowserHostRequest =
       method: BrowserContractCommandMethod
       params: unknown
       context?: BrowserExtensionCommandContext
+      authorization?: BrowserAuthorizationReceipt
       timeoutMs?: number
     }
 

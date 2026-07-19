@@ -81,6 +81,8 @@ export const deDE = {
   "thread.permission.note": "Warte auf Ihre Entscheidung.",
   "thread.permission.applying": "Wird angewendet...",
   "thread.permission.action.allow": "Erlauben",
+  "thread.permission.action.allowOnce": "Einmal erlauben",
+  "thread.permission.action.allowSession": "Für diese Sitzung erlauben",
   "thread.permission.action.deny": "Ablehnen",
   "thread.permission.decisionAria": "{decision}: {title}",
   "thread.permission.risk.low": "Niedriges Risiko",

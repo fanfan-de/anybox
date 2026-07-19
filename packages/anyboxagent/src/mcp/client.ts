@@ -3,10 +3,20 @@ import { pathToFileURL } from "node:url"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
-import { ListRootsRequestSchema } from "@modelcontextprotocol/sdk/types.js"
-import type { ReadResourceResult, Resource, ResourceTemplate } from "@modelcontextprotocol/sdk/types.js"
+import { ElicitRequestSchema, ListRootsRequestSchema } from "@modelcontextprotocol/sdk/types.js"
+import type {
+  ElicitRequest,
+  ElicitResult,
+  ReadResourceResult,
+  Resource,
+  ResourceTemplate,
+} from "@modelcontextprotocol/sdk/types.js"
 import type { McpServerSummary } from "#config/config.ts"
 import type { ResolvedConnectorRuntime } from "#connector/connector.ts"
+import {
+  getBrowserAuthorizationEnvironment,
+  signBrowserAuthorizationReceipt,
+} from "#permission/authorization-receipt.ts"
 import * as Log from "#util/log.ts"
 
 const log = Log.create({ service: "mcp.client" })
@@ -45,10 +55,12 @@ export interface McpClientOptions {
   requestTimeoutMs: number
   server: McpServerSummary
   worktree: string
+  onElicitation?: (request: ElicitRequest) => Promise<ElicitResult>
 }
 
 export interface McpToolRequestContext {
   sessionID?: string
+  turnID?: string
   messageID?: string
   toolCallID?: string
 }
@@ -85,7 +97,7 @@ function normalizedRequestContext(
   context: McpToolRequestContext | undefined,
 ): McpToolRequestContext | undefined {
   const normalized = Object.fromEntries(
-    (["sessionID", "messageID", "toolCallID"] as const).flatMap((key) => {
+    (["sessionID", "turnID", "messageID", "toolCallID"] as const).flatMap((key) => {
       const value = context?.[key]
       return typeof value === "string" && value.trim()
         ? [[key, value.trim()] as const]
@@ -93,6 +105,119 @@ function normalizedRequestContext(
     }),
   )
   return Object.keys(normalized).length > 0 ? normalized : undefined
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined
+}
+
+async function handleAnyboxPermissionElicitation(
+  request: ElicitRequest,
+): Promise<ElicitResult> {
+  const requestMeta = asRecord(request.params._meta)
+  const input = asRecord(requestMeta?.["anybox/permission"])
+  const context = asRecord(input?.context)
+  const scope = asRecord(input?.scope)
+  if (!input || !context || !scope) {
+    return { action: "decline" }
+  }
+  const challenge = asRecord(input.challenge)
+  if (challenge) {
+    for (const key of [
+      "sessionID",
+      "turnID",
+      "messageID",
+      "toolCallID",
+    ] as const) {
+      if (
+        typeof challenge[key] !== "string"
+        || challenge[key] !== context[key]
+      ) {
+        return { action: "decline" }
+      }
+    }
+  }
+  const authorizedInput = challenge ?? input
+
+  const permission = await import("#permission/permission.ts")
+  const result = await permission.requestInProcessPermission({
+    context: {
+      sessionID: String(context.sessionID ?? ""),
+      turnID: String(context.turnID ?? ""),
+      messageID: String(context.messageID ?? ""),
+      toolCallID: String(context.toolCallID ?? ""),
+    },
+    scope: {
+      kind: "browser-origin",
+      sessionID: String(context.sessionID ?? ""),
+      extensionInstanceID: String(
+        authorizedInput.extensionInstanceID ?? scope.extensionInstanceID ?? "",
+      ),
+      origin: String(authorizedInput.origin ?? scope.origin ?? ""),
+      browserID: typeof authorizedInput.browserID === "string"
+        ? authorizedInput.browserID
+        : typeof scope.browserID === "string"
+          ? scope.browserID
+          : undefined,
+    },
+    grantID: typeof authorizedInput.grantID === "string"
+      ? authorizedInput.grantID
+      : undefined,
+    method: String(authorizedInput.method ?? ""),
+    tabID: typeof authorizedInput.tabID === "number"
+      ? authorizedInput.tabID
+      : typeof authorizedInput.tabId === "number"
+        ? authorizedInput.tabId
+        : undefined,
+    tabTitle: typeof authorizedInput.tabTitle === "string"
+      ? authorizedInput.tabTitle
+      : undefined,
+    risk: authorizedInput.risk === "low"
+      || authorizedInput.risk === "medium"
+      || authorizedInput.risk === "high"
+      || authorizedInput.risk === "critical"
+      ? authorizedInput.risk
+      : undefined,
+    sensitive: authorizedInput.sensitive === true,
+    action: authorizedInput.permissionAction === "allow"
+      || authorizedInput.permissionAction === "ask"
+      || authorizedInput.permissionAction === "deny"
+      ? authorizedInput.permissionAction
+      : authorizedInput.action === "allow"
+        || authorizedInput.action === "ask"
+        || authorizedInput.action === "deny"
+        ? authorizedInput.action
+      : undefined,
+    rationale: typeof authorizedInput.rationale === "string"
+      ? authorizedInput.rationale
+      : undefined,
+    timeoutMs: typeof input.timeoutMs === "number" ? input.timeoutMs : undefined,
+  })
+  const authorization = result.decision !== "deny" && challenge
+    ? signBrowserAuthorizationReceipt({
+        challenge,
+        context: {
+          sessionID: String(context.sessionID ?? ""),
+          turnID: String(context.turnID ?? ""),
+          messageID: String(context.messageID ?? ""),
+          toolCallID: String(context.toolCallID ?? ""),
+        },
+        decision: result.decision === "allow-session"
+          ? "allow-session"
+          : "allow-once",
+      })
+    : undefined
+
+  return {
+    action: "accept",
+    content: {
+      decision: result.decision,
+      grantID: result.grantID,
+      ...(authorization ? { authorization } : {}),
+    },
+  }
 }
 
 function resolveAuthorizationHeader(authorization: string | undefined) {
@@ -274,9 +399,27 @@ export class McpClient {
       undefined,
       {
         signal: abort,
-        timeout: this.options.requestTimeoutMs,
+        timeout: isAnyboxNodeReplServer(this.options.server)
+          ? Math.max(this.options.requestTimeoutMs, 250_000)
+          : this.options.requestTimeoutMs,
       },
     ))
+  }
+
+  async notifyLifecycle(input: {
+    type: string
+    context: {
+      sessionID: string
+      turnID: string
+    }
+    detail?: Record<string, unknown>
+  }) {
+    if (!isAnyboxNodeReplServer(this.options.server)) return
+    await this.ensureInitialized()
+    await this.client!.notification({
+      method: "notifications/anybox/lifecycle",
+      params: input,
+    } as never)
   }
 
   private async ensureInitialized() {
@@ -294,6 +437,13 @@ export class McpClient {
         },
         {
           capabilities: {
+            ...(isAnyboxNodeReplServer(this.options.server)
+              ? {
+                  elicitation: {
+                    form: {},
+                  },
+                }
+              : {}),
             roots: {
               listChanged: false,
             },
@@ -333,6 +483,12 @@ export class McpClient {
             name: value === this.options.cwd ? "cwd" : "worktree",
           })),
       }))
+      if (isAnyboxNodeReplServer(this.options.server)) {
+        client.setRequestHandler(
+          ElicitRequestSchema,
+          this.options.onElicitation ?? handleAnyboxPermissionElicitation,
+        )
+      }
       const transport = await this.createTransport()
       transport.onerror = (error) => {
         if (this.closed) return
@@ -454,7 +610,12 @@ export class McpClient {
       command: runtime.command,
       args: runtime.args ?? [],
       cwd: runtime.cwd ?? this.options.cwd,
-      env: mergeProcessEnv(runtime.env),
+      env: mergeProcessEnv({
+        ...(runtime.env ?? {}),
+        ...(isAnyboxNodeReplServer(this.options.server)
+          ? getBrowserAuthorizationEnvironment()
+          : {}),
+      }),
       stderr: "pipe",
     })
     this.captureStderr(transport.stderr)

@@ -81,6 +81,8 @@ export const frFR = {
   "thread.permission.note": "En attente de votre décision.",
   "thread.permission.applying": "Application en cours...",
   "thread.permission.action.allow": "Autoriser",
+  "thread.permission.action.allowOnce": "Autoriser une fois",
+  "thread.permission.action.allowSession": "Autoriser pour la session",
   "thread.permission.action.deny": "Refuser",
   "thread.permission.decisionAria": "{decision} : {title}",
   "thread.permission.risk.low": "Risque faible",

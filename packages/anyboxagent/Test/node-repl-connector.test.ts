@@ -24,7 +24,9 @@ function nodeReplServer() {
   }
 }
 
-async function createClient() {
+async function createClient(options: {
+  onElicitation?: ConstructorParameters<typeof McpClient>[0]["onElicitation"]
+} = {}) {
   const root = await mkdtemp(join(tmpdir(), "anybox-node-repl-"))
   temporaryRoots.push(root)
   return new McpClient({
@@ -32,6 +34,7 @@ async function createClient() {
     worktree: root,
     requestTimeoutMs: 10_000,
     server: nodeReplServer(),
+    onElicitation: options.onElicitation,
   })
 }
 
@@ -148,6 +151,7 @@ describe("built-in Node REPL connector", () => {
         undefined,
         {
           sessionID: "session-node-repl",
+          turnID: "turn-node-repl",
           messageID: "message-node-repl",
           toolCallID: "tool-node-repl",
         },
@@ -157,6 +161,7 @@ describe("built-in Node REPL connector", () => {
       expect(result.structuredContent?.result).toMatchObject({
         requestMeta: {
           sessionID: "session-node-repl",
+          turnID: "turn-node-repl",
           messageID: "message-node-repl",
           toolCallID: "tool-node-repl",
         },
@@ -168,6 +173,111 @@ describe("built-in Node REPL connector", () => {
         code: "return nodeRepl.requestMeta",
       })
       expect(nextCall.structuredContent?.result).toBeNull()
+    } finally {
+      await client.dispose()
+    }
+  })
+
+  test("continues the same JavaScript promise after an in-process permission decision", async () => {
+    let receivedMeta: Record<string, unknown> | undefined
+    const client = await createClient({
+      onElicitation: async (request) => {
+        receivedMeta = request.params._meta?.["anybox/permission"] as Record<string, unknown>
+        return {
+          action: "accept",
+          content: {
+            decision: "allow-session",
+            grantID: "grant-test",
+            authorization: "receipt-test",
+          },
+        }
+      },
+    })
+    try {
+      const result = await client.callTool(
+        "js",
+        {
+          code: `globalThis.permissionContinuation = ["before"]
+            const permission = await nodeRepl.requestPermission({
+              message: "Allow click?",
+              method: "page.click",
+              scope: {
+                kind: "browser-origin",
+                sessionID: "spoofed-session",
+                extensionInstanceID: "extension-test",
+                origin: "https://example.com"
+              }
+            })
+            globalThis.permissionContinuation.push("after")
+            return { permission, continuation: globalThis.permissionContinuation }`,
+        },
+        undefined,
+        {
+          sessionID: "session-node-repl",
+          turnID: "turn-node-repl",
+          messageID: "message-node-repl",
+          toolCallID: "tool-node-repl",
+        },
+      )
+
+      expect(result.isError).toBe(false)
+      expect(result.structuredContent?.result).toEqual({
+        permission: {
+          allowed: true,
+          decision: "allow-session",
+          action: "accept",
+          grantID: "grant-test",
+          authorization: "receipt-test",
+        },
+        continuation: ["before", "after"],
+      })
+      expect(receivedMeta?.continuation).toBe("in-process")
+      expect(receivedMeta?.timeoutMs).toBe(120_000)
+      expect(receivedMeta?.context).toEqual({
+        sessionID: "session-node-repl",
+        turnID: "turn-node-repl",
+        messageID: "message-node-repl",
+        toolCallID: "tool-node-repl",
+      })
+    } finally {
+      await client.dispose()
+    }
+  })
+
+  test("does not charge user decision time against the JavaScript timeout", async () => {
+    const client = await createClient({
+      onElicitation: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 80))
+        return {
+          action: "accept",
+          content: {
+            decision: "allow-once",
+            grantID: "grant-delayed",
+          },
+        }
+      },
+    })
+    try {
+      const result = await client.callTool(
+        "js",
+        {
+          code: `const decision = await nodeRepl.requestPermission({
+              message: "Allow action?",
+              timeoutMs: 1000
+            })
+            return decision.decision`,
+          timeoutMs: 25,
+        },
+        undefined,
+        {
+          sessionID: "session-node-repl",
+          turnID: "turn-node-repl",
+          messageID: "message-node-repl",
+          toolCallID: "tool-node-repl",
+        },
+      )
+      expect(result.isError).toBe(false)
+      expect(result.structuredContent?.result).toBe("allow-once")
     } finally {
       await client.dispose()
     }

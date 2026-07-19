@@ -100,6 +100,7 @@ export async function createToolExecution(input: {
   item: Tool.ToolInfo
   agent: Agent.AgentInfo
   sessionID: string
+  turnID?: string
   messageID: string
   abort: AbortSignal
 }): Promise<ToolExecution> {
@@ -109,6 +110,7 @@ export async function createToolExecution(input: {
 
   const runtimeContext = (toolCallID?: string): Tool.Context => ({
     sessionID: input.sessionID,
+    turnID: input.turnID,
     messageID: input.messageID,
     cwd: Instance.directory,
     worktree: Instance.worktree,

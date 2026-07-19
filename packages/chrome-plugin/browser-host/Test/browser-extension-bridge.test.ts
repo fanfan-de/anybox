@@ -3,7 +3,10 @@ import {
   ANYBOX_CHROME_EXTENSION_ID,
   BROWSER_EXTENSION_PROTOCOL_VERSION,
 } from "@anybox/chrome-shared/browser-extension"
-import { BROWSER_CONTRACT_VERSION } from "@anybox/chrome-shared/browser-contract"
+import {
+  BROWSER_CONTRACT_V1_VERSION,
+  BROWSER_CONTRACT_VERSION,
+} from "@anybox/chrome-shared/browser-contract"
 import { BrowserExtensionBridge } from "../src/bridge.ts"
 
 type SentCommand = {
@@ -113,6 +116,30 @@ describe("BrowserExtensionBridge command result ownership", () => {
     expect(bridge.status().active).toMatchObject({
       extensionInstanceID: "second-instance",
     })
+  })
+
+  test("pings healthy backends and disconnects a stale heartbeat", () => {
+    const bridge = new BrowserExtensionBridge()
+    const connection = createSocket()
+    registerReady(bridge, connection, "heartbeat-instance")
+
+    expect(bridge.heartbeat(Date.now())).toEqual({
+      pinged: 1,
+      disconnected: 0,
+    })
+    expect(connection.messages.at(-1)).toMatchObject({
+      type: "ping",
+    })
+
+    expect(bridge.heartbeat(Date.now() + 40_001)).toEqual({
+      pinged: 0,
+      disconnected: 1,
+    })
+    expect(connection.closes).toContainEqual({
+      code: 1011,
+      reason: "Browser extension heartbeat timed out.",
+    })
+    expect(bridge.status().connected).toBe(false)
   })
 
   test("fails closed on a mismatched advertised Browser Contract version", () => {
@@ -227,7 +254,7 @@ describe("BrowserExtensionBridge command result ownership", () => {
     const ownerConnectionID = registerReady(bridge, owner, "owner-instance")
     const commandPromise = bridge.sendCommand("tabs.list", undefined, { timeoutMs: 1_000 })
     const command = owner.messages[0] as SentCommand
-    expect(command.contractVersion).toBe(BROWSER_CONTRACT_VERSION)
+    expect(command.contractVersion).toBe(BROWSER_CONTRACT_V1_VERSION)
 
     const other = createSocket()
     const otherConnectionID = registerReady(bridge, other, "other-instance")
