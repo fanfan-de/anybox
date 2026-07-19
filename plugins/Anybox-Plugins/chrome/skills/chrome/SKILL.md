@@ -13,24 +13,31 @@ Otherwise, treat a URL or open tab as context rather than browser intent. Before
 
 Use this skill for navigating, inspecting visible page state, testing local web apps, clicking, filling, typing, scrolling, waiting for page changes, and taking screenshots.
 
-## Use only the persistent Node REPL
+## Use only the Anybox Node REPL
 
-Control Chrome only through this plugin's `js` tool. Its full Anybox tool ID normally resembles `mcp__plugin_chrome_node_repl__js`. Do not use per-action `browser_*` MCP tools, Computer Use, standalone Playwright, or another browser-control plugin for this Chrome surface.
+Control Chrome only through the general-purpose Anybox Node REPL `js` tool. Its full Anybox tool ID normally resembles `mcp__connector_node_repl_default__js`. Do not use per-action `browser_*` MCP tools, Computer Use, standalone Playwright, or another browser-control plugin for this Chrome surface.
 
 The `js_reset` tool only clears persistent JavaScript state. The `js_add_node_module_dir` tool only changes CommonJS module resolution. Do not call either helper while trying to expose `js`.
 
 Keep setup details internal. Unless the user asks about implementation, describe progress naturally as connecting to Chrome, inspecting the page, or retrying the connection.
 
-The runtime sends only operations advertised by the negotiated Browser Contract through the Anybox Agent policy gateway over authenticated local IPC. The client performs an early schema and capability check, and the Anybox Agent authoritatively validates the command again before it can reach Chrome. The isolated transport Worker holds the IPC credentials; do not attempt to discover or connect to its endpoint directly.
+The Browser Client sends only operations advertised by the negotiated Browser Contract through a controlled Anybox host-service bridge. The client performs an early schema and capability check, and the Anybox Agent authoritatively validates every command again before it can reach Chrome. Do not call `nodeRepl.requestHost(...)` directly.
 
 ## Bootstrap once
 
-The Node REPL preloads `setupBrowserRuntime`, `agent`, and `nodeRepl`. Do not import an external or built-in `browser-client` package.
+The Node REPL is a general Anybox environment. It preloads `nodeRepl`, but it does not preload `browser-client`, `setupBrowserRuntime`, `agent`, or Chrome-specific capabilities.
 
-Initialize one persistent Chrome binding per fresh REPL session. Read its complete runtime documentation on first use:
+The absolute path shown when this Skill is loaded ends in `skills/chrome/SKILL.md`. Resolve this plugin's package root by moving two directories up from that Skill directory. The bundled Browser Client is `scripts/browser-client.mjs` under that package root. Import exactly that file through an absolute file URL. Never import an external or built-in `browser-client` package. If the bundled file is missing, stop and report that the Chrome plugin package is incomplete.
+
+Import the Browser Client once per fresh REPL session, initialize one persistent Chrome binding, and read its complete runtime documentation on first use:
 
 ```js
 if (globalThis.agent?.browsers == null) {
+  const { resolve } = require("node:path")
+  const { pathToFileURL } = require("node:url")
+  const pluginRoot = "<absolute plugin root derived from this Skill's loaded path>"
+  const browserClientPath = resolve(pluginRoot, "scripts", "browser-client.mjs")
+  const { setupBrowserRuntime } = await import(pathToFileURL(browserClientPath).href)
   await setupBrowserRuntime({ globals: globalThis })
 }
 if (globalThis.chrome == null) {

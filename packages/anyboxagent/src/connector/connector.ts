@@ -23,6 +23,8 @@ const BUILTIN_FEISHU_PACKAGE_PATH = ["plugins", "builtin", "feishu", "0.1.0"] as
 const BUILD_CONNECTOR_CONFIG_PATH = ["config", "connectors.json"] as const
 const BUILD_GMAIL_CONNECTOR_PATH = ["connectors", "gmail"] as const
 const BUILD_FEISHU_CONNECTOR_PATH = ["connectors", "feishu"] as const
+const BUILD_NODE_REPL_CONNECTOR_PATH = ["connectors", "node-repl"] as const
+const SOURCE_NODE_REPL_CONNECTOR_PATH = ["connectors", "node-repl"] as const
 const CONNECTOR_CUSTOM_OAUTH_CLIENT_KEY = "custom-oauth-client"
 
 export type ResolvedConnectorRuntime =
@@ -515,6 +517,23 @@ function builtinFeishuConnectorRoot() {
   return existsSync(packagedRoot) ? packagedRoot : resolve(builtinFeishuPackageRoot(), "connectors", "feishu")
 }
 
+function builtinNodeReplConnectorRoot() {
+  const packagedRoot = resolve(bundledRuntimeRoot(), ...BUILD_NODE_REPL_CONNECTOR_PATH)
+  return existsSync(packagedRoot)
+    ? packagedRoot
+    : packageRootFromAnyboxAgentRoot(...SOURCE_NODE_REPL_CONNECTOR_PATH)
+}
+
+function builtinNodeReplCommand() {
+  return getProcessEnvValue("ANYBOX_NODE_BINARY")?.trim() || "node"
+}
+
+function builtinNodeReplEnvironment() {
+  return getProcessEnvValue("ANYBOX_NODE_RUN_AS_NODE") === "1"
+    ? { ELECTRON_RUN_AS_NODE: "1" }
+    : undefined
+}
+
 function builtinGmailOAuthClientID() {
   const buildConfig = readConnectorBuildConfig()
   return getProcessEnvValue(GMAIL_OAUTH_CLIENT_ID_ENV)?.trim() ||
@@ -531,6 +550,9 @@ function builtinGmailOAuthClientSecret() {
 }
 
 function builtinDefinitions(): ConnectorDefinition[] {
+  const nodeReplConnectorRoot = builtinNodeReplConnectorRoot()
+  const nodeReplServerPath = resolve(nodeReplConnectorRoot, "server.js")
+  const nodeReplRuntimeAvailable = existsSync(nodeReplServerPath)
   const gmailConnectorRoot = builtinGmailConnectorRoot()
   const gmailServerPath = resolve(gmailConnectorRoot, "server.js")
   const gmailClientID = builtinGmailOAuthClientID()
@@ -542,6 +564,71 @@ function builtinDefinitions(): ConnectorDefinition[] {
   const feishuRuntimeAvailable = existsSync(feishuServerPath)
 
   return [
+    ConnectorDefinition.parse({
+      id: "node-repl",
+      category: "builtin_mcp",
+      name: "Node REPL",
+      description: "Run JavaScript in a persistent, general-purpose Node.js environment.",
+      publisher: "Anybox",
+      icon: "JS",
+      risk: "high",
+      permissions: [
+        "Runs JavaScript requested by the agent in a persistent local process.",
+        "JavaScript can load local modules and access the local filesystem and network.",
+        "Allows installed Anybox modules to call explicitly registered host services through an authenticated request bridge.",
+      ],
+      tools: [
+        {
+          name: "js",
+          title: "Node REPL JavaScript",
+          description: "Run JavaScript in a persistent general-purpose Node.js environment.",
+          readOnly: false,
+        },
+        {
+          name: "js_reset",
+          title: "Reset Node REPL",
+          description: "Reset the persistent Node.js environment.",
+          readOnly: false,
+        },
+        {
+          name: "js_add_node_module_dir",
+          title: "Add Node Module Directory",
+          description: "Add a node_modules directory to CommonJS module resolution.",
+          readOnly: false,
+        },
+      ],
+      mcpRuntimes: [
+        {
+          id: "default",
+          name: "Node REPL",
+          available: nodeReplRuntimeAvailable,
+          transport: "stdio",
+          command: builtinNodeReplCommand(),
+          args: [nodeReplServerPath],
+          env: builtinNodeReplEnvironment(),
+          serverDescription: "Persistent general-purpose Node.js environment managed by Anybox.",
+          timeoutMs: 120_000,
+          toolPolicies: {
+            js_reset: {
+              policy: "auto",
+            },
+            js_add_node_module_dir: {
+              policy: "ask",
+            },
+            js: {
+              policy: "ask",
+            },
+          },
+        },
+      ],
+      installReview: [
+        "This runtime belongs to Anybox rather than to a specific plugin.",
+        "Its working directory is the active project, not an installed plugin package.",
+        "Browser behavior is supplied by the Chrome plugin after the agent imports that plugin's Browser Client.",
+      ],
+      source: "platform",
+      available: nodeReplRuntimeAvailable,
+    }),
     ConnectorDefinition.parse({
       id: "gmail",
       category: "account_connector",

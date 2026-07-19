@@ -1074,7 +1074,7 @@ async function writeChromePluginPackage() {
   if (!activeRoot) throw new Error("Temp root has not been initialized.")
 
   const packageSourceRoot = pluginInstallRoot()
-  const packageRoot = join(packageSourceRoot, "chrome", "0.6.0")
+  const packageRoot = join(packageSourceRoot, "chrome", "0.8.0")
   const chromePluginRoot = join(
     import.meta.dir,
     "..",
@@ -3536,7 +3536,7 @@ describe("plugin marketplace API", () => {
     ).not.toContain("connector.docs.default")
   })
 
-  test("migrates a legacy Chrome package to the newer local plugin-owned runtime", async () => {
+  test("migrates a legacy Chrome package to the Anybox-owned Node REPL runtime", async () => {
     await useTempDatabase()
     const legacyPackageRoot = await writeLegacyChromePluginPackage()
 
@@ -3552,22 +3552,25 @@ describe("plugin marketplace API", () => {
     await Plugin.reconcileInstalledRuntimeBindings()
 
     const migrated = Plugin.getInstalled("chrome")
-    expect(migrated?.version).toBe("0.6.0")
-    expect(migrated?.packageRoot).toBe(join(pluginInstallRoot(), "chrome", "0.6.0"))
-    expect(migrated?.mcpServerIDs).toEqual(["plugin.chrome.node-repl"])
-    expect(migrated?.connectorRequirementIDs).toEqual([])
+    expect(migrated?.version).toBe("0.8.0")
+    expect(migrated?.packageRoot).toBe(join(pluginInstallRoot(), "chrome", "0.8.0"))
+    expect(migrated?.mcpServerIDs).toEqual([])
+    expect(migrated?.connectorRequirementIDs).toEqual([
+      "connector:node-repl:default",
+    ])
     expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.chrome.chrome")).toBeUndefined()
-    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.chrome.node-repl")).toMatchObject({
-      transport: "stdio",
+    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.chrome.node-repl")).toBeUndefined()
+    await Connector.syncConnectorRuntimeBindings()
+    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "connector.node-repl.default")).toMatchObject({
+      transport: "connector",
       owner: {
-        kind: "plugin",
-        pluginID: "chrome",
-        bindingID: "mcp:node-repl",
+        kind: "anybox",
+        bindingID: "connector.node-repl.default",
       },
     })
   })
 
-  test("loads the Chrome Node REPL from the Chrome plugin package", async () => {
+  test("loads Chrome through the Anybox-owned Node REPL connector", async () => {
     process.env.ANYBOX_BROWSER_NATIVE_INSTALL = "off"
     await useTempDatabase()
     const legacyBrowserServerID = "connector.browser.default"
@@ -3594,11 +3597,19 @@ describe("plugin marketplace API", () => {
     await Config.setSelectedMcpServerIDs("legacy-browser-project", legacyServerIDs)
     await Connector.syncConnectorRuntimeBindings()
     expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, legacyBrowserServerID)).toBeUndefined()
-    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, legacyNodeReplServerID)).toBeUndefined()
-    expect(await Config.getSelectedMcpServerIDs("legacy-browser-project")).toEqual([])
+    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, legacyNodeReplServerID)).toMatchObject({
+      transport: "connector",
+      connectorId: "connector:node-repl:default",
+      owner: {
+        kind: "anybox",
+        bindingID: legacyNodeReplServerID,
+      },
+    })
+    expect(await Config.getSelectedMcpServerIDs("legacy-browser-project")).toEqual([
+      legacyNodeReplServerID,
+    ])
 
-    const packageSourceRoot = await writeChromePluginPackage()
-    const packageRoot = join(packageSourceRoot, "chrome", "0.6.0")
+    await writeChromePluginPackage()
     const app = createServerApp()
 
     const catalogResponse = await app.request("/api/plugins/catalog")
@@ -3608,12 +3619,26 @@ describe("plugin marketplace API", () => {
     expect(catalogResponse.status).toBe(200)
     expect(plugin?.connectors).toEqual([])
     expect(plugin?.apps).toEqual([])
-    expect(plugin?.connectorRequirements).toEqual([])
+    expect(plugin?.connectorRequirements).toEqual([
+      {
+        connector: "node-repl",
+        runtimeIDs: ["default"],
+        tools: ["js", "js_reset", "js_add_node_module_dir"],
+        permissions: [
+          "Reads and controls Chrome tabs through the Anybox Chrome extension, including navigation, page inspection, screenshots, clicks, scrolling, typing, and form filling.",
+          "Uses a versioned Browser Contract and backend capabilities; the Anybox Agent revalidates every browser command before forwarding it.",
+          "Raw page JavaScript, selector-driven click/fill adapters, and Chrome DevTools Protocol commands are disabled at both the Browser Contract and Anybox Agent command boundaries; bounded selector waits remain available.",
+          "Registers and runs the plugin-bundled Native Messaging Host for the current user.",
+          "Requires the Anybox Chrome extension to be installed, enabled, and connected.",
+        ],
+        required: true,
+        reason: "The agent imports this plugin's Browser Client into Anybox's persistent general-purpose Node REPL.",
+      },
+    ])
     expect(plugin?.icon).toBe("./assets/chrome.svg")
     expect(plugin?.iconUrl).toMatch(/^data:image\/svg\+xml;base64,/)
     expect(plugin?.brandColor).toBe("#4285F4")
-    expect(plugin?.mcpServers.map((server) => server.id)).toEqual(["node-repl"])
-    expect(plugin?.mcpServers.find((server) => server.id === "node-repl")?.tools).toHaveLength(3)
+    expect(plugin?.mcpServers).toEqual([])
 
     const connectorCatalogResponse = await app.request("/api/connectors/catalog")
     const connectorCatalogBody = (await connectorCatalogResponse.json()) as ConnectorCatalogEnvelope
@@ -3622,7 +3647,9 @@ describe("plugin marketplace API", () => {
     expect(connectorCatalogBody.data?.some((item) => item.id === "browser")).toBe(false)
     expect(connectorCatalogBody.data?.some((item) => item.id === "node-repl")).toBe(false)
     expect(definitions.some((item) => item.id === "browser")).toBe(false)
-    expect(definitions.some((item) => item.id === "node-repl")).toBe(false)
+    expect(definitions.some((item) =>
+      item.id === "node-repl" && item.category === "builtin_mcp"
+    )).toBe(true)
 
     const installResponse = await app.request("/api/plugins/installed/chrome", {
       method: "PUT",
@@ -3636,58 +3663,36 @@ describe("plugin marketplace API", () => {
     const installBody = (await installResponse.json()) as InstalledPluginEnvelope
 
     expect(installResponse.status).toBe(200)
-    expect(installBody.data?.mcpServerIDs).toEqual(["plugin.chrome.node-repl"])
+    expect(installBody.data?.mcpServerIDs).toEqual([])
     expect(installBody.data?.connectorIDs).toEqual([])
-    expect(installBody.data?.connectorRequirementIDs).toEqual([])
+    expect(installBody.data?.connectorRequirementIDs).toEqual([
+      "connector:node-repl:default",
+    ])
 
     expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.chrome.chrome")).toBeUndefined()
-    const nodeReplServer = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.chrome.node-repl")
-    expect(nodeReplServer?.transport).toBe("stdio")
-    expect(nodeReplServer?.transport === "stdio" ? nodeReplServer.command : undefined).toBe("node")
-    expect(nodeReplServer?.transport === "stdio" ? nodeReplServer.cwd : undefined).toBe(packageRoot)
-    expect(
-      (nodeReplServer?.transport === "stdio" ? nodeReplServer.args?.[0] : undefined)?.replaceAll("\\", "/"),
-    ).toBe(`${packageRoot.replaceAll("\\", "/")}/scripts/node-repl-server.js`)
+    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.chrome.node-repl")).toBeUndefined()
+    const nodeReplServer = await Config.getMcpServer(
+      Config.GLOBAL_CONFIG_ID,
+      "connector.node-repl.default",
+    )
+    expect(nodeReplServer?.transport).toBe("connector")
+    expect(nodeReplServer?.transport === "connector" ? nodeReplServer.connectorId : undefined)
+      .toBe("connector:node-repl:default")
     expect(nodeReplServer?.owner).toEqual({
-      kind: "plugin",
-      pluginID: "chrome",
-      bindingID: "mcp:node-repl",
+      kind: "anybox",
+      bindingID: "connector.node-repl.default",
     })
 
     await Config.setSelectedPluginIDs("chrome-project", ["chrome"])
     expect(
       (await Config.resolveProjectMcpServers("chrome-project")).map((entry) => entry.id),
-    ).toEqual(expect.arrayContaining(["plugin.chrome.node-repl"]))
+    ).toEqual(expect.arrayContaining(["connector.node-repl.default"]))
 
-    const nodeReplDiagnosticResponse = await app.request("/api/mcp/servers/plugin.chrome.node-repl/diagnostic")
+    const nodeReplDiagnosticResponse = await app.request("/api/mcp/servers/connector.node-repl.default/diagnostic")
     const nodeReplDiagnosticBody = (await nodeReplDiagnosticResponse.json()) as DiagnosticEnvelope
     expect(nodeReplDiagnosticResponse.status).toBe(200)
     expect(nodeReplDiagnosticBody.data?.ok).toBe(true)
     expect(nodeReplDiagnosticBody.data?.toolCount).toBe(3)
-
-    const disableChildResponse = await app.request(
-      "/api/plugins/installed/chrome/mcp/plugin.chrome.node-repl",
-      {
-        method: "PATCH",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          enabled: false,
-          toolPolicies: {
-            js: {
-              policy: "disabled",
-            },
-          },
-        }),
-      },
-    )
-    expect(disableChildResponse.status).toBe(200)
-    await Plugin.reconcileInstalledRuntimeBindings()
-
-    const resyncedNodeReplServer = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.chrome.node-repl")
-    expect(resyncedNodeReplServer?.enabled).toBe(false)
-    expect(resyncedNodeReplServer?.toolPolicies?.js?.policy).toBe("disabled")
 
     const deleteResponse = await app.request("/api/plugins/installed/chrome", {
       method: "DELETE",
@@ -3695,6 +3700,8 @@ describe("plugin marketplace API", () => {
     expect(deleteResponse.status).toBe(200)
     expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.chrome.chrome")).toBeUndefined()
     expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.chrome.node-repl")).toBeUndefined()
+    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "connector.node-repl.default"))
+      .toBeDefined()
   })
 
   test("loads plugin package manifests and exposes MCP, skills, and app connector metadata", async () => {

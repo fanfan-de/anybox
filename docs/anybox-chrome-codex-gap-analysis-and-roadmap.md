@@ -2,14 +2,23 @@
 
 > 文档日期：2026-07-19  
 > Anybox 初始审计版本：Chrome 插件 `0.4.0`  
-> Anybox 当前实现版本：Chrome 插件 `0.6.0`、Extension `0.2.0`、Browser Runtime `0.3.0`、Native Host `0.3.0`、Node MCP Server / Runtime IPC client `0.4.0`
+> Anybox 当前实现版本：Chrome 插件 `0.8.0`、Extension `0.2.0`、Browser Client `0.5.0`、Native Host `0.3.0`、平台 Node REPL Connector `0.1.0`
 > Codex 对照版本：本机已安装 Chrome 插件 `26.715.31925`  
 > 文档性质：历史审计快照、差距分析与工程路线图；正文中的静态 Facade/Worker allowlist 数值保留为 Phase 0 基线
-> 最近实施同步：2026-07-19，Browser Contract v1 与 Browser Client Runtime 首个纵向切片
+> 最近实施同步：2026-07-19，通用 Node REPL、反向 Host Service 与插件 Browser Client 动态导入
 > 相关背景文档：[Codex Browser Use 实现方式：模块化架构与参考实现](./codex-browser-use-implementation-reference.md)
 > 当前实现与后续阶段的权威设计记录：[Anybox Browser Client Runtime 迁移设计](../packages/chrome-plugin/docs/browser-client-runtime-migration.md)
 
-> **阅读提示：** 0.6.0 已实现 BrowserManager、Backend `getInfo`、精确 command
+> **阅读提示：** 0.8.0 已删除 Chrome 插件内的 `node-repl-server.js`、
+> `browser-gateway-worker.js` 和 `browser-ipc-client.cjs`。Node REPL 现在属于
+> Anybox Agent 平台，且不预加载任何 Chrome 业务；Agent 加载 Chrome Skill 后，
+> 在模型循环内根据 Skill 的绝对路径动态导入插件 `browser-client.mjs`。Browser
+> Client 通过 `nodeRepl.requestHost("browser", request)` 回到 Agent 的受控 Host
+> Service，Native Host 仍由 Chrome 插件携带和引导安装。正文中关于旧 Chrome
+> 专属 Node Server、Runtime Worker 和 `anybox.browser-runtime` capability 的描述
+> 均为历史实现，不代表当前工作树。
+>
+> 0.6.0 已实现 BrowserManager、Backend `getInfo`、精确 command
 > schema、capability-filtered API/Documentation Manifest、Agent params → policy →
 > bridge → result 校验，并把 Worker 收敛为受保护 Transport Adapter。正文中把这些能力
 > 标为“缺失”或把 Worker 描述为 15-method allowlist 的段落是审计时事实，不代表当前
@@ -34,7 +43,28 @@
 
 Node REPL 本身不是效果变好的原因。真正决定效果的是 Node REPL 后面那一整套 Browser Runtime 合同。
 
-### 0.1 2026-07-19 实施同步
+### 0.1 0.8.0 当前运行链
+
+```text
+Agent 加载 Chrome Skill
+→ 通用 Node REPL js
+→ 动态 import 插件 browser-client.mjs
+→ nodeRepl.requestHost("browser", request)
+→ MCP 反向 Host Request（仅当前工具调用的一次性 token）
+→ Anybox Agent Browser Host Service
+→ Browser Contract / Policy / BrowserExtensionBridge
+→ Native Host IPC Gateway
+→ 插件 Rust Native Messaging Host
+→ Chrome Native Messaging stdio
+→ Chrome Extension
+```
+
+平台 Node REPL 只提供通用 JavaScript、模块加载、持久会话、输出与 Host Service
+请求能力；它不包含 Chrome Gateway、Native Host、Browser Client、Browser IPC
+凭据或 `anybox.browser-runtime` capability。Chrome 插件不再声明自己的 MCP
+Server，而是声明对平台 `node-repl/default` Connector 的依赖。
+
+### 0.1.1 0.4.0—0.6.0 历史实施记录
 
 本文最初基于 Chrome 插件 `0.4.0` 审计。`0.4.1` 完成第一批入口鉴权与结构化输出加固；当前工作区的 `0.5.0` 又把 Browser control 的两段 localhost HTTP/WebSocket 生产传输迁移为受认证的本机 IPC。
 
@@ -60,7 +90,7 @@ Node REPL 本身不是效果变好的原因。真正决定效果的是 Node REPL
 > command-boundary policy 与 tab ownership、Locator、screenshot/trace/error
 > 的剩余隐私审计，以及真正的端到端取消隔离。
 
-### 0.2 Browser IPC 迁移验收记录
+### 0.2 旧 Runtime Worker Browser IPC 迁移验收记录（已被 0.8.0 入口替代）
 
 截至 2026-07-19，本次 transport 迁移的生产调用链已经固定为：
 

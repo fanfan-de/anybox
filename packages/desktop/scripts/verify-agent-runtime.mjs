@@ -119,6 +119,7 @@ const requiredFiles = [
   path.join(runtimeDir, "cinema-web", "index.html"),
   path.join(runtimeDir, "connectors", "gmail", "server.js"),
   path.join(runtimeDir, "connectors", "feishu", "server.js"),
+  path.join(runtimeDir, "connectors", "node-repl", "server.js"),
   path.join(runtimeDir, bunExecutableName),
   path.join(runtimeDir, "node_modules", "node-pty", "package.json"),
   path.join(dependenciesDir, "manifest.json"),
@@ -138,7 +139,6 @@ if (missing.length > 0) {
 const pluginOwnedRuntimeFiles = [
   path.join(runtimeDir, "connectors", "browser", "server.js"),
   path.join(runtimeDir, "connectors", "browser-runtime", "client.mjs"),
-  path.join(runtimeDir, "connectors", "node-repl", "server.js"),
 ]
 const bundledPluginRuntimeFiles = pluginOwnedRuntimeFiles.filter((filePath) => fs.existsSync(filePath))
 if (bundledPluginRuntimeFiles.length > 0) {

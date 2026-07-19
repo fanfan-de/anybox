@@ -422,7 +422,11 @@ DELETE /api/plugins/installed/:pluginID/connectors/:appID/auth/session
 
 项目选择插件后，`Config.resolveProjectMcpServers()` 会把该插件要求的平台 connector server 也纳入项目可用 MCP server 集合。
 
-Chrome 插件是相反的边界示例：Chrome MCP、Node REPL 和 Chrome Runtime 都位于插件目录并由 `mcpServers` 声明；Anybox Agent 只保留 Chrome 扩展桥接与通用 MCP/插件宿主。安装后生成 `plugin.chrome.chrome` 和 `plugin.chrome.node-repl`，不再生成 `connector.browser.default` 或 `connector.node-repl.default`。
+Chrome 0.8.0 也是共享 requirement 的边界示例：插件不再声明私有 `mcpServers`，
+而是依赖平台的 `connector:node-repl:default`。Agent 根据 Chrome Skill 在通用 Node
+REPL 中动态导入插件的 `browser-client.mjs`；浏览器请求通过受控 host-service bridge
+回到 Agent。安装 Chrome 后不会生成 `plugin.chrome.node-repl`，项目解析使用
+`connector.node-repl.default`；卸载 Chrome 也不会删除这个平台运行时。
 
 ## 10. Skill 集成
 

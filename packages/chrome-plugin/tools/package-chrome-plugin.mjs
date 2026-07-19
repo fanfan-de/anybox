@@ -60,12 +60,9 @@ const requiredPackageFiles = [
   path.join("browser-extension", "popup.js"),
   currentNativeHostTarget.packagePath,
   path.join("scripts", "browser-client.mjs"),
-  path.join("scripts", "browser-gateway-worker.js"),
-  path.join("scripts", "browser-ipc-client.cjs"),
   path.join("scripts", "extension-id.json"),
   path.join("scripts", "installManifest.mjs"),
   path.join("scripts", "native-host-bootstrap.js"),
-  path.join("scripts", "node-repl-server.js"),
   path.join("skills", "chrome", "SKILL.md"),
 ]
 
@@ -269,6 +266,17 @@ export async function validateChromePluginPackage(packageRoot) {
       throw new Error(`Chrome plugin package is missing required file: ${requiredPath}`)
     }
   }
+  for (const removedRuntimePath of [
+    "scripts/node-repl-server.js",
+    "scripts/browser-gateway-worker.js",
+    "scripts/browser-ipc-client.cjs",
+  ]) {
+    if (normalizedSet.has(removedRuntimePath)) {
+      throw new Error(
+        `Chrome plugin package must not contain the removed Chrome runtime: ${removedRuntimePath}`,
+      )
+    }
+  }
 
   for (const relativePath of normalizedFiles) {
     const segments = relativePath.split("/")
@@ -318,39 +326,41 @@ export async function validateChromePluginPackage(packageRoot) {
     throw new Error("Chrome plugin manifest must derive its ID from the canonical name.")
   }
 
-  if (
-    !Array.isArray(manifest.mcpServers)
-    || manifest.mcpServers.length !== 1
-    || manifest.mcpServers[0]?.id !== "node-repl"
-  ) {
+  if ("mcpServers" in manifest) {
     throw new Error(
-      "Chrome plugin manifest must declare exactly one 'node-repl' MCP server.",
+      "Chrome plugin must not bundle its own MCP server.",
     )
   }
-  const nodeRepl = manifest.mcpServers[0]
-  const nodeReplRuntime = nodeRepl.runtime
   if (
-    !nodeReplRuntime
-    || typeof nodeReplRuntime !== "object"
-    || Array.isArray(nodeReplRuntime)
-    || nodeReplRuntime.transport !== "stdio"
-    || nodeReplRuntime.command !== "node"
-    || !Array.isArray(nodeReplRuntime.args)
-    || nodeReplRuntime.args.length !== 1
-    || nodeReplRuntime.args[0] !== "${PLUGIN_ROOT}/scripts/node-repl-server.js"
-    || nodeReplRuntime.cwd !== "${PLUGIN_ROOT}"
-    || !nodeReplRuntime.toolPolicies
-    || typeof nodeReplRuntime.toolPolicies !== "object"
-    || Array.isArray(nodeReplRuntime.toolPolicies)
+    !Array.isArray(manifest.connectorRequirements)
+    || manifest.connectorRequirements.length !== 1
   ) {
     throw new Error(
-      "Chrome plugin node-repl MCP server must declare its packaged stdio runtime.",
+      "Chrome plugin must declare exactly one Anybox Node REPL connector requirement.",
+    )
+  }
+  const nodeReplRequirement = manifest.connectorRequirements[0]
+  if (
+    nodeReplRequirement?.connector !== "node-repl"
+    || nodeReplRequirement?.required !== true
+    || !Array.isArray(nodeReplRequirement?.runtimeIDs)
+    || nodeReplRequirement.runtimeIDs.length !== 1
+    || nodeReplRequirement.runtimeIDs[0] !== "default"
+    || !Array.isArray(nodeReplRequirement?.tools)
+    || nodeReplRequirement.tools.length !== 3
+    || !["js", "js_reset", "js_add_node_module_dir"].every(
+      (tool) => nodeReplRequirement.tools.includes(tool),
+    )
+  ) {
+    throw new Error(
+      "Chrome plugin must depend on the default Anybox Node REPL runtime and its three tools.",
     )
   }
   {
     const capabilityClaims = [
-      ...(Array.isArray(nodeRepl.permissions) ? nodeRepl.permissions : []),
-      ...(Array.isArray(nodeRepl.installReview) ? nodeRepl.installReview : []),
+      ...(Array.isArray(nodeReplRequirement.permissions)
+        ? nodeReplRequirement.permissions
+        : []),
     ].filter((claim) => typeof claim === "string")
     const advancedClaims = capabilityClaims.filter((claim) =>
       /\b(?:raw page|raw script|DevTools Protocol|CDP)\b/i.test(claim)
@@ -374,30 +384,29 @@ export async function validateChromePluginPackage(packageRoot) {
       path.join(packageRoot, "scripts", "browser-client.mjs"),
       "utf8",
     )
-    const browserTransportWorker = await fsp.readFile(
-      path.join(packageRoot, "scripts", "browser-gateway-worker.js"),
+    const nativeHostBootstrap = await fsp.readFile(
+      path.join(packageRoot, "scripts", "native-host-bootstrap.js"),
       "utf8",
     )
     if (
       !/Selector-driven click\/fill adapters, page JavaScript, and CDP are disabled/i.test(skill)
+      || !/\bbrowser-client\.mjs\b/.test(skill)
+      || !/\bpathToFileURL\b/.test(skill)
+      || !/connector_node_repl_default/.test(skill)
       || !/disabled until Anybox can enforce command-level capability/i.test(browserRuntime)
       || !/\bsetupBrowserRuntime\b/.test(browserRuntime)
+      || !/\brequestHost\b/.test(browserRuntime)
+      || !/\bnative-host-bootstrap\.js\b/.test(browserRuntime)
       || !/\bcontractVersion\b/.test(browserRuntime)
       || !/\barbitraryJavaScript\b/.test(browserRuntime)
       || !/\bfullCdp\b/.test(browserRuntime)
       || !/\bCAPABILITY_UNAVAILABLE\b/.test(browserRuntime)
+      || !/\bensureNativeMessagingHost\b/.test(nativeHostBootstrap)
+      || /\banybox\.browser-runtime\b/.test(browserRuntime)
+      || /\bgetCapability\b/.test(browserRuntime)
     ) {
       throw new Error(
-        "Chrome manifest, Skill, and browser runtime capability boundaries are inconsistent.",
-      )
-    }
-    if (
-      !/\bgetInfo\b/.test(browserTransportWorker)
-      || !/\bcontractVersion\b/.test(browserTransportWorker)
-      || /\bSAFE_BROWSER_METHODS\b/.test(browserTransportWorker)
-    ) {
-      throw new Error(
-        "Chrome browser gateway Worker must remain a contract-aware transport adapter without a Browser API method allowlist.",
+        "Chrome manifest, Skill, host-service Browser Client, and Native Host boundaries are inconsistent.",
       )
     }
   }

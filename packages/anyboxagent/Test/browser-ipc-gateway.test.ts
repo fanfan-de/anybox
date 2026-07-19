@@ -1,9 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import "./sqlite.cleanup.ts"
-import {
-  spawn,
-  type ChildProcessWithoutNullStreams,
-} from "node:child_process"
 import { createHmac, randomUUID } from "node:crypto"
 import {
   existsSync,
@@ -35,17 +31,6 @@ import {
 } from "#browser-extension/ipc-gateway.ts"
 
 type JsonRecord = Record<string, unknown>
-
-const repoRoot = path.join(import.meta.dir, "..", "..", "..")
-const nodeReplServerPath = path.join(
-  repoRoot,
-  "plugins",
-  "Anybox-Plugins",
-  "chrome",
-  "scripts",
-  "node-repl-server.js",
-)
-const children: ChildProcessWithoutNullStreams[] = []
 
 class FramedClient {
   private readonly decoder = new BrowserIpcFrameDecoder()
@@ -117,66 +102,11 @@ class FramedClient {
 const gateways: Array<{ gateway: BrowserIpcGateway; root: string }> = []
 
 afterEach(async () => {
-  for (const child of children.splice(0)) child.kill()
   await Promise.all(gateways.splice(0).map(async ({ gateway, root }) => {
     await gateway.stop()
     rmSync(root, { recursive: true, force: true })
   }))
 })
-
-function startMcpServer(env: NodeJS.ProcessEnv) {
-  const child = spawn("node", [nodeReplServerPath], {
-    stdio: ["pipe", "pipe", "pipe"],
-    windowsHide: true,
-    env: {
-      ...process.env,
-      ANYBOX_BROWSER_NATIVE_INSTALL: "off",
-      ...env,
-    },
-  })
-  children.push(child)
-
-  const lines: JsonRecord[] = []
-  const stderr: string[] = []
-  let stdoutBuffer = ""
-  child.stdout.setEncoding("utf8")
-  child.stdout.on("data", (chunk: string) => {
-    stdoutBuffer += chunk
-    const split = stdoutBuffer.split(/\r?\n/)
-    stdoutBuffer = split.pop() ?? ""
-    for (const line of split) {
-      if (line.trim()) lines.push(JSON.parse(line) as JsonRecord)
-    }
-  })
-  child.stderr.setEncoding("utf8")
-  child.stderr.on("data", (chunk: string) => stderr.push(chunk))
-
-  let nextID = 1
-  async function request(method: string, params?: unknown) {
-    const id = nextID
-    nextID += 1
-    child.stdin.write(`${JSON.stringify({
-      jsonrpc: "2.0",
-      id,
-      method,
-      params,
-    })}\n`)
-    const started = Date.now()
-    while (Date.now() - started < 8_000) {
-      const index = lines.findIndex((line) => line.id === id)
-      if (index >= 0) return lines.splice(index, 1)[0]!
-      if (child.exitCode !== null) {
-        throw new Error(
-          `Chrome MCP exited with ${child.exitCode}: ${stderr.join("")}`,
-        )
-      }
-      await Bun.sleep(20)
-    }
-    throw new Error(`Timed out waiting for ${method}: ${stderr.join("")}`)
-  }
-
-  return { request }
-}
 
 function proofFor(
   secret: string,
@@ -762,109 +692,6 @@ describe("Browser IPC Gateway transport and authentication", () => {
       },
     })
   })
-
-  test("runs setupBrowserRuntime through Agent policy and authenticated Native Host IPC", async () => {
-    const { bridge, gateway } = gatewayFixture()
-    await gateway.start()
-    const native = await authenticateNative(gateway)
-    native.client.send({
-      type: "native.message",
-      message: {
-        type: "hello",
-        protocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
-        extensionInstanceID: "extension-vertical-slice",
-        extensionID: ANYBOX_CHROME_EXTENSION_ID,
-        version: "0.2.0",
-        capabilities: {
-          contractVersion: 1,
-          commands: ["tabs.list"],
-        },
-      },
-    })
-    await waitFor(() => bridge.status().connected)
-
-    const mcp = startMcpServer(gateway.runtimeEnvironment())
-    expect(await mcp.request("initialize")).toMatchObject({
-      result: {
-        serverInfo: {
-          name: "anybox-chrome-node-repl",
-          version: "0.4.0",
-        },
-      },
-    })
-
-    const call = mcp.request("tools/call", {
-      name: "js",
-      arguments: {
-        code: [
-          "const browser = await agent.browsers.get('extension')",
-          "const tabs = await browser.tabs.list()",
-          "return {",
-          "  browserId: browser.browserId,",
-          "  commands: browser.capabilities.commands,",
-          "  apiMethods: browser.apiManifest.commands.map(({ method }) => method),",
-          "  documentation: await browser.documentation(),",
-          "  tabs: tabs.map(({ id, title, url, active, runtime }) => ({",
-          "    id, title, url, active, boundTabId: runtime.tabId",
-          "  })),",
-          "}",
-        ].join("\n"),
-      },
-    })
-
-    const forwarded = await native.client.next(8_000)
-    expect(forwarded).toMatchObject({
-      type: "native.message",
-      message: {
-        type: "command",
-        contractVersion: 1,
-        method: "tabs.list",
-        params: {},
-      },
-    })
-    const command = forwarded.message as JsonRecord
-    native.client.send({
-      type: "native.message",
-      message: {
-        type: "result",
-        commandID: command.commandID,
-        ok: true,
-        data: {
-          tabs: [{
-            id: 77,
-            title: "Vertical slice",
-            url: "https://example.com/",
-            active: true,
-          }],
-        },
-      },
-    })
-
-    const response = await call
-    expect(response).toMatchObject({
-      result: {
-        structuredContent: {
-          result: {
-            browserId: "extension",
-            commands: ["tabs.list"],
-            apiMethods: ["tabs.list"],
-            tabs: [{
-              id: 77,
-              title: "Vertical slice",
-              url: "https://example.com/",
-              active: true,
-              boundTabId: 77,
-            }],
-          },
-        },
-      },
-    })
-    const result = (
-      (response.result as JsonRecord).structuredContent as JsonRecord
-    ).result as JsonRecord
-    expect(String(result.documentation)).toContain("browser.tabs.list()")
-    expect(String(result.documentation)).not.toContain("tab.screenshot")
-  }, 15_000)
 
   test("returns stable validation errors without forwarding malformed commands", async () => {
     const { bridge, gateway } = gatewayFixture()

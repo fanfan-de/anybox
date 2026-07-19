@@ -3,34 +3,31 @@
 const readline = require("node:readline")
 const os = require("node:os")
 const path = require("node:path")
-const { pathToFileURL } = require("node:url")
 const { createRequire } = require("node:module")
 const { AsyncLocalStorage } = require("node:async_hooks")
-const { Worker } = require("node:worker_threads")
 const Module = require("node:module")
-const { ensureNativeMessagingHost } = require("./native-host-bootstrap")
 
 const DEFAULT_TIMEOUT_MS = 30_000
 const MAX_TIMEOUT_MS = 120_000
-const browserClientPath = path.resolve(__dirname, "browser-client.mjs")
-const browserGatewayWorkerPath = path.resolve(__dirname, "browser-gateway-worker.js")
+const HOST_REQUEST_TIMEOUT_MS = 120_000
+const HOST_REQUEST_METHOD = "anybox/node-repl/host-request"
+const HOST_REQUEST_TOKEN_META_KEY = "anybox/hostRequestToken"
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor
 
-let browserClientPromise
 let sandbox
 let writes
 let images
+let responseMeta
+let nextHostRequestID = 1
 const nodeModuleDirs = []
-const nativeMessagingHostReady = ensureNativeMessagingHost()
-const browserGateway = createBrowserGateway()
-const browserRequestContext = new AsyncLocalStorage()
-let runtimeReadyPromise
+const requestContext = new AsyncLocalStorage()
+const pendingHostRequests = new Map()
 
 const tools = [
   {
     name: "js",
-    title: "Chrome Node REPL JavaScript",
-    description: "Run JavaScript in a persistent Node.js REPL with Chrome runtime helpers.",
+    title: "Node REPL JavaScript",
+    description: "Run JavaScript in a persistent general-purpose Node.js environment.",
     inputSchema: {
       type: "object",
       properties: {
@@ -50,8 +47,8 @@ const tools = [
   },
   {
     name: "js_reset",
-    title: "Reset Chrome Node REPL",
-    description: "Reset the persistent Node.js REPL state.",
+    title: "Reset Node REPL",
+    description: "Reset the persistent Node.js environment.",
     inputSchema: {
       type: "object",
       properties: {},
@@ -62,7 +59,7 @@ const tools = [
   {
     name: "js_add_node_module_dir",
     title: "Add Node Module Directory",
-    description: "Add a node_modules directory to CommonJS module resolution for later REPL calls.",
+    description: "Add a node_modules directory to CommonJS module resolution for later calls.",
     inputSchema: {
       type: "object",
       properties: {
@@ -129,153 +126,99 @@ function printable(value) {
 }
 
 function addNodeModuleDir(dir) {
-  const normalized = path.resolve(String(dir || ""))
-  if (!normalized) throw new Error("path is required.")
+  const input = String(dir || "").trim()
+  if (!input) throw new Error("path is required.")
+  const normalized = path.resolve(input)
   if (!nodeModuleDirs.includes(normalized)) nodeModuleDirs.push(normalized)
   process.env.NODE_PATH = nodeModuleDirs.join(path.delimiter)
   Module._initPaths()
   return normalized
 }
 
-async function loadBrowserClient() {
-  if (!browserClientPromise) {
-    browserClientPromise = import(pathToFileURL(browserClientPath).toString())
+function publicRequestMeta() {
+  const context = requestContext.getStore()
+  if (!context) return undefined
+  const result = {}
+  for (const key of ["sessionID", "messageID", "toolCallID"]) {
+    if (typeof context[key] === "string" && context[key]) result[key] = context[key]
   }
-  return browserClientPromise
+  return Object.keys(result).length > 0 ? Object.freeze(result) : undefined
 }
 
-function createBrowserGateway() {
-  const worker = new Worker(browserGatewayWorkerPath, {
-    workerData: {
-      protocolVersion: process.env.ANYBOX_BROWSER_IPC_PROTOCOL_VERSION,
-      runtimeEndpoint: process.env.ANYBOX_BROWSER_IPC_RUNTIME_ENDPOINT,
-      brokerInstanceID: process.env.ANYBOX_BROWSER_IPC_BROKER_INSTANCE_ID,
-      runtimeProof: process.env.ANYBOX_BROWSER_IPC_RUNTIME_PROOF,
-      clientVersion: "0.4.0",
-    },
-  })
-  const postWorkerMessage = worker.postMessage.bind(worker)
-  const pending = new Map()
-  let nextID = 1
-  let readyResolve
-  let readyReject
-  let settled = false
-  const ready = new Promise((resolve, reject) => {
-    readyResolve = resolve
-    readyReject = reject
-  })
+function hostError(error, fallbackMessage = "Anybox host request failed.") {
+  const result = new Error(
+    error && typeof error === "object" && typeof error.message === "string"
+      ? error.message
+      : fallbackMessage,
+  )
+  if (error && typeof error === "object") {
+    if (typeof error.code === "string") result.code = error.code
+    if (typeof error.retryable === "boolean") result.retryable = error.retryable
+    if (error.details && typeof error.details === "object" && !Array.isArray(error.details)) {
+      result.details = error.details
+    }
+  }
+  return result
+}
 
-  const rejectPending = (error) => {
-    for (const request of pending.values()) request.reject(error)
-    pending.clear()
+function requestHost(service, request) {
+  if (typeof service !== "string" || !service.trim()) {
+    return Promise.reject(new Error("requestHost requires a service name."))
+  }
+  const context = requestContext.getStore()
+  if (!context?.hostRequestToken) {
+    return Promise.reject(
+      new Error("Host services are available only while an Anybox Node REPL tool call is running."),
+    )
   }
 
-  worker.on("message", (message) => {
-    if (message?.type === "ready") {
-      settled = true
-      readyResolve()
-      return
-    }
-    const request = pending.get(message?.id)
-    if (!request) return
-    pending.delete(message.id)
-    if (message.ok) request.resolve(message.data)
-    else {
-      const error = new Error(message.error || "Chrome browser gateway request failed.")
-      if (typeof message.code === "string") error.code = message.code
-      if (typeof message.retryable === "boolean") error.retryable = message.retryable
-      if (message.details && typeof message.details === "object" && !Array.isArray(message.details)) {
-        error.details = message.details
-      }
-      request.reject(error)
-    }
-  })
-  worker.on("error", (error) => {
-    if (!settled) {
-      settled = true
-      readyReject(error)
-    }
-    rejectPending(error)
-  })
-  worker.on("exit", (code) => {
-    const error = new Error(`Chrome browser gateway stopped with exit code ${code}.`)
-    if (!settled) {
-      settled = true
-      readyReject(error)
-    }
-    rejectPending(error)
-  })
-
-  const callWorker = (message) => {
-    return new Promise((resolve, reject) => {
-      const id = nextID
-      nextID += 1
-      pending.set(id, { resolve, reject })
-      try {
-        postWorkerMessage({ id, ...message })
-      } catch (error) {
-        pending.delete(id)
+  const id = `host-${process.pid}-${nextHostRequestID}`
+  nextHostRequestID += 1
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      pendingHostRequests.delete(id)
+      const error = new Error(
+        `Anybox host service '${service.trim()}' timed out after ${HOST_REQUEST_TIMEOUT_MS}ms.`,
+      )
+      error.code = "DEADLINE_EXCEEDED"
+      error.retryable = true
+      reject(error)
+    }, HOST_REQUEST_TIMEOUT_MS)
+    pendingHostRequests.set(id, {
+      resolve(value) {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      reject(error) {
+        clearTimeout(timer)
         reject(error)
-      }
+      },
     })
-  }
-
-  return {
-    ready,
-    request(request) {
-      return callWorker({ request })
-    },
-    reset() {
-      return callWorker({ type: "reset" })
-    },
-  }
-}
-
-const getBrowserRequestContext =
-  browserRequestContext.getStore.bind(browserRequestContext)
-const runWithBrowserRequestContext =
-  browserRequestContext.run.bind(browserRequestContext)
-
-function clearSensitiveRuntimeEnvironment() {
-  delete process.env.ANYBOX_BROWSER_TRUSTED_TOKEN
-  delete process.env.ANYBOX_BROWSER_TRANSPORT_TOKEN
-  delete process.env.ANYBOX_BROWSER_IPC_PROTOCOL_VERSION
-  delete process.env.ANYBOX_BROWSER_IPC_TRANSPORT
-  delete process.env.ANYBOX_BROWSER_IPC_RUNTIME_ENDPOINT
-  delete process.env.ANYBOX_BROWSER_IPC_NATIVE_ENDPOINT
-  delete process.env.ANYBOX_BROWSER_IPC_BOOTSTRAP_PATH
-  delete process.env.ANYBOX_BROWSER_IPC_BROKER_INSTANCE_ID
-  delete process.env.ANYBOX_BROWSER_IPC_RUNTIME_PROOF
-}
-
-function prepareRuntime() {
-  runtimeReadyPromise ??= Promise.all([
-    nativeMessagingHostReady,
-    loadBrowserClient(),
-    browserGateway.ready,
-  ]).then(([, browserClient]) => {
-    return browserClient
-  }).finally(() => {
-    clearSensitiveRuntimeEnvironment()
-  })
-  return runtimeReadyPromise
-}
-
-function installBrowserRuntime(browserClient, options = {}) {
-  return browserClient.setupBrowserRuntime({
-    ...options,
-    transport: (request) => browserGateway.request({
-      ...request,
-      ...(request.type === "command" && getBrowserRequestContext()
-        ? { context: getBrowserRequestContext() }
-        : {}),
-    }),
+    send({
+      jsonrpc: "2.0",
+      id,
+      method: HOST_REQUEST_METHOD,
+      params: {
+        service: service.trim(),
+        request,
+        token: context.hostRequestToken,
+      },
+    })
+  }).then((result) => {
+    if (result && typeof result === "object" && result.ok === true) {
+      return result.data
+    }
+    if (result && typeof result === "object" && result.ok === false) {
+      throw hostError(result.error)
+    }
+    throw hostError(undefined, "Anybox host returned an invalid response.")
   })
 }
 
 function resetKernel() {
   writes = []
   images = []
+  responseMeta = undefined
   const localRequire = createRequire(__filename)
   sandbox = {
     Buffer,
@@ -299,14 +242,25 @@ function resetKernel() {
   }
   sandbox.global = sandbox
   sandbox.globalThis = sandbox
-  sandbox.nodeRepl = {
+  const nodeRepl = {
     cwd: process.cwd(),
     homeDir: os.homedir(),
     tmpDir: os.tmpdir(),
     nodeModuleDirs,
     addNodeModuleDir,
+    requestHost,
     write(text) {
       writes.push(String(text))
+    },
+    setResponseMeta(value) {
+      if (value === undefined || value === null) {
+        responseMeta = undefined
+        return
+      }
+      if (typeof value !== "object" || Array.isArray(value)) {
+        throw new Error("setResponseMeta expects an object.")
+      }
+      responseMeta = { ...value }
     },
     async emitImage(imageLike) {
       const image = normalizeImage(imageLike)
@@ -314,6 +268,11 @@ function resetKernel() {
       return image
     },
   }
+  Object.defineProperty(nodeRepl, "requestMeta", {
+    enumerable: true,
+    get: publicRequestMeta,
+  })
+  sandbox.nodeRepl = Object.freeze(nodeRepl)
 }
 
 function normalizeImage(imageLike) {
@@ -368,21 +327,16 @@ async function runWithTimeout(promise, ms) {
 }
 
 async function runJavaScript(code, ms) {
-  const browserClient = await prepareRuntime()
-  sandbox.setupBrowserRuntime = (options = {}) => installBrowserRuntime(browserClient, options)
-  if (!sandbox.agent) await installBrowserRuntime(browserClient, { globals: sandbox })
-
   writes = []
   images = []
+  responseMeta = undefined
   const fn = new AsyncFunction(
     "sandbox",
     "nodeRepl",
-    "agent",
-    "setupBrowserRuntime",
     `with (sandbox) { return await (async () => {\n${code}\n})() }`,
   )
   const value = await runWithTimeout(
-    fn.call(sandbox, sandbox, sandbox.nodeRepl, sandbox.agent, browserClient.setupBrowserRuntime),
+    fn.call(sandbox, sandbox, sandbox.nodeRepl),
     ms,
   )
 
@@ -400,11 +354,12 @@ async function runJavaScript(code, ms) {
       writes,
       imageCount: images.length,
     },
+    ...(responseMeta ? { _meta: responseMeta } : {}),
     isError: false,
   }
 }
 
-async function callTool(name, args, requestContext) {
+async function callTool(name, args, context) {
   const normalizedName = {
     node_repl_js: "js",
     node_repl_reset: "js_reset",
@@ -412,7 +367,6 @@ async function callTool(name, args, requestContext) {
   }[name] || name
 
   if (normalizedName === "js_reset") {
-    await browserGateway.reset()
     resetKernel()
     return textResult("Node REPL reset.", { reset: true })
   }
@@ -425,8 +379,8 @@ async function callTool(name, args, requestContext) {
   if (normalizedName === "js") {
     const code = args && typeof args.code === "string" ? args.code : ""
     if (!code.trim()) throw new Error("js requires code.")
-    return runWithBrowserRequestContext(
-      requestContext,
+    return requestContext.run(
+      context,
       () => runJavaScript(code, timeoutMs(args && args.timeoutMs)),
     )
   }
@@ -449,7 +403,22 @@ function readRequestContext(message) {
     )
     if (typeof value === "string") context[target] = value.trim()
   }
+  const token = meta[HOST_REQUEST_TOKEN_META_KEY]
+  if (typeof token === "string" && token) context.hostRequestToken = token
   return Object.keys(context).length > 0 ? context : undefined
+}
+
+function handleResponse(message) {
+  if (message?.method !== undefined || message?.id === undefined) return false
+  const pending = pendingHostRequests.get(String(message.id))
+  if (!pending) return false
+  pendingHostRequests.delete(String(message.id))
+  if (message.error) {
+    pending.reject(hostError(message.error))
+  } else {
+    pending.resolve(message.result)
+  }
+  return true
 }
 
 resetKernel()
@@ -461,17 +430,17 @@ rl.on("line", (line) => {
   void (async () => {
     if (!line.trim()) return
     const message = JSON.parse(line)
+    if (handleResponse(message)) return
     requestID = message.id ?? null
 
     if (message.method === "initialize") {
-      await prepareRuntime()
       send({
         jsonrpc: "2.0",
         id: message.id,
         result: {
           protocolVersion: "2025-06-18",
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: "anybox-chrome-node-repl", version: "0.4.0" },
+          serverInfo: { name: "anybox-node-repl", version: "0.1.0" },
         },
       })
       return
@@ -528,5 +497,8 @@ rl.on("line", (line) => {
 })
 
 rl.on("close", () => {
-  void browserGateway.reset().finally(() => process.exit(0))
+  const error = new Error("Anybox host connection closed.")
+  for (const pending of pendingHostRequests.values()) pending.reject(error)
+  pendingHostRequests.clear()
+  process.exit(0)
 })

@@ -14,7 +14,7 @@ packages/chrome-plugin/
   browser-runtime/         TypeScript browser SDK bundled to browser-client.mjs
   browser-native-host/     Rust Native Messaging Host project
   docs/                    Browser Contract and Runtime migration design
-  runtime/                 Authored manifest, Node REPL MCP script, and Skill
+  runtime/                 Authored manifest, Native Host bootstrap, and Skill
   tools/                   Distribution synchronization and regression tests
   LICENSE
   README.md
@@ -23,7 +23,7 @@ plugins/Anybox-Plugins/chrome/
   .anybox-plugin/          Generated canonical manifest
   browser-extension/       Generated extension build
   extension-host/          Platform-specific Rust Native Messaging Host
-  scripts/                 Generated Node REPL and browser client runtime
+  scripts/                 Generated Browser Client and Native Host bootstrap
   skills/                  Generated Chrome Skill
   LICENSE
 ```
@@ -65,23 +65,30 @@ directory together.
 
 ## Browser control architecture
 
-The plugin registers one persistent `node-repl` MCP server. The model uses its
-`js` tool and the preloaded `agent.browsers` Browser Client Runtime for backend
-discovery, tab access, inspection, interaction, and screenshots. The runtime
-uses a versioned Browser Contract for capabilities, a machine-readable API
-manifest, and dynamic documentation. Client-side checks provide early errors;
-the Anybox Agent is authoritative for schema and advertised capability checks.
+The plugin declares a requirement on Anybox's platform-owned persistent
+`node-repl` connector; it no longer bundles a Chrome-specific MCP server. On
+first use, the model imports the bundled `browser-client.mjs` through the
+general-purpose `js` tool. Setup uses the generic `nodeRepl.requestHost`
+bridge and installs
+`agent.browsers` for backend discovery, tab access, inspection, interaction,
+and screenshots. The runtime uses a versioned Browser Contract for
+capabilities, a machine-readable API manifest, and dynamic documentation.
+Client-side checks provide early errors; the Anybox Agent is authoritative for
+schema and advertised capability checks.
 Extension 0.2.0 advertises its Browser Contract version and command set; the
 Agent exposes only the safe intersection and fails closed on version mismatch.
 The first slice explicitly advertises permission/ownership lifecycle features
 as unavailable until their policy phases land. Raw page evaluation and full CDP
 remain disabled. The plugin no longer registers per-action `browser_*` MCP tools.
 
-The isolated browser transport Worker holds IPC credentials and connects to the
-Anybox Agent Browser Policy Gateway over authenticated local IPC. The Rust Native Messaging Host uses a
-separate authenticated IPC endpoint, then keeps Chrome's required native stdio
-framing unchanged. Windows uses Named Pipes; macOS and Linux use Unix Domain
-Sockets. Production has no automatic HTTP or WebSocket browser-control fallback.
+Browser requests return directly to the Anybox Agent through the authenticated
+host-service request associated with the active Node REPL tool call. The generic
+Node process receives no Browser IPC credentials and exposes no
+`anybox.browser-runtime` capability. The Rust Native Messaging Host connects to
+the Agent Browser Gateway over authenticated local IPC, then keeps Chrome's
+required native stdio framing unchanged. Windows uses Named Pipes; macOS and
+Linux use Unix Domain Sockets. Production has no automatic HTTP or WebSocket
+browser-control fallback.
 The persisted Native Host runtime config contains only non-secret IPC locators
 and protocol metadata; a short-lived, one-time bootstrap proof is rotated by the
 Agent and removed after successful authentication.

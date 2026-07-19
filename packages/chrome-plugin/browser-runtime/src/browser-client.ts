@@ -38,6 +38,10 @@ import type {
 type BrowserCommandParams = Record<string, unknown>
 type PageFunction<TResult = unknown> = (...args: any[]) => TResult
 
+const BROWSER_HOST_SERVICE = "browser"
+const NATIVE_INSTALL_ENV = "ANYBOX_BROWSER_NATIVE_INSTALL"
+let nativeMessagingHostReady: Promise<void> | undefined
+
 type TabsOpenOptions = Omit<BrowserContractCommandParams<"tabs.open">, "url">
 type SnapshotOptions = Omit<BrowserContractCommandParams<"page.snapshot">, "tabId">
 type InteractiveSnapshotOptions = Omit<
@@ -143,6 +147,12 @@ export interface BrowserRuntimeAgent extends Record<string, unknown> {
 
 export interface BrowserRuntimeGlobals extends Record<string, unknown> {
   agent?: BrowserRuntimeAgent | Record<string, unknown>
+  nodeRepl?: {
+    requestHost?<TResult = unknown>(
+      service: string,
+      request: unknown,
+    ): Promise<TResult>
+  }
   setupBrowserRuntime?: typeof setupBrowserRuntime
 }
 
@@ -185,6 +195,55 @@ function unavailableTransport<TResult>(): Promise<TResult> {
       { retryable: true },
     ),
   )
+}
+
+function hostBrowserTransport(
+  globals: BrowserRuntimeGlobals,
+): BrowserRuntimeTransport | undefined {
+  const nodeRepl = globals.nodeRepl
+  const requestHost = nodeRepl?.requestHost
+  if (typeof requestHost !== "function") return undefined
+
+  return async <TResult = unknown>(
+    request: BrowserRuntimeTransportRequest,
+  ): Promise<TResult> => {
+    await ensureNativeMessagingHost()
+    return requestHost.call(
+      nodeRepl,
+      BROWSER_HOST_SERVICE,
+      request,
+    ) as Promise<TResult>
+  }
+}
+
+async function ensureNativeMessagingHost(): Promise<void> {
+  if (process.env[NATIVE_INSTALL_ENV]?.trim().toLowerCase() === "off") return
+  nativeMessagingHostReady ??= (async () => {
+    const bootstrapModule = await import(
+      new URL("./native-host-bootstrap.js", import.meta.url).href
+    ) as {
+      ensureNativeMessagingHost?: () => Promise<unknown>
+      default?: {
+        ensureNativeMessagingHost?: () => Promise<unknown>
+      }
+    }
+    const ensure = bootstrapModule.ensureNativeMessagingHost
+      ?? bootstrapModule.default?.ensureNativeMessagingHost
+    if (typeof ensure !== "function") {
+      throw new Error(
+        "Chrome plugin package is missing its Native Messaging Host bootstrap.",
+      )
+    }
+    await ensure()
+  })().catch((cause) => {
+    nativeMessagingHostReady = undefined
+    throw new BrowserRuntimeError(
+      "BACKEND_UNAVAILABLE",
+      "Chrome Native Messaging Host setup failed.",
+      { retryable: true, cause },
+    )
+  })
+  await nativeMessagingHostReady
 }
 
 function invalidBackendResult(message: string, cause?: unknown): never {
@@ -744,7 +803,9 @@ export async function setupBrowserRuntime(
 ): Promise<BrowserRuntimeAgent> {
   const globals = options.globals
     ?? globalThis as unknown as BrowserRuntimeGlobals
-  const transport = options.transport ?? unavailableTransport
+  const transport = options.transport
+    ?? hostBrowserTransport(globals)
+    ?? unavailableTransport
   const agent = isRecord(globals.agent)
     ? globals.agent as BrowserRuntimeAgent
     : {} as BrowserRuntimeAgent

@@ -96,6 +96,21 @@ test("derives secret-free Named Pipe and Unix Domain Socket locators", () => {
     linux.bootstrapPath,
     /com\.anybox\.browser\.bootstrap\.json$/,
   )
+
+  const managed = resolveBrowserIpcRuntimeConfig({
+    env: { ANYBOX_AGENT_DATA_DIR: "/tmp/managed-anybox" },
+    homeDir: "/home/test",
+    platform: "linux",
+  })
+  assert.equal(
+    managed.bootstrapPath,
+    path.resolve(
+      "/tmp/managed-anybox",
+      "state",
+      "browser-ipc",
+      "com.anybox.browser.bootstrap.json",
+    ),
+  )
 })
 
 test("validates explicitly injected IPC locators", () => {

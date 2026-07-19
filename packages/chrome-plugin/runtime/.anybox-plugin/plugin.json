@@ -1,7 +1,7 @@
 {
   "name": "chrome",
-  "version": "0.6.0",
-  "description": "Control Chrome through a plugin-bundled persistent Node REPL, Anybox Agent policy gateway, Chrome extension, and Native Messaging host.",
+  "version": "0.8.0",
+  "description": "Control Chrome by importing the plugin Browser Client into Anybox's general-purpose Node REPL.",
   "author": {
     "name": "Anybox"
   },
@@ -24,8 +24,8 @@
       "zh-CN": "通过持久 Node REPL 使用 Chrome。"
     },
     "longDescription": {
-      "en-US": "A self-contained Chrome plugin that exposes a persistent Node REPL with a preloaded Chrome browser runtime, routes control through the Anybox Agent over authenticated local IPC, and bundles a Chrome extension plus platform-specific Rust Native Messaging Host.",
-      "zh-CN": "一个自包含的 Chrome 插件，通过持久 Node REPL 暴露预加载的 Chrome 浏览器运行时，经认证本机 IPC 将控制请求统一路由到 Anybox Agent，并内含构建后的 Chrome 扩展和平台对应的 Rust Native Messaging Host。"
+      "en-US": "A Chrome plugin whose Browser Client is imported by the agent into Anybox's general-purpose Node REPL on first use. Browser requests return to the Anybox Agent through a controlled host-service bridge, while the plugin bundles the Chrome extension and platform-specific Rust Native Messaging Host.",
+      "zh-CN": "一个由 Agent 在首次使用时把 Browser Client 导入 Anybox 通用 Node REPL 的 Chrome 插件。浏览器请求通过受控宿主服务桥回到 Anybox Agent，插件自身仅携带 Chrome 扩展和平台对应的 Rust Native Messaging Host。"
     },
     "developerName": "Anybox",
     "category": "Browser",
@@ -41,71 +41,26 @@
     "iconUrl": "./assets/chrome.svg"
   },
   "skills": "skills",
-  "mcpServers": [
+  "connectorRequirements": [
     {
-      "id": "node-repl",
-      "name": "Chrome Node REPL",
-      "description": "Run JavaScript in a persistent local Node.js REPL with a preloaded Chrome browser runtime.",
-      "risk": "high",
+      "connector": "node-repl",
+      "runtimeIDs": [
+        "default"
+      ],
       "tools": [
-        {
-          "name": "js",
-          "title": "Chrome Node REPL JavaScript",
-          "description": "Run JavaScript in a persistent Node.js REPL with Chrome runtime helpers.",
-          "readOnly": false
-        },
-        {
-          "name": "js_reset",
-          "title": "Reset Chrome Node REPL",
-          "description": "Reset the persistent Node.js REPL state.",
-          "readOnly": false
-        },
-        {
-          "name": "js_add_node_module_dir",
-          "title": "Add Node Module Directory",
-          "description": "Add a node_modules directory to CommonJS module resolution.",
-          "readOnly": false
-        }
+        "js",
+        "js_reset",
+        "js_add_node_module_dir"
       ],
       "permissions": [
-        "Runs JavaScript requested by the agent in a persistent local process, including local module, filesystem, and network access.",
         "Reads and controls Chrome tabs through the Anybox Chrome extension, including navigation, page inspection, screenshots, clicks, scrolling, typing, and form filling.",
         "Uses a versioned Browser Contract and backend capabilities; the Anybox Agent revalidates every browser command before forwarding it.",
         "Raw page JavaScript, selector-driven click/fill adapters, and Chrome DevTools Protocol commands are disabled at both the Browser Contract and Anybox Agent command boundaries; bounded selector waits remain available.",
-        "Connects the isolated browser transport Worker and Native Messaging Host to the Anybox Agent policy gateway over authenticated local IPC.",
         "Registers and runs the plugin-bundled Native Messaging Host for the current user.",
         "Requires the Anybox Chrome extension to be installed, enabled, and connected."
       ],
-      "runtime": {
-        "transport": "stdio",
-        "command": "node",
-        "args": [
-          "${PLUGIN_ROOT}/scripts/node-repl-server.js"
-        ],
-        "cwd": "${PLUGIN_ROOT}",
-        "timeoutMs": 120000,
-        "toolPolicies": {
-          "js_reset": {
-            "policy": "auto"
-          },
-          "js_add_node_module_dir": {
-            "policy": "ask"
-          },
-          "js": {
-            "policy": "ask"
-          }
-        }
-      },
-      "installReview": [
-        "Runs a persistent local JavaScript process bundled inside the Chrome plugin.",
-        "JavaScript can load local modules and access the local filesystem and network.",
-        "Browser interaction uses a versioned command contract, negotiated backend capabilities, and authoritative Anybox Agent validation; raw page JavaScript, selector-driven click/fill adapters, and Chrome DevTools Protocol access remain disabled, while bounded selector waits remain available.",
-        "The Browser Client Runtime exposes machine-readable API schemas and documentation filtered to the connected backend capabilities.",
-        "This release does not yet advertise per-origin approval, claimed user-tab ownership, Locator, or command cancellation capabilities.",
-        "Browser transport uses current-user local IPC with no production fallback to localhost HTTP or WebSocket control routes.",
-        "Registers a user-level Chrome Native Messaging Host whose executable is bundled inside the plugin.",
-        "Requires the Anybox Chrome extension to be connected before browser commands can run."
-      ]
+      "required": true,
+      "reason": "The agent imports this plugin's Browser Client into Anybox's persistent general-purpose Node REPL."
     }
   ],
   "skillPreviews": [

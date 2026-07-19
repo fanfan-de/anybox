@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url"
 const runtimeURL = pathToFileURL(
   path.resolve(import.meta.dirname, "..", "dist", "browser-client.mjs"),
 )
+process.env.ANYBOX_BROWSER_NATIVE_INSTALL = "off"
 
 const COMMAND_METADATA = {
   "tabs.list": {
@@ -153,6 +154,30 @@ test("installs a discovery-backed BrowserManager on the provided globals", async
     agent.browsers.getForUrl("not-an-absolute-url"),
     (error) => error.code === "INVALID_COMMAND_PARAMS",
   )
+})
+
+test("uses the generic Anybox host-service bridge from nodeRepl", async () => {
+  const requests = []
+  const transport = backendTransport({ requests })
+  const services = []
+  const globals = {
+    nodeRepl: {
+      requestHost(service, request) {
+        services.push(service)
+        return transport(request)
+      },
+    },
+  }
+  const { setupBrowserRuntime } = await importRuntime("host-service")
+  const agent = await setupBrowserRuntime({ globals })
+  const browser = await agent.browsers.getDefault()
+
+  assert.deepEqual(services, ["browser"])
+  assert.equal(browser.browserId, "extension")
+  assert.deepEqual(requests, [{
+    type: "getInfo",
+    contractVersion: 1,
+  }])
 })
 
 test("filters API manifests and documentation from backend capabilities", async () => {

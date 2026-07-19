@@ -30,7 +30,6 @@ import { BROWSER_CONTRACT_VERSION } from "@anybox/shared/browser-contract"
 import {
   BROWSER_IPC_HANDSHAKE_TIMEOUT_MS,
   BROWSER_IPC_PROTOCOL_VERSION,
-  BROWSER_IPC_RUNTIME_CLIENT_VERSION,
   MAX_BROWSER_IPC_FRAME_BYTES,
   BrowserIpcFrameDecoder,
   BrowserIpcNativeHostHelloMessage,
@@ -1005,10 +1004,3 @@ export function startBrowserIpcGateway() {
 export function stopBrowserIpcGateway() {
   return browserIpcGateway.stop()
 }
-
-export async function getBrowserIpcRuntimeEnvironment() {
-  await browserIpcGateway.start()
-  return browserIpcGateway.runtimeEnvironment()
-}
-
-export const browserIpcRuntimeClientVersion = BROWSER_IPC_RUNTIME_CLIENT_VERSION

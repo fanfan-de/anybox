@@ -36,6 +36,10 @@ function endpointIdentity(homeDir) {
 }
 
 function defaultIpcStateDirectory(homeDir, env) {
+  const managedAgentDataDir = env.ANYBOX_AGENT_DATA_DIR?.trim()
+  if (managedAgentDataDir) {
+    return path.join(path.resolve(managedAgentDataDir), "state", "browser-ipc")
+  }
   const stateHome = env.XDG_STATE_HOME?.trim()
     ? path.resolve(env.XDG_STATE_HOME)
     : path.join(path.resolve(homeDir), ".local", "state")
