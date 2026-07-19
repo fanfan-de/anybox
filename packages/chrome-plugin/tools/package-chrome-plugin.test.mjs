@@ -71,6 +71,7 @@ async function createFixture(projectRoot) {
       "Structured locators are available only when advertised. Raw page JavaScript and unrestricted CDP are disabled.",
       "Use mcp__connector_node_repl_default__js.",
       "Import scripts/browser-client.mjs with pathToFileURL.",
+      "Call agent.browsers.ensureReady({ launch: true }) before selecting Chrome.",
       "",
     ].join("\n"),
   )
@@ -89,6 +90,7 @@ async function createFixture(projectRoot) {
       "const capabilities = { arbitraryJavaScript: false, fullCdp: false }",
       "const locatorMethods = ['locator.click', 'locator.fill']",
       "const unavailable = 'CAPABILITY_UNAVAILABLE'",
+      "const readinessState = 'needs-extension'",
       "",
     ].join("\n"),
   )

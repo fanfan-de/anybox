@@ -43,6 +43,11 @@ import {
   ensureBrowserHostRuntime,
   requestBrowserHost,
 } from "./browser-host-client.ts"
+import {
+  ChromeLaunchError,
+  createChromeLauncher,
+  type ChromeLauncher,
+} from "./chrome-launcher.ts"
 
 const NATIVE_INSTALL_ENV = "ANYBOX_BROWSER_NATIVE_INSTALL"
 let nativeMessagingHostReady: Promise<void> | undefined
@@ -119,7 +124,49 @@ export type BrowserRuntimeTransport = <TResult = unknown>(
 
 export interface BrowserRuntimeStatus extends Record<string, unknown> {
   connected: boolean
+  contractCompatible?: boolean
+  extensionConnected?: boolean
   backends?: BrowserBackendInfo[]
+}
+
+export type BrowserReadinessState =
+  | "ready"
+  | "needs-browser"
+  | "needs-extension"
+  | "needs-native-host-repair"
+  | "needs-extension-update"
+  | "browser-not-installed"
+  | "backend-unavailable"
+
+export type BrowserReadinessAction =
+  | "none"
+  | "open-chrome"
+  | "enable-extension"
+  | "repair-native-host"
+  | "update-extension"
+  | "install-chrome"
+  | "retry"
+
+export interface BrowserReadiness {
+  state: BrowserReadinessState
+  action: BrowserReadinessAction
+  connected: boolean
+  launched: boolean
+  message: string
+  retryable: boolean
+  status?: BrowserRuntimeStatus
+  error?: {
+    code: string
+    message: string
+    retryable?: boolean
+  }
+}
+
+export interface BrowserReadinessOptions {
+  launch?: boolean
+  pollIntervalMs?: number
+  settleTimeoutMs?: number
+  timeoutMs?: number
 }
 
 export type BrowserSelection = {
@@ -130,6 +177,8 @@ export type BrowserSelection = {
 }
 
 export interface BrowserCollection {
+  readiness(): Promise<BrowserReadiness>
+  ensureReady(options?: BrowserReadinessOptions): Promise<BrowserReadiness>
   list(): Promise<BrowserContext[]>
   get(selection?: string | BrowserSelection): Promise<BrowserContext>
   getDefault(): Promise<BrowserContext>
@@ -170,7 +219,9 @@ export interface BrowserRuntimeGlobals extends Record<string, unknown> {
 }
 
 export interface SetupBrowserRuntimeOptions {
+  chromeLauncher?: ChromeLauncher
   globals?: BrowserRuntimeGlobals
+  nativeHostProbe?: () => Promise<void>
   transport?: BrowserRuntimeTransport
 }
 
@@ -207,10 +258,10 @@ function pluginBrowserTransport(
     request: BrowserRuntimeTransportRequest,
   ): Promise<TResult> => {
     await ensureBrowserHostRuntime()
-    await ensureNativeMessagingHost()
     if (request.type === "status") {
       return requestBrowserHost<TResult>({ operation: "status" })
     }
+    await ensureNativeMessagingHost()
     if (request.type === "getInfo") {
       return requestBrowserHost<TResult>({
         operation: "getInfo",
@@ -389,6 +440,40 @@ async function ensureNativeMessagingHost(): Promise<void> {
   await nativeMessagingHostReady
 }
 
+async function probeNativeMessagingHost(): Promise<void> {
+  if (process.env[NATIVE_INSTALL_ENV]?.trim().toLowerCase() === "off") return
+  try {
+    const bootstrapModule = await import(
+      new URL("./native-host-bootstrap.js", import.meta.url).href
+    ) as {
+      probeNativeMessagingHost?: () => Promise<unknown>
+      default?: {
+        probeNativeMessagingHost?: () => Promise<unknown>
+      }
+    }
+    const probe = bootstrapModule.probeNativeMessagingHost
+      ?? bootstrapModule.default?.probeNativeMessagingHost
+    if (typeof probe !== "function") {
+      throw new Error(
+        "Chrome plugin package is missing its Native Messaging Host probe.",
+      )
+    }
+    await probe()
+  } catch (cause) {
+    throw new BrowserRuntimeError(
+      "NATIVE_HOST_INSTALL_FAILED",
+      "Chrome Native Messaging Host health check failed.",
+      {
+        retryable: true,
+        details: {
+          probeError: cause instanceof Error ? cause.message : String(cause),
+        },
+        cause,
+      },
+    )
+  }
+}
+
 function invalidBackendResult(message: string, cause?: unknown): never {
   throw new BrowserContractValidationError(
     "INVALID_COMMAND_RESULT",
@@ -465,6 +550,135 @@ function parseStatus(value: unknown): BrowserRuntimeStatus {
     invalidBackendResult("Browser backend status result is invalid.")
   }
   return value as BrowserRuntimeStatus
+}
+
+function wait(delayMs: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, delayMs))
+}
+
+function boundedDuration(
+  value: number | undefined,
+  fallback: number,
+  maximum: number,
+) {
+  if (value === undefined || !Number.isFinite(value)) return fallback
+  return Math.min(Math.max(0, Math.floor(value)), maximum)
+}
+
+function readinessError(error: unknown) {
+  const code = (
+    error instanceof BrowserRuntimeError
+    || error instanceof BrowserHostClientError
+    || error instanceof ChromeLaunchError
+  )
+    ? error.code
+    : isRecord(error) && typeof error.code === "string"
+      ? error.code
+      : "BACKEND_UNAVAILABLE"
+  return {
+    code,
+    message: error instanceof Error
+      ? error.message
+      : "The Chrome browser backend is unavailable.",
+    retryable: (
+      error instanceof BrowserRuntimeError
+      || error instanceof BrowserHostClientError
+    )
+      ? error.retryable
+      : isRecord(error) && typeof error.retryable === "boolean"
+        ? error.retryable
+        : undefined,
+  }
+}
+
+function statusReadiness(
+  status: BrowserRuntimeStatus,
+  launched = false,
+): BrowserReadiness {
+  if (status.connected) {
+    return {
+      state: "ready",
+      action: "none",
+      connected: true,
+      launched,
+      message: "Chrome is connected and ready.",
+      retryable: false,
+      status,
+    }
+  }
+  if (status.contractCompatible === false) {
+    return {
+      state: "needs-extension-update",
+      action: "update-extension",
+      connected: false,
+      launched,
+      message:
+        "The connected Anybox Chrome extension is incompatible and must be updated.",
+      retryable: false,
+      status,
+    }
+  }
+  return {
+    state: "needs-browser",
+    action: "open-chrome",
+    connected: false,
+    launched,
+    message: "Chrome is not connected. Open Chrome to continue.",
+    retryable: true,
+    status,
+  }
+}
+
+function failedReadiness(
+  error: unknown,
+  launched = false,
+): BrowserReadiness {
+  const normalized = readinessError(error)
+  if (normalized.code === "NATIVE_HOST_INSTALL_FAILED") {
+    return {
+      state: "needs-native-host-repair",
+      action: "repair-native-host",
+      connected: false,
+      launched,
+      message:
+        "The Anybox Chrome Native Messaging Host installation or authenticated local channel is unavailable.",
+      retryable: true,
+      error: normalized,
+    }
+  }
+  return {
+    state: "backend-unavailable",
+    action: "retry",
+    connected: false,
+    launched,
+    message: "The Anybox Chrome browser backend is unavailable.",
+    retryable: normalized.retryable ?? true,
+    error: normalized,
+  }
+}
+
+function launchFailedReadiness(error: unknown): BrowserReadiness {
+  const normalized = readinessError(error)
+  if (normalized.code === "CHROME_NOT_FOUND") {
+    return {
+      state: "browser-not-installed",
+      action: "install-chrome",
+      connected: false,
+      launched: false,
+      message: "Google Chrome is not installed or could not be found.",
+      retryable: false,
+      error: normalized,
+    }
+  }
+  return {
+    state: "backend-unavailable",
+    action: "retry",
+    connected: false,
+    launched: false,
+    message: "Google Chrome could not be opened.",
+    retryable: true,
+    error: normalized,
+  }
 }
 
 function validateBrowserUrl(value: string | URL): URL {
@@ -945,10 +1159,108 @@ export class BrowserContext {
 export class BrowserManager implements BrowserCollection {
   readonly #transport: BrowserRuntimeTransport
   readonly #backend: BackendTransport
+  readonly #chromeLauncher: ChromeLauncher
+  readonly #nativeHostProbe: () => Promise<void>
 
-  constructor(transport: BrowserRuntimeTransport) {
+  constructor(
+    transport: BrowserRuntimeTransport,
+    chromeLauncher: ChromeLauncher = createChromeLauncher(),
+    nativeHostProbe: () => Promise<void> = async () => undefined,
+  ) {
     this.#transport = transport
     this.#backend = new BackendTransport(transport)
+    this.#chromeLauncher = chromeLauncher
+    this.#nativeHostProbe = nativeHostProbe
+  }
+
+  private async readReadiness(launched = false) {
+    try {
+      return statusReadiness(await this.#backend.status(), launched)
+    } catch (error) {
+      return failedReadiness(error, launched)
+    }
+  }
+
+  private async waitForReadiness(
+    timeoutMs: number,
+    pollIntervalMs: number,
+    launched: boolean,
+  ) {
+    const deadline = Date.now() + timeoutMs
+    let readiness: BrowserReadiness
+    do {
+      readiness = await this.readReadiness(launched)
+      if (readiness.state !== "needs-browser") return readiness
+      const remaining = deadline - Date.now()
+      if (remaining <= 0) return readiness
+      await wait(Math.min(pollIntervalMs, remaining))
+    } while (true)
+  }
+
+  async readiness(): Promise<BrowserReadiness> {
+    return this.readReadiness()
+  }
+
+  async ensureReady(
+    options: BrowserReadinessOptions = {},
+  ): Promise<BrowserReadiness> {
+    const pollIntervalMs = boundedDuration(
+      options.pollIntervalMs,
+      250,
+      5_000,
+    )
+    const settleTimeoutMs = boundedDuration(
+      options.settleTimeoutMs,
+      750,
+      10_000,
+    )
+    const timeoutMs = boundedDuration(options.timeoutMs, 10_000, 60_000)
+
+    let readiness = await this.readReadiness()
+    if (readiness.state !== "needs-browser" || options.launch !== true) {
+      return readiness
+    }
+
+    if (settleTimeoutMs > 0) {
+      readiness = await this.waitForReadiness(
+        settleTimeoutMs,
+        Math.max(1, pollIntervalMs),
+        false,
+      )
+      if (readiness.state !== "needs-browser") return readiness
+    }
+
+    try {
+      await this.#nativeHostProbe()
+    } catch (error) {
+      const recovered = await this.readReadiness()
+      return recovered.state === "ready"
+        ? recovered
+        : failedReadiness(error)
+    }
+
+    readiness = await this.readReadiness()
+    if (readiness.state !== "needs-browser") return readiness
+
+    try {
+      await this.#chromeLauncher.launch()
+    } catch (error) {
+      return launchFailedReadiness(error)
+    }
+
+    readiness = await this.waitForReadiness(
+      timeoutMs,
+      Math.max(1, pollIntervalMs),
+      true,
+    )
+    if (readiness.state !== "needs-browser") return readiness
+    return {
+      ...readiness,
+      state: "needs-extension",
+      action: "enable-extension",
+      message:
+        "Chrome opened, but the Anybox Chrome extension did not connect. Install or enable the extension, then retry.",
+    }
   }
 
   async list(): Promise<BrowserContext[]> {
@@ -1061,7 +1373,12 @@ export async function setupBrowserRuntime(
     ? globals.agent as BrowserRuntimeAgent
     : {} as BrowserRuntimeAgent
 
-  const browsers = new BrowserManager(transport)
+  const browsers = new BrowserManager(
+    transport,
+    options.chromeLauncher ?? createChromeLauncher(),
+    options.nativeHostProbe
+      ?? (options.transport ? async () => undefined : probeNativeMessagingHost),
+  )
   agent.browsers = browsers
   globals.agent = agent
   globals.setupBrowserRuntime = setupBrowserRuntime

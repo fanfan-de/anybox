@@ -95,6 +95,8 @@ import type {
 import type {
   DesktopOpenCinemaProjectInput,
   DesktopOpenCinemaProjectResult,
+  DesktopLaunchApplicationInput,
+  DesktopLaunchApplicationResult,
   DesktopOpenPathInput,
   DesktopOpenPathResult,
   DeletedRegistrySkillResult,
@@ -1334,6 +1336,10 @@ export interface DesktopIpcContract {
     input: { url: string }
     output: { ok: true; url: string }
   }
+  "desktop:launch-application": {
+    input: DesktopLaunchApplicationInput
+    output: DesktopLaunchApplicationResult
+  }
   "desktop:open-path": {
     input: DesktopOpenPathInput
     output: DesktopOpenPathResult
@@ -2390,6 +2396,7 @@ export interface DesktopApiMethods {
   listExternalEditorsForTarget(input: DesktopIpcInput<"desktop:list-external-editors-for-target">): Promise<DesktopIpcOutput<"desktop:list-external-editors-for-target">>
   openInExternalEditor(input: DesktopIpcInput<"desktop:open-in-external-editor">): Promise<DesktopIpcOutput<"desktop:open-in-external-editor">>
   openExternalUrl(input: DesktopIpcInput<"desktop:open-external-url">): Promise<DesktopIpcOutput<"desktop:open-external-url">>
+  launchApplication(input: DesktopIpcInput<"desktop:launch-application">): Promise<DesktopIpcOutput<"desktop:launch-application">>
   openPath(input: DesktopIpcInput<"desktop:open-path">): Promise<DesktopIpcOutput<"desktop:open-path">>
   openCinemaProject(input: DesktopIpcInput<"desktop:open-cinema-project">): Promise<DesktopIpcOutput<"desktop:open-cinema-project">>
   openMonitorWindow(): Promise<DesktopIpcOutput<"desktop:open-monitor-window">>

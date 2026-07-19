@@ -70,6 +70,7 @@ import {
 } from "./appearance-themes-config"
 import { ComputerUseOverlayManager } from "./computer-use-overlay"
 import { filterAvailableExternalEditorsForTarget, listAvailableExternalEditors, openInExternalEditor } from "./external-editors"
+import { launchExternalApplication } from "./external-applications"
 import { buildFolderWorkspaceForDirectory, buildFolderWorkspaces } from "./folder-workspaces"
 import {
   checkoutGitBranch,
@@ -3677,6 +3678,15 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
       ok: true as const,
       url,
     }
+  })
+
+  handleDesktopIpc("desktop:launch-application", async (_event, input) => {
+    const parsedInput = DesktopIpcSchemas.launchApplication.input.parse(input)
+    await launchExternalApplication(parsedInput.application)
+    return DesktopIpcSchemas.launchApplication.output.parse({
+      ok: true as const,
+      application: parsedInput.application,
+    })
   })
 
   handleDesktopIpc("desktop:open-path", async (_event, input: { targetPath: string }) => {

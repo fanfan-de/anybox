@@ -69,6 +69,11 @@ Server。模型首次使用时通过通用 `js` 工具导入插件内置的
 `browser-client.mjs`；Browser Client 会按需启动或复用插件包内的
 `browser-host.mjs`，并安装持久的 `agent.browsers`。Browser Host 独占 Browser
 Contract、schema/capability 校验、策略、IPC Gateway 与 Chrome 桥接。
+当 Chrome 尚未运行时，显式的
+`agent.browsers.ensureReady({ launch: true })` 会跨平台定位并打开 Chrome，
+并在启动前验证 Native Host 本地认证链路，随后有限等待 Extension 自动重连，
+再返回可操作的结构化状态；只读
+`readiness()` 不会启动 Chrome。
 Runtime 使用版本化 Browser Contract 获取 capability、机器可读 API Manifest 和动态
 文档；客户端预检只提供友好错误，插件自有 Browser Host 是已实现 schema 与 capability 检查的
 权威边界。Extension 0.2.0 会声明 Browser Contract 版本与命令

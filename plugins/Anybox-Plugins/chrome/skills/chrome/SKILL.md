@@ -43,6 +43,8 @@ if (globalThis.agent?.browsers == null) {
   await setupBrowserRuntime({ globals: globalThis })
 }
 if (globalThis.chrome == null) {
+  const readiness = await agent.browsers.ensureReady({ launch: true })
+  if (readiness.state !== "ready") return readiness
   globalThis.chrome = await agent.browsers.getDefault()
   nodeRepl.write(await chrome.documentation())
 }
@@ -50,13 +52,24 @@ if (globalThis.chrome == null) {
 
 Reuse `globalThis.chrome` across later calls and user turns. Do not initialize another browser runtime merely because the user sent a new message.
 
-Check the extension connection when state is unclear:
+`agent.browsers.readiness()` reports the current connection state without launching Chrome or running the Native Host probe. During an explicit Chrome task, `agent.browsers.ensureReady({ launch: true })` first allows an in-flight extension reconnect to settle, verifies the installed Native Messaging Host through its authenticated local IPC probe, opens Chrome at most once when needed, and waits for a bounded extension handshake. It never scans Chrome profiles or credential stores.
+
+Check or restore the connection when state is unclear:
 
 ```js
-return await chrome.status()
+return await agent.browsers.ensureReady({ launch: true })
 ```
 
-If Chrome is disconnected, retry `chrome.status()` once after a short interval. If it remains disconnected, ask the user to install or enable the Anybox Chrome extension, reconnect it, and tell you when it is ready.
+Handle the returned state directly instead of treating every failure as a generic disconnect:
+
+- `ready`: continue with the existing `chrome` binding, or initialize it if absent.
+- `needs-extension`: Chrome opened, but the extension did not connect. Ask the user to install or enable the Anybox Chrome extension and then retry.
+- `needs-extension-update`: ask the user to update the Anybox Chrome extension; do not bypass the Contract mismatch.
+- `needs-native-host-repair`: the Native Messaging Host installation or authenticated local channel failed; ask the user to repair or reinstall the Chrome plugin.
+- `browser-not-installed`: report that Google Chrome could not be found.
+- `backend-unavailable`: retry once only when `retryable` is true; if it persists, report the returned `error.code` and `error.message`.
+
+Do not keep polling or repeatedly open Chrome after `ensureReady` returns a non-ready state.
 
 ## Work with tabs
 
@@ -109,7 +122,7 @@ await nodeRepl.emitImage(await tab.screenshot())
 
 Available APIs include:
 
-- `agent.browsers.list()`, `get("extension")`, `getDefault()`, and `getForUrl(url)`
+- `agent.browsers.readiness()`, `ensureReady({ launch })`, `list()`, `get("extension")`, `getDefault()`, and `getForUrl(url)`
 - `chrome.browserId`, `chrome.capabilities`, `chrome.status()`, and capability-filtered `chrome.documentation()`
 - `chrome.tabs.list()`, `open(url, options)`, `activate(tabId)`, `get(tabId)`, and `current()`
 - `tab.info()`, `activate()`, `snapshot()`, `interactiveSnapshot()`, `domTree()`, `accessibilityTree()`, and `screenshot()`

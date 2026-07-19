@@ -208,6 +208,7 @@ fn main() {
 }
 
 fn run() -> Result<(), String> {
+    let probe_only = env::args_os().skip(1).any(|argument| argument == "--probe");
     let runtime = load_runtime_config()?;
     validate_runtime_config(&runtime)?;
     let bootstrap = load_bootstrap_config(&runtime.bootstrap_path)?;
@@ -217,6 +218,9 @@ fn run() -> Result<(), String> {
         format!("failed to connect to the Anybox Browser IPC endpoint: {error}")
     })?;
     authenticate(&mut stream, &bootstrap)?;
+    if probe_only {
+        return Ok(());
+    }
 
     let mut browser_host_reader = stream
         .try_clone()

@@ -271,6 +271,63 @@ describe("PluginsPage", () => {
     expect(onInstallPlugin).toHaveBeenCalledWith("filesystem")
   })
 
+  it("opens Chrome from the installed Chrome plugin detail and supports retry", async () => {
+    const launchApplication = vi.fn()
+      .mockRejectedValueOnce(new Error("Chrome missing"))
+      .mockResolvedValueOnce({ ok: true, application: "chrome" })
+    window.desktop = {
+      launchApplication,
+    } as unknown as Window["desktop"]
+    const chrome = createPlugin({
+      id: "chrome",
+      name: "Chrome",
+      category: "Browser",
+      configFields: [],
+      mcpServers: [],
+      skills: [],
+      apps: [],
+      connectorRequirements: [],
+    })
+
+    render(
+      <PluginsPage
+        {...createProps({
+          activePluginID: "chrome",
+          pluginCatalog: [chrome],
+          installedPlugins: [
+            createInstalledPlugin({
+              pluginID: "chrome",
+              mcpServerID: undefined,
+              mcpServerIDs: [],
+              mcpServerEnabled: {},
+              config: {},
+            }),
+          ],
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Chrome" }))
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Chrome could not be opened",
+      )
+    })
+    expect(launchApplication).toHaveBeenNthCalledWith(1, {
+      application: "chrome",
+    })
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }))
+    await waitFor(() => {
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "Chrome was opened",
+      )
+    })
+    expect(launchApplication).toHaveBeenNthCalledWith(2, {
+      application: "chrome",
+    })
+  })
+
   it("imports a plugin URL from the marketplace toolbar", async () => {
     const onImportPluginFromURL = vi.fn().mockResolvedValue(true)
     render(<PluginsPage {...createProps({ onImportPluginFromURL })} />)

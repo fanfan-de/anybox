@@ -1044,6 +1044,7 @@ export class BrowserIpcGateway {
     const ipcStatus = this.status()
     return {
       connected: bridgeStatus.connected,
+      extensionConnected: contract.connected,
       contractCompatible: contract.compatible,
       backendVersion: bridgeStatus.active?.version,
       transport: ipcStatus.transport,

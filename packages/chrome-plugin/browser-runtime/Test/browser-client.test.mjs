@@ -130,6 +130,8 @@ test("installs a discovery-backed BrowserManager on the provided globals", async
   assert.equal(typeof agent.browsers.get, "function")
   assert.equal(typeof agent.browsers.getDefault, "function")
   assert.equal(typeof agent.browsers.getForUrl, "function")
+  assert.equal(typeof agent.browsers.readiness, "function")
+  assert.equal(typeof agent.browsers.ensureReady, "function")
 
   const listed = await agent.browsers.list()
   const named = await agent.browsers.get("extension")
@@ -158,6 +160,185 @@ test("installs a discovery-backed BrowserManager on the provided globals", async
     agent.browsers.getForUrl("not-an-absolute-url"),
     (error) => error.code === "INVALID_COMMAND_PARAMS",
   )
+})
+
+test("opens Chrome once and waits for the extension handshake", async () => {
+  let connected = false
+  let launchCount = 0
+  let statusCount = 0
+  const transport = async (request) => {
+    if (request.type !== "status") {
+      throw new Error(`Unexpected request: ${JSON.stringify(request)}`)
+    }
+    statusCount += 1
+    return {
+      connected,
+      extensionConnected: connected,
+      contractCompatible: true,
+    }
+  }
+  const chromeLauncher = {
+    async launch() {
+      launchCount += 1
+      connected = true
+    },
+  }
+  const { setupBrowserRuntime } = await importRuntime("readiness-launch")
+  const agent = await setupBrowserRuntime({
+    globals: {},
+    transport,
+    chromeLauncher,
+  })
+
+  const readiness = await agent.browsers.ensureReady({
+    launch: true,
+    settleTimeoutMs: 0,
+    pollIntervalMs: 1,
+    timeoutMs: 20,
+  })
+
+  assert.equal(readiness.state, "ready")
+  assert.equal(readiness.action, "none")
+  assert.equal(readiness.connected, true)
+  assert.equal(readiness.launched, true)
+  assert.equal(launchCount, 1)
+  assert.equal(statusCount, 3)
+})
+
+test("reports the extension remediation after Chrome opens without a handshake", async () => {
+  let launchCount = 0
+  const { setupBrowserRuntime } = await importRuntime(
+    "readiness-extension-timeout",
+  )
+  const agent = await setupBrowserRuntime({
+    globals: {},
+    transport: async (request) => {
+      assert.equal(request.type, "status")
+      return {
+        connected: false,
+        extensionConnected: false,
+        contractCompatible: true,
+      }
+    },
+    chromeLauncher: {
+      async launch() {
+        launchCount += 1
+      },
+    },
+  })
+
+  const readiness = await agent.browsers.ensureReady({
+    launch: true,
+    settleTimeoutMs: 0,
+    timeoutMs: 0,
+  })
+
+  assert.equal(readiness.state, "needs-extension")
+  assert.equal(readiness.action, "enable-extension")
+  assert.equal(readiness.launched, true)
+  assert.equal(readiness.retryable, true)
+  assert.equal(launchCount, 1)
+})
+
+test("does not open Chrome for an incompatible extension", async () => {
+  let launchCount = 0
+  const { setupBrowserRuntime } = await importRuntime(
+    "readiness-incompatible-extension",
+  )
+  const agent = await setupBrowserRuntime({
+    globals: {},
+    transport: async () => ({
+      connected: false,
+      extensionConnected: true,
+      contractCompatible: false,
+    }),
+    chromeLauncher: {
+      async launch() {
+        launchCount += 1
+      },
+    },
+  })
+
+  const readiness = await agent.browsers.ensureReady({ launch: true })
+
+  assert.equal(readiness.state, "needs-extension-update")
+  assert.equal(readiness.action, "update-extension")
+  assert.equal(readiness.retryable, false)
+  assert.equal(launchCount, 0)
+})
+
+test("distinguishes missing Chrome from Native Host and backend failures", async () => {
+  const disconnected = async () => ({
+    connected: false,
+    extensionConnected: false,
+    contractCompatible: true,
+  })
+  const { setupBrowserRuntime } = await importRuntime(
+    "readiness-failure-classification",
+  )
+  const missingChrome = await setupBrowserRuntime({
+    globals: {},
+    transport: disconnected,
+    chromeLauncher: {
+      async launch() {
+        throw Object.assign(new Error("Chrome executable was not found."), {
+          code: "CHROME_NOT_FOUND",
+        })
+      },
+    },
+  })
+  const missingChromeReadiness = await missingChrome.browsers.ensureReady({
+    launch: true,
+    settleTimeoutMs: 0,
+  })
+  assert.equal(missingChromeReadiness.state, "browser-not-installed")
+  assert.equal(missingChromeReadiness.action, "install-chrome")
+
+  let probeLaunchCount = 0
+  const nativeHostProbe = await setupBrowserRuntime({
+    globals: {},
+    transport: disconnected,
+    nativeHostProbe: async () => {
+      throw Object.assign(new Error("Native Host probe failed."), {
+        code: "NATIVE_HOST_INSTALL_FAILED",
+      })
+    },
+    chromeLauncher: {
+      async launch() {
+        probeLaunchCount += 1
+      },
+    },
+  })
+  const nativeHostProbeReadiness =
+    await nativeHostProbe.browsers.ensureReady({
+      launch: true,
+      settleTimeoutMs: 0,
+    })
+  assert.equal(nativeHostProbeReadiness.state, "needs-native-host-repair")
+  assert.equal(nativeHostProbeReadiness.action, "repair-native-host")
+  assert.equal(probeLaunchCount, 0)
+
+  const nativeHost = await setupBrowserRuntime({
+    globals: {},
+    transport: async () => {
+      throw Object.assign(new Error("Native Host install failed."), {
+        code: "NATIVE_HOST_INSTALL_FAILED",
+      })
+    },
+  })
+  const nativeHostReadiness = await nativeHost.browsers.readiness()
+  assert.equal(nativeHostReadiness.state, "needs-native-host-repair")
+  assert.equal(nativeHostReadiness.action, "repair-native-host")
+
+  const backend = await setupBrowserRuntime({
+    globals: {},
+    transport: async () => {
+      throw new Error("Browser Host stopped.")
+    },
+  })
+  const backendReadiness = await backend.browsers.readiness()
+  assert.equal(backendReadiness.state, "backend-unavailable")
+  assert.equal(backendReadiness.action, "retry")
 })
 
 test("does not depend on a reverse host-service API in nodeRepl", async () => {

@@ -9,6 +9,7 @@
 | 通用 Node REPL | Agent 首次调用 `js` | `js_reset` 只清全局状态 |
 | Browser Client | LLM 循环动态导入 | 随 Node 会话；可重建 Host 连接 |
 | Browser Host | Browser Client 按需启动 | 无连接空闲 15 分钟或收到信号 |
+| Google Chrome | 显式 `ensureReady({ launch: true })` 按需启动 | 由用户和操作系统管理 |
 | Rust Native Host | Extension `connectNative` | Chrome 关闭 Port |
 | Extension | Chrome Service Worker 生命周期 | 自动重连 Native Host |
 
@@ -31,8 +32,12 @@
 ## 诊断顺序
 
 1. 确认插件含 `scripts/browser-client.mjs` 与 `scripts/browser-host.mjs`；
-2. 调用 `chrome.status()`；
-3. 若 Host 不可用，检查 runtime bootstrap 与 Browser Host stderr；
-4. 若 Host 可用但 Extension 未连接，检查 Native Host 安装、Chrome Extension popup 和
-   Rust Host stderr；
-5. Contract 不兼容时升级插件与 Extension，不要绕过版本校验。
+2. 调用 `agent.browsers.readiness()` 获取只读结构化状态；
+3. 在用户明确要求 Chrome 时调用一次
+   `agent.browsers.ensureReady({ launch: true })`，先探测 Native Host 认证链路，再允许
+   Chrome 冷启动并有限等待 Extension 握手；
+4. `needs-extension`：Chrome 已打开，检查 Extension 是否安装或启用；
+5. `needs-native-host-repair`：修复插件安装和 Native Host 注册；
+6. `needs-extension-update`：升级插件与 Extension，不要绕过 Contract 版本校验；
+7. `browser-not-installed`：安装 Chrome 或通过 `ANYBOX_CHROME_EXECUTABLE` 指定可执行文件；
+8. `backend-unavailable`：检查 runtime bootstrap 与 Browser Host stderr。

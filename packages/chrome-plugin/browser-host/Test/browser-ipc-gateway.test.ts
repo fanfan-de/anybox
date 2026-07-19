@@ -548,6 +548,7 @@ describe("Browser IPC Gateway transport and authentication", () => {
       ok: true,
       data: {
         connected: true,
+        extensionConnected: true,
         contractCompatible: true,
         backendVersion: "0.1.1",
         protocolVersion: BROWSER_IPC_PROTOCOL_VERSION,

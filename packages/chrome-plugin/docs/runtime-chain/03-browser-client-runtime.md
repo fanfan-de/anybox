@@ -10,6 +10,8 @@
 Browser Client 负责：
 
 - Backend 发现和 `BrowserContext` / `BrowserTab` 易用 API；
+- 通过 `readiness()` 输出结构化连接状态，并由显式
+  `ensureReady({ launch: true })` 在需要时启动 Chrome、有限等待 Extension 握手；
 - 使用插件私有 Contract 做参数和结果的早期校验；
 - 根据 Host 广告的 capability 生成 API 与动态文档；
 - 将 `nodeRepl.requestMeta` 附加到 command；
@@ -17,3 +19,15 @@ Browser Client 负责：
 
 默认 transport 由 `browser-host-client.ts` 实现。测试仍可显式注入 transport，但生产
 路径不会调用 AnyboxAgent host service。
+
+Chrome 冷启动由 `chrome-launcher.ts` 负责，按平台寻找 Google Chrome：
+
+- Windows：环境变量、当前用户安装目录、Program Files 与 `PATH`；
+- macOS：系统/用户 Applications 与 `PATH`；
+- Linux：`PATH`、`/usr/bin` 与 Google Chrome 默认安装目录。
+
+启动动作只有在调用方显式传入 `launch: true` 时发生。启动前，Runtime 会执行
+Native Host `--probe`，只验证已安装二进制、runtime config、本地 IPC 与 Host
+鉴权，不接触 Chrome 配置或页面数据。探测失败返回
+`needs-native-host-repair`；探测成功后再打开 Chrome。启动后默认最多等待 10 秒，
+仍无 Extension 握手就返回 `needs-extension`，不会无限轮询或重复打开 Chrome。

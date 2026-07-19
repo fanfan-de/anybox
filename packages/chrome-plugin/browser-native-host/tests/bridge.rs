@@ -252,3 +252,94 @@ fn forwards_messages_between_chrome_and_the_agent_ipc_gateway() {
         panic!("extension-host exited with {status}: {stderr}");
     }
 }
+
+#[test]
+fn probe_authenticates_with_the_browser_host_and_exits() {
+    let (endpoint, name) = endpoint_and_name();
+    let listener = ListenerOptions::new().name(name).create_sync().unwrap();
+    let temp_root =
+        std::env::temp_dir().join(format!("anybox-browser-native-host-probe-{}", unique_suffix()));
+    fs::create_dir_all(&temp_root).unwrap();
+    let runtime_config_path = temp_root.join("runtime.json");
+    let bootstrap_path = temp_root.join("bootstrap.json");
+    let broker_instance_id = "probe-integration-broker";
+    let bootstrap_proof = "probe-integration-bootstrap-proof";
+    let transport = if cfg!(windows) {
+        "windows-named-pipe"
+    } else {
+        "unix-domain-socket"
+    };
+    fs::write(
+        &runtime_config_path,
+        serde_json::to_vec_pretty(&json!({
+            "transport": transport,
+            "protocolVersion": IPC_PROTOCOL_VERSION,
+            "runtimeEndpoint": "unused",
+            "nativeHostEndpoint": endpoint,
+            "bootstrapPath": bootstrap_path,
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    fs::write(
+        &bootstrap_path,
+        serde_json::to_vec_pretty(&json!({
+            "transport": transport,
+            "protocolVersion": IPC_PROTOCOL_VERSION,
+            "role": "native-host",
+            "brokerInstanceID": broker_instance_id,
+            "endpoint": endpoint,
+            "proof": bootstrap_proof,
+            "expiresAt": u64::MAX,
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+
+    let server = thread::spawn(move || {
+        let mut stream = listener.accept().unwrap();
+        write_ipc_json(
+            &mut stream,
+            &json!({
+                "type": "challenge",
+                "protocolVersion": IPC_PROTOCOL_VERSION,
+                "role": "native-host",
+                "brokerInstanceID": broker_instance_id,
+                "nonce": "probe-challenge-nonce",
+                "expiresAt": u64::MAX,
+            }),
+        );
+        let hello = read_ipc_json(&mut stream);
+        assert_eq!(hello["type"], "hello");
+        assert_eq!(
+            hello["proof"].as_str().unwrap(),
+            proof_for(bootstrap_proof, &hello)
+        );
+        write_ipc_json(
+            &mut stream,
+            &json!({
+                "type": "ready",
+                "protocolVersion": IPC_PROTOCOL_VERSION,
+                "role": "native-host",
+                "brokerInstanceID": broker_instance_id,
+            }),
+        );
+        let mut trailing = [0_u8; 1];
+        assert_eq!(stream.read(&mut trailing).unwrap(), 0);
+    });
+
+    let output = Command::new(env!("CARGO_BIN_EXE_extension-host"))
+        .arg("--probe")
+        .env("ANYBOX_BROWSER_NATIVE_CONFIG", &runtime_config_path)
+        .output()
+        .unwrap();
+
+    server.join().unwrap();
+    fs::remove_dir_all(temp_root).unwrap();
+    assert!(
+        output.status.success(),
+        "extension-host probe failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.stdout.is_empty());
+}
