@@ -26,7 +26,7 @@ test("installs the browser runtime on the provided globals object", async () => 
   await assert.rejects(agent.browsers.get("unknown"), /Unknown browser runtime/)
 })
 
-test("routes browser commands through the Anybox agent API", async () => {
+test("routes browser commands through the Anybox Agent policy transport", async () => {
   const requests = []
   const transport = async (request) => {
     requests.push(request)

@@ -4,10 +4,10 @@ import os from "node:os"
 import path from "node:path"
 import test from "node:test"
 import {
+  BROWSER_IPC_PROTOCOL_VERSION,
   install,
   nativeMessagingManifest,
-  resolveAgentBaseURL,
-  resolveBrowserTransportToken,
+  resolveBrowserIpcRuntimeConfig,
   resolveBundledExtensionHost,
   resolveNativeMessagingPaths,
 } from "../runtime/scripts/installManifest.mjs"
@@ -61,87 +61,120 @@ test("builds a Chrome Native Messaging manifest", () => {
   )
 })
 
-test("derives the Anybox Agent URL from the runtime environment", () => {
+test("derives secret-free Named Pipe and Unix Domain Socket locators", () => {
+  const windows = resolveBrowserIpcRuntimeConfig({
+    env: {},
+    homeDir: "C:\\Users\\test",
+    platform: "win32",
+  })
+  assert.equal(windows.transport, "windows-named-pipe")
+  assert.equal(windows.protocolVersion, BROWSER_IPC_PROTOCOL_VERSION)
+  assert.match(windows.runtimeEndpoint, /^\\\\\.\\pipe\\anybox-browser-runtime-v1-/)
+  assert.match(windows.nativeHostEndpoint, /^\\\\\.\\pipe\\anybox-browser-native-host-v1-/)
   assert.equal(
-    resolveAgentBaseURL({
-      ANYBOX_SERVER_HOST: "127.0.0.1",
-      ANYBOX_SERVER_PORT: "4567",
-    }),
-    "http://127.0.0.1:4567",
+    windows.bootstrapPath,
+    path.resolve(
+      "C:\\Users\\test",
+      ".local",
+      "state",
+      "anybox",
+      "browser-ipc",
+      "com.anybox.browser.bootstrap.json",
+    ),
   )
-  assert.throws(
-    () => resolveAgentBaseURL({ ANYBOX_AGENT_BASE_URL: "https://example.com" }),
-    /must use local HTTP/,
-  )
-  assert.equal(
-    resolveAgentBaseURL({ ANYBOX_AGENT_BASE_URL: "http://127.42.0.9:4096" }),
-    "http://127.42.0.9:4096",
-  )
-  assert.equal(
-    resolveAgentBaseURL({ ANYBOX_AGENT_BASE_URL: "http://LOCALHOST:4096" }),
-    "http://localhost:4096",
-  )
-  assert.equal(
-    resolveAgentBaseURL({ ANYBOX_AGENT_BASE_URL: "http://[::1]:4096" }),
-    "http://[::1]:4096",
-  )
-  for (const agentBaseURL of [
-    "http://example.com:4096",
-    "http://192.168.1.10:4096",
-    "http://0.0.0.0:4096",
-    "http://[::2]:4096",
-    "http://localhost.example.com:4096",
-  ]) {
-    assert.throws(
-      () => resolveAgentBaseURL({ ANYBOX_AGENT_BASE_URL: agentBaseURL }),
-      /must use a loopback host/,
-    )
-  }
-  for (const agentBaseURL of [
-    "http://user:password@127.0.0.1:4096",
-    "http://127.0.0.1:4096?token=value",
-    "http://127.0.0.1:4096#fragment",
-  ]) {
-    assert.throws(
-      () => resolveAgentBaseURL({ ANYBOX_AGENT_BASE_URL: agentBaseURL }),
-      /cannot contain credentials, query, or fragment/,
-    )
-  }
-})
 
-test("requires a single-line browser transport token", () => {
-  assert.equal(
-    resolveBrowserTransportToken({
-      ANYBOX_BROWSER_TRANSPORT_TOKEN: " transport-secret ",
-    }),
-    "transport-secret",
-  )
-  assert.throws(
-    () => resolveBrowserTransportToken({}),
-    /Missing Anybox browser transport token/,
-  )
-  assert.throws(
-    () => resolveBrowserTransportToken({
-      ANYBOX_BROWSER_TRANSPORT_TOKEN: "transport-secret\r\nx-injected: true",
-    }),
-    /must be a single line/,
+  const linux = resolveBrowserIpcRuntimeConfig({
+    env: { XDG_STATE_HOME: "/tmp/anybox-state" },
+    homeDir: "/home/test",
+    platform: "linux",
+  })
+  assert.equal(linux.transport, "unix-domain-socket")
+  assert.equal(linux.protocolVersion, BROWSER_IPC_PROTOCOL_VERSION)
+  assert.match(linux.runtimeEndpoint, /runtime-v1-[a-f0-9]{16}\.sock$/)
+  assert.match(linux.nativeHostEndpoint, /native-host-v1-[a-f0-9]{16}\.sock$/)
+  assert.match(
+    linux.bootstrapPath,
+    /com\.anybox\.browser\.bootstrap\.json$/,
   )
 })
 
-test("installs a plugin-owned Windows Native Messaging host", async () => {
+test("validates explicitly injected IPC locators", () => {
+  assert.deepEqual(
+    resolveBrowserIpcRuntimeConfig({
+      env: {
+        ANYBOX_BROWSER_IPC_RUNTIME_ENDPOINT: "\\\\.\\pipe\\runtime-test",
+        ANYBOX_BROWSER_IPC_NATIVE_ENDPOINT: "\\\\.\\pipe\\native-test",
+        ANYBOX_BROWSER_IPC_BOOTSTRAP_PATH: "C:\\state\\bootstrap.json",
+      },
+      homeDir: "C:\\Users\\test",
+      platform: "win32",
+    }),
+    {
+      transport: "windows-named-pipe",
+      protocolVersion: BROWSER_IPC_PROTOCOL_VERSION,
+      runtimeEndpoint: "\\\\.\\pipe\\runtime-test",
+      nativeHostEndpoint: "\\\\.\\pipe\\native-test",
+      bootstrapPath: path.resolve("C:\\state\\bootstrap.json"),
+    },
+  )
+  assert.throws(
+    () => resolveBrowserIpcRuntimeConfig({
+      env: { ANYBOX_BROWSER_IPC_RUNTIME_ENDPOINT: "http://127.0.0.1:4096" },
+      homeDir: "C:\\Users\\test",
+      platform: "win32",
+    }),
+    /must be a Windows Named Pipe path/,
+  )
+  assert.throws(
+    () => resolveBrowserIpcRuntimeConfig({
+      env: { ANYBOX_BROWSER_IPC_RUNTIME_ENDPOINT: "\\\\.\\pipe\\runtime\r\nforged" },
+      homeDir: "C:\\Users\\test",
+      platform: "win32",
+    }),
+    /contains an invalid character/,
+  )
+  assert.throws(
+    () => resolveBrowserIpcRuntimeConfig({
+      env: { ANYBOX_BROWSER_IPC_RUNTIME_ENDPOINT: "relative.sock" },
+      homeDir: "/home/test",
+      platform: "linux",
+    }),
+    /must be an absolute Unix Domain Socket path/,
+  )
+})
+
+test("installs a plugin-owned Windows host and replaces legacy token config", async () => {
   const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "anybox-native-host-install-"))
   const pluginRoot = path.join(tempRoot, "plugin")
   const appData = path.join(tempRoot, "AppData", "Roaming")
   const hostPath = await createPluginFixture(pluginRoot)
   const registryCalls = []
+  const runtimeEndpoint = "\\\\.\\pipe\\runtime-install-test"
+  const nativeHostEndpoint = "\\\\.\\pipe\\native-install-test"
+  const bootstrapPath = path.join(tempRoot, "state", "bootstrap.json")
 
   try {
+    const paths = resolveNativeMessagingPaths({
+      env: { APPDATA: appData },
+      extensionHostName: "com.anybox.browser",
+      homeDir: path.join(tempRoot, "home"),
+      platform: "win32",
+    })
+    await fsp.mkdir(path.dirname(paths.runtimeConfigPath), { recursive: true })
+    await fsp.writeFile(paths.runtimeConfigPath, JSON.stringify({
+      agentBaseURL: "http://127.0.0.1:4096",
+      browserTransportToken: "obsolete-long-lived-token",
+    }))
+
     const result = await install({
       architecture: "x64",
       env: {
         APPDATA: appData,
         ANYBOX_AGENT_BASE_URL: "http://127.0.0.1:4567",
-        ANYBOX_BROWSER_TRANSPORT_TOKEN: "transport-secret",
+        ANYBOX_BROWSER_TRANSPORT_TOKEN: "must-not-be-persisted",
+        ANYBOX_BROWSER_IPC_RUNTIME_ENDPOINT: runtimeEndpoint,
+        ANYBOX_BROWSER_IPC_NATIVE_ENDPOINT: nativeHostEndpoint,
+        ANYBOX_BROWSER_IPC_BOOTSTRAP_PATH: bootstrapPath,
       },
       homeDir: path.join(tempRoot, "home"),
       platform: "win32",
@@ -172,9 +205,26 @@ test("installs a plugin-owned Windows Native Messaging host", async () => {
     ])
 
     const runtimeConfig = JSON.parse(await fsp.readFile(result.runtimeConfigPath, "utf8"))
-    assert.equal(runtimeConfig.agentBaseURL, "http://127.0.0.1:4567")
-    assert.equal(runtimeConfig.browserTransportToken, "transport-secret")
+    assert.deepEqual(
+      {
+        transport: runtimeConfig.transport,
+        protocolVersion: runtimeConfig.protocolVersion,
+        runtimeEndpoint: runtimeConfig.runtimeEndpoint,
+        nativeHostEndpoint: runtimeConfig.nativeHostEndpoint,
+        bootstrapPath: runtimeConfig.bootstrapPath,
+      },
+      {
+        transport: "windows-named-pipe",
+        protocolVersion: BROWSER_IPC_PROTOCOL_VERSION,
+        runtimeEndpoint,
+        nativeHostEndpoint,
+        bootstrapPath: path.resolve(bootstrapPath),
+      },
+    )
     assert.equal(typeof runtimeConfig.updatedAt, "string")
+    assert.equal(runtimeConfig.agentBaseURL, undefined)
+    assert.equal(runtimeConfig.browserTransportToken, undefined)
+    assert.equal(JSON.stringify(runtimeConfig).includes("must-not-be-persisted"), false)
   } finally {
     await fsp.rm(tempRoot, { recursive: true, force: true })
   }

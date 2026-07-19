@@ -1,10 +1,16 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process"
+import { createHmac, randomUUID } from "node:crypto"
 import { existsSync, readFileSync } from "node:fs"
-import { createServer, type RequestListener, type Server } from "node:http"
-import type { AddressInfo } from "node:net"
+import { createServer, type Server, type Socket } from "node:net"
 import { join } from "node:path"
 import { Worker } from "node:worker_threads"
+import {
+  BROWSER_IPC_PROTOCOL_VERSION,
+  BrowserIpcFrameDecoder,
+  browserIpcProofTranscript,
+  encodeBrowserIpcFrame,
+} from "@anybox/shared/browser-ipc"
 
 const repoRoot = join(import.meta.dir, "..", "..", "..")
 const chromePluginProjectRoot = join(repoRoot, "packages", "chrome-plugin")
@@ -17,15 +23,26 @@ const chromePluginRoot = join(
 const chromePluginScriptsRoot = join(chromePluginRoot, "scripts")
 const nodeReplServerPath = join(chromePluginScriptsRoot, "node-repl-server.js")
 const browserGatewayWorkerPath = join(
-  chromePluginProjectRoot,
-  "runtime",
-  "scripts",
+  chromePluginScriptsRoot,
   "browser-gateway-worker.js",
 )
 const children: ChildProcessWithoutNullStreams[] = []
-const agentServers: Server[] = []
+const ipcServers: Array<{ server: Server; sockets: Set<Socket> }> = []
 
-function startMcpServer(serverPath: string, env: NodeJS.ProcessEnv = {}) {
+type BrowserRequest = {
+  type: "runtime.request"
+  requestID: string
+  operation: "status" | "command"
+  method?: string
+  params?: unknown
+  context?: {
+    sessionID?: string
+    messageID?: string
+    toolCallID?: string
+  }
+}
+
+function startMcpServer(serverPath: string, env: NodeJS.ProcessEnv) {
   const child = spawn("node", [serverPath], {
     stdio: ["pipe", "pipe", "pipe"],
     windowsHide: true,
@@ -38,12 +55,15 @@ function startMcpServer(serverPath: string, env: NodeJS.ProcessEnv = {}) {
   children.push(child)
 
   const lines: unknown[] = []
+  const stderr: string[] = []
   child.stdout.setEncoding("utf8")
   child.stdout.on("data", (chunk: string) => {
     for (const line of chunk.split(/\r?\n/)) {
       if (line.trim()) lines.push(JSON.parse(line))
     }
   })
+  child.stderr.setEncoding("utf8")
+  child.stderr.on("data", (chunk: string) => stderr.push(chunk))
 
   let nextID = 1
   async function request(method: string, params?: unknown) {
@@ -51,42 +71,192 @@ function startMcpServer(serverPath: string, env: NodeJS.ProcessEnv = {}) {
     nextID += 1
     child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`)
     const started = Date.now()
-    while (Date.now() - started < 5000) {
+    while (Date.now() - started < 5_000) {
       const index = lines.findIndex((line) => (line as { id?: unknown }).id === id)
-      if (index >= 0) return lines.splice(index, 1)[0] as { result?: unknown; error?: unknown }
-      await new Promise((resolve) => setTimeout(resolve, 20))
+      if (index >= 0) return lines.splice(index, 1)[0] as {
+        result?: unknown
+        error?: { message?: string }
+      }
+      if (child.exitCode !== null) {
+        throw new Error(
+          `Chrome MCP exited with ${child.exitCode}: ${stderr.join("")}`,
+        )
+      }
+      await Bun.sleep(20)
     }
-    throw new Error(`Timed out waiting for ${method}`)
+    throw new Error(
+      `Timed out waiting for ${method}: ${stderr.join("")}`,
+    )
   }
 
   return { child, request }
 }
 
-async function startAgentServer(handler: RequestListener) {
-  const server = createServer(handler)
+function runtimeProof(
+  secret: string,
+  input: {
+    brokerInstanceID: string
+    nonce: string
+    clientInstanceID: string
+    clientVersion: string
+  },
+) {
+  return createHmac("sha256", secret)
+    .update(browserIpcProofTranscript({ role: "runtime", ...input }))
+    .digest("base64url")
+}
+
+async function startIpcGateway(
+  handler: (request: BrowserRequest) => unknown | Promise<unknown>,
+) {
+  const suffix = `${process.pid}-${randomUUID()}`
+  const endpoint = process.platform === "win32"
+    ? `\\\\.\\pipe\\anybox-chrome-runtime-test-${suffix}`
+    : join(process.cwd(), `.anybox-chrome-runtime-test-${suffix}.sock`)
+  const brokerInstanceID = `broker-${suffix}`
+  const proof = `proof-${suffix}`
+  const requests: BrowserRequest[] = []
+  const sockets = new Set<Socket>()
+  let connectionCount = 0
+  let disconnectCount = 0
+
+  const server = createServer((socket) => {
+    sockets.add(socket)
+    connectionCount += 1
+    socket.on("close", () => {
+      sockets.delete(socket)
+      disconnectCount += 1
+    })
+    const decoder = new BrowserIpcFrameDecoder()
+    const nonce = `challenge-${randomUUID()}`
+    let authenticated = false
+    socket.write(encodeBrowserIpcFrame({
+      type: "challenge",
+      protocolVersion: BROWSER_IPC_PROTOCOL_VERSION,
+      role: "runtime",
+      brokerInstanceID,
+      nonce,
+      expiresAt: Date.now() + 5_000,
+    }))
+    socket.on("data", (chunk) => {
+      const bytes = typeof chunk === "string" ? Buffer.from(chunk) : chunk
+      for (const value of decoder.push(bytes)) {
+        void (async () => {
+          const message = value as Record<string, unknown>
+          if (!authenticated) {
+            const proofInput = {
+              brokerInstanceID,
+              nonce,
+              clientInstanceID: String(message.clientInstanceID),
+              clientVersion: String(message.clientVersion),
+            }
+            if (
+              message.type !== "hello"
+              || message.protocolVersion !== BROWSER_IPC_PROTOCOL_VERSION
+              || message.role !== "runtime"
+              || message.brokerInstanceID !== brokerInstanceID
+              || message.nonce !== nonce
+              || message.proof !== runtimeProof(proof, proofInput)
+            ) {
+              socket.end(encodeBrowserIpcFrame({
+                type: "error",
+                code: "AUTH_FAILED",
+                message: "Test Browser IPC authentication failed.",
+              }))
+              return
+            }
+            authenticated = true
+            socket.write(encodeBrowserIpcFrame({
+              type: "ready",
+              protocolVersion: BROWSER_IPC_PROTOCOL_VERSION,
+              role: "runtime",
+              brokerInstanceID,
+            }))
+            return
+          }
+
+          const request = message as unknown as BrowserRequest
+          requests.push(request)
+          try {
+            socket.write(encodeBrowserIpcFrame({
+              type: "runtime.response",
+              requestID: request.requestID,
+              ok: true,
+              data: await handler(request),
+            }))
+          } catch (error) {
+            socket.write(encodeBrowserIpcFrame({
+              type: "runtime.response",
+              requestID: request.requestID,
+              ok: false,
+              error: {
+                code: "BROWSER_COMMAND_FAILED",
+                message: error instanceof Error ? error.message : String(error),
+              },
+            }))
+          }
+        })()
+      }
+    })
+  })
   await new Promise<void>((resolve, reject) => {
-    const onError = (error: Error) => reject(error)
-    server.once("error", onError)
-    server.listen(0, "127.0.0.1", () => {
-      server.off("error", onError)
+    server.once("error", reject)
+    server.listen(endpoint, () => {
+      server.off("error", reject)
       resolve()
     })
   })
-  agentServers.push(server)
-  return (server.address() as AddressInfo).port
+  ipcServers.push({ server, sockets })
+
+  return {
+    env: {
+      ANYBOX_BROWSER_IPC_PROTOCOL_VERSION: String(BROWSER_IPC_PROTOCOL_VERSION),
+      ANYBOX_BROWSER_IPC_TRANSPORT: process.platform === "win32"
+        ? "windows-named-pipe"
+        : "unix-domain-socket",
+      ANYBOX_BROWSER_IPC_RUNTIME_ENDPOINT: endpoint,
+      ANYBOX_BROWSER_IPC_NATIVE_ENDPOINT: process.platform === "win32"
+        ? `${endpoint}-native`
+        : `${endpoint}.native`,
+      ANYBOX_BROWSER_IPC_BOOTSTRAP_PATH: join(
+        process.cwd(),
+        `.anybox-native-bootstrap-${suffix}.json`,
+      ),
+      ANYBOX_BROWSER_IPC_BROKER_INSTANCE_ID: brokerInstanceID,
+      ANYBOX_BROWSER_IPC_RUNTIME_PROOF: proof,
+    },
+    requests,
+    get connectionCount() {
+      return connectionCount
+    },
+    get disconnectCount() {
+      return disconnectCount
+    },
+  }
+}
+
+async function runtimeFixture(
+  handler: (request: BrowserRequest) => unknown | Promise<unknown> = (
+    request,
+  ) => request.operation === "status" ? { connected: true } : {},
+) {
+  const gateway = await startIpcGateway(handler)
+  return {
+    gateway,
+    mcp: startMcpServer(nodeReplServerPath, gateway.env),
+  }
 }
 
 afterEach(async () => {
-  for (const child of children.splice(0)) {
-    child.kill()
-  }
-  await Promise.all(agentServers.splice(0).map((server) =>
-    new Promise<void>((resolve) => server.close(() => resolve()))
-  ))
+  for (const child of children.splice(0)) child.kill()
+  await Promise.all(ipcServers.splice(0).map(({ server, sockets }) => {
+    for (const socket of sockets) socket.destroy()
+    return new Promise<void>((resolve) => server.close(() => resolve()))
+  }))
 })
 
 describe("Chrome plugin runtimes", () => {
-  test("uses the canonical Anybox plugin package layout", () => {
+  test("uses the canonical generated plugin package layout and capability boundary", () => {
     const sourceManifest = JSON.parse(
       readFileSync(
         join(chromePluginProjectRoot, "runtime", ".anybox-plugin", "plugin.json"),
@@ -102,72 +272,62 @@ describe("Chrome plugin runtimes", () => {
 
     expect(existsSync(join(chromePluginProjectRoot, "browser-extension", "src"))).toBe(true)
     expect(existsSync(join(chromePluginProjectRoot, "browser-native-host", "src"))).toBe(true)
-    expect(existsSync(join(chromePluginProjectRoot, "tools", "package-chrome-plugin.mjs"))).toBe(true)
-    expect(existsSync(join(chromePluginProjectRoot, "runtime", "assets", "chrome.svg"))).toBe(true)
     expect(existsSync(join(chromePluginRoot, ".anybox-plugin", "plugin.json"))).toBe(true)
     expect(existsSync(join(chromePluginRoot, "plugin.json"))).toBe(false)
-    expect(existsSync(join(chromePluginRoot, "assets", "chrome.svg"))).toBe(true)
-    expect(existsSync(join(chromePluginRoot, "browser-extension", "manifest.json"))).toBe(true)
     expect(existsSync(join(chromePluginRoot, "browser-extension", "src"))).toBe(false)
     expect(existsSync(join(chromePluginRoot, "browser-native-host"))).toBe(false)
     expect(
       existsSync(join(chromePluginRoot, "extension-host", "windows", "x64", "extension-host.exe")),
     ).toBe(true)
     expect(existsSync(join(chromePluginRoot, "browser-extension", "package.json"))).toBe(false)
-    expect(existsSync(join(chromePluginRoot, "runtime-package"))).toBe(false)
-    expect(sourceManifest.package).toBeUndefined()
     expect(pluginManifest).toEqual(sourceManifest)
     expect(pluginManifest.name).toBe("chrome")
-    expect(pluginManifest.interface?.displayName).toEqual({
-      "en-US": "Chrome",
-      "zh-CN": "Chrome",
-    })
-    expect(pluginManifest.interface?.logo).toBe("./assets/chrome.svg")
-    expect(pluginManifest.interface?.iconUrl).toBe("./assets/chrome.svg")
-    expect(pluginManifest.interface?.brandColor).toBe("#4285F4")
-    expect(pluginManifest.version).toBe("0.4.1")
-    expect(pluginManifest.mcpServers?.map((server: { id: string }) => server.id)).toEqual(["node-repl"])
-    expect(pluginManifest.skillPreviews).toHaveLength(1)
-    expect(pluginManifest.skillPreviews[0]).toMatchObject({ name: "Chrome", directory: "chrome" })
+    expect(pluginManifest.version).toBe("0.5.0")
+    expect(pluginManifest.mcpServers?.map((server: { id: string }) => server.id))
+      .toEqual(["node-repl"])
+    expect(JSON.stringify(pluginManifest)).not.toContain(
+      "Allows raw page JavaScript",
+    )
+    expect(JSON.stringify(pluginManifest)).toContain(
+      "Chrome DevTools Protocol commands are disabled",
+    )
     expect(extensionManifest.icons).toEqual({
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png",
     })
-    for (const size of [16, 48, 128]) {
-      expect(
-        readFileSync(join(chromePluginRoot, "browser-extension", "icons", `icon${size}.png`)),
-      ).toEqual(
-        readFileSync(join(chromePluginProjectRoot, "browser-extension", "public", "icons", `icon${size}.png`)),
-      )
-    }
     expect(existsSync(join(chromePluginScriptsRoot, "browser-client.mjs"))).toBe(true)
     expect(existsSync(join(chromePluginScriptsRoot, "browser-gateway-worker.js"))).toBe(true)
+    expect(existsSync(join(chromePluginScriptsRoot, "browser-ipc-client.cjs"))).toBe(true)
     expect(existsSync(join(chromePluginScriptsRoot, "browser-server.js"))).toBe(false)
     expect(existsSync(nodeReplServerPath)).toBe(true)
-    expect(existsSync(join(chromePluginScriptsRoot, "extension-id.json"))).toBe(true)
     expect(existsSync(join(chromePluginScriptsRoot, "installManifest.mjs"))).toBe(true)
     expect(existsSync(join(chromePluginScriptsRoot, "native-host-bootstrap.js"))).toBe(true)
   })
 
-  test("lists tools and preserves globalThis state", async () => {
-    const server = startMcpServer(nodeReplServerPath)
-    await server.request("initialize")
+  test("passes MCP initialize, tools/list, and a safe tools/call while preserving state", async () => {
+    const { mcp } = await runtimeFixture()
+    const initialized = await mcp.request("initialize") as {
+      result?: { serverInfo?: { version?: string } }
+    }
+    expect(initialized.result?.serverInfo?.version).toBe("0.3.0")
 
-    const list = await server.request("tools/list") as { result?: { tools?: Array<{ name: string }> } }
+    const list = await mcp.request("tools/list") as {
+      result?: { tools?: Array<{ name: string }> }
+    }
     expect(list.result?.tools?.map((tool) => tool.name)).toEqual([
       "js",
       "js_reset",
       "js_add_node_module_dir",
     ])
 
-    const first = await server.request("tools/call", {
+    const first = await mcp.request("tools/call", {
       name: "js",
       arguments: {
         code: "globalThis.answer = (globalThis.answer || 0) + 1\nreturn globalThis.answer",
       },
     }) as { result?: { structuredContent?: { result?: unknown } } }
-    const second = await server.request("tools/call", {
+    const second = await mcp.request("tools/call", {
       name: "js",
       arguments: {
         code: "globalThis.answer = (globalThis.answer || 0) + 1\nreturn globalThis.answer",
@@ -178,58 +338,46 @@ describe("Chrome plugin runtimes", () => {
     expect(second.result?.structuredContent?.result).toBe(2)
   })
 
-  test("keeps browser credentials outside the model-visible Node environment", async () => {
-    const server = startMcpServer(nodeReplServerPath, {
-      ANYBOX_BROWSER_TRUSTED_TOKEN: "trusted-model-secret",
-      ANYBOX_BROWSER_TRANSPORT_TOKEN: "transport-model-secret",
+  test("keeps legacy and IPC credentials outside the model-visible environment", async () => {
+    const gateway = await startIpcGateway(() => ({ connected: true }))
+    const mcp = startMcpServer(nodeReplServerPath, {
+      ...gateway.env,
+      ANYBOX_BROWSER_TRUSTED_TOKEN: "legacy-trusted-secret",
+      ANYBOX_BROWSER_TRANSPORT_TOKEN: "legacy-transport-secret",
     })
-    await server.request("initialize")
+    await mcp.request("initialize")
 
-    const response = await server.request("tools/call", {
+    const response = await mcp.request("tools/call", {
       name: "js",
       arguments: {
         code: [
-          "const env = require('process').env",
-          "return {",
-          "  trusted: env.ANYBOX_BROWSER_TRUSTED_TOKEN,",
-          "  transport: env.ANYBOX_BROWSER_TRANSPORT_TOKEN,",
-          "}",
+          "const env = require('node:process').env",
+          "return Object.fromEntries([",
+          "  'ANYBOX_BROWSER_TRUSTED_TOKEN',",
+          "  'ANYBOX_BROWSER_TRANSPORT_TOKEN',",
+          "  'ANYBOX_BROWSER_IPC_PROTOCOL_VERSION',",
+          "  'ANYBOX_BROWSER_IPC_TRANSPORT',",
+          "  'ANYBOX_BROWSER_IPC_RUNTIME_ENDPOINT',",
+          "  'ANYBOX_BROWSER_IPC_NATIVE_ENDPOINT',",
+          "  'ANYBOX_BROWSER_IPC_BOOTSTRAP_PATH',",
+          "  'ANYBOX_BROWSER_IPC_BROKER_INSTANCE_ID',",
+          "  'ANYBOX_BROWSER_IPC_RUNTIME_PROOF',",
+          "].filter((key) => env[key] !== undefined).map((key) => [key, env[key]]))",
         ].join("\n"),
       },
-    }) as {
-      result?: {
-        structuredContent?: {
-          result?: {
-            trusted?: unknown
-            transport?: unknown
-          }
-        }
-      }
-    }
+    }) as { result?: { structuredContent?: { result?: unknown } } }
 
     expect(response.result?.structuredContent?.result).toEqual({})
   })
 
-  test("keeps trusted HTTP credentials outside model-visible fetch and diagnostics hooks", async () => {
-    let receivedToken: string | undefined
-    const agentPort = await startAgentServer((request, response) => {
-      request.resume()
-      receivedToken = typeof request.headers["x-anybox-browser-trusted-token"] === "string"
-        ? request.headers["x-anybox-browser-trusted-token"]
-        : undefined
-      response.setHeader("content-type", "application/json")
-      response.end(JSON.stringify({
-        success: true,
-        data: { connected: true },
-      }))
-    })
-    const server = startMcpServer(nodeReplServerPath, {
-      ANYBOX_AGENT_BASE_URL: `http://127.0.0.1:${agentPort}`,
-      ANYBOX_BROWSER_TRUSTED_TOKEN: "worker-isolated-token",
-    })
-    await server.request("initialize")
+  test("uses IPC without exposing traffic to model fetch or diagnostics hooks", async () => {
+    const { gateway, mcp } = await runtimeFixture(() => ({
+      connected: true,
+      extension: "test",
+    }))
+    await mcp.request("initialize")
 
-    const response = await server.request("tools/call", {
+    const response = await mcp.request("tools/call", {
       name: "js",
       arguments: {
         code: [
@@ -253,121 +401,35 @@ describe("Chrome plugin runtimes", () => {
           "}",
         ].join("\n"),
       },
-    }) as {
-      result?: {
-        structuredContent?: {
-          result?: {
-            connected?: boolean
-            interceptedFetch?: boolean
-            observedRequests?: number
-          }
-        }
-      }
-    }
+    }) as { result?: { structuredContent?: { result?: unknown } } }
 
     expect(response.result?.structuredContent?.result).toEqual({
       connected: true,
       interceptedFetch: false,
       observedRequests: 0,
     })
-    expect(receivedToken).toBe("worker-isolated-token")
+    expect(gateway.requests).toHaveLength(1)
+    expect(gateway.requests[0]).toMatchObject({ operation: "status" })
   })
 
-  test("rejects a non-loopback browser gateway before initializing the model runtime", async () => {
-    const server = startMcpServer(nodeReplServerPath, {
-      ANYBOX_AGENT_BASE_URL: "http://browser-gateway.example:4096",
-      ANYBOX_BROWSER_TRUSTED_TOKEN: "remote-gateway-token",
+  test("fails closed when the runtime IPC protocol is incompatible", async () => {
+    const gateway = await startIpcGateway(() => ({ connected: true }))
+    const mcp = startMcpServer(nodeReplServerPath, {
+      ...gateway.env,
+      ANYBOX_BROWSER_IPC_PROTOCOL_VERSION: "99",
     })
-    const response = await server.request("initialize") as {
-      error?: { message?: string }
-    }
 
-    expect(response.error?.message).toContain("requires a loopback Anybox Agent host")
+    const response = await mcp.request("initialize")
+    expect(response.error?.message).toContain(
+      "Chrome browser gateway IPC protocol version is incompatible",
+    )
   })
 
-  test("preloads setupBrowserRuntime", async () => {
-    const server = startMcpServer(nodeReplServerPath)
-    await server.request("initialize")
+  test("keeps raw page evaluation disabled before any IPC request", async () => {
+    const { gateway, mcp } = await runtimeFixture(() => ({ value: 2 }))
+    await mcp.request("initialize")
 
-    const response = await server.request("tools/call", {
-      name: "js",
-      arguments: {
-        code: [
-          "await setupBrowserRuntime({ globals: globalThis })",
-          "const runtime = await agent.browsers.get('extension')",
-          "return {",
-          "  open: typeof runtime.tabs.open,",
-          "  documented: (await runtime.documentation()).includes('Anybox Chrome browser runtime'),",
-          "}",
-        ].join("\n"),
-      },
-    }) as { result?: { structuredContent?: { result?: { open?: unknown; documented?: unknown } } } }
-
-    expect(response.result?.structuredContent?.result).toEqual({
-      open: "function",
-      documented: true,
-    })
-  })
-
-  test("reads Chrome connection status through the Node REPL browser runtime", async () => {
-    let receivedToken: string | undefined
-    const agentPort = await startAgentServer((request, response) => {
-      request.resume()
-      receivedToken = typeof request.headers["x-anybox-browser-trusted-token"] === "string"
-        ? request.headers["x-anybox-browser-trusted-token"]
-        : undefined
-      response.setHeader("content-type", "application/json")
-      response.end(JSON.stringify({
-        success: true,
-        data: {
-          connected: true,
-          extension: "test",
-        },
-      }))
-    })
-    const server = startMcpServer(nodeReplServerPath, {
-      ANYBOX_AGENT_BASE_URL: "",
-      ANYBOX_SERVER_HOST: "127.0.0.1",
-      ANYBOX_SERVER_PORT: String(agentPort),
-      ANYBOX_BROWSER_TRUSTED_TOKEN: "browser-runtime-status-token",
-    })
-    await server.request("initialize")
-
-    const response = await server.request("tools/call", {
-      name: "js",
-      arguments: {
-        code: "return await (await agent.browsers.get('extension')).status()",
-      },
-    }) as { result?: { structuredContent?: { result?: unknown } } }
-
-    expect(
-      (response.result?.structuredContent?.result as { connected?: boolean } | undefined)?.connected,
-    ).toBe(true)
-    expect(receivedToken).toBe("browser-runtime-status-token")
-  })
-
-  test("keeps raw page evaluation disabled at the model command boundary", async () => {
-    let requestCount = 0
-    const agentPort = await startAgentServer((request, response) => {
-      request.resume()
-      requestCount += 1
-      response.setHeader("content-type", "application/json")
-      response.end(JSON.stringify({
-        success: true,
-        data: {
-          value: 2,
-        },
-      }))
-    })
-    const server = startMcpServer(nodeReplServerPath, {
-      ANYBOX_AGENT_BASE_URL: "",
-      ANYBOX_SERVER_HOST: "127.0.0.1",
-      ANYBOX_SERVER_PORT: String(agentPort),
-      ANYBOX_BROWSER_TRUSTED_TOKEN: "browser-runtime-test-token",
-    })
-    await server.request("initialize")
-
-    const response = await server.request("tools/call", {
+    const response = await mcp.request("tools/call", {
       name: "js",
       arguments: {
         code: [
@@ -376,26 +438,23 @@ describe("Chrome plugin runtimes", () => {
           "return await tab.evaluate('1 + 1')",
         ].join("\n"),
       },
-    }) as { result?: { structuredContent?: { result?: unknown } } }
+    }) as { result?: { structuredContent?: { error?: string } } }
 
-    expect(
-      (response.result?.structuredContent as { error?: string } | undefined)?.error,
-    ).toContain("disabled until Anybox can enforce command-level capability")
-    expect(requestCount).toBe(0)
+    expect(response.result?.structuredContent?.error).toContain(
+      "disabled until Anybox can enforce command-level capability",
+    )
+    expect(gateway.requests).toHaveLength(0)
   })
 
-  test("rejects raw browser requests inside the isolated gateway worker", async () => {
-    let requestCount = 0
-    const agentPort = await startAgentServer((request, response) => {
-      request.resume()
-      requestCount += 1
-      response.setHeader("content-type", "application/json")
-      response.end(JSON.stringify({ success: true, data: {} }))
-    })
+  test("rejects trusted-command and raw methods inside the isolated worker", async () => {
+    const gateway = await startIpcGateway(() => ({}))
     const worker = new Worker(browserGatewayWorkerPath, {
       workerData: {
-        agentBaseURL: `http://127.0.0.1:${agentPort}`,
-        trustedToken: "worker-policy-token",
+        protocolVersion: gateway.env.ANYBOX_BROWSER_IPC_PROTOCOL_VERSION,
+        runtimeEndpoint: gateway.env.ANYBOX_BROWSER_IPC_RUNTIME_ENDPOINT,
+        brokerInstanceID: gateway.env.ANYBOX_BROWSER_IPC_BROKER_INSTANCE_ID,
+        runtimeProof: gateway.env.ANYBOX_BROWSER_IPC_RUNTIME_PROOF,
+        clientVersion: "test-worker",
       },
     })
     try {
@@ -429,47 +488,43 @@ describe("Chrome plugin runtimes", () => {
       const trusted = await request(1, {
         type: "trusted-command",
         method: "page.executeScript",
-        params: { script: "document.body.innerText" },
       })
-      const disguised = await request(2, {
+      const raw = await request(2, {
         type: "command",
         method: "page.executeScript",
-        params: { script: "document.body.innerText" },
       })
 
       expect(trusted.ok).toBe(false)
       expect(trusted.error).toContain("request type is invalid")
-      expect(disguised.ok).toBe(false)
-      expect(disguised.error).toContain("command method is invalid")
-      expect(requestCount).toBe(0)
+      expect(raw.ok).toBe(false)
+      expect(raw.error).toContain("command method is invalid")
+      expect(gateway.requests).toHaveLength(0)
     } finally {
       await worker.terminate()
     }
   })
 
-  test("emits Chrome screenshots from the Node REPL as image content", async () => {
+  test("forwards MCP request context and emits screenshots as image content", async () => {
     const imageData = Buffer.from("fixture-png").toString("base64")
-    const agentPort = await startAgentServer((request, response) => {
-      request.resume()
-      response.setHeader("content-type", "application/json")
-      response.end(JSON.stringify({
-        success: true,
-        data: {
-          tabId: 7,
-          mime: "image/png",
-          data: imageData,
+    const { gateway, mcp } = await runtimeFixture((request) => {
+      expect(request).toMatchObject({
+        operation: "command",
+        method: "page.screenshot",
+        context: {
+          sessionID: "session-1",
+          messageID: "message-1",
+          toolCallID: "tool-1",
         },
-      }))
+      })
+      return {
+        tabId: 7,
+        mime: "image/png",
+        data: imageData,
+      }
     })
-    const server = startMcpServer(nodeReplServerPath, {
-      ANYBOX_AGENT_BASE_URL: "",
-      ANYBOX_SERVER_HOST: "127.0.0.1",
-      ANYBOX_SERVER_PORT: String(agentPort),
-      ANYBOX_BROWSER_TRUSTED_TOKEN: "browser-runtime-screenshot-token",
-    })
-    await server.request("initialize")
+    await mcp.request("initialize")
 
-    const response = await server.request("tools/call", {
+    const response = await mcp.request("tools/call", {
       name: "js",
       arguments: {
         code: [
@@ -477,6 +532,11 @@ describe("Chrome plugin runtimes", () => {
           "const tab = await runtime.tabs.get(7)",
           "await nodeRepl.emitImage(await tab.screenshot())",
         ].join("\n"),
+      },
+      _meta: {
+        sessionID: "session-1",
+        messageID: "message-1",
+        toolCallID: "tool-1",
       },
     }) as {
       result?: {
@@ -491,5 +551,36 @@ describe("Chrome plugin runtimes", () => {
       mimeType: "image/png",
       data: imageData,
     })
+    expect(gateway.requests).toHaveLength(1)
+  })
+
+  test("reset closes the IPC socket and reconnects on the next browser call", async () => {
+    const { gateway, mcp } = await runtimeFixture(() => ({ connected: true }))
+    await mcp.request("initialize")
+    await mcp.request("tools/call", {
+      name: "js",
+      arguments: {
+        code: "return await (await agent.browsers.get('extension')).status()",
+      },
+    })
+    expect(gateway.connectionCount).toBe(1)
+
+    await mcp.request("tools/call", {
+      name: "js_reset",
+      arguments: {},
+    })
+    const started = Date.now()
+    while (gateway.disconnectCount < 1 && Date.now() - started < 2_000) {
+      await Bun.sleep(10)
+    }
+    expect(gateway.disconnectCount).toBeGreaterThanOrEqual(1)
+
+    await mcp.request("tools/call", {
+      name: "js",
+      arguments: {
+        code: "return await (await agent.browsers.get('extension')).status()",
+      },
+    })
+    expect(gateway.connectionCount).toBe(2)
   })
 })

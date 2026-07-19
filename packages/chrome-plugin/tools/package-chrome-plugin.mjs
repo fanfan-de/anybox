@@ -61,6 +61,7 @@ const requiredPackageFiles = [
   currentNativeHostTarget.packagePath,
   path.join("scripts", "browser-client.mjs"),
   path.join("scripts", "browser-gateway-worker.js"),
+  path.join("scripts", "browser-ipc-client.cjs"),
   path.join("scripts", "extension-id.json"),
   path.join("scripts", "installManifest.mjs"),
   path.join("scripts", "native-host-bootstrap.js"),
@@ -309,6 +310,44 @@ export async function validateChromePluginPackage(packageRoot) {
   }
   if ("id" in manifest) {
     throw new Error("Chrome plugin manifest must derive its ID from the canonical name.")
+  }
+
+  const nodeRepl = manifest.mcpServers?.find?.((server) => server?.id === "node-repl")
+  if (nodeRepl) {
+    const capabilityClaims = [
+      ...(Array.isArray(nodeRepl.permissions) ? nodeRepl.permissions : []),
+      ...(Array.isArray(nodeRepl.installReview) ? nodeRepl.installReview : []),
+    ].filter((claim) => typeof claim === "string")
+    const advancedClaims = capabilityClaims.filter((claim) =>
+      /\b(?:raw page|raw script|DevTools Protocol|CDP)\b/i.test(claim)
+    )
+    if (
+      advancedClaims.length === 0
+      || advancedClaims.some((claim) =>
+        !/\b(?:disabled|unavailable|not exposed|does not allow)\b/i.test(claim)
+      )
+    ) {
+      throw new Error(
+        "Chrome plugin capability claims must state that raw page JavaScript and CDP are disabled.",
+      )
+    }
+
+    const skill = await fsp.readFile(
+      path.join(packageRoot, "skills", "chrome", "SKILL.md"),
+      "utf8",
+    )
+    const browserRuntime = await fsp.readFile(
+      path.join(packageRoot, "scripts", "browser-client.mjs"),
+      "utf8",
+    )
+    if (
+      !/Raw selector adapters, page JavaScript, and CDP are disabled/i.test(skill)
+      || !/disabled until Anybox can enforce command-level capability/i.test(browserRuntime)
+    ) {
+      throw new Error(
+        "Chrome manifest, Skill, and browser runtime capability boundaries are inconsistent.",
+      )
+    }
   }
 
   const extensionManifest = JSON.parse(

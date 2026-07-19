@@ -10,7 +10,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js"
 import z from "zod"
 import * as Config from "#config/config.ts"
-import { McpClient } from "#mcp/client.ts"
+import { McpClient, type McpToolRequestContext } from "#mcp/client.ts"
 import * as Mcp from "#mcp/manager.ts"
 import * as Agent from "#agent/agent.ts"
 import { Instance } from "#project/instance.ts"
@@ -129,6 +129,9 @@ async function writeMockMcpServer(root: string) {
       "    const envProbe = value === '__browser_env__' ? {",
       "      browserTrustedToken: envKeys.has('ANYBOX_BROWSER_TRUSTED_TOKEN') ? 'present' : 'absent',",
       "      browserTransportToken: envKeys.has('ANYBOX_BROWSER_TRANSPORT_TOKEN') ? 'present' : 'absent',",
+      "      browserIpcEndpoint: envKeys.has('ANYBOX_BROWSER_IPC_RUNTIME_ENDPOINT') ? 'present' : 'absent',",
+      "      browserIpcProof: envKeys.has('ANYBOX_BROWSER_IPC_RUNTIME_PROOF') ? 'present' : 'absent',",
+      "      requestMeta: message.params?._meta,",
       "    } : {}",
       "    send({",
       "      jsonrpc: '2.0',",
@@ -309,7 +312,7 @@ describe("mcp integration", () => {
     }
   })
 
-  test("injects browser credentials only into the managed Chrome runtime", async () => {
+  test("injects ephemeral Browser IPC bootstrap only into the managed Chrome runtime", async () => {
     const root = await mkdtemp(join(tmpdir(), "anybox-mcp-browser-env-"))
     const originalTrustedToken = process.env.ANYBOX_BROWSER_TRUSTED_TOKEN
     const originalTransportToken = process.env.ANYBOX_BROWSER_TRANSPORT_TOKEN
@@ -319,6 +322,17 @@ describe("mcp integration", () => {
     try {
       const script = await writeMockMcpServer(root)
       const createClient = (owner?: Config.McpServerOwner) => new McpClient({
+        browserRuntimeEnvironment: owner
+          ? {
+              ANYBOX_BROWSER_IPC_PROTOCOL_VERSION: "1",
+              ANYBOX_BROWSER_IPC_TRANSPORT: "windows-named-pipe",
+              ANYBOX_BROWSER_IPC_RUNTIME_ENDPOINT: "\\\\.\\pipe\\runtime-test",
+              ANYBOX_BROWSER_IPC_NATIVE_ENDPOINT: "\\\\.\\pipe\\native-test",
+              ANYBOX_BROWSER_IPC_BOOTSTRAP_PATH: "C:\\state\\bootstrap.json",
+              ANYBOX_BROWSER_IPC_BROKER_INSTANCE_ID: "broker-test",
+              ANYBOX_BROWSER_IPC_RUNTIME_PROOF: "runtime-proof-test",
+            }
+          : undefined,
         cwd: root,
         worktree: root,
         requestTimeoutMs: 1000,
@@ -345,6 +359,8 @@ describe("mcp integration", () => {
         expect(result.structuredContent).toMatchObject({
           browserTrustedToken: "absent",
           browserTransportToken: "absent",
+          browserIpcEndpoint: "absent",
+          browserIpcProof: "absent",
         })
       } finally {
         await generic.dispose()
@@ -356,10 +372,27 @@ describe("mcp integration", () => {
         bindingID: "mcp:node-repl",
       })
       try {
-        const result = await chrome.callTool("echo", { value: "__browser_env__" })
+        const result = await chrome.callTool(
+          "echo",
+          { value: "__browser_env__" },
+          undefined,
+          {
+            sessionID: "session-browser",
+            messageID: "message-browser",
+            toolCallID: "tool-browser",
+            unexpected: "must-not-forward",
+          } as McpToolRequestContext & { unexpected: string },
+        )
         expect(result.structuredContent).toMatchObject({
-          browserTrustedToken: "present",
-          browserTransportToken: "present",
+          browserTrustedToken: "absent",
+          browserTransportToken: "absent",
+          browserIpcEndpoint: "present",
+          browserIpcProof: "present",
+        })
+        expect(result.structuredContent?.requestMeta).toEqual({
+          sessionID: "session-browser",
+          messageID: "message-browser",
+          toolCallID: "tool-browser",
         })
       } finally {
         await chrome.dispose()

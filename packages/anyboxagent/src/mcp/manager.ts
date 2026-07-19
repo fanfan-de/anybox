@@ -521,7 +521,13 @@ export class McpManager {
           description: definition.description ?? `${definition.name} (from MCP server ${server.name ?? server.id})`,
           parameters,
           execute: async (args, ctx) => {
-            const result = await this.call(server.id, definition.name, args as Record<string, unknown>, ctx.abort)
+            const result = await this.call(
+              server.id,
+              definition.name,
+              args as Record<string, unknown>,
+              ctx.abort,
+              ctx,
+            )
             const summary = summarizeToolCallResult(result)
             const metadata: Record<string, unknown> = {
               [MCP_SERVER_ID_KEY]: server.id,
@@ -634,6 +640,7 @@ export class McpManager {
     toolName: string,
     args: Record<string, unknown>,
     abort?: AbortSignal,
+    context?: Pick<Tool.Context, "sessionID" | "messageID" | "toolCallID">,
   ) {
     const handle = this.handles.get(serverID)
     if (!handle) {
@@ -641,7 +648,7 @@ export class McpManager {
     }
 
     const client = await this.clientFor(handle)
-    return await client.callTool(toolName, args, abort)
+    return await client.callTool(toolName, args, abort, context)
   }
 
   private async serverTools(handle: ManagedServer) {

@@ -1,7 +1,7 @@
 {
   "name": "chrome",
-  "version": "0.4.1",
-  "description": "Control Chrome through a plugin-bundled persistent Node REPL, Chrome extension, and Native Messaging host.",
+  "version": "0.5.0",
+  "description": "Control Chrome through a plugin-bundled persistent Node REPL, Anybox Agent policy gateway, Chrome extension, and Native Messaging host.",
   "author": {
     "name": "Anybox"
   },
@@ -24,8 +24,8 @@
       "zh-CN": "通过持久 Node REPL 使用 Chrome。"
     },
     "longDescription": {
-      "en-US": "A self-contained Chrome plugin that exposes a persistent Node REPL with a preloaded Chrome browser runtime, built Chrome extension, and platform-specific Rust Native Messaging Host.",
-      "zh-CN": "一个自包含的 Chrome 插件，通过持久 Node REPL 暴露预加载的 Chrome 浏览器运行时，并内含构建后的 Chrome 扩展和平台对应的 Rust Native Messaging Host。"
+      "en-US": "A self-contained Chrome plugin that exposes a persistent Node REPL with a preloaded Chrome browser runtime, routes control through the Anybox Agent over authenticated local IPC, and bundles a Chrome extension plus platform-specific Rust Native Messaging Host.",
+      "zh-CN": "一个自包含的 Chrome 插件，通过持久 Node REPL 暴露预加载的 Chrome 浏览器运行时，经认证本机 IPC 将控制请求统一路由到 Anybox Agent，并内含构建后的 Chrome 扩展和平台对应的 Rust Native Messaging Host。"
     },
     "developerName": "Anybox",
     "category": "Browser",
@@ -70,7 +70,8 @@
       "permissions": [
         "Runs JavaScript requested by the agent in a persistent local process, including local module, filesystem, and network access.",
         "Reads and controls Chrome tabs through the Anybox Chrome extension, including navigation, page inspection, screenshots, clicks, scrolling, typing, and form filling.",
-        "Allows raw page JavaScript and Chrome DevTools Protocol commands through the preloaded browser runtime.",
+        "Raw page JavaScript, selector adapters, and Chrome DevTools Protocol commands are disabled at the model command boundary.",
+        "Connects the isolated browser runtime and Native Messaging Host to the Anybox Agent policy gateway over authenticated local IPC.",
         "Registers and runs the plugin-bundled Native Messaging Host for the current user.",
         "Requires the Anybox Chrome extension to be installed, enabled, and connected."
       ],
@@ -97,7 +98,8 @@
       "installReview": [
         "Runs a persistent local JavaScript process bundled inside the Chrome plugin.",
         "JavaScript can load local modules and access the local filesystem and network.",
-        "Browser interaction, raw page script, and Chrome DevTools Protocol access run through the JavaScript tool and are configured to ask before execution.",
+        "Browser interaction uses a fixed safe command allowlist; raw page JavaScript, selector adapters, and Chrome DevTools Protocol access remain disabled.",
+        "Browser transport uses current-user local IPC with no production fallback to localhost HTTP or WebSocket control routes.",
         "Registers a user-level Chrome Native Messaging Host whose executable is bundled inside the plugin.",
         "Requires the Anybox Chrome extension to be connected before browser commands can run."
       ]

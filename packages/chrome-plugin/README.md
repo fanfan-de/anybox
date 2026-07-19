@@ -70,6 +70,21 @@ interaction, and screenshots. Raw page evaluation, selector adapters, and CDP
 are disabled until command-level capability and permission policy is available.
 The plugin no longer registers per-action `browser_*` MCP tools.
 
+The isolated browser gateway Worker connects to the Anybox Agent Browser Policy
+Gateway over authenticated local IPC. The Rust Native Messaging Host uses a
+separate authenticated IPC endpoint, then keeps Chrome's required native stdio
+framing unchanged. Windows uses Named Pipes; macOS and Linux use Unix Domain
+Sockets. Production has no automatic HTTP or WebSocket browser-control fallback.
+The persisted Native Host runtime config contains only non-secret IPC locators
+and protocol metadata; a short-lived, one-time bootstrap proof is rotated by the
+Agent and removed after successful authentication.
+
+The Windows Named Pipe path is covered by cross-process integration tests in
+this repository. The Unix Domain Socket implementation shares the same framing
+and authentication contract, but was not executed by the current Windows
+validation run. The runtime does not yet verify peer PID/SID/uid; OS ACLs and
+short-lived proofs reduce exposure but do not provide signed process provenance.
+
 ## Native Host delivery
 
 Like the Codex Chrome plugin, the downloadable Anybox plugin owns its Native

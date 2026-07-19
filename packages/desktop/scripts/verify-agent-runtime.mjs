@@ -13,9 +13,23 @@ import { LINUX_PYTHON_DISTRIBUTION } from "./prepare-workspace-dependencies.mjs"
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const desktopDir = path.resolve(scriptDir, "..")
 const agentDir = path.resolve(desktopDir, "..", "anyboxagent")
-const runtimeDir = path.join(desktopDir, "build", "agent-runtime")
+const runtimeBuildDir = path.join(desktopDir, "build")
+const runtimeDir = resolveRuntimeOutputDirectory()
 const dependenciesDir = path.join(runtimeDir, "dependencies")
 const bunExecutableName = process.platform === "win32" ? "bun.exe" : "bun"
+
+function resolveRuntimeOutputDirectory() {
+  const configured = process.env.ANYBOX_AGENT_RUNTIME_OUTPUT_DIR?.trim()
+  if (!configured) return path.join(runtimeBuildDir, "agent-runtime")
+  const resolved = path.resolve(configured)
+  const relative = path.relative(runtimeBuildDir, resolved)
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error(
+      `ANYBOX_AGENT_RUNTIME_OUTPUT_DIR must be a child of ${runtimeBuildDir}`,
+    )
+  }
+  return resolved
+}
 const pythonExecutable = process.platform === "win32"
   ? path.join(dependenciesDir, "python", "python.exe")
   : path.join(dependenciesDir, "python", "bin", "python3")
@@ -99,6 +113,8 @@ async function verifyBetaMediaRuntime(mediaToolsDir) {
 
 const requiredFiles = [
   path.join(runtimeDir, "agent-server.js"),
+  path.join(runtimeDir, "ipc-listener-sidecar.mjs"),
+  path.join(runtimeDir, "node-pty-worker.mjs"),
   ...bundledCinemaProviderManifests,
   path.join(runtimeDir, "cinema-web", "index.html"),
   path.join(runtimeDir, "connectors", "gmail", "server.js"),

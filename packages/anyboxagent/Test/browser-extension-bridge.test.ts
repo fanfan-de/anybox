@@ -164,4 +164,27 @@ describe("BrowserExtensionBridge command result ownership", () => {
       ok: true,
     })
   })
+
+  test("fails an owned pending command when its connection disconnects", async () => {
+    const bridge = new BrowserExtensionBridge()
+    const owner = createSocket()
+    const ownerConnectionID = registerReady(
+      bridge,
+      owner,
+      "disconnecting-owner",
+    )
+    const command = bridge.sendCommand("tabs.list", undefined, {
+      timeoutMs: 1_000,
+    })
+
+    bridge.unregister(ownerConnectionID)
+
+    await expect(command).rejects.toThrow(
+      "Browser extension disconnected before returning a result.",
+    )
+    expect(bridge.status()).toMatchObject({
+      connected: false,
+      connectionCount: 0,
+    })
+  })
 })

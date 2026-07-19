@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process"
+import { createHash } from "node:crypto"
 import { access, chmod, mkdir, readFile, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -7,6 +8,7 @@ import { promisify } from "node:util"
 const execFileAsync = promisify(execFile)
 const EXTENSION_CONFIG_FILENAME = "extension-id.json"
 const RUNTIME_CONFIG_SUFFIX = ".runtime.json"
+export const BROWSER_IPC_PROTOCOL_VERSION = 1
 
 const platformDirectories = {
   darwin: "macos",
@@ -26,51 +28,77 @@ function requiredString(value, label) {
   return value.trim()
 }
 
-function isLoopbackHostname(hostname) {
-  const normalized = hostname.startsWith("[") && hostname.endsWith("]")
-    ? hostname.slice(1, -1)
-    : hostname
-  if (normalized.toLowerCase() === "localhost" || normalized === "::1") return true
-
-  const octets = normalized.split(".")
-  return octets.length === 4
-    && octets[0] === "127"
-    && octets.every((octet) => /^\d{1,3}$/.test(octet) && Number(octet) <= 255)
+function endpointIdentity(homeDir) {
+  return createHash("sha256")
+    .update(path.resolve(homeDir).toLowerCase())
+    .digest("hex")
+    .slice(0, 16)
 }
 
-function normalizeAgentBaseURL(value) {
-  const normalized = requiredString(value, "Anybox Agent base URL").replace(/\/+$/, "")
-  const parsed = new URL(normalized)
-  if (parsed.protocol !== "http:") {
-    throw new Error(`Anybox Agent base URL must use local HTTP: ${normalized}`)
-  }
-  if (!isLoopbackHostname(parsed.hostname)) {
-    throw new Error(`Anybox Agent base URL must use a loopback host: ${normalized}`)
-  }
-  if (parsed.username || parsed.password || parsed.search || parsed.hash) {
-    throw new Error("Anybox Agent base URL cannot contain credentials, query, or fragment.")
-  }
-  return parsed.toString().replace(/\/+$/, "")
+function defaultIpcStateDirectory(homeDir, env) {
+  const stateHome = env.XDG_STATE_HOME?.trim()
+    ? path.resolve(env.XDG_STATE_HOME)
+    : path.join(path.resolve(homeDir), ".local", "state")
+  return path.join(stateHome, "anybox", "browser-ipc")
 }
 
-export function resolveAgentBaseURL(env = process.env) {
-  const explicit = env.ANYBOX_AGENT_BASE_URL?.trim()
-  if (explicit) return normalizeAgentBaseURL(explicit)
-
-  const host = env.ANYBOX_SERVER_HOST?.trim() || "127.0.0.1"
-  const port = env.ANYBOX_SERVER_PORT?.trim() || "4096"
-  return normalizeAgentBaseURL(`http://${host}:${port}`)
+function normalizeIpcEndpoint(value, label, platform) {
+  const endpoint = requiredString(value, label)
+  if (/[\r\n\0]/.test(endpoint)) {
+    throw new Error(`${label} contains an invalid character.`)
+  }
+  if (platform === "win32") {
+    if (!endpoint.startsWith("\\\\.\\pipe\\")) {
+      throw new Error(`${label} must be a Windows Named Pipe path.`)
+    }
+    return endpoint
+  }
+  if (!path.isAbsolute(endpoint)) {
+    throw new Error(`${label} must be an absolute Unix Domain Socket path.`)
+  }
+  return path.resolve(endpoint)
 }
 
-export function resolveBrowserTransportToken(env = process.env) {
-  const token = requiredString(
-    env.ANYBOX_BROWSER_TRANSPORT_TOKEN,
-    "Anybox browser transport token",
+export function resolveBrowserIpcRuntimeConfig(input = {}) {
+  const env = input.env ?? process.env
+  const platform = input.platform ?? process.platform
+  if (!["win32", "darwin", "linux"].includes(platform)) {
+    throw new Error(`Unsupported Browser IPC platform: ${platform}`)
+  }
+  const homeDir = path.resolve(input.homeDir ?? os.homedir())
+  const identity = endpointIdentity(homeDir)
+  const ipcDirectory = defaultIpcStateDirectory(homeDir, env)
+  const transport = platform === "win32"
+    ? "windows-named-pipe"
+    : "unix-domain-socket"
+  const defaultEndpoint = (role) => platform === "win32"
+    ? `\\\\.\\pipe\\anybox-browser-${role}-v${BROWSER_IPC_PROTOCOL_VERSION}-${identity}`
+    : path.join(
+        ipcDirectory,
+        `${role}-v${BROWSER_IPC_PROTOCOL_VERSION}-${identity}.sock`,
+      )
+  const runtimeEndpoint = normalizeIpcEndpoint(
+    env.ANYBOX_BROWSER_IPC_RUNTIME_ENDPOINT || defaultEndpoint("runtime"),
+    "Anybox Browser Runtime IPC endpoint",
+    platform,
   )
-  if (/[\r\n]/.test(token)) {
-    throw new Error("Anybox browser transport token must be a single line.")
+  const nativeHostEndpoint = normalizeIpcEndpoint(
+    env.ANYBOX_BROWSER_IPC_NATIVE_ENDPOINT || defaultEndpoint("native-host"),
+    "Anybox Browser Native Host IPC endpoint",
+    platform,
+  )
+  const bootstrapPath = path.resolve(
+    env.ANYBOX_BROWSER_IPC_BOOTSTRAP_PATH
+      || path.join(ipcDirectory, `${input.extensionHostName || "com.anybox.browser"}.bootstrap.json`),
+  )
+
+  return {
+    transport,
+    protocolVersion: BROWSER_IPC_PROTOCOL_VERSION,
+    runtimeEndpoint,
+    nativeHostEndpoint,
+    bootstrapPath,
   }
-  return token
 }
 
 export function resolveBundledExtensionHost(
@@ -220,8 +248,12 @@ export async function install(options = {}) {
     extensionId,
   })
   const runtimeConfig = {
-    agentBaseURL: resolveAgentBaseURL(env),
-    browserTransportToken: resolveBrowserTransportToken(env),
+    ...resolveBrowserIpcRuntimeConfig({
+      env,
+      extensionHostName: extensionConfig.extensionHostName,
+      homeDir,
+      platform,
+    }),
     updatedAt: new Date().toISOString(),
   }
 

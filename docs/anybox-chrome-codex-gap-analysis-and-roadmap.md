@@ -2,10 +2,10 @@
 
 > 文档日期：2026-07-19  
 > Anybox 初始审计版本：Chrome 插件 `0.4.0`  
-> Anybox 当前实现版本：Chrome 插件 `0.4.1`、Extension `0.1.1`、Browser Runtime `0.1.1`、Native Host / Node MCP Server `0.2.1`  
+> Anybox 当前实现版本：Chrome 插件 `0.5.0`、Extension `0.1.1`、Browser Runtime `0.2.0`、Native Host / Node MCP Server `0.3.0`
 > Codex 对照版本：本机已安装 Chrome 插件 `26.715.31925`  
 > 文档性质：当前实现审计、差距分析与工程路线图  
-> 最近实施同步：2026-07-19，Phase 0 第一批安全、隐私与传输加固  
+> 最近实施同步：2026-07-19，Browser control 本机 IPC 迁移与 Phase 0 gate 复核
 > 相关背景文档：[Codex Browser Use 实现方式：模块化架构与参考实现](./codex-browser-use-implementation-reference.md)
 
 ## 0. 文档目标
@@ -26,26 +26,26 @@ Node REPL 本身不是效果变好的原因。真正决定效果的是 Node REPL
 
 ### 0.1 2026-07-19 实施同步
 
-本文最初基于 Chrome 插件 `0.4.0` 审计。随后已经完成一批 Phase 0 实现，正文中受影响的“当前”描述、验收清单和 PR 状态已同步到 `0.4.1`。
+本文最初基于 Chrome 插件 `0.4.0` 审计。`0.4.1` 完成第一批入口鉴权与结构化输出加固；当前工作区的 `0.5.0` 又把 Browser control 的两段 localhost HTTP/WebSocket 生产传输迁移为受认证的本机 IPC。
 
 | 工作面 | 当前状态 | 本轮结果 |
 |---|---|---|
-| HTTP Browser API | 已完成本轮目标 | `/status`、`/command`、`/trusted-command` 统一鉴权；`/health` 仅保留最小公开健康信息 |
-| CORS / WebSocket | 已完成本轮目标 | Browser 控制路由不再暴露开放 CORS；WebSocket 校验 Bearer token、Origin 和协议 hello |
-| 连接身份与结果所有权 | 已完成本轮目标 | transport/host identity 由服务端绑定；校验固定 Extension ID、协议版本和 pending connection ownership |
-| Native Host transport | 部分完成 | 强制 loopback、Bearer 握手认证、拒绝 URL credential/query/fragment；但 transport token 仍以长期值写入用户级运行时配置 |
-| 模型凭据隔离 | 已完成 trusted HTTP token 隔离 | trusted HTTP token 只进入独立 Worker；从模型可见 env、主线程 fetch 和 diagnostics 中移除 |
-| Snapshot / DOM / AX 隐私 | 已完成本轮结构化输出目标 | editable 值默认不输出；敏感 metadata、AX private 子树、URL/path/file/srcset/style 等 fail-closed 脱敏 |
-| raw evaluate / CDP | 默认关闭 | Browser Runtime 与隔离 Worker 双层拒绝 raw evaluate、CDP 和模型发起的 `trusted-command` |
-| 打包、版本与 CI | 已完成本轮结构一致性目标 | 源码与 `plugins/Anybox-Plugins/chrome` 同步，版本升级，21 个发行文件 package check 和专项 CI 已接入 |
-| Manifest capability 语义 | 未完成 | `.anybox-plugin/plugin.json` 仍宣称允许 raw page JavaScript/CDP，与当前运行时默认拒绝不一致 |
-| Command boundary policy | 未完成 | session/message/tool-call/plugin/tab ownership、逐命令风险、确认、cancel/interruption 尚未进入统一 gateway |
-| Screenshot / trace 隐私 | 未完成 | 结构化页面输出已脱敏，但 screenshot 和端到端 trace 仍需要明确策略与回归测试 |
-| Runtime / Tab 生命周期 | 未完成 | 真正取消、串行隔离、claim/finalize、debugger detach 等仍属于后续 Phase |
+| Browser control HTTP / WebSocket | 已从生产链路删除 | `/status`、`/command`、`/trusted-command`、`/ws` 不再注册；`/health` 只返回带 `ok: true` 的最小 API envelope，没有自动 legacy fallback |
+| IPC framing / role | Windows 已实现并实测 | Runtime 与 Native Host 使用独立 Named Pipe；4-byte big-endian 长度前缀 JSON、16 MiB 上限、严格 message schema、稳定错误码 |
+| macOS / Linux transport | 代码已提供，当前机器未实测 | 同一 `node:net` / Rust local-socket 抽象使用 Unix Domain Socket；目录 `0700`、socket `0600`，不能把 Windows 回归写成跨平台验证 |
+| 认证与凭据生命周期 | 已移除长期落盘 token | pipe 名不是 secret；hello 绑定 role、protocol、broker instance、client version 和 challenge HMAC。Runtime proof 每次 Agent 进程轮换且只注入受管 MCP；Native proof 最长 5 分钟、一次消费、断线/过期轮换 |
+| Native runtime config | 已完成 secret-free 升级 | 持久配置只保留 transport、protocol、endpoint 和 bootstrap 文件定位；安装会覆盖旧 token 配置 |
+| Policy / Bridge 边界 | 保留 | Browser IPC Gateway 在 Agent 主进程验证命令并复用 `BrowserExtensionBridge`；listener sidecar 只转发字节，不拥有认证、policy、pending 或 ownership 逻辑 |
+| 连接身份与结果所有权 | 保留并回归 | 固定 Extension ID、first-ready sticky、connection-owned result、owner disconnect 失败 pending command、role confusion 拒绝 |
+| 模型隔离 | 已完成本轮目标 | endpoint/proof 在创建 Worker 后从模型进程环境删除；Browser Facade 不暴露 socket；Worker allowlist 拒绝 `trusted-command`、raw evaluate 和 CDP |
+| Capability / packaging | 已完成本轮目标 | manifest、README、Skill 和运行时都声明 raw capability disabled；语义负例测试已加入；生成包 `22` 个文件 |
+| Peer process provenance | 仍有残余风险 | Windows 使用进程 token 默认 DACL 且没有 all-users grant，但当前运行库未校验连接端 PID/SID；同一用户的任意进程仍是明确残余威胁 |
+| Command boundary policy | 部分完成 | session/message/tool-call context 已从 MCP `_meta` 传到 Agent command；逐命令风险确认、permission proof、完整 tab ownership、trace 和 cancel/interruption 尚未闭环 |
+| Screenshot / trace 隐私 | 未完成 | 结构化页面输出已脱敏，screenshot 像素、端到端 trace、fill/type 和错误对象仍需要统一策略与真实 Chrome fixture |
 
 因此，本文当前结论是：
 
-> Phase 0 第一批入口鉴权、连接所有权、trusted token 隔离、结构化输出隐私和 raw capability 默认关闭已经落地；整个 Phase 0 仍被 Native transport 长期凭据、插件 provenance、command-boundary policy/context、screenshot/trace 策略以及真正的取消隔离阻塞。
+> 本机传输迁移、长期 transport token 清理和 capability 声明漂移已经完成；Phase 0 整体仍未退出。阻塞项已转为可信 peer/provenance、command-boundary policy 与 tab ownership、screenshot/trace/error redaction，以及真正的取消隔离。
 
 ---
 
@@ -57,15 +57,20 @@ Node REPL 本身不是效果变好的原因。真正决定效果的是 Node REPL
 
 - `packages/chrome-plugin/runtime/scripts/node-repl-server.js`
 - `packages/chrome-plugin/runtime/scripts/browser-gateway-worker.js`
+- `packages/chrome-plugin/runtime/scripts/browser-ipc-client.cjs`
 - `packages/chrome-plugin/browser-runtime/src/browser-client.ts`
 - `packages/chrome-plugin/browser-extension/src/background/commands.ts`
 - `packages/chrome-plugin/browser-extension/src/background/anybox-client.ts`
 - `packages/chrome-plugin/browser-native-host/src/main.rs`
 - `packages/anyboxagent/src/browser-extension/bridge.ts`
+- `packages/anyboxagent/src/browser-extension/command-gateway.ts`
+- `packages/anyboxagent/src/browser-extension/ipc-gateway.ts`
+- `packages/anyboxagent/src/browser-extension/ipc-listener-sidecar.mjs`
 - `packages/anyboxagent/src/server/routes/browser-extension.ts`
 - `packages/anyboxagent/src/server/server.ts`
 - `packages/anyboxagent/src/tool/browser-tools.ts`
 - `packages/shared/src/browser-extension.ts`
+- `packages/shared/src/browser-ipc.ts`
 - `packages/chrome-plugin/tools/package-chrome-plugin.mjs`
 - `packages/chrome-plugin/runtime/skills/chrome/SKILL.md`
 
@@ -74,10 +79,12 @@ Node REPL 本身不是效果变好的原因。真正决定效果的是 Node REPL
 本文还核对了：
 
 - `packages/chrome-plugin/browser-runtime/Test/browser-client.test.mjs`
+- `packages/chrome-plugin/browser-runtime/Test/browser-ipc-client.test.mjs`
 - `packages/chrome-plugin/browser-extension/Test/commands-privacy.test.ts`
 - `packages/anyboxagent/Test/chrome-plugin-runtime.test.ts`
 - `packages/anyboxagent/Test/browser-extension-routes.test.ts`
 - `packages/anyboxagent/Test/browser-extension-bridge.test.ts`
+- `packages/anyboxagent/Test/browser-ipc-gateway.test.ts`
 - `packages/anyboxagent/Test/mcp.test.ts`
 - `packages/chrome-plugin/browser-native-host/tests/bridge.rs`
 - 2026-07-19 提供的实际 Anybox session trace
@@ -119,20 +126,21 @@ Codex 插件是 proprietary 软件。本文只描述本机可观察行为和可�
 Anybox 已经具备以下主链路：
 
 ```text
-Agent
-  → Chrome 插件的 MCP js 工具
+Anybox Agent
+  → Chrome 插件的 MCP js 工具（stdio）
   → node-repl-server.js
   → browser-client.mjs
   → 隔离的 browser-gateway Worker
-  → authenticated Anybox Agent HTTP Browser API
+  → authenticated local IPC runtime endpoint
+  → Anybox Agent Browser IPC Policy Gateway
   → BrowserExtensionBridge
-  → WebSocket
+  → authenticated local IPC native-host endpoint
   → Native Messaging Host
   → Chrome MV3 扩展
   → Chrome APIs / CDP
 ```
 
-这说明基础连接已经跑通，并不是“完全没实现”。
+Windows 当前使用两个 Named Pipe；macOS/Linux 由同一接口选择 Unix Domain Socket。Agent 内的 Node listener sidecar 仅处理 socket I/O 和字节转发，认证、method allowlist、context、Bridge ownership 与请求结果仍在 Agent 主进程执行。生产路径没有 localhost HTTP/WebSocket fallback。
 
 但是当前链路更接近：
 
@@ -155,20 +163,20 @@ Agent
 
 ### 2.3 必须先处理的 P0 问题
 
-以下问题不宜等到“API 功能做齐以后”再处理。`0.4.1` 后的状态如下：
+以下问题不宜等到“API 功能做齐以后”再处理。`0.5.0` 工作区状态如下：
 
 | P0 问题 | 状态 |
 |---|---|
-| localhost Browser API 与 WebSocket 认证、Origin 约束 | **本轮已完成** |
-| 普通 Browser command endpoint 无 token | **本轮已完成** |
-| Browser 控制 API 继承开放 CORS | **本轮已完成**：Browser 路由不再进入全局 CORS |
-| 客户端自报 `transport=native` / `hostName` | **本轮已完成**：由认证路由绑定固定 identity |
+| localhost Browser API 与 Browser WebSocket | **已从生产控制面删除**；只保留最小 `/health` |
+| IPC framing、role confusion、stale broker、replay | **本轮已完成并有真实 Named Pipe 回归** |
+| 长期 transport token 写入 runtime config | **本轮已移除**；配置只含非秘密 locator |
+| OS ACL / peer process provenance | **部分完成**：Windows 默认 DACL、UDS `0700/0600`；尚未验证 PID/SID 或 peer credential |
 | command result 未校验 connection ownership | **本轮已完成** |
-| trusted HTTP token 可由模型读取 | **本轮已完成**：移入隔离 Worker |
+| Runtime bootstrap / 原始 IPC 可由模型读取 | **本轮已阻断常规模型路径**：受管注入、环境清除、Facade 不暴露 socket |
 | snapshot / interactive / DOM / AX 敏感值旁路 | **本轮已完成结构化输出范围** |
 | raw evaluate / CDP 默认可用 | **本轮已关闭**，等待逐命令 capability policy |
-| manifest 仍宣称 raw evaluate / CDP 可用 | **发布阻塞**：需与实际 fail-closed capability 同步 |
-| Native transport 长期 token 与插件 provenance | **仍阻塞** |
+| manifest 仍宣称 raw evaluate / CDP 可用 | **已修复**：source/package/README/Skill/runtime 语义一致性测试通过 |
+| Native Host / plugin 强 provenance | **仍阻塞**：固定身份与 proof 不是签名或进程身份校验 |
 | session/message/tool-call context 与逐命令风险确认 | **仍阻塞** |
 | screenshot / trace 敏感数据策略 | **仍阻塞** |
 | `Promise.race` 超时不能终止执行或取消动作 | **仍阻塞** |
@@ -218,7 +226,8 @@ Agent
 Chrome Extension
   → chrome.runtime.connectNative("com.anybox.browser")
   → Rust Native Host
-  → Anybox Agent WebSocket
+  → authenticated Named Pipe / Unix Domain Socket
+  → Anybox Agent Browser IPC Gateway
 ```
 
 这能够复用用户真实 Chrome Profile、现有标签页和登录状态，是与 Codex Chrome 模式相同的大方向。
@@ -241,7 +250,7 @@ Chrome Extension
 - last command diagnostics
 - authenticated native transport metadata
 
-这些结构不需要推倒重来。当前已补上入口认证、first-ready 选择和 connection-owned result；下一步仍需补能力协商、session/tab 的逐命令归属、heartbeat、cancel 和完整生命周期。
+这些结构没有因 transport 迁移被复制或删除。当前 Browser IPC Gateway 把完成认证的 Native Host 连接注册为 `native-ipc` transport，并继续由 Bridge 执行 first-ready 选择和 connection-owned result；下一步仍需补能力协商、session/tab 的逐命令归属、heartbeat、cancel 和完整生命周期。
 
 ### 3.5 页面执行能力已经覆盖 MVP
 
@@ -291,10 +300,13 @@ flowchart LR
     R --> C["browser-client.mjs"]
     C --> I["Opaque transport"]
     I --> W0["Isolated browser-gateway Worker"]
-    W0 --> H["Authenticated HTTP /api/browser-extension/*"]
-    H --> B["BrowserExtensionBridge"]
-    B --> W["Authenticated WebSocket"]
-    W --> N["Native Host only"]
+    W0 --> RP["Authenticated Runtime IPC"]
+    RP --> L["Agent listener sidecar (bytes only)"]
+    L --> G["Agent Browser IPC Policy Gateway"]
+    G --> B["BrowserExtensionBridge"]
+    B --> L
+    L --> NP["Authenticated Native Host IPC"]
+    NP --> N["Native Host only"]
     N --> E["Chrome Extension"]
     E --> P["Chrome APIs / CDP"]
     P --> T["Chrome Tab"]
@@ -306,21 +318,23 @@ flowchart LR
 MCP stdio
 → JavaScript wrapper
 → isolated Worker request
-→ HTTP request
-→ JSON encode/decode
-→ WebSocket
+→ length-prefixed Runtime IPC
+→ Agent policy / Bridge
+→ length-prefixed Native Host IPC
 → Native Messaging
 → Extension command
 → Chrome/CDP
 → 原路返回
 ```
 
-`0.4.1` 在模型侧 Chrome MCP 进程完成初始化后的关键安全边界是：
+`0.5.0` 在模型侧 Chrome MCP 进程完成初始化后的关键安全边界是：
 
-- trusted HTTP token 在模型侧只存在于 Worker 的 `workerData` 和 Worker 私有网络栈；Anybox Agent 服务端仍在自身模块闭包中持有验证凭据。
-- Browser Runtime 只持有不可枚举的结构化 transport，不读取 token、base URL 或全局 `fetch`。
+- Agent 只向受管 Chrome MCP 注入当前 Agent 进程的 Runtime endpoint、broker ID 和 bootstrap proof；`node-repl-server.js` 创建 Worker 后从模型可见环境删除这些值。
+- Browser Runtime 只持有不可枚举的结构化 transport，不读取 endpoint/proof，也不获得原始 socket。
 - 模型侧只能发送普通 allowlist command；`trusted-command`、raw evaluate 和 CDP 在 Worker 内再次拒绝。
-- Extension 不再保留 direct WebSocket fallback，连接必须经过 Native Messaging Host。
+- Agent Gateway 在 Runtime endpoint 再次执行 schema/method/role 校验，并把 context 交给既有 Bridge；Runtime 无法连接 Native Host endpoint 冒充该角色。
+- Native Host 使用一次性、短期 bootstrap proof；Extension 不保留直连或 WebSocket fallback，连接必须经过 Chrome Native Messaging Host。
+- Windows pipe 由无 policy 能力的 Node sidecar 监听，以避开 Bun `node:net` listener 与 MCP child process 并存的运行时崩溃；这没有把 policy 移出 Agent 主进程。
 
 ### 4.2 从本机 Codex 可观察到的 Browser Runtime 抽象
 
@@ -366,7 +380,7 @@ flowchart LR
 
 关键要求是：
 
-> JavaScript Runtime 只能获得 Browser Facade，不能通过持有 localhost token 绕过 Browser Policy Gateway。
+> JavaScript Runtime 只能获得 Browser Facade，不能通过持有 raw endpoint/proof 或直接连接 Native Host 绕过 Browser Policy Gateway。
 
 ---
 
@@ -478,7 +492,7 @@ Trace 中两次完整 `interactiveSnapshot()` 都产生约 90.7 KB 数据，随�
 这意味着：
 
 1. 扩展先收集完整数据。
-2. 数据通过 Native Messaging、WebSocket、HTTP、MCP 多次序列化。
+2. 数据仍通过 Native Messaging、两段 IPC framing 和 MCP 多次序列化；HTTP/WebSocket 两次协议转换已经删除。
 3. Node REPL 同时把结果转为 text 和 structuredContent。
 4. Anybox 外层发现过大后再落盘和截断。
 5. Agent 没拿到完整内容，只能继续尝试其他办法。
@@ -515,7 +529,7 @@ Trace 中一个约 16.9 KB 的 snapshot，最终 `modelOutput.json` 达到约 59
 
 这不是单纯的“Agent 太冒进”。它说明高层 API 无法稳定完成复杂编辑器和发布流程，而初始审计版本又默认暴露了 raw evaluate/CDP 作为近距离逃生通道。
 
-`0.4.1` 实施状态：
+`0.5.0` 当前状态：
 
 - 模型可见 Browser Runtime 的 `evaluate()` 和 `cdp.send()` 现在 fail-closed。
 - 隔离 Worker 同时拒绝 `trusted-command`、`page.executeScript` 和 `cdp.send`，不能通过直接构造 transport request 绕过。
@@ -556,7 +570,7 @@ Agent 只能用 `setTimeout` 猜页面是否完成变化。
 | 输入与表单 | 2/5 | 5/5 | 基础 click/fill 可用，复杂控件和框架兼容不足 |
 | Capability 系统 | 1/5 | 5/5 | raw capability 已默认关闭，但仍无协商、动态过滤和 capability docs |
 | 逐动作权限 | 1/5 | 5/5 | Node 路径只有粗粒度 js 审批 |
-| 本地接口安全 | 4/5 | 5/5 | HTTP/WS/Origin/loopback/result ownership 已加固；transport token 生命周期和来源证明仍不足 |
+| 本地接口安全 | 4/5 | 5/5 | Browser HTTP/WS 与长期 token 已删除，IPC role/proof/result ownership 已回归；仍缺 peer PID/SID/uid 与包 provenance |
 | 错误与取消 | 1/5 | 5/5 | 错误弱、超时不取消、无 abort propagation |
 | 输出预算 | 1/5 | 5/5 | 大对象完整生成后才由外层截断 |
 | 可观测性 | 2/5 | 5/5 | 有 trace，但看不到结构化 nested browser command |
@@ -643,7 +657,7 @@ Promise.race([
 #### 优化方向
 
 - 每个执行单元必须拥有可取消的 runtime/cell。
-- 浏览器 HTTP 请求接收 `AbortSignal`。
+- Browser IPC request 接收 `AbortSignal` 并映射为协议 cancel。
 - Browser bridge pending command支持 cancel。
 - 超时后禁止提交任何晚到副作用或输出。
 - CPU 死循环必须能由宿主中断，而不是依赖同一 event loop 的 timer。
@@ -724,24 +738,17 @@ require("node:process")
 - 文件、网络、shell 应继续通过 Anybox 正常工具体系和权限系统。
 - 如果保留 general Node 模式，应与 Chrome Browser Runtime 分离成不同插件/权限。
 
-### 7.6 缺少 request metadata
+### 7.6 request metadata 基础已接通，授权上下文仍不完整
 
-当前 MCP Server 忽略 `tools/call` 的请求元数据，也没有提供：
+`0.5.0` 中 Anybox MCP manager 只对受管 Chrome binding 写入 `tools/call._meta` 的 `sessionID`、`messageID` 和 `toolCallID`。Node MCP Server 用 `AsyncLocalStorage` 将其绑定到当前 `js` 调用，Browser Facade 自动附加到每条 Worker/IPC command；模型不需要、也不能通过公共 Browser API 手填该 context。
 
-```js
-nodeRepl.requestMeta
-```
+当前仍缺：
 
-因此 Browser Runtime 无法知道：
-
-- session ID
-- message ID
-- tool call ID
-- 当前 Agent
-- 用户审批状态
-- browser-use trace context
-
-这是 Node 路径失去 tab ownership 和逐命令审计的根因之一。
+- 当前 Agent / delegated role
+- 用户审批或 permission proof
+- plugin/package provenance
+- 原子 tab claim/finalize ownership
+- response metadata 与完整 browser-use trace span
 
 #### 优化方向
 
@@ -1118,14 +1125,14 @@ Anybox 当前只有 Chrome，并不一定马上需要多浏览器选择，但 ca
 
 ### 10.3 已有基础协议 hello，但 Capability handshake 仍缺失
 
-`0.4.1` 的 Extension hello 当前发送并校验：
+`0.5.0` 的 Extension hello 当前继续发送并校验：
 
 - `protocolVersion`，当前固定为协议版本 `1`
 - `extensionInstanceID`
 - 固定 `extensionID`
 - `version`
 
-transport 与 host name 不再由客户端 hello/query 自报，而是由通过认证的服务端 WebSocket 路由绑定为固定 Native Host identity。
+transport 与 host name 不由客户端 hello/query 自报，而是由完成 Native IPC challenge/hello 的 Agent Gateway 固定绑定为 `native-ipc` / `com.anybox.browser`。在此之前，Browser IPC 还会独立校验 role、broker instance、client version 和 HMAC proof。
 
 当前仍没有发送：
 
@@ -1186,20 +1193,16 @@ Codex 当前模型将其分开：
 
 这种分层减少了误操作和猜 tab ID。
 
-### 11.2 Node REPL 路径没有传递 command context
+### 11.2 Node REPL 已传递基础 command context，Tab ownership 仍未闭环
 
-`browser-client.ts` 发 HTTP 请求时没有附带：
+`0.5.0` 已把 session/message/tool-call context 从 MCP `_meta` 经 `AsyncLocalStorage`、Worker 和 IPC 传到 Agent。Gateway 会在 `tabs.open` 成功后调用既有 Bridge ownership helper，`tabs.release` 也在 Agent 本地更新该状态。
 
-- sessionID
-- messageID
-- toolCallID
+这修复了“Node 路径完全没有 session context”的缺口，但仍不能等同完整 Tab 生命周期：
 
-因此：
-
-- `tabs.open` 不会被 bridge 标记为当前 session owned。
-- `preferredTabID()` 机制不适用于 Node 路径。
-- `release()` 很难建立正确的 session 归属。
-- 多个 Agent session 共享同一个 Browser bridge 时可能串台。
+- 没有原子的 user-tab claim。
+- `current()` / preferred tab 仍可能在多 Profile 或多 session 下漂移。
+- ownership 尚未绑定 permission proof、agent role 和 finalize disposition。
+- release 仍需与 debugger detach、interruption 和 browser shutdown 形成闭环。
 
 ### 11.3 `current()` 不是稳定 tab binding
 
@@ -1771,7 +1774,7 @@ Node 插件当前只把整个 `js` 工具设为 `ask`。
 → 写本地文件
 ```
 
-`0.4.1` 已让 raw evaluate/CDP 在 facade、Worker allowlist 和普通 `/command` 三层 fail-closed，但宿主仍看不到每一个高层 Browser action，也无法在真正提交前再次确认。
+`0.5.0` 已让 raw evaluate/CDP 在 facade、Worker allowlist 和 Agent IPC Gateway 三层 fail-closed，但宿主仍未对每一个高层 Browser action完成风险分类，也无法在真正提交前再次确认。
 
 ### 16.2 Codex 风格的关键不是“Skill 说要确认”
 
@@ -1789,41 +1792,44 @@ browser facade method
 → execute
 ```
 
-### 16.3 localhost Browser API 已统一鉴权
+### 16.3 localhost Browser control API 已删除
 
-`0.4.1` 当前：
+`0.5.0` 当前：
 
-- `/api/browser-extension/status`、`/command`、`/trusted-command` 都要求 `x-anybox-browser-trusted-token`。
-- `/health` 保持公开，但只返回最小健康信息，不暴露连接状态或控制能力。
-- token 比较使用 timing-safe comparison。
-- 生成的 trusted token 不再写回全局 `process.env`。
+- `/api/browser-extension/status`、`/command`、`/trusted-command` 和 `/ws` 均不再注册，回归测试要求返回 `404`。
+- `/api/browser-extension/health` 继续公开，但只返回带 `ok: true` 的最小 API envelope，不暴露 connection、pipe path、proof 或控制状态。
+- 生产代码没有自动回退到旧 HTTP/WebSocket transport 的分支或 feature flag。
+- Anybox Server 仍为 PTY 等非 Browser 功能保留通用 HTTP/WebSocket；这不能误写成 Browser control legacy transport 仍存在。
 
-入口鉴权问题已完成本轮修复。剩余风险不是“接口无 token”，而是 token 的授权范围仍然过大，尚未变成随 command context 生成的短期 capability。
+因此 localhost TCP、CORS、Origin 和 WebSocket hijacking 不再是 Browser control 的入口防线；它们被从该控制面移除，而不是只靠更复杂的 header 鉴权继续维持。
 
-### 16.4 Browser 控制路由已从开放 CORS 中隔离
+### 16.4 IPC transport 采用独立 endpoint 与严格 framing
 
-`createServerRuntime()` 仍需治理其他 `/api/*` 的全局 CORS 策略，但 Browser Extension API 已被单独排除：
+Runtime 与 Native Host 使用不同 endpoint。每条消息使用 4-byte big-endian 长度前缀 JSON，最大 frame 为 16 MiB；共享 decoder 覆盖完整、分片、合并、malformed JSON/UTF-8、零长度、超限和中途关闭。
 
-- Browser 控制路由不返回开放 CORS。
-- 带浏览器 `Origin` 的 HTTP 控制请求会被拒绝。
-- OPTIONS 预检不能获得控制接口授权。
-- status 也经过独立认证 middleware。
+连接必须先完成 challenge/hello：
 
-后续仍可补充 Host、Sec-Fetch-Site 和显式本机 client policy；从“恶意网页仅靠开放 CORS 访问 Browser API”的角度，本轮阻断已经完成。
+- 固定 `protocolVersion`
+- endpoint 绑定的 `role`
+- 当前 `brokerInstanceID`
+- challenge nonce 与 expiry
+- `clientInstanceID` / `clientVersion`
+- 对完整 transcript 的 HMAC proof
 
-### 16.5 WebSocket 已有基础认证与身份绑定
+未完成 hello、错误 role/protocol/broker、unknown message type、replay、过期 proof 和 role-only method 混淆都会 fail-closed。
 
-`0.4.1` 当前 `/ws`：
+### 16.5 Native Host IPC 已认证，长期 token 已删除
 
-- 要求 `Authorization: Bearer <browserTransportToken>`。
-- 拒绝带浏览器 Origin 的建连请求。
-- 忽略 query identity，不再接受客户端自报 `transport` 或 `hostName`。
-- 服务端固定注册为 `transport=native`、`hostName=com.anybox.browser`。
-- hello 必须通过协议 schema，并校验协议版本和固定 Extension ID。
-- 连接只有完成合法 hello 后才可接收命令。
-- 第一条 ready connection 在断开前保持 active，后续连接不能通过 hello 抢占。
+Native Host runtime config 只保存非秘密 locator：transport、protocol、Runtime/Native endpoint 和 bootstrap file path。旧 config 在安装/更新时会被 secret-free 文档覆盖。
 
-仍未解决的强威胁模型问题是：`browserTransportToken` 目前写入用户级 Native Host 运行时配置；暴露本地文件系统的 Node 模型进程可以读取该长期 transport credential。下一步应使用一次性 bootstrap、带 peer credential 的 Named Pipe/Unix socket 或等价 OS-bound IPC，并校验实际 Host/插件 provenance。
+Agent 启动时写出 mode `0600` 的 Native bootstrap 文件；proof：
+
+- 最长有效 5 分钟；
+- hello 成功即消费并删除；
+- 过期、重放和旧 broker instance 均拒绝；
+- Native Host 断开后重新轮换。
+
+Windows listener 使用进程 token 默认 DACL，且没有 `readableAll` / `writableAll` grant；Unix socket 目录为 `0700`、socket 为 `0600`。但是当前 Node/Rust 组合没有在应用层校验 peer PID/SID/uid，所以“同一用户下任意进程”仍是残余威胁，固定 pipe 名也明确不被当作认证。
 
 ### 16.6 command result 已绑定 connection ownership
 
@@ -1835,23 +1841,22 @@ pending.connectionID === connection.connectionID
 
 非 owner connection 返回的成功或失败 result 都会被忽略；owner 断开时对应 pending command 会失败，不会由其他连接接管。这一协议不变量已有成功/失败两类回归测试。
 
-### 16.7 trusted HTTP token 已移入隔离 Worker
+### 16.7 Runtime IPC proof 与模型环境隔离
 
-`0.4.1` 当前设计：
+`0.5.0` 当前设计：
 
-- Agent 只向受管的 Chrome plugin binding 注入 browser credentials，并对环境变量名做 Windows 大小写不敏感过滤。
-- `node-repl-server.js` 在模型代码运行前创建独立 `browser-gateway-worker.js`。
-- trusted HTTP token 只通过 `workerData` 进入 Worker；初始化后从主进程环境删除。
-- Worker 拥有独立的 `fetch` 和 diagnostics 环境，模型修改真实 global fetch 或订阅主线程 undici diagnostics 不能观察 token/header。
-- Browser Runtime 只得到存放在 JavaScript `#private` field 中的结构化 transport，不读取 token、base URL 或网络实现。
-- Worker 对 request type 和 method 做 allowlist，模型不能借 transport 构造 `trusted-command`。
+- Agent 只向受管 Chrome plugin binding 注入当前进程的 Runtime endpoint、broker ID 和随机 proof；对环境变量名做 Windows 大小写不敏感过滤，generic MCP 不会获得这些值。
+- `node-repl-server.js` 先把凭据放入独立 `browser-gateway-worker.js` 的 `workerData`，再从模型可见 `process.env` 删除所有 legacy 和 IPC credential。
+- Browser Runtime Facade 不暴露 endpoint、proof、socket 或通用 request 方法。
+- Worker 只加载 IPC client，既不调用 HTTP，也不允许模型替换 `fetch` 观察流量；request type 与 method allowlist 拒绝 `trusted-command`、`page.executeScript` 和 `cdp.send`。
+- Agent Gateway 仍对 Worker 消息做独立 schema、role 和 method 校验，Worker 不是授权边界的唯一一层。
 
-测试覆盖 `require("process").env`、真实 global fetch monkeypatch、undici diagnostics 和非 loopback gateway。
+测试覆盖 generic MCP env、受管 Chrome env、模型 `process.env`、global `fetch` hook、原始方法拒绝、reset/reconnect 和 stale broker。
 
 剩余问题：
 
-- Agent 当前主要依据 plugin owner ID / binding ID 决定注入，仍需要 package signature、固定 runtime hash 或等价 provenance 校验。
-- Native transport token 与 trusted HTTP token 已分离，但前者仍以长期值落盘。
+- Runtime proof 在 Agent 进程内轮换，不长期落盘，但受管 Node MCP 本身仍是同一用户的本地进程；缺少 PID/SID 绑定。
+- Agent 主要依据 plugin owner ID / binding ID 决定注入，仍需要 package signature、固定 runtime hash 或等价 provenance 校验。
 
 ### 16.8 页面内容的 prompt injection 治理不足
 
@@ -1873,7 +1878,7 @@ pending.connectionID === connection.connectionID
 
 ### 16.9 raw evaluate/CDP 已默认关闭，等待正式 capability policy
 
-`0.4.1` 中 `tab.evaluate()` 和 `tab.cdp.send()` 会 fail-closed；隔离 Worker 也不会转发 `page.executeScript`、`cdp.send` 或任何模型发起的 `trusted-command`。
+`0.5.0` 中 `tab.evaluate()` 和 `tab.cdp.send()` 会 fail-closed；隔离 Worker 与 Agent IPC Gateway 都不会转发 `page.executeScript`、`cdp.send` 或任何模型发起的 `trusted-command`。
 
 重新开放前仍应拆成 capability：
 
@@ -1899,7 +1904,16 @@ full developer CDP
 
 ### 17.1 已有协议版本校验，但缺少兼容协商
 
-`0.4.1` 之后，Extension hello 已携带并校验：
+`0.5.0` 有两层显式 hello。Browser IPC hello 校验：
+
+- 固定 `protocolVersion: 1`
+- endpoint 绑定的 Runtime / Native Host role
+- 当前 Agent `brokerInstanceID`
+- client version / instance
+- 有 deadline 的 challenge nonce
+- HMAC transcript proof
+
+Extension hello 继续校验：
 
 - 固定的 `protocolVersion: 1`
 - `extensionID`
@@ -1913,11 +1927,11 @@ Broker 会拒绝协议版本、固定 Extension ID 或 transport identity 不匹
 - capability version
 - downgrade / incompatible error contract
 
-当前可见版本为：plugin `0.4.1`、Extension `0.1.1`、Browser Runtime `0.1.1`、Native Host `0.2.1`、Node MCP Server `0.2.1`，command protocol 为 `v1`。版本已显式化，但还没有形成兼容矩阵。
+当前可见版本为：plugin `0.5.0`、Extension `0.1.1`、Browser Runtime `0.2.0`、Native Host `0.3.0`、Node MCP Server `0.3.0`，Browser IPC 与 Extension command protocol 均为 `v1`。版本已显式化，但还没有形成完整 compatibility matrix。
 
 ### 17.2 active connection 已避免“最后 hello 覆盖”，多实例治理仍不足
 
-Broker 当前采用 first-ready sticky 选择，并把 pending result 绑定到发起命令的 connection；无效或后到连接不能直接抢占 active connection。Extension 的直连 WebSocket fallback 已移除，当前只允许 Native Messaging 链路。
+Broker 当前采用 first-ready sticky 选择，并把 pending result 绑定到发起命令的 connection；无效或后到连接不能直接抢占 active connection。Extension 只允许 Native Messaging 链路；Native Host 只允许 IPC，不存在 direct WebSocket 或自动 fallback。
 
 连接断开时已有确定的剩余连接 fallback，但仍需要定义：
 
@@ -1935,30 +1949,32 @@ Bridge 有 `ping()`，但没有看到周期性：
 - stale connection eviction
 - command 前健康检查
 
-TCP/WebSocket 未及时报告断开时，active connection 可能长期处于假连接状态。
+Named Pipe/UDS 和 Native Messaging 会报告正常断开，但半开连接仍可能长期处于假连接状态；transport 迁移没有替代 application-level heartbeat。
 
-### 17.4 Native Host 到 Broker 已认证，但凭据生命周期和来源证明仍不足
+### 17.4 凭据生命周期已收口，peer 来源证明仍不足
 
-Rust Host 当前使用 Bearer transport token 连接 Broker；Broker 同时校验 Origin、固定的 native transport identity、Extension ID 和 protocol hello。凭据不再放入 URL query，Host 还会拒绝带 credential、query 或 fragment 的 endpoint。
+Rust Host 当前读取短期 bootstrap 文件，通过 Native endpoint challenge/response 连接 Broker。proof 一次消费、最长 5 分钟、绑定 broker/role/nonce/client identity；配置文件不再保存 token 或 proof。
 
 当前剩余风险是：
 
-- transport token 仍以长期明文形式存在用户 runtime config 中。
-- token 尚未按启动或连接轮换，也不是一次性 bootstrap proof。
-- Host/插件来源证明主要依赖本机文件 owner、固定 binding 和协议身份，还不是签名或 hash 级 provenance。
-- 尚无 OS-bound secret store、named pipe ACL 或等价的强本机身份机制。
+- Node listener 使用默认 Windows DACL，UDS 使用 `0700/0600`；但自动测试不能模拟另一 Windows 用户，且应用层没有验证 peer PID/SID/uid。
+- 同一用户、能在 proof 有效窗口读取 bootstrap 文件的恶意进程，理论上可能抢先消费 Native proof。
+- Host/插件来源证明主要依赖用户级安装位置、固定 Extension ID/binding 和协议身份，还不是签名、hash 或进程证明。
+- Runtime proof 只进入受管 MCP 并随 Agent 进程轮换，但也尚未绑定具体子进程身份。
 
-因此这里的状态是“完成首批认证基线”，不是 transport credential 闭环。
+因此 transport credential 的“长期明文落盘”阻断已经解除，但强 peer provenance 仍未闭环。
 
-### 17.5 agentBaseURL 已强制 loopback
+### 17.5 Endpoint、stale socket 与重启策略
 
-Native Host 当前只接受经过解析和校验的 loopback endpoint，并覆盖：
+Windows endpoint 是当前用户 home identity hash 派生的固定 pipe locator；它不是 secret。macOS/Linux endpoint 位于 Agent state 下的私有目录。Gateway：
 
-- `127.0.0.0/8`
-- `::1`
-- `localhost`
+- Runtime 与 Native Host 分 endpoint，避免角色混淆。
+- 启动前只清理自己 IPC 目录下、且实际类型为 socket 的 stale UDS；拒绝删除普通文件或目录外路径。
+- Agent restart 生成新 broker ID 和 proof，旧 hello 被 `BROKER_STALE` 拒绝。
+- shutdown 终止连接、拒绝 pending Runtime request、删除自有 bootstrap 和 UDS。
+- Native Host 断开后 provision 新的一次性 bootstrap；Runtime client 在 reset 或断线后重新连接。
 
-非 loopback、带 URL credential、query 或 fragment 的地址会被拒绝，并已有对应回归测试。
+Windows Named Pipe rebind、Native Host 重连、Runtime reset/reconnect 已有实际跨进程回归；Unix stale socket 逻辑在本轮 Windows 环境未执行。
 
 ### 17.6 缺少 cancel command
 
@@ -2165,13 +2181,15 @@ type BrowserApprovalProof = {
 ```text
 MCP stdio
 → Node child
-→ HTTP localhost
-→ Agent route
+→ isolated Worker
+→ Runtime Named Pipe / UDS
+→ listener sidecar byte relay
+→ Agent Gateway
 ```
 
 之后才进入原有 bridge。
 
-如果每个浏览器动作单独调用一次 `js`，开销会比旧 MCP 更高。
+相较 `0.4.1`，HTTP route 和 WebSocket 两套协议/重连已经删除；代价是本机 IPC framing、listener sidecar 与跨平台 ACL/重连诊断复杂度。若每个浏览器动作仍单独调用一次 `js`，开销依然会比旧 MCP 高。
 
 ### 20.2 Node REPL 的优势没有被充分利用
 
@@ -2474,12 +2492,12 @@ type BrowserCommandSpan = {
 
 ## 24. 打包、版本和发布差距
 
-`0.4.1` 当前状态：
+`0.5.0` 当前状态：
 
 - `packages/chrome-plugin/` 继续作为权威源码，`plugins/Anybox-Plugins/chrome/` 为生成分发目录。
-- source/package 一致性检查已通过，当前打包结果共 `21` 个文件。
-- `browser-gateway-worker.js` 已进入 required package files。
-- manifest、README、Skill 与运行能力仍需做语义一致性检查；当前 `.anybox-plugin/plugin.json` 仍宣称允许 raw page JavaScript/CDP，与运行时默认拒绝的事实不一致。
+- source/package 一致性检查已通过，当前打包结果共 `22` 个文件。
+- `browser-gateway-worker.js` 和 `browser-ipc-client.cjs` 均进入 required package files。
+- manifest、README、Skill 与运行能力的语义检查已加入；负例会拒绝重新宣称 raw page JavaScript/CDP。
 
 ### 24.1 当前 package layout 是良好基础
 
@@ -2501,14 +2519,13 @@ chrome/
   docs/
 ```
 
-### 24.2 package check 已覆盖本轮新增运行文件，文档语义检查仍缺
+### 24.2 package check 已覆盖 IPC 运行文件与 capability 语义
 
-本轮已更新 required package files、stage copy、package snapshot、package validation 和 stale generated package test，能够发现 Worker 遗漏或 source/package 漂移。
+本轮已更新 required package files、stage copy、package snapshot、package validation 和 stale generated package test，能够发现 IPC client/Worker 遗漏或 source/package 漂移；semantic validation 会交叉检查 manifest、README、Skill 和 Runtime raw capability。
 
 下一步仍需补：
 
 - packaged docs 可读性和 hash/完整性检查
-- manifest/README/Skill 与实际 capability 的语义一致性测试
 - compatibility matrix
 - 旧版本拒绝或降级测试
 
@@ -2516,12 +2533,12 @@ chrome/
 
 当前版本已显式更新为：
 
-- plugin `0.4.1`
-- Node MCP Server `0.2.1`
-- Browser Runtime `0.1.1`
+- plugin `0.5.0`
+- Node MCP Server `0.3.0`
+- Browser Runtime `0.2.0`
 - Extension `0.1.1`
-- Native Host `0.2.1`
-- command protocol `v1`
+- Native Host `0.3.0`
+- Browser IPC / command protocol `v1`
 
 至少统一管理：
 
@@ -2574,33 +2591,42 @@ plugins/Anybox-Plugins/chrome/scripts/browser-client.mjs
 
 本轮验证结果为：
 
-- Agent 定向安全与运行测试：`37` 项通过。
-- plugin marketplace 相关测试：`46` 项通过。
+- Shared 全量测试：`96` 项通过，其中 Browser IPC framing/protocol `11` 项。
+- Agent Browser route/Bridge/IPC/packaged Runtime 定向测试：`29` 项通过。
+- Agent MCP 集成：`12` 项通过。
+- plugin marketplace 全量回归：`46` 项、`563` 个断言通过，包含 Chrome package 加载、安装与 diagnostic。
 - Extension privacy：`8` 项通过。
-- Browser Runtime：`4` 项通过。
-- Native Host：`12` 项通过。
-- packaging tooling：`10` 项通过。
-- package check：通过，分发包 `21` 个文件。
+- Browser Runtime：`8` 项通过。
+- Native Host：`9` 个 unit + `1` 个真实 Windows Named Pipe integration 通过。
+- packaging tooling：`11` 项通过。
+- package check：通过，分发包 `22` 个文件。
+- Desktop managed Agent runtime：隔离输出目录的完整 build + verify 通过，包含 `ipc-listener-sidecar.mjs`。
+
+补充验证：Shared 与 Desktop TypeScript typecheck 通过。`packages/anyboxagent` 的全量 `tsc` 已执行，但仍被本次改动范围外的 `permission.ts`、Cinema/API、plugin fixture 和 server fixture 共 `8` 个既存类型错误阻塞；本轮新增 IPC 源码和测试不在剩余错误列表中。
 
 当前覆盖已包括：
 
 - package layout
-- MCP tools/list
+- MCP initialize、tools/list 和安全代表性 tools/call
 - `globalThis` state
 - browser runtime preload
-- `/status`、`/command`、`/trusted-command` 鉴权
-- Browser control CORS/Origin 拒绝
-- WebSocket Bearer token、Origin、protocol 和 identity 校验
+- legacy `/status`、`/command`、`/trusted-command`、`/ws` 均为 `404`，`/health` 最小化
+- IPC 完整/分片/合并 frame、malformed JSON/UTF-8、非法/超限长度和中途关闭
+- challenge/hello、protocol/role/broker/client identity、HMAC proof、expiry/replay/stale broker
+- Runtime/Native endpoint 与 method 角色隔离
+- Windows Named Pipe Agent、Runtime 和 Rust Native Host 跨进程连接
 - result connection ownership
 - first-ready connection selection
-- trusted token Worker 隔离
+- owner disconnect 失败 pending command
+- Runtime proof/endpoint 的 Worker 与模型环境隔离
 - raw evaluate/CDP 三层拒绝
-- non-loopback、URL credential、query 和 fragment 拒绝
+- reset/shutdown/rebind/reconnect 与 Native proof rotation
+- 旧 token config 的 secret-free 升级
 - snapshot/interactive/DOM/AX editable 与 sensitive 文本脱敏
 - URL path/query/fragment、本地路径和敏感属性脱敏
 - screenshot image emission
 - Native Messaging framing
-- Host WebSocket forwarding
+- Native Host IPC forwarding
 
 ### 25.2 当前缺少的关键测试
 
@@ -2614,12 +2640,11 @@ plugins/Anybox-Plugins/chrome/scripts/browser-client.mjs
 - circular/BigInt output
 - 大输出预算
 - image 不重复 base64
-- request/response metadata
+- response metadata、plugin/tab ownership context 与多并发 request context 隔离
 
 #### Browser Security
 
-- transport token rotation / expiry
-- OS-bound credential 或一次性 bootstrap proof
+- 另一 Windows 用户对 Named Pipe 的实际拒绝测试与 peer PID/SID/uid 验证
 - Native Host / plugin 签名或 hash provenance
 - 多 Chrome Profile / instance ownership
 - heartbeat、stale connection eviction
@@ -2710,20 +2735,21 @@ tab cleanup correctness
 
 优先级：P0，任何扩大灰度之前必须完成。
 
-状态：**进行中；认证、传输基线和结构化文本隐私首批已落地，但 Phase 0 整体尚未退出。**
+状态：**进行中；本机 IPC 迁移、长期 transport token 清理和结构化文本隐私已落地，但 Phase 0 整体尚未退出。**
 
 目标状态：
 
-- [x] `/status`、`/command`、`/trusted-command` 等浏览器控制入口鉴权。
-- [x] Browser control routes 不返回开放 CORS，并拒绝浏览器 Origin 发起的 HTTP/WS 控制请求。
-- [x] WebSocket 建连校验 Bearer token、Origin、协议版本和 client identity。
+- [x] `/status`、`/command`、`/trusted-command` 和 Browser `/ws` 从生产路由删除；只保留最小 `/health`。
+- [x] Runtime / Native Host 使用独立 Named Pipe/UDS endpoint，严格 length-prefixed framing、大小上限和角色 schema。
+- [x] IPC hello 校验 challenge HMAC、role、协议版本、broker instance 和 client identity。
 - [x] command result 只能完成同一 connection 发起的 pending request。
-- [x] Native Host 只连接经过校验的 loopback endpoint。
-- [x] HTTP trusted token 与模型 Node 环境隔离；模型替换全局 `fetch` 或读取 `process` 均不能观察该 token。
+- [x] Native Host 只能连接 Agent Native IPC endpoint；Browser Runtime 不能绕过 Agent 或使用 Native role/method。
+- [x] Runtime IPC endpoint/proof 与模型 Node 环境隔离；模型替换 `fetch`、读取 `process` 或探测 Facade 均不能获得原始 transport。
 - [x] snapshot、interactive snapshot、DOM tree 和 AX tree 默认不输出 editable/sensitive 值，URL/本地路径按 fail-closed 策略脱敏。
 - [x] raw page evaluate/CDP 在模型路径默认关闭。
-- [ ] manifest、README、Skill 对 raw capability 的声明与实际 fail-closed 行为一致。
-- [ ] transport token 不再以长期明文形式保存在 runtime config，并具备 rotation/expiry 或 OS-bound bootstrap。
+- [x] manifest、README、Skill 对 raw capability 的声明与实际 fail-closed 行为一致。
+- [x] transport token 不再以长期明文形式保存在 runtime config；Native bootstrap proof 一次消费、过期/断线轮换。
+- [ ] OS ACL 的跨用户拒绝有平台实测，且 peer PID/SID/uid 与受管进程身份绑定。
 - [ ] Native Host / plugin 具备强于 owner/binding 的 provenance proof。
 - [ ] screenshot、trace、fill/type 参数和错误对象完成统一脱敏。
 - [ ] 每条浏览器命令携带 session、message、tool call、plugin 和 tab ownership 上下文。
@@ -2731,20 +2757,21 @@ tab cleanup correctness
 
 建议交付物：
 
-1. Browser transport gateway：**已完成首批**；尚未成为完整 Policy Gateway。
-2. 短期 scoped capability token：**未完成**；当前 token 是运行期 transport credential，不是逐命令 permission proof。
-3. WebSocket challenge/response 或等价本机认证：**完成当前 Bearer + identity 基线**；credential lifecycle/provenance 仍需加强。
+1. Browser transport gateway：**IPC transport、role、context routing 已完成**；逐命令风险/确认仍未成为完整 Policy Gateway。
+2. 短期 scoped capability token：**transport bootstrap 已完成，command permission proof 未完成**；两者不是同一个授权层。
+3. 本机认证：**challenge HMAC + 短期/进程期 proof 已完成**；OS peer credential/provenance 仍需加强。
 4. snapshot redaction policy：**结构化文本输出已完成**；screenshot/trace/error 未完成。
 5. result ownership 校验：**已完成**。
 6. 安全回归测试集：**已完成首批**。
 
 退出条件：
 
-- [x] 未认证页面无法调用任何读写浏览器命令。
-- [x] 恶意网页不能仅靠访问 localhost 控制浏览器。
+- [x] 未认证本机 client 无法调用任何读写浏览器命令。
+- [x] 恶意网页没有 Browser control TCP/HTTP/WebSocket endpoint 可直接访问。
 - [x] 一个旧连接或伪造连接不能回应另一个连接的 request。
-- [x] 模型执行环境无法获得 HTTP trusted token。
-- [ ] Native transport credential 不再是长期明文 secret。
+- [x] 模型执行环境无法获得 Runtime proof 或原始 IPC transport。
+- [x] Native transport credential 不再是长期明文 secret。
+- [ ] 跨用户 ACL 与同用户 peer process provenance 有强验证。
 - [x] 敏感 editable 值不进入 Browser 结构化文本输出。
 - [ ] fill/type、screenshot、trace 和错误对象有统一且经过真实 Chrome fixture 验证的脱敏策略。
 - [ ] command-boundary context、risk、permission proof、tab ownership 和 cancellation 形成闭环。
@@ -2990,7 +3017,7 @@ flowchart LR
 
 - 决定某个网站能否点击；
 - 保存浏览器长期 token；
-- 直接拼 HTTP request；
+- 直接创建 IPC socket 或拼 transport request；
 - 推断 tab ownership。
 
 ### 27.2 Browser Facade
@@ -3218,13 +3245,14 @@ raw evaluate/scoped CDP
 
 ### 30.1 Security Gate
 
-- [x] `/status`、`/command`、`/trusted-command` 都有适当鉴权。
-- [x] Browser control routes 拒绝浏览器 Origin；任何例外必须显式 allowlist。
-- [x] WebSocket 校验 Origin、token、client identity 和协议版本。
+- [x] Browser `/status`、`/command`、`/trusted-command`、`/ws` 已删除，且没有生产 fallback。
+- [x] `/health` 不暴露 pipe、connection、proof 或控制状态。
+- [x] Runtime/Native IPC 使用分离 endpoint、严格 framing、role、protocol、broker 和 challenge proof。
 - [x] pending request 与 connection 绑定。
-- [x] Native Host 只连接 loopback allowlist。
-- [x] HTTP trusted token 不进入模型可读环境。
-- [ ] Native transport credential 不以长期明文形式落盘，并具备 rotation/expiry 或 OS-bound proof。
+- [x] Native Host 不能调用 Runtime-only method；Runtime 不能直接访问 Native Host/Extension。
+- [x] IPC endpoint/proof 与原始 socket 不进入模型可读环境。
+- [x] Native transport credential 不以长期明文形式落盘，并具备一次消费、rotation 和 expiry。
+- [ ] Windows 跨用户 ACL 拒绝与 peer PID/SID/uid 绑定通过平台测试。
 - [x] raw evaluate/CDP 默认关闭。
 - [ ] 所有 mutation 在 command boundary 重新做 policy check。
 
@@ -3296,11 +3324,12 @@ raw evaluate/scoped CDP
 ### 30.8 Release Gate
 
 - [x] source 与 packaged plugin 一致性测试通过。
-- [ ] manifest、README、Skill 与运行时 capability 语义一致。
+- [x] manifest、README、Skill 与运行时 capability 语义一致。
+- [x] IPC client、Worker、Native Host 和 secret-free installer 进入生成包。
 - [ ] extension/host/agent/plugin compatibility matrix 通过。
 - [ ] 旧版本拒绝或降级行为明确。
 - [ ] feature flag 与回滚已演练。
-- [ ] Windows 安装、更新、卸载和重连路径通过。
+- [ ] Windows 完整 Chrome 安装、更新、卸载矩阵通过；当前只验证安装配置升级、Host 启动、Named Pipe forwarding 和重连。
 - [ ] nightly eval 无关键场景回归。
 
 ## 31. 建议的前 10 个 PR
@@ -3335,23 +3364,23 @@ raw evaluate/scoped CDP
 - [ ] screenshot 像素/metadata 策略。
 - [ ] 通用错误对象 secret fixture。
 
-### `0.4.1` 之后的 Phase 0 收尾 PR（不计入原 10 个编号）
+### `0.4.1` 之后的 Phase 0 收尾工作（不计入原 10 个编号）
 
 执行顺序应固定为：
 
-1. **P0-0：Capability declaration hotfix**：先修正 source/package 中 `.anybox-plugin/plugin.json` 对 raw page JavaScript/CDP 的错误声明，并增加 manifest/README/Skill/runtime 语义一致性测试。
-2. **P0-A：Native transport credential 与 provenance**。
+1. **P0-0：Capability declaration hotfix**：**`0.5.0` 工作区已完成**；source/package manifest、README、Skill/runtime 与语义负例测试一致。
+2. **P0-A：Native transport credential 与 provenance**：**transport 与 credential lifecycle 已完成；peer provenance 部分未完成**。
 3. **P0-B：PR 2 剩余隐私边界**。
 4. PR 3 Command Registry，再进入 PR 4 command-boundary policy/ownership。
 
 P0-A 范围：
 
-- 移除 runtime config 中长期明文 transport token。
-- 引入按启动/连接轮换的一次性 bootstrap、OS-bound secret 或受 ACL 保护的本机 IPC。
-- 让 Broker 验证强于 owner/binding 的 Host/插件 provenance。
-- 增加 expiry、replay、stale credential 和安装升级 fixture。
+- [x] 移除 runtime config 中长期明文 transport token。
+- [x] 引入按启动/连接轮换的一次性 bootstrap 和受 ACL 保护的 Named Pipe/UDS。
+- [ ] 让 Broker 验证强于 owner/binding 的 Host/插件 provenance。
+- [x] 增加 expiry、replay、stale broker/credential 和安装升级 fixture。
 
-P0-B 范围是 trace、fill/type、screenshot 和 error redaction。P0-0、P0-A、P0-B 都通过对应 Release/Security/Privacy Gate 后，再进入 PR 3；不要把“首批 hardening 已完成”误写成“Phase 0 已完成”。
+P0-B 范围是 trace、fill/type、screenshot 和 error redaction。P0-0 已完成，P0-A 还剩 peer provenance，P0-B 未完成；不要把“IPC 已连接”误写成“Phase 0 已完成”。
 
 ### PR 3：统一 Command Registry 与结构化错误
 
@@ -3366,7 +3395,7 @@ P0-B 范围是 trace、fill/type、screenshot 和 error redaction。P0-0、P0-A�
 
 ### PR 4：上下文、权限与 ownership gateway
 
-状态：**仅有 transport gateway 和 raw deny 基础，核心未完成。**
+状态：**已有 IPC transport gateway、raw deny 和 session/message/tool-call context 透传；逐命令 risk/permission proof、完整 ownership 和 cancel 核心未完成。**
 
 范围：
 
@@ -3485,25 +3514,29 @@ Runtime 中只保留极小的故障兜底文档，例如“docs 缺失、版本�
 
 - Node REPL 是执行基础设施。
 - Browser Runtime 是注入其中的受策略约束能力。
-- Browser trusted transport 当前已通过独立 `browser-gateway-worker.js` 隔离，模型只拿到 allowlisted facade。
-- 不应依赖模型自己从 env 读取 token 再拼 HTTP。
+- Browser trusted transport 当前已通过独立 `browser-gateway-worker.js` 隔离，模型只拿到 allowlisted facade；IPC endpoint/proof 在 Worker 初始化后从模型环境清除。
+- 不应依赖模型自己从 env 读取 proof 或创建 Named Pipe/UDS socket。
 
 这样以后接入文件、桌面自动化或其他 Runtime 时，不会复制浏览器安全错误。
 
 ### 32.4 HTTP/WebSocket 还是本机 IPC
 
-当前已经落地 authenticated loopback HTTP/WebSocket，并完成了 Browser route Origin 隔离、Bearer auth、connection identity、protocol v1 和 result ownership。
+当前 Browser control 已切换为本机 IPC：Windows Named Pipe 已实测，macOS/Linux 使用同一接口的 Unix Domain Socket 实现但尚未在本轮 Windows 工作区执行。旧 HTTP/WebSocket command routes 和长期 bearer token 已删除，且没有自动降级。
 
-短期继续使用这条链路前，仍必须补：
+收益：
 
-- transport token rotation / expiry；
-- 一次性或 OS-bound bootstrap；
-- command-scoped permission proof；
-- Host/插件 provenance；
-- 完整 protocol compatibility negotiation；
-- TLS 不作为 localhost 安全的替代品。
+- 不再开放 Browser control TCP 端口，减少 localhost 探测、CORS、Origin、DNS rebinding/WS hijacking 和 Host header 防护面。
+- 不再长期落盘 transport bearer token。
+- 两个独立 endpoint 与 role handshake 减少 Runtime/Native Host 混淆。
+- HTTP → Bridge → WebSocket 的双层协议和重连收敛为统一 framing。
 
-其中 token rotation 不能只停留在配置文件换值；下一步应优先移除 runtime config 中的长期明文 transport token。长期可评估 named pipe 或其他带 ACL 的本机 IPC，以减小被网页探测和 CSRF/WS hijacking 的攻击面。无论采用何种传输，应用层身份、权限和 ownership 仍然不可省略。
+代价：
+
+- 新增 Windows ACL、Unix mode、stale socket、安装升级、sidecar 交付、重连和跨平台诊断复杂度。
+- Named Pipe/UDS 权限不等于应用层身份；当前还缺 peer PID/SID/uid 与包 provenance。
+- transport proof 只解决本机连接认证，不是逐命令 permission proof。
+
+因此后续仍需补 command-scoped policy、Host/插件 provenance、完整 compatibility matrix 和跨平台实测。Codex 在这里提供的是“可信本机 IPC 边界”的参考，不要求 Anybox 逐文件或逐组件照抄。
 
 ### 32.5 Documentation 应该多长
 
@@ -3564,19 +3597,22 @@ Codex 当前 `documentation()` 较长，价值在于它是精确、动态且与�
 
 ## 35. 最终判断
 
-Anybox 当前并不是“只比 Codex 少几个浏览器工具”。在 `0.4.1` 这一轮之后，它已经从“只跑通最小链路”推进到具备认证传输和首批 fail-closed 隔离的安全基线：
+Anybox 当前并不是“只比 Codex 少几个浏览器工具”。在 `0.5.0` 工作区实现之后，它已经从 localhost HTTP/WebSocket 认证基线推进到受认证本机 IPC 和首批 fail-closed 隔离：
 
 ```text
 MCP js
   → Node-like execution service
   → browser facade
   → isolated browser-gateway-worker
-  → authenticated desktop agent bridge
-  → Native Messaging / Native Host
+  → authenticated Runtime Named Pipe / UDS
+  → Agent Browser IPC Policy Gateway
+  → BrowserExtensionBridge
+  → authenticated Native Host Named Pipe / UDS
+  → Native Host / Chrome Native Messaging
   → Chrome extension
 ```
 
-当前基线已经包括：HTTP/WS 鉴权、Browser Origin 限制、protocol/Extension identity 校验、connection-owned result、loopback validation、模型 token 隔离、editable 结构化输出默认脱敏，以及 raw evaluate/CDP 默认关闭。
+当前基线已经包括：严格 framing、分离 role endpoint、challenge HMAC、broker/replay/expiry 校验、短期 Native proof、进程期 Runtime proof、secret-free runtime config、connection-owned result、first-ready selection、模型 transport 隔离、editable 结构化输出默认脱敏，以及 raw evaluate/CDP 默认关闭。旧 Browser HTTP/WS 控制面没有保留 legacy fallback。
 
 但 Codex 风格方案真正有效的部分，是这条链路周围的一整套契约：
 
@@ -3597,15 +3633,15 @@ MCP js
 
 初始 trace 中“更慢、阻隔更多、频繁试错”的现象，仍说明这些契约尚未形成闭环。单纯继续增加 `browser-client.mjs` 方法，能缓解一部分 `not a function`，但不能解决逐命令权限、tab 漂移、固定等待、结果膨胀和资源清理问题。
 
-不应再把“未认证连接冒认”或“snapshot/DOM/AX 直接回显 editable 值”描述成当前未解决问题。当前主要缺口已经转为：transport credential 生命周期与 provenance、trace/screenshot/error 隐私、session/toolCall context、scoped permission proof、tab ownership、真正的取消隔离、typed registry、动态文档和可靠交互语义。
+不应再把“长期 transport token 落盘”“Browser command HTTP/WS 仍在生产路径”“未认证连接可直接冒认”或“snapshot/DOM/AX 直接回显 editable 值”描述成当前未解决问题。当前主要缺口已经转为：peer process/package provenance、跨平台 ACL 实测、trace/screenshot/error 隐私、command-boundary risk 与 scoped permission proof、tab ownership、真正的取消隔离、typed registry、动态文档和可靠交互语义。
 
 最推荐的总策略是：
 
-1. 先修正 manifest capability 声明，再完成 P0 transport credential/provenance，并收尾 trace、screenshot、fill/type 和 error redaction。
+1. 在已完成 capability 声明和 IPC credential lifecycle 的基础上，补齐 peer provenance，并收尾 trace、screenshot、fill/type 和 error redaction。
 2. 完成统一 Command Registry 和结构化错误，再补 command-boundary context、permission proof、ownership 与 cancel。
 3. 随后稳定 Node Runtime 的持久语义、串行、真正 timeout/cancel isolation、reset 和 metadata。
 4. 建立与真实能力同源的动态 documentation。
 5. 按真实任务频率补齐导航、locator、表单和 frame。
-6. 用旧 MCP 作为基线与回退，逐能力灰度；达到安全、成功率、时延和清理 gate 后，再完成入口迁移。
+6. 用旧 MCP 的能力/评测结果作为基线，而不是在生产 transport 上自动回退 HTTP/WS；达到安全、成功率、时延和清理 gate 后再扩大灰度。
 
 这样优化后，Anybox 得到的不会只是“看起来像 Codex 的 Node REPL 调用方式”，而是一套能让 Agent 在真实用户 Chrome 中稳定、安全、低试错地工作的 Browser Runtime。

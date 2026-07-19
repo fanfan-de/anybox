@@ -32,6 +32,17 @@ async function createFixture(projectRoot) {
         directory: "chrome",
       },
     ],
+    mcpServers: [
+      {
+        id: "node-repl",
+        permissions: [
+          "Raw page JavaScript and Chrome DevTools Protocol are disabled.",
+        ],
+        installReview: [
+          "Raw page JavaScript and CDP are disabled at the model command boundary.",
+        ],
+      },
+    ],
   }, null, 2)}\n`)
   await write(
     projectRoot,
@@ -44,13 +55,18 @@ async function createFixture(projectRoot) {
   await write(
     projectRoot,
     path.join("runtime", "scripts", "installManifest.mjs"),
-    "const browserTransportToken = process.env.ANYBOX_BROWSER_TRANSPORT_TOKEN\n",
+    "const runtimeEndpoint = process.env.ANYBOX_BROWSER_IPC_RUNTIME_ENDPOINT\n",
   )
   await write(projectRoot, path.join("runtime", "scripts", "browser-gateway-worker.js"))
+  await write(projectRoot, path.join("runtime", "scripts", "browser-ipc-client.cjs"))
   await write(projectRoot, path.join("runtime", "scripts", "native-host-bootstrap.js"))
   await write(projectRoot, path.join("runtime", "scripts", "node-repl-server.js"))
   await write(projectRoot, path.join("runtime", "assets", "chrome.svg"), "<svg />\n")
-  await write(projectRoot, path.join("runtime", "skills", "chrome", "SKILL.md"))
+  await write(
+    projectRoot,
+    path.join("runtime", "skills", "chrome", "SKILL.md"),
+    "Raw selector adapters, page JavaScript, and CDP are disabled.\n",
+  )
   await write(projectRoot, "LICENSE", "MIT License\n")
 
   await write(projectRoot, path.join("browser-runtime", "package.json"), "{}\n")
@@ -58,7 +74,7 @@ async function createFixture(projectRoot) {
   await write(
     projectRoot,
     path.join("browser-runtime", "dist", "browser-client.mjs"),
-    "// generated browser runtime\n",
+    "// generated browser runtime: disabled until Anybox can enforce command-level capability\n",
   )
   await write(projectRoot, path.join("browser-extension", "package.json"), "{}\n")
   await write(projectRoot, path.join("browser-extension", "src", "background.ts"))
@@ -134,6 +150,7 @@ test("synchronizes only installable Chrome files into the distribution directory
       "LICENSE",
       "scripts/browser-client.mjs",
       "scripts/browser-gateway-worker.js",
+      "scripts/browser-ipc-client.cjs",
       "scripts/extension-id.json",
       "scripts/installManifest.mjs",
       "scripts/native-host-bootstrap.js",
@@ -148,11 +165,11 @@ test("synchronizes only installable Chrome files into the distribution directory
     assert.equal(files.some((entry) => entry.toLowerCase().includes("readme")), false)
     assert.equal(
       await fsp.readFile(path.join(pluginRoot, "scripts", "browser-client.mjs"), "utf8"),
-      "// generated browser runtime\n",
+      "// generated browser runtime: disabled until Anybox can enforce command-level capability\n",
     )
     assert.equal(
       await fsp.readFile(path.join(pluginRoot, "scripts", "installManifest.mjs"), "utf8"),
-      "const browserTransportToken = process.env.ANYBOX_BROWSER_TRANSPORT_TOKEN\n",
+      "const runtimeEndpoint = process.env.ANYBOX_BROWSER_IPC_RUNTIME_ENDPOINT\n",
     )
 
     const manifest = JSON.parse(
@@ -193,6 +210,30 @@ test("check mode reports a stale tracked plugin without overwriting it", async (
     assert.equal(
       await fsp.readFile(path.join(pluginRoot, "scripts", "node-repl-server.js"), "utf8"),
       "stale\n",
+    )
+  } finally {
+    await fsp.rm(tempRoot, { recursive: true, force: true })
+  }
+})
+
+test("rejects capability claims that re-enable raw page JavaScript or CDP", async () => {
+  const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "anybox-chrome-capability-"))
+  const projectRoot = path.join(tempRoot, "packages", "chrome-plugin")
+  const pluginRoot = path.join(tempRoot, "plugins", "Anybox-Plugins", "chrome")
+
+  try {
+    await createFixture(projectRoot)
+    await packageChromePlugin({ projectRoot, pluginRoot })
+    const manifestPath = path.join(pluginRoot, ".anybox-plugin", "plugin.json")
+    const manifest = JSON.parse(await fsp.readFile(manifestPath, "utf8"))
+    manifest.mcpServers[0].permissions = [
+      "Allows raw page JavaScript and Chrome DevTools Protocol commands.",
+    ]
+    await fsp.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+
+    await assert.rejects(
+      validateChromePluginPackage(pluginRoot),
+      /capability claims must state that raw page JavaScript and CDP are disabled/,
     )
   } finally {
     await fsp.rm(tempRoot, { recursive: true, force: true })

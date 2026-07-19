@@ -29,6 +29,10 @@ import * as Log from "#util/log.ts"
 import { getProcessEnvValue } from "#env/compat.ts"
 import { getServerBaseURL, setServerBaseURL } from "#server/base-url.ts"
 import { startAutomationScheduler } from "#automation/scheduler.ts"
+import {
+  startBrowserIpcGateway,
+  stopBrowserIpcGateway,
+} from "#browser-extension/ipc-gateway.ts"
 
 export interface ServerOptions {
   host?: string
@@ -143,7 +147,7 @@ export function createServerRuntime(options: Pick<ServerOptions, "corsWhitelist"
   app.route("/api/permissions", PermissionsRoutes())
   app.route("/api/remote", RemoteRoutes())
   app.route("/api/workspace-files", WorkspaceFilesRoutes())
-  app.route("/api/browser-extension", BrowserExtensionRoutes({ upgradeWebSocket }))
+  app.route("/api/browser-extension", BrowserExtensionRoutes())
   app.route("/api/pty", PtyRoutes({ registry: ptyRegistry, upgradeWebSocket }))
   app.route("/api/automation-events", AutomationEventRoutes())
   app.route("/api/automations", AutomationRoutes())
@@ -195,6 +199,9 @@ export function startServer(options: ServerOptions = {}) {
     corsWhitelist: options.corsWhitelist,
     ptyRegistry: options.ptyRegistry,
   })
+  void startBrowserIpcGateway().catch((error) => {
+    log.error("browser-ipc-start-failed", { error })
+  })
   activeServer = Bun.serve({
     hostname: host,
     port,
@@ -216,8 +223,12 @@ export function startServer(options: ServerOptions = {}) {
 }
 
 export function stopServer() {
-  if (!activeServer) return
-  activeServer.stop(true)
-  activeServer = undefined
-  log.info("server-stopped")
+  if (activeServer) {
+    activeServer.stop(true)
+    activeServer = undefined
+    log.info("server-stopped")
+  }
+  void stopBrowserIpcGateway().catch((error) => {
+    log.error("browser-ipc-stop-failed", { error })
+  })
 }

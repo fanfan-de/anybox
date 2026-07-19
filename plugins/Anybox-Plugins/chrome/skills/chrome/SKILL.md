@@ -21,6 +21,8 @@ The `js_reset` tool only clears persistent JavaScript state. The `js_add_node_mo
 
 Keep setup details internal. Unless the user asks about implementation, describe progress naturally as connecting to Chrome, inspecting the page, or retrying the connection.
 
+The runtime sends only the documented allowlisted operations through the Anybox Agent policy gateway over authenticated local IPC. Do not attempt to discover or connect to the IPC endpoint directly.
+
 ## Bootstrap once
 
 The Node REPL preloads `setupBrowserRuntime`, `agent`, and `nodeRepl`. Do not import an external or built-in `browser-client` package.

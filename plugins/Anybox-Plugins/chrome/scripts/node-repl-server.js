@@ -5,6 +5,7 @@ const os = require("node:os")
 const path = require("node:path")
 const { pathToFileURL } = require("node:url")
 const { createRequire } = require("node:module")
+const { AsyncLocalStorage } = require("node:async_hooks")
 const { Worker } = require("node:worker_threads")
 const Module = require("node:module")
 const { ensureNativeMessagingHost } = require("./native-host-bootstrap")
@@ -22,6 +23,7 @@ let images
 const nodeModuleDirs = []
 const nativeMessagingHostReady = ensureNativeMessagingHost()
 const browserGateway = createBrowserGateway()
+const browserRequestContext = new AsyncLocalStorage()
 let runtimeReadyPromise
 
 const tools = [
@@ -127,19 +129,14 @@ async function loadBrowserClient() {
   return browserClientPromise
 }
 
-function browserGatewayAgentBaseURL() {
-  const explicit = String(process.env.ANYBOX_AGENT_BASE_URL || "").trim()
-  if (explicit) return explicit
-  const host = String(process.env.ANYBOX_SERVER_HOST || "127.0.0.1").trim() || "127.0.0.1"
-  const port = String(process.env.ANYBOX_SERVER_PORT || "4096").trim() || "4096"
-  return `http://${host}:${port}`
-}
-
 function createBrowserGateway() {
   const worker = new Worker(browserGatewayWorkerPath, {
     workerData: {
-      agentBaseURL: browserGatewayAgentBaseURL(),
-      trustedToken: process.env.ANYBOX_BROWSER_TRUSTED_TOKEN || "",
+      protocolVersion: process.env.ANYBOX_BROWSER_IPC_PROTOCOL_VERSION,
+      runtimeEndpoint: process.env.ANYBOX_BROWSER_IPC_RUNTIME_ENDPOINT,
+      brokerInstanceID: process.env.ANYBOX_BROWSER_IPC_BROKER_INSTANCE_ID,
+      runtimeProof: process.env.ANYBOX_BROWSER_IPC_RUNTIME_PROOF,
+      clientVersion: "0.3.0",
     },
   })
   const pending = new Map()
@@ -185,20 +182,27 @@ function createBrowserGateway() {
     rejectPending(error)
   })
 
+  const callWorker = (message) => {
+    return new Promise((resolve, reject) => {
+      const id = nextID
+      nextID += 1
+      pending.set(id, { resolve, reject })
+      try {
+        worker.postMessage({ id, ...message })
+      } catch (error) {
+        pending.delete(id)
+        reject(error)
+      }
+    })
+  }
+
   return {
     ready,
     request(request) {
-      return new Promise((resolve, reject) => {
-        const id = nextID
-        nextID += 1
-        pending.set(id, { resolve, reject })
-        try {
-          worker.postMessage({ id, request })
-        } catch (error) {
-          pending.delete(id)
-          reject(error)
-        }
-      })
+      return callWorker({ request })
+    },
+    reset() {
+      return callWorker({ type: "reset" })
     },
   }
 }
@@ -206,6 +210,13 @@ function createBrowserGateway() {
 function clearSensitiveRuntimeEnvironment() {
   delete process.env.ANYBOX_BROWSER_TRUSTED_TOKEN
   delete process.env.ANYBOX_BROWSER_TRANSPORT_TOKEN
+  delete process.env.ANYBOX_BROWSER_IPC_PROTOCOL_VERSION
+  delete process.env.ANYBOX_BROWSER_IPC_TRANSPORT
+  delete process.env.ANYBOX_BROWSER_IPC_RUNTIME_ENDPOINT
+  delete process.env.ANYBOX_BROWSER_IPC_NATIVE_ENDPOINT
+  delete process.env.ANYBOX_BROWSER_IPC_BOOTSTRAP_PATH
+  delete process.env.ANYBOX_BROWSER_IPC_BROKER_INSTANCE_ID
+  delete process.env.ANYBOX_BROWSER_IPC_RUNTIME_PROOF
 }
 
 function prepareRuntime() {
@@ -224,7 +235,12 @@ function prepareRuntime() {
 function installBrowserRuntime(browserClient, options = {}) {
   return browserClient.setupBrowserRuntime({
     ...options,
-    transport: browserGateway.request,
+    transport: (request) => browserGateway.request({
+      ...request,
+      ...(request.type === "command" && browserRequestContext.getStore()
+        ? { context: browserRequestContext.getStore() }
+        : {}),
+    }),
   })
 }
 
@@ -359,7 +375,7 @@ async function runJavaScript(code, ms) {
   }
 }
 
-async function callTool(name, args) {
+async function callTool(name, args, requestContext) {
   const normalizedName = {
     node_repl_js: "js",
     node_repl_reset: "js_reset",
@@ -367,6 +383,7 @@ async function callTool(name, args) {
   }[name] || name
 
   if (normalizedName === "js_reset") {
+    await browserGateway.reset()
     resetKernel()
     return textResult("Node REPL reset.", { reset: true })
   }
@@ -379,10 +396,31 @@ async function callTool(name, args) {
   if (normalizedName === "js") {
     const code = args && typeof args.code === "string" ? args.code : ""
     if (!code.trim()) throw new Error("js requires code.")
-    return runJavaScript(code, timeoutMs(args && args.timeoutMs))
+    return browserRequestContext.run(
+      requestContext,
+      () => runJavaScript(code, timeoutMs(args && args.timeoutMs)),
+    )
   }
 
   throw new Error(`Unknown tool: ${name}`)
+}
+
+function readRequestContext(message) {
+  const meta = message?.params?._meta
+  if (!meta || typeof meta !== "object" || Array.isArray(meta)) return undefined
+  const context = {}
+  const aliases = {
+    sessionID: ["sessionID", "sessionId", "anybox/sessionID"],
+    messageID: ["messageID", "messageId", "anybox/messageID"],
+    toolCallID: ["toolCallID", "toolCallId", "anybox/toolCallID"],
+  }
+  for (const [target, keys] of Object.entries(aliases)) {
+    const value = keys.map((key) => meta[key]).find(
+      (candidate) => typeof candidate === "string" && candidate.trim(),
+    )
+    if (typeof value === "string") context[target] = value.trim()
+  }
+  return Object.keys(context).length > 0 ? context : undefined
 }
 
 resetKernel()
@@ -404,7 +442,7 @@ rl.on("line", (line) => {
         result: {
           protocolVersion: "2025-06-18",
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: "anybox-chrome-node-repl", version: "0.2.1" },
+          serverInfo: { name: "anybox-chrome-node-repl", version: "0.3.0" },
         },
       })
       return
@@ -419,7 +457,11 @@ rl.on("line", (line) => {
 
     if (message.method === "tools/call") {
       try {
-        const result = await callTool(message.params && message.params.name, message.params && message.params.arguments)
+        const result = await callTool(
+          message.params && message.params.name,
+          message.params && message.params.arguments,
+          readRequestContext(message),
+        )
         send({ jsonrpc: "2.0", id: message.id, result })
       } catch (error) {
         send({ jsonrpc: "2.0", id: message.id, result: errorResult(error) })
@@ -456,4 +498,6 @@ rl.on("line", (line) => {
   })
 })
 
-rl.on("close", () => process.exit(0))
+rl.on("close", () => {
+  void browserGateway.reset().finally(() => process.exit(0))
+})

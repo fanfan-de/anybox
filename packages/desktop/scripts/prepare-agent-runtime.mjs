@@ -11,7 +11,8 @@ const desktopDir = path.resolve(scriptDir, "..")
 const repoRoot = path.resolve(desktopDir, "..", "..")
 const agentDir = path.join(repoRoot, "packages", "anyboxagent")
 const cinemaWebDistDir = path.join(repoRoot, "packages", "cinema-web", "dist")
-const runtimeDir = path.join(desktopDir, "build", "agent-runtime")
+const runtimeBuildDir = path.join(desktopDir, "build")
+const runtimeDir = resolveRuntimeOutputDirectory()
 const cinemaProviderCatalogSource = path.join(agentDir, "src", "cinema", "provider-manifests.json")
 const cinemaProviderManifestsSourceDir = path.join(agentDir, "src", "cinema", "provider-manifests")
 const gmailConnectorSourceDir = path.join(agentDir, "plugins", "builtin", "gmail", "0.1.0", "connectors", "gmail")
@@ -19,6 +20,19 @@ const feishuConnectorSourceDir = path.join(agentDir, "plugins", "builtin", "feis
 
 const bunExecutableName = process.platform === "win32" ? "bun.exe" : "bun"
 const connectorBuildConfigFile = path.join(runtimeDir, "config", "connectors.json")
+
+function resolveRuntimeOutputDirectory() {
+  const configured = process.env.ANYBOX_AGENT_RUNTIME_OUTPUT_DIR?.trim()
+  if (!configured) return path.join(runtimeBuildDir, "agent-runtime")
+  const resolved = path.resolve(configured)
+  const relative = path.relative(runtimeBuildDir, resolved)
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error(
+      `ANYBOX_AGENT_RUNTIME_OUTPUT_DIR must be a child of ${runtimeBuildDir}`,
+    )
+  }
+  return resolved
+}
 
 function readEnv(key) {
   const value = process.env[key]?.trim()
@@ -204,6 +218,10 @@ async function main() {
   await fsp.copyFile(bunBinary, path.join(runtimeDir, bunExecutableName))
   await fsp.chmod(path.join(runtimeDir, bunExecutableName), 0o755).catch(() => {})
   await fsp.copyFile(path.join(agentDir, "src", "pty", "node-pty-worker.mjs"), path.join(runtimeDir, "node-pty-worker.mjs"))
+  await fsp.copyFile(
+    path.join(agentDir, "src", "browser-extension", "ipc-listener-sidecar.mjs"),
+    path.join(runtimeDir, "ipc-listener-sidecar.mjs"),
+  )
   await copyNodePtyRuntime(runtimeNodeModulesDir)
   await fixNodePtySpawnHelperPermissions(runtimeNodeModulesDir)
   await copyCinemaProviderManifests()

@@ -1,0 +1,961 @@
+import {
+  createHash,
+  createHmac,
+  randomBytes,
+  randomUUID,
+  timingSafeEqual,
+} from "node:crypto"
+import {
+  spawn as spawnChild,
+  type ChildProcessWithoutNullStreams,
+} from "node:child_process"
+import {
+  chmodSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
+import path from "node:path"
+import { fileURLToPath } from "node:url"
+import { ZodError } from "zod"
+import {
+  ANYBOX_CHROME_EXTENSION_ID,
+  ANYBOX_CHROME_NATIVE_HOST_NAME,
+} from "@anybox/shared/browser-extension"
+import {
+  BROWSER_IPC_HANDSHAKE_TIMEOUT_MS,
+  BROWSER_IPC_PROTOCOL_VERSION,
+  BROWSER_IPC_RUNTIME_CLIENT_VERSION,
+  MAX_BROWSER_IPC_FRAME_BYTES,
+  BrowserIpcFrameDecoder,
+  BrowserIpcNativeHostHelloMessage,
+  BrowserIpcNativeMessage,
+  BrowserIpcProtocolError,
+  BrowserIpcRole,
+  BrowserIpcRuntimeHelloMessage,
+  BrowserIpcRuntimeRequest,
+  browserIpcProofTranscript,
+  encodeBrowserIpcFrame,
+  type BrowserIpcErrorCode,
+  type BrowserIpcRuntimeRequest as BrowserIpcRuntimeRequestValue,
+  type BrowserIpcTransportKind,
+} from "@anybox/shared/browser-ipc"
+import {
+  browserExtensionBridge,
+  type BrowserExtensionBridge,
+} from "#browser-extension/bridge.ts"
+import {
+  BrowserCommandGatewayError,
+  runBrowserRuntimeCommand,
+} from "#browser-extension/command-gateway.ts"
+import * as Global from "#global/global.ts"
+import { getProcessEnvValue } from "#env/compat.ts"
+import * as Log from "#util/log.ts"
+import { which } from "#util/which.ts"
+
+const log = Log.create({ service: "browser-ipc" })
+const IPC_DIRECTORY_NAME = "browser-ipc"
+const NATIVE_BOOTSTRAP_FILENAME = `${ANYBOX_CHROME_NATIVE_HOST_NAME}.bootstrap.json`
+const NATIVE_BOOTSTRAP_TTL_MS = 5 * 60_000
+const LISTENER_CONTROL_MAX_BYTES = MAX_BROWSER_IPC_FRAME_BYTES * 2
+
+export type BrowserIpcGatewayOptions = {
+  platform?: NodeJS.Platform
+  runtimeEndpoint?: string
+  nativeHostEndpoint?: string
+  bootstrapPath?: string
+  brokerInstanceID?: string
+  runtimeProof?: string
+  now?: () => number
+  handshakeTimeoutMs?: number
+  nativeBootstrapTtlMs?: number
+  bridge?: BrowserExtensionBridge
+}
+
+type Challenge = {
+  nonce: string
+  expiresAt: number
+}
+
+type GatewayConnection = {
+  connectionID: string
+  role: BrowserIpcRole
+  decoder: BrowserIpcFrameDecoder
+  challenge: Challenge
+  authenticated: boolean
+  bridgeConnectionID?: string
+  clientInstanceID?: string
+  clientVersion?: string
+  handshakeTimer: ReturnType<typeof setTimeout>
+  requestIDs: Set<string>
+  closing: boolean
+}
+
+type NativeBootstrap = {
+  proof: string
+  issuedAt: number
+  expiresAt: number
+}
+
+type BrowserIpcRuntimeEnvironment = {
+  ANYBOX_BROWSER_IPC_PROTOCOL_VERSION: string
+  ANYBOX_BROWSER_IPC_TRANSPORT: BrowserIpcTransportKind
+  ANYBOX_BROWSER_IPC_RUNTIME_ENDPOINT: string
+  ANYBOX_BROWSER_IPC_NATIVE_ENDPOINT: string
+  ANYBOX_BROWSER_IPC_BOOTSTRAP_PATH: string
+  ANYBOX_BROWSER_IPC_BROKER_INSTANCE_ID: string
+  ANYBOX_BROWSER_IPC_RUNTIME_PROOF: string
+}
+
+function endpointIdentity(homeDir: string) {
+  return createHash("sha256")
+    .update(path.resolve(homeDir).toLowerCase())
+    .digest("hex")
+    .slice(0, 16)
+}
+
+export function defaultBrowserIpcPaths(
+  platform: NodeJS.Platform = process.platform,
+  homeDir = Global.Path.home,
+  stateDir = Global.Path.state,
+) {
+  if (!["win32", "darwin", "linux"].includes(platform)) {
+    throw new BrowserIpcProtocolError(
+      "PLATFORM_UNSUPPORTED",
+      `Browser IPC is unsupported on platform '${platform}'.`,
+    )
+  }
+  const identity = endpointIdentity(homeDir)
+  const ipcDirectory = path.join(stateDir, IPC_DIRECTORY_NAME)
+  const transport: BrowserIpcTransportKind = platform === "win32"
+    ? "windows-named-pipe"
+    : "unix-domain-socket"
+  const endpoint = (role: BrowserIpcRole) => platform === "win32"
+    ? `\\\\.\\pipe\\anybox-browser-${role}-v${BROWSER_IPC_PROTOCOL_VERSION}-${identity}`
+    : path.join(
+        ipcDirectory,
+        `${role}-v${BROWSER_IPC_PROTOCOL_VERSION}-${identity}.sock`,
+      )
+
+  return {
+    transport,
+    ipcDirectory,
+    runtimeEndpoint: endpoint("runtime"),
+    nativeHostEndpoint: endpoint("native-host"),
+    bootstrapPath: path.join(ipcDirectory, NATIVE_BOOTSTRAP_FILENAME),
+  }
+}
+
+function randomProof() {
+  return randomBytes(32).toString("base64url")
+}
+
+function safeEqual(left: string, right: string) {
+  const leftBytes = Buffer.from(left)
+  const rightBytes = Buffer.from(right)
+  return leftBytes.length === rightBytes.length
+    && timingSafeEqual(leftBytes, rightBytes)
+}
+
+function proofFor(
+  bootstrapProof: string,
+  input: Parameters<typeof browserIpcProofTranscript>[0],
+) {
+  return createHmac("sha256", bootstrapProof)
+    .update(browserIpcProofTranscript(input))
+    .digest("base64url")
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function protocolError(error: unknown) {
+  if (error instanceof BrowserIpcProtocolError) return error
+  if (error instanceof ZodError) {
+    return new BrowserIpcProtocolError(
+      "INVALID_MESSAGE",
+      "Browser IPC message does not match the protocol schema.",
+    )
+  }
+  return new BrowserIpcProtocolError(
+    "INTERNAL_ERROR",
+    error instanceof Error ? error.message : String(error),
+  )
+}
+
+export class BrowserIpcGateway {
+  readonly platform: NodeJS.Platform
+  readonly transport: BrowserIpcTransportKind
+  readonly runtimeEndpoint: string
+  readonly nativeHostEndpoint: string
+  readonly bootstrapPath: string
+  readonly brokerInstanceID: string
+  readonly runtimeProof: string
+
+  private readonly now: () => number
+  private readonly handshakeTimeoutMs: number
+  private readonly nativeBootstrapTtlMs: number
+  private readonly ipcDirectory: string
+  private readonly bridge: BrowserExtensionBridge
+  private readonly connections = new Map<string, GatewayConnection>()
+  private startPromise: Promise<void> | undefined
+  private running = false
+  private nativeBootstrap: NativeBootstrap | undefined
+  private nativeBootstrapTimer: ReturnType<typeof setTimeout> | undefined
+  private listenerSidecar: ChildProcessWithoutNullStreams | undefined
+  private listenerStdoutBuffer = ""
+  private listenerStderrBuffer = ""
+  private listenerStartResolve: (() => void) | undefined
+  private listenerStartReject: ((error: Error) => void) | undefined
+  private listenerStopResolve: (() => void) | undefined
+
+  constructor(options: BrowserIpcGatewayOptions = {}) {
+    this.platform = options.platform ?? process.platform
+    const defaults = defaultBrowserIpcPaths(this.platform)
+    this.transport = defaults.transport
+    this.runtimeEndpoint = options.runtimeEndpoint ?? defaults.runtimeEndpoint
+    this.nativeHostEndpoint = options.nativeHostEndpoint ?? defaults.nativeHostEndpoint
+    this.bootstrapPath = options.bootstrapPath ?? defaults.bootstrapPath
+    this.ipcDirectory = path.dirname(this.bootstrapPath)
+    this.brokerInstanceID = options.brokerInstanceID ?? randomUUID()
+    this.runtimeProof = options.runtimeProof ?? randomProof()
+    this.now = options.now ?? Date.now
+    this.handshakeTimeoutMs = options.handshakeTimeoutMs
+      ?? BROWSER_IPC_HANDSHAKE_TIMEOUT_MS
+    this.nativeBootstrapTtlMs = Math.max(
+      1,
+      options.nativeBootstrapTtlMs ?? NATIVE_BOOTSTRAP_TTL_MS,
+    )
+    this.bridge = options.bridge ?? browserExtensionBridge
+  }
+
+  runtimeEnvironment(): BrowserIpcRuntimeEnvironment {
+    return {
+      ANYBOX_BROWSER_IPC_PROTOCOL_VERSION: String(BROWSER_IPC_PROTOCOL_VERSION),
+      ANYBOX_BROWSER_IPC_TRANSPORT: this.transport,
+      ANYBOX_BROWSER_IPC_RUNTIME_ENDPOINT: this.runtimeEndpoint,
+      ANYBOX_BROWSER_IPC_NATIVE_ENDPOINT: this.nativeHostEndpoint,
+      ANYBOX_BROWSER_IPC_BOOTSTRAP_PATH: this.bootstrapPath,
+      ANYBOX_BROWSER_IPC_BROKER_INSTANCE_ID: this.brokerInstanceID,
+      ANYBOX_BROWSER_IPC_RUNTIME_PROOF: this.runtimeProof,
+    }
+  }
+
+  status() {
+    const runtimeConnections = [...this.connections.values()]
+      .filter((connection) => connection.role === "runtime" && connection.authenticated)
+      .length
+    const nativeHostConnections = [...this.connections.values()]
+      .filter((connection) => connection.role === "native-host" && connection.authenticated)
+      .length
+
+    return {
+      transport: this.transport,
+      protocolVersion: BROWSER_IPC_PROTOCOL_VERSION,
+      brokerInstanceID: this.brokerInstanceID,
+      running: this.running,
+      runtimeConnections,
+      nativeHostConnections,
+      nativeBootstrapAvailable: Boolean(this.nativeBootstrap),
+      legacyHttpTransportEnabled: false,
+      legacyWebSocketTransportEnabled: false,
+      acl: this.platform === "win32"
+        ? "process-token default DACL; no all-users read/write grant"
+        : "socket directory 0700 and socket mode 0600",
+      peerProcessIdentityVerified: false,
+    }
+  }
+
+  start() {
+    this.startPromise ??= this.startInternal().catch((error) => {
+      this.startPromise = undefined
+      throw error
+    })
+    return this.startPromise
+  }
+
+  async stop() {
+    await this.startPromise?.catch(() => undefined)
+    this.running = false
+    this.clearNativeBootstrapTimer()
+    for (const connection of [...this.connections.values()]) {
+      this.postListenerMessage({
+        type: "connection.terminate",
+        connectionID: connection.connectionID,
+      })
+      this.cleanupConnection(connection)
+    }
+
+    await this.stopListenerSidecar()
+    this.removeBootstrapIfOwned()
+    this.nativeBootstrap = undefined
+    this.removeUnixEndpoint(this.runtimeEndpoint)
+    this.removeUnixEndpoint(this.nativeHostEndpoint)
+    this.startPromise = undefined
+  }
+
+  private async startInternal() {
+    this.prepareIpcDirectory()
+    this.removeUnixEndpoint(this.runtimeEndpoint)
+    this.removeUnixEndpoint(this.nativeHostEndpoint)
+
+    try {
+      await this.startListenerSidecar()
+      if (this.platform !== "win32") {
+        chmodSync(this.runtimeEndpoint, 0o600)
+        chmodSync(this.nativeHostEndpoint, 0o600)
+      }
+    } catch (error) {
+      await this.stopListenerSidecar()
+      this.removeUnixEndpoint(this.runtimeEndpoint)
+      this.removeUnixEndpoint(this.nativeHostEndpoint)
+      throw error
+    }
+    this.running = true
+    this.provisionNativeBootstrap()
+    log.info("started", {
+      transport: this.transport,
+      protocolVersion: BROWSER_IPC_PROTOCOL_VERSION,
+      brokerInstanceID: this.brokerInstanceID,
+      peerProcessIdentityVerified: false,
+    })
+  }
+
+  private prepareIpcDirectory() {
+    mkdirSync(this.ipcDirectory, { recursive: true, mode: 0o700 })
+    if (this.platform !== "win32") chmodSync(this.ipcDirectory, 0o700)
+  }
+
+  private startListenerSidecar() {
+    if (this.listenerSidecar) {
+      return Promise.reject(new Error("Browser IPC listener sidecar is already running."))
+    }
+    const nodeBinary = getProcessEnvValue("ANYBOX_NODE_BINARY")?.trim()
+      || which("node.exe")
+      || which("node")
+    if (!nodeBinary) {
+      return Promise.reject(
+        new Error("Node.js is required to host the Browser IPC listener."),
+      )
+    }
+    const sidecarPath = fileURLToPath(
+      new URL("./ipc-listener-sidecar.mjs", import.meta.url),
+    )
+    const env = Object.fromEntries(
+      Object.entries(process.env).filter(
+        (entry): entry is [string, string] =>
+          typeof entry[1] === "string"
+          && !entry[0].toUpperCase().startsWith("ANYBOX_BROWSER_"),
+      ),
+    )
+    if (getProcessEnvValue("ANYBOX_NODE_RUN_AS_NODE") === "1") {
+      env.ELECTRON_RUN_AS_NODE = "1"
+    }
+    const child = spawnChild(nodeBinary, [sidecarPath], {
+      stdio: ["pipe", "pipe", "pipe"],
+      env,
+      windowsHide: true,
+    })
+    this.listenerSidecar = child
+    this.listenerStdoutBuffer = ""
+    this.listenerStderrBuffer = ""
+    child.stdout.setEncoding("utf8")
+    child.stdout.on("data", (chunk: string) => {
+      this.handleListenerStdout(chunk)
+    })
+    child.stderr.setEncoding("utf8")
+    child.stderr.on("data", (chunk: string) => {
+      this.listenerStderrBuffer = `${this.listenerStderrBuffer}${chunk}`.slice(-4_096)
+    })
+    child.once("error", (error) => {
+      this.handleListenerFailure(
+        new Error(`Browser IPC listener sidecar failed: ${error.message}`),
+      )
+    })
+    child.once("exit", (code, signal) => {
+      if (this.listenerSidecar !== child) return
+      const detail = this.listenerStderrBuffer.trim()
+      this.handleListenerFailure(new Error(
+        `Browser IPC listener sidecar exited (code=${code ?? "null"}, signal=${signal ?? "none"})`
+        + (detail ? `: ${detail}` : ""),
+      ))
+    })
+    const ready = new Promise<void>((resolve, reject) => {
+      this.listenerStartResolve = resolve
+      this.listenerStartReject = reject
+    })
+    this.postListenerMessage({
+      type: "start",
+      runtimeEndpoint: this.runtimeEndpoint,
+      nativeHostEndpoint: this.nativeHostEndpoint,
+    })
+    return ready
+  }
+
+  private async stopListenerSidecar() {
+    const child = this.listenerSidecar
+    if (!child) return
+    const stopped = new Promise<void>((resolve) => {
+      this.listenerStopResolve = resolve
+    })
+    this.postListenerMessage({ type: "stop" })
+    await Promise.race([
+      stopped,
+      new Promise<void>((resolve) => setTimeout(resolve, 2_000)),
+    ])
+    this.listenerSidecar = undefined
+    child.stdout.removeAllListeners()
+    child.stderr.removeAllListeners()
+    child.removeAllListeners()
+    child.stdin.destroy()
+    if (!child.killed) child.kill()
+    this.listenerStdoutBuffer = ""
+    this.listenerStderrBuffer = ""
+    this.listenerStartResolve = undefined
+    this.listenerStartReject = undefined
+    this.listenerStopResolve = undefined
+  }
+
+  private handleListenerStdout(chunk: string) {
+    this.listenerStdoutBuffer += chunk
+    if (Buffer.byteLength(this.listenerStdoutBuffer, "utf8") > LISTENER_CONTROL_MAX_BYTES) {
+      this.handleListenerFailure(
+        new Error("Browser IPC listener sidecar emitted an oversized control message."),
+      )
+      return
+    }
+    const lines = this.listenerStdoutBuffer.split(/\r?\n/)
+    this.listenerStdoutBuffer = lines.pop() ?? ""
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed) continue
+      try {
+        this.handleListenerMessage(JSON.parse(trimmed))
+      } catch {
+        this.handleListenerFailure(
+          new Error("Browser IPC listener sidecar emitted invalid JSON."),
+        )
+        return
+      }
+    }
+  }
+
+  private handleListenerMessage(value: unknown) {
+    if (!isRecord(value) || typeof value.type !== "string") return
+    if (value.type === "ready") {
+      this.listenerStartResolve?.()
+      this.listenerStartResolve = undefined
+      this.listenerStartReject = undefined
+      return
+    }
+    if (value.type === "start.error") {
+      const error = new Error(
+        typeof value.message === "string"
+          ? value.message
+          : "Browser IPC listener failed to start.",
+      )
+      this.listenerStartReject?.(error)
+      this.listenerStartResolve = undefined
+      this.listenerStartReject = undefined
+      const child = this.listenerSidecar
+      this.listenerSidecar = undefined
+      if (child && !child.killed) child.kill()
+      return
+    }
+    if (value.type === "stopped") {
+      this.listenerStopResolve?.()
+      return
+    }
+    if (value.type === "connection.open") {
+      const role = BrowserIpcRole.safeParse(value.role)
+      if (!role.success || typeof value.connectionID !== "string") return
+      this.accept(role.data, value.connectionID)
+      return
+    }
+
+    const connection = typeof value.connectionID === "string"
+      ? this.connections.get(value.connectionID)
+      : undefined
+    if (value.type === "connection.data" && connection) {
+      try {
+        if (typeof value.bytes !== "string") {
+          throw new BrowserIpcProtocolError(
+            "INVALID_MESSAGE",
+            "Browser IPC listener sidecar returned invalid bytes.",
+          )
+        }
+        const bytes = Buffer.from(value.bytes, "base64")
+        for (const message of connection.decoder.push(bytes)) {
+          void this.handleMessage(connection, message).catch((error) => {
+            const normalized = protocolError(error)
+            this.fail(connection, normalized.code, normalized.message)
+          })
+        }
+      } catch (error) {
+        const normalized = protocolError(error)
+        this.fail(connection, normalized.code, normalized.message)
+      }
+      return
+    }
+    if (value.type === "connection.end" && connection) {
+      try {
+        connection.decoder.finish()
+      } catch (error) {
+        log.warn("truncated-frame", {
+          connectionID: connection.connectionID,
+          role: connection.role,
+          error,
+        })
+      }
+      return
+    }
+    if (value.type === "connection.close" && connection) {
+      this.cleanupConnection(connection)
+      return
+    }
+    if (value.type === "connection.error") {
+      log.debug("connection-error", {
+        connectionID: value.connectionID,
+        message: value.message,
+      })
+      return
+    }
+    if (value.type === "listener.error" || value.type === "sidecar.error") {
+      this.handleListenerFailure(new Error(
+        typeof value.message === "string"
+          ? value.message
+          : "Browser IPC listener failed.",
+      ))
+    }
+  }
+
+  private handleListenerFailure(error: Error) {
+    this.listenerStartReject?.(error)
+    this.listenerStartResolve = undefined
+    this.listenerStartReject = undefined
+    if (!this.running) return
+    this.running = false
+    this.clearNativeBootstrapTimer()
+    this.removeBootstrapIfOwned()
+    this.nativeBootstrap = undefined
+    for (const connection of [...this.connections.values()]) {
+      this.cleanupConnection(connection)
+    }
+    const child = this.listenerSidecar
+    this.listenerSidecar = undefined
+    if (child && !child.killed) child.kill()
+    log.error("listener-failed", { error })
+  }
+
+  private postListenerMessage(message: Record<string, unknown>, bytes?: Uint8Array) {
+    const child = this.listenerSidecar
+    if (!child || child.stdin.destroyed || !child.stdin.writable) return false
+    const payload = bytes
+      ? { ...message, bytes: Buffer.from(bytes).toString("base64") }
+      : message
+    child.stdin.write(`${JSON.stringify(payload)}\n`)
+    return true
+  }
+
+  private accept(role: BrowserIpcRole, connectionID: string) {
+    if (this.connections.has(connectionID)) return
+    const challenge = {
+      nonce: randomBytes(24).toString("base64url"),
+      expiresAt: this.now() + this.handshakeTimeoutMs,
+    }
+    const connection: GatewayConnection = {
+      connectionID,
+      role,
+      decoder: new BrowserIpcFrameDecoder(),
+      challenge,
+      authenticated: false,
+      handshakeTimer: setTimeout(() => {
+        this.fail(connection, "HANDSHAKE_EXPIRED", "Browser IPC hello timed out.")
+      }, this.handshakeTimeoutMs),
+      requestIDs: new Set(),
+      closing: false,
+    }
+    this.connections.set(connectionID, connection)
+
+    this.write(connection, {
+      type: "challenge",
+      protocolVersion: BROWSER_IPC_PROTOCOL_VERSION,
+      role,
+      brokerInstanceID: this.brokerInstanceID,
+      ...challenge,
+    })
+  }
+
+  private async handleMessage(
+    connection: GatewayConnection,
+    value: unknown,
+  ) {
+    if (!connection.authenticated) {
+      this.handleHello(connection, value)
+      return
+    }
+
+    if (!isRecord(value) || typeof value.type !== "string") {
+      throw new BrowserIpcProtocolError(
+        "INVALID_MESSAGE",
+        "Browser IPC message must be an object with a type.",
+      )
+    }
+
+    if (value.type === "pong") return
+    if (connection.role === "runtime") {
+      if (value.type !== "runtime.request") {
+        throw new BrowserIpcProtocolError(
+          value.type === "native.message" ? "ROLE_FORBIDDEN" : "UNKNOWN_MESSAGE_TYPE",
+          "Runtime IPC clients may send only runtime.request messages.",
+        )
+      }
+      const request = BrowserIpcRuntimeRequest.parse(value)
+      await this.handleRuntimeRequest(connection, request)
+      return
+    }
+
+    if (value.type !== "native.message") {
+      throw new BrowserIpcProtocolError(
+        value.type === "runtime.request" ? "ROLE_FORBIDDEN" : "UNKNOWN_MESSAGE_TYPE",
+        "Native Host IPC clients may send only native.message messages.",
+      )
+    }
+    const message = BrowserIpcNativeMessage.parse(value)
+    if (!connection.bridgeConnectionID) {
+      throw new BrowserIpcProtocolError(
+        "INTERNAL_ERROR",
+        "Native Host bridge connection is not initialized.",
+      )
+    }
+    this.bridge.handleRawMessage(
+      connection.bridgeConnectionID,
+      message.message,
+    )
+  }
+
+  private handleHello(connection: GatewayConnection, value: unknown) {
+    if (!isRecord(value) || value.type !== "hello") {
+      throw new BrowserIpcProtocolError(
+        "HELLO_REQUIRED",
+        "Browser IPC clients must complete hello before sending messages.",
+      )
+    }
+    if (value.protocolVersion !== BROWSER_IPC_PROTOCOL_VERSION) {
+      throw new BrowserIpcProtocolError(
+        "PROTOCOL_MISMATCH",
+        `Browser IPC protocol ${String(value.protocolVersion)} is not supported.`,
+      )
+    }
+    if (value.role !== connection.role) {
+      throw new BrowserIpcProtocolError(
+        "ROLE_MISMATCH",
+        `Browser IPC endpoint requires role '${connection.role}'.`,
+      )
+    }
+    if (value.brokerInstanceID !== this.brokerInstanceID) {
+      throw new BrowserIpcProtocolError(
+        "BROKER_STALE",
+        "Browser IPC broker instance is stale.",
+      )
+    }
+    if (
+      value.nonce !== connection.challenge.nonce
+      || this.now() > connection.challenge.expiresAt
+    ) {
+      throw new BrowserIpcProtocolError(
+        "HANDSHAKE_EXPIRED",
+        "Browser IPC challenge is invalid or expired.",
+      )
+    }
+
+    const hello = connection.role === "runtime"
+      ? BrowserIpcRuntimeHelloMessage.parse(value)
+      : BrowserIpcNativeHostHelloMessage.parse(value)
+    if (
+      connection.role === "native-host"
+      && this.nativeBootstrap
+      && this.now() > this.nativeBootstrap.expiresAt
+    ) {
+      this.expireNativeBootstrap()
+      throw new BrowserIpcProtocolError(
+        "HANDSHAKE_EXPIRED",
+        "Browser IPC bootstrap proof is expired.",
+      )
+    }
+    const expectedBootstrapProof = connection.role === "runtime"
+      ? this.runtimeProof
+      : this.nativeBootstrap?.proof
+    if (!expectedBootstrapProof) {
+      throw new BrowserIpcProtocolError(
+        "AUTH_FAILED",
+        "Browser IPC bootstrap proof is unavailable or already consumed.",
+      )
+    }
+    const expectedProof = proofFor(expectedBootstrapProof, {
+      role: connection.role,
+      brokerInstanceID: this.brokerInstanceID,
+      nonce: connection.challenge.nonce,
+      clientInstanceID: hello.clientInstanceID,
+      clientVersion: hello.clientVersion,
+    })
+    if (!safeEqual(expectedProof, hello.proof)) {
+      throw new BrowserIpcProtocolError(
+        "AUTH_FAILED",
+        "Browser IPC bootstrap proof is invalid.",
+      )
+    }
+
+    clearTimeout(connection.handshakeTimer)
+    connection.authenticated = true
+    connection.clientInstanceID = hello.clientInstanceID
+    connection.clientVersion = hello.clientVersion
+
+    if (connection.role === "native-host") {
+      this.nativeBootstrap = undefined
+      this.clearNativeBootstrapTimer()
+      this.removeBootstrapIfOwned()
+      connection.bridgeConnectionID = this.bridge.register(
+        {
+          send: (data) => {
+            const message = JSON.parse(data)
+            this.write(connection, { type: "native.message", message })
+          },
+          close: () => this.endConnection(connection),
+        },
+        {
+          transport: "native-ipc",
+          hostName: ANYBOX_CHROME_NATIVE_HOST_NAME,
+        },
+      )
+    }
+
+    this.write(connection, {
+      type: "ready",
+      protocolVersion: BROWSER_IPC_PROTOCOL_VERSION,
+      role: connection.role,
+      brokerInstanceID: this.brokerInstanceID,
+    })
+    log.info("authenticated", {
+      connectionID: connection.connectionID,
+      role: connection.role,
+      clientInstanceID: connection.clientInstanceID,
+      clientVersion: connection.clientVersion,
+    })
+  }
+
+  private async handleRuntimeRequest(
+    connection: GatewayConnection,
+    request: BrowserIpcRuntimeRequestValue,
+  ) {
+    if (connection.requestIDs.has(request.requestID)) {
+      this.write(connection, {
+        type: "runtime.response",
+        requestID: request.requestID,
+        ok: false,
+        error: {
+          code: "DUPLICATE_REQUEST",
+          message: "Browser IPC requestID is already in flight.",
+        },
+      })
+      return
+    }
+
+    connection.requestIDs.add(request.requestID)
+    try {
+      const data = request.operation === "status"
+        ? {
+            ...this.bridge.status(),
+            ipc: this.status(),
+          }
+        : await runBrowserRuntimeCommand(request, this.bridge)
+      if (!this.isConnectionOpen(connection)) return
+      this.write(connection, {
+        type: "runtime.response",
+        requestID: request.requestID,
+        ok: true,
+        data,
+      })
+    } catch (error) {
+      if (!this.isConnectionOpen(connection)) return
+      const code = error instanceof BrowserCommandGatewayError
+        ? error.code
+        : "INTERNAL_ERROR"
+      this.write(connection, {
+        type: "runtime.response",
+        requestID: request.requestID,
+        ok: false,
+        error: {
+          code,
+          message: error instanceof Error ? error.message : String(error),
+        },
+      })
+    } finally {
+      connection.requestIDs.delete(request.requestID)
+    }
+  }
+
+  private write(connection: GatewayConnection, message: unknown) {
+    if (!this.isConnectionOpen(connection)) return
+    const frame = encodeBrowserIpcFrame(message)
+    this.postListenerMessage(
+      {
+        type: "connection.write",
+        connectionID: connection.connectionID,
+        end: false,
+      },
+      frame,
+    )
+  }
+
+  private isConnectionOpen(connection: GatewayConnection) {
+    return this.connections.has(connection.connectionID)
+      && !connection.closing
+      && Boolean(this.listenerSidecar)
+  }
+
+  private endConnection(connection: GatewayConnection) {
+    if (!this.isConnectionOpen(connection)) return
+    connection.closing = true
+    this.postListenerMessage({
+      type: "connection.end",
+      connectionID: connection.connectionID,
+    })
+  }
+
+  private fail(
+    connection: GatewayConnection,
+    code: BrowserIpcErrorCode,
+    message: string,
+  ) {
+    if (!this.isConnectionOpen(connection)) return
+    connection.closing = true
+    const frame = encodeBrowserIpcFrame({
+      type: "error",
+      code,
+      message,
+    })
+    this.postListenerMessage(
+      {
+        type: "connection.write",
+        connectionID: connection.connectionID,
+        end: true,
+      },
+      frame,
+    )
+  }
+
+  private cleanupConnection(connection: GatewayConnection) {
+    if (!this.connections.delete(connection.connectionID)) return
+    clearTimeout(connection.handshakeTimer)
+    if (connection.bridgeConnectionID) {
+      this.bridge.unregister(connection.bridgeConnectionID)
+    }
+
+    if (
+      connection.role === "native-host"
+      && this.running
+      && ![...this.connections.values()].some(
+        (candidate) =>
+          candidate.role === "native-host" && candidate.authenticated,
+      )
+    ) {
+      this.provisionNativeBootstrap()
+    }
+  }
+
+  private provisionNativeBootstrap() {
+    if (this.nativeBootstrap || !this.running) return
+    this.nativeBootstrap = {
+      proof: randomProof(),
+      issuedAt: this.now(),
+      expiresAt: this.now() + this.nativeBootstrapTtlMs,
+    }
+    const document = {
+      transport: this.transport,
+      protocolVersion: BROWSER_IPC_PROTOCOL_VERSION,
+      role: "native-host",
+      brokerInstanceID: this.brokerInstanceID,
+      endpoint: this.nativeHostEndpoint,
+      proof: this.nativeBootstrap.proof,
+      issuedAt: new Date(this.nativeBootstrap.issuedAt).toISOString(),
+      expiresAt: this.nativeBootstrap.expiresAt,
+    }
+    const temporaryPath = `${this.bootstrapPath}.${process.pid}.${randomUUID()}.tmp`
+    writeFileSync(
+      temporaryPath,
+      `${JSON.stringify(document, null, 2)}\n`,
+      { encoding: "utf8", mode: 0o600 },
+    )
+    if (this.platform !== "win32") chmodSync(temporaryPath, 0o600)
+    renameSync(temporaryPath, this.bootstrapPath)
+    this.clearNativeBootstrapTimer()
+    const expectedProof = this.nativeBootstrap.proof
+    this.nativeBootstrapTimer = setTimeout(() => {
+      if (this.nativeBootstrap?.proof !== expectedProof) return
+      this.expireNativeBootstrap()
+      this.provisionNativeBootstrap()
+    }, this.nativeBootstrapTtlMs)
+    this.nativeBootstrapTimer.unref?.()
+  }
+
+  private expireNativeBootstrap() {
+    this.clearNativeBootstrapTimer()
+    this.removeBootstrapIfOwned()
+    this.nativeBootstrap = undefined
+  }
+
+  private clearNativeBootstrapTimer() {
+    if (!this.nativeBootstrapTimer) return
+    clearTimeout(this.nativeBootstrapTimer)
+    this.nativeBootstrapTimer = undefined
+  }
+
+  private removeBootstrapIfOwned() {
+    if (!existsSync(this.bootstrapPath)) return
+    try {
+      const parsed = JSON.parse(readFileSync(this.bootstrapPath, "utf8")) as {
+        brokerInstanceID?: unknown
+      }
+      if (parsed.brokerInstanceID !== this.brokerInstanceID) return
+      rmSync(this.bootstrapPath, { force: true })
+    } catch {
+      // Never delete a bootstrap file that cannot be proven to belong to us.
+    }
+  }
+
+  private removeUnixEndpoint(endpoint: string) {
+    if (this.platform === "win32" || !existsSync(endpoint)) return
+    const relative = path.relative(this.ipcDirectory, endpoint)
+    if (relative.startsWith("..") || path.isAbsolute(relative)) {
+      throw new Error(`Refusing to remove Browser IPC endpoint outside ${this.ipcDirectory}.`)
+    }
+    const stat = lstatSync(endpoint)
+    if (!stat.isSocket()) {
+      throw new Error(`Refusing to replace non-socket Browser IPC endpoint: ${endpoint}`)
+    }
+    rmSync(endpoint, { force: true })
+  }
+}
+
+export const browserIpcGateway = new BrowserIpcGateway()
+
+export function startBrowserIpcGateway() {
+  return browserIpcGateway.start()
+}
+
+export function stopBrowserIpcGateway() {
+  return browserIpcGateway.stop()
+}
+
+export async function getBrowserIpcRuntimeEnvironment() {
+  await browserIpcGateway.start()
+  return browserIpcGateway.runtimeEnvironment()
+}
+
+export const browserIpcRuntimeClientVersion = BROWSER_IPC_RUNTIME_CLIENT_VERSION

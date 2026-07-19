@@ -1,6 +1,6 @@
 [package]
 name = "anybox-chrome-native-host"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2024"
 license = "MIT"
 description = "Native Messaging host for the Anybox Chrome plugin"
@@ -11,9 +11,12 @@ name = "extension-host"
 path = "src/main.rs"
 
 [dependencies]
+base64 = "0.22.1"
+hmac = "0.12.1"
+interprocess = "2.4.2"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
-tungstenite = { version = "0.30.0", default-features = false, features = ["handshake"] }
+sha2 = "0.10.9"
 
 [profile.release]
 codegen-units = 1

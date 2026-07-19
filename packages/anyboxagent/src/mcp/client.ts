@@ -7,16 +7,20 @@ import { ListRootsRequestSchema } from "@modelcontextprotocol/sdk/types.js"
 import type { ReadResourceResult, Resource, ResourceTemplate } from "@modelcontextprotocol/sdk/types.js"
 import type { McpServerSummary } from "#config/config.ts"
 import type { ResolvedConnectorRuntime } from "#connector/connector.ts"
-import {
-  getBrowserTransportToken,
-  getBrowserTrustedCommandToken,
-} from "#browser-extension/runtime-token.ts"
+import { getBrowserIpcRuntimeEnvironment } from "#browser-extension/ipc-gateway.ts"
 import * as Log from "#util/log.ts"
 
 const log = Log.create({ service: "mcp.client" })
 const BROWSER_SECRET_ENV_KEYS = new Set([
   "ANYBOX_BROWSER_TRANSPORT_TOKEN",
   "ANYBOX_BROWSER_TRUSTED_TOKEN",
+  "ANYBOX_BROWSER_IPC_BOOTSTRAP_PATH",
+  "ANYBOX_BROWSER_IPC_BROKER_INSTANCE_ID",
+  "ANYBOX_BROWSER_IPC_NATIVE_ENDPOINT",
+  "ANYBOX_BROWSER_IPC_PROTOCOL_VERSION",
+  "ANYBOX_BROWSER_IPC_RUNTIME_ENDPOINT",
+  "ANYBOX_BROWSER_IPC_RUNTIME_PROOF",
+  "ANYBOX_BROWSER_IPC_TRANSPORT",
 ])
 
 function isBrowserSecretEnvKey(key: string) {
@@ -49,12 +53,19 @@ export type McpResourceTemplateDefinition = ResourceTemplate
 export type McpResourceReadResult = ReadResourceResult
 
 export interface McpClientOptions {
+  browserRuntimeEnvironment?: Record<string, string>
   cwd: string
   onResourcesChanged?: () => void
   onToolsChanged?: () => void
   requestTimeoutMs: number
   server: McpServerSummary
   worktree: string
+}
+
+export interface McpToolRequestContext {
+  sessionID?: string
+  messageID?: string
+  toolCallID?: string
 }
 
 function getToolDisplayName(tool: McpToolDefinition) {
@@ -78,19 +89,24 @@ function mergeProcessEnv(overrides?: Record<string, string>) {
   }
 }
 
-function browserRuntimeCredentials(server: McpServerSummary): Record<string, string> | undefined {
-  if (
+function isChromeBrowserRuntimeServer(server: McpServerSummary) {
+  return (
     server.owner?.kind !== "plugin"
-    || server.owner.pluginID !== "chrome"
-    || server.owner.bindingID !== "mcp:node-repl"
-  ) {
-    return undefined
-  }
+    ? false
+    : server.owner.pluginID === "chrome"
+      && server.owner.bindingID === "mcp:node-repl"
+  )
+}
 
-  return {
-    ANYBOX_BROWSER_TRANSPORT_TOKEN: getBrowserTransportToken(),
-    ANYBOX_BROWSER_TRUSTED_TOKEN: getBrowserTrustedCommandToken(),
-  }
+async function browserRuntimeCredentials(
+  server: McpServerSummary,
+  injected?: Record<string, string>,
+): Promise<
+  Record<string, string> | undefined
+> {
+  return isChromeBrowserRuntimeServer(server)
+    ? injected ?? await getBrowserIpcRuntimeEnvironment()
+    : undefined
 }
 
 function resolveAuthorizationHeader(authorization: string | undefined) {
@@ -253,13 +269,27 @@ export class McpClient {
     toolName: string,
     args: Record<string, unknown> | undefined,
     abort?: AbortSignal,
+    context?: McpToolRequestContext,
   ): Promise<McpToolCallResult> {
     await this.ensureInitialized()
+    const requestMeta = isChromeBrowserRuntimeServer(this.options.server)
+      ? Object.fromEntries(
+          (["sessionID", "messageID", "toolCallID"] as const).flatMap((key) => {
+            const value = context?.[key]
+            return typeof value === "string" && value.trim()
+              ? [[key, value.trim()] as const]
+              : []
+          }),
+        )
+      : undefined
 
     return normalizeCallResult(await this.client!.callTool(
       {
         name: toolName,
         arguments: args,
+        ...(requestMeta && Object.keys(requestMeta).length > 0
+          ? { _meta: requestMeta }
+          : {}),
       },
       undefined,
       {
@@ -424,7 +454,10 @@ export class McpClient {
       cwd: this.options.cwd,
       env: {
         ...mergeProcessEnv(this.options.server.env),
-        ...(browserRuntimeCredentials(this.options.server) ?? {}),
+        ...(await browserRuntimeCredentials(
+          this.options.server,
+          this.options.browserRuntimeEnvironment,
+        ) ?? {}),
       },
       stderr: "pipe",
     })

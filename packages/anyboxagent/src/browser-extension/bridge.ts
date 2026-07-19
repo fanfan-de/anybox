@@ -24,7 +24,7 @@ type Connection = {
   extensionInstanceID?: string
   extensionID?: string
   version?: string
-  transport?: "native"
+  transport?: "native" | "native-ipc"
   hostName?: string
   lastTransportError?: string
   connectedAt: number
@@ -65,7 +65,7 @@ type LastCommand = {
 }
 
 type ConnectionOptions = {
-  transport?: "native"
+  transport?: "native" | "native-ipc"
   hostName?: string
 }
 
@@ -209,7 +209,7 @@ export class BrowserExtensionBridge {
     try {
       parsedJson = typeof raw === "string" ? JSON.parse(raw) : raw
     } catch {
-      throw new Error("Browser extension websocket message must be valid JSON.")
+      throw new Error("Browser extension transport message must be valid JSON.")
     }
 
     const message = BrowserExtensionClientMessage.parse(parsedJson)
