@@ -96,9 +96,24 @@ function textResult(text, structuredContent) {
 
 function errorResult(error) {
   const message = error instanceof Error ? error.message : String(error)
+  const code = error && typeof error === "object" && typeof error.code === "string"
+    ? error.code
+    : undefined
+  const retryable = error && typeof error === "object" && typeof error.retryable === "boolean"
+    ? error.retryable
+    : undefined
+  const details = error && typeof error === "object" && error.details
+    && typeof error.details === "object" && !Array.isArray(error.details)
+    ? error.details
+    : undefined
   return {
     content: [textBlock(message)],
-    structuredContent: { error: message },
+    structuredContent: {
+      error: message,
+      ...(code ? { code } : {}),
+      ...(retryable !== undefined ? { retryable } : {}),
+      ...(details ? { details } : {}),
+    },
     isError: true,
   }
 }
@@ -136,9 +151,10 @@ function createBrowserGateway() {
       runtimeEndpoint: process.env.ANYBOX_BROWSER_IPC_RUNTIME_ENDPOINT,
       brokerInstanceID: process.env.ANYBOX_BROWSER_IPC_BROKER_INSTANCE_ID,
       runtimeProof: process.env.ANYBOX_BROWSER_IPC_RUNTIME_PROOF,
-      clientVersion: "0.3.0",
+      clientVersion: "0.4.0",
     },
   })
+  const postWorkerMessage = worker.postMessage.bind(worker)
   const pending = new Map()
   let nextID = 1
   let readyResolve
@@ -164,7 +180,15 @@ function createBrowserGateway() {
     if (!request) return
     pending.delete(message.id)
     if (message.ok) request.resolve(message.data)
-    else request.reject(new Error(message.error || "Chrome browser gateway request failed."))
+    else {
+      const error = new Error(message.error || "Chrome browser gateway request failed.")
+      if (typeof message.code === "string") error.code = message.code
+      if (typeof message.retryable === "boolean") error.retryable = message.retryable
+      if (message.details && typeof message.details === "object" && !Array.isArray(message.details)) {
+        error.details = message.details
+      }
+      request.reject(error)
+    }
   })
   worker.on("error", (error) => {
     if (!settled) {
@@ -188,7 +212,7 @@ function createBrowserGateway() {
       nextID += 1
       pending.set(id, { resolve, reject })
       try {
-        worker.postMessage({ id, ...message })
+        postWorkerMessage({ id, ...message })
       } catch (error) {
         pending.delete(id)
         reject(error)
@@ -206,6 +230,11 @@ function createBrowserGateway() {
     },
   }
 }
+
+const getBrowserRequestContext =
+  browserRequestContext.getStore.bind(browserRequestContext)
+const runWithBrowserRequestContext =
+  browserRequestContext.run.bind(browserRequestContext)
 
 function clearSensitiveRuntimeEnvironment() {
   delete process.env.ANYBOX_BROWSER_TRUSTED_TOKEN
@@ -237,8 +266,8 @@ function installBrowserRuntime(browserClient, options = {}) {
     ...options,
     transport: (request) => browserGateway.request({
       ...request,
-      ...(request.type === "command" && browserRequestContext.getStore()
-        ? { context: browserRequestContext.getStore() }
+      ...(request.type === "command" && getBrowserRequestContext()
+        ? { context: getBrowserRequestContext() }
         : {}),
     }),
   })
@@ -396,7 +425,7 @@ async function callTool(name, args, requestContext) {
   if (normalizedName === "js") {
     const code = args && typeof args.code === "string" ? args.code : ""
     if (!code.trim()) throw new Error("js requires code.")
-    return browserRequestContext.run(
+    return runWithBrowserRequestContext(
       requestContext,
       () => runJavaScript(code, timeoutMs(args && args.timeoutMs)),
     )
@@ -442,7 +471,7 @@ rl.on("line", (line) => {
         result: {
           protocolVersion: "2025-06-18",
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: "anybox-chrome-node-repl", version: "0.3.0" },
+          serverInfo: { name: "anybox-chrome-node-repl", version: "0.4.0" },
         },
       })
       return

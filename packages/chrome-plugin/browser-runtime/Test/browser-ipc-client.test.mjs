@@ -138,6 +138,19 @@ test("runtime client authenticates, reconnects, and rejects pending work on rese
           protocolVersion: BROWSER_IPC_PROTOCOL_VERSION,
           role: "runtime",
           brokerInstanceID,
+          ...(connections > 1
+            ? {
+                applicationCapabilities: {
+                  runtimeOperations: [
+                    "status",
+                    "getInfo",
+                    "command",
+                    "future.operation",
+                  ],
+                  browserContractVersions: [1],
+                },
+              }
+            : {}),
         }))
         return
       }
@@ -169,12 +182,23 @@ test("runtime client authenticates, reconnects, and rejects pending work on rese
       connection: 1,
       operation: "status",
     })
+    await assert.rejects(
+      client.request({ operation: "getInfo", contractVersion: 1 }),
+      (error) => error.code === "CONTRACT_VERSION_UNSUPPORTED",
+    )
 
     client.reset()
     assert.deepEqual(await client.request({ operation: "status" }), {
       connection: 2,
       operation: "status",
     })
+    assert.deepEqual(
+      await client.request({ operation: "getInfo", contractVersion: 1 }),
+      {
+        connection: 2,
+        operation: "getInfo",
+      },
+    )
 
     holdNextRequest = true
     const pending = client.request({

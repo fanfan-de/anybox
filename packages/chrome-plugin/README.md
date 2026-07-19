@@ -13,6 +13,7 @@ packages/chrome-plugin/
   browser-extension/       Vite/TypeScript Chrome extension project
   browser-runtime/         TypeScript browser SDK bundled to browser-client.mjs
   browser-native-host/     Rust Native Messaging Host project
+  docs/                    Browser Contract and Runtime migration design
   runtime/                 Authored manifest, Node REPL MCP script, and Skill
   tools/                   Distribution synchronization and regression tests
   LICENSE
@@ -65,13 +66,19 @@ directory together.
 ## Browser control architecture
 
 The plugin registers one persistent `node-repl` MCP server. The model uses its
-`js` tool and the preloaded `agent.browsers` API for tab discovery, inspection,
-interaction, and screenshots. Raw page evaluation, selector adapters, and CDP
-are disabled until command-level capability and permission policy is available.
-The plugin no longer registers per-action `browser_*` MCP tools.
+`js` tool and the preloaded `agent.browsers` Browser Client Runtime for backend
+discovery, tab access, inspection, interaction, and screenshots. The runtime
+uses a versioned Browser Contract for capabilities, a machine-readable API
+manifest, and dynamic documentation. Client-side checks provide early errors;
+the Anybox Agent is authoritative for schema and advertised capability checks.
+Extension 0.2.0 advertises its Browser Contract version and command set; the
+Agent exposes only the safe intersection and fails closed on version mismatch.
+The first slice explicitly advertises permission/ownership lifecycle features
+as unavailable until their policy phases land. Raw page evaluation and full CDP
+remain disabled. The plugin no longer registers per-action `browser_*` MCP tools.
 
-The isolated browser gateway Worker connects to the Anybox Agent Browser Policy
-Gateway over authenticated local IPC. The Rust Native Messaging Host uses a
+The isolated browser transport Worker holds IPC credentials and connects to the
+Anybox Agent Browser Policy Gateway over authenticated local IPC. The Rust Native Messaging Host uses a
 separate authenticated IPC endpoint, then keeps Chrome's required native stdio
 framing unchanged. Windows uses Named Pipes; macOS and Linux use Unix Domain
 Sockets. Production has no automatic HTTP or WebSocket browser-control fallback.
@@ -84,6 +91,9 @@ this repository. The Unix Domain Socket implementation shares the same framing
 and authentication contract, but was not executed by the current Windows
 validation run. The runtime does not yet verify peer PID/SID/uid; OS ACLs and
 short-lived proofs reduce exposure but do not provide signed process provenance.
+
+See [the Browser Client Runtime migration design](./docs/browser-client-runtime-migration.md)
+for the complete ownership, locator, cancellation, and staged-delivery design.
 
 ## Native Host delivery
 

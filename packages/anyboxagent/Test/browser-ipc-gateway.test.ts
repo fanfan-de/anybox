@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import "./sqlite.cleanup.ts"
+import {
+  spawn,
+  type ChildProcessWithoutNullStreams,
+} from "node:child_process"
 import { createHmac, randomUUID } from "node:crypto"
 import {
   existsSync,
@@ -31,6 +35,17 @@ import {
 } from "#browser-extension/ipc-gateway.ts"
 
 type JsonRecord = Record<string, unknown>
+
+const repoRoot = path.join(import.meta.dir, "..", "..", "..")
+const nodeReplServerPath = path.join(
+  repoRoot,
+  "plugins",
+  "Anybox-Plugins",
+  "chrome",
+  "scripts",
+  "node-repl-server.js",
+)
+const children: ChildProcessWithoutNullStreams[] = []
 
 class FramedClient {
   private readonly decoder = new BrowserIpcFrameDecoder()
@@ -102,11 +117,66 @@ class FramedClient {
 const gateways: Array<{ gateway: BrowserIpcGateway; root: string }> = []
 
 afterEach(async () => {
+  for (const child of children.splice(0)) child.kill()
   await Promise.all(gateways.splice(0).map(async ({ gateway, root }) => {
     await gateway.stop()
     rmSync(root, { recursive: true, force: true })
   }))
 })
+
+function startMcpServer(env: NodeJS.ProcessEnv) {
+  const child = spawn("node", [nodeReplServerPath], {
+    stdio: ["pipe", "pipe", "pipe"],
+    windowsHide: true,
+    env: {
+      ...process.env,
+      ANYBOX_BROWSER_NATIVE_INSTALL: "off",
+      ...env,
+    },
+  })
+  children.push(child)
+
+  const lines: JsonRecord[] = []
+  const stderr: string[] = []
+  let stdoutBuffer = ""
+  child.stdout.setEncoding("utf8")
+  child.stdout.on("data", (chunk: string) => {
+    stdoutBuffer += chunk
+    const split = stdoutBuffer.split(/\r?\n/)
+    stdoutBuffer = split.pop() ?? ""
+    for (const line of split) {
+      if (line.trim()) lines.push(JSON.parse(line) as JsonRecord)
+    }
+  })
+  child.stderr.setEncoding("utf8")
+  child.stderr.on("data", (chunk: string) => stderr.push(chunk))
+
+  let nextID = 1
+  async function request(method: string, params?: unknown) {
+    const id = nextID
+    nextID += 1
+    child.stdin.write(`${JSON.stringify({
+      jsonrpc: "2.0",
+      id,
+      method,
+      params,
+    })}\n`)
+    const started = Date.now()
+    while (Date.now() - started < 8_000) {
+      const index = lines.findIndex((line) => line.id === id)
+      if (index >= 0) return lines.splice(index, 1)[0]!
+      if (child.exitCode !== null) {
+        throw new Error(
+          `Chrome MCP exited with ${child.exitCode}: ${stderr.join("")}`,
+        )
+      }
+      await Bun.sleep(20)
+    }
+    throw new Error(`Timed out waiting for ${method}: ${stderr.join("")}`)
+  }
+
+  return { request }
+}
 
 function proofFor(
   secret: string,
@@ -310,23 +380,45 @@ describe("Browser IPC Gateway transport and authentication", () => {
     })
   })
 
-  test("rejects replayed hello and privileged or role-confused messages", async () => {
+  test("rejects replayed hello and role confusion while routing application methods to policy", async () => {
     const { gateway } = gatewayFixture()
     await gateway.start()
 
     const authenticated = await authenticateRuntime(gateway)
-    expect(authenticated.response).toMatchObject({ type: "ready", role: "runtime" })
+    expect(authenticated.response).toMatchObject({
+      type: "ready",
+      role: "runtime",
+      applicationCapabilities: {
+        runtimeOperations: ["status", "getInfo", "command"],
+        browserContractVersions: [1],
+      },
+    })
 
     authenticated.client.send({
       type: "runtime.request",
       requestID: "raw-script",
       operation: "command",
+      contractVersion: 1,
       method: "page.executeScript",
       params: { script: "document.title" },
     })
     expect(await authenticated.client.next()).toMatchObject({
-      type: "error",
-      code: "INVALID_MESSAGE",
+      type: "runtime.response",
+      requestID: "raw-script",
+      ok: false,
+      error: {
+        code: "COMMAND_NOT_SUPPORTED",
+      },
+    })
+    authenticated.client.send({
+      type: "runtime.request",
+      requestID: "still-open",
+      operation: "status",
+    })
+    expect(await authenticated.client.next()).toMatchObject({
+      type: "runtime.response",
+      requestID: "still-open",
+      ok: true,
     })
 
     const unknownType = await authenticateRuntime(gateway)
@@ -424,10 +516,112 @@ describe("Browser IPC Gateway transport and authentication", () => {
 
     const runtime = await authenticateRuntime(gateway)
     expect(runtime.response.type).toBe("ready")
+
+    runtime.client.send({
+      type: "runtime.request",
+      requestID: "public-status",
+      operation: "status",
+    })
+    const publicStatus = await runtime.client.next()
+    expect(publicStatus).toMatchObject({
+      type: "runtime.response",
+      requestID: "public-status",
+      ok: true,
+      data: {
+        connected: true,
+        contractCompatible: true,
+        backendVersion: "0.1.1",
+        protocolVersion: BROWSER_IPC_PROTOCOL_VERSION,
+        runtimeConnections: 1,
+        nativeHostConnections: 1,
+      },
+    })
+    const publicStatusText = JSON.stringify(publicStatus)
+    for (const internalField of [
+      "brokerInstanceID",
+      "activeSessionID",
+      "ownedTabs",
+      "lastCommand",
+      "connectionID",
+      "extensionInstanceID",
+      "lastTransportError",
+    ]) {
+      expect(publicStatusText).not.toContain(internalField)
+    }
+
+    runtime.client.send({
+      type: "runtime.request",
+      requestID: "backend-info",
+      operation: "getInfo",
+      contractVersion: 1,
+    })
+    const backendInfoResponse = await runtime.client.next()
+    expect(backendInfoResponse).toMatchObject({
+      type: "runtime.response",
+      requestID: "backend-info",
+      ok: true,
+      data: {
+        backend: {
+          contractVersion: 1,
+          browserId: "extension",
+          kind: "extension",
+          connected: true,
+          protocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
+          backendVersion: "0.1.1",
+          capabilities: {
+            features: {
+              ownership: false,
+              claim: false,
+              locator: false,
+              cancel: false,
+              arbitraryJavaScript: false,
+              scopedCdp: false,
+              fullCdp: false,
+            },
+          },
+        },
+        apiManifest: {
+          contractVersion: 1,
+        },
+        documentationManifest: {
+          contractVersion: 1,
+        },
+      },
+    })
+    const infoData = backendInfoResponse.data as JsonRecord
+    const backend = infoData.backend as JsonRecord
+    const capabilities = backend.capabilities as JsonRecord
+    const advertisedMethods = capabilities.commands as string[]
+    const apiManifest = infoData.apiManifest as JsonRecord
+    const documentationManifest = infoData.documentationManifest as JsonRecord
+    expect((apiManifest.commands as JsonRecord[]).map((entry) => entry.method))
+      .toEqual(advertisedMethods)
+    expect((documentationManifest.entries as JsonRecord[]).map((entry) => entry.method))
+      .toEqual(advertisedMethods)
+    expect(advertisedMethods).toContain("tabs.list")
+    expect(advertisedMethods).not.toContain("page.executeScript")
+    expect(advertisedMethods).not.toContain("cdp.send")
+
+    runtime.client.send({
+      type: "runtime.request",
+      requestID: "future-runtime-info",
+      operation: "getInfo",
+      contractVersion: 2,
+    })
+    expect(await runtime.client.next()).toMatchObject({
+      type: "runtime.response",
+      requestID: "future-runtime-info",
+      ok: false,
+      error: {
+        code: "CONTRACT_VERSION_UNSUPPORTED",
+      },
+    })
+
     runtime.client.send({
       type: "runtime.request",
       requestID: "open-tab",
       operation: "command",
+      contractVersion: 1,
       method: "tabs.open",
       params: { url: "https://example.com/" },
       context: {
@@ -484,6 +678,316 @@ describe("Browser IPC Gateway transport and authentication", () => {
         messageID: "message-1",
         toolCallID: "tool-1",
         ok: true,
+      },
+    })
+  })
+
+  test("filters getInfo manifests to capabilities negotiated by the extension", async () => {
+    const { bridge, gateway } = gatewayFixture()
+    await gateway.start()
+    const native = await authenticateNative(gateway)
+    native.client.send({
+      type: "native.message",
+      message: {
+        type: "hello",
+        protocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
+        extensionInstanceID: "extension-capabilities",
+        extensionID: ANYBOX_CHROME_EXTENSION_ID,
+        version: "0.2.0",
+        capabilities: {
+          contractVersion: 1,
+          commands: ["tabs.list", "page.executeScript", "page.future"],
+        },
+      },
+    })
+    await waitFor(() => bridge.status().connected)
+
+    const runtime = await authenticateRuntime(gateway)
+    runtime.client.send({
+      type: "runtime.request",
+      requestID: "negotiated-info",
+      operation: "getInfo",
+      contractVersion: 1,
+    })
+    const response = await runtime.client.next()
+    const data = response.data as JsonRecord
+    const backend = data.backend as JsonRecord
+    const capabilities = backend.capabilities as JsonRecord
+    const apiManifest = data.apiManifest as JsonRecord
+    const documentationManifest = data.documentationManifest as JsonRecord
+    expect(capabilities.commands).toEqual(["tabs.list"])
+    expect((apiManifest.commands as JsonRecord[]).map((entry) => entry.method))
+      .toEqual(["tabs.list"])
+    expect((documentationManifest.entries as JsonRecord[]).map((entry) => entry.method))
+      .toEqual(["tabs.list"])
+  })
+
+  test("returns a stable getInfo error for an incompatible extension contract", async () => {
+    const { bridge, gateway } = gatewayFixture()
+    await gateway.start()
+    const native = await authenticateNative(gateway)
+    native.client.send({
+      type: "native.message",
+      message: {
+        type: "hello",
+        protocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
+        extensionInstanceID: "extension-future-contract",
+        extensionID: ANYBOX_CHROME_EXTENSION_ID,
+        version: "0.2.0",
+        capabilities: {
+          contractVersion: 2,
+          commands: ["tabs.list"],
+        },
+      },
+    })
+    await waitFor(() => {
+      const compatibility = bridge.browserContractCompatibility()
+      return compatibility.connected && !compatibility.compatible
+    })
+
+    const runtime = await authenticateRuntime(gateway)
+    runtime.client.send({
+      type: "runtime.request",
+      requestID: "incompatible-info",
+      operation: "getInfo",
+      contractVersion: 1,
+    })
+    expect(await runtime.client.next()).toMatchObject({
+      type: "runtime.response",
+      requestID: "incompatible-info",
+      ok: false,
+      error: {
+        code: "CONTRACT_VERSION_UNSUPPORTED",
+        retryable: false,
+      },
+    })
+  })
+
+  test("runs setupBrowserRuntime through Agent policy and authenticated Native Host IPC", async () => {
+    const { bridge, gateway } = gatewayFixture()
+    await gateway.start()
+    const native = await authenticateNative(gateway)
+    native.client.send({
+      type: "native.message",
+      message: {
+        type: "hello",
+        protocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
+        extensionInstanceID: "extension-vertical-slice",
+        extensionID: ANYBOX_CHROME_EXTENSION_ID,
+        version: "0.2.0",
+        capabilities: {
+          contractVersion: 1,
+          commands: ["tabs.list"],
+        },
+      },
+    })
+    await waitFor(() => bridge.status().connected)
+
+    const mcp = startMcpServer(gateway.runtimeEnvironment())
+    expect(await mcp.request("initialize")).toMatchObject({
+      result: {
+        serverInfo: {
+          name: "anybox-chrome-node-repl",
+          version: "0.4.0",
+        },
+      },
+    })
+
+    const call = mcp.request("tools/call", {
+      name: "js",
+      arguments: {
+        code: [
+          "const browser = await agent.browsers.get('extension')",
+          "const tabs = await browser.tabs.list()",
+          "return {",
+          "  browserId: browser.browserId,",
+          "  commands: browser.capabilities.commands,",
+          "  apiMethods: browser.apiManifest.commands.map(({ method }) => method),",
+          "  documentation: await browser.documentation(),",
+          "  tabs: tabs.map(({ id, title, url, active, runtime }) => ({",
+          "    id, title, url, active, boundTabId: runtime.tabId",
+          "  })),",
+          "}",
+        ].join("\n"),
+      },
+    })
+
+    const forwarded = await native.client.next(8_000)
+    expect(forwarded).toMatchObject({
+      type: "native.message",
+      message: {
+        type: "command",
+        contractVersion: 1,
+        method: "tabs.list",
+        params: {},
+      },
+    })
+    const command = forwarded.message as JsonRecord
+    native.client.send({
+      type: "native.message",
+      message: {
+        type: "result",
+        commandID: command.commandID,
+        ok: true,
+        data: {
+          tabs: [{
+            id: 77,
+            title: "Vertical slice",
+            url: "https://example.com/",
+            active: true,
+          }],
+        },
+      },
+    })
+
+    const response = await call
+    expect(response).toMatchObject({
+      result: {
+        structuredContent: {
+          result: {
+            browserId: "extension",
+            commands: ["tabs.list"],
+            apiMethods: ["tabs.list"],
+            tabs: [{
+              id: 77,
+              title: "Vertical slice",
+              url: "https://example.com/",
+              active: true,
+              boundTabId: 77,
+            }],
+          },
+        },
+      },
+    })
+    const result = (
+      (response.result as JsonRecord).structuredContent as JsonRecord
+    ).result as JsonRecord
+    expect(String(result.documentation)).toContain("browser.tabs.list()")
+    expect(String(result.documentation)).not.toContain("tab.screenshot")
+  }, 15_000)
+
+  test("returns stable validation errors without forwarding malformed commands", async () => {
+    const { bridge, gateway } = gatewayFixture()
+    await gateway.start()
+    const native = await authenticateNative(gateway)
+    expect(native.response.type).toBe("ready")
+    native.client.send({
+      type: "native.message",
+      message: {
+        type: "hello",
+        protocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
+        extensionInstanceID: "extension-validation",
+        extensionID: ANYBOX_CHROME_EXTENSION_ID,
+        version: "0.1.1",
+      },
+    })
+    await waitFor(() => bridge.status().connected)
+
+    const runtime = await authenticateRuntime(gateway)
+    expect(runtime.response.type).toBe("ready")
+    runtime.client.send({
+      type: "runtime.request",
+      requestID: "future-contract-version",
+      operation: "command",
+      contractVersion: 2,
+      method: "tabs.list",
+      params: {},
+    })
+    expect(await runtime.client.next()).toMatchObject({
+      type: "runtime.response",
+      requestID: "future-contract-version",
+      ok: false,
+      error: {
+        code: "CONTRACT_VERSION_UNSUPPORTED",
+        retryable: false,
+      },
+    })
+
+    runtime.client.send({
+      type: "runtime.request",
+      requestID: "invalid-list-params",
+      operation: "command",
+      contractVersion: 1,
+      method: "tabs.list",
+      params: { unexpected: true },
+    })
+    expect(await runtime.client.next()).toMatchObject({
+      type: "runtime.response",
+      requestID: "invalid-list-params",
+      ok: false,
+      error: {
+        code: "INVALID_COMMAND_PARAMS",
+        retryable: false,
+      },
+    })
+
+    runtime.client.send({
+      type: "runtime.request",
+      requestID: "invalid-list-result",
+      operation: "command",
+      contractVersion: 1,
+      method: "tabs.list",
+      params: {},
+    })
+    const forwarded = await native.client.next()
+    expect(forwarded).toMatchObject({
+      type: "native.message",
+      message: {
+        type: "command",
+        method: "tabs.list",
+        params: {},
+      },
+    })
+    const command = forwarded.message as JsonRecord
+    native.client.send({
+      type: "native.message",
+      message: {
+        type: "result",
+        commandID: command.commandID,
+        ok: true,
+        data: {
+          tabs: [{ id: 0, active: true }],
+        },
+      },
+    })
+    expect(await runtime.client.next()).toMatchObject({
+      type: "runtime.response",
+      requestID: "invalid-list-result",
+      ok: false,
+      error: {
+        code: "INVALID_COMMAND_RESULT",
+        retryable: false,
+      },
+    })
+
+    runtime.client.send({
+      type: "runtime.request",
+      requestID: "extension-validation-error",
+      operation: "command",
+      contractVersion: 1,
+      method: "tabs.list",
+      params: {},
+    })
+    const rejectedForward = await native.client.next()
+    const rejectedCommand = rejectedForward.message as JsonRecord
+    native.client.send({
+      type: "native.message",
+      message: {
+        type: "result",
+        commandID: rejectedCommand.commandID,
+        ok: false,
+        error: "Extension result does not match the Browser Contract.",
+        code: "INVALID_COMMAND_RESULT",
+        retryable: false,
+      },
+    })
+    expect(await runtime.client.next()).toMatchObject({
+      type: "runtime.response",
+      requestID: "extension-validation-error",
+      ok: false,
+      error: {
+        code: "INVALID_COMMAND_RESULT",
+        retryable: false,
       },
     })
   })

@@ -3,11 +3,13 @@ import {
   ANYBOX_CHROME_EXTENSION_ID,
   BROWSER_EXTENSION_PROTOCOL_VERSION,
 } from "@anybox/shared/browser-extension"
+import { BROWSER_CONTRACT_VERSION } from "@anybox/shared/browser-contract"
 import { BrowserExtensionBridge } from "#browser-extension/bridge.ts"
 
 type SentCommand = {
   type: "command"
   commandID: string
+  contractVersion: number
 }
 
 function createSocket() {
@@ -113,6 +115,103 @@ describe("BrowserExtensionBridge command result ownership", () => {
     })
   })
 
+  test("fails closed on a mismatched advertised Browser Contract version", () => {
+    const bridge = new BrowserExtensionBridge()
+    const connection = createSocket()
+    const connectionID = bridge.register(connection.socket, {
+      transport: "native",
+    })
+    bridge.handleRawMessage(connectionID, {
+      type: "hello",
+      protocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
+      extensionInstanceID: "future-contract",
+      extensionID: ANYBOX_CHROME_EXTENSION_ID,
+      version: "0.2.0",
+      capabilities: {
+        contractVersion: BROWSER_CONTRACT_VERSION + 1,
+        commands: ["tabs.list"],
+      },
+    })
+
+    expect(bridge.backendInfo().capabilities.commands).toEqual([])
+    expect(bridge.browserContractCompatibility()).toEqual({
+      connected: true,
+      compatible: false,
+      advertisedVersion: BROWSER_CONTRACT_VERSION + 1,
+    })
+  })
+
+  test("prefers a compatible backend that connects after an incompatible one", () => {
+    const bridge = new BrowserExtensionBridge()
+    const incompatible = createSocket()
+    const incompatibleID = bridge.register(incompatible.socket, {
+      transport: "native",
+    })
+    bridge.handleRawMessage(incompatibleID, {
+      type: "hello",
+      protocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
+      extensionInstanceID: "incompatible-first",
+      extensionID: ANYBOX_CHROME_EXTENSION_ID,
+      version: "0.2.0",
+      capabilities: {
+        contractVersion: BROWSER_CONTRACT_VERSION + 1,
+        commands: ["tabs.list"],
+      },
+    })
+
+    const compatible = createSocket()
+    const compatibleID = bridge.register(compatible.socket, {
+      transport: "native",
+    })
+    bridge.handleRawMessage(compatibleID, {
+      type: "hello",
+      protocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
+      extensionInstanceID: "compatible-second",
+      extensionID: ANYBOX_CHROME_EXTENSION_ID,
+      version: "0.2.0",
+      capabilities: {
+        contractVersion: BROWSER_CONTRACT_VERSION,
+        commands: ["tabs.list"],
+      },
+    })
+
+    expect(bridge.status().active).toMatchObject({
+      extensionInstanceID: "compatible-second",
+    })
+    expect(bridge.backendInfo().capabilities.commands).toEqual(["tabs.list"])
+    expect(bridge.browserContractCompatibility()).toMatchObject({
+      connected: true,
+      compatible: true,
+    })
+  })
+
+  test("rechecks the selected connection capability immediately before dispatch", async () => {
+    const bridge = new BrowserExtensionBridge()
+    const limited = createSocket()
+    const connectionID = bridge.register(limited.socket, {
+      transport: "native",
+    })
+    bridge.handleRawMessage(connectionID, {
+      type: "hello",
+      protocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
+      extensionInstanceID: "limited-capability",
+      extensionID: ANYBOX_CHROME_EXTENSION_ID,
+      version: "0.2.0",
+      capabilities: {
+        contractVersion: BROWSER_CONTRACT_VERSION,
+        commands: ["tabs.list"],
+      },
+    })
+
+    await expect(bridge.sendCommand("page.screenshot", {
+      tabId: 7,
+    })).rejects.toMatchObject({
+      code: "CAPABILITY_UNAVAILABLE",
+      retryable: false,
+    })
+    expect(limited.messages).toEqual([])
+  })
+
   test.each([
     {
       name: "successful",
@@ -128,6 +227,7 @@ describe("BrowserExtensionBridge command result ownership", () => {
     const ownerConnectionID = registerReady(bridge, owner, "owner-instance")
     const commandPromise = bridge.sendCommand("tabs.list", undefined, { timeoutMs: 1_000 })
     const command = owner.messages[0] as SentCommand
+    expect(command.contractVersion).toBe(BROWSER_CONTRACT_VERSION)
 
     const other = createSocket()
     const otherConnectionID = registerReady(bridge, other, "other-instance")
@@ -185,6 +285,19 @@ describe("BrowserExtensionBridge command result ownership", () => {
     expect(bridge.status()).toMatchObject({
       connected: false,
       connectionCount: 0,
+    })
+  })
+
+  test("classifies a Bridge timeout as a retryable deadline error", async () => {
+    const bridge = new BrowserExtensionBridge()
+    const owner = createSocket()
+    registerReady(bridge, owner, "timing-out-owner")
+
+    await expect(bridge.sendCommand("tabs.list", {}, {
+      timeoutMs: 1,
+    })).rejects.toMatchObject({
+      code: "DEADLINE_EXCEEDED",
+      retryable: true,
     })
   })
 })

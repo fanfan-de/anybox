@@ -25,11 +25,19 @@ export const BrowserExtensionCommandMethod = z.enum([
 ])
 export type BrowserExtensionCommandMethod = z.infer<typeof BrowserExtensionCommandMethod>
 
+export const BrowserExtensionCapabilities = z.object({
+  contractVersion: z.number().int().positive(),
+  commands: z.array(z.string().min(1).max(128)).max(256),
+}).strict()
+export type BrowserExtensionCapabilities = z.infer<
+  typeof BrowserExtensionCapabilities
+>
+
 export const BrowserExtensionCommandContext = z.object({
-  sessionID: z.string().min(1).optional(),
-  messageID: z.string().min(1).optional(),
-  toolCallID: z.string().min(1).optional(),
-})
+  sessionID: z.string().trim().min(1).max(256).optional(),
+  messageID: z.string().trim().min(1).max(256).optional(),
+  toolCallID: z.string().trim().min(1).max(256).optional(),
+}).strict()
 export type BrowserExtensionCommandContext = z.infer<typeof BrowserExtensionCommandContext>
 
 export const BrowserExtensionHelloMessage = z.object({
@@ -38,8 +46,9 @@ export const BrowserExtensionHelloMessage = z.object({
   extensionInstanceID: z.string().min(1),
   extensionID: z.string().min(1),
   version: z.string().min(1),
+  capabilities: BrowserExtensionCapabilities.optional(),
   lastTransportError: z.string().min(1).optional(),
-})
+}).strict()
 export type BrowserExtensionHelloMessage = z.infer<typeof BrowserExtensionHelloMessage>
 
 export const BrowserExtensionResultMessage = z.discriminatedUnion("ok", [
@@ -54,6 +63,8 @@ export const BrowserExtensionResultMessage = z.discriminatedUnion("ok", [
     commandID: z.string().min(1),
     ok: z.literal(false),
     error: z.string(),
+    code: z.string().min(1).optional(),
+    retryable: z.boolean().optional(),
   }),
 ])
 export type BrowserExtensionResultMessage = z.infer<typeof BrowserExtensionResultMessage>
@@ -82,6 +93,10 @@ export type BrowserExtensionClientMessage = z.infer<typeof BrowserExtensionClien
 export const BrowserExtensionCommandMessage = z.object({
   type: z.literal("command"),
   commandID: z.string().min(1),
+  // Optional within Browser Extension protocol v1 so an older Agent can still
+  // drive a newer extension. An explicit unsupported version is rejected by
+  // the extension before command execution.
+  contractVersion: z.number().int().positive().optional(),
   method: BrowserExtensionCommandMethod,
   params: z.unknown().optional(),
   context: BrowserExtensionCommandContext.optional(),
@@ -101,34 +116,35 @@ export const BrowserExtensionServerMessage = z.union([
 export type BrowserExtensionServerMessage = z.infer<typeof BrowserExtensionServerMessage>
 
 export const BrowserExtensionTabSummary = z.object({
-  id: z.number().int(),
+  id: z.number().int().positive(),
   windowId: z.number().int().optional(),
   title: z.string().optional(),
   url: z.string().optional(),
   active: z.boolean().optional(),
-})
+}).strict()
 export type BrowserExtensionTabSummary = z.infer<typeof BrowserExtensionTabSummary>
 
 export const BrowserExtensionTabsListResult = z.object({
   tabs: z.array(BrowserExtensionTabSummary),
-})
+}).strict()
 export type BrowserExtensionTabsListResult = z.infer<typeof BrowserExtensionTabsListResult>
 
 export const BrowserExtensionSnapshotResult = z.object({
-  tabId: z.number().int(),
+  tabId: z.number().int().positive(),
   url: z.string().optional(),
   title: z.string().optional(),
   text: z.string(),
-  links: z.array(z.object({ text: z.string(), href: z.string() })),
-  buttons: z.array(z.object({ text: z.string() })),
+  links: z.array(z.object({ text: z.string(), href: z.string() }).strict()),
+  buttons: z.array(z.object({ text: z.string() }).strict()),
   inputs: z.array(z.object({
     name: z.string().optional(),
     type: z.string().optional(),
     placeholder: z.string().optional(),
     value: z.string().optional(),
-  })),
+    sensitive: z.boolean().optional(),
+  }).strict()),
   truncated: z.boolean(),
-})
+}).strict()
 export type BrowserExtensionSnapshotResult = z.infer<typeof BrowserExtensionSnapshotResult>
 
 export const BrowserExtensionElementRect = z.object({
@@ -136,7 +152,7 @@ export const BrowserExtensionElementRect = z.object({
   y: z.number(),
   width: z.number(),
   height: z.number(),
-})
+}).strict()
 export type BrowserExtensionElementRect = z.infer<typeof BrowserExtensionElementRect>
 
 export const BrowserExtensionInteractiveElement = z.object({
@@ -153,16 +169,16 @@ export const BrowserExtensionInteractiveElement = z.object({
   visible: z.boolean(),
   sensitive: z.boolean().optional(),
   rect: BrowserExtensionElementRect,
-})
+}).strict()
 export type BrowserExtensionInteractiveElement = z.infer<typeof BrowserExtensionInteractiveElement>
 
 export const BrowserExtensionInteractiveSnapshotResult = z.object({
-  tabId: z.number().int(),
+  tabId: z.number().int().positive(),
   url: z.string().optional(),
   title: z.string().optional(),
   elements: z.array(BrowserExtensionInteractiveElement),
   truncated: z.boolean(),
-})
+}).strict()
 export type BrowserExtensionInteractiveSnapshotResult = z.infer<typeof BrowserExtensionInteractiveSnapshotResult>
 
 export type BrowserExtensionDomNode = {
@@ -187,10 +203,10 @@ export const BrowserExtensionDomNode: z.ZodType<BrowserExtensionDomNode> = z.laz
   nodeValue: z.string().optional(),
   attributes: z.record(z.string(), z.string()).optional(),
   children: z.array(BrowserExtensionDomNode).optional(),
-}))
+}).strict())
 
 export const BrowserExtensionDomTreeResult = z.object({
-  tabId: z.number().int(),
+  tabId: z.number().int().positive(),
   url: z.string().optional(),
   title: z.string().optional(),
   root: BrowserExtensionDomNode,
@@ -198,7 +214,7 @@ export const BrowserExtensionDomTreeResult = z.object({
   maxDepth: z.number().int().nonnegative(),
   maxNodes: z.number().int().positive(),
   truncated: z.boolean(),
-})
+}).strict()
 export type BrowserExtensionDomTreeResult = z.infer<typeof BrowserExtensionDomTreeResult>
 
 export const BrowserExtensionAccessibilityNode = z.object({
@@ -213,11 +229,11 @@ export const BrowserExtensionAccessibilityNode = z.object({
   description: z.string().optional(),
   properties: z.record(z.string(), z.unknown()).optional(),
   childIds: z.array(z.string()).optional(),
-})
+}).strict()
 export type BrowserExtensionAccessibilityNode = z.infer<typeof BrowserExtensionAccessibilityNode>
 
 export const BrowserExtensionAccessibilityTreeResult = z.object({
-  tabId: z.number().int(),
+  tabId: z.number().int().positive(),
   url: z.string().optional(),
   title: z.string().optional(),
   rootNodeId: z.string().optional(),
@@ -227,34 +243,68 @@ export const BrowserExtensionAccessibilityTreeResult = z.object({
   maxNodes: z.number().int().positive(),
   includeIgnored: z.boolean(),
   truncated: z.boolean(),
-})
+}).strict()
 export type BrowserExtensionAccessibilityTreeResult = z.infer<typeof BrowserExtensionAccessibilityTreeResult>
 
 export const BrowserExtensionScreenshotResult = z.object({
-  tabId: z.number().int(),
+  tabId: z.number().int().positive(),
   mime: z.literal("image/png"),
   data: z.string().min(1),
-})
+}).strict()
 export type BrowserExtensionScreenshotResult = z.infer<typeof BrowserExtensionScreenshotResult>
 
 export const BrowserExtensionElementActionResult = z.object({
-  tabId: z.number().int(),
+  tabId: z.number().int().positive(),
   elementId: z.string().min(1),
   url: z.string().optional(),
   title: z.string().optional(),
-})
+}).strict()
 export type BrowserExtensionElementActionResult = z.infer<typeof BrowserExtensionElementActionResult>
 
 export const BrowserExtensionFillResult = BrowserExtensionElementActionResult.extend({
   textLength: z.number().int().nonnegative(),
-})
+}).strict()
 export type BrowserExtensionFillResult = z.infer<typeof BrowserExtensionFillResult>
 
 export const BrowserExtensionWaitForResult = z.object({
-  tabId: z.number().int(),
+  tabId: z.number().int().positive(),
   url: z.string().optional(),
   title: z.string().optional(),
   matched: z.boolean(),
   reason: z.string().optional(),
-})
+}).strict()
 export type BrowserExtensionWaitForResult = z.infer<typeof BrowserExtensionWaitForResult>
+
+export const BrowserExtensionClickResult = z.object({
+  tabId: z.number().int().positive(),
+  x: z.number().finite(),
+  y: z.number().finite(),
+  button: z.enum(["left", "right", "middle"]),
+}).strict()
+export type BrowserExtensionClickResult = z.infer<typeof BrowserExtensionClickResult>
+
+export const BrowserExtensionTypeResult = z.object({
+  tabId: z.number().int().positive(),
+  textLength: z.number().int().nonnegative(),
+}).strict()
+export type BrowserExtensionTypeResult = z.infer<typeof BrowserExtensionTypeResult>
+
+export const BrowserExtensionScrollPosition = z.object({
+  scrollX: z.number().finite(),
+  scrollY: z.number().finite(),
+}).strict()
+export type BrowserExtensionScrollPosition = z.infer<typeof BrowserExtensionScrollPosition>
+
+export const BrowserExtensionScrollResult = z.object({
+  tabId: z.number().int().positive(),
+  scrollX: z.number().finite(),
+  scrollY: z.number().finite(),
+  position: BrowserExtensionScrollPosition,
+}).strict()
+export type BrowserExtensionScrollResult = z.infer<typeof BrowserExtensionScrollResult>
+
+export const BrowserExtensionTabsReleaseResult = z.object({
+  tabId: z.number().int().positive(),
+  released: z.boolean(),
+}).strict()
+export type BrowserExtensionTabsReleaseResult = z.infer<typeof BrowserExtensionTabsReleaseResult>

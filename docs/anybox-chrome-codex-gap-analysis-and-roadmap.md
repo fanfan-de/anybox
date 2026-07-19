@@ -2,11 +2,21 @@
 
 > 文档日期：2026-07-19  
 > Anybox 初始审计版本：Chrome 插件 `0.4.0`  
-> Anybox 当前实现版本：Chrome 插件 `0.5.0`、Extension `0.1.1`、Browser Runtime `0.2.0`、Native Host / Node MCP Server `0.3.0`
+> Anybox 当前实现版本：Chrome 插件 `0.6.0`、Extension `0.2.0`、Browser Runtime `0.3.0`、Native Host `0.3.0`、Node MCP Server / Runtime IPC client `0.4.0`
 > Codex 对照版本：本机已安装 Chrome 插件 `26.715.31925`  
-> 文档性质：当前实现审计、差距分析与工程路线图  
-> 最近实施同步：2026-07-19，Browser control 本机 IPC 迁移与 Phase 0 gate 复核
+> 文档性质：历史审计快照、差距分析与工程路线图；正文中的静态 Facade/Worker allowlist 数值保留为 Phase 0 基线
+> 最近实施同步：2026-07-19，Browser Contract v1 与 Browser Client Runtime 首个纵向切片
 > 相关背景文档：[Codex Browser Use 实现方式：模块化架构与参考实现](./codex-browser-use-implementation-reference.md)
+> 当前实现与后续阶段的权威设计记录：[Anybox Browser Client Runtime 迁移设计](../packages/chrome-plugin/docs/browser-client-runtime-migration.md)
+
+> **阅读提示：** 0.6.0 已实现 BrowserManager、Backend `getInfo`、精确 command
+> schema、capability-filtered API/Documentation Manifest、Agent params → policy →
+> bridge → result 校验，并把 Worker 收敛为受保护 Transport Adapter。正文中把这些能力
+> 标为“缺失”或把 Worker 描述为 15-method allowlist 的段落是审计时事实，不代表当前
+> 工作树。Extension `0.2.0` 已通过 Browser Contract version + command 列表协商
+> capability，模型可见 status/getInfo 与 command error 已做边界脱敏。
+> ownership/claim/finalize、逐 origin/动作审批、Locator、cancel/turnEnded 与
+> feature flag 仍未完成。
 
 ## 0. 文档目标
 
@@ -37,15 +47,18 @@ Node REPL 本身不是效果变好的原因。真正决定效果的是 Node REPL
 | Native runtime config | 已完成 secret-free 升级 | 持久配置只保留 transport、protocol、endpoint 和 bootstrap 文件定位；安装会覆盖旧 token 配置 |
 | Policy / Bridge 边界 | 保留 | Browser IPC Gateway 在 Agent 主进程验证命令并复用 `BrowserExtensionBridge`；listener sidecar 只转发字节，不拥有认证、policy、pending 或 ownership 逻辑 |
 | 连接身份与结果所有权 | 保留并回归 | 固定 Extension ID、first-ready sticky、connection-owned result、owner disconnect 失败 pending command、role confusion 拒绝 |
-| 模型隔离 | 已完成本轮目标 | endpoint/proof 在创建 Worker 后从模型进程环境删除；Browser Facade 不暴露 socket；Worker allowlist 拒绝 `trusted-command`、raw evaluate 和 CDP |
-| Capability / packaging | 已完成本轮目标 | manifest、README、Skill 和运行时都声明 raw capability disabled；语义负例测试已加入；生成包 `22` 个文件 |
+| 模型隔离 | 已完成本轮目标 | endpoint/proof 在创建 Worker 后从模型进程环境删除；Browser Client 不暴露 socket；Worker 只检查 transport envelope，Agent Contract 与 Extension 均拒绝 raw evaluate/CDP |
+| Capability / packaging | 已完成首个 Runtime 切片 | Browser Contract v1、versioned Extension command capability 协商、BackendInfo、API/Documentation Manifest 与动态裁剪已落地；高级 capability 显式为 false；生成包仍为 `22` 个文件 |
 | Peer process provenance | 仍有残余风险 | Windows 使用进程 token 默认 DACL 且没有 all-users grant，但当前运行库未校验连接端 PID/SID；同一用户的任意进程仍是明确残余威胁 |
-| Command boundary policy | 部分完成 | session/message/tool-call context 已从 MCP `_meta` 传到 Agent command；逐命令风险确认、permission proof、完整 tab ownership、trace 和 cancel/interruption 尚未闭环 |
-| Screenshot / trace 隐私 | 未完成 | 结构化页面输出已脱敏，screenshot 像素、端到端 trace、fill/type 和错误对象仍需要统一策略与真实 Chrome fixture |
+| Command boundary policy | 部分完成 | Agent 已权威执行 strict schema、backend capability 与 security class；session/message/tool-call context 已贯穿；逐命令用户确认、permission proof、完整 tab ownership、trace 和 cancel/interruption 尚未闭环 |
+| Screenshot / trace 隐私 | 部分完成 | 结构化页面输出及模型可见 command error/status/getInfo 已脱敏；screenshot 像素、端到端 trace、fill/type 的完整审计与真实 Chrome fixture 仍未完成 |
 
 因此，本文当前结论是：
 
-> 本机传输迁移、长期 transport token 清理和 capability 声明漂移已经完成；Phase 0 整体仍未退出。阻塞项已转为可信 peer/provenance、command-boundary policy 与 tab ownership、screenshot/trace/error redaction，以及真正的取消隔离。
+> 本机传输迁移、长期 transport token 清理、Phase 0 基线和 Browser Client Runtime
+> 首个纵向切片已经完成。剩余阻塞项是可信 peer/provenance、用户级
+> command-boundary policy 与 tab ownership、Locator、screenshot/trace/error
+> 的剩余隐私审计，以及真正的端到端取消隔离。
 
 ### 0.2 Browser IPC 迁移验收记录
 
@@ -65,13 +78,13 @@ MCP js
 → Chrome Extension
 ```
 
-`BrowserExtensionBridge` 仍是 Browser connection registry、first-ready
-selection、pending command、timeout、connection-owned result 和 tab ownership
-的唯一业务实现。Browser IPC Gateway 只在它前面增加 transport authentication、
-role/method schema、context forwarding 和 Runtime command allowlist；Runtime
-没有连接 Native Host endpoint 或绕过 Agent 的代码路径。Node listener sidecar
-只是 Agent 内部的 socket byte relay，不持有 proof、policy、pending command
-或 Browser ownership 状态。
+`BrowserExtensionBridge` 仍负责 Browser connection registry、first-ready
+selection、pending command、timeout、connection-owned result 和现有的 tab
+bookkeeping。Agent Command Gateway/BrowserPolicyEngine 在它前面权威执行 contract
+version、params、backend capability 和 result 校验；完整 permission/ownership
+policy 尚待后续阶段。Runtime 没有连接 Native Host endpoint 或绕过 Agent 的代码
+路径。Node listener sidecar 只是 Agent 内部的 socket byte relay，不持有 proof、
+policy、pending command 或 Browser ownership 状态。
 
 本次入口变化如下：
 

@@ -1,19 +1,72 @@
+import {
+  BROWSER_CONTRACT_VERSION,
+  BrowserContractCommandRegistry,
+  BrowserContractValidationError,
+  BrowserGetInfoResult,
+  createBrowserApiManifest,
+  createBrowserDocumentationManifest,
+  parseBrowserCommandParams,
+  parseBrowserCommandResult,
+} from "@anybox/shared/browser-contract"
+import type {
+  BrowserApiManifest,
+  BrowserBackendCapabilities,
+  BrowserBackendInfo,
+  BrowserContractCommandMethod,
+  BrowserContractCommandParams,
+  BrowserContractCommandResult,
+  BrowserContractErrorCode,
+  BrowserDocumentationManifest,
+} from "@anybox/shared/browser-contract"
 import type {
   BrowserExtensionAccessibilityTreeResult,
-  BrowserExtensionCommandMethod,
+  BrowserExtensionClickResult,
   BrowserExtensionDomTreeResult,
   BrowserExtensionElementActionResult,
   BrowserExtensionFillResult,
   BrowserExtensionInteractiveSnapshotResult,
   BrowserExtensionScreenshotResult,
+  BrowserExtensionScrollResult,
   BrowserExtensionSnapshotResult,
   BrowserExtensionTabSummary,
   BrowserExtensionTabsListResult,
+  BrowserExtensionTabsReleaseResult,
+  BrowserExtensionTypeResult,
   BrowserExtensionWaitForResult,
 } from "@anybox/shared/browser-extension"
 
 type BrowserCommandParams = Record<string, unknown>
 type PageFunction<TResult = unknown> = (...args: any[]) => TResult
+
+type TabsOpenOptions = Omit<BrowserContractCommandParams<"tabs.open">, "url">
+type SnapshotOptions = Omit<BrowserContractCommandParams<"page.snapshot">, "tabId">
+type InteractiveSnapshotOptions = Omit<
+  BrowserContractCommandParams<"page.interactiveSnapshot">,
+  "tabId"
+>
+type DomTreeOptions = Omit<BrowserContractCommandParams<"page.domTree">, "tabId">
+type AccessibilityTreeOptions = Omit<
+  BrowserContractCommandParams<"page.accessibilityTree">,
+  "tabId"
+>
+type ScreenshotOptions = Omit<
+  BrowserContractCommandParams<"page.screenshot">,
+  "tabId"
+>
+type ClickOptions = Omit<
+  BrowserContractCommandParams<"page.click">,
+  "tabId" | "x" | "y"
+>
+type ClickElementOptions = Omit<
+  BrowserContractCommandParams<"page.clickElement">,
+  "tabId" | "elementId"
+>
+type FillOptions = Omit<
+  BrowserContractCommandParams<"page.fill">,
+  "tabId" | "elementId" | "text"
+>
+type ScrollOptions = Omit<BrowserContractCommandParams<"page.scroll">, "tabId">
+type WaitForOptions = Omit<BrowserContractCommandParams<"page.waitFor">, "tabId">
 
 interface BrowserCommandOptions {
   timeoutMs?: number
@@ -22,9 +75,14 @@ interface BrowserCommandOptions {
 export type BrowserRuntimeTransportRequest =
   | { type: "status" }
   | {
+      type: "getInfo"
+      contractVersion: typeof BROWSER_CONTRACT_VERSION
+    }
+  | {
       type: "command"
-      method: BrowserExtensionCommandMethod
-      params: BrowserCommandParams
+      contractVersion: typeof BROWSER_CONTRACT_VERSION
+      method: BrowserContractCommandMethod
+      params: unknown
       timeoutMs?: number
     }
 
@@ -49,10 +107,10 @@ interface PlaywrightAdapter {
     pageFunction: PageFunction<TResult> | string,
     ...args: unknown[]
   ): Promise<TResult>
-  screenshot(options?: BrowserCommandParams): Promise<BrowserExtensionScreenshotResult>
+  screenshot(options?: ScreenshotOptions): Promise<BrowserExtensionScreenshotResult>
   waitForSelector(
     selector: string,
-    options?: BrowserCommandParams & { timeout?: number },
+    options?: { timeout?: number },
   ): Promise<BrowserExtensionWaitForResult>
   click(selector: string, options?: BrowserCommandParams): Promise<BrowserCommandParams>
   fill(
@@ -61,15 +119,22 @@ interface PlaywrightAdapter {
     options?: BrowserCommandParams,
   ): Promise<BrowserCommandParams>
   keyboard: {
-    type(text: string): Promise<unknown>
+    type(text: string): Promise<BrowserExtensionTypeResult>
   }
   mouse: {
-    click(x: number, y: number, options?: BrowserCommandParams): Promise<unknown>
+    click(
+      x: number,
+      y: number,
+      options?: ClickOptions,
+    ): Promise<BrowserExtensionClickResult>
   }
 }
 
-interface BrowserCollection {
-  get(name?: string): Promise<BrowserRuntime>
+export interface BrowserCollection {
+  list(): Promise<BrowserContext[]>
+  get(name?: string): Promise<BrowserContext>
+  getDefault(): Promise<BrowserContext>
+  getForUrl(url: string | URL): Promise<BrowserContext>
 }
 
 export interface BrowserRuntimeAgent extends Record<string, unknown> {
@@ -86,71 +151,217 @@ export interface SetupBrowserRuntimeOptions {
   transport?: BrowserRuntimeTransport
 }
 
-const BROWSER_RUNTIME_DOCUMENTATION = [
-  "Anybox Chrome browser runtime",
-  "",
-  "Browser:",
-  "  await browser.status()",
-  "  await browser.documentation()",
-  "  await browser.tabs.list()",
-  "  await browser.tabs.open(url, options?)",
-  "  await browser.tabs.activate(tabId)",
-  "  await browser.tabs.get(tabId)",
-  "  await browser.tabs.current()",
-  "",
-  "Tab inspection:",
-  "  await tab.info()",
-  "  await tab.snapshot(options?)",
-  "  await tab.interactiveSnapshot(options?)",
-  "  await tab.domTree(options?)",
-  "  await tab.accessibilityTree(options?)",
-  "  await tab.screenshot(options?)",
-  "",
-  "Tab interaction:",
-  "  await tab.activate()",
-  "  await tab.click(x, y, options?)",
-  "  await tab.clickElement(elementId, options?)",
-  "  await tab.fill(elementId, text, options?)",
-  "  await tab.type(text)",
-  "  await tab.scroll(options?)",
-  "  await tab.waitFor({ text?, urlIncludes?, selector?, elementId?, timeoutMs? })",
-  "  await tab.release()",
-  "",
-  "Advanced raw evaluate/CDP and selector adapters are disabled until command-level policy is available.",
-  "Emit screenshots with: await nodeRepl.emitImage(await tab.screenshot())",
-].join("\n")
+interface BrowserRuntimeErrorOptions {
+  retryable?: boolean
+  details?: Record<string, unknown>
+  cause?: unknown
+}
+
+export class BrowserRuntimeError extends Error {
+  readonly retryable: boolean
+  readonly details?: Record<string, unknown>
+
+  constructor(
+    readonly code: BrowserContractErrorCode,
+    message: string,
+    options: BrowserRuntimeErrorOptions = {},
+  ) {
+    super(message, options.cause === undefined ? undefined : { cause: options.cause })
+    this.name = "BrowserRuntimeError"
+    this.retryable = options.retryable ?? false
+    this.details = options.details
+  }
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
 function unavailableTransport<TResult>(): Promise<TResult> {
-  return Promise.reject(new Error("Chrome browser runtime transport is not available."))
+  return Promise.reject(
+    new BrowserRuntimeError(
+      "BACKEND_UNAVAILABLE",
+      "Chrome browser runtime transport is not available.",
+      { retryable: true },
+    ),
+  )
 }
 
-async function browserCommand<TResult = unknown>(
-  transport: BrowserRuntimeTransport,
-  method: BrowserExtensionCommandMethod,
-  params: BrowserCommandParams = {},
-  options: BrowserCommandOptions = {},
-): Promise<TResult> {
-  return transport<TResult>({
-    type: "command",
-    method,
-    params,
-    ...(options.timeoutMs ? { timeoutMs: options.timeoutMs } : {}),
-  })
+function invalidBackendResult(message: string, cause?: unknown): never {
+  throw new BrowserContractValidationError(
+    "INVALID_COMMAND_RESULT",
+    message,
+    cause === undefined ? undefined : { cause },
+  )
+}
+
+function sameCommandOrder(
+  expected: readonly BrowserContractCommandMethod[],
+  actual: readonly BrowserContractCommandMethod[],
+): boolean {
+  return expected.length === actual.length
+    && expected.every((method, index) => actual[index] === method)
+}
+
+function validateGetInfo(value: unknown): BrowserGetInfoResult {
+  const parsed = BrowserGetInfoResult.safeParse(value)
+  if (!parsed.success) {
+    invalidBackendResult(
+      `Browser backend getInfo result does not match contract v${BROWSER_CONTRACT_VERSION}.`,
+      parsed.error,
+    )
+  }
+
+  const result = parsed.data
+  const supported = result.backend.capabilities.commands
+  const apiCommands = result.apiManifest.commands.map((entry) => entry.method)
+  const documentationCommands = result.documentationManifest.entries.map(
+    (entry) => entry.method,
+  )
+  if (
+    !sameCommandOrder(supported, apiCommands)
+    || !sameCommandOrder(supported, documentationCommands)
+  ) {
+    invalidBackendResult(
+      "Browser backend manifests must exactly match its advertised command capabilities.",
+    )
+  }
+
+  for (const entry of result.apiManifest.commands) {
+    const definition = BrowserContractCommandRegistry[entry.method]
+    if (
+      entry.apiPath !== definition.apiPath
+      || entry.security !== definition.security
+    ) {
+      invalidBackendResult(
+        `Browser backend API manifest entry '${entry.method}' is inconsistent with the Anybox contract.`,
+      )
+    }
+  }
+  for (const entry of result.documentationManifest.entries) {
+    const definition = BrowserContractCommandRegistry[entry.method]
+    if (
+      entry.apiPath !== definition.apiPath
+      || entry.signature !== definition.signature
+      || entry.summary !== definition.summary
+      || entry.security !== definition.security
+    ) {
+      invalidBackendResult(
+        `Browser backend documentation entry '${entry.method}' is inconsistent with the Anybox contract.`,
+      )
+    }
+  }
+  return {
+    backend: result.backend,
+    apiManifest: createBrowserApiManifest(supported),
+    documentationManifest: createBrowserDocumentationManifest(supported),
+  }
+}
+
+function parseStatus(value: unknown): BrowserRuntimeStatus {
+  if (!isRecord(value) || typeof value.connected !== "boolean") {
+    invalidBackendResult("Browser backend status result is invalid.")
+  }
+  return value as BrowserRuntimeStatus
 }
 
 function disabledAdvancedCapability(name: string): Promise<never> {
   return Promise.reject(
-    new Error(
+    new BrowserRuntimeError(
+      "CAPABILITY_UNAVAILABLE",
       `${name} is disabled until Anybox can enforce command-level capability and permission policy.`,
     ),
   )
 }
 
-class BrowserLocator {
+function validateBrowserUrl(value: string | URL): URL {
+  try {
+    const url = value instanceof URL ? value.href : value
+    return new URL(parseBrowserCommandParams("tabs.open", { url }).url)
+  } catch (cause) {
+    throw new BrowserRuntimeError(
+      "INVALID_COMMAND_PARAMS",
+      "Browser URL must be absolute and use a non-executable scheme.",
+      { cause },
+    )
+  }
+}
+
+function validateTabId(value: number): number {
+  return parseBrowserCommandParams("tabs.activate", { tabId: value }).tabId
+}
+
+export class BackendTransport {
+  readonly #transport: BrowserRuntimeTransport
+
+  constructor(transport: BrowserRuntimeTransport) {
+    this.#transport = transport
+  }
+
+  async status(): Promise<BrowserRuntimeStatus> {
+    return parseStatus(await this.#transport({ type: "status" }))
+  }
+
+  async getInfo(): Promise<BrowserGetInfoResult> {
+    return validateGetInfo(await this.#transport({
+      type: "getInfo",
+      contractVersion: BROWSER_CONTRACT_VERSION,
+    }))
+  }
+
+  async command<TResult = unknown>(
+    method: BrowserContractCommandMethod,
+    params: unknown,
+    options: BrowserCommandOptions = {},
+  ): Promise<TResult> {
+    return this.#transport<TResult>({
+      type: "command",
+      contractVersion: BROWSER_CONTRACT_VERSION,
+      method,
+      params,
+      ...(options.timeoutMs ? { timeoutMs: options.timeoutMs } : {}),
+    })
+  }
+}
+
+export class CommandRouter {
+  readonly #backend: BackendTransport
+  readonly #supportedCommands: ReadonlySet<BrowserContractCommandMethod>
+
+  constructor(
+    backend: BackendTransport,
+    capabilities: BrowserBackendCapabilities,
+  ) {
+    this.#backend = backend
+    this.#supportedCommands = new Set(capabilities.commands)
+  }
+
+  supports(method: BrowserContractCommandMethod): boolean {
+    return this.#supportedCommands.has(method)
+  }
+
+  async run<TMethod extends BrowserContractCommandMethod>(
+    method: TMethod,
+    params: unknown,
+    options: BrowserCommandOptions = {},
+  ): Promise<BrowserContractCommandResult<TMethod>> {
+    if (!this.supports(method)) {
+      throw new BrowserRuntimeError(
+        "CAPABILITY_UNAVAILABLE",
+        `Browser backend does not advertise capability '${method}'.`,
+      )
+    }
+    const parsedParams = parseBrowserCommandParams(method, params)
+    const rawResult = await this.#backend.command(
+      method,
+      parsedParams,
+      options,
+    )
+    return parseBrowserCommandResult(method, rawResult)
+  }
+}
+
+export class BrowserLocator {
   constructor(
     private readonly tab: BrowserTab,
     readonly selector: string,
@@ -184,15 +395,15 @@ class BrowserLocator {
   }
 }
 
-class BrowserTab {
-  readonly #transport: BrowserRuntimeTransport
-  tabId: number | undefined
+export class BrowserTab {
+  readonly #router: CommandRouter
+  tabId: number
   readonly cdp: CdpAdapter
   readonly playwright: PlaywrightAdapter
 
-  constructor(tabId: number | undefined, transport: BrowserRuntimeTransport) {
-    this.#transport = transport
-    this.tabId = tabId
+  constructor(tabId: number, router: CommandRouter) {
+    this.#router = router
+    this.tabId = validateTabId(tabId)
     this.cdp = {
       send: <TResult = unknown>(
         _method: string,
@@ -203,21 +414,16 @@ class BrowserTab {
   }
 
   private withTabId(params: BrowserCommandParams = {}): BrowserCommandParams {
-    return this.tabId ? { ...params, tabId: this.tabId } : params
+    return { ...params, tabId: this.tabId }
   }
 
   async info(): Promise<BrowserExtensionTabSummary | undefined> {
-    if (!this.tabId) return undefined
-    const result = await browserCommand<BrowserExtensionTabsListResult>(
-      this.#transport,
-      "tabs.list",
-    )
+    const result = await this.#router.run("tabs.list", {})
     return result.tabs.find((tab) => tab.id === this.tabId)
   }
 
   async activate(): Promise<BrowserExtensionTabSummary> {
-    const tab = await browserCommand<BrowserExtensionTabSummary>(
-      this.#transport,
+    const tab = await this.#router.run(
       "tabs.activate",
       this.withTabId(),
     )
@@ -226,91 +432,113 @@ class BrowserTab {
   }
 
   async snapshot(
-    options: BrowserCommandParams = {},
+    options: SnapshotOptions = {},
   ): Promise<BrowserExtensionSnapshotResult> {
-    return browserCommand(this.#transport, "page.snapshot", this.withTabId(options))
+    return this.#router.run(
+      "page.snapshot",
+      this.withTabId(options),
+    )
   }
 
   async interactiveSnapshot(
-    options: BrowserCommandParams = {},
+    options: InteractiveSnapshotOptions = {},
   ): Promise<BrowserExtensionInteractiveSnapshotResult> {
-    return browserCommand(this.#transport, "page.interactiveSnapshot", this.withTabId(options))
+    return this.#router.run(
+      "page.interactiveSnapshot",
+      this.withTabId(options),
+    )
   }
 
   async domTree(
-    options: BrowserCommandParams = {},
+    options: DomTreeOptions = {},
   ): Promise<BrowserExtensionDomTreeResult> {
-    return browserCommand(this.#transport, "page.domTree", this.withTabId(options))
+    return this.#router.run(
+      "page.domTree",
+      this.withTabId(options),
+    )
   }
 
   async accessibilityTree(
-    options: BrowserCommandParams = {},
+    options: AccessibilityTreeOptions = {},
   ): Promise<BrowserExtensionAccessibilityTreeResult> {
-    return browserCommand(this.#transport, "page.accessibilityTree", this.withTabId(options))
+    return this.#router.run(
+      "page.accessibilityTree",
+      this.withTabId(options),
+    )
   }
 
   async screenshot(
-    options: BrowserCommandParams = {},
+    options: ScreenshotOptions = {},
   ): Promise<BrowserExtensionScreenshotResult> {
-    return browserCommand(this.#transport, "page.screenshot", this.withTabId(options))
+    return this.#router.run(
+      "page.screenshot",
+      this.withTabId(options),
+    )
   }
 
   async click(
     x: number,
     y: number,
-    options: BrowserCommandParams = {},
-  ): Promise<unknown> {
-    return browserCommand(this.#transport, "page.click", this.withTabId({ x, y, ...options }))
+    options: ClickOptions = {},
+  ): Promise<BrowserExtensionClickResult> {
+    return this.#router.run(
+      "page.click",
+      this.withTabId({ ...options, x, y }),
+    )
   }
 
   async clickElement(
     elementId: string,
-    options: BrowserCommandParams = {},
+    options: ClickElementOptions = {},
   ): Promise<BrowserExtensionElementActionResult> {
-    return browserCommand(
-      this.#transport,
+    return this.#router.run(
       "page.clickElement",
-      this.withTabId({ elementId, ...options }),
+      this.withTabId({ ...options, elementId }),
     )
   }
 
   async fill(
     elementId: string,
     text: string,
-    options: BrowserCommandParams = {},
+    options: FillOptions = {},
   ): Promise<BrowserExtensionFillResult> {
-    return browserCommand(
-      this.#transport,
+    return this.#router.run(
       "page.fill",
-      this.withTabId({ elementId, text, ...options }),
+      this.withTabId({ ...options, elementId, text }),
     )
   }
 
-  async type(text: string): Promise<unknown> {
-    return browserCommand(this.#transport, "page.type", this.withTabId({ text }))
+  async type(text: string): Promise<BrowserExtensionTypeResult> {
+    return this.#router.run(
+      "page.type",
+      this.withTabId({ text }),
+    )
   }
 
-  async scroll(options: BrowserCommandParams = {}): Promise<unknown> {
-    return browserCommand(this.#transport, "page.scroll", this.withTabId(options))
+  async scroll(
+    options: ScrollOptions = {},
+  ): Promise<BrowserExtensionScrollResult> {
+    return this.#router.run(
+      "page.scroll",
+      this.withTabId(options),
+    )
   }
 
   async waitFor(
-    options: BrowserCommandParams & { timeoutMs?: number } = {},
+    options: WaitForOptions = {},
   ): Promise<BrowserExtensionWaitForResult> {
     const timeoutMs = options.timeoutMs
       ? Math.min(Math.max(Number(options.timeoutMs), 1), 60_000) + 5_000
       : undefined
-    return browserCommand(
-      this.#transport,
+    return this.#router.run(
       "page.waitFor",
       this.withTabId(options),
       { timeoutMs },
     )
   }
 
-  async release(): Promise<{ tabId?: number; released: boolean }> {
-    if (!this.tabId) return { released: false }
-    return browserCommand(this.#transport, "tabs.release", { tabId: this.tabId })
+  async release(): Promise<BrowserExtensionTabsReleaseResult> {
+    return this.#router.run("tabs.release", { tabId: this.tabId })
   }
 
   async evaluate<TResult = unknown>(
@@ -369,63 +597,146 @@ function createPlaywrightAdapter(tab: BrowserTab): PlaywrightAdapter {
   }
 }
 
-class BrowserRuntime {
-  readonly #transport: BrowserRuntimeTransport
+function renderDocumentation(
+  info: BrowserBackendInfo,
+  manifest: BrowserDocumentationManifest,
+): string {
+  const lines = [
+    manifest.title,
+    "",
+    `Backend: ${info.name} (${info.browserId})`,
+    `Connected: ${info.connected ? "yes" : "no"}`,
+    `Browser contract: v${manifest.contractVersion}`,
+    "",
+    "Available API:",
+  ]
+  for (const entry of manifest.entries) {
+    lines.push(`  ${entry.signature}`)
+    lines.push(`    ${entry.summary}`)
+  }
+  lines.push(
+    "",
+    "Raw page JavaScript and full CDP are unavailable by default.",
+  )
+  if (info.capabilities.commands.includes("page.screenshot")) {
+    lines.push(
+      "Emit screenshots with: await nodeRepl.emitImage(await tab.screenshot())",
+    )
+  }
+  return lines.join("\n")
+}
+
+export class BrowserContext {
+  readonly browserId: string
+  readonly capabilities: BrowserBackendCapabilities
+  readonly apiManifest: BrowserApiManifest
+  readonly documentationManifest: BrowserDocumentationManifest
+  readonly info: BrowserBackendInfo
   readonly tabs: {
     list(): Promise<Array<BrowserExtensionTabSummary & { runtime: BrowserTab }>>
-    open(url: string, options?: BrowserCommandParams): Promise<BrowserTab>
+    open(url: string, options?: TabsOpenOptions): Promise<BrowserTab>
     activate(tabId: number): Promise<BrowserTab>
     get(tabId: number): Promise<BrowserTab>
     current(): Promise<BrowserTab>
   }
+  readonly #backend: BackendTransport
+  readonly #router: CommandRouter
+  readonly #documentation: string
 
-  constructor(transport: BrowserRuntimeTransport) {
-    this.#transport = transport
+  constructor(
+    backend: BackendTransport,
+    getInfo: BrowserGetInfoResult,
+  ) {
+    this.#backend = backend
+    this.info = getInfo.backend
+    this.browserId = this.info.browserId
+    this.capabilities = this.info.capabilities
+    this.apiManifest = getInfo.apiManifest
+    this.documentationManifest = getInfo.documentationManifest
+    this.#router = new CommandRouter(backend, this.capabilities)
+    this.#documentation = renderDocumentation(
+      this.info,
+      this.documentationManifest,
+    )
     this.tabs = {
-      list: async (): Promise<Array<BrowserExtensionTabSummary & { runtime: BrowserTab }>> => {
-        const result = await browserCommand<BrowserExtensionTabsListResult>(
-          this.#transport,
-          "tabs.list",
-        )
+      list: async () => {
+        const result = await this.#router.run("tabs.list", {})
         return result.tabs.map((tab) => ({
           ...tab,
-          runtime: new BrowserTab(tab.id, this.#transport),
+          runtime: new BrowserTab(tab.id, this.#router),
         }))
       },
-      open: async (
-        url: string,
-        options: BrowserCommandParams = {},
-      ): Promise<BrowserTab> => {
-        const tab = await browserCommand<BrowserExtensionTabSummary>(
-          this.#transport,
+      open: async (url, options = {}) => {
+        const tab = await this.#router.run(
           "tabs.open",
-          { url, ...options },
+          { ...options, url },
         )
-        return new BrowserTab(tab.id, this.#transport)
+        return new BrowserTab(tab.id, this.#router)
       },
-      activate: async (tabId: number): Promise<BrowserTab> => {
-        const tab = await browserCommand<BrowserExtensionTabSummary>(
-          this.#transport,
+      activate: async (tabId) => {
+        const tab = await this.#router.run(
           "tabs.activate",
           { tabId },
         )
-        return new BrowserTab(tab.id, this.#transport)
+        return new BrowserTab(tab.id, this.#router)
       },
-      get: async (tabId: number): Promise<BrowserTab> =>
-        new BrowserTab(tabId, this.#transport),
-      current: async (): Promise<BrowserTab> =>
-        new BrowserTab(undefined, this.#transport),
+      get: async (tabId) =>
+        new BrowserTab(tabId, this.#router),
+      current: async () => {
+        const result = await this.#router.run("tabs.list", {})
+        const current = result.tabs.find((tab) => tab.active)
+          ?? result.tabs[0]
+        if (!current) {
+          throw new BrowserRuntimeError(
+            "TAB_NOT_FOUND",
+            "No Chrome tab is available.",
+            { retryable: true },
+          )
+        }
+        return new BrowserTab(current.id, this.#router)
+      },
     }
   }
 
   async status(): Promise<BrowserRuntimeStatus> {
-    return this.#transport<BrowserRuntimeStatus>({ type: "status" })
+    return this.#backend.status()
   }
 
   async documentation(): Promise<string> {
-    return BROWSER_RUNTIME_DOCUMENTATION
+    return this.#documentation
+  }
+}
+
+export class BrowserManager implements BrowserCollection {
+  readonly #backend: BackendTransport
+
+  constructor(transport: BrowserRuntimeTransport) {
+    this.#backend = new BackendTransport(transport)
   }
 
+  async list(): Promise<BrowserContext[]> {
+    return [await this.get("extension")]
+  }
+
+  async get(name = "extension"): Promise<BrowserContext> {
+    if (name !== "extension") {
+      throw new BrowserRuntimeError(
+        "BACKEND_UNAVAILABLE",
+        `Unknown browser runtime '${name}'.`,
+      )
+    }
+    const info = await this.#backend.getInfo()
+    return new BrowserContext(this.#backend, info)
+  }
+
+  async getDefault(): Promise<BrowserContext> {
+    return this.get("extension")
+  }
+
+  async getForUrl(url: string | URL): Promise<BrowserContext> {
+    validateBrowserUrl(url)
+    return this.getDefault()
+  }
 }
 
 export async function setupBrowserRuntime(
@@ -438,14 +749,7 @@ export async function setupBrowserRuntime(
     ? globals.agent as BrowserRuntimeAgent
     : {} as BrowserRuntimeAgent
 
-  agent.browsers = {
-    get: async (name = "extension") => {
-      if (name !== "extension") {
-        throw new Error(`Unknown browser runtime '${name}'.`)
-      }
-      return new BrowserRuntime(transport)
-    },
-  }
+  agent.browsers = new BrowserManager(transport)
   globals.agent = agent
   globals.setupBrowserRuntime = setupBrowserRuntime
   return agent

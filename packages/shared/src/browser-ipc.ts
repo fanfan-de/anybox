@@ -4,11 +4,15 @@ import {
   ANYBOX_CHROME_NATIVE_HOST_NAME,
   BrowserExtensionCommandContext,
 } from "./browser-extension"
+import {
+  BROWSER_CONTRACT_ERROR_CODES,
+  BrowserGetInfoResult,
+} from "./browser-contract"
 
 export const BROWSER_IPC_PROTOCOL_VERSION = 1 as const
 export const MAX_BROWSER_IPC_FRAME_BYTES = 16 * 1024 * 1024
 export const BROWSER_IPC_HANDSHAKE_TIMEOUT_MS = 5_000
-export const BROWSER_IPC_RUNTIME_CLIENT_VERSION = "0.3.0"
+export const BROWSER_IPC_RUNTIME_CLIENT_VERSION = "0.4.0"
 export const BROWSER_IPC_NATIVE_HOST_VERSION = "0.3.0"
 
 export const BrowserIpcRole = z.enum(["runtime", "native-host"])
@@ -20,23 +24,10 @@ export const BrowserIpcTransportKind = z.enum([
 ])
 export type BrowserIpcTransportKind = z.infer<typeof BrowserIpcTransportKind>
 
-export const BrowserIpcRuntimeCommandMethod = z.enum([
-  "tabs.list",
-  "tabs.open",
-  "tabs.activate",
-  "tabs.release",
-  "page.snapshot",
-  "page.interactiveSnapshot",
-  "page.domTree",
-  "page.accessibilityTree",
-  "page.screenshot",
-  "page.click",
-  "page.clickElement",
-  "page.fill",
-  "page.type",
-  "page.scroll",
-  "page.waitFor",
-])
+// Browser IPC is a transport envelope, not the Browser Contract authority.
+// Bounded strings let the Agent return request-scoped version/command errors
+// without treating future application methods as a broken IPC frame.
+export const BrowserIpcRuntimeCommandMethod = z.string().trim().min(1).max(128)
 export type BrowserIpcRuntimeCommandMethod = z.infer<typeof BrowserIpcRuntimeCommandMethod>
 
 export const BrowserIpcErrorCode = z.enum([
@@ -59,6 +50,7 @@ export const BrowserIpcErrorCode = z.enum([
   "ROLE_FORBIDDEN",
   "ROLE_MISMATCH",
   "UNKNOWN_MESSAGE_TYPE",
+  ...BROWSER_CONTRACT_ERROR_CODES,
 ])
 export type BrowserIpcErrorCode = z.infer<typeof BrowserIpcErrorCode>
 
@@ -102,11 +94,24 @@ export const BrowserIpcHelloMessage = z.discriminatedUnion("role", [
 ])
 export type BrowserIpcHelloMessage = z.infer<typeof BrowserIpcHelloMessage>
 
+export const BrowserIpcRuntimeApplicationCapabilities = z.object({
+  // Bounded strings make the advertisement forward-compatible. A Runtime
+  // checks only the operations it understands and ignores future additions.
+  runtimeOperations: z.array(z.string().trim().min(1).max(64)).min(1),
+  browserContractVersions: z.array(z.number().int().positive()).min(1),
+}).strict()
+export type BrowserIpcRuntimeApplicationCapabilities = z.infer<
+  typeof BrowserIpcRuntimeApplicationCapabilities
+>
+
 export const BrowserIpcReadyMessage = z.object({
   type: z.literal("ready"),
   protocolVersion: z.literal(BROWSER_IPC_PROTOCOL_VERSION),
   role: BrowserIpcRole,
   brokerInstanceID: z.string().min(1),
+  // Optional at IPC protocol v1 for mixed-version detection. A new Runtime
+  // must not send getInfo to an older Agent that did not advertise it.
+  applicationCapabilities: BrowserIpcRuntimeApplicationCapabilities.optional(),
 }).strict()
 export type BrowserIpcReadyMessage = z.infer<typeof BrowserIpcReadyMessage>
 
@@ -125,10 +130,24 @@ export const BrowserIpcRuntimeStatusRequest = z.object({
 }).strict()
 export type BrowserIpcRuntimeStatusRequest = z.infer<typeof BrowserIpcRuntimeStatusRequest>
 
+export const BrowserIpcRuntimeGetInfoRequest = z.object({
+  type: z.literal("runtime.request"),
+  requestID: z.string().min(1),
+  operation: z.literal("getInfo"),
+  contractVersion: z.number().int().positive(),
+}).strict()
+export type BrowserIpcRuntimeGetInfoRequest = z.infer<
+  typeof BrowserIpcRuntimeGetInfoRequest
+>
+
 export const BrowserIpcRuntimeCommandRequest = z.object({
   type: z.literal("runtime.request"),
   requestID: z.string().min(1),
   operation: z.literal("command"),
+  // Accept a positive version number at the transport schema so the Agent can
+  // return CONTRACT_VERSION_UNSUPPORTED instead of collapsing negotiation into
+  // a generic malformed-message error.
+  contractVersion: z.number().int().positive().optional(),
   method: BrowserIpcRuntimeCommandMethod,
   params: z.unknown().optional(),
   context: BrowserExtensionCommandContext.optional(),
@@ -138,6 +157,7 @@ export type BrowserIpcRuntimeCommandRequest = z.infer<typeof BrowserIpcRuntimeCo
 
 export const BrowserIpcRuntimeRequest = z.discriminatedUnion("operation", [
   BrowserIpcRuntimeStatusRequest,
+  BrowserIpcRuntimeGetInfoRequest,
   BrowserIpcRuntimeCommandRequest,
 ])
 export type BrowserIpcRuntimeRequest = z.infer<typeof BrowserIpcRuntimeRequest>
@@ -156,10 +176,22 @@ export const BrowserIpcRuntimeResponse = z.discriminatedUnion("ok", [
     error: z.object({
       code: BrowserIpcErrorCode,
       message: z.string().min(1),
+      retryable: z.boolean().optional(),
+      details: z.record(z.string(), z.unknown()).optional(),
     }).strict(),
   }).strict(),
 ])
 export type BrowserIpcRuntimeResponse = z.infer<typeof BrowserIpcRuntimeResponse>
+
+export const BrowserIpcRuntimeGetInfoResponse = z.object({
+  type: z.literal("runtime.response"),
+  requestID: z.string().min(1),
+  ok: z.literal(true),
+  data: BrowserGetInfoResult,
+}).strict()
+export type BrowserIpcRuntimeGetInfoResponse = z.infer<
+  typeof BrowserIpcRuntimeGetInfoResponse
+>
 
 export const BrowserIpcNativeMessage = z.object({
   type: z.literal("native.message"),

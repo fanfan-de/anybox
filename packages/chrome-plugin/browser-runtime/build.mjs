@@ -26,3 +26,9 @@ await build({
     js: "// Generated from browser-runtime/src/browser-client.ts by esbuild. Do not edit.",
   },
 })
+
+const bundledSource = await fsp.readFile(outputPath, "utf8")
+const normalizedSource = bundledSource.replace(/[ \t]+$/gm, "")
+if (normalizedSource !== bundledSource) {
+  await fsp.writeFile(outputPath, normalizedSource)
+}

@@ -1,10 +1,20 @@
 import { describe, expect, test } from "vitest"
 import {
+  BrowserIpcErrorCode,
   BrowserIpcFrameDecoder,
   BrowserIpcProtocolError,
+  BrowserIpcRuntimeCommandMethod,
+  BrowserIpcRuntimeGetInfoRequest,
+  BrowserIpcRuntimeGetInfoResponse,
+  BrowserIpcReadyMessage,
   BrowserIpcRuntimeRequest,
+  BrowserIpcRuntimeResponse,
   encodeBrowserIpcFrame,
 } from "./browser-ipc"
+import {
+  createBrowserBackendInfo,
+  createBrowserGetInfoResult,
+} from "./browser-contract"
 
 function frameBytes(payload: Uint8Array) {
   const frame = new Uint8Array(payload.byteLength + 4)
@@ -97,16 +107,114 @@ describe("Browser IPC framing", () => {
 })
 
 describe("Browser IPC runtime command schema", () => {
+  test("advertises Browser Contract application support without changing IPC v1", () => {
+    expect(BrowserIpcReadyMessage.parse({
+      type: "ready",
+      protocolVersion: 1,
+      role: "runtime",
+      brokerInstanceID: "broker-1",
+      applicationCapabilities: {
+        runtimeOperations: ["status", "getInfo", "command", "turnEnded"],
+        browserContractVersions: [1],
+      },
+    })).toMatchObject({
+      applicationCapabilities: {
+        runtimeOperations: ["status", "getInfo", "command", "turnEnded"],
+        browserContractVersions: [1],
+      },
+    })
+  })
+
   test.each(["page.executeScript", "cdp.send", "trusted-command"])(
-    "does not admit the privileged method %s",
+    "keeps the transport envelope open for Agent-rejected method %s",
     (method) => {
       expect(BrowserIpcRuntimeRequest.safeParse({
         type: "runtime.request",
         requestID: "request-1",
         operation: "command",
+        contractVersion: 1,
         method,
         params: {},
-      }).success).toBe(false)
+      }).success).toBe(true)
     },
   )
+  test("bounds transport command method strings", () => {
+    expect(BrowserIpcRuntimeCommandMethod.safeParse("").success).toBe(false)
+    expect(BrowserIpcRuntimeCommandMethod.safeParse("x".repeat(129)).success)
+      .toBe(false)
+  })
+
+  test("accepts getInfo without changing the IPC transport protocol", () => {
+    const request = {
+      type: "runtime.request",
+      requestID: "get-info-1",
+      operation: "getInfo",
+      contractVersion: 1,
+    }
+    expect(BrowserIpcRuntimeGetInfoRequest.parse(request)).toEqual(request)
+    expect(BrowserIpcRuntimeRequest.parse(request)).toEqual(request)
+    expect(BrowserIpcRuntimeRequest.safeParse({
+      ...request,
+      contractVersion: 2,
+    }).success).toBe(true)
+  })
+
+  test("accepts legacy/current commands and defers future versions to the Agent", () => {
+    const legacy = {
+      type: "runtime.request",
+      requestID: "legacy-command",
+      operation: "command",
+      method: "tabs.list",
+      params: {},
+    }
+    expect(BrowserIpcRuntimeRequest.safeParse(legacy).success).toBe(true)
+    expect(BrowserIpcRuntimeRequest.safeParse({
+      ...legacy,
+      requestID: "contract-command",
+      contractVersion: 1,
+    }).success).toBe(true)
+    expect(BrowserIpcRuntimeRequest.safeParse({
+      ...legacy,
+      requestID: "future-contract-command",
+      contractVersion: 2,
+    }).success).toBe(true)
+    expect(BrowserIpcRuntimeRequest.safeParse({
+      ...legacy,
+      requestID: "invalid-contract-command",
+      contractVersion: 0,
+    }).success).toBe(false)
+  })
+
+  test("admits structured Browser Contract error codes", () => {
+    expect(BrowserIpcErrorCode.safeParse("PERMISSION_DENIED").success).toBe(true)
+    expect(BrowserIpcErrorCode.safeParse("TAB_NOT_OWNED").success).toBe(true)
+    expect(BrowserIpcErrorCode.safeParse("CANCELLED").success).toBe(true)
+
+    const response = {
+      type: "runtime.response",
+      requestID: "request-denied",
+      ok: false,
+      error: {
+        code: "PERMISSION_DENIED",
+        message: "The browser action was denied.",
+        retryable: false,
+        details: { policy: "browser-origin" },
+      },
+    }
+    expect(BrowserIpcRuntimeResponse.parse(response)).toEqual(response)
+  })
+
+  test("defines the exact successful getInfo response data shape", () => {
+    const response = {
+      type: "runtime.response",
+      requestID: "get-info-result",
+      ok: true,
+      data: createBrowserGetInfoResult(createBrowserBackendInfo({
+        connected: true,
+        protocolVersion: 1,
+        commands: ["tabs.list"],
+      })),
+    }
+    expect(BrowserIpcRuntimeGetInfoResponse.parse(response)).toEqual(response)
+  })
 })

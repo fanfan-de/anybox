@@ -300,7 +300,13 @@ export async function validateChromePluginPackage(packageRoot) {
   const manifest = JSON.parse(
     await fsp.readFile(path.join(packageRoot, ".anybox-plugin", "plugin.json"), "utf8"),
   )
-  if (manifest.name !== "chrome" || typeof manifest.version !== "string" || !manifest.version) {
+  if (
+    manifest.name !== "chrome"
+    || typeof manifest.version !== "string"
+    || !manifest.version
+    || typeof manifest.description !== "string"
+    || !manifest.description.trim()
+  ) {
     throw new Error("Chrome plugin package manifest must describe a versioned 'chrome' plugin.")
   }
   if ("package" in manifest) {
@@ -312,8 +318,36 @@ export async function validateChromePluginPackage(packageRoot) {
     throw new Error("Chrome plugin manifest must derive its ID from the canonical name.")
   }
 
-  const nodeRepl = manifest.mcpServers?.find?.((server) => server?.id === "node-repl")
-  if (nodeRepl) {
+  if (
+    !Array.isArray(manifest.mcpServers)
+    || manifest.mcpServers.length !== 1
+    || manifest.mcpServers[0]?.id !== "node-repl"
+  ) {
+    throw new Error(
+      "Chrome plugin manifest must declare exactly one 'node-repl' MCP server.",
+    )
+  }
+  const nodeRepl = manifest.mcpServers[0]
+  const nodeReplRuntime = nodeRepl.runtime
+  if (
+    !nodeReplRuntime
+    || typeof nodeReplRuntime !== "object"
+    || Array.isArray(nodeReplRuntime)
+    || nodeReplRuntime.transport !== "stdio"
+    || nodeReplRuntime.command !== "node"
+    || !Array.isArray(nodeReplRuntime.args)
+    || nodeReplRuntime.args.length !== 1
+    || nodeReplRuntime.args[0] !== "${PLUGIN_ROOT}/scripts/node-repl-server.js"
+    || nodeReplRuntime.cwd !== "${PLUGIN_ROOT}"
+    || !nodeReplRuntime.toolPolicies
+    || typeof nodeReplRuntime.toolPolicies !== "object"
+    || Array.isArray(nodeReplRuntime.toolPolicies)
+  ) {
+    throw new Error(
+      "Chrome plugin node-repl MCP server must declare its packaged stdio runtime.",
+    )
+  }
+  {
     const capabilityClaims = [
       ...(Array.isArray(nodeRepl.permissions) ? nodeRepl.permissions : []),
       ...(Array.isArray(nodeRepl.installReview) ? nodeRepl.installReview : []),
@@ -340,12 +374,30 @@ export async function validateChromePluginPackage(packageRoot) {
       path.join(packageRoot, "scripts", "browser-client.mjs"),
       "utf8",
     )
+    const browserTransportWorker = await fsp.readFile(
+      path.join(packageRoot, "scripts", "browser-gateway-worker.js"),
+      "utf8",
+    )
     if (
-      !/Raw selector adapters, page JavaScript, and CDP are disabled/i.test(skill)
+      !/Selector-driven click\/fill adapters, page JavaScript, and CDP are disabled/i.test(skill)
       || !/disabled until Anybox can enforce command-level capability/i.test(browserRuntime)
+      || !/\bsetupBrowserRuntime\b/.test(browserRuntime)
+      || !/\bcontractVersion\b/.test(browserRuntime)
+      || !/\barbitraryJavaScript\b/.test(browserRuntime)
+      || !/\bfullCdp\b/.test(browserRuntime)
+      || !/\bCAPABILITY_UNAVAILABLE\b/.test(browserRuntime)
     ) {
       throw new Error(
         "Chrome manifest, Skill, and browser runtime capability boundaries are inconsistent.",
+      )
+    }
+    if (
+      !/\bgetInfo\b/.test(browserTransportWorker)
+      || !/\bcontractVersion\b/.test(browserTransportWorker)
+      || /\bSAFE_BROWSER_METHODS\b/.test(browserTransportWorker)
+    ) {
+      throw new Error(
+        "Chrome browser gateway Worker must remain a contract-aware transport adapter without a Browser API method allowlist.",
       )
     }
   }

@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./api": "./src/api.ts",
+    "./browser-contract": "./src/browser-contract.ts",
     "./browser-extension": "./src/browser-extension.ts",
     "./browser-ipc": "./src/browser-ipc.ts",
     "./cinema": "./src/cinema.ts",

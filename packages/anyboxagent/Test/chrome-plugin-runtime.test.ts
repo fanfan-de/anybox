@@ -11,6 +11,12 @@ import {
   browserIpcProofTranscript,
   encodeBrowserIpcFrame,
 } from "@anybox/shared/browser-ipc"
+import {
+  BROWSER_CONTRACT_COMMAND_METHODS,
+  BROWSER_CONTRACT_VERSION,
+  createBrowserBackendInfo,
+  createBrowserGetInfoResult,
+} from "@anybox/shared/browser-contract"
 
 const repoRoot = join(import.meta.dir, "..", "..", "..")
 const chromePluginProjectRoot = join(repoRoot, "packages", "chrome-plugin")
@@ -32,9 +38,11 @@ const ipcServers: Array<{ server: Server; sockets: Set<Socket> }> = []
 type BrowserRequest = {
   type: "runtime.request"
   requestID: string
-  operation: "status" | "command"
+  operation: "status" | "getInfo" | "command"
+  contractVersion?: number
   method?: string
   params?: unknown
+  timeoutMs?: number
   context?: {
     sessionID?: string
     messageID?: string
@@ -171,6 +179,10 @@ async function startIpcGateway(
               protocolVersion: BROWSER_IPC_PROTOCOL_VERSION,
               role: "runtime",
               brokerInstanceID,
+              applicationCapabilities: {
+                runtimeOperations: ["status", "getInfo", "command"],
+                browserContractVersions: [BROWSER_CONTRACT_VERSION],
+              },
             }))
             return
           }
@@ -185,13 +197,21 @@ async function startIpcGateway(
               data: await handler(request),
             }))
           } catch (error) {
+            const errorCode =
+              error
+              && typeof error === "object"
+              && "code" in error
+              && typeof error.code === "string"
+                ? error.code
+                : "COMMAND_FAILED"
             socket.write(encodeBrowserIpcFrame({
               type: "runtime.response",
               requestID: request.requestID,
               ok: false,
               error: {
-                code: "BROWSER_COMMAND_FAILED",
+                code: errorCode,
                 message: error instanceof Error ? error.message : String(error),
+                retryable: false,
               },
             }))
           }
@@ -240,7 +260,16 @@ async function runtimeFixture(
     request,
   ) => request.operation === "status" ? { connected: true } : {},
 ) {
-  const gateway = await startIpcGateway(handler)
+  const gateway = await startIpcGateway((request) =>
+    request.operation === "getInfo"
+      ? createBrowserGetInfoResult(
+          createBrowserBackendInfo({
+            connected: true,
+            commands: BROWSER_CONTRACT_COMMAND_METHODS,
+          }),
+        )
+      : handler(request)
+  )
   return {
     gateway,
     mcp: startMcpServer(nodeReplServerPath, gateway.env),
@@ -282,7 +311,7 @@ describe("Chrome plugin runtimes", () => {
     expect(existsSync(join(chromePluginRoot, "browser-extension", "package.json"))).toBe(false)
     expect(pluginManifest).toEqual(sourceManifest)
     expect(pluginManifest.name).toBe("chrome")
-    expect(pluginManifest.version).toBe("0.5.0")
+    expect(pluginManifest.version).toBe("0.6.0")
     expect(pluginManifest.mcpServers?.map((server: { id: string }) => server.id))
       .toEqual(["node-repl"])
     expect(JSON.stringify(pluginManifest)).not.toContain(
@@ -310,7 +339,7 @@ describe("Chrome plugin runtimes", () => {
     const initialized = await mcp.request("initialize") as {
       result?: { serverInfo?: { version?: string } }
     }
-    expect(initialized.result?.serverInfo?.version).toBe("0.3.0")
+    expect(initialized.result?.serverInfo?.version).toBe("0.4.0")
 
     const list = await mcp.request("tools/list") as {
       result?: { tools?: Array<{ name: string }> }
@@ -408,8 +437,9 @@ describe("Chrome plugin runtimes", () => {
       interceptedFetch: false,
       observedRequests: 0,
     })
-    expect(gateway.requests).toHaveLength(1)
-    expect(gateway.requests[0]).toMatchObject({ operation: "status" })
+    expect(gateway.requests).toHaveLength(2)
+    expect(gateway.requests[0]).toMatchObject({ operation: "getInfo" })
+    expect(gateway.requests[1]).toMatchObject({ operation: "status" })
   })
 
   test("fails closed when the runtime IPC protocol is incompatible", async () => {
@@ -425,7 +455,7 @@ describe("Chrome plugin runtimes", () => {
     )
   })
 
-  test("keeps raw page evaluation disabled before any IPC request", async () => {
+  test("keeps raw page evaluation disabled before any command request", async () => {
     const { gateway, mcp } = await runtimeFixture(() => ({ value: 2 }))
     await mcp.request("initialize")
 
@@ -443,11 +473,20 @@ describe("Chrome plugin runtimes", () => {
     expect(response.result?.structuredContent?.error).toContain(
       "disabled until Anybox can enforce command-level capability",
     )
-    expect(gateway.requests).toHaveLength(0)
+    expect(gateway.requests).toHaveLength(1)
+    expect(gateway.requests[0]).toMatchObject({ operation: "getInfo" })
   })
 
-  test("rejects trusted-command and raw methods inside the isolated worker", async () => {
-    const gateway = await startIpcGateway(() => ({}))
+  test("keeps the worker transport-only and leaves raw-method rejection to the Agent", async () => {
+    const gateway = await startIpcGateway((request) => {
+      if (request.method === "page.executeScript") {
+        throw Object.assign(
+          new Error("Browser command 'page.executeScript' is not supported."),
+          { code: "COMMAND_NOT_SUPPORTED" },
+        )
+      }
+      return {}
+    })
     const worker = new Worker(browserGatewayWorkerPath, {
       workerData: {
         protocolVersion: gateway.env.ANYBOX_BROWSER_IPC_PROTOCOL_VERSION,
@@ -493,12 +532,36 @@ describe("Chrome plugin runtimes", () => {
         type: "command",
         method: "page.executeScript",
       })
+      const oversizedMethod = await request(3, {
+        type: "command",
+        method: "x".repeat(129),
+      })
+      const invalidTimeout = await request(4, {
+        type: "command",
+        method: "tabs.list",
+        timeoutMs: 0,
+      })
+      const invalidContext = await request(5, {
+        type: "command",
+        method: "tabs.list",
+        context: { sessionID: "   " },
+      })
 
       expect(trusted.ok).toBe(false)
       expect(trusted.error).toContain("request type is invalid")
       expect(raw.ok).toBe(false)
-      expect(raw.error).toContain("command method is invalid")
-      expect(gateway.requests).toHaveLength(0)
+      expect(raw.error).toContain("page.executeScript")
+      expect(oversizedMethod.ok).toBe(false)
+      expect(oversizedMethod.error).toContain("method is invalid")
+      expect(invalidTimeout.ok).toBe(false)
+      expect(invalidTimeout.error).toContain("timeout is invalid")
+      expect(invalidContext.ok).toBe(false)
+      expect(invalidContext.error).toContain("context is invalid")
+      expect(gateway.requests).toHaveLength(1)
+      expect(gateway.requests[0]).toMatchObject({
+        operation: "command",
+        method: "page.executeScript",
+      })
     } finally {
       await worker.terminate()
     }
@@ -509,6 +572,7 @@ describe("Chrome plugin runtimes", () => {
     const { gateway, mcp } = await runtimeFixture((request) => {
       expect(request).toMatchObject({
         operation: "command",
+        contractVersion: BROWSER_CONTRACT_VERSION,
         method: "page.screenshot",
         context: {
           sessionID: "session-1",
@@ -551,7 +615,57 @@ describe("Chrome plugin runtimes", () => {
       mimeType: "image/png",
       data: imageData,
     })
-    expect(gateway.requests).toHaveLength(1)
+    expect(gateway.requests).toHaveLength(2)
+    expect(gateway.requests[0]).toMatchObject({ operation: "getInfo" })
+    expect(gateway.requests[1]).toMatchObject({
+      operation: "command",
+      contractVersion: BROWSER_CONTRACT_VERSION,
+      method: "page.screenshot",
+    })
+  })
+
+  test("binds host context and Worker transport before model prototype mutation", async () => {
+    const { gateway, mcp } = await runtimeFixture((request) => {
+      expect(request).toMatchObject({
+        operation: "command",
+        contractVersion: BROWSER_CONTRACT_VERSION,
+        method: "tabs.list",
+        context: {
+          sessionID: "host-session",
+          messageID: "host-message",
+          toolCallID: "host-tool",
+        },
+      })
+      return { tabs: [] }
+    })
+    await mcp.request("initialize")
+
+    const response = await mcp.request("tools/call", {
+      name: "js",
+      arguments: {
+        code: [
+          "const { Worker } = require('node:worker_threads')",
+          "const { AsyncLocalStorage } = require('node:async_hooks')",
+          "Worker.prototype.postMessage = () => {",
+          "  throw new Error('mutated Worker.prototype.postMessage')",
+          "}",
+          "AsyncLocalStorage.prototype.getStore = () => ({",
+          "  sessionID: 'forged-session',",
+          "  messageID: 'forged-message',",
+          "  toolCallID: 'forged-tool',",
+          "})",
+          "return (await (await agent.browsers.get('extension')).tabs.list()).length",
+        ].join("\n"),
+      },
+      _meta: {
+        sessionID: "host-session",
+        messageID: "host-message",
+        toolCallID: "host-tool",
+      },
+    }) as { result?: { structuredContent?: { result?: unknown } } }
+
+    expect(response.result?.structuredContent?.result).toBe(0)
+    expect(gateway.requests).toHaveLength(2)
   })
 
   test("reset closes the IPC socket and reconnects on the next browser call", async () => {

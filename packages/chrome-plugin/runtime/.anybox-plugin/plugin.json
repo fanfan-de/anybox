@@ -1,6 +1,6 @@
 {
   "name": "chrome",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Control Chrome through a plugin-bundled persistent Node REPL, Anybox Agent policy gateway, Chrome extension, and Native Messaging host.",
   "author": {
     "name": "Anybox"
@@ -70,8 +70,9 @@
       "permissions": [
         "Runs JavaScript requested by the agent in a persistent local process, including local module, filesystem, and network access.",
         "Reads and controls Chrome tabs through the Anybox Chrome extension, including navigation, page inspection, screenshots, clicks, scrolling, typing, and form filling.",
-        "Raw page JavaScript, selector adapters, and Chrome DevTools Protocol commands are disabled at the model command boundary.",
-        "Connects the isolated browser runtime and Native Messaging Host to the Anybox Agent policy gateway over authenticated local IPC.",
+        "Uses a versioned Browser Contract and backend capabilities; the Anybox Agent revalidates every browser command before forwarding it.",
+        "Raw page JavaScript, selector-driven click/fill adapters, and Chrome DevTools Protocol commands are disabled at both the Browser Contract and Anybox Agent command boundaries; bounded selector waits remain available.",
+        "Connects the isolated browser transport Worker and Native Messaging Host to the Anybox Agent policy gateway over authenticated local IPC.",
         "Registers and runs the plugin-bundled Native Messaging Host for the current user.",
         "Requires the Anybox Chrome extension to be installed, enabled, and connected."
       ],
@@ -98,7 +99,9 @@
       "installReview": [
         "Runs a persistent local JavaScript process bundled inside the Chrome plugin.",
         "JavaScript can load local modules and access the local filesystem and network.",
-        "Browser interaction uses a fixed safe command allowlist; raw page JavaScript, selector adapters, and Chrome DevTools Protocol access remain disabled.",
+        "Browser interaction uses a versioned command contract, negotiated backend capabilities, and authoritative Anybox Agent validation; raw page JavaScript, selector-driven click/fill adapters, and Chrome DevTools Protocol access remain disabled, while bounded selector waits remain available.",
+        "The Browser Client Runtime exposes machine-readable API schemas and documentation filtered to the connected backend capabilities.",
+        "This release does not yet advertise per-origin approval, claimed user-tab ownership, Locator, or command cancellation capabilities.",
         "Browser transport uses current-user local IPC with no production fallback to localhost HTTP or WebSocket control routes.",
         "Registers a user-level Chrome Native Messaging Host whose executable is bundled inside the plugin.",
         "Requires the Anybox Chrome extension to be connected before browser commands can run."

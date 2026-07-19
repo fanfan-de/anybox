@@ -26,6 +26,7 @@ import {
   ANYBOX_CHROME_EXTENSION_ID,
   ANYBOX_CHROME_NATIVE_HOST_NAME,
 } from "@anybox/shared/browser-extension"
+import { BROWSER_CONTRACT_VERSION } from "@anybox/shared/browser-contract"
 import {
   BROWSER_IPC_HANDSHAKE_TIMEOUT_MS,
   BROWSER_IPC_PROTOCOL_VERSION,
@@ -52,6 +53,10 @@ import {
   BrowserCommandGatewayError,
   runBrowserRuntimeCommand,
 } from "#browser-extension/command-gateway.ts"
+import {
+  browserPolicyEngine,
+  type BrowserPolicyEngine,
+} from "#browser-extension/browser-policy.ts"
 import * as Global from "#global/global.ts"
 import { getProcessEnvValue } from "#env/compat.ts"
 import * as Log from "#util/log.ts"
@@ -74,6 +79,7 @@ export type BrowserIpcGatewayOptions = {
   handshakeTimeoutMs?: number
   nativeBootstrapTtlMs?: number
   bridge?: BrowserExtensionBridge
+  policy?: BrowserPolicyEngine
 }
 
 type Challenge = {
@@ -198,6 +204,7 @@ export class BrowserIpcGateway {
   readonly runtimeProof: string
 
   private readonly now: () => number
+  private readonly policy: BrowserPolicyEngine
   private readonly handshakeTimeoutMs: number
   private readonly nativeBootstrapTtlMs: number
   private readonly ipcDirectory: string
@@ -224,6 +231,7 @@ export class BrowserIpcGateway {
     this.ipcDirectory = path.dirname(this.bootstrapPath)
     this.brokerInstanceID = options.brokerInstanceID ?? randomUUID()
     this.runtimeProof = options.runtimeProof ?? randomProof()
+    this.policy = options.policy ?? browserPolicyEngine
     this.now = options.now ?? Date.now
     this.handshakeTimeoutMs = options.handshakeTimeoutMs
       ?? BROWSER_IPC_HANDSHAKE_TIMEOUT_MS
@@ -740,6 +748,14 @@ export class BrowserIpcGateway {
       protocolVersion: BROWSER_IPC_PROTOCOL_VERSION,
       role: connection.role,
       brokerInstanceID: this.brokerInstanceID,
+      ...(connection.role === "runtime"
+        ? {
+            applicationCapabilities: {
+              runtimeOperations: ["status", "getInfo", "command"],
+              browserContractVersions: [BROWSER_CONTRACT_VERSION],
+            },
+          }
+        : {}),
     })
     log.info("authenticated", {
       connectionID: connection.connectionID,
@@ -769,11 +785,10 @@ export class BrowserIpcGateway {
     connection.requestIDs.add(request.requestID)
     try {
       const data = request.operation === "status"
-        ? {
-            ...this.bridge.status(),
-            ipc: this.status(),
-          }
-        : await runBrowserRuntimeCommand(request, this.bridge)
+        ? this.runtimeStatus()
+        : request.operation === "getInfo"
+          ? this.runtimeGetInfo(request.contractVersion)
+          : await runBrowserRuntimeCommand(request, this.bridge, this.policy)
       if (!this.isConnectionOpen(connection)) return
       this.write(connection, {
         type: "runtime.response",
@@ -792,12 +807,50 @@ export class BrowserIpcGateway {
         ok: false,
         error: {
           code,
-          message: error instanceof Error ? error.message : String(error),
+          message: error instanceof BrowserCommandGatewayError
+            ? error.message
+            : "The Anybox Agent could not complete the browser request.",
+          ...(error instanceof BrowserCommandGatewayError
+            ? { retryable: error.retryable }
+            : {}),
         },
       })
     } finally {
       connection.requestIDs.delete(request.requestID)
     }
+  }
+
+  private runtimeStatus() {
+    const bridgeStatus = this.bridge.status()
+    const contract = this.bridge.browserContractCompatibility()
+    const ipcStatus = this.status()
+    return {
+      connected: bridgeStatus.connected,
+      contractCompatible: contract.compatible,
+      backendVersion: bridgeStatus.active?.version,
+      transport: ipcStatus.transport,
+      protocolVersion: ipcStatus.protocolVersion,
+      runtimeConnections: ipcStatus.runtimeConnections,
+      nativeHostConnections: ipcStatus.nativeHostConnections,
+      peerProcessIdentityVerified: ipcStatus.peerProcessIdentityVerified,
+    }
+  }
+
+  private runtimeGetInfo(requestedContractVersion: number) {
+    if (requestedContractVersion !== BROWSER_CONTRACT_VERSION) {
+      throw new BrowserCommandGatewayError(
+        "CONTRACT_VERSION_UNSUPPORTED",
+        `Browser Contract version '${requestedContractVersion}' is not supported.`,
+      )
+    }
+    const contract = this.bridge.browserContractCompatibility()
+    if (contract.connected && !contract.compatible) {
+      throw new BrowserCommandGatewayError(
+        "CONTRACT_VERSION_UNSUPPORTED",
+        "The connected Chrome extension uses an incompatible Browser Contract.",
+      )
+    }
+    return this.bridge.getInfo()
   }
 
   private write(connection: GatewayConnection, message: unknown) {

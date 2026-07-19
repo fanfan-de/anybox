@@ -52,6 +52,8 @@ const fields: FakeElement[] = []
 const links: FakeElement[] = []
 const cdpResponses = new Map<string, unknown>()
 let currentTabUrl = "https://fixture.invalid/form"
+let queriedTabs: Array<Record<string, unknown>> = [{ id: 7, active: true }]
+let currentWindowTabId = 7
 
 function installPage(
   fieldsForPage: FakeElement[],
@@ -89,7 +91,11 @@ let handleBrowserCommand: (
     | "page.snapshot"
     | "page.interactiveSnapshot"
     | "page.domTree"
-    | "page.accessibilityTree",
+    | "page.accessibilityTree"
+    | "tabs.list"
+    | "tabs.open"
+    | "page.executeScript"
+    | "cdp.send",
   params?: unknown,
 ) => Promise<unknown>
 
@@ -112,8 +118,11 @@ beforeAll(async () => {
         async get(tabId: number) {
           return { id: tabId, title: "Fixture", url: currentTabUrl }
         },
-        async query() {
-          return [{ id: 7, active: true }]
+        async query(query: { active?: boolean; currentWindow?: boolean }) {
+          if (query.active && query.currentWindow) {
+            return queriedTabs.filter((tab) => tab.id === currentWindowTabId)
+          }
+          return queriedTabs
         },
       },
     },
@@ -124,7 +133,73 @@ beforeAll(async () => {
 
 beforeEach(() => {
   cdpResponses.clear()
+  queriedTabs = [{ id: 7, active: true }]
+  currentWindowTabId = 7
   installPage([])
+})
+
+describe("browser command contract defense", () => {
+  test("strictly validates tabs.list parameters and extension results", async () => {
+    await expect(handleBrowserCommand("tabs.list", { unexpected: true })).rejects.toMatchObject({
+      code: "INVALID_COMMAND_PARAMS",
+    })
+
+    queriedTabs = [{
+      id: 7,
+      active: true,
+      title: "Fixture",
+      url: "https://fixture.invalid/private/path?token=secret",
+    }]
+    await expect(handleBrowserCommand("tabs.list")).resolves.toEqual({
+      tabs: [{
+        id: 7,
+        active: true,
+        title: "Fixture",
+        url: "https://fixture.invalid/[redacted-path]?[redacted]",
+      }],
+    })
+
+    queriedTabs = [{ id: 0, active: true }]
+    await expect(handleBrowserCommand("tabs.list")).rejects.toMatchObject({
+      code: "INVALID_COMMAND_RESULT",
+    })
+  })
+
+  test("orders the selected current-window tab before active tabs in other windows", async () => {
+    queriedTabs = [
+      { id: 7, windowId: 1, active: true },
+      { id: 9, windowId: 2, active: true },
+    ]
+    currentWindowTabId = 9
+
+    await expect(handleBrowserCommand("tabs.list")).resolves.toEqual({
+      tabs: [
+        { id: 9, windowId: 2, active: true },
+        { id: 7, windowId: 1, active: true },
+      ],
+    })
+  })
+
+  test("defensively rejects arbitrary JavaScript and raw CDP", async () => {
+    await expect(handleBrowserCommand("tabs.open", {
+      url: "javascript:document.title='bypass'",
+    })).rejects.toMatchObject({
+      code: "INVALID_COMMAND_PARAMS",
+    })
+    await expect(handleBrowserCommand("page.executeScript", {
+      tabId: 7,
+      script: "document.title",
+    })).rejects.toMatchObject({
+      code: "COMMAND_NOT_SUPPORTED",
+    })
+    await expect(handleBrowserCommand("cdp.send", {
+      tabId: 7,
+      method: "Runtime.evaluate",
+      params: { expression: "document.title" },
+    })).rejects.toMatchObject({
+      code: "COMMAND_NOT_SUPPORTED",
+    })
+  })
 })
 
 describe("browser snapshot privacy", () => {

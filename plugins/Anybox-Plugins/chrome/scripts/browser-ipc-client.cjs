@@ -8,10 +8,12 @@ const DEFAULT_CONNECT_TIMEOUT_MS = 5_000
 const utf8Decoder = new TextDecoder("utf-8", { fatal: true })
 
 class BrowserIpcClientError extends Error {
-  constructor(code, message) {
+  constructor(code, message, options = {}) {
     super(message)
     this.name = "BrowserIpcClientError"
     this.code = code
+    if (typeof options.retryable === "boolean") this.retryable = options.retryable
+    if (isRecord(options.details)) this.details = options.details
   }
 }
 
@@ -138,11 +140,24 @@ class BrowserIpcRuntimeClient {
     this.decoder = undefined
     this.connectPromise = undefined
     this.handshake = undefined
+    this.applicationCapabilities = undefined
     this.pending = new Map()
   }
 
   async request(request) {
     await this.ensureConnected()
+    if (request?.operation === "getInfo") {
+      const capabilities = this.applicationCapabilities
+      if (
+        !capabilities?.runtimeOperations.includes("getInfo")
+        || !capabilities.browserContractVersions.includes(request.contractVersion)
+      ) {
+        throw new BrowserIpcClientError(
+          "CONTRACT_VERSION_UNSUPPORTED",
+          "The connected Anybox Agent does not advertise the requested Browser Contract.",
+        )
+      }
+    }
     const socket = this.socket
     if (!socket || socket.destroyed) {
       throw new BrowserIpcClientError(
@@ -342,6 +357,30 @@ class BrowserIpcRuntimeClient {
           "Browser IPC runtime ready message is incompatible.",
         )
       }
+      const capabilities = message.applicationCapabilities
+      if (capabilities !== undefined) {
+        if (
+          !isRecord(capabilities)
+          || !Array.isArray(capabilities.runtimeOperations)
+          || capabilities.runtimeOperations.length === 0
+          || capabilities.runtimeOperations.some((operation) =>
+            typeof operation !== "string"
+            || !operation.trim()
+            || operation.length > 64
+          )
+          || !Array.isArray(capabilities.browserContractVersions)
+          || capabilities.browserContractVersions.length === 0
+          || capabilities.browserContractVersions.some((version) =>
+            !Number.isSafeInteger(version) || version < 1
+          )
+        ) {
+          throw new BrowserIpcClientError(
+            "PROTOCOL_MISMATCH",
+            "Browser IPC runtime application capabilities are invalid.",
+          )
+        }
+      }
+      this.applicationCapabilities = capabilities
       this.handshake?.resolve()
       return
     }
@@ -365,6 +404,10 @@ class BrowserIpcRuntimeClient {
         pending.reject(new BrowserIpcClientError(
           message.error?.code || "BROWSER_COMMAND_FAILED",
           message.error?.message || "Browser IPC request failed.",
+          {
+            retryable: message.error?.retryable,
+            details: message.error?.details,
+          },
         ))
       }
       return
@@ -383,6 +426,7 @@ class BrowserIpcRuntimeClient {
     const socket = this.socket
     this.socket = undefined
     this.decoder = undefined
+    this.applicationCapabilities = undefined
     if (this.handshake) {
       const handshake = this.handshake
       this.handshake = undefined

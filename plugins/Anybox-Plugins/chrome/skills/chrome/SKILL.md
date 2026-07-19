@@ -21,7 +21,7 @@ The `js_reset` tool only clears persistent JavaScript state. The `js_add_node_mo
 
 Keep setup details internal. Unless the user asks about implementation, describe progress naturally as connecting to Chrome, inspecting the page, or retrying the connection.
 
-The runtime sends only the documented allowlisted operations through the Anybox Agent policy gateway over authenticated local IPC. Do not attempt to discover or connect to the IPC endpoint directly.
+The runtime sends only operations advertised by the negotiated Browser Contract through the Anybox Agent policy gateway over authenticated local IPC. The client performs an early schema and capability check, and the Anybox Agent authoritatively validates the command again before it can reach Chrome. The isolated transport Worker holds the IPC credentials; do not attempt to discover or connect to its endpoint directly.
 
 ## Bootstrap once
 
@@ -34,7 +34,7 @@ if (globalThis.agent?.browsers == null) {
   await setupBrowserRuntime({ globals: globalThis })
 }
 if (globalThis.chrome == null) {
-  globalThis.chrome = await agent.browsers.get("extension")
+  globalThis.chrome = await agent.browsers.getDefault()
   nodeRepl.write(await chrome.documentation())
 }
 ```
@@ -88,7 +88,7 @@ Prefer the highest-level operation that can complete the task:
 - Use `tab.interactiveSnapshot()` before element actions, then pass a current `elementId` to `tab.clickElement()` or `tab.fill()`.
 - Use `tab.waitFor()` with a concrete URL, text, selector, or element condition after navigation or page-changing actions.
 - Use `tab.click()` for coordinates only when element-based interaction is unavailable.
-- Raw selector adapters, page JavaScript, and CDP are disabled until Anybox can enforce permission at the command boundary.
+- Selector-driven click/fill adapters, page JavaScript, and CDP are disabled until Anybox can enforce permission at the command boundary. Bounded `waitForSelector()` remains available.
 
 Interactive element IDs can become stale after DOM changes. Take a new interactive snapshot instead of retrying an old ID.
 
@@ -100,7 +100,8 @@ await nodeRepl.emitImage(await tab.screenshot())
 
 Available APIs include:
 
-- `chrome.status()` and `chrome.documentation()`
+- `agent.browsers.list()`, `get("extension")`, `getDefault()`, and `getForUrl(url)`
+- `chrome.browserId`, `chrome.capabilities`, `chrome.status()`, and capability-filtered `chrome.documentation()`
 - `chrome.tabs.list()`, `open(url, options)`, `activate(tabId)`, `get(tabId)`, and `current()`
 - `tab.info()`, `activate()`, `snapshot()`, `interactiveSnapshot()`, `domTree()`, `accessibilityTree()`, and `screenshot()`
 - `tab.click()`, `clickElement()`, `fill()`, `type()`, `scroll()`, `waitFor()`, and `release()`

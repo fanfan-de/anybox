@@ -1,4 +1,11 @@
 import type { BrowserExtensionCommandMethod } from "@anybox/shared/browser-extension"
+import {
+  BrowserContractCommandMethod,
+  BrowserContractValidationError,
+  parseBrowserCommandParams,
+  parseBrowserCommandResult,
+  type BrowserContractCommandMethod as BrowserContractCommandMethodValue,
+} from "@anybox/shared/browser-contract"
 
 const attachedTabs = new Set<number>()
 
@@ -252,11 +259,23 @@ async function runInPage<T>(tabId: number, func: (...args: any[]) => T, args: un
 }
 
 async function listTabs() {
-  const tabs = await chrome.tabs.query({})
+  const [tabs, selectedTabs] = await Promise.all([
+    chrome.tabs.query({}),
+    chrome.tabs.query({ active: true, currentWindow: true }),
+  ])
+  const selectedTabId = selectedTabs.find(
+    (tab: any) => typeof tab.id === "number",
+  )?.id
+  const summaries = tabs
+    .filter((tab: any) => typeof tab.id === "number")
+    .map(toTabSummary)
+  if (typeof selectedTabId === "number") {
+    summaries.sort((left: TabSummary, right: TabSummary) =>
+      Number(right.id === selectedTabId) - Number(left.id === selectedTabId)
+    )
+  }
   return {
-    tabs: tabs
-      .filter((tab: any) => typeof tab.id === "number")
-      .map(toTabSummary),
+    tabs: summaries,
   }
 }
 
@@ -1263,32 +1282,10 @@ async function waitFor(params: unknown) {
   return { tabId, url: tab.url, title: tab.title, matched: false, reason }
 }
 
-async function executeScript(params: unknown) {
-  const input = readRecord(params)
-  const tabId = await activeTabId(input.tabId)
-  const script = readString(input.script)
-  if (!script) throw new Error("page.executeScript requires script.")
-  const result = await sendCdp(tabId, "Runtime.evaluate", {
-    expression: script,
-    awaitPromise: true,
-    returnByValue: true,
-  }) as { result?: { value?: unknown } }
-  return {
-    tabId,
-    value: result.result?.value,
-  }
-}
-
-async function cdpSend(params: unknown) {
-  const input = readRecord(params)
-  const tabId = await activeTabId(input.tabId)
-  const method = readString(input.method)
-  if (!method) throw new Error("cdp.send requires method.")
-  const commandParams = readRecord(input.params)
-  return await sendCdp(tabId, method, commandParams)
-}
-
-export async function handleBrowserCommand(method: BrowserExtensionCommandMethod, params?: unknown) {
+async function handleContractCommand(
+  method: BrowserContractCommandMethodValue,
+  params: unknown,
+) {
   switch (method) {
     case "tabs.list":
       return await listTabs()
@@ -1297,7 +1294,10 @@ export async function handleBrowserCommand(method: BrowserExtensionCommandMethod
     case "tabs.activate":
       return await activateTab(params)
     case "tabs.release":
-      return { ok: true }
+      return {
+        tabId: readNumber(readRecord(params).tabId)!,
+        released: false,
+      }
     case "page.snapshot":
       return await snapshot(params)
     case "page.interactiveSnapshot":
@@ -1320,10 +1320,30 @@ export async function handleBrowserCommand(method: BrowserExtensionCommandMethod
       return await scroll(params)
     case "page.waitFor":
       return await waitFor(params)
+  }
+}
+
+export async function handleBrowserCommand(method: BrowserExtensionCommandMethod, params?: unknown) {
+  const contractMethod = BrowserContractCommandMethod.safeParse(method)
+  if (contractMethod.success) {
+    const parsedParams = parseBrowserCommandParams(
+      contractMethod.data,
+      params,
+    )
+    const result = await handleContractCommand(
+      contractMethod.data,
+      parsedParams,
+    )
+    return parseBrowserCommandResult(contractMethod.data, result)
+  }
+
+  switch (method) {
     case "page.executeScript":
-      return await executeScript(params)
     case "cdp.send":
-      return await cdpSend(params)
+      throw new BrowserContractValidationError(
+        "COMMAND_NOT_SUPPORTED",
+        `Browser extension command '${method}' is disabled: arbitrary page JavaScript and raw CDP are not extension capabilities.`,
+      )
   }
 }
 

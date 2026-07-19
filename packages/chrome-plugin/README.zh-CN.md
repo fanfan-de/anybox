@@ -12,6 +12,7 @@ packages/chrome-plugin/
   browser-extension/       Vite/TypeScript Chrome 扩展工程
   browser-runtime/         编译为 browser-client.mjs 的 TypeScript 浏览器 SDK
   browser-native-host/     Rust Native Messaging Host 工程
+  docs/                    Browser Contract 与 Runtime 迁移设计
   runtime/                 插件清单、Node REPL MCP 脚本与 Skill 源码
   tools/                   发行目录同步脚本与回归测试
   LICENSE
@@ -62,12 +63,17 @@ corepack pnpm chrome-plugin:package:check
 ## 浏览器控制架构
 
 插件只注册一个持久 `node-repl` MCP Server。模型通过其 `js` 工具使用预加载的
-`agent.browsers` API 完成标签页查询、页面检查、交互和截图。原始页面脚本、
-selector 适配层与 CDP 在 command boundary 的 capability/permission policy
-完成前默认关闭；插件不再注册逐动作的 `browser_*` MCP 工具。
+`agent.browsers` Browser Client Runtime 完成 Backend 发现、标签页查询、页面检查、
+交互和截图。Runtime 使用版本化 Browser Contract 获取 capability、机器可读 API
+Manifest 和动态文档；客户端预检只提供友好错误，Anybox Agent 是已实现 schema 与
+capability 检查的权威边界。Extension 0.2.0 会声明 Browser Contract 版本与命令
+集合，Agent 只暴露安全交集，并在版本不匹配时 fail-closed。第一切片会把
+permission/ownership 生命周期能力明确
+标为不可用，直到对应策略阶段真正完成。原始页面脚本与 full CDP 默认关闭；插件不再
+注册逐动作的 `browser_*` MCP 工具。
 
-隔离的 Browser Gateway Worker 通过认证本机 IPC 连接 Anybox Agent Browser
-Policy Gateway。Rust Native Messaging Host 使用独立的认证 IPC endpoint，
+隔离的 Browser Transport Worker 只保管 IPC 凭据并通过认证本机 IPC 连接 Anybox
+Agent Browser Policy Gateway。Rust Native Messaging Host 使用独立的认证 IPC endpoint，
 之后继续使用 Chrome 规定的 Native Messaging stdio framing。Windows 使用
 Named Pipe，macOS/Linux 使用 Unix Domain Socket。生产环境不会自动回退到
 HTTP 或 WebSocket 浏览器控制链路。持久化的 Native Host runtime config
@@ -78,6 +84,9 @@ HTTP 或 WebSocket 浏览器控制链路。持久化的 Native Host runtime conf
 实现复用同一 framing 与认证合同，但本次 Windows 验证没有执行该平台路径。
 当前运行时也尚未校验对端 PID/SID/uid；OS ACL 与短期 proof 能缩小暴露面，
 但不能替代签名级进程来源证明。
+
+完整迁移设计、ownership/Locator/cancellation 目标和分阶段交付边界见
+[Browser Client Runtime 迁移设计](./docs/browser-client-runtime-migration.md)。
 
 ## Native Host 交付
 

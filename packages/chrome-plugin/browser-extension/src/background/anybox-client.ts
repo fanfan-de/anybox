@@ -6,6 +6,13 @@ import {
   type BrowserExtensionCommandMessage,
   type BrowserExtensionServerMessage as BrowserExtensionServerMessageValue,
 } from "@anybox/shared/browser-extension"
+import {
+  BROWSER_CONTRACT_COMMAND_METHODS,
+  BROWSER_CONTRACT_VERSION,
+} from "@anybox/shared/browser-contract"
+import {
+  supportsBrowserCommandContractVersion,
+} from "./browser-contract-compat"
 import { handleBrowserCommand } from "./commands"
 import {
   EXTENSION_INSTANCE_KEY,
@@ -69,12 +76,25 @@ async function sendHello() {
     extensionID: chrome.runtime.id,
     extensionInstanceID: await extensionInstanceID(),
     version: extensionVersion(),
+    capabilities: {
+      contractVersion: BROWSER_CONTRACT_VERSION,
+      commands: BROWSER_CONTRACT_COMMAND_METHODS,
+    },
     lastTransportError,
   })
 }
 
 async function handleCommand(message: BrowserExtensionCommandMessage) {
   try {
+    if (!supportsBrowserCommandContractVersion(message.contractVersion)) {
+      throw Object.assign(
+        new Error("The browser command contract version is not supported."),
+        {
+          code: "CONTRACT_VERSION_UNSUPPORTED",
+          retryable: false,
+        },
+      )
+    }
     const data = await handleBrowserCommand(message.method, message.params)
     sendClientMessage({
       type: "result",
@@ -83,11 +103,21 @@ async function handleCommand(message: BrowserExtensionCommandMessage) {
       data,
     })
   } catch (error) {
+    const code = error && typeof error === "object"
+      && typeof (error as { code?: unknown }).code === "string"
+      ? (error as { code: string }).code
+      : undefined
+    const retryable = error && typeof error === "object"
+      && typeof (error as { retryable?: unknown }).retryable === "boolean"
+      ? (error as { retryable: boolean }).retryable
+      : undefined
     sendClientMessage({
       type: "result",
       commandID: message.commandID,
       ok: false,
       error: error instanceof Error ? error.message : String(error),
+      ...(code ? { code } : {}),
+      ...(retryable !== undefined ? { retryable } : {}),
     })
   }
 }

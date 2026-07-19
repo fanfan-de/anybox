@@ -1,5 +1,6 @@
 import {
   ANYBOX_CHROME_EXTENSION_ID,
+  BROWSER_EXTENSION_PROTOCOL_VERSION,
   BrowserExtensionClientMessage,
   BrowserExtensionCommandMethod,
   BrowserExtensionServerMessage,
@@ -8,6 +9,14 @@ import {
   type BrowserExtensionCommandMethod as BrowserExtensionCommandMethodValue,
   type BrowserExtensionTabSummary,
 } from "@anybox/shared/browser-extension"
+import {
+  BROWSER_CONTRACT_COMMAND_METHODS,
+  BROWSER_CONTRACT_VERSION,
+  BrowserContractCommandMethod,
+  createBrowserBackendInfo,
+  createBrowserGetInfoResult,
+  type BrowserContractCommandMethod as BrowserContractCommandMethodValue,
+} from "@anybox/shared/browser-contract"
 import * as Log from "#util/log.ts"
 
 const DEFAULT_COMMAND_TIMEOUT_MS = 15_000
@@ -27,6 +36,9 @@ type Connection = {
   transport?: "native" | "native-ipc"
   hostName?: string
   lastTransportError?: string
+  browserCommands?: BrowserContractCommandMethodValue[]
+  browserContractVersion?: number
+  browserContractCompatible?: boolean
   connectedAt: number
   lastSeenAt: number
 }
@@ -118,6 +130,35 @@ export class BrowserExtensionBridge {
     }
   }
 
+  backendInfo() {
+    const active = this.activeConnection()
+    return createBrowserBackendInfo({
+      connected: Boolean(active),
+      protocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
+      backendVersion: active?.version,
+      commands: active?.browserCommands ?? [],
+    })
+  }
+
+  getInfo() {
+    return createBrowserGetInfoResult(this.backendInfo())
+  }
+
+  browserContractCompatibility() {
+    const active = this.activeConnection()
+    const incompatible = active
+      ? undefined
+      : [...this.connections.values()].find((connection) =>
+          connection.ready && connection.browserContractCompatible === false
+        )
+    return {
+      connected: Boolean(active ?? incompatible),
+      compatible: Boolean(active) || !incompatible,
+      advertisedVersion:
+        active?.browserContractVersion ?? incompatible?.browserContractVersion,
+    }
+  }
+
   preferredTabID(sessionID: string | undefined, explicitTabID?: number) {
     if (explicitTabID) return explicitTabID
     if (!sessionID) return undefined
@@ -185,7 +226,10 @@ export class BrowserExtensionBridge {
 
     this.connections.delete(connectionID)
     if (this.activeConnectionID === connectionID) {
-      this.activeConnectionID = [...this.connections.values()].find((candidate) => candidate.ready)?.connectionID
+      this.activeConnectionID = [...this.connections.values()].find(
+        (candidate) =>
+          candidate.ready && candidate.browserContractCompatible === true,
+      )?.connectionID
     }
 
     for (const [commandID, pending] of this.pending) {
@@ -227,6 +271,19 @@ export class BrowserExtensionBridge {
     if (!connection) {
       throw new Error("No Chrome extension is connected to Anybox.")
     }
+    if (!connection.browserCommands?.includes(
+      method as BrowserContractCommandMethodValue,
+    )) {
+      const error = new Error(
+        `Chrome extension capability '${method}' is unavailable on the active connection.`,
+      ) as Error & {
+        code: string
+        retryable: boolean
+      }
+      error.code = "CAPABILITY_UNAVAILABLE"
+      error.retryable = false
+      throw error
+    }
 
     const commandID = crypto.randomUUID()
     const timeoutMs = options.timeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS
@@ -258,7 +315,15 @@ export class BrowserExtensionBridge {
           ok: false,
           error: `Timed out after ${timeoutMs}ms.`,
         }
-        reject(new Error(`Browser command '${method}' timed out after ${timeoutMs}ms.`))
+        const error = new Error(
+          `Browser command '${method}' timed out after ${timeoutMs}ms.`,
+        ) as Error & {
+          code: string
+          retryable: boolean
+        }
+        error.code = "DEADLINE_EXCEEDED"
+        error.retryable = true
+        reject(error)
       }, timeoutMs)
 
       this.pending.set(commandID, {
@@ -276,6 +341,7 @@ export class BrowserExtensionBridge {
         send(connection.socket, {
           type: "command",
           commandID,
+          contractVersion: BROWSER_CONTRACT_VERSION,
           method,
           params,
           context: options.context,
@@ -316,10 +382,15 @@ export class BrowserExtensionBridge {
   private activeConnection() {
     if (this.activeConnectionID) {
       const active = this.connections.get(this.activeConnectionID)
-      if (active?.ready) return active
+      if (active?.ready && active.browserContractCompatible === true) {
+        return active
+      }
     }
 
-    const next = [...this.connections.values()].find((connection) => connection.ready)
+    const next = [...this.connections.values()].find(
+      (connection) =>
+        connection.ready && connection.browserContractCompatible === true,
+    )
     this.activeConnectionID = next?.connectionID
     return next
   }
@@ -340,11 +411,34 @@ export class BrowserExtensionBridge {
         connection.extensionID = message.extensionID
         connection.version = message.version
         connection.lastTransportError = message.lastTransportError
+        const legacyContractV1 =
+          !message.capabilities && /^0\.1\./.test(message.version)
+        connection.browserContractVersion =
+          message.capabilities?.contractVersion
+          ?? (legacyContractV1 ? BROWSER_CONTRACT_VERSION : undefined)
+        connection.browserContractCompatible =
+          message.capabilities
+            ? message.capabilities.contractVersion === BROWSER_CONTRACT_VERSION
+            : legacyContractV1
+        connection.browserCommands = message.capabilities
+          ? connection.browserContractCompatible
+            ? BROWSER_CONTRACT_COMMAND_METHODS.filter((method) =>
+                message.capabilities?.commands.includes(method)
+              )
+            : []
+          : legacyContractV1
+            ? [...BROWSER_CONTRACT_COMMAND_METHODS]
+            : []
         connection.ready = true
         const active = this.activeConnectionID
           ? this.connections.get(this.activeConnectionID)
           : undefined
-        if (!active?.ready) this.activeConnectionID = connection.connectionID
+        if (
+          connection.browserContractCompatible
+          && (!active?.ready || active.browserContractCompatible !== true)
+        ) {
+          this.activeConnectionID = connection.connectionID
+        }
         log.info("hello", {
           connectionID: connection.connectionID,
           extensionInstanceID: message.extensionInstanceID,
@@ -375,7 +469,17 @@ export class BrowserExtensionBridge {
         if (message.ok) {
           pending.resolve(message.data)
         } else {
-          pending.reject(new Error(message.error || `Browser command '${pending.method}' failed.`))
+          const error = new Error(
+            message.error || `Browser command '${pending.method}' failed.`,
+          ) as Error & {
+            code?: string
+            retryable?: boolean
+          }
+          if (message.code) error.code = message.code
+          if (message.retryable !== undefined) {
+            error.retryable = message.retryable
+          }
+          pending.reject(error)
         }
         return
       }
