@@ -23,6 +23,7 @@ import { useI18n } from "../i18n/I18nProvider"
 import type { TranslationKey } from "../i18n/translations"
 import type { AppLocale } from "../../../../shared/locale"
 import type {
+  ConnectorDefinition,
   ConnectorStatus,
   InstalledPlugin,
   McpServerDiagnostic,
@@ -45,6 +46,7 @@ interface PluginsPageProps {
   installedPlugins: InstalledPlugin[]
   isLoading: boolean
   loadError: string | null
+  connectorCatalog: ConnectorDefinition[]
   connectorStatuses: ConnectorStatus[]
   pluginCatalog: PluginCatalogItem[]
   pluginConnectorStatuses: Record<string, PluginConnectorStatus[]>
@@ -88,6 +90,7 @@ interface PluginsPageProps {
     policy: McpToolPolicyValue,
   ) => boolean | Promise<boolean>
   onManageConnector?: (connectorID: string) => void
+  onManageMcpServer?: (serverID: string) => void
   onStartInstalledPluginConnectorAuthFlow: (pluginID: string, appID: string) => boolean | Promise<boolean>
 }
 
@@ -1080,6 +1083,7 @@ function PluginSection({
 
 export function PluginsPage({
   activePluginID,
+  connectorCatalog,
   connectorStatuses,
   deletingPluginID,
   diagnosingMcpServerID,
@@ -1118,6 +1122,7 @@ export function PluginsPage({
   onSetInstalledPluginMcpEnabled,
   onSetInstalledPluginMcpToolPolicy,
   onManageConnector,
+  onManageMcpServer,
   onStartInstalledPluginConnectorAuthFlow,
 }: PluginsPageProps) {
   const { locale, t } = useI18n()
@@ -1172,6 +1177,10 @@ export function PluginsPage({
   const platformConnectorStatusByDefinitionID = useMemo(
     () => new Map(connectorStatuses.map((status) => [status.definitionID, status])),
     [connectorStatuses],
+  )
+  const platformConnectorDefinitionByID = useMemo(
+    () => new Map(connectorCatalog.map((definition) => [definition.id, definition])),
+    [connectorCatalog],
   )
   const pluginBusyIDs = useMemo(
     () => new Set([installingPluginID, updatingPluginID, deletingPluginID, diagnosingPluginID].filter(Boolean) as string[]),
@@ -2007,6 +2016,16 @@ export function PluginsPage({
                         const status = platformConnectorStatusByDefinitionID.get(requirement.connector)
                         const statusLabel = connectorStatusLabel(status)
                         const connectorID = status?.connectorID ?? `connector:${requirement.connector}:default`
+                        const connectorDefinition = platformConnectorDefinitionByID.get(requirement.connector)
+                        const isBuiltinMcp = connectorDefinition?.category === "builtin_mcp"
+                        const mcpServerID =
+                          status?.mcpBindings?.find((binding) => binding.runtimeID === "default")?.serverID
+                          ?? status?.generatedMcpServerID
+                          ?? status?.mcpBindings?.[0]?.serverID
+                          ?? `connector.${requirement.connector}.default`
+                        const canManageRequirement = isBuiltinMcp
+                          ? Boolean(onManageMcpServer)
+                          : Boolean(onManageConnector)
                         const requestedTools = requirement.tools?.join(", ") || "Declared by connector"
                         const requestedPermissions = requirement.permissions?.join(", ") || "Declared by connector"
 
@@ -2083,14 +2102,20 @@ export function PluginsPage({
                                     </div>
                                   ) : null}
                                 </dl>
-                                {onManageConnector ? (
+                                {canManageRequirement ? (
                                   <div className="plugins-connector-actions">
                                     <button
                                       className="plugins-detail-uninstall-button"
                                       type="button"
-                                      onClick={() => onManageConnector(connectorID)}
+                                      onClick={() => {
+                                        if (isBuiltinMcp) {
+                                          onManageMcpServer?.(mcpServerID)
+                                          return
+                                        }
+                                        onManageConnector?.(connectorID)
+                                      }}
                                     >
-                                      {t("plugins.connector.manage")}
+                                      {t(isBuiltinMcp ? "plugins.mcp.manage" : "plugins.connector.manage")}
                                     </button>
                                   </div>
                                 ) : null}

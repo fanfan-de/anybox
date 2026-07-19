@@ -215,6 +215,7 @@ function createProps(overrides: Partial<PluginsPageProps> = {}): PluginsPageProp
     installedPlugins: [],
     isLoading: false,
     loadError: null,
+    connectorCatalog: [],
     connectorStatuses: [],
     pluginCatalog: [createPlugin()],
     pluginConnectorStatuses: {},
@@ -1427,6 +1428,77 @@ describe("PluginsPage", () => {
     expect(screen.getByText("connector.gmail.default")).toBeInTheDocument()
     fireEvent.click(screen.getByRole("button", { name: "Manage in Connectors" }))
     expect(onManageConnector).toHaveBeenCalledWith("connector:gmail:default")
+  })
+
+  it("manages built-in MCP connector requirements from the MCP inventory", () => {
+    const plugin = createPlugin({
+      id: "chrome",
+      name: "Chrome",
+      mcpServers: [],
+      skills: [],
+      apps: [],
+      configFields: [],
+      connectorRequirements: [
+        {
+          connector: "node-repl",
+          reason: "Run the plugin Browser Client in the persistent Node runtime.",
+        },
+      ],
+    })
+    const onManageConnector = vi.fn()
+    const onManageMcpServer = vi.fn()
+
+    render(
+      <PluginsPage
+        {...createProps({
+          activePluginID: "chrome",
+          pluginCatalog: [plugin],
+          connectorCatalog: [
+            {
+              id: "node-repl",
+              name: "Node REPL",
+              description: "Run JavaScript in the Anybox Node runtime.",
+              category: "builtin_mcp",
+              publisher: "Anybox",
+              risk: "high",
+              permissions: [],
+              tools: [],
+              configFields: [],
+              mcpRuntimes: [],
+              installReview: [],
+              source: "platform",
+              available: true,
+            },
+          ],
+          connectorStatuses: [
+            {
+              connectorID: "connector:node-repl:default",
+              definitionID: "node-repl",
+              name: "Node REPL",
+              connected: true,
+              available: true,
+              authStatus: "connected",
+              mcpBindings: [
+                {
+                  runtimeID: "default",
+                  serverID: "connector.node-repl.default",
+                  name: "Node REPL",
+                },
+              ],
+              generatedMcpServerID: "connector.node-repl.default",
+            },
+          ],
+          onManageConnector,
+          onManageMcpServer,
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Show details for node-repl" }))
+    expect(screen.queryByRole("button", { name: "Manage in Connectors" })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Manage in MCP" }))
+    expect(onManageMcpServer).toHaveBeenCalledWith("connector.node-repl.default")
+    expect(onManageConnector).not.toHaveBeenCalled()
   })
 
   it("shows OAuth connector sign-in controls in included app details", () => {

@@ -2954,6 +2954,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                 <Suspense fallback={null}>
                   <PluginsPage
                     activePluginID={activePluginID}
+                    connectorCatalog={connectorCatalog}
                     connectorStatuses={connectorStatuses}
                     deletingPluginID={deletingPluginID}
                     diagnosingPluginConnectorID={diagnosingPluginConnectorID}
@@ -2996,6 +2997,10 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                     onManageConnector={(connectorID) => {
                       setActiveConnectionsTab("connectors")
                       selectConnector(connectorID)
+                    }}
+                    onManageMcpServer={(serverID) => {
+                      setActiveConnectionsTab("mcp")
+                      selectMcpServer(serverID)
                     }}
                     onStartInstalledPluginConnectorAuthFlow={startInstalledPluginConnectorAuthFlow}
                   />
