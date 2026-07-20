@@ -132,10 +132,13 @@ Available APIs include:
 
 - `agent.browsers.readiness()`, `ensureReady({ launch })`, `list()`, `get("extension")`, `getDefault()`, and `getForUrl(url)`
 - `chrome.browserId`, `chrome.capabilities`, `chrome.status()`, and capability-filtered `chrome.documentation()`
-- `chrome.tabs.list()`, `open(url, options)`, `activate(tabId)`, `get(tabId)`, and `current()`
+- `chrome.tabs.list()`, `listUser()`, `open(url, options)`, `claim(tabId)`, `activate(tabId)`, `get(tabId)`, `current()`, and `finalize()`
 - `tab.info()`, `activate()`, `snapshot()`, `interactiveSnapshot()`, `domTree()`, `accessibilityTree()`, and `screenshot()`
-- `tab.click()`, `clickElement()`, `fill()`, `type()`, `scroll()`, `waitFor()`, and `release()`
-- `tab.playwright.screenshot()`, `waitForSelector()`, keyboard typing, and coordinate mouse clicks
+- `tab.click()`, `clickElement()`, `fill()`, `type()`, `scroll()`, `waitFor()`, `release()`, and `markDeliverable()`
+- `tab.locator(descriptor).click()`, `fill()`, `textContent()`, `inputValue()`, and `waitFor()` when structured locators are advertised
+
+There is no `tab.playwright`, arbitrary page JavaScript, unrestricted CDP,
+general keyboard API, or `waitForSelector()` compatibility alias.
 
 ## Authentication and privacy
 
