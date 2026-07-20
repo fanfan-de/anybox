@@ -47,6 +47,11 @@ const validParams = {
   "tabs.open": { url: "https://example.com/", active: true },
   "tabs.claim": { tabId: 7 },
   "tabs.activate": { tabId: 7 },
+  "tabs.goto": { tabId: 7, url: "https://example.com/next" },
+  "tabs.back": { tabId: 7 },
+  "tabs.forward": { tabId: 7 },
+  "tabs.reload": { tabId: 7 },
+  "tabs.close": { tabId: 7 },
   "tabs.release": { tabId: 7 },
   "tabs.markDeliverable": { tabId: 7 },
   "tabs.finalize": { reason: "turn-end" },
@@ -178,6 +183,11 @@ const validResults = {
   "tabs.open": tab,
   "tabs.claim": tab,
   "tabs.activate": tab,
+  "tabs.goto": tab,
+  "tabs.back": tab,
+  "tabs.forward": tab,
+  "tabs.reload": tab,
+  "tabs.close": { tabId: 7, closed: true },
   "tabs.release": { tabId: 7, released: true },
   "tabs.markDeliverable": { tabId: 7, state: "deliverable" },
   "tabs.finalize": {
@@ -382,8 +392,8 @@ describe("Browser Contract command registry", () => {
     expect(BROWSER_CONTRACT_VERSION).toBe(3)
     expect(BROWSER_CONTRACT_SUPPORTED_VERSIONS).toEqual([3])
     expect(BROWSER_CONTRACT_V3_PLAYWRIGHT_COMMAND_METHODS).toHaveLength(24)
-    expect(BROWSER_CONTRACT_COMMAND_METHODS).toHaveLength(43)
-    expect(Object.keys(BrowserContractCommandRegistry)).toHaveLength(43)
+    expect(BROWSER_CONTRACT_COMMAND_METHODS).toHaveLength(48)
+    expect(Object.keys(BrowserContractCommandRegistry)).toHaveLength(48)
     expect(new Set(Object.keys(BrowserContractCommandRegistry)))
       .toEqual(new Set(BROWSER_CONTRACT_COMMAND_METHODS))
     expect(BrowserContractCommandMethod.safeParse("page.executeScript").success)
@@ -460,10 +470,15 @@ describe("Browser Contract command registry", () => {
     "data:text/html,<script>document.title='bypass'</script>",
     "vbscript:msgbox(1)",
   ])("rejects executable target URL scheme %s", (url) => {
-    expect(() => parseBrowserCommandParams("tabs.open", { url }))
-      .toThrowError(expect.objectContaining({
-        code: "INVALID_COMMAND_PARAMS",
-      }))
+    for (const [method, params] of [
+      ["tabs.open", { url }],
+      ["tabs.goto", { tabId: 7, url }],
+    ] as const) {
+      expect(() => parseBrowserCommandParams(method, params))
+        .toThrowError(expect.objectContaining({
+          code: "INVALID_COMMAND_PARAMS",
+        }))
+    }
   })
 
   test("reports an unsupported command with a stable contract error", () => {
@@ -709,7 +724,7 @@ describe("Browser Contract capabilities and manifests", () => {
 
   test("generates serializable JSON Schema for all commands, including DOM and waitFor", () => {
     const manifest = createBrowserApiManifest()
-    expect(manifest.commands).toHaveLength(43)
+    expect(manifest.commands).toHaveLength(48)
     expect(manifest.commands.map((entry) => entry.method))
       .toEqual([...BROWSER_CONTRACT_COMMAND_METHODS])
 

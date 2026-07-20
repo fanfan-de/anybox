@@ -30,6 +30,7 @@ import type {
   BrowserExtensionScrollResult,
   BrowserExtensionSnapshotResult,
   BrowserExtensionTabSummary,
+  BrowserExtensionTabsCloseResult,
   BrowserExtensionTabsListResult,
   BrowserExtensionTabsFinalizeResult,
   BrowserExtensionTabsMarkDeliverableResult,
@@ -856,6 +857,30 @@ export class BrowserTab {
     )
     this.tabId = tab.id
     return tab
+  }
+
+  async goto(url: string): Promise<BrowserExtensionTabSummary> {
+    const target = validateBrowserUrl(url)
+    return this.#router.run(
+      "tabs.goto",
+      this.withTabId({ url: target.href }),
+    )
+  }
+
+  async back(): Promise<BrowserExtensionTabSummary> {
+    return this.#router.run("tabs.back", this.withTabId())
+  }
+
+  async forward(): Promise<BrowserExtensionTabSummary> {
+    return this.#router.run("tabs.forward", this.withTabId())
+  }
+
+  async reload(): Promise<BrowserExtensionTabSummary> {
+    return this.#router.run("tabs.reload", this.withTabId())
+  }
+
+  async close(): Promise<BrowserExtensionTabsCloseResult> {
+    return this.#router.run("tabs.close", this.withTabId())
   }
 
   async snapshot(

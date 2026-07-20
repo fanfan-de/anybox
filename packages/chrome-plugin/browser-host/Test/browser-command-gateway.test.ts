@@ -158,6 +158,48 @@ describe("Browser command gateway contract boundary", () => {
       })
     expect(events).toEqual([])
   })
+
+  test("authorizes tabs.goto against its destination origin", async () => {
+    const events: string[] = []
+    const bridge = {
+      ...bridgeStub({ events }),
+      describeTab: async () => ({
+        id: 7,
+        title: "Current page",
+        url: "https://current.example/path",
+        active: true,
+        lease: {
+          source: "agent",
+          sessionID: context().sessionID,
+          turnID: context().turnID,
+          state: "active",
+          extensionInstanceID: "gateway",
+          expiresAt: Date.now() + 60_000,
+        },
+      }),
+    } as unknown as BrowserExtensionBridge
+
+    await expect(runBrowserRuntimeCommand({
+      contractVersion: BROWSER_CONTRACT_VERSION,
+      method: "tabs.goto",
+      params: {
+        tabId: 7,
+        url: "https://destination.example/private/path?token=secret",
+      },
+      context: context(),
+    }, bridge, new BrowserPolicyEngine(), "test-public-key"))
+      .rejects.toMatchObject({
+        code: "APPROVAL_REQUIRED",
+        details: {
+          challenge: {
+            method: "tabs.goto",
+            origin: "https://destination.example",
+            tabId: 7,
+          },
+        },
+      })
+    expect(events).toEqual([])
+  })
 })
 
 describe("Browser command gateway policy and transport errors", () => {
@@ -200,6 +242,38 @@ describe("Browser command gateway policy and transport errors", () => {
       risk: "high",
       sensitive: true,
     })
+
+    const goto = new BrowserPolicyEngine().authorize({
+      method: "tabs.goto",
+      params: { tabId: 7, url: "https://destination.example/path" },
+      backend: createBrowserBackendInfo({
+        connected: true,
+        commands: ["tabs.goto"],
+      }),
+      origin: "https://destination.example",
+    })
+    expect(goto).toMatchObject({
+      security: "target-url",
+      permissionAction: "ask",
+      risk: "medium",
+      sensitive: false,
+    })
+
+    const close = new BrowserPolicyEngine().authorize({
+      method: "tabs.close",
+      params: { tabId: 7 },
+      backend: createBrowserBackendInfo({
+        connected: true,
+        commands: ["tabs.close"],
+      }),
+      origin: "https://example.com",
+    })
+    expect(close).toMatchObject({
+      security: "tab-lifecycle",
+      permissionAction: "ask",
+      risk: "medium",
+      sensitive: false,
+    })
   })
 
   test("never marks interrupted non-idempotent actions as retryable", () => {
@@ -212,6 +286,17 @@ describe("Browser command gateway policy and transport errors", () => {
       details: {
         phase: "transport",
         action: "playwright.locator.click",
+      },
+    })
+    expect(backendGatewayError(
+      new Error("extension transport closed"),
+      "tabs.back",
+    )).toMatchObject({
+      code: "ACTION_OUTCOME_UNKNOWN",
+      retryable: false,
+      details: {
+        phase: "transport",
+        action: "tabs.back",
       },
     })
     expect(backendGatewayError(

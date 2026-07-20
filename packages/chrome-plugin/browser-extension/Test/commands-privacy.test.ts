@@ -58,6 +58,7 @@ const cdpResponses = new Map<string, unknown>()
 let currentTabUrl = "https://fixture.invalid/form"
 let queriedTabs: Array<Record<string, unknown>> = [{ id: 7, active: true }]
 let currentWindowTabId = 7
+let tabOperations: Array<Record<string, unknown>> = []
 const sessionStorage: Record<string, unknown> = {}
 const commandContext = {
   sessionID: "privacy-session",
@@ -165,13 +166,35 @@ beforeAll(async () => {
         async get(tabId: number) {
           return { id: tabId, title: "Fixture", url: currentTabUrl }
         },
+        async update(tabId: number, properties: Record<string, unknown>) {
+          tabOperations.push({ method: "update", tabId, properties })
+          if (typeof properties.url === "string") currentTabUrl = properties.url
+          return {
+            id: tabId,
+            title: "Fixture",
+            url: currentTabUrl,
+            active: properties.active === true,
+          }
+        },
+        async goBack(tabId: number) {
+          tabOperations.push({ method: "goBack", tabId })
+        },
+        async goForward(tabId: number) {
+          tabOperations.push({ method: "goForward", tabId })
+        },
+        async reload(tabId: number) {
+          tabOperations.push({ method: "reload", tabId })
+        },
         async query(query: { active?: boolean; currentWindow?: boolean }) {
           if (query.active && query.currentWindow) {
             return queriedTabs.filter((tab) => tab.id === currentWindowTabId)
           }
           return queriedTabs
         },
-        async remove() {},
+        async remove(tabId: number) {
+          tabOperations.push({ method: "remove", tabId })
+        },
+        async sendMessage() {},
       },
       storage: {
         session: {
@@ -195,6 +218,7 @@ beforeEach(() => {
   cdpResponses.clear()
   queriedTabs = [{ id: 7, active: true }]
   currentWindowTabId = 7
+  tabOperations = []
   installLeases(7)
   installPage([])
 })
@@ -246,6 +270,43 @@ describe("browser command contract defense", () => {
       sessionID: commandContext.sessionID,
       extensionInstanceID: commandContext.extensionInstanceID,
     })
+  })
+
+  test("navigates and closes a leased tab through the explicit tab APIs", async () => {
+    await expect(handleBrowserCommand("tabs.goto", {
+      tabId: 7,
+      url: "https://fixture.invalid/private/next?token=secret",
+    })).resolves.toMatchObject({
+      id: 7,
+      url: "https://fixture.invalid/[redacted-path]?[redacted]",
+    })
+    await expect(handleBrowserCommand("tabs.back", { tabId: 7 }))
+      .resolves.toMatchObject({ id: 7 })
+    await expect(handleBrowserCommand("tabs.forward", { tabId: 7 }))
+      .resolves.toMatchObject({ id: 7 })
+    await expect(handleBrowserCommand("tabs.reload", { tabId: 7 }))
+      .resolves.toMatchObject({ id: 7 })
+    await expect(handleBrowserCommand("tabs.close", { tabId: 7 }))
+      .resolves.toEqual({ tabId: 7, closed: true })
+
+    expect(tabOperations).toEqual([
+      {
+        method: "update",
+        tabId: 7,
+        properties: {
+          url: "https://fixture.invalid/private/next?token=secret",
+        },
+      },
+      { method: "goBack", tabId: 7 },
+      { method: "goForward", tabId: 7 },
+      { method: "reload", tabId: 7 },
+      { method: "remove", tabId: 7 },
+    ])
+    expect(
+      (sessionStorage["anybox.browser.tabLeases"] as Record<string, {
+        state: string
+      }>)["7"]?.state,
+    ).toBe("released")
   })
 
   test("aborts an in-flight wait when the Browser Host connection closes", async () => {

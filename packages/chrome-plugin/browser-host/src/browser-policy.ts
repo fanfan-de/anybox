@@ -68,6 +68,11 @@ const SAFE_SESSION_METHODS = new Set<BrowserContractCommandMethodValue>([
 const ORIGIN_SCOPED_ASK_METHODS = new Set<BrowserContractCommandMethodValue>([
   "tabs.open",
   "tabs.claim",
+  "tabs.goto",
+  "tabs.back",
+  "tabs.forward",
+  "tabs.reload",
+  "tabs.close",
   "page.click",
   "page.clickElement",
   "page.fill",

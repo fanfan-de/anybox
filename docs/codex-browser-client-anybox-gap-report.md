@@ -566,39 +566,39 @@ Anybox 当前能从开源仓库直接证明的安全控制包括：
 - P2：扩大工作流覆盖和产品体验。
 - P3：开发者或高级场景，风险较高或受众较窄。
 
-| 能力域 | Codex 当前能力 | Anybox 当前能力 | 判断 |
-|---|---|---|---|
-| 多后端 | Chrome、内置 Browser、CDP 统一发现和选择 | 多 Chrome 扩展实例；无内置 Browser/CDP 后端抽象 | 平台级 P2，不应强塞进 Chrome 插件 |
-| Browser 选择 | 完整 URL、Path、Host、域名层级、Profile 偏好 | 相同 Origin 和首选 Window | 部分具备，P2 |
-| 动态 API | Proxy 真正隐藏不可用成员 | Contract 命令集和对象构造时过滤 | 已具备基础 |
-| 动态文档 | API、条件化 Guidance、Lookup 文档、Capability 文档 | 当前命令签名、摘要和少量固定提示 | 明显不足，P0/P1 |
-| Tab 导航 | new、goto、back、forward、reload、close | 只能 `tabs.open(url)`，无 Tab 内导航和直接 close | 缺失，P0 |
-| Locator | 组合、过滤、计数、状态、Frame、读写完整 | 平面 Descriptor，五个动作，默认取第一个匹配 | 可靠性缺口，P0 |
-| Frame | Frame Locator、DOM CUA 可处理复杂 Frame | 开放 Shadow Root 和同源 iframe；跨域 iframe 不支持 | 缺失，P1 |
-| 等待 | URL、Load State、Navigation、Event、Locator State | URL/Text/Selector/Element 有界轮询 | 部分具备，P0 |
-| 键盘 | Keypress、Locator press、文本输入 | `Input.insertText`，无 Enter、快捷键 | 缺失，P0 |
-| 鼠标 | 单击、双击、移动、拖拽、路径输入 | 单击和滚动 | 缺失，P0/P1 |
-| 表单控件 | fill、type、select、check、uncheck、file chooser | fill/type；无 select/check/file chooser | 缺失，P0/P1 |
-| CUA | 视觉 CUA 与 DOM CUA 两套正式接口 | 坐标点击、交互快照、Element ID，尚未形成完整两栈 | 部分具备，P1 |
-| 页面状态 | DOM Snapshot、Element Info、Element Screenshot | Snapshot、DOM、AX、Screenshot | 基础较强，精细探测不足 |
-| 文档代际 | DOM/Locator 有新鲜度和重试指导 | Element ID 会失效，但无公开 documentGeneration | 缺失，P0 |
-| Tab 生命周期 | claim、deliverable、handoff、session naming、tab group | claim、lease、deliverable、finalize | 基础强；handoff/group/name 缺失，P2 |
-| 响应元数据 | 自动打开 Tab IDs、脱敏 URL、当前截图、Session 状态 | 后端、方法、部分 Origin/计数、截图尺寸元数据 | 已有但不完整，P0/P1 |
-| 用户中断 | 用户/扩展接管有专门语义和指导 | 断连可 Abort；没有正式 user-takeover 状态 | 缺失，P1 |
-| 主动取消 | 后端和事件体系可配合取消/超时 | Error Code 已有，Capability `cancel=false` | 缺失，P0 |
-| 安全认证 | 凭据安全表单，秘密不返回模型 | 只能让用户在 Chrome 手工登录 | 关键缺口，P1 |
-| 站点权限 | 逐站点确认、Allow once/site/all、设置页 allow/block | Origin 策略、Agent 权限请求、Receipt；插件内无管理 UI | 后端强、产品闭环不足，P0/P1 |
-| 风险分类 | 历史、上传、敏感传输、完整 CDP、外部副作用分别处理 | 五类粗粒度 Security Class，主要按命令和 sensitive 标记 | 不够细，P0 |
-| 浏览历史 | 聚焦查询、独立审批、无 always allow | 缺失 | 高隐私，P3 |
-| 上传下载 | File Chooser、Download Event、媒体下载、权限 | 缺失 | P1 |
-| 剪贴板 | 文本与二进制 Item | 缺失 | P2 |
-| JS 对话框 | Alert/Confirm/Prompt/BeforeUnload | 缺失 | P1/P2 |
-| Console/导出 | Logs、页面导出、G Suite 导出 | 缺失 | P2 |
-| 页面资源 | 图片、字体、CSS、视频、SVG 清单与 Bundle | 缺失 | P3 |
-| 只读 Evaluate | 沙箱化只读运行 | 明确禁用 | 可选 P3 |
-| Scoped/Full CDP | Capability + Origin/Developer mode 审批 | 公共面禁用，内部仅固定 CDP | 可选 P3 |
-| 可观测性 | 命令、发现、Locator Retry、响应元数据遥测 | 结构化日志和错误；缺少完整指标 | P0/P1 |
-| 发布平台 | Codex 当前安装包随桌面应用提供 | Manifest 声明六目标，仓库制品仅 Windows x64 | 发布缺口，视目标平台为 P0 |
+| 能力域             | Codex 当前能力                                         | Anybox 当前能力                              | 判断                           |
+| --------------- | -------------------------------------------------- | ---------------------------------------- | ---------------------------- |
+| 多后端             | Chrome、内置 Browser、CDP 统一发现和选择                      | 多 Chrome 扩展实例；无内置 Browser/CDP 后端抽象       | 平台级 P2，不应强塞进 Chrome 插件       |
+| Browser 选择      | 完整 URL、Path、Host、域名层级、Profile 偏好                   | 相同 Origin 和首选 Window                     | 部分具备，P2                      |
+| 动态 API          | Proxy 真正隐藏不可用成员                                    | Contract 命令集和对象构造时过滤                     | 已具备基础                        |
+| 动态文档            | API、条件化 Guidance、Lookup 文档、Capability 文档           | 当前命令签名、摘要和少量固定提示                         | 明显不足，P0/P1                   |
+| Tab 导航          | new、goto、back、forward、reload、close                 | 只能 `tabs.open(url)`，无 Tab 内导航和直接 close   | 缺失，P0                        |
+| Locator         | 组合、过滤、计数、状态、Frame、读写完整                             | 平面 Descriptor，五个动作，默认取第一个匹配              | 可靠性缺口，P0                     |
+| Frame           | Frame Locator、DOM CUA 可处理复杂 Frame                  | 开放 Shadow Root 和同源 iframe；跨域 iframe 不支持  | 缺失，P1                        |
+| 等待              | URL、Load State、Navigation、Event、Locator State      | URL/Text/Selector/Element 有界轮询           | 部分具备，P0                      |
+| 键盘              | Keypress、Locator press、文本输入                        | `Input.insertText`，无 Enter、快捷键           | 缺失，P0                        |
+| 鼠标              | 单击、双击、移动、拖拽、路径输入                                   | 单击和滚动                                    | 缺失，P0/P1                     |
+| 表单控件            | fill、type、select、check、uncheck、file chooser        | fill/type；无 select/check/file chooser    | 缺失，P0/P1                     |
+| CUA             | 视觉 CUA 与 DOM CUA 两套正式接口                            | 坐标点击、交互快照、Element ID，尚未形成完整两栈            | 部分具备，P1                      |
+| 页面状态            | DOM Snapshot、Element Info、Element Screenshot       | Snapshot、DOM、AX、Screenshot               | 基础较强，精细探测不足                  |
+| 文档代际            | DOM/Locator 有新鲜度和重试指导                              | Element ID 会失效，但无公开 documentGeneration   | 缺失，P0                        |
+| Tab 生命周期        | claim、deliverable、handoff、session naming、tab group | claim、lease、deliverable、finalize         | 基础强；handoff/group/name 缺失，P2 |
+| 响应元数据           | 自动打开 Tab IDs、脱敏 URL、当前截图、Session 状态                | 后端、方法、部分 Origin/计数、截图尺寸元数据               | 已有但不完整，P0/P1                 |
+| 用户中断            | 用户/扩展接管有专门语义和指导                                    | 断连可 Abort；没有正式 user-takeover 状态          | 缺失，P1                        |
+| 主动取消            | 后端和事件体系可配合取消/超时                                    | Error Code 已有，Capability `cancel=false`  | 缺失，P0                        |
+| 安全认证            | 凭据安全表单，秘密不返回模型                                     | 只能让用户在 Chrome 手工登录                       | 关键缺口，P1                      |
+| 站点权限            | 逐站点确认、Allow once/site/all、设置页 allow/block          | Origin 策略、Agent 权限请求、Receipt；插件内无管理 UI   | 后端强、产品闭环不足，P0/P1             |
+| 风险分类            | 历史、上传、敏感传输、完整 CDP、外部副作用分别处理                        | 五类粗粒度 Security Class，主要按命令和 sensitive 标记 | 不够细，P0                       |
+| 浏览历史            | 聚焦查询、独立审批、无 always allow                           | 缺失                                       | 高隐私，P3                       |
+| 上传下载            | File Chooser、Download Event、媒体下载、权限                | 缺失                                       | P1                           |
+| 剪贴板             | 文本与二进制 Item                                        | 缺失                                       | P2                           |
+| JS 对话框          | Alert/Confirm/Prompt/BeforeUnload                  | 缺失                                       | P1/P2                        |
+| Console/导出      | Logs、页面导出、G Suite 导出                               | 缺失                                       | P2                           |
+| 页面资源            | 图片、字体、CSS、视频、SVG 清单与 Bundle                        | 缺失                                       | P3                           |
+| 只读 Evaluate     | 沙箱化只读运行                                            | 明确禁用                                     | 可选 P3                        |
+| Scoped/Full CDP | Capability + Origin/Developer mode 审批              | 公共面禁用，内部仅固定 CDP                          | 可选 P3                        |
+| 可观测性            | 命令、发现、Locator Retry、响应元数据遥测                        | 结构化日志和错误；缺少完整指标                          | P0/P1                        |
+| 发布平台            | Codex 当前安装包随桌面应用提供                                 | Manifest 声明六目标，仓库制品仅 Windows x64         | 发布缺口，视目标平台为 P0               |
 
 ---
 

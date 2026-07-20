@@ -106,6 +106,20 @@ globalThis.tab = await chrome.tabs.open("https://example.com/")
 return await tab.snapshot()
 ```
 
+Navigate an existing leased tab directly instead of opening a duplicate:
+
+```js
+await tab.goto("https://example.com/docs")
+return await tab.playwright.domSnapshot()
+```
+
+`goto()`, `back()`, `forward()`, and `reload()` start navigation but do not
+promise that the destination has finished loading. After any of them, use
+`waitForURL()` or `waitForLoadState()` when advertised, then take a fresh DOM
+or interactive snapshot before reusing selectors or element IDs. Use
+`tab.close()` when the requested workflow is finished with that tab; a
+successfully closed tab does not also need `release()`.
+
 An item returned by `chrome.tabs.list()` also contains a bound `runtime` property that can be used within the same call. Prefer an explicit tab binding across calls.
 
 If a tab is missing, stale, or closed, discard only `globalThis.tab` and obtain or create a fresh tab from the existing `chrome` binding. An empty tab list does not invalidate the browser binding.
@@ -181,7 +195,7 @@ Available APIs include:
 - `agent.browsers.readiness()`, `ensureReady({ launch })`, `list()`, `get("extension")`, `getDefault()`, and `getForUrl(url)`
 - `chrome.browserId`, `chrome.capabilities`, `chrome.status()`, and capability-filtered `chrome.documentation()`
 - `chrome.tabs.list()`, `listUser()`, `open(url, options)`, `claim(tabId)`, `activate(tabId)`, `get(tabId)`, `current()`, and `finalize()`
-- `tab.info()`, `activate()`, `snapshot()`, `interactiveSnapshot()`, `domTree()`, `accessibilityTree()`, and `screenshot()`
+- `tab.info()`, `activate()`, `goto(url)`, `back()`, `forward()`, `reload()`, `close()`, `snapshot()`, `interactiveSnapshot()`, `domTree()`, `accessibilityTree()`, and `screenshot()`
 - `tab.click()`, `clickElement()`, `fill()`, `type()`, `scroll()`, `waitFor()`, `release()`, and `markDeliverable()`
 - `tab.playwright.domSnapshot()`, `elementInfo()`, `locator()`, `frameLocator()`, `getByRole()`, `getByText()`, `getByLabel()`, `getByPlaceholder()`, and `getByTestId()`
 - Locator composition with `locator()`, `filter()`, `and()`, `or()`, `first()`, `last()`, `nth()`, and `all()`

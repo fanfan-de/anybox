@@ -35,6 +35,46 @@ const COMMAND_METADATA = {
     publicReceiver: "browser",
     publicResult: "tab-runtime-handle",
   },
+  "tabs.goto": {
+    apiPath: "tab.goto",
+    signature: "tab.goto(url)",
+    summary: "Navigate a leased tab to an absolute URL.",
+    security: "target-url",
+    publicReceiver: "tab",
+    publicResult: "command-result",
+  },
+  "tabs.back": {
+    apiPath: "tab.back",
+    signature: "tab.back()",
+    summary: "Navigate a leased tab backward in its history.",
+    security: "page-interaction",
+    publicReceiver: "tab",
+    publicResult: "command-result",
+  },
+  "tabs.forward": {
+    apiPath: "tab.forward",
+    signature: "tab.forward()",
+    summary: "Navigate a leased tab forward in its history.",
+    security: "page-interaction",
+    publicReceiver: "tab",
+    publicResult: "command-result",
+  },
+  "tabs.reload": {
+    apiPath: "tab.reload",
+    signature: "tab.reload()",
+    summary: "Reload a leased tab.",
+    security: "page-interaction",
+    publicReceiver: "tab",
+    publicResult: "command-result",
+  },
+  "tabs.close": {
+    apiPath: "tab.close",
+    signature: "tab.close()",
+    summary: "Close a leased tab and release its browser resources.",
+    security: "tab-lifecycle",
+    publicReceiver: "tab",
+    publicResult: "command-result",
+  },
   "page.screenshot": {
     apiPath: "tab.screenshot",
     signature: "tab.screenshot(options?)",
@@ -525,7 +565,16 @@ test("filters API manifests and documentation from backend capabilities", async 
 
 test("routes tabs and Tab APIs through the v3 CommandRouter", async () => {
   const requests = []
-  const commands = ["tabs.list", "tabs.open", "page.screenshot"]
+  const commands = [
+    "tabs.list",
+    "tabs.open",
+    "tabs.goto",
+    "tabs.back",
+    "tabs.forward",
+    "tabs.reload",
+    "tabs.close",
+    "page.screenshot",
+  ]
   const transport = backendTransport({
     commands,
     requests,
@@ -546,6 +595,25 @@ test("routes tabs and Tab APIs through the v3 CommandRouter", async () => {
           title: "Opened",
           url: request.params.url,
           active: request.params.active,
+        }
+      }
+      if ([
+        "tabs.goto",
+        "tabs.back",
+        "tabs.forward",
+        "tabs.reload",
+      ].includes(request.method)) {
+        return {
+          id: request.params.tabId,
+          title: "Navigated",
+          url: request.params.url ?? "https://example.com/history",
+          active: true,
+        }
+      }
+      if (request.method === "tabs.close") {
+        return {
+          tabId: request.params.tabId,
+          closed: true,
         }
       }
       if (request.method === "page.screenshot") {
@@ -571,12 +639,19 @@ test("routes tabs and Tab APIs through the v3 CommandRouter", async () => {
   const screenshot = await opened.screenshot({ fullPage: true })
   const current = await browser.tabs.current()
   await current.screenshot()
+  const navigated = await opened.goto("https://example.com/next")
+  await opened.back()
+  await opened.forward()
+  await opened.reload()
+  const closed = await opened.close()
 
   assert.equal(status.connected, true)
   assert.equal(tabs[0].runtime.tabId, 42)
   assert.equal(opened.tabId, 43)
   assert.equal(screenshot.tabId, 43)
   assert.equal(current.tabId, 42)
+  assert.equal(navigated.id, 43)
+  assert.deepEqual(closed, { tabId: 43, closed: true })
 
   const commandRequests = requests.filter(({ type }) => type === "command")
   assert.deepEqual(commandRequests[0], {
@@ -606,7 +681,26 @@ test("routes tabs and Tab APIs through the v3 CommandRouter", async () => {
     },
     browserID: "extension",
   })
-  assert.deepEqual(commandRequests.at(-1)?.params, { tabId: 42 })
+  assert.deepEqual(
+    commandRequests.filter(({ method }) => method === "page.screenshot").at(-1)?.params,
+    { tabId: 42 },
+  )
+  assert.deepEqual(
+    commandRequests
+      .filter(({ method }) => method.startsWith("tabs."))
+      .slice(-5)
+      .map(({ method, params }) => ({ method, params })),
+    [
+      {
+        method: "tabs.goto",
+        params: { tabId: 43, url: "https://example.com/next" },
+      },
+      { method: "tabs.back", params: { tabId: 43 } },
+      { method: "tabs.forward", params: { tabId: 43 } },
+      { method: "tabs.reload", params: { tabId: 43 } },
+      { method: "tabs.close", params: { tabId: 43 } },
+    ],
+  )
 
   await assert.rejects(
     browser.tabs.open("not-a-url"),
@@ -614,6 +708,10 @@ test("routes tabs and Tab APIs through the v3 CommandRouter", async () => {
   )
   await assert.rejects(
     browser.tabs.open("javascript:document.title='bypass'"),
+    (error) => error.code === "INVALID_COMMAND_PARAMS",
+  )
+  await assert.rejects(
+    opened.goto("javascript:document.title='bypass'"),
     (error) => error.code === "INVALID_COMMAND_PARAMS",
   )
   await assert.rejects(
@@ -1039,7 +1137,7 @@ test("replaces an authenticated Browser Host from an older plugin version", asyn
 
     assert.equal(readiness.state, "needs-browser")
     assert.notEqual(upgradedBootstrap.hostPID, initialBootstrap.hostPID)
-    assert.equal(upgradedBootstrap.hostVersion, "0.12.0")
+    assert.equal(upgradedBootstrap.hostVersion, "0.13.0")
   } finally {
     for (const hostPID of hostPIDs) {
       if (!Number.isInteger(hostPID)) continue

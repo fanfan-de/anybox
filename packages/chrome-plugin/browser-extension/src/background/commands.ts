@@ -427,6 +427,59 @@ async function activateTab(params: unknown, signal?: AbortSignal) {
   return toTabSummary(tab)
 }
 
+async function gotoTab(params: unknown, signal?: AbortSignal) {
+  const input = readRecord(params)
+  const tabId = await activeTabId(input.tabId)
+  const url = readString(input.url)
+  if (!url) throw new Error("tabs.goto requires a URL.")
+  throwIfCommandAborted(signal)
+  const tab = await chrome.tabs.update(tabId, { url })
+  throwIfCommandAborted(signal)
+  return toTabSummary(tab)
+}
+
+async function backTab(params: unknown, signal?: AbortSignal) {
+  const tabId = await activeTabId(readRecord(params).tabId)
+  throwIfCommandAborted(signal)
+  await chrome.tabs.goBack(tabId)
+  throwIfCommandAborted(signal)
+  return tabInfo(tabId)
+}
+
+async function forwardTab(params: unknown, signal?: AbortSignal) {
+  const tabId = await activeTabId(readRecord(params).tabId)
+  throwIfCommandAborted(signal)
+  await chrome.tabs.goForward(tabId)
+  throwIfCommandAborted(signal)
+  return tabInfo(tabId)
+}
+
+async function reloadTab(params: unknown, signal?: AbortSignal) {
+  const tabId = await activeTabId(readRecord(params).tabId)
+  throwIfCommandAborted(signal)
+  await chrome.tabs.reload(tabId)
+  throwIfCommandAborted(signal)
+  return tabInfo(tabId)
+}
+
+async function closeTab(
+  params: unknown,
+  context?: BrowserExtensionCommandContext,
+  signal?: AbortSignal,
+) {
+  const tabId = readNumber(readRecord(params).tabId)
+  if (!tabId) throw new Error("tabs.close requires a tabId.")
+  throwIfCommandAborted(signal)
+  await removeBrowserOverlay(tabId)
+  releasePlaywrightTab(tabId)
+  await detachTabDebugger(tabId)
+  throwIfCommandAborted(signal)
+  await chrome.tabs.remove(tabId)
+  await releaseLease(tabId, context).catch(() => undefined)
+  throwIfCommandAborted(signal)
+  return { tabId, closed: true }
+}
+
 async function snapshot(params: unknown, signal?: AbortSignal) {
   const input = readRecord(params)
   const tabId = await activeTabId(input.tabId)
@@ -1551,6 +1604,11 @@ export async function finalizeDisconnectedTabLeases() {
 
 const LEASED_TAB_METHODS = new Set<BrowserContractCommandMethodValue>([
   "tabs.activate",
+  "tabs.goto",
+  "tabs.back",
+  "tabs.forward",
+  "tabs.reload",
+  "tabs.close",
   "tabs.release",
   "tabs.markDeliverable",
   "page.snapshot",
@@ -1612,6 +1670,16 @@ async function handleContractCommand(
       return await claimTab(params, context, signal)
     case "tabs.activate":
       return await activateTab(params, signal)
+    case "tabs.goto":
+      return await gotoTab(params, signal)
+    case "tabs.back":
+      return await backTab(params, signal)
+    case "tabs.forward":
+      return await forwardTab(params, signal)
+    case "tabs.reload":
+      return await reloadTab(params, signal)
+    case "tabs.close":
+      return await closeTab(params, context, signal)
     case "tabs.release":
       return await releaseTab(params, context)
     case "tabs.markDeliverable":

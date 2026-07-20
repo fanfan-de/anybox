@@ -22,6 +22,7 @@ import {
   BrowserExtensionScrollResult,
   BrowserExtensionSnapshotResult,
   BrowserExtensionTabSummary,
+  BrowserExtensionTabsCloseResult,
   BrowserExtensionTabsListResult,
   BrowserExtensionTabsFinalizeResult,
   BrowserExtensionTabsMarkDeliverableResult,
@@ -99,6 +100,11 @@ export const BROWSER_CONTRACT_COMMAND_METHODS = [
   "tabs.open",
   "tabs.claim",
   "tabs.activate",
+  "tabs.goto",
+  "tabs.back",
+  "tabs.forward",
+  "tabs.reload",
+  "tabs.close",
   "tabs.release",
   "tabs.markDeliverable",
   "tabs.finalize",
@@ -319,6 +325,27 @@ export const BrowserTabsActivateParams = z.object({
   tabId: RequiredTabID,
 }).strict()
 
+export const BrowserTabsGotoParams = z.object({
+  tabId: RequiredTabID,
+  url: BrowserTargetUrl,
+}).strict()
+
+export const BrowserTabsBackParams = z.object({
+  tabId: RequiredTabID,
+}).strict()
+
+export const BrowserTabsForwardParams = z.object({
+  tabId: RequiredTabID,
+}).strict()
+
+export const BrowserTabsReloadParams = z.object({
+  tabId: RequiredTabID,
+}).strict()
+
+export const BrowserTabsCloseParams = z.object({
+  tabId: RequiredTabID,
+}).strict()
+
 export const BrowserTabsReleaseParams = z.object({
   tabId: RequiredTabID,
 }).strict()
@@ -496,6 +523,51 @@ const BrowserContractBaseCommandRegistry = {
     security: "tab-lifecycle",
     params: BrowserTabsActivateParams,
     result: BrowserExtensionTabSummary,
+  },
+  "tabs.goto": {
+    method: "tabs.goto",
+    apiPath: "tab.goto",
+    signature: "tab.goto(url)",
+    summary: "Navigate a leased tab to an absolute URL.",
+    security: "target-url",
+    params: BrowserTabsGotoParams,
+    result: BrowserExtensionTabSummary,
+  },
+  "tabs.back": {
+    method: "tabs.back",
+    apiPath: "tab.back",
+    signature: "tab.back()",
+    summary: "Navigate a leased tab backward in its history.",
+    security: "page-interaction",
+    params: BrowserTabsBackParams,
+    result: BrowserExtensionTabSummary,
+  },
+  "tabs.forward": {
+    method: "tabs.forward",
+    apiPath: "tab.forward",
+    signature: "tab.forward()",
+    summary: "Navigate a leased tab forward in its history.",
+    security: "page-interaction",
+    params: BrowserTabsForwardParams,
+    result: BrowserExtensionTabSummary,
+  },
+  "tabs.reload": {
+    method: "tabs.reload",
+    apiPath: "tab.reload",
+    signature: "tab.reload()",
+    summary: "Reload a leased tab.",
+    security: "page-interaction",
+    params: BrowserTabsReloadParams,
+    result: BrowserExtensionTabSummary,
+  },
+  "tabs.close": {
+    method: "tabs.close",
+    apiPath: "tab.close",
+    signature: "tab.close()",
+    summary: "Close a leased tab and release its browser resources.",
+    security: "tab-lifecycle",
+    params: BrowserTabsCloseParams,
+    result: BrowserExtensionTabsCloseResult,
   },
   "tabs.release": {
     method: "tabs.release",

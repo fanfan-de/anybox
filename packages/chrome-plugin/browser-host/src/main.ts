@@ -15,7 +15,7 @@ import { BrowserIpcGateway } from "./ipc-gateway.ts"
 import { browserExtensionBridge } from "./bridge.ts"
 import * as Log from "./log.ts"
 
-const BROWSER_HOST_VERSION = "0.12.0"
+const BROWSER_HOST_VERSION = "0.13.0"
 const IDLE_TIMEOUT_MS = 15 * 60_000
 const log = Log.create({ service: "browser-host" })
 

@@ -11,6 +11,11 @@ export const BrowserExtensionCommandMethod = z.enum([
   "tabs.open",
   "tabs.claim",
   "tabs.activate",
+  "tabs.goto",
+  "tabs.back",
+  "tabs.forward",
+  "tabs.reload",
+  "tabs.close",
   "tabs.release",
   "tabs.markDeliverable",
   "tabs.finalize",
@@ -362,6 +367,12 @@ export const BrowserExtensionTabsReleaseResult = z.object({
   released: z.boolean(),
 }).strict()
 export type BrowserExtensionTabsReleaseResult = z.infer<typeof BrowserExtensionTabsReleaseResult>
+
+export const BrowserExtensionTabsCloseResult = z.object({
+  tabId: z.number().int().positive(),
+  closed: z.boolean(),
+}).strict()
+export type BrowserExtensionTabsCloseResult = z.infer<typeof BrowserExtensionTabsCloseResult>
 
 export const BrowserExtensionTabsMarkDeliverableResult = z.object({
   tabId: z.number().int().positive(),

@@ -46,6 +46,11 @@ export class BrowserCommandGatewayError extends Error {
 
 const LEASE_REQUIRED_METHODS = new Set<BrowserContractCommandMethod>([
   "tabs.activate",
+  "tabs.goto",
+  "tabs.back",
+  "tabs.forward",
+  "tabs.reload",
+  "tabs.close",
   "tabs.release",
   "tabs.markDeliverable",
   "page.snapshot",
@@ -62,7 +67,12 @@ const LEASE_REQUIRED_METHODS = new Set<BrowserContractCommandMethod>([
   ...BROWSER_CONTRACT_V3_PLAYWRIGHT_COMMAND_METHODS,
 ])
 
-const NON_IDEMPOTENT_INPUT_METHODS = new Set<BrowserContractCommandMethod>([
+const NON_IDEMPOTENT_ACTION_METHODS = new Set<BrowserContractCommandMethod>([
+  "tabs.goto",
+  "tabs.back",
+  "tabs.forward",
+  "tabs.reload",
+  "tabs.close",
   "page.click",
   "page.clickElement",
   "page.fill",
@@ -129,7 +139,7 @@ export async function runBrowserRuntimeCommand(
 
   enforceLeaseBeforeForward(method, tabId, tab, context)
 
-  const targetUrl = method === "tabs.open"
+  const targetUrl = method === "tabs.open" || method === "tabs.goto"
     ? readStringField(params, "url")
     : tab?.url
   const origin = normalizeBrowserOrigin(targetUrl)
@@ -364,7 +374,7 @@ export function backendGatewayError(
   if (
     extensionCode.success
     && extensionCode.data === "DEADLINE_EXCEEDED"
-    && NON_IDEMPOTENT_INPUT_METHODS.has(method)
+    && NON_IDEMPOTENT_ACTION_METHODS.has(method)
   ) {
     return new BrowserCommandGatewayError(
       "ACTION_OUTCOME_UNKNOWN",
@@ -392,7 +402,7 @@ export function backendGatewayError(
       details,
     )
   }
-  if (NON_IDEMPOTENT_INPUT_METHODS.has(method)) {
+  if (NON_IDEMPOTENT_ACTION_METHODS.has(method)) {
     return new BrowserCommandGatewayError(
       "ACTION_OUTCOME_UNKNOWN",
       publicBackendErrorMessage("ACTION_OUTCOME_UNKNOWN", method),
@@ -565,7 +575,7 @@ function updateOwnership(
     if (parsedTab.success) bridge.markOwnedTab(parsedTab.data, context)
     return
   }
-  if (method === "tabs.release") {
+  if (method === "tabs.release" || method === "tabs.close") {
     const tabId = readTabId(params)
     if (tabId) bridge.releaseOwnedTab(tabId, context?.sessionID)
     return

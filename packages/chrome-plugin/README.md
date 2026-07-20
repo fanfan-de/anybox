@@ -1,6 +1,6 @@
 # Anybox Chrome 插件
 
-本文是 Chrome 插件工程唯一需要长期维护的实现文档。当前代码基线为 `0.12.0`；版本与安装元数据以
+本文是 Chrome 插件工程唯一需要长期维护的实现文档。当前代码基线为 `0.13.0`；版本与安装元数据以
 [`runtime/.anybox-plugin/plugin.json`](./runtime/.anybox-plugin/plugin.json)
 为准。
 
@@ -117,6 +117,7 @@ if (readiness.state !== "ready") return readiness
 
 globalThis.chrome = await agent.browsers.getDefault()
 globalThis.tab = await chrome.tabs.open("https://example.com/")
+await tab.goto("https://example.com/docs")
 return await tab.snapshot()
 ```
 
@@ -126,7 +127,7 @@ return await tab.snapshot()
 |---|---|
 | `agent.browsers` | `readiness()`、`ensureReady()`、`list()`、`get()`、`getDefault()`、`getForUrl()` |
 | Browser Context | `status()`、`documentation()`、`tabs.list()`、`listUser()`、`open()`、`claim()`、`activate()`、`get()`、`current()`、`finalize()` |
-| Browser Tab | 页面/Tab API，以及原子能力 `playwright` |
+| Browser Tab | `info()`、`activate()`、`goto()`、`back()`、`forward()`、`reload()`、`close()`、页面 API，以及原子能力 `playwright` |
 | `tab.playwright` | `domSnapshot()`、`elementInfo()`、`locator()`、`frameLocator()`、`getByRole/Text/Label/Placeholder/TestId()`、页面等待和一次性事件 |
 | Playwright Locator | 不可变组合、批量读取、严格单元素读取、actionability 动作和 `waitFor()` |
 
@@ -141,6 +142,7 @@ return await tab.snapshot()
 `contractVersion: 3`；缺失、v1/v2 或未来版本都会返回稳定的不兼容错误，不进行协商降级。
 v3 提供以下执行面：
 
+- Tab 导航：`goto`、`back`、`forward`、`reload` 和 `close`
 - 定位依据：`playwright.domSnapshot`、`playwright.elementInfo`
 - Locator 读取：`count`、`allTextContents`、`textContent`、`innerText`、`inputValue`、
   `getAttribute`、`isVisible`、`isEnabled`、`waitFor`
@@ -174,7 +176,7 @@ SHA-256、Apache-2.0 License/NOTICE 和离线构建使用的成品均在
 
 | 操作 | 底层实现 | 说明 |
 |---|---|---|
-| Tab 查询、创建、激活、关闭 | `chrome.tabs` | 输出 URL 会移除 path、query 和 hash，只保留 Origin |
+| Tab 查询、创建、激活、导航、刷新、关闭 | `chrome.tabs` | 输出 URL 会移除 path、query 和 hash，只保留 Origin |
 | 普通快照 | 固定的 `chrome.scripting.executeScript` | 提取受限的正文、链接、按钮和输入框信息 |
 | 交互快照 | 固定注入函数 | 为当前交互元素生成临时 `data-anybox-element-id` |
 | DOM 树 | 受限 CDP `DOM.getDocument` | 限制深度和节点数，并执行文本脱敏 |
@@ -263,6 +265,8 @@ Turn、状态、保留标记和扩展实例 ID：
 - `tabs.list()` 只列出当前 Session 已拥有的 Tab。
 - `tabs.listUser()` 列出可以认领的用户 Tab。
 - `tabs.claim()` 为现有用户 Tab 建立租约。
+- `tab.goto()`、`back()`、`forward()` 和 `reload()` 只作用于当前 Session 已租用的 Tab。
+- `tab.close()` 关闭 Tab，并释放租约、调试器和 Locator 执行状态；关闭后无需再调用 `release()`。
 - 通过已有租约 Tab 打开的新 Tab 会继承租约。
 - 跨 Session 操作会被 Browser Host 和扩展双重拒绝。
 
