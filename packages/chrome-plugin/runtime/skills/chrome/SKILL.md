@@ -23,7 +23,7 @@ Keep setup details internal. Unless the user asks about implementation, describe
 
 The Browser Client sends only operations advertised by the negotiated Browser Contract to the plugin-owned Browser Host over authenticated local IPC. The client performs an early schema and capability check, and the Browser Host authoritatively validates every command again before it can reach Chrome. The general-purpose Node environment does not provide a browser host-service API; do not call or expect `nodeRepl.requestHost(...)`.
 
-## Bootstrap once
+## Bootstrap and reload safely
 
 The Node REPL is a general Anybox environment. It preloads `nodeRepl`, but it does not preload `browser-client`, `setupBrowserRuntime`, `agent`, or Chrome-specific capabilities.
 
@@ -31,16 +31,20 @@ Importing and initializing the Browser Client starts or reconnects the Browser H
 
 The absolute path shown when this Skill is loaded ends in `skills/chrome/SKILL.md`. Resolve this plugin's package root by moving two directories up from that Skill directory. The bundled Browser Client is `scripts/browser-client.mjs` under that package root. Import exactly that file through an absolute file URL. Never import an external or built-in `browser-client` package. If the bundled file is missing, stop and report that the Chrome plugin package is incomplete.
 
-Import the Browser Client once per fresh REPL session, initialize one persistent Chrome binding, and read its complete runtime documentation on first use:
+Import the Browser Client from the currently loaded plugin package. Reuse it while that package version remains active, but replace a Browser Client retained from an older plugin version before using Chrome. Initialize one persistent Chrome binding and read its complete runtime documentation on first use:
 
 ```js
-if (globalThis.agent?.browsers == null) {
-  const { resolve } = require("node:path")
-  const { pathToFileURL } = require("node:url")
-  const pluginRoot = "<absolute plugin root derived from this Skill's loaded path>"
-  const browserClientPath = resolve(pluginRoot, "scripts", "browser-client.mjs")
-  const { setupBrowserRuntime } = await import(pathToFileURL(browserClientPath).href)
+const { resolve } = require("node:path")
+const { pathToFileURL } = require("node:url")
+const pluginRoot = "<absolute plugin root derived from this Skill's loaded path>"
+const browserClientPath = resolve(pluginRoot, "scripts", "browser-client.mjs")
+const { setupBrowserRuntime } = await import(pathToFileURL(browserClientPath).href)
+if (
+  globalThis.agent?.browsers == null
+  || globalThis.setupBrowserRuntime !== setupBrowserRuntime
+) {
   await setupBrowserRuntime({ globals: globalThis })
+  globalThis.chrome = undefined
 }
 if (globalThis.chrome == null) {
   const readiness = await agent.browsers.ensureReady({ launch: true })
@@ -50,7 +54,7 @@ if (globalThis.chrome == null) {
 }
 ```
 
-Reuse `globalThis.chrome` across later calls and user turns. Do not initialize another browser runtime merely because the user sent a new message.
+Reuse `globalThis.chrome` across later calls and user turns while the imported setup function still matches `globalThis.setupBrowserRuntime`. A mismatch means the persistent REPL retained an older plugin version, so reinitialize from the currently loaded package and discard the stale Chrome binding. Do not initialize another browser runtime merely because the user sent a new message.
 
 `agent.browsers.readiness()` reports the current connection state without launching Chrome or running the Native Host probe. During an explicit Chrome task, `agent.browsers.ensureReady({ launch: true })` first allows an in-flight extension reconnect to settle, verifies the installed Native Messaging Host through its authenticated local IPC probe, opens Chrome at most once when needed, and waits for a bounded extension handshake. It never scans Chrome profiles or credential stores.
 

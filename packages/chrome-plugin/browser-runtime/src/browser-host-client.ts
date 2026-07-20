@@ -20,9 +20,10 @@ import type {
   BrowserExtensionCommandContext,
 } from "@anybox/chrome-shared/browser-extension"
 
-const BROWSER_HOST_CLIENT_VERSION = "0.11.0"
+const BROWSER_HOST_CLIENT_VERSION = "0.11.2"
 const DEFAULT_CONNECT_TIMEOUT_MS = 5_000
 const HOST_START_TIMEOUT_MS = 8_000
+const HOST_REPLACE_TIMEOUT_MS = 5_000
 
 export type BrowserHostRequest =
   | {
@@ -49,6 +50,7 @@ type RuntimeBootstrap = {
   brokerInstanceID: string
   endpoint: string
   proof: string
+  hostPID: number
   hostVersion: string
 }
 
@@ -101,6 +103,17 @@ function requiredString(value: unknown, label: string) {
   return value.trim()
 }
 
+function requiredProcessID(value: unknown, label: string) {
+  if (!Number.isSafeInteger(value) || Number(value) <= 0) {
+    throw new BrowserHostClientError(
+      "BACKEND_UNAVAILABLE",
+      `${label} is missing from the Browser Host bootstrap.`,
+      { retryable: true },
+    )
+  }
+  return Number(value)
+}
+
 function runtimeBootstrapPath() {
   return path.resolve(
     process.env.ANYBOX_BROWSER_HOST_BOOTSTRAP_PATH?.trim()
@@ -140,6 +153,7 @@ async function readRuntimeBootstrap(): Promise<RuntimeBootstrap> {
     ),
     endpoint: requiredString(value.endpoint, "Browser Host runtime endpoint"),
     proof: requiredString(value.proof, "Browser Host runtime proof"),
+    hostPID: requiredProcessID(value.hostPID, "Browser Host process ID"),
     hostVersion: requiredString(value.hostVersion, "Browser Host version"),
   }
 }
@@ -186,6 +200,75 @@ function wait(delayMs: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, delayMs))
 }
 
+function processIsRunning(processID: number) {
+  try {
+    process.kill(processID, 0)
+    return true
+  } catch (error) {
+    if (
+      isRecord(error)
+      && (error.code === "ESRCH" || error.code === "EINVAL")
+    ) {
+      return false
+    }
+    throw error
+  }
+}
+
+async function replaceIncompatibleHost(bootstrap: RuntimeBootstrap) {
+  if (bootstrap.hostPID === process.pid) {
+    throw new BrowserHostClientError(
+      "BACKEND_UNAVAILABLE",
+      "Chrome plugin Browser Host bootstrap points to the current process.",
+      { retryable: false },
+    )
+  }
+
+  const authenticatedClient = new BrowserHostRuntimeClient(bootstrap)
+  await authenticatedClient.ensureConnected()
+  authenticatedClient.close()
+
+  try {
+    process.kill(bootstrap.hostPID, "SIGTERM")
+  } catch (error) {
+    if (
+      !isRecord(error)
+      || (error.code !== "ESRCH" && error.code !== "EINVAL")
+    ) {
+      throw new BrowserHostClientError(
+        "BACKEND_UNAVAILABLE",
+        "The incompatible Chrome plugin Browser Host could not be stopped.",
+        {
+          retryable: true,
+          cause: error,
+          details: {
+            actualVersion: bootstrap.hostVersion,
+            expectedVersion: BROWSER_HOST_CLIENT_VERSION,
+          },
+        },
+      )
+    }
+  }
+
+  const deadline = Date.now() + HOST_REPLACE_TIMEOUT_MS
+  while (Date.now() < deadline && processIsRunning(bootstrap.hostPID)) {
+    await wait(25)
+  }
+  if (processIsRunning(bootstrap.hostPID)) {
+    throw new BrowserHostClientError(
+      "BACKEND_UNAVAILABLE",
+      "The incompatible Chrome plugin Browser Host did not stop in time.",
+      {
+        retryable: true,
+        details: {
+          actualVersion: bootstrap.hostVersion,
+          expectedVersion: BROWSER_HOST_CLIENT_VERSION,
+        },
+      },
+    )
+  }
+}
+
 async function connectToAvailableHost() {
   const deadline = Date.now() + HOST_START_TIMEOUT_MS
   let started = false
@@ -195,6 +278,27 @@ async function connectToAvailableHost() {
   while (Date.now() < deadline) {
     try {
       const bootstrap = await readRuntimeBootstrap()
+      if (bootstrap.hostVersion !== BROWSER_HOST_CLIENT_VERSION) {
+        await replaceIncompatibleHost(bootstrap)
+        lastError = new BrowserHostClientError(
+          "BACKEND_UNAVAILABLE",
+          "An incompatible Chrome plugin Browser Host was replaced.",
+          {
+            retryable: true,
+            details: {
+              actualVersion: bootstrap.hostVersion,
+              expectedVersion: BROWSER_HOST_CLIENT_VERSION,
+            },
+          },
+        )
+        if (!started) {
+          started = true
+          await spawnBrowserHost()
+        }
+        await wait(Math.min(delayMs, Math.max(1, deadline - Date.now())))
+        delayMs = Math.min(delayMs * 2, 250)
+        continue
+      }
       const client = new BrowserHostRuntimeClient(bootstrap)
       await client.ensureConnected()
       return client

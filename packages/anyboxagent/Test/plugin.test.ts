@@ -3539,21 +3539,60 @@ describe("plugin marketplace API", () => {
   test("migrates a legacy Chrome package to the Anybox-owned Node REPL runtime", async () => {
     await useTempDatabase()
     const legacyPackageRoot = await writeLegacyChromePluginPackage()
+    const installedAt = Date.now()
+    Plugin.listInstalled()
+    Sqlite.upsert(
+      "installed_plugins",
+      Plugin.InstalledPlugin.parse({
+        pluginID: "chrome",
+        version: "0.1.0",
+        enabled: true,
+        mcpServerIDs: [],
+        mcpServerEnabled: {},
+        skillIDs: [],
+        connectorIDs: [],
+        connectorRequirementIDs: [
+          "connector:browser:default",
+          "connector:node-repl:default",
+        ],
+        config: {},
+        installedAt,
+        updatedAt: installedAt,
+        lastConnectorDiagnostics: {},
+        platformArtifactReceipts: [],
+      }),
+      ["pluginID"],
+    )
 
-    const legacyInstalled = await Plugin.install("chrome", { enabled: true })
-    expect(legacyInstalled.version).toBe("0.1.0")
-    expect(legacyInstalled.packageRoot).toBe(legacyPackageRoot)
-    expect(legacyInstalled.mcpServerIDs).toEqual([])
-    expect(legacyInstalled.connectorRequirementIDs).toEqual([
+    const legacyInstalled = Plugin.getInstalled("chrome")
+    expect(legacyInstalled?.version).toBe("0.1.0")
+    expect(legacyInstalled?.packageRoot).toBe(legacyPackageRoot)
+    expect(legacyInstalled?.mcpServerIDs).toEqual([])
+    expect(legacyInstalled?.connectorRequirementIDs).toEqual([
       "connector:browser:default",
       "connector:node-repl:default",
     ])
 
     await Plugin.reconcileInstalledRuntimeBindings()
 
+    const currentChromeRoot = join(
+      import.meta.dir,
+      "..",
+      "..",
+      "..",
+      "plugins",
+      "Anybox-Plugins",
+      "chrome",
+    )
+    const currentChromeManifest = JSON.parse(await readFile(
+      join(currentChromeRoot, ".anybox-plugin", "plugin.json"),
+      "utf8",
+    )) as { version: string }
     const migrated = Plugin.getInstalled("chrome")
-    expect(migrated?.version).toBe("0.10.0")
-    expect(migrated?.packageRoot).toBe(join(pluginInstallRoot(), "chrome", "0.10.0"))
+    expect(migrated?.version).toBe(currentChromeManifest.version)
+    expect(migrated?.packageRoot).toBe(
+      join(pluginInstallRoot(), "chrome", currentChromeManifest.version),
+    )
     expect(migrated?.mcpServerIDs).toEqual([])
     expect(migrated?.connectorRequirementIDs).toEqual([
       "connector:node-repl:default",
@@ -3888,6 +3927,58 @@ describe("plugin marketplace API", () => {
     expect(versionedPlugin?.version).toBe("0.2.0")
     expect(versionedPlugin?.name).toBe("Version Lab New")
     expect(versionedPlugin?.mcpServers[0]?.runtime.transport).toBe("stdio")
+  })
+
+  test("prefers a newer local source package over an older managed install", async () => {
+    await useTempDatabase()
+
+    const writePackage = async (
+      root: string,
+      version: string,
+      displayName: string,
+    ) => {
+      const manifestRoot = join(
+        root,
+        "root-precedence-lab",
+        version,
+        ".anybox-plugin",
+      )
+      await mkdir(manifestRoot, { recursive: true })
+      await writeFile(join(manifestRoot, "plugin.json"), JSON.stringify({
+        name: "root-precedence-lab",
+        version,
+        description: `${displayName} fixture plugin.`,
+        author: "Anybox Tests",
+        interface: {
+          displayName,
+          shortDescription: `${displayName} fixture.`,
+          developerName: "Anybox Tests",
+          category: "Docs",
+        },
+      }, null, 2))
+    }
+
+    await writePackage(
+      pluginInstallRoot(),
+      "0.10.0",
+      "Managed Install Old",
+    )
+    await writePackage(
+      pluginLocalRoot(),
+      "0.11.0",
+      "Local Source New",
+    )
+    const app = createServerApp()
+
+    const catalogResponse = await app.request("/api/plugins/catalog")
+    const catalogBody = (await catalogResponse.json()) as PluginCatalogEnvelope
+    const plugin = catalogBody.data?.find(
+      (item) => item.id === "root-precedence-lab",
+    )
+
+    expect(catalogResponse.status).toBe(200)
+    expect(plugin?.version).toBe("0.11.0")
+    expect(plugin?.name).toBe("Local Source New")
   })
 
   test("stores app connector API keys outside MCP config and resolves headers at runtime", async () => {

@@ -1,6 +1,6 @@
 {
   "name": "anybox-chrome-extension",
-  "version": "0.11.0",
+  "version": "0.11.2",
   "private": true,
   "description": "Chrome extension bridge for the Anybox Chrome plugin.",
   "type": "module",

@@ -1949,7 +1949,16 @@ function listPackageManifestSources() {
     }
 
     for (const [pluginID, source] of byRootID) {
-      byID.set(pluginID, source)
+      const existing = byID.get(pluginID)
+      if (
+        !existing
+        || compareManifestVersions(
+          source.manifest.version,
+          existing.manifest.version,
+        ) >= 0
+      ) {
+        byID.set(pluginID, source)
+      }
     }
   }
 

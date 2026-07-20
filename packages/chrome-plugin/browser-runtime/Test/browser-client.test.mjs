@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { mkdtemp, readFile, rm } from "node:fs/promises"
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
@@ -160,6 +160,41 @@ test("installs a discovery-backed BrowserManager on the provided globals", async
     agent.browsers.getForUrl("not-an-absolute-url"),
     (error) => error.code === "INVALID_COMMAND_PARAMS",
   )
+})
+
+test("rebinds a persistent REPL when the loaded plugin runtime changes", async () => {
+  const globals = {}
+  const firstRuntime = await importRuntime("persistent-runtime-old")
+  await firstRuntime.setupBrowserRuntime({
+    globals,
+    transport: backendTransport(),
+  })
+  const firstBrowsers = globals.agent.browsers
+  globals.chrome = { stale: true }
+
+  const currentRuntime = await importRuntime("persistent-runtime-current")
+  assert.notEqual(
+    globals.setupBrowserRuntime,
+    currentRuntime.setupBrowserRuntime,
+  )
+
+  if (
+    globals.agent?.browsers == null
+    || globals.setupBrowserRuntime !== currentRuntime.setupBrowserRuntime
+  ) {
+    await currentRuntime.setupBrowserRuntime({
+      globals,
+      transport: backendTransport(),
+    })
+    globals.chrome = undefined
+  }
+
+  assert.equal(
+    globals.setupBrowserRuntime,
+    currentRuntime.setupBrowserRuntime,
+  )
+  assert.notEqual(globals.agent.browsers, firstBrowsers)
+  assert.equal(globals.chrome, undefined)
 })
 
 test("opens Chrome once and waits for the extension handshake", async () => {
@@ -705,6 +740,72 @@ test("starts and connects to the plugin-owned Browser Host", async () => {
         process.kill(hostPID, "SIGTERM")
       } catch {
         // The host may already have exited after a failed assertion.
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250))
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test("replaces an authenticated Browser Host from an older plugin version", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "anybox-browser-host-upgrade-"))
+  const bootstrapPath = path.join(root, "browser-host.runtime.json")
+  const hostEntrypoint = path.resolve(
+    import.meta.dirname,
+    "..",
+    "..",
+    "browser-host",
+    "dist",
+    "browser-host.mjs",
+  )
+  const previous = Object.fromEntries(
+    [
+      "ANYBOX_AGENT_DATA_DIR",
+      "ANYBOX_BROWSER_HOST",
+      "ANYBOX_BROWSER_HOST_BOOTSTRAP_PATH",
+      "ANYBOX_BROWSER_HOST_ENTRYPOINT",
+      "ANYBOX_TEST_HOME",
+    ].map((key) => [key, process.env[key]]),
+  )
+  const hostPIDs = new Set()
+  process.env.ANYBOX_AGENT_DATA_DIR = root
+  process.env.ANYBOX_BROWSER_HOST_BOOTSTRAP_PATH = bootstrapPath
+  process.env.ANYBOX_BROWSER_HOST_ENTRYPOINT = hostEntrypoint
+  process.env.ANYBOX_TEST_HOME = root
+  delete process.env.ANYBOX_BROWSER_HOST
+
+  try {
+    const initialRuntime = await importRuntime("browser-host-upgrade-seed")
+    const initialAgent = await initialRuntime.setupBrowserRuntime({ globals: {} })
+    await initialAgent.browsers.readiness()
+    const initialBootstrap = JSON.parse(await readFile(bootstrapPath, "utf8"))
+    hostPIDs.add(initialBootstrap.hostPID)
+
+    await writeFile(bootstrapPath, `${JSON.stringify({
+      ...initialBootstrap,
+      hostVersion: "0.10.0",
+    }, null, 2)}\n`)
+
+    const upgradedRuntime = await importRuntime("browser-host-upgrade-replace")
+    const upgradedAgent = await upgradedRuntime.setupBrowserRuntime({ globals: {} })
+    const readiness = await upgradedAgent.browsers.readiness()
+    const upgradedBootstrap = JSON.parse(await readFile(bootstrapPath, "utf8"))
+    hostPIDs.add(upgradedBootstrap.hostPID)
+
+    assert.equal(readiness.state, "needs-browser")
+    assert.notEqual(upgradedBootstrap.hostPID, initialBootstrap.hostPID)
+    assert.equal(upgradedBootstrap.hostVersion, "0.11.2")
+  } finally {
+    for (const hostPID of hostPIDs) {
+      if (!Number.isInteger(hostPID)) continue
+      try {
+        process.kill(hostPID, "SIGTERM")
+      } catch {
+        // The host may already have exited after the replacement or a failed assertion.
       }
     }
     await new Promise((resolve) => setTimeout(resolve, 250))

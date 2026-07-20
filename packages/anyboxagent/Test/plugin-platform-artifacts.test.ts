@@ -228,6 +228,162 @@ describe("declarative plugin platform artifacts", () => {
     await expect(access(receipt!.managedRoot)).rejects.toBeDefined()
   })
 
+  test("commits an upgrade while the replaced native host is still locked", async () => {
+    const input = await fixture()
+    const [first] = await installPlatformArtifacts({
+      pluginID: "chrome",
+      pluginVersion: "0.10.0",
+      packageRoot: input.packageRoot,
+      artifacts: [artifact()],
+      platform: "linux",
+      architecture: "x64",
+      homeDir: input.homeDir,
+      dataDir: input.dataDir,
+      stateDir: input.stateDir,
+      env: input.env,
+    })
+    await writeFile(input.executablePath, "native-host-v2")
+    const lockedError = Object.assign(new Error("locked"), { code: "EBUSY" })
+
+    const [second] = await installPlatformArtifacts({
+      pluginID: "chrome",
+      pluginVersion: "0.10.1",
+      packageRoot: input.packageRoot,
+      artifacts: [artifact()],
+      existingReceipts: [first!],
+      platform: "linux",
+      architecture: "x64",
+      homeDir: input.homeDir,
+      dataDir: input.dataDir,
+      stateDir: input.stateDir,
+      env: input.env,
+      removeReplacedCurrent: async () => {
+        throw lockedError
+      },
+    })
+
+    expect(second!.pluginVersion).toBe("0.10.1")
+    expect(await readFile(second!.executablePath, "utf8")).toBe("native-host-v2")
+    await expect(retryPendingPlatformArtifactCleanup({
+      dataDir: input.dataDir,
+    })).resolves.toEqual({
+      removed: ["chrome-native-host"],
+      pending: [],
+    })
+    expect(await readFile(second!.executablePath, "utf8")).toBe("native-host-v2")
+  })
+
+  test("moves Windows upgrades to a versioned path when legacy current is locked", async () => {
+    const input = await fixture()
+    const windowsArtifact = PluginPlatformArtifact.parse({
+      ...artifact(),
+      executables: [{
+        platform: "win32",
+        architecture: "x64",
+        path: "bin/extension-host",
+      }],
+    })
+    const run = async () => ({ stdout: "" })
+    const installInput = {
+      pluginID: "chrome",
+      packageRoot: input.packageRoot,
+      artifacts: [windowsArtifact],
+      platform: "win32" as const,
+      architecture: "x64" as const,
+      homeDir: input.homeDir,
+      dataDir: input.dataDir,
+      stateDir: input.stateDir,
+      env: {
+        APPDATA: path.join(input.root, "app-data"),
+      },
+      run,
+    }
+    const [first] = await installPlatformArtifacts({
+      ...installInput,
+      pluginVersion: "0.10.0",
+    })
+    const legacyCurrent = path.join(first!.managedRoot, "current")
+    await mkdir(legacyCurrent, { recursive: true })
+    await writeFile(
+      path.join(legacyCurrent, "extension-host.exe"),
+      "legacy-native-host",
+    )
+    await writeFile(input.executablePath, "native-host-v2")
+    const lockedError = Object.assign(new Error("locked"), { code: "EPERM" })
+
+    const [second] = await installPlatformArtifacts({
+      ...installInput,
+      pluginVersion: "0.10.1",
+      existingReceipts: [first!],
+      removeReplacedCurrent: async () => {
+        throw lockedError
+      },
+    })
+
+    expect(second!.executablePath).toContain(
+      `${path.sep}versions${path.sep}`,
+    )
+    expect(second!.executablePath).toContain(
+      `${path.sep}win32-x64${path.sep}`,
+    )
+    expect(second!.executablePath).not.toContain(
+      `${path.sep}current${path.sep}`,
+    )
+    expect(await readFile(second!.executablePath, "utf8")).toBe("native-host-v2")
+    await expect(retryPendingPlatformArtifactCleanup({
+      dataDir: input.dataDir,
+    })).resolves.toEqual({
+      removed: ["chrome-native-host"],
+      pending: [],
+    })
+    await expect(access(legacyCurrent)).rejects.toBeDefined()
+  })
+
+  test("reuses an identical versioned Windows host during an in-use reinstall", async () => {
+    const input = await fixture()
+    const windowsArtifact = PluginPlatformArtifact.parse({
+      ...artifact(),
+      executables: [{
+        platform: "win32",
+        architecture: "x64",
+        path: "bin/extension-host",
+      }],
+    })
+    const installInput = {
+      pluginID: "chrome",
+      pluginVersion: "0.11.2",
+      packageRoot: input.packageRoot,
+      artifacts: [windowsArtifact],
+      platform: "win32" as const,
+      architecture: "x64" as const,
+      homeDir: input.homeDir,
+      dataDir: input.dataDir,
+      stateDir: input.stateDir,
+      env: {
+        APPDATA: path.join(input.root, "app-data"),
+      },
+      run: async () => ({ stdout: "" }),
+    }
+    const [first] = await installPlatformArtifacts(installInput)
+    let copyAttempted = false
+
+    const [reinstalled] = await installPlatformArtifacts({
+      ...installInput,
+      copyVersionExecutable: async () => {
+        copyAttempted = true
+        throw Object.assign(new Error("active executable is locked"), {
+          code: "EBUSY",
+        })
+      },
+    })
+
+    expect(copyAttempted).toBe(false)
+    expect(reinstalled!.ownershipID).toBe(first!.ownershipID)
+    expect(reinstalled!.executablePath).toBe(first!.executablePath)
+    expect(await readFile(reinstalled!.executablePath, "utf8"))
+      .toBe("native-host-v1")
+  })
+
   test("rolls back an upgrade when platform registration fails", async () => {
     const input = await fixture()
     const windowsArtifact = PluginPlatformArtifact.parse({

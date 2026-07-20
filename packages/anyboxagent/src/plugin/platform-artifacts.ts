@@ -103,6 +103,11 @@ type InstallOptions = {
   env?: NodeJS.ProcessEnv
   now?: () => number
   run?: (file: string, args: string[]) => Promise<unknown>
+  removeReplacedCurrent?: (replacedRoot: string) => Promise<void>
+  copyVersionExecutable?: (
+    source: string,
+    destination: string,
+  ) => Promise<void>
 }
 
 type RemoveOptions = {
@@ -339,8 +344,50 @@ async function atomicCurrentExecutable(input: {
   source: string
   managedRoot: string
   executableName: string
+  platform: "win32" | "darwin" | "linux"
+  removeReplacedCurrent?: (replacedRoot: string) => Promise<void>
 }) {
   const current = path.join(input.managedRoot, "current")
+  if (input.platform === "win32") {
+    let settled = false
+    return {
+      executablePath: input.source,
+      async commit(
+        deferRemoval?: (replacedRoot: string) => Promise<void>,
+      ) {
+        if (settled) return
+        try {
+          await access(current)
+        } catch (error) {
+          if (
+            error
+            && typeof error === "object"
+            && "code" in error
+            && String(error.code) === "ENOENT"
+          ) {
+            settled = true
+            return
+          }
+          throw error
+        }
+        try {
+          if (input.removeReplacedCurrent) {
+            await input.removeReplacedCurrent(current)
+          } else {
+            await rm(current, { recursive: true, force: true })
+          }
+        } catch (error) {
+          if (!deferRemoval || !isRetryableRemovalError(error)) throw error
+          await deferRemoval(current)
+        }
+        settled = true
+      },
+      async rollback() {
+        settled = true
+      },
+    }
+  }
+
   const staging = path.join(
     input.managedRoot,
     `.current-${process.pid}-${randomUUID()}`,
@@ -371,10 +418,21 @@ async function atomicCurrentExecutable(input: {
   let settled = false
   return {
     executablePath: path.join(current, input.executableName),
-    async commit() {
+    async commit(
+      deferRemoval?: (replacedRoot: string) => Promise<void>,
+    ) {
       if (settled) return
       if (movedCurrent) {
-        await rm(backup, { recursive: true, force: true })
+        try {
+          if (input.removeReplacedCurrent) {
+            await input.removeReplacedCurrent(backup)
+          } else {
+            await rm(backup, { recursive: true, force: true })
+          }
+        } catch (error) {
+          if (!deferRemoval || !isRetryableRemovalError(error)) throw error
+          await deferRemoval(backup)
+        }
       }
       settled = true
     },
@@ -616,10 +674,11 @@ export async function installPlatformArtifacts(
     }
     const ownershipID = existing?.ownershipID ?? diskOwner?.ownershipID
       ?? randomUUID()
+    const sourceSha256 = await sha256(source)
     const versionDirectory = path.join(
       managedRoot,
       "versions",
-      safeSegment(rawOptions.pluginVersion),
+      `${safeSegment(rawOptions.pluginVersion)}-${sourceSha256.slice(0, 12)}`,
       `${supportedPlatform}-${supportedArchitecture}`,
     )
     await mkdir(versionDirectory, { recursive: true })
@@ -627,7 +686,15 @@ export async function installPlatformArtifacts(
       ? "extension-host.exe"
       : "extension-host"
     const versionExecutable = path.join(versionDirectory, executableName)
-    await copyFile(source, versionExecutable)
+    const installedSha256 = await sha256(versionExecutable).catch(
+      () => undefined,
+    )
+    if (installedSha256 !== sourceSha256) {
+      await (rawOptions.copyVersionExecutable ?? copyFile)(
+        source,
+        versionExecutable,
+      )
+    }
     if (supportedPlatform !== "win32") await chmod(versionExecutable, 0o755)
 
     const currentPointerPath = path.join(
@@ -669,6 +736,8 @@ export async function installPlatformArtifacts(
         source: versionExecutable,
         managedRoot,
         executableName,
+        platform: supportedPlatform,
+        removeReplacedCurrent: rawOptions.removeReplacedCurrent,
       })
       await atomicJson(currentPointerPath, {
         schemaVersion: 1,
@@ -734,7 +803,14 @@ export async function installPlatformArtifacts(
         installedAt,
       })
       await atomicJson(ownershipPath, receipt)
-      await currentSwap.commit()
+      await currentSwap.commit(async (replacedRoot) => {
+        const managedBase = path.join(dataDir, "platform-artifacts")
+        await writePendingRemoval(managedBase, {
+          ...receipt,
+          managedRoot: replacedRoot,
+        })
+        schedulePendingPlatformArtifactCleanup(dataDir)
+      })
       installed.push(receipt)
     } catch (cause) {
       const rollbackResults = await Promise.allSettled([

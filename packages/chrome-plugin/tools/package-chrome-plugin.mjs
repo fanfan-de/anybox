@@ -418,6 +418,7 @@ export async function validateChromePluginPackage(packageRoot) {
       || !/\bpathToFileURL\b/.test(skill)
       || !/connector_node_repl_default/.test(skill)
       || !/\bensureReady\b/.test(skill)
+      || !/globalThis\.setupBrowserRuntime\s*!==\s*setupBrowserRuntime/.test(skill)
       || !/\bsetupBrowserRuntime\b/.test(browserRuntime)
       || !/\bneeds-extension\b/.test(browserRuntime)
       || /\brequestHost\b/.test(browserRuntime)

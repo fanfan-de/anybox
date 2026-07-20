@@ -71,6 +71,7 @@ async function createFixture(projectRoot) {
       "Structured locators are available only when advertised. Raw page JavaScript and unrestricted CDP are disabled.",
       "Use mcp__connector_node_repl_default__js.",
       "Import scripts/browser-client.mjs with pathToFileURL.",
+      "Reload when globalThis.setupBrowserRuntime !== setupBrowserRuntime.",
       "Call agent.browsers.ensureReady({ launch: true }) before selecting Chrome.",
       "",
     ].join("\n"),
