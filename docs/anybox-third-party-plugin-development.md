@@ -73,7 +73,7 @@ my-anybox-plugins/
 }
 ```
 
-实际插件还应该声明 `interface`、`mcpServers`、`skills`、`connectors` 或 `connectorRequirements`。
+实际插件还应该声明 `interface`、`mcpServers`、`mcpRequirements`、`skills`、`connectors` 或 `connectorRequirements`。
 
 ### MCP Server
 
@@ -115,7 +115,26 @@ plugin.<pluginID>.connector.<connectorID>
 
 ### Platform Connector Requirement
 
-`connectorRequirements` 用于引用 Anybox 平台已有的共享 connector。例如 GitHub、browser、workspace files 等。它们独立于插件，适合多个插件复用。
+`connectorRequirements` 用于引用 Anybox 平台已有的共享账号 connector，例如 Gmail、GitHub 或数据库连接。它们独立于插件，适合多个插件复用。
+
+### Anybox Built-in MCP Requirement
+
+如果插件依赖 Anybox 已有、没有账号或授权生命周期的内置 MCP，使用 `mcpRequirements`：
+
+```json
+{
+  "mcpRequirements": [
+    {
+      "mcp": "node-repl",
+      "tools": ["js", "js_reset", "js_add_node_module_dir"],
+      "required": true
+    }
+  ]
+}
+```
+
+这类依赖不会生成 Connector，也不会出现在 Connector 管理页。`node-repl` 对应的全局 MCP
+server ID 是 `anybox.node-repl`。
 
 ## 建议的独立 Git 项目结构
 
@@ -772,7 +791,7 @@ API key connector 需要用户保存 API key。OAuth connector 需要用户完�
 
 - 插件目录是版本化结构。
 - `plugin.json` 只使用支持的字段。
-- 至少声明一种真实能力：`mcpServers`、`skills`、`connectors` 或 `connectorRequirements`。
+- 至少声明一种真实能力：`mcpServers`、`mcpRequirements`、`skills`、`connectors` 或 `connectorRequirements`。
 - 所有 `${PLACEHOLDER}` 都有来源：`PLUGIN_ROOT`、安装 config、API key 或 OAuth token。
 - 本地 MCP server 能响应 `initialize`、`tools/list` 和 `tools/call`。
 - `permissions`、`risk`、`readOnly`、`destructive` 写得准确。

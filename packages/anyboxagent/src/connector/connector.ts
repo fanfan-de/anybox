@@ -23,8 +23,6 @@ const BUILTIN_FEISHU_PACKAGE_PATH = ["plugins", "builtin", "feishu", "0.1.0"] as
 const BUILD_CONNECTOR_CONFIG_PATH = ["config", "connectors.json"] as const
 const BUILD_GMAIL_CONNECTOR_PATH = ["connectors", "gmail"] as const
 const BUILD_FEISHU_CONNECTOR_PATH = ["connectors", "feishu"] as const
-const BUILD_NODE_REPL_CONNECTOR_PATH = ["connectors", "node-repl"] as const
-const SOURCE_NODE_REPL_CONNECTOR_PATH = ["connectors", "node-repl"] as const
 const CONNECTOR_CUSTOM_OAUTH_CLIENT_KEY = "custom-oauth-client"
 
 export type ResolvedConnectorRuntime =
@@ -176,7 +174,7 @@ export type ConnectorMcpRemoteRuntime = z.infer<typeof ConnectorMcpRemoteRuntime
 export const ConnectorMcpRuntime = z.union([ConnectorMcpStdioRuntime, ConnectorMcpRemoteRuntime])
 export type ConnectorMcpRuntime = z.infer<typeof ConnectorMcpRuntime>
 
-export const ConnectorCategory = z.enum(["account_connector", "builtin_mcp"])
+export const ConnectorCategory = z.literal("account_connector")
 export type ConnectorCategory = z.infer<typeof ConnectorCategory>
 
 const ConnectorDefinitionFields = {
@@ -224,20 +222,11 @@ function legacyRuntimeAlias(runtime: ConnectorMcpRuntime | undefined): Connector
 
 function validateConnectorDefinition(
   definition: {
-    category: ConnectorCategory
     credential?: ConnectorCredential
     mcpRuntimes: ConnectorMcpRuntime[]
   },
   ctx: z.RefinementCtx,
 ) {
-  if (definition.category === "builtin_mcp" && definition.credential) {
-    ctx.addIssue({
-      code: "custom",
-      message: "Built-in MCP definitions cannot declare connector credentials.",
-      path: ["credential"],
-    })
-  }
-
   const seenRuntimeIDs = new Set<string>()
   definition.mcpRuntimes.forEach((runtime, index) => {
     if (seenRuntimeIDs.has(runtime.id)) {
@@ -517,23 +506,6 @@ function builtinFeishuConnectorRoot() {
   return existsSync(packagedRoot) ? packagedRoot : resolve(builtinFeishuPackageRoot(), "connectors", "feishu")
 }
 
-function builtinNodeReplConnectorRoot() {
-  const packagedRoot = resolve(bundledRuntimeRoot(), ...BUILD_NODE_REPL_CONNECTOR_PATH)
-  return existsSync(packagedRoot)
-    ? packagedRoot
-    : packageRootFromAnyboxAgentRoot(...SOURCE_NODE_REPL_CONNECTOR_PATH)
-}
-
-function builtinNodeReplCommand() {
-  return getProcessEnvValue("ANYBOX_NODE_BINARY")?.trim() || "node"
-}
-
-function builtinNodeReplEnvironment() {
-  return getProcessEnvValue("ANYBOX_NODE_RUN_AS_NODE") === "1"
-    ? { ELECTRON_RUN_AS_NODE: "1" }
-    : undefined
-}
-
 function builtinGmailOAuthClientID() {
   const buildConfig = readConnectorBuildConfig()
   return getProcessEnvValue(GMAIL_OAUTH_CLIENT_ID_ENV)?.trim() ||
@@ -550,9 +522,6 @@ function builtinGmailOAuthClientSecret() {
 }
 
 function builtinDefinitions(): ConnectorDefinition[] {
-  const nodeReplConnectorRoot = builtinNodeReplConnectorRoot()
-  const nodeReplServerPath = resolve(nodeReplConnectorRoot, "server.js")
-  const nodeReplRuntimeAvailable = existsSync(nodeReplServerPath)
   const gmailConnectorRoot = builtinGmailConnectorRoot()
   const gmailServerPath = resolve(gmailConnectorRoot, "server.js")
   const gmailClientID = builtinGmailOAuthClientID()
@@ -564,71 +533,6 @@ function builtinDefinitions(): ConnectorDefinition[] {
   const feishuRuntimeAvailable = existsSync(feishuServerPath)
 
   return [
-    ConnectorDefinition.parse({
-      id: "node-repl",
-      category: "builtin_mcp",
-      name: "Node REPL",
-      description: "Run JavaScript in a persistent, general-purpose Node.js environment.",
-      publisher: "Anybox",
-      icon: "JS",
-      risk: "high",
-      permissions: [
-        "Runs JavaScript requested by the agent in a persistent local process.",
-        "JavaScript can load local modules and access the local filesystem and network.",
-        "Imported modules run with ordinary Node.js capabilities; this runtime does not add domain-specific host services.",
-      ],
-      tools: [
-        {
-          name: "js",
-          title: "Node REPL JavaScript",
-          description: "Run JavaScript in a persistent general-purpose Node.js environment.",
-          readOnly: false,
-        },
-        {
-          name: "js_reset",
-          title: "Reset Node REPL",
-          description: "Reset the persistent Node.js environment.",
-          readOnly: false,
-        },
-        {
-          name: "js_add_node_module_dir",
-          title: "Add Node Module Directory",
-          description: "Add a node_modules directory to CommonJS module resolution.",
-          readOnly: false,
-        },
-      ],
-      mcpRuntimes: [
-        {
-          id: "default",
-          name: "Node REPL",
-          available: nodeReplRuntimeAvailable,
-          transport: "stdio",
-          command: builtinNodeReplCommand(),
-          args: [nodeReplServerPath],
-          env: builtinNodeReplEnvironment(),
-          serverDescription: "Persistent general-purpose Node.js environment managed by Anybox.",
-          timeoutMs: 120_000,
-          toolPolicies: {
-            js_reset: {
-              policy: "auto",
-            },
-            js_add_node_module_dir: {
-              policy: "ask",
-            },
-            js: {
-              policy: "ask",
-            },
-          },
-        },
-      ],
-      installReview: [
-        "This runtime belongs to Anybox rather than to a specific plugin.",
-        "Its working directory is the active project, not an installed plugin package.",
-        "Plugins can expose capabilities by having the agent import their own modules at runtime.",
-      ],
-      source: "platform",
-      available: nodeReplRuntimeAvailable,
-    }),
     ConnectorDefinition.parse({
       id: "gmail",
       category: "account_connector",
@@ -872,7 +776,7 @@ export function listDefinitions(): ConnectorDefinition[] {
 }
 
 export function listAccountDefinitions(): ConnectorDefinition[] {
-  return listDefinitions().filter((definition) => definition.category === "account_connector")
+  return listDefinitions()
 }
 
 export function getDefinition(definitionID: string) {
@@ -990,9 +894,7 @@ async function statusForDefinition(
   const activeFlow = ProviderAuth.getLatestProviderAuthFlow(connectorID)
   const isPendingFlow = activeFlow && ["pending", "waiting_user", "authorizing"].includes(activeFlow.status)
   const connected = !definition.credential
-    ? definition.category === "account_connector"
-      ? definition.available
-      : Boolean(definition.mcpRuntimes.some((runtime) => runtime.available) && definition.available)
+    ? definition.available
     : definition.credential.kind === "api_key"
       ? credential?.kind === "api_key"
       : credential?.kind === "oauth_session" && credential.expiresAt > now()
@@ -1333,21 +1235,14 @@ function runtimeBindingForConnector(
 }
 
 function ownerForConnectorRuntime(
-  definition: ConnectorDefinition,
   connectorId: string,
   runtimeID: string,
-  serverID: string,
 ): Config.McpServerOwner {
-  return definition.category === "account_connector"
-    ? {
-        kind: "connector",
-        connectorId,
-        runtimeID,
-      }
-    : {
-        kind: "anybox",
-        bindingID: serverID,
-      }
+  return {
+    kind: "connector",
+    connectorId,
+    runtimeID,
+  }
 }
 
 async function syncConnectorRuntimeBinding(
@@ -1378,10 +1273,8 @@ async function syncConnectorRuntimeBinding(
     serverID,
     synchronizedBinding,
     ownerForConnectorRuntime(
-      definition,
       runtimeBinding.connectorId,
       runtime.id,
-      serverID,
     ),
   )
   return serverID
@@ -1400,10 +1293,6 @@ async function syncConnectorDefinitionRuntimeBindings(
 
 function isConnectorRuntimeOwner(owner: Config.McpServerOwner | undefined) {
   return owner?.kind === "connector" && Boolean(parseConnectorID(owner.connectorId))
-}
-
-function isAnyboxConnectorRuntimeOwner(owner: Config.McpServerOwner | undefined) {
-  return owner?.kind === "anybox" && owner.bindingID.startsWith("connector.")
 }
 
 export async function syncConnectorRuntimeBindings() {
@@ -1432,7 +1321,7 @@ export async function syncConnectorRuntimeBindings() {
 
   for (const server of existingServers) {
     if (desiredServerIDs.has(server.id)) continue
-    if (!isConnectorRuntimeOwner(server.owner) && !isAnyboxConnectorRuntimeOwner(server.owner)) continue
+    if (!isConnectorRuntimeOwner(server.owner)) continue
     await Config.removeMcpServer(Config.GLOBAL_CONFIG_ID, server.id)
     await Config.removeSelectedMcpServerIDFromAllProjects(server.id)
   }
@@ -1461,10 +1350,8 @@ export async function diagnoseConnector(connectorID: string, runtimeID = "defaul
     id: serverID,
     ...runtimeBinding,
     owner: ownerForConnectorRuntime(
-      definition,
       runtimeBinding.connectorId,
       runtime.id,
-      serverID,
     ),
     enabled: runtimeBinding.enabled ?? true,
   })

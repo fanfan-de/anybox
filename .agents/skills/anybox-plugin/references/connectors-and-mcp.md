@@ -14,9 +14,10 @@
 
 按以下规则选择：
 
-- 不需要独立用户连接生命周期的内置或远程 MCP Server 使用 `mcpServers`。
+- 插件自己提供、且不需要独立用户连接生命周期的本地或远程 MCP Server 使用 `mcpServers`。
+- 插件依赖 Anybox 已有的共享内置 MCP（例如 `node-repl`）时使用 `mcpRequirements`。
 - 插件自有 API Key、OAuth Session，或需要随插件一起清理的连接状态使用 `connectors`。
-- 插件依赖 Gmail、Browser 等 Anybox 共享平台 Connector 时使用 `connectorRequirements`。
+- 插件依赖 Gmail、GitHub 等 Anybox 共享账号 Connector 时使用 `connectorRequirements`。
 - 只有导入旧插件时才使用 `apps`。
 
 ## MCP Server
@@ -283,6 +284,28 @@ tokenEndpointAuthMethod, registration, description
 ```
 
 支持的字段为 `connector`、`runtimeIDs`、`tools`、`permissions`、`required` 和 `reason`。确认 Connector ID、Runtime ID 和工具名称确实存在于实时平台 Connector Registry 中。
+
+## Anybox 内置 MCP 依赖
+
+共享内置 MCP 没有账号、授权或连接生命周期，不得伪装成 Connector。插件通过 `mcpRequirements`
+引用它，安装记录保存对应 MCP server ID，但不会取得该运行时的所有权：
+
+```json
+{
+  "mcpRequirements": [
+    {
+      "mcp": "node-repl",
+      "tools": ["js", "js_reset", "js_add_node_module_dir"],
+      "required": true,
+      "reason": "在 Anybox 通用 Node REPL 中加载插件客户端。"
+    }
+  ]
+}
+```
+
+`node-repl` 的规范 MCP server ID 是 `anybox.node-repl`，owner 是
+`{"kind":"anybox","bindingID":"node-repl"}`，transport 是 `stdio`。它不应出现在 Connector
+catalog、Connector 状态或 `connectorRequirements` 中。
 
 ## 生成 ID 与密钥处理
 

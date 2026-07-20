@@ -10367,30 +10367,6 @@ describe("App", () => {
   })
 
   it("opens platform connectors from the activity rail and runs diagnostics", async () => {
-    const browserDefinition = {
-      id: "browser",
-      name: "Browser",
-      description: "Control Chrome through the Anybox Chrome extension.",
-      category: "builtin_mcp",
-      publisher: "Anybox",
-      risk: "high",
-      permissions: ["Controls Chrome through the Chrome extension."],
-      tools: [],
-      runtime: {
-        transport: "stdio",
-        command: "node",
-      },
-      mcpRuntimes: [{
-        id: "default",
-        name: "Browser",
-        available: true,
-        transport: "stdio",
-        command: "node",
-      }],
-      installReview: [],
-      source: "platform",
-      available: true,
-    }
     const gmailDefinition = {
       id: "gmail",
       name: "Gmail",
@@ -10434,30 +10410,6 @@ describe("App", () => {
       source: "platform",
       available: true,
     }
-    const nodeReplDefinition = {
-      id: "node-repl",
-      name: "Node REPL",
-      description: "Run JavaScript in the Anybox Node runtime.",
-      category: "builtin_mcp",
-      publisher: "Anybox",
-      risk: "high",
-      permissions: ["Runs JavaScript in the local Node runtime."],
-      tools: [],
-      runtime: {
-        transport: "stdio",
-        command: "node",
-      },
-      mcpRuntimes: [{
-        id: "default",
-        name: "Node REPL",
-        available: true,
-        transport: "stdio",
-        command: "node",
-      }],
-      installReview: [],
-      source: "platform",
-      available: true,
-    }
     const gmailStatus = {
       connectorID: "connector:gmail:default",
       definitionID: "gmail",
@@ -10475,52 +10427,19 @@ describe("App", () => {
       }],
       generatedMcpServerID: "connector.gmail.default",
     }
-    const browserStatus = {
-      connectorID: "connector:browser:default",
-      definitionID: "browser",
-      name: "Browser",
-      connected: true,
-      available: true,
-      authStatus: "connected",
-      mcpBindings: [{
-        runtimeID: "default",
-        serverID: "connector.browser.default",
-        name: "Browser",
-      }],
-      generatedMcpServerID: "connector.browser.default",
-    }
-    const nodeReplStatus = {
-      connectorID: "connector:node-repl:default",
-      definitionID: "node-repl",
-      name: "Node REPL",
-      connected: true,
-      available: true,
-      authStatus: "connected",
-      mcpBindings: [{
-        runtimeID: "default",
-        serverID: "connector.node-repl.default",
-        name: "Node REPL",
-      }],
-      generatedMcpServerID: "connector.node-repl.default",
-    }
-    window.desktop!.getConnectorCatalog = vi.fn().mockResolvedValue([
-      browserDefinition,
-      gmailDefinition,
-      nodeReplDefinition,
-    ])
-    window.desktop!.getConnectors = vi.fn().mockResolvedValue([browserStatus, gmailStatus, nodeReplStatus])
+    window.desktop!.getConnectorCatalog = vi.fn().mockResolvedValue([gmailDefinition])
+    window.desktop!.getConnectors = vi.fn().mockResolvedValue([gmailStatus])
     window.desktop!.getConnector = vi.fn().mockResolvedValue(gmailStatus)
     window.desktop!.getGlobalMcpServers = vi.fn().mockResolvedValue([
       {
-        id: "connector.browser.default",
+        id: "anybox.browser",
         name: "Browser",
         owner: {
           kind: "anybox",
           bindingID: "browser",
         },
-        transport: "connector",
-        connectorId: "connector:browser:default",
-        connectorRuntimeId: "default",
+        transport: "stdio",
+        command: "node",
         enabled: true,
       },
       {
@@ -10537,15 +10456,14 @@ describe("App", () => {
         enabled: true,
       },
       {
-        id: "connector.node-repl.default",
+        id: "anybox.node-repl",
         name: "Node REPL",
         owner: {
           kind: "anybox",
           bindingID: "node-repl",
         },
-        transport: "connector",
-        connectorId: "connector:node-repl:default",
-        connectorRuntimeId: "default",
+        transport: "stdio",
+        command: "node",
         enabled: true,
       },
     ])
@@ -12623,6 +12541,7 @@ describe("App", () => {
         mcpServerIDs: ["plugin.build-web-apps"],
         skillIDs: ["plugin:build-web-apps:frontend-app-builder"],
         connectorIDs: [],
+        mcpRequirementIDs: [],
         connectorRequirementIDs: [],
         config: {},
         installedAt: 1,
@@ -12642,6 +12561,7 @@ describe("App", () => {
         tools: [],
         configFields: [],
         mcpServers: [],
+        mcpRequirements: [],
         skills: [],
         connectorRequirements: [],
         apps: [],

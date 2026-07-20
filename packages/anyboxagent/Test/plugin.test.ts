@@ -10,6 +10,7 @@ import * as ProviderAuth from "#auth/provider-auth.ts"
 import * as Config from "#config/config.ts"
 import * as Connector from "#connector/connector.ts"
 import * as Sqlite from "#database/Sqlite.ts"
+import * as BuiltinMcp from "#mcp/builtin.ts"
 import * as Plugin from "#plugin/plugin.ts"
 import { createServerApp } from "#server/server.ts"
 import * as Skill from "#skill/skill.ts"
@@ -162,6 +163,13 @@ type PluginCatalogEnvelope = JsonEnvelope<
         headers?: Record<string, string>
       }
     }>
+    mcpRequirements: Array<{
+      mcp: string
+      tools?: string[]
+      permissions?: string[]
+      required?: boolean
+      reason?: string
+    }>
     connectorRequirements: Array<{
       connector: string
       runtimeIDs?: string[]
@@ -170,6 +178,8 @@ type PluginCatalogEnvelope = JsonEnvelope<
       required?: boolean
       reason?: string
     }>
+    icon?: string
+    brandColor?: string
   }>
 >
 type PluginCatalogItemEnvelope = JsonEnvelope<NonNullable<PluginCatalogEnvelope["data"]>[number]>
@@ -182,6 +192,7 @@ type InstalledPluginEnvelope = JsonEnvelope<{
   mcpServerEnabled: Record<string, boolean>
   skillIDs: string[]
   connectorIDs: string[]
+  mcpRequirementIDs: string[]
   connectorRequirementIDs: string[]
   config: Record<string, string>
   packageRoot?: string
@@ -192,7 +203,7 @@ type ConnectorCatalogEnvelope = JsonEnvelope<
   Array<{
     id: string
     name: string
-    category: "account_connector" | "builtin_mcp"
+    category: "account_connector"
     credential?: {
       kind: "api_key" | "oauth"
       label: string
@@ -1320,7 +1331,11 @@ describe("plugin marketplace API", () => {
     expect(body.data?.some((plugin) => plugin.id === "manifest-lab")).toBe(true)
     expect(body.data?.every((plugin) => plugin.risk !== "critical")).toBe(true)
     expect(body.data?.every((plugin) =>
-      plugin.mcpServers.length + plugin.skills.length + plugin.connectorRequirements.length + plugin.apps.length > 0
+      plugin.mcpServers.length
+        + plugin.mcpRequirements.length
+        + plugin.skills.length
+        + plugin.connectorRequirements.length
+        + plugin.apps.length > 0
     )).toBe(true)
 
     const manifestPlugin = body.data?.find((plugin) => plugin.id === "manifest-lab")
@@ -3594,57 +3609,48 @@ describe("plugin marketplace API", () => {
       join(pluginInstallRoot(), "chrome", currentChromeManifest.version),
     )
     expect(migrated?.mcpServerIDs).toEqual([])
-    expect(migrated?.connectorRequirementIDs).toEqual([
-      "connector:node-repl:default",
-    ])
+    expect(migrated?.mcpRequirementIDs).toEqual(["anybox.node-repl"])
+    expect(migrated?.connectorRequirementIDs).toEqual([])
     expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.chrome.chrome")).toBeUndefined()
     expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.chrome.node-repl")).toBeUndefined()
-    await Connector.syncConnectorRuntimeBindings()
-    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "connector.node-repl.default")).toMatchObject({
-      transport: "connector",
+    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "anybox.node-repl")).toMatchObject({
+      transport: "stdio",
       owner: {
         kind: "anybox",
-        bindingID: "connector.node-repl.default",
+        bindingID: "node-repl",
       },
     })
   })
 
-  test("loads Chrome through the Anybox-owned Node REPL connector", async () => {
+  test("loads Chrome through the Anybox built-in Node REPL MCP", async () => {
     await useTempDatabase()
-    const legacyBrowserServerID = "connector.browser.default"
     const legacyNodeReplServerID = "connector.node-repl.default"
-    const legacyServerIDs = [legacyBrowserServerID, legacyNodeReplServerID]
-    for (const serverID of legacyServerIDs) {
-      await Config.setManagedMcpServer(
-        Config.GLOBAL_CONFIG_ID,
-        serverID,
-        {
-          name: serverID === "connector.browser.default" ? "Browser" : "Node REPL",
-          transport: "connector",
-          connectorId: serverID === "connector.browser.default"
-            ? "connector:browser:default"
-            : "connector:node-repl:default",
-          enabled: true,
-        },
-        {
-          kind: "anybox",
-          bindingID: serverID,
-        },
-      )
-    }
-    await Config.setSelectedMcpServerIDs("legacy-browser-project", legacyServerIDs)
-    await Connector.syncConnectorRuntimeBindings()
-    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, legacyBrowserServerID)).toBeUndefined()
-    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, legacyNodeReplServerID)).toMatchObject({
-      transport: "connector",
-      connectorId: "connector:node-repl:default",
-      owner: {
+    await Config.setManagedMcpServer(
+      Config.GLOBAL_CONFIG_ID,
+      legacyNodeReplServerID,
+      {
+        name: "Node REPL",
+        transport: "connector",
+        connectorId: "connector:node-repl:default",
+        enabled: true,
+      },
+      {
         kind: "anybox",
         bindingID: legacyNodeReplServerID,
       },
+    )
+    await Config.setSelectedMcpServerIDs("legacy-browser-project", [legacyNodeReplServerID])
+    await BuiltinMcp.syncBuiltinMcpRuntimeBindings()
+    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, legacyNodeReplServerID)).toBeUndefined()
+    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "anybox.node-repl")).toMatchObject({
+      transport: "stdio",
+      owner: {
+        kind: "anybox",
+        bindingID: "node-repl",
+      },
     })
     expect(await Config.getSelectedMcpServerIDs("legacy-browser-project")).toEqual([
-      legacyNodeReplServerID,
+      "anybox.node-repl",
     ])
 
     await writeChromePluginPackage()
@@ -3657,10 +3663,9 @@ describe("plugin marketplace API", () => {
     expect(catalogResponse.status).toBe(200)
     expect(plugin?.connectors).toEqual([])
     expect(plugin?.apps).toEqual([])
-    expect(plugin?.connectorRequirements).toEqual([
+    expect(plugin?.mcpRequirements).toEqual([
       {
-        connector: "node-repl",
-        runtimeIDs: ["default"],
+        mcp: "node-repl",
         tools: ["js", "js_reset", "js_add_node_module_dir"],
         permissions: [
           "Reads and controls Chrome tabs through the Anybox Chrome extension, including navigation, page inspection, screenshots, clicks, scrolling, typing, and form filling.",
@@ -3677,6 +3682,7 @@ describe("plugin marketplace API", () => {
     expect(plugin?.iconUrl).toMatch(/^data:image\/svg\+xml;base64,/)
     expect(plugin?.brandColor).toBe("#4285F4")
     expect(plugin?.mcpServers).toEqual([])
+    expect(plugin?.connectorRequirements).toEqual([])
 
     const connectorCatalogResponse = await app.request("/api/connectors/catalog")
     const connectorCatalogBody = (await connectorCatalogResponse.json()) as ConnectorCatalogEnvelope
@@ -3685,9 +3691,11 @@ describe("plugin marketplace API", () => {
     expect(connectorCatalogBody.data?.some((item) => item.id === "browser")).toBe(false)
     expect(connectorCatalogBody.data?.some((item) => item.id === "node-repl")).toBe(false)
     expect(definitions.some((item) => item.id === "browser")).toBe(false)
-    expect(definitions.some((item) =>
-      item.id === "node-repl" && item.category === "builtin_mcp"
-    )).toBe(true)
+    expect(definitions.some((item) => item.id === "node-repl")).toBe(false)
+    expect(BuiltinMcp.getDefinition("node-repl")).toMatchObject({
+      id: "node-repl",
+      serverID: "anybox.node-repl",
+    })
 
     const installResponse = await app.request("/api/plugins/installed/chrome", {
       method: "PUT",
@@ -3703,30 +3711,27 @@ describe("plugin marketplace API", () => {
     expect(installResponse.status).toBe(200)
     expect(installBody.data?.mcpServerIDs).toEqual([])
     expect(installBody.data?.connectorIDs).toEqual([])
-    expect(installBody.data?.connectorRequirementIDs).toEqual([
-      "connector:node-repl:default",
-    ])
+    expect(installBody.data?.mcpRequirementIDs).toEqual(["anybox.node-repl"])
+    expect(installBody.data?.connectorRequirementIDs).toEqual([])
 
     expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.chrome.chrome")).toBeUndefined()
     expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.chrome.node-repl")).toBeUndefined()
     const nodeReplServer = await Config.getMcpServer(
       Config.GLOBAL_CONFIG_ID,
-      "connector.node-repl.default",
+      "anybox.node-repl",
     )
-    expect(nodeReplServer?.transport).toBe("connector")
-    expect(nodeReplServer?.transport === "connector" ? nodeReplServer.connectorId : undefined)
-      .toBe("connector:node-repl:default")
+    expect(nodeReplServer?.transport).toBe("stdio")
     expect(nodeReplServer?.owner).toEqual({
       kind: "anybox",
-      bindingID: "connector.node-repl.default",
+      bindingID: "node-repl",
     })
 
     await Config.setSelectedPluginIDs("chrome-project", ["chrome"])
     expect(
       (await Config.resolveProjectMcpServers("chrome-project")).map((entry) => entry.id),
-    ).toEqual(expect.arrayContaining(["connector.node-repl.default"]))
+    ).toEqual(expect.arrayContaining(["anybox.node-repl"]))
 
-    const nodeReplDiagnosticResponse = await app.request("/api/mcp/servers/connector.node-repl.default/diagnostic")
+    const nodeReplDiagnosticResponse = await app.request("/api/mcp/servers/anybox.node-repl/diagnostic")
     const nodeReplDiagnosticBody = (await nodeReplDiagnosticResponse.json()) as DiagnosticEnvelope
     expect(nodeReplDiagnosticResponse.status).toBe(200)
     expect(nodeReplDiagnosticBody.data?.ok).toBe(true)
@@ -3738,7 +3743,7 @@ describe("plugin marketplace API", () => {
     expect(deleteResponse.status).toBe(200)
     expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.chrome.chrome")).toBeUndefined()
     expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "plugin.chrome.node-repl")).toBeUndefined()
-    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "connector.node-repl.default"))
+    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "anybox.node-repl"))
       .toBeDefined()
   })
 

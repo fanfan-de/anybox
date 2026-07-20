@@ -118,7 +118,7 @@ const requiredFiles = [
   path.join(runtimeDir, "cinema-web", "index.html"),
   path.join(runtimeDir, "connectors", "gmail", "server.js"),
   path.join(runtimeDir, "connectors", "feishu", "server.js"),
-  path.join(runtimeDir, "connectors", "node-repl", "server.js"),
+  path.join(runtimeDir, "mcp", "node-repl", "server.js"),
   path.join(runtimeDir, bunExecutableName),
   path.join(runtimeDir, "node_modules", "node-pty", "package.json"),
   path.join(dependenciesDir, "manifest.json"),

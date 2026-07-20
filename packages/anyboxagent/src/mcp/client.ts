@@ -13,6 +13,7 @@ import type {
 } from "@modelcontextprotocol/sdk/types.js"
 import type { McpServerSummary } from "#config/config.ts"
 import type { ResolvedConnectorRuntime } from "#connector/connector.ts"
+import * as BuiltinMcp from "#mcp/builtin.ts"
 import {
   getBrowserAuthorizationEnvironment,
   signBrowserAuthorizationReceipt,
@@ -20,8 +21,6 @@ import {
 import * as Log from "#util/log.ts"
 
 const log = Log.create({ service: "mcp.client" })
-const NODE_REPL_SERVER_ID = "connector.node-repl.default"
-const NODE_REPL_CONNECTOR_ID = "connector:node-repl:default"
 
 export interface McpToolDefinition {
   name: string
@@ -84,13 +83,7 @@ function mergeProcessEnv(overrides?: Record<string, string>) {
 }
 
 function isAnyboxNodeReplServer(server: McpServerSummary) {
-  return (
-    server.id === NODE_REPL_SERVER_ID
-    && server.owner?.kind === "anybox"
-    && server.owner.bindingID === NODE_REPL_SERVER_ID
-    && server.transport === "connector"
-    && server.connectorId === NODE_REPL_CONNECTOR_ID
-  )
+  return BuiltinMcp.isNodeReplServer(server)
 }
 
 function normalizedRequestContext(
@@ -587,9 +580,12 @@ export class McpClient {
       command: this.options.server.command,
       args: this.options.server.args ?? [],
       cwd: this.options.cwd,
-      env: {
-        ...mergeProcessEnv(this.options.server.env),
-      },
+      env: mergeProcessEnv({
+        ...(this.options.server.env ?? {}),
+        ...(isAnyboxNodeReplServer(this.options.server)
+          ? getBrowserAuthorizationEnvironment()
+          : {}),
+      }),
       stderr: "pipe",
     })
     this.captureStderr(transport.stderr)

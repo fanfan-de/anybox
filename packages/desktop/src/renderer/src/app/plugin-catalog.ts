@@ -39,6 +39,7 @@ export function buildInstalledPluginCatalogFallback(installed: InstalledPlugin):
     tools: [],
     configFields: [],
     mcpServers: [],
+    mcpRequirements: [],
     skills: [],
     connectorRequirements: [],
     connectors: [],

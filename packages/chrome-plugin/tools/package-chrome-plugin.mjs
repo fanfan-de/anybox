@@ -457,20 +457,17 @@ export async function validateChromePluginPackage(packageRoot) {
     )
   }
   if (
-    !Array.isArray(manifest.connectorRequirements)
-    || manifest.connectorRequirements.length !== 1
+    !Array.isArray(manifest.mcpRequirements)
+    || manifest.mcpRequirements.length !== 1
   ) {
     throw new Error(
-      "Chrome plugin must declare exactly one Anybox Node REPL connector requirement.",
+      "Chrome plugin must declare exactly one Anybox built-in Node REPL MCP requirement.",
     )
   }
-  const nodeReplRequirement = manifest.connectorRequirements[0]
+  const nodeReplRequirement = manifest.mcpRequirements[0]
   if (
-    nodeReplRequirement?.connector !== "node-repl"
+    nodeReplRequirement?.mcp !== "node-repl"
     || nodeReplRequirement?.required !== true
-    || !Array.isArray(nodeReplRequirement?.runtimeIDs)
-    || nodeReplRequirement.runtimeIDs.length !== 1
-    || nodeReplRequirement.runtimeIDs[0] !== "default"
     || !Array.isArray(nodeReplRequirement?.tools)
     || nodeReplRequirement.tools.length !== 3
     || !["js", "js_reset", "js_add_node_module_dir"].every(
@@ -478,7 +475,7 @@ export async function validateChromePluginPackage(packageRoot) {
     )
   ) {
     throw new Error(
-      "Chrome plugin must depend on the default Anybox Node REPL runtime and its three tools.",
+      "Chrome plugin must depend on the Anybox built-in Node REPL MCP and its three tools.",
     )
   }
   {
@@ -522,7 +519,7 @@ export async function validateChromePluginPackage(packageRoot) {
       || !/Raw page JavaScript and unrestricted CDP are disabled/i.test(skill)
       || !/\bbrowser-client\.mjs\b/.test(skill)
       || !/\bpathToFileURL\b/.test(skill)
-      || !/connector_node_repl_default/.test(skill)
+      || !/anybox_node_repl/.test(skill)
       || !/\bensureReady\b/.test(skill)
       || !/globalThis\.setupBrowserRuntime\s*!==\s*setupBrowserRuntime/.test(skill)
       || !/\bsetupBrowserRuntime\b/.test(browserRuntime)

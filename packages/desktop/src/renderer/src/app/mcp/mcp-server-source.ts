@@ -4,7 +4,6 @@ import type {
   McpServerSummary,
   PluginCatalogItem,
 } from "../types"
-import { normalizeConnectorDefinition } from "../connectors/connector-presentation"
 
 export interface McpServerPluginSource {
   pluginID: string
@@ -131,12 +130,15 @@ export function getMcpServerPresentationSource(
         "anybox",
         "built-in",
         server.owner.bindingID,
+        server.name ?? "",
         connectorDefinition?.id ?? "",
         connectorDefinition?.name ?? "",
       ].join(" "),
       title: connectorDefinition
         ? `Built into Anybox: ${connectorDefinition.name}`
-        : "Built into Anybox",
+        : server.name
+          ? `Built into Anybox: ${server.name}`
+          : "Built into Anybox",
     }
   }
 
@@ -194,22 +196,6 @@ export function getMcpServerPresentationSource(
 
   const connectorDefinition = getPlatformConnectorDefinition(server, connectorCatalog)
   if (connectorDefinition) {
-    const normalizedConnectorDefinition = normalizeConnectorDefinition(connectorDefinition)
-    if (normalizedConnectorDefinition.category === "builtin_mcp") {
-      return {
-        ariaLabel: "built into Anybox",
-        badge: "Anybox",
-        kind: "anybox",
-        searchText: [
-          "anybox",
-          "built-in",
-          connectorDefinition.id,
-          connectorDefinition.name,
-        ].join(" "),
-        title: `Built into Anybox: ${connectorDefinition.name}`,
-      }
-    }
-
     return {
       ariaLabel: `from connector ${connectorDefinition.name}`,
       badge: "Connector",

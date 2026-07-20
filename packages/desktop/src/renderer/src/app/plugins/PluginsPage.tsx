@@ -156,24 +156,16 @@ function generatedAppServerID(plugin: PluginCatalogItem, appID: string) {
   return `plugin.${plugin.id}.connector.${appID}`
 }
 
-function matchesAnyboxMcpConnectorRequirement(
+function matchesAnyboxMcpRequirement(
   server: McpServerSummary,
-  connectorDefinitionID: string,
+  mcpDefinitionID: string,
 ) {
-  if (server.owner?.kind !== "anybox") return false
-
-  const connectorID =
-    server.transport === "connector" || server.transport === "remote"
-      ? server.connectorId
-      : undefined
-  if (connectorID?.startsWith("connector:")) {
-    const definitionID = connectorID.slice("connector:".length).split(":")[0]?.trim()
-    if (definitionID === connectorDefinitionID) return true
-  }
-
-  return server.owner.bindingID === connectorDefinitionID
-    || server.owner.bindingID.startsWith(`connector.${connectorDefinitionID}.`)
-    || server.id.startsWith(`connector.${connectorDefinitionID}.`)
+  return (
+    server.owner?.kind === "anybox"
+    && server.owner.bindingID === mcpDefinitionID
+    && server.id === `anybox.${mcpDefinitionID}`
+    && server.transport === "stdio"
+  )
 }
 
 function toolSummary(tools?: Array<{ name: string; title?: string }>) {
@@ -390,7 +382,13 @@ function pluginBrandStyle(plugin: PluginCatalogItem): PluginVisualStyle | undefi
 }
 
 function pluginCapabilityCount(plugin: PluginCatalogItem) {
-  return plugin.mcpServers.length + plugin.skills.length + plugin.connectorRequirements.length + plugin.apps.length
+  return (
+    plugin.mcpServers.length
+    + plugin.mcpRequirements.length
+    + plugin.skills.length
+    + plugin.connectorRequirements.length
+    + plugin.apps.length
+  )
 }
 
 function pluginCategoryLabel(category: PluginCategory | "All", t: Translate) {
@@ -473,6 +471,7 @@ function pluginSearchText(plugin: PluginCatalogItem, locale: AppLocale) {
     (plugin.tags ?? []).join(" "),
     plugin.tools.map((tool) => tool.name).join(" "),
     plugin.skills.map((skill) => skill.name).join(" "),
+    plugin.mcpRequirements.map((requirement) => requirement.mcp).join(" "),
     plugin.connectorRequirements.map((requirement) => requirement.connector).join(" "),
     plugin.apps.map((app) => app.name).join(" "),
   ].join(" ")
@@ -484,7 +483,7 @@ function pluginDetailDescription(plugin: PluginCatalogItem, locale: AppLocale, t
 
   const description = pluginDisplayDescription(plugin, locale)
 
-  const capabilityCount = plugin.mcpServers.length + plugin.skills.length + plugin.connectorRequirements.length + plugin.apps.length
+  const capabilityCount = pluginCapabilityCount(plugin)
   const capabilityLabel = capabilityCount === 1 ? t("plugins.detail.capability") : t("plugins.detail.capabilities")
   const category = locale === "en-US"
     ? pluginCategoryLabel(plugin.category, t).toLowerCase()
@@ -501,7 +500,7 @@ function pluginDetailDescription(plugin: PluginCatalogItem, locale: AppLocale, t
 function pluginFunctionLabel(plugin: PluginCatalogItem) {
   const toolModes = new Set<string>(plugin.tools.map((tool) => (tool.readOnly ? "Read" : "Write")))
   if (plugin.connectorRequirements.length + plugin.apps.length > 0) toolModes.add("Interactive")
-  if (plugin.mcpServers.length > 0) toolModes.add("MCP")
+  if (plugin.mcpServers.length + plugin.mcpRequirements.length > 0) toolModes.add("MCP")
   if (toolModes.size === 0) toolModes.add(plugin.category)
 
   return Array.from(toolModes).join(", ")
@@ -2023,25 +2022,109 @@ export function PluginsPage({
                           </div>
                         )
                       })}
+                      {activePlugin.mcpRequirements.map((requirement) => {
+                        const itemID = `${activePlugin.id}:mcp-requirement:${requirement.mcp}`
+                        const isExpanded = expandedIncludedItemID === itemID
+                        const mcpServerID = `anybox.${requirement.mcp}`
+                        const mcpServer = mcpServers.find((server) =>
+                          matchesAnyboxMcpRequirement(server, requirement.mcp),
+                        )
+                        const statusLabel = !mcpServer
+                          ? "Unavailable"
+                          : mcpServer.enabled
+                            ? t("app.enabled")
+                            : t("app.disabled")
+                        const statusClassName = !mcpServer
+                          ? "is-error"
+                          : mcpServer.enabled
+                            ? "is-enabled"
+                            : "is-unavailable"
+                        const requestedTools = requirement.tools?.join(", ") || "Declared by Anybox MCP"
+                        const requestedPermissions = requirement.permissions?.join(", ") || "Declared by Anybox MCP"
+
+                        return (
+                          <div key={`mcp-requirement:${requirement.mcp}`} className="plugins-included-item">
+                            <button
+                              className={isExpanded ? "plugins-included-row is-expanded" : "plugins-included-row"}
+                              type="button"
+                              aria-expanded={isExpanded}
+                              aria-controls={`${itemID}:detail`}
+                              aria-label={`Show details for ${requirement.mcp}`}
+                              onClick={() => toggleIncludedItem(itemID)}
+                            >
+                              <span className="plugins-included-icon"><McpIcon /></span>
+                              <span className="plugins-included-copy">
+                                <strong>{mcpServer?.name ?? requirement.mcp}</strong>
+                                <span>{requirement.reason ?? "Anybox built-in MCP requirement"}</span>
+                              </span>
+                              <span
+                                className={joinClassNames("plugins-included-status-dot", statusClassName)}
+                                role="img"
+                                aria-label={`Status: ${statusLabel}`}
+                                title={statusLabel}
+                              />
+                              <span className="plugins-included-chevron" aria-hidden="true"><ChevronDownIcon /></span>
+                            </button>
+                            {isExpanded ? (
+                              <div className="plugins-included-detail" id={`${itemID}:detail`}>
+                                <dl className="plugins-included-detail-grid">
+                                  <div>
+                                    <dt>Type</dt>
+                                    <dd>Anybox built-in MCP</dd>
+                                  </div>
+                                  <div>
+                                    <dt>{t("mcp.title")}</dt>
+                                    <dd>{requirement.mcp}</dd>
+                                  </div>
+                                  <div>
+                                    <dt>Status</dt>
+                                    <dd>{statusLabel}</dd>
+                                  </div>
+                                  <div>
+                                    <dt>MCP server ID</dt>
+                                    <dd>{mcpServer?.id ?? mcpServerID}</dd>
+                                  </div>
+                                  <div>
+                                    <dt>Required</dt>
+                                    <dd>{requirement.required === false ? "Optional" : "Required"}</dd>
+                                  </div>
+                                  <div>
+                                    <dt>Tools</dt>
+                                    <dd>{requestedTools}</dd>
+                                  </div>
+                                  <div>
+                                    <dt>Permissions</dt>
+                                    <dd>{requestedPermissions}</dd>
+                                  </div>
+                                  {requirement.reason ? (
+                                    <div className="is-wide">
+                                      <dt>Reason</dt>
+                                      <dd>{requirement.reason}</dd>
+                                    </div>
+                                  ) : null}
+                                </dl>
+                                {mcpServer && onManageMcpServer ? (
+                                  <div className="plugins-connector-actions">
+                                    <button
+                                      className="plugins-detail-uninstall-button"
+                                      type="button"
+                                      onClick={() => onManageMcpServer(mcpServer.id)}
+                                    >
+                                      {t("plugins.mcp.manage")}
+                                    </button>
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </div>
+                        )
+                      })}
                       {activePlugin.connectorRequirements.map((requirement) => {
                         const itemID = `${activePlugin.id}:connector-requirement:${requirement.connector}`
                         const isExpanded = expandedIncludedItemID === itemID
                         const status = platformConnectorStatusByDefinitionID.get(requirement.connector)
                         const statusLabel = connectorStatusLabel(status)
                         const connectorID = status?.connectorID ?? `connector:${requirement.connector}:default`
-                        const builtinMcpServer = mcpServers.find((server) =>
-                          matchesAnyboxMcpConnectorRequirement(server, requirement.connector),
-                        )
-                        const isBuiltinMcp = Boolean(builtinMcpServer)
-                        const mcpServerID =
-                          builtinMcpServer?.id
-                          ?? status?.mcpBindings?.find((binding) => binding.runtimeID === "default")?.serverID
-                          ?? status?.generatedMcpServerID
-                          ?? status?.mcpBindings?.[0]?.serverID
-                          ?? `connector.${requirement.connector}.default`
-                        const canManageRequirement = isBuiltinMcp
-                          ? Boolean(onManageMcpServer)
-                          : Boolean(onManageConnector)
                         const requestedTools = requirement.tools?.join(", ") || "Declared by connector"
                         const requestedPermissions = requirement.permissions?.join(", ") || "Declared by connector"
 
@@ -2118,20 +2201,14 @@ export function PluginsPage({
                                     </div>
                                   ) : null}
                                 </dl>
-                                {canManageRequirement ? (
+                                {onManageConnector ? (
                                   <div className="plugins-connector-actions">
                                     <button
                                       className="plugins-detail-uninstall-button"
                                       type="button"
-                                      onClick={() => {
-                                        if (isBuiltinMcp) {
-                                          onManageMcpServer?.(mcpServerID)
-                                          return
-                                        }
-                                        onManageConnector?.(connectorID)
-                                      }}
+                                      onClick={() => onManageConnector(connectorID)}
                                     >
-                                      {t(isBuiltinMcp ? "plugins.mcp.manage" : "plugins.connector.manage")}
+                                      {t("plugins.connector.manage")}
                                     </button>
                                   </div>
                                 ) : null}

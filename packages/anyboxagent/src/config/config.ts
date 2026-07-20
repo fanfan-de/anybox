@@ -1060,6 +1060,63 @@ export function removeSelectedMcpServerIDFromAllProjectsInCurrentTransaction(ser
   }
 }
 
+export async function replaceSelectedMcpServerIDInAllProjects(
+  previousServerID: string,
+  nextServerID: string,
+): Promise<{
+  affectedProjectIDs: string[]
+  affectedCount: number
+}> {
+  const transaction = db.db.transaction(() =>
+    replaceSelectedMcpServerIDInAllProjectsInCurrentTransaction(previousServerID, nextServerID)
+  )
+  return transaction()
+}
+
+export function replaceSelectedMcpServerIDInAllProjectsInCurrentTransaction(
+  previousServerID: string,
+  nextServerID: string,
+): {
+  affectedProjectIDs: string[]
+  affectedCount: number
+} {
+  const normalizedPreviousServerID = previousServerID.trim()
+  const normalizedNextServerID = nextServerID.trim()
+  if (
+    !normalizedPreviousServerID
+    || !normalizedNextServerID
+    || normalizedPreviousServerID === normalizedNextServerID
+  ) {
+    return { affectedProjectIDs: [], affectedCount: 0 }
+  }
+
+  ensureProjectConfigTable()
+  const rows = db.findMany("project_configs", ProjectConfigRecord)
+  const affected = rows.flatMap((row) => {
+    const current = normalizeMcpServerIDs(row.config.selected_mcp_servers ?? [])
+    if (!current.includes(normalizedPreviousServerID)) return []
+    const next = Info.parse({
+      ...row.config,
+      selected_mcp_servers: normalizeMcpServerIDs(
+        current.map((id) => id === normalizedPreviousServerID ? normalizedNextServerID : id),
+      ),
+    })
+    return [{ projectID: row.projectID, config: next }]
+  })
+
+  for (const row of affected) {
+    db.upsert("project_configs", row, ["projectID"])
+  }
+
+  const affectedProjectIDs = affected
+    .map((row) => row.projectID)
+    .filter((projectID) => projectID !== GLOBAL_CONFIG_ID)
+  return {
+    affectedProjectIDs,
+    affectedCount: affectedProjectIDs.length,
+  }
+}
+
 function readSelectedSkillIDs(configID: string) {
   const selected = readConfig(configID).selected_skills
   return selected ? normalizeSkillIDs(selected) : null
@@ -1350,6 +1407,9 @@ export async function resolveProjectMcpServers(projectID: string): Promise<McpSe
   const selectedPluginOwnedServerIDs = new Set(
     pluginModule.resolveEnabledInstalledPluginMcpServerIDs(selectedPluginIDs),
   )
+  const selectedPluginMcpRequirementServerIDs = new Set(
+    pluginModule.resolveEnabledInstalledPluginMcpRequirementServerIDs(selectedPluginIDs),
+  )
   const selectedPluginConnectorRequirementServerIDs = new Set(
     pluginModule.resolveEnabledInstalledPluginConnectorRequirementServerIDs(selectedPluginIDs),
   )
@@ -1358,6 +1418,7 @@ export async function resolveProjectMcpServers(projectID: string): Promise<McpSe
     globalServers
       .filter((server) =>
         selectedPluginOwnedServerIDs.has(server.id) ||
+        selectedPluginMcpRequirementServerIDs.has(server.id) ||
         selectedPluginConnectorRequirementServerIDs.has(server.id),
       )
       .map((server) => server.id),

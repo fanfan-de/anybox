@@ -33,9 +33,8 @@ async function createFixture(projectRoot) {
         description: "Chrome fixture skill.",
         directory: "chrome",
       }],
-      connectorRequirements: [{
-        connector: "node-repl",
-        runtimeIDs: ["default"],
+      mcpRequirements: [{
+        mcp: "node-repl",
         tools: ["js", "js_reset", "js_add_node_module_dir"],
         permissions: [
           "Raw page JavaScript and Chrome DevTools Protocol are disabled.",
@@ -69,7 +68,7 @@ async function createFixture(projectRoot) {
     path.join("runtime", "skills", "chrome", "SKILL.md"),
     [
       "Structured locators are available only when advertised. Raw page JavaScript and unrestricted CDP are disabled.",
-      "Use mcp__connector_node_repl_default__js.",
+      "Use mcp__anybox_node_repl__js.",
       "Import scripts/browser-client.mjs with pathToFileURL.",
       "Reload when globalThis.setupBrowserRuntime !== setupBrowserRuntime.",
       "Call agent.browsers.ensureReady({ launch: true }) before selecting Chrome.",
@@ -223,7 +222,7 @@ test("synchronizes only installable Chrome files into the distribution directory
       await fsp.readFile(path.join(pluginRoot, ".anybox-plugin", "plugin.json"), "utf8"),
     )
     assert.equal(manifest.mcpServers, undefined)
-    assert.equal(manifest.connectorRequirements[0].connector, "node-repl")
+    assert.equal(manifest.mcpRequirements[0].mcp, "node-repl")
     await packageChromePlugin({ projectRoot, pluginRoot, check: true })
     assert.deepEqual(await compareChromePluginPackages(pluginRoot, pluginRoot), [])
   })
@@ -250,7 +249,7 @@ test("rejects capability claims that re-enable raw page JavaScript or CDP", asyn
     await packageChromePlugin({ projectRoot, pluginRoot })
     const manifestPath = path.join(pluginRoot, ".anybox-plugin", "plugin.json")
     const manifest = JSON.parse(await fsp.readFile(manifestPath, "utf8"))
-    manifest.connectorRequirements[0].permissions = [
+    manifest.mcpRequirements[0].permissions = [
       "Allows raw page JavaScript and Chrome DevTools Protocol commands.",
     ]
     await fsp.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
@@ -267,12 +266,12 @@ test("rejects a Chrome manifest without its Anybox Node REPL requirement", async
     await packageChromePlugin({ projectRoot, pluginRoot })
     const manifestPath = path.join(pluginRoot, ".anybox-plugin", "plugin.json")
     const manifest = JSON.parse(await fsp.readFile(manifestPath, "utf8"))
-    delete manifest.connectorRequirements
+    delete manifest.mcpRequirements
     await fsp.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
 
     await assert.rejects(
       validateChromePluginPackage(pluginRoot),
-      /must declare exactly one Anybox Node REPL connector requirement/,
+      /must declare exactly one Anybox built-in Node REPL MCP requirement/,
     )
   })
 })

@@ -59,13 +59,14 @@
 - `homepage`、`repository`、`license`、`keywords`
 - `interface`：插件在市场和详情页中的展示信息。
 - `mcpServers`：生成全局 MCP server 配置的模板。
+- `mcpRequirements`：插件依赖的 Anybox 共享内置 MCP。
 - `skills`：插件包内 Skill 目录，默认是 `skills`。
 - `connectorRequirements`：插件依赖的共享平台 connector。
 - `connectors`：插件自带 connector 声明，支持远程或本地 stdio runtime。
 - `apps`：旧字段，按 `connectors` 的兼容别名解析。
 - `commands`、`agents`：v1 保留字段，不实现执行语义。
 
-插件应至少提供 `mcpServers`、`skills`、`connectorRequirements` 或 `connectors` 中的一类真实能力。
+插件应至少提供 `mcpServers`、`mcpRequirements`、`skills`、`connectorRequirements` 或 `connectors` 中的一类真实能力。
 
 ## MCP Servers
 
@@ -123,7 +124,9 @@ Skill 的产品形态是一个目录，而不是单个 `SKILL.md` 文档。插�
 
 `connectorRequirements` 用于引用共享平台 connector。平台 connector 独立于插件，适合 Gmail、GitHub、数据库账号等用户预期只授权一次、由多个插件复用的连接。
 
-Browser 自动化、Node REPL 和类似的本地执行 runtime 不属于共享账号连接，应由对应插件放在自身目录中并通过 `mcpServers` 声明。Anybox 可以保留通用宿主或桥接基础设施，但不应把这些插件能力重新实现成平台内置 Connector。
+Browser 自动化等业务能力不属于共享账号连接，应由对应插件放在自身目录中。Anybox 通用
+Node REPL 则是共享内置 MCP，插件只能通过 `mcpRequirements` 引用，不能把它声明成
+Connector。
 
 ```json
 {
@@ -138,7 +141,27 @@ Browser 自动化、Node REPL 和类似的本地执行 runtime 不属于共享�
 }
 ```
 
-当项目选择并启用该插件时，项目 MCP server 解析会自动把已安装插件的 connector requirement 对应平台 connector server 纳入候选集合。
+## Anybox Built-in MCP Requirements
+
+`mcpRequirements` 用于引用 Anybox 自己拥有、没有账号连接生命周期的共享内置 MCP：
+
+```json
+{
+  "mcpRequirements": [
+    {
+      "mcp": "node-repl",
+      "tools": ["js", "js_reset", "js_add_node_module_dir"],
+      "required": true
+    }
+  ]
+}
+```
+
+`node-repl` 的 server ID 是 `anybox.node-repl`，使用 `stdio` transport，并以 `anybox` owner
+标识。它不会进入 Connector catalog。
+
+当项目选择并启用该插件时，项目 MCP server 解析会自动合并已安装插件的 Connector
+requirements 和内置 MCP requirements。
 
 ## Plugin-Owned Connectors
 

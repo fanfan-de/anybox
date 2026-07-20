@@ -511,56 +511,17 @@ describe("ConnectorsPage", () => {
     expect(screen.getByText("No authentication required.")).toBeInTheDocument()
   })
 
-  it("keeps credential-free runtimes out of the account connector module", () => {
-    const browserConnector: ConnectorDefinition = {
-      ...createConnector(),
-      id: "browser",
-      name: "Browser",
-      description: "Control Chrome through the Anybox Chrome extension.",
-      category: "builtin_mcp",
-      credential: undefined,
-    }
-    const nodeReplConnector: ConnectorDefinition = {
-      ...createConnector(),
-      id: "node-repl",
-      name: "Node REPL",
-      description: "Run JavaScript in the Anybox Node runtime.",
-      category: "builtin_mcp",
-      credential: undefined,
-    }
-
+  it("renders the account connector catalog without built-in MCP entries", () => {
     render(
       <ConnectorsPage
         {...createProps({
-          activeConnectorID: "connector:browser:default",
-          connectorCatalog: [browserConnector, createConnector(), nodeReplConnector],
-          connectorStatuses: [
-            createStatus({
-              connectorID: "connector:browser:default",
-              definitionID: "browser",
-              name: "Browser",
-              credentialKind: undefined,
-              credentialLabel: undefined,
-              email: undefined,
-              generatedMcpServerID: "connector.browser.default",
-            }),
-            createStatus(),
-            createStatus({
-              connectorID: "connector:node-repl:default",
-              definitionID: "node-repl",
-              name: "Node REPL",
-              credentialKind: undefined,
-              credentialLabel: undefined,
-              email: undefined,
-              generatedMcpServerID: "connector.node-repl.default",
-            }),
-          ],
+          activeConnectorID: "connector:gmail:default",
+          connectorCatalog: [createConnector()],
+          connectorStatuses: [createStatus()],
         })}
       />,
     )
 
-    expect(screen.queryByRole("button", { name: "Browser Connected" })).not.toBeInTheDocument()
-    expect(screen.queryByRole("button", { name: "Node REPL Connected" })).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Gmail Connected" })).toBeInTheDocument()
     expect(screen.getByRole("heading", { name: "Gmail", level: 1 })).toBeInTheDocument()
   })

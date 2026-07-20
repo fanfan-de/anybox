@@ -45,7 +45,7 @@ test("keeps Chrome runtime business out of AnyboxAgent and shared core", async (
     await filesUnder(path.join(agentRoot, "src"))
   ).filter((file) => /\.(?:c|m)?(?:j|t)s$/.test(file))
   sourceFiles.push(
-    path.join(agentRoot, "connectors", "node-repl", "server.js"),
+    path.join(agentRoot, "mcp", "node-repl", "server.js"),
   )
   const forbidden = [
     "@anybox/chrome-shared",

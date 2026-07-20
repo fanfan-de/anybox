@@ -76,6 +76,7 @@
 | `keywords` | 字符串数组 | 目录标签 |
 | `interface` | 对象 | Marketplace 和 UI 元数据 |
 | `mcpServers` | 数组或包内相对 JSON 路径 | MCP 运行时声明 |
+| `mcpRequirements` | 数组 | 对 Anybox 共享内置 MCP 的依赖 |
 | `skills` | 字符串或字符串数组 | Skill 根目录；默认值为 `skills` |
 | `connectorRequirements` | 数组 | 对共享平台 Connector 的依赖 |
 | `connectors` | 数组或包内相对 JSON 路径 | 推荐的插件自有 Connector |

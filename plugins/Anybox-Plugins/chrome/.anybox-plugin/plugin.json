@@ -1,6 +1,6 @@
 {
   "name": "chrome",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "description": "Control Chrome by importing the plugin Browser Client into Anybox's general-purpose Node REPL.",
   "author": {
     "name": "Anybox"
@@ -87,12 +87,9 @@
       }
     }
   ],
-  "connectorRequirements": [
+  "mcpRequirements": [
     {
-      "connector": "node-repl",
-      "runtimeIDs": [
-        "default"
-      ],
+      "mcp": "node-repl",
       "tools": [
         "js",
         "js_reset",

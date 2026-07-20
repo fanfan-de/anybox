@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { mkdtemp, readFile, rm } from "node:fs/promises"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
-import * as Connector from "../src/connector/connector"
+import * as BuiltinMcp from "../src/mcp/builtin"
 import { McpClient } from "../src/mcp/client"
 
 const temporaryRoots: string[] = []
@@ -10,16 +10,16 @@ const originalNodeBinary = process.env.ANYBOX_NODE_BINARY
 const originalNodeRunAsNode = process.env.ANYBOX_NODE_RUN_AS_NODE
 
 function nodeReplServer() {
+  const definition = BuiltinMcp.getDefinition(BuiltinMcp.NODE_REPL_DEFINITION_ID)
+  if (!definition) throw new Error("Expected the built-in Node REPL MCP definition.")
   return {
-    id: "connector.node-repl.default",
-    name: "Node REPL",
-    transport: "connector" as const,
-    connectorId: "connector:node-repl:default",
-    connectorRuntimeId: "default",
-    enabled: true,
+    id: definition.serverID,
+    ...definition.runtime,
+    transport: "stdio" as const,
+    enabled: definition.runtime.enabled ?? true,
     owner: {
       kind: "anybox" as const,
-      bindingID: "connector.node-repl.default",
+      bindingID: definition.id,
     },
   }
 }
@@ -50,34 +50,23 @@ afterEach(async () => {
   )
 })
 
-describe("built-in Node REPL connector", () => {
+describe("built-in Node REPL MCP", () => {
   test("is a platform-owned general-purpose runtime with no Chrome implementation", async () => {
-    const definition = Connector.getDefinition("node-repl")
+    const definition = BuiltinMcp.getDefinition("node-repl")
     expect(definition).toMatchObject({
       id: "node-repl",
-      category: "builtin_mcp",
+      serverID: "anybox.node-repl",
       risk: "high",
       available: true,
     })
-    const configuredRuntime = definition?.mcpRuntimes[0]
+    const configuredRuntime = definition?.runtime
     expect(configuredRuntime).toMatchObject({
-      id: "default",
       transport: "stdio",
       command: "node",
     })
-    expect(
-      configuredRuntime?.transport === "stdio"
-        ? configuredRuntime.cwd
-        : "unexpected-remote-runtime",
-    ).toBeUndefined()
+    expect(configuredRuntime?.cwd).toBeUndefined()
 
-    const runtime = await Connector.resolveRuntime(
-      "connector:node-repl:default",
-      "default",
-    )
-    expect(runtime.transport).toBe("stdio")
-    if (runtime.transport !== "stdio") throw new Error("Expected stdio runtime.")
-    const source = await readFile(runtime.args?.[0] ?? "", "utf8")
+    const source = await readFile(configuredRuntime?.args?.[0] ?? "", "utf8")
     expect(source).toContain("anybox-node-repl")
     expect(source).not.toMatch(
       /Chrome|browser|native-host|requestHost|getCapability/,
@@ -87,7 +76,7 @@ describe("built-in Node REPL connector", () => {
   test("uses Electron's Node mode in the managed desktop runtime", () => {
     process.env.ANYBOX_NODE_BINARY = "C:\\Anybox\\Anybox.exe"
     process.env.ANYBOX_NODE_RUN_AS_NODE = "1"
-    const runtime = Connector.getDefinition("node-repl")?.mcpRuntimes[0]
+    const runtime = BuiltinMcp.getDefinition("node-repl")?.runtime
     expect(runtime).toMatchObject({
       transport: "stdio",
       command: "C:\\Anybox\\Anybox.exe",

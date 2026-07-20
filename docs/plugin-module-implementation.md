@@ -84,6 +84,7 @@ plugins/Anybox-Plugins/                                仓库内插件包集合
     "capabilities": ["calendar", "todos", "events"]
   },
   "mcpServers": [],
+  "mcpRequirements": [],
   "skills": "skills",
   "connectorRequirements": [],
   "connectors": []
@@ -96,13 +97,14 @@ plugins/Anybox-Plugins/                                仓库内插件包集合
 - `author`、`homepage`、`repository`、`license`、`keywords`：元数据。
 - `interface`：市场和插件页展示信息，支持本地化文本对象。
 - `mcpServers`：普通 MCP server 模板。
+- `mcpRequirements`：对 Anybox 共享内置 MCP 的依赖。
 - `skills`：插件内 skill 根目录，默认 `"skills"`，可为字符串或字符串数组。
 - `connectorRequirements`：对平台共享 connector 的依赖。
 - `connectors`：插件自带 connector 声明，支持 `stdio` 或 `remote` runtime。
 - `apps`：旧字段，兼容别名；新插件应使用 `connectors`。
 - `commands`、`agents`：保留字段，当前接受但不执行。
 
-插件至少应提供一种真实能力：`mcpServers`、`skills`、`connectorRequirements` 或 `connectors`。
+插件至少应提供一种真实能力：`mcpServers`、`mcpRequirements`、`skills`、`connectorRequirements` 或 `connectors`。
 
 ## 4. Catalog 加载和合并
 
@@ -155,7 +157,7 @@ Registry item 可以只有展示 metadata，也可以携带 zip 包下载信息�
 `normalizeCatalogItem()` 将 manifest source 转换成 UI 和 API 使用的 `PluginCatalogItem`：
 
 - 从 `interface` 生成名称、短描述、长描述、分类、图标、截图、品牌色等展示字段。
-- 从 `mcpServers`、`connectors`、`connectorRequirements`、`skills` 汇总权限、工具预览、配置字段和风险等级。
+- 从 `mcpServers`、`mcpRequirements`、`connectors`、`connectorRequirements`、`skills` 汇总权限、工具预览、配置字段和风险等级。
 - 若本地包存在，会读取 `skills/<skill>/SKILL.md` 的 frontmatter 生成 skill preview。
 - 风险等级取各能力最高风险；`critical` 插件会出现在 catalog 中，但安装会被拒绝。
 - `installable` 由本地包存在或 registry zip 下载信息完整决定。
@@ -422,11 +424,16 @@ DELETE /api/plugins/installed/:pluginID/connectors/:appID/auth/session
 
 项目选择插件后，`Config.resolveProjectMcpServers()` 会把该插件要求的平台 connector server 也纳入项目可用 MCP server 集合。
 
-Chrome 0.8.0 也是共享 requirement 的边界示例：插件不再声明私有 `mcpServers`，
-而是依赖平台的 `connector:node-repl:default`。Agent 根据 Chrome Skill 在通用 Node
-REPL 中动态导入插件的 `browser-client.mjs`；浏览器请求通过受控 host-service bridge
-回到 Agent。安装 Chrome 后不会生成 `plugin.chrome.node-repl`，项目解析使用
-`connector.node-repl.default`；卸载 Chrome 也不会删除这个平台运行时。
+### 9.1 Anybox 内置 MCP Requirement
+
+`mcpRequirements` 声明插件依赖 Anybox 已有、没有账号连接生命周期的共享内置 MCP。
+安装记录保存 `mcpRequirementIDs`，项目选择插件后会合并这些 MCP，但插件不会取得运行时所有权。
+
+Chrome 0.12.1 是这个边界的示例：插件不声明私有 `mcpServers`，
+而是通过 `mcpRequirements` 依赖 Anybox 内置的 `node-repl` MCP。Agent 根据 Chrome Skill 在通用 Node
+REPL 中动态导入插件的 `browser-client.mjs`；Chrome 业务运行时仍归插件所有。安装 Chrome
+后不会生成 `plugin.chrome.node-repl`，项目解析使用
+`anybox.node-repl`；卸载 Chrome 也不会删除这个 Anybox 内置 MCP。
 
 ## 10. Skill 集成
 
@@ -611,6 +618,7 @@ packages/anyboxagent/Test/calendar-plugin.test.ts
 - 普通 MCP 插件安装、禁用、诊断、卸载。
 - critical 风险插件安装拒绝。
 - 平台 connector 与插件 `connectorRequirements`。
+- Anybox 内置 MCP 与插件 `mcpRequirements`，包括旧 Node REPL Connector 配置迁移。
 - Browser/Gmail 内置插件通过平台 connector 工作。
 - 插件 manifest 中 MCP、skills、connectors/apps 的解析。
 - 插件 Skill 运行时发现，以及从全局 Skill 文件树中隐藏。

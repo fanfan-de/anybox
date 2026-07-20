@@ -17,7 +17,7 @@ const cinemaProviderCatalogSource = path.join(agentDir, "src", "cinema", "provid
 const cinemaProviderManifestsSourceDir = path.join(agentDir, "src", "cinema", "provider-manifests")
 const gmailConnectorSourceDir = path.join(agentDir, "plugins", "builtin", "gmail", "0.1.0", "connectors", "gmail")
 const feishuConnectorSourceDir = path.join(agentDir, "plugins", "builtin", "feishu", "0.1.0", "connectors", "feishu")
-const nodeReplConnectorSourceDir = path.join(agentDir, "connectors", "node-repl")
+const nodeReplMcpSourceDir = path.join(agentDir, "mcp", "node-repl")
 
 const bunExecutableName = process.platform === "win32" ? "bun.exe" : "bun"
 const connectorBuildConfigFile = path.join(runtimeDir, "config", "connectors.json")
@@ -136,26 +136,26 @@ async function fixNodePtySpawnHelperPermissions(runtimeNodeModulesDir) {
   )
 }
 
-async function copyBundledConnectors() {
+async function copyBundledPlatformRuntimes() {
   const gmailConnectorTargetDir = path.join(runtimeDir, "connectors", "gmail")
   const feishuConnectorTargetDir = path.join(runtimeDir, "connectors", "feishu")
-  const nodeReplConnectorTargetDir = path.join(runtimeDir, "connectors", "node-repl")
+  const nodeReplMcpTargetDir = path.join(runtimeDir, "mcp", "node-repl")
   if (!(await pathExists(path.join(gmailConnectorSourceDir, "server.js")))) {
     throw new Error(`Missing Gmail connector server at ${gmailConnectorSourceDir}`)
   }
   if (!(await pathExists(path.join(feishuConnectorSourceDir, "server.js")))) {
     throw new Error(`Missing Feishu connector server at ${feishuConnectorSourceDir}`)
   }
-  if (!(await pathExists(path.join(nodeReplConnectorSourceDir, "server.js")))) {
-    throw new Error(`Missing Node REPL connector server at ${nodeReplConnectorSourceDir}`)
+  if (!(await pathExists(path.join(nodeReplMcpSourceDir, "server.js")))) {
+    throw new Error(`Missing built-in Node REPL MCP server at ${nodeReplMcpSourceDir}`)
   }
 
   await fsp.mkdir(gmailConnectorTargetDir, { recursive: true })
   await fsp.mkdir(feishuConnectorTargetDir, { recursive: true })
-  await fsp.mkdir(nodeReplConnectorTargetDir, { recursive: true })
+  await fsp.mkdir(nodeReplMcpTargetDir, { recursive: true })
   await fsp.copyFile(path.join(gmailConnectorSourceDir, "server.js"), path.join(gmailConnectorTargetDir, "server.js"))
   await fsp.copyFile(path.join(feishuConnectorSourceDir, "server.js"), path.join(feishuConnectorTargetDir, "server.js"))
-  await fsp.copyFile(path.join(nodeReplConnectorSourceDir, "server.js"), path.join(nodeReplConnectorTargetDir, "server.js"))
+  await fsp.copyFile(path.join(nodeReplMcpSourceDir, "server.js"), path.join(nodeReplMcpTargetDir, "server.js"))
 }
 
 async function copyCinemaWebDist() {
@@ -229,7 +229,7 @@ async function main() {
   await fixNodePtySpawnHelperPermissions(runtimeNodeModulesDir)
   await copyCinemaProviderManifests()
   await copyCinemaWebDist()
-  await copyBundledConnectors()
+  await copyBundledPlatformRuntimes()
   await writeConnectorBuildConfig()
   await prepareWorkspaceDependencies({
     bunBinary,

@@ -11,6 +11,7 @@ import * as ProviderAuth from "#auth/provider-auth.ts"
 import * as Config from "#config/config.ts"
 import * as Connector from "#connector/connector.ts"
 import * as db from "#database/Sqlite.ts"
+import * as BuiltinMcp from "#mcp/builtin.ts"
 import * as Global from "#global/global.ts"
 import { toCreateTableSQL, withPrimaryKey, zodObjectToColumnDefs } from "#database/parser.ts"
 import * as Mcp from "#mcp/manager.ts"
@@ -615,6 +616,7 @@ export const PluginManifest = z
     keywords: z.array(z.string()).optional(),
     interface: PluginInterface.optional(),
     mcpServers: z.array(PluginManifestMcpServer).optional(),
+    mcpRequirements: z.array(BuiltinMcp.McpRequirement).optional(),
     skills: z.union([z.string(), z.array(z.string())]).optional(),
     connectorRequirements: z.array(Connector.ConnectorRequirement).optional(),
     connectors: z.array(PluginAppConnector).optional(),
@@ -735,6 +737,7 @@ export const PluginCatalogItem = z
     configFields: z.array(PluginConfigField),
     runtime: PluginRuntimeTemplate.optional(),
     mcpServers: z.array(PluginMcpServerCatalogEntry),
+    mcpRequirements: z.array(BuiltinMcp.McpRequirement),
     skills: z.array(PluginSkillPreview),
     connectorRequirements: z.array(Connector.ConnectorRequirement),
     connectors: z.array(PluginAppConnector),
@@ -757,6 +760,7 @@ export const InstalledPlugin = z
     mcpServerEnabled: z.record(z.string(), z.boolean()).optional(),
     skillIDs: z.array(z.string()).optional(),
     connectorIDs: z.array(z.string()).optional(),
+    mcpRequirementIDs: z.array(z.string()).optional(),
     connectorRequirementIDs: z.array(z.string()).optional(),
     config: z.record(z.string(), z.string()),
     installedAt: z.number().int().positive(),
@@ -772,12 +776,13 @@ export const InstalledPlugin = z
   .strict()
 export type InstalledPlugin = Omit<
   z.infer<typeof InstalledPlugin>,
-  "mcpServerIDs" | "mcpServerEnabled" | "skillIDs" | "connectorIDs" | "connectorRequirementIDs" | "lastConnectorDiagnostics" | "platformArtifactReceipts"
+  "mcpServerIDs" | "mcpServerEnabled" | "skillIDs" | "connectorIDs" | "mcpRequirementIDs" | "connectorRequirementIDs" | "lastConnectorDiagnostics" | "platformArtifactReceipts"
 > & {
   mcpServerIDs: string[]
   mcpServerEnabled: Record<string, boolean>
   skillIDs: string[]
   connectorIDs: string[]
+  mcpRequirementIDs: string[]
   connectorRequirementIDs: string[]
   lastConnectorDiagnostics?: Record<string, PluginDiagnostic>
   platformArtifactReceipts: PlatformArtifactOwnershipReceipt[]
@@ -2216,7 +2221,23 @@ function normalizeCatalogItem(source: PluginManifestSource): PluginCatalogItem {
   const pluginID = normalizeManifestID(manifest.name)
   const mcpServers = normalizeMcpServers(manifest)
   const connectors = normalizePluginConnectors(manifest)
-  const connectorRequirements = manifest.connectorRequirements ?? []
+  const legacyNodeReplRequirements = (manifest.connectorRequirements ?? [])
+    .filter((requirement) => requirement.connector === BuiltinMcp.NODE_REPL_DEFINITION_ID)
+    .map((requirement) => BuiltinMcp.McpRequirement.parse({
+      mcp: BuiltinMcp.NODE_REPL_DEFINITION_ID,
+      tools: requirement.tools,
+      permissions: requirement.permissions,
+      required: requirement.required,
+      reason: requirement.reason,
+    }))
+  const mcpRequirements = [
+    ...(manifest.mcpRequirements ?? []),
+    ...legacyNodeReplRequirements,
+  ].filter((requirement, index, all) =>
+    all.findIndex((candidate) => candidate.mcp === requirement.mcp) === index
+  )
+  const connectorRequirements = (manifest.connectorRequirements ?? [])
+    .filter((requirement) => requirement.connector !== BuiltinMcp.NODE_REPL_DEFINITION_ID)
   const skills = packageRoot
     ? discoverSkillPreviews(pluginID, manifest, packageRoot)
     : source.skillPreviews ?? []
@@ -2233,6 +2254,7 @@ function normalizeCatalogItem(source: PluginManifestSource): PluginCatalogItem {
   const risk = highestRisk([
     ...mcpServers.map((server) => server.risk),
     ...connectors.map((app) => app.risk ?? "medium"),
+    ...mcpRequirements.map((requirement) => BuiltinMcp.getDefinition(requirement.mcp)?.risk ?? "medium"),
     connectorRequirements.length > 0 ? "medium" : undefined,
     skills.length > 0 ? "low" : undefined,
   ])
@@ -2258,6 +2280,7 @@ function normalizeCatalogItem(source: PluginManifestSource): PluginCatalogItem {
     risk,
     permissions: uniqueStrings([
       ...mcpServers.flatMap((server) => server.permissions ?? []),
+      ...mcpRequirements.flatMap((requirement) => requirement.permissions ?? []),
       ...connectorRequirements.flatMap((requirement) => requirement.permissions ?? []),
       ...connectors.flatMap((app) => app.permissions ?? []),
     ]),
@@ -2271,6 +2294,7 @@ function normalizeCatalogItem(source: PluginManifestSource): PluginCatalogItem {
     ]),
     runtime: mcpServers[0]?.runtime,
     mcpServers,
+    mcpRequirements,
     skills,
     connectorRequirements,
     connectors,
@@ -2462,6 +2486,7 @@ function normalizeInstalledRecord(record: z.infer<typeof InstalledPlugin> | null
   )
   const skillIDs = uniqueStrings(record.skillIDs ?? [])
   const connectorIDs = uniqueStrings(record.connectorIDs ?? [])
+  const mcpRequirementIDs = uniqueStrings(record.mcpRequirementIDs ?? [])
   const connectorRequirementIDs = uniqueStrings(record.connectorRequirementIDs ?? [])
 
   return {
@@ -2471,6 +2496,7 @@ function normalizeInstalledRecord(record: z.infer<typeof InstalledPlugin> | null
     mcpServerEnabled,
     skillIDs,
     connectorIDs,
+    mcpRequirementIDs,
     connectorRequirementIDs,
     lastConnectorDiagnostics: record.lastConnectorDiagnostics ?? {},
     platformArtifactReceipts: record.platformArtifactReceipts ?? [],
@@ -2727,6 +2753,13 @@ function generatedConnectorIDs(plugin: PluginCatalogItem) {
   return plugin.apps.map((app) => connectorIDForPluginApp(plugin.id, app.appID))
 }
 
+function generatedMcpRequirementIDs(plugin: PluginCatalogItem) {
+  return uniqueStrings(plugin.mcpRequirements.flatMap((requirement) => {
+    const serverID = BuiltinMcp.serverIDForDefinition(requirement.mcp)
+    return serverID ? [serverID] : []
+  }))
+}
+
 function generatedConnectorRequirementIDs(plugin: PluginCatalogItem) {
   return plugin.connectorRequirements.map((requirement) => Connector.connectorIDForDefinition(requirement.connector))
 }
@@ -2802,6 +2835,9 @@ async function syncPluginRuntimeBindings(plugin: PluginCatalogItem, installed: I
   if (plugin.connectorRequirements.length > 0) {
     await Connector.syncConnectorRuntimeBindings()
   }
+  if (plugin.mcpRequirements.length > 0) {
+    await BuiltinMcp.syncBuiltinMcpRuntimeBindings()
+  }
 
   return synchronizedServerIDs
 }
@@ -2834,6 +2870,7 @@ export async function reconcileInstalledRuntimeBindings() {
       mcpServerEnabled: normalizeMcpServerEnabled(mcpServerIDs, installed.mcpServerEnabled),
       skillIDs: generatedSkillIDs(plugin),
       connectorIDs: generatedConnectorIDs(plugin),
+      mcpRequirementIDs: generatedMcpRequirementIDs(plugin),
       connectorRequirementIDs: generatedConnectorRequirementIDs(plugin),
       platformArtifactReceipts,
     })
@@ -3609,6 +3646,17 @@ async function ensurePluginPackageAvailable(pluginID: string) {
   return installedSource
 }
 
+export function resolveEnabledInstalledPluginMcpRequirementServerIDs(pluginIDs: string[]) {
+  const selectedPluginIDs = new Set(resolveEnabledInstalledPluginIDs(pluginIDs))
+  if (selectedPluginIDs.size === 0) return []
+
+  return uniqueStrings(
+    listEnabledInstalled()
+      .filter((plugin) => selectedPluginIDs.has(plugin.pluginID))
+      .flatMap((plugin) => plugin.mcpRequirementIDs),
+  )
+}
+
 async function syncPluginPlatformArtifacts(
   source: PluginManifestSource,
   existing: InstalledPlugin | null,
@@ -3675,6 +3723,7 @@ export async function install(pluginID: string, input: InstallPluginInput) {
     mcpServerEnabled: normalizeMcpServerEnabled(mcpServerIDs, existing?.mcpServerEnabled),
     skillIDs: generatedSkillIDs(plugin),
     connectorIDs: generatedConnectorIDs(plugin),
+    mcpRequirementIDs: generatedMcpRequirementIDs(plugin),
     connectorRequirementIDs: generatedConnectorRequirementIDs(plugin),
     config: normalizeConfig(plugin, input.config ?? existing?.config),
     installedAt: existing?.installedAt ?? timestamp,
@@ -3716,6 +3765,7 @@ export async function update(pluginID: string, input: UpdateInstalledPluginInput
     mcpServerEnabled: normalizeMcpServerEnabled(mcpServerIDs, existing.mcpServerEnabled),
     skillIDs: generatedSkillIDs(plugin),
     connectorIDs: generatedConnectorIDs(plugin),
+    mcpRequirementIDs: generatedMcpRequirementIDs(plugin),
     connectorRequirementIDs: generatedConnectorRequirementIDs(plugin),
     config: normalizeConfig(plugin, input.config ?? existing.config),
     updatedAt: now(),

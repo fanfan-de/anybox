@@ -27,6 +27,7 @@ function createPlugin(id: string, name: string): PluginCatalogItem {
       },
     ],
     mcpServers: [],
+    mcpRequirements: [],
     skills: [],
     connectorRequirements: [],
     connectors: [],
@@ -43,6 +44,7 @@ function createInstalledPlugin(pluginID: string): InstalledPlugin {
     mcpServerEnabled: {},
     skillIDs: [],
     connectorIDs: [],
+    mcpRequirementIDs: [],
     connectorRequirementIDs: [],
     config: {
       ROOT_PATH: "C:\\Projects",

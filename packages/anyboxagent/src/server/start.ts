@@ -3,6 +3,7 @@ import { cinemaRenderQueue } from "#cinema/render-queue.ts"
 import * as Log from "#util/log.ts"
 import { getProcessEnvValue } from "#env/compat.ts"
 import * as Connector from "#connector/connector.ts"
+import * as BuiltinMcp from "#mcp/builtin.ts"
 import * as Plugin from "#plugin/plugin.ts"
 
 const log = Log.create({ service: "server-bootstrap" })
@@ -28,6 +29,12 @@ await Log.init({
 })
 
 log.info("server-logging-ready", Log.status())
+
+try {
+  await BuiltinMcp.syncBuiltinMcpRuntimeBindings()
+} catch (error) {
+  log.error("built-in-mcp-runtime-reconcile-failed", { error })
+}
 
 try {
   await Plugin.reconcileInstalledRuntimeBindings()

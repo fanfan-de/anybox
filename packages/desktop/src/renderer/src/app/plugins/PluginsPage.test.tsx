@@ -58,6 +58,7 @@ function createPlugin(overrides: Partial<CatalogPlugin> = {}): CatalogPlugin {
         },
       },
     ],
+    mcpRequirements: overrides.mcpRequirements ?? [],
     skills: overrides.skills ?? [],
     connectorRequirements: overrides.connectorRequirements ?? [],
     connectors: overrides.connectors ?? overrides.apps ?? [],
@@ -179,6 +180,7 @@ function createInstalledPlugin(overrides: Partial<InstalledPlugin> = {}): Instal
     },
     skillIDs: overrides.skillIDs ?? [],
     connectorIDs: overrides.connectorIDs ?? [],
+    mcpRequirementIDs: overrides.mcpRequirementIDs ?? [],
     connectorRequirementIDs: overrides.connectorRequirementIDs ?? [],
     config: overrides.config ?? {
       ROOT_PATH: "C:\\Projects",
@@ -1464,7 +1466,7 @@ describe("PluginsPage", () => {
     expect(onManageConnector).toHaveBeenCalledWith("connector:gmail:default")
   })
 
-  it("manages built-in MCP connector requirements from the MCP inventory", () => {
+  it("shows an Anybox built-in MCP requirement as enabled and manages it from MCP", () => {
     const plugin = createPlugin({
       id: "chrome",
       name: "Chrome",
@@ -1472,9 +1474,9 @@ describe("PluginsPage", () => {
       skills: [],
       apps: [],
       configFields: [],
-      connectorRequirements: [
+      mcpRequirements: [
         {
-          connector: "node-repl",
+          mcp: "node-repl",
           reason: "Run the plugin Browser Client in the persistent Node runtime.",
         },
       ],
@@ -1489,15 +1491,15 @@ describe("PluginsPage", () => {
           pluginCatalog: [plugin],
           mcpServers: [
             {
-              id: "connector.node-repl.default",
+              id: "anybox.node-repl",
               name: "Node REPL",
               owner: {
                 kind: "anybox",
-                bindingID: "connector.node-repl.default",
+                bindingID: "node-repl",
               },
-              transport: "connector",
-              connectorId: "connector:node-repl:default",
-              connectorRuntimeId: "default",
+              transport: "stdio",
+              command: "node",
+              args: ["mcp/node-repl/server.js"],
               enabled: true,
             },
           ],
@@ -1508,9 +1510,13 @@ describe("PluginsPage", () => {
     )
 
     fireEvent.click(screen.getByRole("button", { name: "Show details for node-repl" }))
+    expect(screen.getByText("Anybox built-in MCP")).toBeInTheDocument()
+    expect(screen.getByText("Enabled")).toBeInTheDocument()
+    expect(screen.getByText("anybox.node-repl")).toBeInTheDocument()
+    expect(screen.queryByText("Platform connector")).not.toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Manage in Connectors" })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole("button", { name: "Manage in MCP" }))
-    expect(onManageMcpServer).toHaveBeenCalledWith("connector.node-repl.default")
+    expect(onManageMcpServer).toHaveBeenCalledWith("anybox.node-repl")
     expect(onManageConnector).not.toHaveBeenCalled()
   })
 

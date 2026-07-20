@@ -1595,7 +1595,7 @@ export interface AgentConnectorDefinition {
   id: string
   name: string
   description: string
-  category?: "account_connector" | "builtin_mcp"
+  category?: "account_connector"
   publisher: string
   icon?: string
   risk: AgentConnectorRisk
@@ -1613,6 +1613,14 @@ export interface AgentConnectorDefinition {
 
 export interface AgentConnectorRequirement {
   connector: string
+  tools?: string[]
+  permissions?: string[]
+  required?: boolean
+  reason?: string
+}
+
+export interface AgentMcpRequirement {
+  mcp: string
   tools?: string[]
   permissions?: string[]
   required?: boolean
@@ -1841,6 +1849,7 @@ export interface AgentPluginCatalogItem {
   configFields: AgentPluginConfigField[]
   runtime?: AgentPluginRuntimeTemplate
   mcpServers: AgentPluginMcpServerCatalogEntry[]
+  mcpRequirements: AgentMcpRequirement[]
   skills: AgentPluginSkillPreview[]
   connectorRequirements: AgentConnectorRequirement[]
   connectors: AgentPluginAppConnector[]
@@ -1860,6 +1869,7 @@ export interface AgentInstalledPlugin {
   mcpServerEnabled: Record<string, boolean>
   skillIDs: string[]
   connectorIDs: string[]
+  mcpRequirementIDs: string[]
   connectorRequirementIDs: string[]
   config: Record<string, string>
   installedAt: number

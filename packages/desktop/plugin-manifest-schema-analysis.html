@@ -441,6 +441,7 @@
     keywords: z.array(z.string()).optional(),
     interface: PluginInterface.optional(),
     mcpServers: z.array(PluginManifestMcpServer).optional(),
+    mcpRequirements: z.array(BuiltinMcp.McpRequirement).optional(),
     skills: z.union([z.string(), z.array(z.string())]).optional(),
     connectorRequirements: z.array(Connector.ConnectorRequirement).optional(),
     connectors: z.array(PluginAppConnector).optional(),
@@ -487,6 +488,11 @@
               <td><code>skills</code></td>
               <td>插件技能根目录。</td>
               <td>默认扫描 <code>skills</code>，只发现直接子目录里的 <code>SKILL.md</code>。</td>
+            </tr>
+            <tr>
+              <td><code>mcpRequirements</code></td>
+              <td>插件依赖 Anybox 已有的共享内置 MCP。</td>
+              <td>例如 Chrome 插件依赖 <code>node-repl</code>；它不是 Connector。</td>
             </tr>
             <tr>
               <td><code>connectorRequirements</code></td>
@@ -781,6 +787,7 @@
     configFields: z.array(PluginConfigField),
     runtime: PluginRuntimeTemplate.optional(),
     mcpServers: z.array(PluginMcpServerCatalogEntry),
+    mcpRequirements: z.array(BuiltinMcp.McpRequirement),
     skills: z.array(PluginSkillPreview),
     connectorRequirements: z.array(Connector.ConnectorRequirement),
     connectors: z.array(PluginAppConnector),
@@ -819,6 +826,7 @@
     mcpServerIDs: z.array(z.string()).optional(),
     skillIDs: z.array(z.string()).optional(),
     connectorIDs: z.array(z.string()).optional(),
+    mcpRequirementIDs: z.array(z.string()).optional(),
     connectorRequirementIDs: z.array(z.string()).optional(),
     config: z.record(z.string(), z.string()),
     installedAt: z.number().int().positive(),
@@ -847,6 +855,10 @@
             <tr>
               <td><code>connectorIDs</code></td>
               <td>插件自带 connector 的 credential/provider ID，例如 <code>plugin-connector:manifest-lab:docs</code>。</td>
+            </tr>
+            <tr>
+              <td><code>mcpRequirementIDs</code></td>
+              <td>插件依赖的 Anybox 内置 MCP server ID，例如 <code>anybox.node-repl</code>。</td>
             </tr>
             <tr>
               <td><code>connectorRequirementIDs</code></td>

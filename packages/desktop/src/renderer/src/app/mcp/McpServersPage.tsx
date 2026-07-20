@@ -884,6 +884,12 @@ export function McpServersPage({
                         </div>
                       </div>
 
+                      {isManagedMcpServer && !isConnectorMcpServer ? (
+                        <p className="settings-helper-text">
+                          {getManagedMcpHelperText(activeMcpServerSource)}
+                        </p>
+                      ) : null}
+
                       <label className="settings-field">
                         <span className="settings-field-label">Timeout (ms)</span>
                         <input

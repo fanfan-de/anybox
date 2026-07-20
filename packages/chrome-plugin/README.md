@@ -71,7 +71,7 @@ Anybox Registry 指向生成目录中的规范 Manifest，并通过 GitHub Tree 
 生成目录中的 `browser-client.mjs`、`browser-host.mjs`、扩展文件、Native Host 或 Skill；修改源码后
 统一重新打包。
 
-插件 Manifest 只声明平台 `node-repl/default` Connector 依赖，所需工具为 `js`、`js_reset` 和
+插件 Manifest 只声明 Anybox 内置 `node-repl` MCP 依赖，所需工具为 `js`、`js_reset` 和
 `js_add_node_module_dir`。Chrome 业务逻辑全部留在本插件中，没有逐动作 `browser_*` MCP 工具。
 
 ## 启动与连接

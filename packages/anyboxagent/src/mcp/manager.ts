@@ -4,6 +4,7 @@ import { isAbsolute, resolve as resolvePath } from "node:path"
 import type { JSONValue } from "@ai-sdk/provider"
 import z from "zod"
 import * as Config from "#config/config.ts"
+import { NODE_REPL_SERVER_ID } from "#mcp/builtin.ts"
 import { Instance } from "#project/instance.ts"
 import * as Tool from "#tool/tool.ts"
 import * as EventStore from "#session/runtime/event-store.ts"
@@ -279,7 +280,7 @@ export class McpManager {
       ) {
         return
       }
-      const client = this.handles.get("connector.node-repl.default")?.client
+      const client = this.handles.get(NODE_REPL_SERVER_ID)?.client
       if (!client) return
       void client.notifyLifecycle({
         type: "turn-end",
@@ -314,7 +315,7 @@ export class McpManager {
     }
     detail?: Record<string, unknown>
   }) {
-    const client = this.handles.get("connector.node-repl.default")?.client
+    const client = this.handles.get(NODE_REPL_SERVER_ID)?.client
     if (!client) return false
     await client.notifyLifecycle(input)
     return true

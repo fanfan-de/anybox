@@ -225,6 +225,7 @@ function resolveComposerMcpLabel(selectedServerIDs: string[], servers: McpServer
 function describeComposerPlugin(plugin: InstalledPlugin, catalogItem: PluginCatalogItem | undefined) {
   const capabilityCounts = [
     plugin.mcpServerIDs.length > 0 ? `${plugin.mcpServerIDs.length} MCP` : null,
+    plugin.mcpRequirementIDs.length > 0 ? `${plugin.mcpRequirementIDs.length} built-in MCP` : null,
     plugin.skillIDs.length > 0 ? `${plugin.skillIDs.length} skills` : null,
     plugin.connectorRequirementIDs.length > 0 ? `${plugin.connectorRequirementIDs.length} platform connectors` : null,
     plugin.connectorIDs.length > 0 ? `${plugin.connectorIDs.length} connectors` : null,

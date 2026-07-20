@@ -194,6 +194,7 @@ describe("McpServersPage tool policies", () => {
               },
               skillIDs: [],
               connectorIDs: [],
+              mcpRequirementIDs: [],
               connectorRequirementIDs: [],
               config: {},
               installedAt: 0,
@@ -239,49 +240,13 @@ describe("McpServersPage tool policies", () => {
     expect(onMcpServerDraftChange).toHaveBeenCalledWith("transport", "stdio")
   })
 
-  it("keeps account-connector MCP hidden while showing Browser and Node REPL as built-in MCP", () => {
+  it("keeps account-connector MCP hidden while showing Anybox-owned MCP servers", () => {
     render(
       <McpServersPage
         {...createProps({
-          activeMcpServerID: "connector.browser.default",
+          activeMcpServerID: "anybox.node-repl",
           activeMcpServerDiagnostic: null,
           connectorCatalog: [
-            {
-              id: "browser",
-              name: "Browser",
-              description: "Control Chrome through the Anybox Chrome extension.",
-              category: "builtin_mcp",
-              publisher: "Anybox",
-              risk: "high",
-              permissions: [],
-              tools: [],
-              configFields: [],
-              runtime: {
-                transport: "stdio",
-                command: "node",
-              },
-              installReview: [],
-              source: "platform",
-              available: true,
-            },
-            {
-              id: "node-repl",
-              name: "Node REPL",
-              description: "Run JavaScript in the Anybox Node runtime.",
-              category: "builtin_mcp",
-              publisher: "Anybox",
-              risk: "high",
-              permissions: [],
-              tools: [],
-              configFields: [],
-              runtime: {
-                transport: "stdio",
-                command: "node",
-              },
-              installReview: [],
-              source: "platform",
-              available: true,
-            },
             {
               id: "gmail",
               name: "Gmail",
@@ -310,35 +275,34 @@ describe("McpServersPage tool policies", () => {
             },
           ],
           mcpServerDraft: createDraft({
-            id: "connector.browser.default",
-            name: "Browser",
-            transport: "connector",
+            id: "anybox.node-repl",
+            name: "Node REPL",
+            transport: "stdio",
+            command: "node",
             serverUrl: "",
-            connectorId: "connector:browser:default",
+            connectorId: "",
           }),
           mcpServers: [
             {
-              id: "connector.browser.default",
+              id: "anybox.browser",
               name: "Browser",
               owner: {
                 kind: "anybox",
                 bindingID: "browser",
               },
-              transport: "connector",
-              connectorId: "connector:browser:default",
-              connectorRuntimeId: "default",
+              transport: "stdio",
+              command: "node",
               enabled: true,
             },
             {
-              id: "connector.node-repl.default",
+              id: "anybox.node-repl",
               name: "Node REPL",
               owner: {
                 kind: "anybox",
                 bindingID: "node-repl",
               },
-              transport: "connector",
-              connectorId: "connector:node-repl:default",
-              connectorRuntimeId: "default",
+              transport: "stdio",
+              command: "node",
               enabled: true,
             },
             {
@@ -374,7 +338,8 @@ describe("McpServersPage tool policies", () => {
     expect(within(list).getByRole("button", { name: "Node REPL built into Anybox enabled" })).toBeInTheDocument()
     expect(within(list).queryByRole("button", { name: /Gmail/ })).not.toBeInTheDocument()
     expect(within(list).getByRole("button", { name: "Context7 enabled" })).toBeInTheDocument()
-    expect(screen.getByText("BUILT-IN")).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: "STDIO" })).toHaveAttribute("aria-checked", "true")
+    expect(screen.getByRole("radio", { name: "STDIO" })).toBeDisabled()
     expect(screen.getByText(/This MCP server is built into Anybox/)).toBeInTheDocument()
   })
 

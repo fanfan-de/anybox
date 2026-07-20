@@ -1985,7 +1985,7 @@ export interface ConnectorDefinition {
   id: string
   name: string
   description: string
-  category?: "account_connector" | "builtin_mcp"
+  category?: "account_connector"
   publisher: string
   icon?: string
   risk: ConnectorRisk
@@ -2003,6 +2003,14 @@ export interface ConnectorDefinition {
 
 export interface ConnectorRequirement {
   connector: string
+  tools?: string[]
+  permissions?: string[]
+  required?: boolean
+  reason?: string
+}
+
+export interface McpRequirement {
+  mcp: string
   tools?: string[]
   permissions?: string[]
   required?: boolean
@@ -2231,6 +2239,7 @@ export interface PluginCatalogItem {
   configFields: PluginConfigField[]
   runtime?: PluginRuntimeTemplate
   mcpServers: PluginMcpServerCatalogEntry[]
+  mcpRequirements: McpRequirement[]
   skills: PluginSkillPreview[]
   connectorRequirements: ConnectorRequirement[]
   connectors: PluginAppConnector[]
@@ -2250,6 +2259,7 @@ export interface InstalledPlugin {
   mcpServerEnabled: Record<string, boolean>
   skillIDs: string[]
   connectorIDs: string[]
+  mcpRequirementIDs: string[]
   connectorRequirementIDs: string[]
   config: Record<string, string>
   installedAt: number
