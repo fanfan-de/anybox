@@ -1,4 +1,5 @@
 import {
+  BROWSER_CONTRACT_V3_PLAYWRIGHT_COMMAND_METHODS,
   BROWSER_CONTRACT_VERSION,
   BrowserContractCommandRegistry,
   BrowserContractValidationError,
@@ -17,7 +18,6 @@ import type {
   BrowserContractCommandResult,
   BrowserContractErrorCode,
   BrowserDocumentationManifest,
-  BrowserLocator as BrowserLocatorInput,
 } from "@anybox/chrome-shared/browser-contract"
 import type {
   BrowserExtensionAccessibilityTreeResult,
@@ -26,7 +26,6 @@ import type {
   BrowserExtensionElementActionResult,
   BrowserExtensionFillResult,
   BrowserExtensionInteractiveSnapshotResult,
-  BrowserExtensionLocatorValueResult,
   BrowserExtensionScreenshotResult,
   BrowserExtensionScrollResult,
   BrowserExtensionSnapshotResult,
@@ -48,6 +47,16 @@ import {
   createChromeLauncher,
   type ChromeLauncher,
 } from "./chrome-launcher.ts"
+import {
+  BrowserPlaywrightAPI,
+} from "./playwright-client.ts"
+export {
+  BrowserPlaywrightAPI,
+  BrowserPlaywrightDownload,
+  BrowserPlaywrightFileChooser,
+  BrowserPlaywrightFrameLocator,
+  BrowserPlaywrightLocator,
+} from "./playwright-client.ts"
 
 const NATIVE_INSTALL_ENV = "ANYBOX_BROWSER_NATIVE_INSTALL"
 let nativeMessagingHostReady: Promise<void> | undefined
@@ -81,22 +90,6 @@ type FillOptions = Omit<
 >
 type ScrollOptions = Omit<BrowserContractCommandParams<"page.scroll">, "tabId">
 type WaitForOptions = Omit<BrowserContractCommandParams<"page.waitFor">, "tabId">
-type LocatorClickOptions = Omit<
-  BrowserContractCommandParams<"locator.click">,
-  "tabId" | "locator"
->
-type LocatorFillOptions = Omit<
-  BrowserContractCommandParams<"locator.fill">,
-  "tabId" | "locator" | "text"
->
-type LocatorReadOptions = Omit<
-  BrowserContractCommandParams<"locator.textContent">,
-  "tabId" | "locator"
->
-type LocatorWaitOptions = Omit<
-  BrowserContractCommandParams<"locator.waitFor">,
-  "tabId" | "locator"
->
 
 interface BrowserCommandOptions {
   timeoutMs?: number
@@ -279,7 +272,7 @@ function pluginBrowserTransport(
     ) {
       throw new BrowserRuntimeError(
         "SESSION_REQUIRED",
-        "Browser Contract v2 requires active Node REPL session, turn, message, and tool-call metadata.",
+        "Browser Contract v3 requires active Node REPL session, turn, message, and tool-call metadata.",
       )
     }
     const context = {
@@ -756,12 +749,14 @@ export class BackendTransport {
 export class CommandRouter {
   readonly #backend: BackendTransport
   readonly #supportedCommands: ReadonlySet<BrowserContractCommandMethod>
+  readonly capabilities: BrowserBackendCapabilities
 
   constructor(
     backend: BackendTransport,
     capabilities: BrowserBackendCapabilities,
   ) {
     this.#backend = backend
+    this.capabilities = capabilities
     this.#supportedCommands = new Set(capabilities.commands)
   }
 
@@ -781,86 +776,62 @@ export class CommandRouter {
       )
     }
     const parsedParams = parseBrowserCommandParams(method, params)
-    const rawResult = await this.#backend.command(
-      method,
-      parsedParams,
-      options,
-    )
-    return parseBrowserCommandResult(method, rawResult)
-  }
-}
-
-export class BrowserLocator {
-  constructor(
-    private readonly tab: BrowserTab,
-    readonly descriptor: BrowserLocatorInput,
-  ) {}
-
-  async click(
-    options: LocatorClickOptions = {},
-  ): Promise<BrowserExtensionElementActionResult> {
-    return this.tab.runLocator(
-      "locator.click",
-      { ...options, locator: this.descriptor },
-    )
-  }
-
-  async fill(
-    text: string,
-    options: LocatorFillOptions = {},
-  ): Promise<BrowserExtensionFillResult> {
-    return this.tab.runLocator(
-      "locator.fill",
-      { ...options, locator: this.descriptor, text },
-    )
-  }
-
-  async textContent(options: LocatorReadOptions = {}): Promise<string | null> {
-    const result = await this.tab.runLocator(
-      "locator.textContent",
-      { ...options, locator: this.descriptor },
-    )
-    return result.value
-  }
-
-  async inputValue(options: LocatorReadOptions = {}): Promise<string | null> {
-    const result = await this.tab.runLocator(
-      "locator.inputValue",
-      { ...options, locator: this.descriptor },
-    )
-    return result.value
-  }
-
-  async waitFor(
-    options: LocatorWaitOptions = {},
-  ): Promise<BrowserExtensionWaitForResult> {
-    return this.tab.runLocator(
-      "locator.waitFor",
-      { ...options, locator: this.descriptor },
-    )
+    try {
+      const rawResult = await this.#backend.command(
+        method,
+        parsedParams,
+        options,
+      )
+      return parseBrowserCommandResult(method, rawResult)
+    } catch (cause) {
+      if (cause instanceof BrowserHostClientError) {
+        throw new BrowserRuntimeError(
+          cause.code as BrowserContractErrorCode,
+          cause.message,
+          {
+            retryable: cause.retryable,
+            details: cause.details,
+            cause,
+          },
+        )
+      }
+      throw cause
+    }
   }
 }
 
 export class BrowserTab {
   readonly #router: CommandRouter
+  declare readonly playwright: BrowserPlaywrightAPI
   tabId: number
 
   constructor(tabId: number, router: CommandRouter) {
     this.#router = router
     this.tabId = validateTabId(tabId)
-    if (!router.supports("locator.click")) {
+    const hasPlaywright = router.capabilities.features.playwrightLocator
+      && BROWSER_CONTRACT_V3_PLAYWRIGHT_COMMAND_METHODS.every((method) =>
+        router.supports(method)
+      )
+    if (hasPlaywright) {
+      Object.defineProperty(this, "playwright", {
+        configurable: false,
+        enumerable: true,
+        value: new BrowserPlaywrightAPI(router, () => this.tabId),
+        writable: false,
+      })
+    } else {
       return new Proxy(this, {
         get(target, property) {
-          if (property === "locator") return undefined
+          if (property === "playwright") return undefined
           const value = Reflect.get(target, property, target)
           return typeof value === "function" ? value.bind(target) : value
         },
         has(target, property) {
-          if (property === "locator") return false
+          if (property === "playwright") return false
           return Reflect.has(target, property)
         },
         getOwnPropertyDescriptor(target, property) {
-          if (property === "locator") return undefined
+          if (property === "playwright") return undefined
           return Reflect.getOwnPropertyDescriptor(target, property)
         },
       })
@@ -1004,46 +975,6 @@ export class BrowserTab {
     return this.#router.run("tabs.markDeliverable", { tabId: this.tabId })
   }
 
-  locator(descriptor: BrowserLocatorInput): BrowserLocator {
-    if (!this.#router.supports("locator.click")) {
-      throw new BrowserRuntimeError(
-        "CAPABILITY_UNAVAILABLE",
-        "Structured locators are unavailable on this browser backend.",
-      )
-    }
-    return new BrowserLocator(this, descriptor)
-  }
-
-  runLocator(
-    method: "locator.click",
-    params: Omit<BrowserContractCommandParams<"locator.click">, "tabId">,
-  ): Promise<BrowserExtensionElementActionResult>
-  runLocator(
-    method: "locator.fill",
-    params: Omit<BrowserContractCommandParams<"locator.fill">, "tabId">,
-  ): Promise<BrowserExtensionFillResult>
-  runLocator(
-    method: "locator.textContent" | "locator.inputValue",
-    params: Omit<
-      BrowserContractCommandParams<"locator.textContent">,
-      "tabId"
-    >,
-  ): Promise<BrowserExtensionLocatorValueResult>
-  runLocator(
-    method: "locator.waitFor",
-    params: Omit<BrowserContractCommandParams<"locator.waitFor">, "tabId">,
-  ): Promise<BrowserExtensionWaitForResult>
-  runLocator(
-    method:
-      | "locator.click"
-      | "locator.fill"
-      | "locator.textContent"
-      | "locator.inputValue"
-      | "locator.waitFor",
-    params: Record<string, unknown>,
-  ) {
-    return this.#router.run(method, this.withTabId(params))
-  }
 }
 
 function renderDocumentation(
@@ -1107,7 +1038,10 @@ export class BrowserContext {
     this.capabilities = this.info.capabilities
     this.apiManifest = getInfo.apiManifest
     this.documentationManifest = getInfo.documentationManifest
-    this.#router = new CommandRouter(backend, this.capabilities)
+    this.#router = new CommandRouter(
+      backend,
+      this.capabilities,
+    )
     this.#documentation = renderDocumentation(
       this.info,
       this.documentationManifest,

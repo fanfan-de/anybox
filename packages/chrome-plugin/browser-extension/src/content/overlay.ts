@@ -7,10 +7,10 @@ type OverlayRuntime = {
 }
 
 const overlayGlobal = globalThis as typeof globalThis & {
-  __anyboxBrowserOverlayV2__?: OverlayRuntime
+  __anyboxBrowserOverlay__?: OverlayRuntime
 }
 
-if (!overlayGlobal.__anyboxBrowserOverlayV2__) {
+if (!overlayGlobal.__anyboxBrowserOverlay__) {
   let hideTimer: number | undefined
 
   const ensureRoot = () => {
@@ -61,7 +61,7 @@ if (!overlayGlobal.__anyboxBrowserOverlayV2__) {
       }
       document.getElementById(ROOT_ID)?.remove()
       chrome.runtime.onMessage.removeListener(onMessage)
-      delete overlayGlobal.__anyboxBrowserOverlayV2__
+      delete overlayGlobal.__anyboxBrowserOverlay__
     },
   }
   const onMessage = (
@@ -81,6 +81,6 @@ if (!overlayGlobal.__anyboxBrowserOverlayV2__) {
     sendResponse({ ok: true })
     return true
   }
-  overlayGlobal.__anyboxBrowserOverlayV2__ = runtime
+  overlayGlobal.__anyboxBrowserOverlay__ = runtime
   chrome.runtime.onMessage.addListener(onMessage)
 }

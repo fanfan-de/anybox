@@ -4,7 +4,8 @@ import {
   BROWSER_EXTENSION_PROTOCOL_VERSION,
 } from "@anybox/chrome-shared/browser-extension"
 import {
-  BROWSER_CONTRACT_V1_VERSION,
+  BROWSER_CONTRACT_COMMAND_METHODS,
+  BROWSER_CONTRACT_V3_PLAYWRIGHT_COMMAND_METHODS,
   BROWSER_CONTRACT_VERSION,
 } from "@anybox/chrome-shared/browser-contract"
 import { BrowserExtensionBridge } from "../src/bridge.ts"
@@ -45,6 +46,10 @@ function registerReady(
     extensionInstanceID: instanceID,
     extensionID: ANYBOX_CHROME_EXTENSION_ID,
     version: "0.1.0",
+    capabilities: {
+      contractVersion: BROWSER_CONTRACT_VERSION,
+      commands: BROWSER_CONTRACT_COMMAND_METHODS,
+    },
   })
   return connectionID
 }
@@ -75,6 +80,10 @@ describe("BrowserExtensionBridge command result ownership", () => {
       extensionInstanceID: "forged-instance",
       extensionID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       version: "0.1.0",
+      capabilities: {
+        contractVersion: BROWSER_CONTRACT_VERSION,
+        commands: BROWSER_CONTRACT_COMMAND_METHODS,
+      },
     })
 
     expect(rejected.closes).toEqual([{
@@ -91,6 +100,10 @@ describe("BrowserExtensionBridge command result ownership", () => {
       extensionInstanceID: "real-instance",
       extensionID: ANYBOX_CHROME_EXTENSION_ID,
       version: "0.1.0",
+      capabilities: {
+        contractVersion: BROWSER_CONTRACT_VERSION,
+        commands: BROWSER_CONTRACT_COMMAND_METHODS,
+      },
     })
 
     expect(accepted.closes).toEqual([])
@@ -212,6 +225,66 @@ describe("BrowserExtensionBridge command result ownership", () => {
     })
   })
 
+  test("accepts only v3 and hides an incomplete Playwright surface", () => {
+    const partialBridge = new BrowserExtensionBridge()
+    const partial = createSocket()
+    const partialID = partialBridge.register(partial.socket, {
+      transport: "native",
+    })
+    partialBridge.handleRawMessage(partialID, {
+      type: "hello",
+      protocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
+      extensionInstanceID: "partial-v3-extension",
+      extensionID: ANYBOX_CHROME_EXTENSION_ID,
+      version: "0.3.0",
+      capabilities: {
+        contractVersion: BROWSER_CONTRACT_VERSION,
+        commands: [
+          "tabs.list",
+          "page.screenshot",
+          "playwright.domSnapshot",
+        ],
+      },
+    })
+    expect(partialBridge.backendInfo().capabilities.features.playwrightLocator)
+      .toBe(false)
+    expect(
+      partialBridge.backendInfo().capabilities.commands.some((method) =>
+        method.startsWith("playwright.")
+      ),
+    ).toBe(false)
+
+    const v3Bridge = new BrowserExtensionBridge()
+    const v3 = createSocket()
+    const v3ID = v3Bridge.register(v3.socket, { transport: "native" })
+    v3Bridge.handleRawMessage(v3ID, {
+      type: "hello",
+      protocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
+      extensionInstanceID: "v3-extension",
+      extensionID: ANYBOX_CHROME_EXTENSION_ID,
+      version: "0.3.0",
+      capabilities: {
+        contractVersion: BROWSER_CONTRACT_VERSION,
+        commands: BROWSER_CONTRACT_COMMAND_METHODS,
+      },
+    })
+    expect(v3Bridge.backendInfo()).toMatchObject({
+      contractVersion: BROWSER_CONTRACT_VERSION,
+      capabilities: {
+        features: {
+          playwrightLocator: true,
+          playwrightApiRevision: 1,
+          playwrightEngineVersion: "1.61.1",
+        },
+      },
+    })
+    expect(
+      BROWSER_CONTRACT_V3_PLAYWRIGHT_COMMAND_METHODS.every((method) =>
+        v3Bridge.backendInfo().capabilities.commands.includes(method)
+      ),
+    ).toBe(true)
+  })
+
   test("rechecks the selected connection capability immediately before dispatch", async () => {
     const bridge = new BrowserExtensionBridge()
     const limited = createSocket()
@@ -236,7 +309,9 @@ describe("BrowserExtensionBridge command result ownership", () => {
       code: "CAPABILITY_UNAVAILABLE",
       retryable: false,
     })
-    expect(limited.messages).toEqual([])
+    expect(limited.messages.filter((message) =>
+      (message as { type?: string }).type === "command"
+    )).toEqual([])
   })
 
   test.each([
@@ -253,8 +328,10 @@ describe("BrowserExtensionBridge command result ownership", () => {
     const owner = createSocket()
     const ownerConnectionID = registerReady(bridge, owner, "owner-instance")
     const commandPromise = bridge.sendCommand("tabs.list", undefined, { timeoutMs: 1_000 })
-    const command = owner.messages[0] as SentCommand
-    expect(command.contractVersion).toBe(BROWSER_CONTRACT_V1_VERSION)
+    const command = owner.messages.find((message) =>
+      (message as { type?: string }).type === "command"
+    ) as SentCommand
+    expect(command.contractVersion).toBe(BROWSER_CONTRACT_VERSION)
 
     const other = createSocket()
     const otherConnectionID = registerReady(bridge, other, "other-instance")

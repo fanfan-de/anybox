@@ -29,8 +29,8 @@ import {
 } from "@anybox/chrome-shared/browser-extension"
 import {
   BROWSER_CONTRACT_SUPPORTED_VERSIONS,
-  BROWSER_CONTRACT_V1_VERSION,
   BROWSER_CONTRACT_VERSION,
+  type BrowserContractVersion,
 } from "@anybox/chrome-shared/browser-contract"
 import {
   BROWSER_IPC_HANDSHAKE_TIMEOUT_MS,
@@ -933,18 +933,7 @@ export class BrowserIpcGateway {
         ? {
             applicationCapabilities: {
               runtimeOperations: ["status", "getInfo", "command"],
-              browserContractVersions: [...BROWSER_CONTRACT_SUPPORTED_VERSIONS]
-                .filter((version) => {
-                  const maximum = Number(
-                    process.env.ANYBOX_BROWSER_CONTRACT_MAX_VERSION
-                    ?? BROWSER_CONTRACT_VERSION,
-                  )
-                  return version <= (
-                    Number.isInteger(maximum)
-                      ? maximum
-                      : BROWSER_CONTRACT_VERSION
-                  )
-                }),
+              browserContractVersions: [...BROWSER_CONTRACT_SUPPORTED_VERSIONS],
             },
           }
         : {}),
@@ -975,6 +964,9 @@ export class BrowserIpcGateway {
     }
 
     connection.requestIDs.add(request.requestID)
+    const commandStartedAt = request.operation === "command"
+      ? performance.now()
+      : undefined
     try {
       const data = request.operation === "status"
         ? this.runtimeStatus(connection)
@@ -986,6 +978,27 @@ export class BrowserIpcGateway {
               this.policy,
               connection.authorizationPublicKey,
             )
+      if (
+        request.operation === "command"
+        && commandStartedAt !== undefined
+      ) {
+        const result = data && typeof data === "object"
+          ? data as Record<string, unknown>
+          : {}
+        const matchCount = typeof result.count === "number"
+          ? result.count
+          : Array.isArray(result.values)
+            ? result.values.length
+            : undefined
+        log.info("command", {
+          method: request.method,
+          durationMs: Math.max(
+            0,
+            Math.round(performance.now() - commandStartedAt),
+          ),
+          ...(matchCount === undefined ? {} : { matchCount }),
+        })
+      }
       if (
         request.operation === "command"
         && request.authorization?.value
@@ -1007,6 +1020,19 @@ export class BrowserIpcGateway {
       const code = error instanceof BrowserCommandGatewayError
         ? error.code
         : "INTERNAL_ERROR"
+      if (
+        request.operation === "command"
+        && commandStartedAt !== undefined
+      ) {
+        log.info("command", {
+          method: request.method,
+          durationMs: Math.max(
+            0,
+            Math.round(performance.now() - commandStartedAt),
+          ),
+          errorCode: code,
+        })
+      }
       if (code === "APPROVAL_REQUIRED") {
         this.metrics.approvalChallenges += 1
         log.info("approval-required", {
@@ -1079,9 +1105,7 @@ export class BrowserIpcGateway {
     requestedContractVersion: number,
     browserID?: string,
   ) {
-    if (!BROWSER_CONTRACT_SUPPORTED_VERSIONS.includes(
-      requestedContractVersion as (typeof BROWSER_CONTRACT_SUPPORTED_VERSIONS)[number],
-    )) {
+    if (requestedContractVersion !== BROWSER_CONTRACT_VERSION) {
       throw new BrowserCommandGatewayError(
         "CONTRACT_VERSION_UNSUPPORTED",
         `Browser Contract version '${requestedContractVersion}' is not supported.`,
@@ -1096,9 +1120,7 @@ export class BrowserIpcGateway {
     }
     return this.bridge.getInfo(
       browserID,
-      requestedContractVersion as
-        | typeof BROWSER_CONTRACT_V1_VERSION
-        | typeof BROWSER_CONTRACT_VERSION,
+      requestedContractVersion as BrowserContractVersion,
     )
   }
 

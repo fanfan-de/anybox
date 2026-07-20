@@ -5,6 +5,13 @@ import {
   sign as signPayload,
 } from "node:crypto"
 import {
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
+import os from "node:os"
+import path from "node:path"
+import {
   BROWSER_CONTRACT_COMMAND_METHODS,
   BROWSER_CONTRACT_VERSION,
   createBrowserBackendInfo,
@@ -69,6 +76,7 @@ function expectation(
     origin: challenge.origin,
     tabId: challenge.tabId,
     sensitive: challenge.sensitive,
+    requestFingerprint: challenge.requestFingerprint,
     ...overrides,
   }
 }
@@ -95,6 +103,7 @@ function sign(
     origin: challenge.origin,
     tabId: challenge.tabId,
     sensitive: challenge.sensitive,
+    requestFingerprint: challenge.requestFingerprint,
     issuedAt: challenge.issuedAt,
     expiresAt: challenge.expiresAt,
     ...overrides,
@@ -176,6 +185,41 @@ describe("Browser authorization receipts", () => {
       .toBe(challenge.challengeID)
   })
 
+  test("binds a one-time receipt to a normalized local-file fingerprint", () => {
+    const service = new BrowserAuthorizationService()
+    const requestFingerprint = "a".repeat(64)
+    const challenge = service.createChallenge({
+      method: "playwright.fileChooser.setFiles",
+      security: "local-file-read",
+      context: context(),
+      extensionInstanceID: "profile-auth",
+      origin: "https://example.com",
+      tabId: 9,
+      sensitive: true,
+      requestFingerprint,
+      permissionAction: "ask",
+      risk: "high",
+      rationale: "Each local file upload requires a one-time decision.",
+      authorizationPublicKey: encodedPublicKey,
+    })
+    const receipt = sign(challenge)
+
+    expect(() => service.verify(
+      receipt,
+      expectation(challenge, {
+        requestFingerprint: "b".repeat(64),
+      }),
+      encodedPublicKey,
+    )).toThrow(expect.objectContaining({
+      code: "AUTHORIZATION_INVALID",
+    }))
+    expect(service.verify(
+      receipt,
+      expectation(challenge),
+      encodedPublicKey,
+    ).challenge.requestFingerprint).toBe(requestFingerprint)
+  })
+
   test("binds each challenge to the runtime connection public key", () => {
     const service = new BrowserAuthorizationService()
     const challenge = createChallenge(service)
@@ -194,7 +238,7 @@ describe("Browser authorization receipts", () => {
     }))
   })
 
-  test("never forwards a v2 write before a valid Host challenge receipt", async () => {
+  test("never forwards a v3 write before a valid Host challenge receipt", async () => {
     let forwarded = 0
     const bridge = {
       backendInfo: () => createBrowserBackendInfo({
@@ -206,7 +250,6 @@ describe("Browser authorization receipts", () => {
         features: {
           ownership: true,
           claim: true,
-          locator: true,
         },
       }),
       describeTab: async () => undefined,
@@ -253,6 +296,105 @@ describe("Browser authorization receipts", () => {
       authorization: { value: sign(challenge!) },
     }, bridge, undefined, encodedPublicKey)).resolves.toMatchObject({ id: 9 })
     expect(forwarded).toBe(1)
+  })
+
+  test("normalizes local files and rejects a path swap after approval", async () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), "anybox-local-file-auth-"))
+    const firstPath = path.join(root, "first.txt")
+    const secondPath = path.join(root, "second.txt")
+    writeFileSync(firstPath, "first")
+    writeFileSync(secondPath, "second")
+    let forwarded = 0
+    const bridge = {
+      backendInfo: () => createBrowserBackendInfo({
+        connected: true,
+        contractVersion: BROWSER_CONTRACT_VERSION,
+        browserId: "extension:profile-auth",
+        instanceID: "profile-auth",
+        commands: BROWSER_CONTRACT_COMMAND_METHODS,
+      }),
+      describeTab: async () => ({
+        id: 9,
+        active: true,
+        title: "Upload",
+        url: "https://example.com/upload",
+        lease: {
+          sessionID: context().sessionID,
+          turnID: context().turnID,
+          extensionInstanceID: "profile-auth",
+          state: "claimed",
+          expiresAt: Date.now() + 60_000,
+        },
+      }),
+      sendCommand: async (
+        method: string,
+        params: Record<string, unknown>,
+      ) => {
+        expect(method).toBe("playwright.fileChooser.setFiles")
+        expect(params.files).toEqual([path.resolve(firstPath)])
+        forwarded += 1
+        return {
+          tabId: 9,
+          documentGeneration: 3,
+          fileCount: 1,
+        }
+      },
+      markOwnedTab() {},
+      touchTab() {},
+      releaseOwnedTab() {},
+    } as unknown as BrowserExtensionBridge
+    const request = {
+      contractVersion: BROWSER_CONTRACT_VERSION,
+      method: "playwright.fileChooser.setFiles",
+      params: {
+        tabId: 9,
+        eventID: "00000000-0000-4000-8000-000000000009",
+        files: [firstPath],
+      },
+      context: context(),
+    } as const
+
+    try {
+      let challenge: BrowserAuthorizationChallenge | undefined
+      try {
+        await runBrowserRuntimeCommand(
+          request,
+          bridge,
+          undefined,
+          encodedPublicKey,
+        )
+      } catch (error) {
+        challenge = (error as {
+          details?: { challenge?: BrowserAuthorizationChallenge }
+        }).details?.challenge
+      }
+      expect(challenge).toMatchObject({
+        security: "local-file-read",
+        sensitive: true,
+      })
+      expect(challenge!.requestFingerprint).toMatch(/^[a-f0-9]{64}$/)
+      const receipt = sign(challenge!)
+
+      await expect(runBrowserRuntimeCommand({
+        ...request,
+        params: { ...request.params, files: [secondPath] },
+        authorization: { value: receipt },
+      }, bridge, undefined, encodedPublicKey)).rejects.toMatchObject({
+        code: "AUTHORIZATION_INVALID",
+      })
+      expect(forwarded).toBe(0)
+
+      const result = await runBrowserRuntimeCommand({
+        ...request,
+        authorization: { value: receipt },
+      }, bridge, undefined, encodedPublicKey)
+      expect(result).toMatchObject({
+        fileCount: 1,
+      })
+      expect(forwarded).toBe(1)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 
   test("uses stable receipt errors", () => {

@@ -1151,30 +1151,7 @@ export function PluginsPage({
   const [isImportingPluginURL, setIsImportingPluginURL] = useState(false)
   const [skillContextMenu, setSkillContextMenu] = useState<PluginSkillContextMenuState>(null)
   const [skillBrowser, setSkillBrowser] = useState<PluginSkillBrowserState>(null)
-  const [chromeLaunchState, setChromeLaunchState] = useState<
-    "idle" | "launching" | "opened" | "error"
-  >("idle")
   const effectiveSearchQuery = searchQuery ?? ""
-
-  useEffect(() => {
-    setChromeLaunchState("idle")
-  }, [activePluginID])
-
-  const openChrome = async () => {
-    const launchApplication = window.desktop?.launchApplication
-    if (!launchApplication) {
-      setChromeLaunchState("error")
-      return
-    }
-    setChromeLaunchState("launching")
-    try {
-      await launchApplication({ application: "chrome" })
-      setChromeLaunchState("opened")
-    } catch (error) {
-      console.error("[plugins] Failed to open Chrome.", error)
-      setChromeLaunchState("error")
-    }
-  }
 
   const installedByPluginID = useMemo(
     () => new Map(installedPlugins.map((plugin) => [plugin.pluginID, plugin])),
@@ -1553,44 +1530,6 @@ export function PluginsPage({
                   </header>
 
                   <p className="plugins-detail-description">{pluginDetailDescription(activePlugin, locale, t)}</p>
-
-                  {activePlugin.id === "chrome"
-                    && activeInstalledPlugin
-                    && !activeInstalledPlugin.missingPackage ? (
-                    <section className="plugins-detail-section">
-                      <h2>{t("plugins.chrome.connectionTitle")}</h2>
-                      <div className="plugins-config-card">
-                        <div className="plugins-config-actions">
-                          <span>{t("plugins.chrome.connectionCopy")}</span>
-                          <button
-                            className="plugins-detail-install-button"
-                            type="button"
-                            disabled={chromeLaunchState === "launching"}
-                            onClick={() => void openChrome()}
-                          >
-                            <OpenExternalIcon />
-                            <span>
-                              {chromeLaunchState === "launching"
-                                ? t("plugins.chrome.opening")
-                                : chromeLaunchState === "error"
-                                  ? t("plugins.chrome.retry")
-                                  : t("plugins.chrome.open")}
-                            </span>
-                          </button>
-                        </div>
-                        {chromeLaunchState === "opened" ? (
-                          <div className="settings-banner is-success" role="status">
-                            {t("plugins.chrome.opened")}
-                          </div>
-                        ) : null}
-                        {chromeLaunchState === "error" ? (
-                          <div className="settings-banner is-error" role="alert">
-                            {t("plugins.chrome.openFailed")}
-                          </div>
-                        ) : null}
-                      </div>
-                    </section>
-                  ) : null}
 
                   {activePlugin.configFields.length > 0 ? (
                     <section className="plugins-detail-section">

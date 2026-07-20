@@ -11,28 +11,26 @@ import {
   type BrowserExtensionTabSummary,
 } from "@anybox/chrome-shared/browser-extension"
 import {
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  statSync,
+} from "node:fs"
+import { tmpdir } from "node:os"
+import { join, resolve, sep } from "node:path"
+import {
   BROWSER_CONTRACT_COMMAND_METHODS,
-  BROWSER_CONTRACT_SUPPORTED_VERSIONS,
-  BROWSER_CONTRACT_V1_COMMAND_METHODS,
-  BROWSER_CONTRACT_V1_VERSION,
+  BROWSER_CONTRACT_V3_PLAYWRIGHT_COMMAND_METHODS,
   BROWSER_CONTRACT_VERSION,
   BrowserContractCommandMethod,
   createBrowserBackendInfo,
   createBrowserGetInfoResult,
+  type BrowserContractVersion,
   type BrowserContractCommandMethod as BrowserContractCommandMethodValue,
 } from "@anybox/chrome-shared/browser-contract"
 import * as Log from "./log.ts"
 
 const DEFAULT_COMMAND_TIMEOUT_MS = 15_000
-const V1_SAFE_READ_METHODS = new Set<BrowserContractCommandMethodValue>([
-  "tabs.list",
-  "page.snapshot",
-  "page.interactiveSnapshot",
-  "page.domTree",
-  "page.accessibilityTree",
-  "page.screenshot",
-  "page.waitFor",
-])
 
 type SocketLike = {
   send(data: string): void
@@ -51,7 +49,7 @@ type Connection = {
   lastTransportError?: string
   browserCommands?: BrowserContractCommandMethodValue[]
   advertisedBrowserContractVersion?: number
-  browserContractVersion?: number
+  browserContractVersion?: BrowserContractVersion
   browserContractCompatible?: boolean
   browserID?: string
   connectedAt: number
@@ -117,18 +115,64 @@ function normalizeError(error: unknown) {
   return new Error(typeof error === "string" ? error : String(error))
 }
 
-function configuredContractMaxVersion() {
-  const parsed = Number(process.env.ANYBOX_BROWSER_CONTRACT_MAX_VERSION)
-  return Number.isInteger(parsed) && parsed > 0
-    ? Math.min(parsed, BROWSER_CONTRACT_VERSION)
-    : BROWSER_CONTRACT_VERSION
+const DOWNLOAD_DIRECTORY_PREFIX = "anybox-browser-downloads-"
+const DOWNLOAD_TTL_MS = 24 * 60 * 60 * 1_000
+const DOWNLOAD_CLEANUP_INTERVAL_MS = 60 * 60 * 1_000
+let downloadDirectory: string | undefined
+let downloadCleanupTimer: ReturnType<typeof setInterval> | undefined
+
+function cleanupManagedDownloadDirectories(now = Date.now()) {
+  const root = resolve(tmpdir())
+  const rootPrefix = root.endsWith(sep) ? root : `${root}${sep}`
+  try {
+    for (const entry of readdirSync(root, { withFileTypes: true })) {
+      if (!entry.isDirectory() || !entry.name.startsWith(
+        DOWNLOAD_DIRECTORY_PREFIX,
+      )) {
+        continue
+      }
+      const candidate = resolve(join(root, entry.name))
+      if (!candidate.startsWith(rootPrefix)) continue
+      try {
+        for (const file of readdirSync(candidate, { withFileTypes: true })) {
+          if (!file.isFile()) continue
+          const filePath = resolve(join(candidate, file.name))
+          const candidatePrefix = candidate.endsWith(sep)
+            ? candidate
+            : `${candidate}${sep}`
+          if (!filePath.startsWith(candidatePrefix)) continue
+          if (now - statSync(filePath).mtimeMs >= DOWNLOAD_TTL_MS) {
+            rmSync(filePath, { force: true })
+          }
+        }
+        if (
+          candidate !== downloadDirectory
+          && readdirSync(candidate).length === 0
+        ) {
+          rmSync(candidate, { force: true })
+        }
+      } catch {
+        // A concurrent Host may own or remove this directory.
+      }
+    }
+  } catch {
+    // Cleanup is best-effort.
+  }
 }
 
-function negotiatedContractVersion(advertised: readonly number[]) {
-  const maximum = configuredContractMaxVersion()
-  return [...BROWSER_CONTRACT_SUPPORTED_VERSIONS]
-    .filter((version) => version <= maximum && advertised.includes(version))
-    .sort((left, right) => right - left)[0]
+function managedDownloadDirectory() {
+  cleanupManagedDownloadDirectories()
+  if (downloadDirectory) return downloadDirectory
+  const root = resolve(tmpdir())
+  downloadDirectory = mkdtempSync(join(root, DOWNLOAD_DIRECTORY_PREFIX))
+  if (!downloadCleanupTimer) {
+    downloadCleanupTimer = setInterval(
+      () => cleanupManagedDownloadDirectories(),
+      DOWNLOAD_CLEANUP_INTERVAL_MS,
+    )
+    downloadCleanupTimer.unref?.()
+  }
+  return downloadDirectory
 }
 
 function browserIDForInstance(extensionInstanceID: string) {
@@ -182,22 +226,29 @@ export class BrowserExtensionBridge {
 
   backendInfo(browserID?: string) {
     const active = this.activeConnection(browserID)
+    const contractVersion =
+      active?.browserContractVersion ?? BROWSER_CONTRACT_VERSION
+    const commands = active?.browserCommands ?? []
+    const playwrightLocator =
+      BROWSER_CONTRACT_V3_PLAYWRIGHT_COMMAND_METHODS.every((method) =>
+        commands.includes(method)
+      )
     return createBrowserBackendInfo({
       connected: Boolean(active),
-      contractVersion: active?.browserContractVersion === BROWSER_CONTRACT_V1_VERSION
-        ? BROWSER_CONTRACT_V1_VERSION
-        : BROWSER_CONTRACT_VERSION,
+      contractVersion,
       browserId: active?.browserID ?? browserID ?? "extension",
       instanceID: active?.extensionInstanceID,
       protocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
       backendVersion: active?.version,
-      commands: active?.browserCommands ?? [],
+      commands,
       features: {
-        ownership: active?.browserContractVersion === BROWSER_CONTRACT_VERSION,
-        claim: active?.browserContractVersion === BROWSER_CONTRACT_VERSION,
-        locator: active?.browserCommands?.some((method) =>
-          method.startsWith("locator.")
-        ) ?? false,
+        ownership: true,
+        claim: true,
+        playwrightLocator,
+        playwrightApiRevision: playwrightLocator ? 1 : 0,
+        ...(playwrightLocator
+          ? { playwrightEngineVersion: "1.61.1" }
+          : {}),
         cancel: false,
       },
     })
@@ -213,29 +264,10 @@ export class BrowserExtensionBridge {
 
   getInfo(
     browserID?: string,
-    contractVersion: typeof BROWSER_CONTRACT_V1_VERSION
-      | typeof BROWSER_CONTRACT_VERSION = BROWSER_CONTRACT_VERSION,
+    contractVersion: BrowserContractVersion = BROWSER_CONTRACT_VERSION,
   ) {
-    const backend = this.backendInfo(browserID)
-    const publicBackend = contractVersion === BROWSER_CONTRACT_V1_VERSION
-      ? {
-          ...backend,
-          capabilities: {
-            ...backend.capabilities,
-            commands: backend.capabilities.commands.filter((method) =>
-              V1_SAFE_READ_METHODS.has(method)
-            ),
-            features: {
-              ...backend.capabilities.features,
-              ownership: false,
-              claim: false,
-              locator: false,
-            },
-          },
-        }
-      : backend
     return createBrowserGetInfoResult(
-      publicBackend,
+      this.backendInfo(browserID),
       contractVersion,
     )
   }
@@ -449,10 +481,7 @@ export class BrowserExtensionBridge {
         send(connection.socket, {
           type: "command",
           commandID,
-          contractVersion:
-            options.contractVersion
-            ?? connection.browserContractVersion
-            ?? BROWSER_CONTRACT_VERSION,
+          contractVersion: options.contractVersion ?? BROWSER_CONTRACT_VERSION,
           method,
           params,
           context: commandContext,
@@ -500,10 +529,10 @@ export class BrowserExtensionBridge {
       options.browserID ?? options.context?.browserID,
     )
     if (!connection) return undefined
-    const methods: BrowserExtensionCommandMethodValue[] =
-      connection.browserContractVersion === BROWSER_CONTRACT_VERSION
-        ? ["tabs.list", "tabs.listUser"]
-        : ["tabs.list"]
+    const methods: BrowserExtensionCommandMethodValue[] = [
+      "tabs.list",
+      "tabs.listUser",
+    ]
     for (const method of methods) {
       if (!connection.browserCommands?.includes(
         method as BrowserContractCommandMethodValue,
@@ -593,34 +622,35 @@ export class BrowserExtensionBridge {
         connection.extensionID = message.extensionID
         connection.version = message.version
         connection.lastTransportError = message.lastTransportError
-        const legacyContractV1 =
-          !message.capabilities && /^0\.1\./.test(message.version)
-        const advertisedVersions = message.capabilities?.contractVersions
-          ?? (message.capabilities
-            ? [message.capabilities.contractVersion]
-            : legacyContractV1
-              ? [BROWSER_CONTRACT_V1_VERSION]
-              : [])
-        connection.advertisedBrowserContractVersion = advertisedVersions
-          .filter((version) => Number.isInteger(version))
-          .sort((left, right) => right - left)[0]
-        connection.browserContractVersion =
-          negotiatedContractVersion(advertisedVersions)
+        connection.advertisedBrowserContractVersion =
+          message.capabilities.contractVersion
         connection.browserContractCompatible =
-          connection.browserContractVersion !== undefined
-        const contractCommands =
-          connection.browserContractVersion === BROWSER_CONTRACT_VERSION
-            ? BROWSER_CONTRACT_COMMAND_METHODS
-            : BROWSER_CONTRACT_V1_COMMAND_METHODS
-        connection.browserCommands = message.capabilities
-          ? connection.browserContractCompatible
-            ? contractCommands.filter((method) =>
-                message.capabilities?.commands.includes(method)
-              )
-            : []
-          : legacyContractV1
-            ? [...BROWSER_CONTRACT_V1_COMMAND_METHODS]
-            : []
+          message.capabilities.contractVersion === BROWSER_CONTRACT_VERSION
+        connection.browserContractVersion = connection.browserContractCompatible
+          ? BROWSER_CONTRACT_VERSION
+          : undefined
+        connection.browserCommands = connection.browserContractCompatible
+          ? BROWSER_CONTRACT_COMMAND_METHODS.filter((method) =>
+              message.capabilities.commands.includes(method)
+            )
+          : []
+        if (connection.browserContractCompatible) {
+          const advertisedPlaywright = new Set(
+            connection.browserCommands.filter((method) =>
+              method.startsWith("playwright.")
+            ),
+          )
+          if (
+            advertisedPlaywright.size > 0
+            && !BROWSER_CONTRACT_V3_PLAYWRIGHT_COMMAND_METHODS.every(
+              (method) => advertisedPlaywright.has(method),
+            )
+          ) {
+            connection.browserCommands = connection.browserCommands.filter(
+              (method) => !method.startsWith("playwright."),
+            )
+          }
+        }
         connection.ready = true
         const active = this.activeConnectionID
           ? this.connections.get(this.activeConnectionID)
@@ -633,7 +663,6 @@ export class BrowserExtensionBridge {
         }
         if (
           connection.browserContractCompatible
-          && message.capabilities?.contractVersions
         ) {
           send(connection.socket, {
             type: "helloAck",
@@ -643,6 +672,7 @@ export class BrowserExtensionBridge {
             extensionInstanceID: message.extensionInstanceID,
             heartbeatIntervalMs: 30_000,
             heartbeatTimeoutMs: 10_000,
+            downloadDirectory: managedDownloadDirectory(),
           })
         }
         log.info("hello", {
@@ -707,11 +737,13 @@ export class BrowserExtensionBridge {
           ) as Error & {
             code?: string
             retryable?: boolean
+            details?: Record<string, unknown>
           }
           if (message.code) error.code = message.code
           if (message.retryable !== undefined) {
             error.retryable = message.retryable
           }
+          if (message.details) error.details = message.details
           pending.reject(error)
         }
         return

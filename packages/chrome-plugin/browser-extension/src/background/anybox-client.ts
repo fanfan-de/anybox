@@ -8,12 +8,8 @@ import {
 } from "@anybox/chrome-shared/browser-extension"
 import {
   BROWSER_CONTRACT_COMMAND_METHODS,
-  BROWSER_CONTRACT_SUPPORTED_VERSIONS,
   BROWSER_CONTRACT_VERSION,
 } from "@anybox/chrome-shared/browser-contract"
-import {
-  supportsBrowserCommandContractVersion,
-} from "./browser-contract-compat"
 import { NativeHostChunkReassembler } from "./native-chunks"
 import {
   detachAllDebuggers,
@@ -26,6 +22,9 @@ import {
   STATUS_STORAGE_KEY,
   type BridgeStatus,
 } from "../shared/status"
+import {
+  configurePlaywrightDownloadDirectory,
+} from "./playwright-executor"
 
 const NATIVE_HOST_NAME = ANYBOX_CHROME_NATIVE_HOST_NAME
 const RECONNECT_BASE_MS = 1_000
@@ -33,8 +32,8 @@ const RECONNECT_MAX_MS = 60_000
 const HELLO_ACK_TIMEOUT_MS = 10_000
 const HEARTBEAT_INTERVAL_MS = 30_000
 const HEARTBEAT_TIMEOUT_MS = 10_000
-const HEALTH_ALARM_NAME = "anybox-browser-health-v2"
-const DISCONNECT_CLEANUP_ALARM_NAME = "anybox-browser-disconnect-cleanup-v2"
+const HEALTH_ALARM_NAME = "anybox-browser-health"
+const DISCONNECT_CLEANUP_ALARM_NAME = "anybox-browser-disconnect-cleanup"
 const DISCONNECT_GRACE_MS = 2 * 60_000
 
 type ActiveTransport = {
@@ -178,7 +177,6 @@ async function sendHello() {
     version: extensionVersion(),
     capabilities: {
       contractVersion: BROWSER_CONTRACT_VERSION,
-      contractVersions: BROWSER_CONTRACT_SUPPORTED_VERSIONS,
       commands: BROWSER_CONTRACT_COMMAND_METHODS,
     },
     lastTransportError,
@@ -195,18 +193,8 @@ async function handleCommand(message: BrowserExtensionCommandMessage) {
         { code: "BACKEND_UNAVAILABLE", retryable: true },
       )
     }
-    if (!supportsBrowserCommandContractVersion(message.contractVersion)) {
-      throw Object.assign(
-        new Error("The browser command contract version is not supported."),
-        {
-          code: "CONTRACT_VERSION_UNSUPPORTED",
-          retryable: false,
-        },
-      )
-    }
     const data = await handleBrowserCommand(message.method, message.params, {
       context: message.context,
-      contractVersion: message.contractVersion,
       signal: controller.signal,
     })
     sendClientMessage({
@@ -224,6 +212,12 @@ async function handleCommand(message: BrowserExtensionCommandMessage) {
       && typeof (error as { retryable?: unknown }).retryable === "boolean"
       ? (error as { retryable: boolean }).retryable
       : undefined
+    const details = error && typeof error === "object"
+      && (error as { details?: unknown }).details
+      && typeof (error as { details?: unknown }).details === "object"
+      && !Array.isArray((error as { details?: unknown }).details)
+      ? (error as { details: Record<string, unknown> }).details
+      : undefined
     sendClientMessage({
       type: "result",
       commandID: message.commandID,
@@ -231,6 +225,7 @@ async function handleCommand(message: BrowserExtensionCommandMessage) {
       error: error instanceof Error ? error.message : String(error),
       ...(code ? { code } : {}),
       ...(retryable !== undefined ? { retryable } : {}),
+      ...(details ? { details } : {}),
     })
   } finally {
     pendingCommands.delete(message.commandID)
@@ -252,6 +247,7 @@ function markConnectionAcknowledged(message: Extract<
       return
     }
     acknowledged = true
+    configurePlaywrightDownloadDirectory(message.downloadDirectory)
     cancelDisconnectCleanup()
     reconnectAttempt = 0
     lastHostActivity = Date.now()

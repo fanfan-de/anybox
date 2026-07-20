@@ -52,7 +52,7 @@ function importRuntime(label) {
 function getInfo(commands = ["tabs.list"]) {
   return {
     backend: {
-      contractVersion: 2,
+      contractVersion: 3,
       browserId: "extension",
       name: "Anybox Chrome Extension",
       kind: "extension",
@@ -65,7 +65,8 @@ function getInfo(commands = ["tabs.list"]) {
         features: {
           ownership: false,
           claim: false,
-          locator: false,
+          playwrightLocator: false,
+          playwrightApiRevision: 0,
           cancel: false,
           arbitraryJavaScript: false,
           scopedCdp: false,
@@ -74,7 +75,7 @@ function getInfo(commands = ["tabs.list"]) {
       },
     },
     apiManifest: {
-      contractVersion: 2,
+      contractVersion: 3,
       commands: commands.map((method) => ({
         method,
         apiPath: COMMAND_METADATA[method].apiPath,
@@ -86,7 +87,7 @@ function getInfo(commands = ["tabs.list"]) {
       })),
     },
     documentationManifest: {
-      contractVersion: 2,
+      contractVersion: 3,
       title: "Anybox Browser Client Runtime",
       entries: commands.map((method) => ({
         method,
@@ -145,7 +146,7 @@ test("installs a discovery-backed BrowserManager on the provided globals", async
   assert.equal(forUrl.browserId, "extension")
   assert.equal(
     requests.filter(({ type }) => type === "getInfo").every((request) =>
-      request.contractVersion === 2
+      request.contractVersion === 3
     ),
     true,
   )
@@ -522,7 +523,7 @@ test("filters API manifests and documentation from backend capabilities", async 
   assert.equal(requests.filter(({ type }) => type === "command").length, 0)
 })
 
-test("routes legacy tabs and Tab APIs through one versioned CommandRouter", async () => {
+test("routes tabs and Tab APIs through the v3 CommandRouter", async () => {
   const requests = []
   const commands = ["tabs.list", "tabs.open", "page.screenshot"]
   const transport = backendTransport({
@@ -580,14 +581,14 @@ test("routes legacy tabs and Tab APIs through one versioned CommandRouter", asyn
   const commandRequests = requests.filter(({ type }) => type === "command")
   assert.deepEqual(commandRequests[0], {
     type: "command",
-    contractVersion: 2,
+    contractVersion: 3,
     method: "tabs.list",
     params: {},
     browserID: "extension",
   })
   assert.deepEqual(commandRequests[1], {
     type: "command",
-    contractVersion: 2,
+    contractVersion: 3,
     method: "tabs.open",
     params: {
       url: "https://example.com/open",
@@ -597,7 +598,7 @@ test("routes legacy tabs and Tab APIs through one versioned CommandRouter", asyn
   })
   assert.deepEqual(commandRequests[2], {
     type: "command",
-    contractVersion: 2,
+    contractVersion: 3,
     method: "page.screenshot",
     params: {
       tabId: 43,
@@ -701,7 +702,7 @@ test("keeps the Browser Host transport out of model-visible runtime properties",
   assert.equal(JSON.stringify({ browser, tab }).includes("transport"), false)
 })
 
-test("does not expose unavailable evaluate, CDP, or locator members", async () => {
+test("does not expose raw access or a partial Playwright surface", async () => {
   const requests = []
   const { setupBrowserRuntime } = await importRuntime("raw-denied")
   const agent = await setupBrowserRuntime({
@@ -721,6 +722,212 @@ test("does not expose unavailable evaluate, CDP, or locator members", async () =
   assert.equal("locator" in tab, false)
   assert.equal(Object.prototype.hasOwnProperty.call(tab, "locator"), false)
   assert.equal(requests.filter(({ type }) => type === "command").length, 0)
+})
+
+test("builds immutable Locator v3 plans and dispatches the complete public surface", async () => {
+  const calls = []
+  const { BrowserPlaywrightAPI } = await importRuntime("playwright-api")
+  const runner = {
+    async run(method, params, options) {
+      calls.push({ method, params, options })
+      const base = { tabId: 17, documentGeneration: 4 }
+      if (method === "playwright.locator.count") {
+        return { ...base, count: 2 }
+      }
+      if (method === "playwright.locator.selectOption") {
+        return { ...base, dispatched: true, values: ["monthly"] }
+      }
+      return { ...base, dispatched: true }
+    },
+  }
+  const playwright = new BrowserPlaywrightAPI(runner, () => 17)
+  const base = playwright.getByRole("button", {
+    name: /save\s+now/iu,
+  })
+  const emptyName = playwright.getByRole("button", { name: "", exact: true })
+  const unchanged = base.filter({})
+  const target = base
+    .filter({ hasText: "Primary", visible: true })
+    .and(playwright.locator("[data-state='ready']"))
+    .nth(1)
+
+  assert.equal(Object.isFrozen(base.plan), true)
+  assert.equal(Object.isFrozen(base.plan.expression), true)
+  assert.deepEqual(unchanged.plan, base.plan)
+  assert.notEqual(unchanged, base)
+  assert.equal(base.plan.expression.kind, "role")
+  assert.deepEqual(emptyName.plan.expression.name, {
+    type: "string",
+    value: "",
+    exact: true,
+  })
+  assert.equal(target.plan.expression.kind, "nth")
+  assert.equal(base.nth(-2).plan.expression.index, -2)
+  const otherTab = new BrowserPlaywrightAPI(runner, () => 18)
+  assert.throws(
+    () => base.and(otherTab.locator("button")),
+    /same tab and frame/u,
+  )
+  assert.throws(
+    () => {
+      target.plan.framePath.push("iframe")
+    },
+    TypeError,
+  )
+
+  assert.equal(await target.count({ timeout: 250 }), 2)
+  assert.deepEqual(await target.selectOption("monthly"), ["monthly"])
+  assert.equal(calls[0].method, "playwright.locator.count")
+  assert.equal(calls[0].params.tabId, 17)
+  assert.equal(calls[0].params.timeoutMs, 250)
+  assert.equal(calls[0].options.timeoutMs, 5_250)
+  assert.equal(calls[0].params.plan.expression.index, 1)
+  assert.deepEqual(
+    calls[0].params.plan.expression.source.left.source.name,
+    { type: "regex", source: "save\\s+now", flags: "iu" },
+  )
+
+  const frameTarget = playwright
+    .frameLocator("iframe[name='outer']")
+    .frameLocator("iframe[data-inner]")
+    .getByLabel("Email", { exact: true })
+  assert.deepEqual(frameTarget.plan.framePath, [
+    "iframe[name='outer']",
+    "iframe[data-inner]",
+  ])
+
+  for (const method of [
+    "domSnapshot",
+    "elementInfo",
+    "locator",
+    "frameLocator",
+    "getByRole",
+    "getByText",
+    "getByLabel",
+    "getByPlaceholder",
+    "getByTestId",
+    "expectNavigation",
+    "waitForURL",
+    "waitForLoadState",
+    "waitForTimeout",
+    "waitForEvent",
+  ]) {
+    assert.equal(typeof playwright[method], "function", method)
+  }
+  for (const method of [
+    "locator",
+    "filter",
+    "and",
+    "or",
+    "first",
+    "last",
+    "nth",
+    "all",
+    "count",
+    "allTextContents",
+    "textContent",
+    "innerText",
+    "getAttribute",
+    "isVisible",
+    "isEnabled",
+    "inputValue",
+    "click",
+    "dblclick",
+    "fill",
+    "type",
+    "press",
+    "selectOption",
+    "setChecked",
+    "check",
+    "uncheck",
+    "waitFor",
+  ]) {
+    assert.equal(typeof target[method], "function", method)
+  }
+})
+
+test("registers navigation before the action and preserves one-shot event handles", async () => {
+  const calls = []
+  const waiterID = "00000000-0000-4000-8000-000000000001"
+  const downloadID = "00000000-0000-4000-8000-000000000002"
+  const chooserID = "00000000-0000-4000-8000-000000000003"
+  const { BrowserPlaywrightAPI } = await importRuntime("playwright-events")
+  const runner = {
+    async run(method, params) {
+      calls.push({ method, params })
+      const base = { tabId: 9, documentGeneration: 8 }
+      if (
+        method === "playwright.waitForNavigation"
+        && params.mode === "register"
+      ) {
+        return {
+          ...base,
+          matched: true,
+          state: "registered",
+          waiterID,
+        }
+      }
+      if (method === "playwright.waitForNavigation") {
+        return { ...base, matched: true, state: "load" }
+      }
+      if (method === "playwright.waitForEvent") {
+        return {
+          ...base,
+          event: params.event,
+          eventID: params.event === "download" ? downloadID : chooserID,
+          ...(params.event === "filechooser" ? { multiple: true } : {}),
+        }
+      }
+      if (method === "playwright.download.path") {
+        return { ...base, path: "C:\\managed\\download.bin" }
+      }
+      if (method === "playwright.fileChooser.setFiles") {
+        return { ...base, fileCount: params.files.length }
+      }
+      throw new Error(`Unexpected method: ${method}`)
+    },
+  }
+  const playwright = new BrowserPlaywrightAPI(runner, () => 9)
+  const result = await playwright.expectNavigation(async () => {
+    calls.push({ method: "action" })
+    return "action-result"
+  }, { waitUntil: "load" })
+
+  assert.equal(result, "action-result")
+  assert.deepEqual(calls.slice(0, 3).map(({ method }) => method), [
+    "playwright.waitForNavigation",
+    "action",
+    "playwright.waitForNavigation",
+  ])
+  assert.equal(calls[0].params.fromGeneration, undefined)
+  assert.equal(calls[2].params.waiterID, waiterID)
+
+  const actionFailure = new Error("action failed")
+  await assert.rejects(
+    playwright.expectNavigation(() => {
+      throw actionFailure
+    }),
+    (error) => error === actionFailure,
+  )
+  assert.deepEqual(calls.at(-1), {
+    method: "playwright.waitForNavigation",
+    params: {
+      tabId: 9,
+      mode: "cancel",
+      waiterID,
+      timeoutMs: 1_000,
+    },
+  })
+
+  const download = await playwright.waitForEvent("download")
+  assert.equal(await download.path(), "C:\\managed\\download.bin")
+  const chooser = await playwright.waitForEvent("filechooser")
+  assert.equal(chooser.multiple, true)
+  await chooser.setFiles(["C:\\approved\\a.txt", "C:\\approved\\b.txt"])
+  assert.deepEqual(calls.at(-1).params.files, [
+    "C:\\approved\\a.txt",
+    "C:\\approved\\b.txt",
+  ])
 })
 
 test("starts and connects to the plugin-owned Browser Host", async () => {
@@ -832,7 +1039,7 @@ test("replaces an authenticated Browser Host from an older plugin version", asyn
 
     assert.equal(readiness.state, "needs-browser")
     assert.notEqual(upgradedBootstrap.hostPID, initialBootstrap.hostPID)
-    assert.equal(upgradedBootstrap.hostVersion, "0.11.3")
+    assert.equal(upgradedBootstrap.hostVersion, "0.12.0")
   } finally {
     for (const hostPID of hostPIDs) {
       if (!Number.isInteger(hostPID)) continue

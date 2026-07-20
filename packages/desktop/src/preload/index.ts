@@ -236,8 +236,6 @@ try {
         ok: true
         url: string
       }>,
-    launchApplication: (input: DesktopIpcInput<"desktop:launch-application">) =>
-      invokeDesktop("desktop:launch-application", input) as Promise<DesktopIpcOutput<"desktop:launch-application">>,
     openPath: (input: DesktopIpcInput<"desktop:open-path">) =>
       invokeDesktop("desktop:open-path", input) as Promise<DesktopIpcOutput<"desktop:open-path">>,
     openCinemaProject: (input: DesktopIpcInput<"desktop:open-cinema-project">) =>

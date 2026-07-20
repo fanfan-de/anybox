@@ -3,13 +3,14 @@ import { describe, expect, test } from "vitest"
 import {
   BROWSER_CONTRACT_COMMAND_METHODS,
   BROWSER_CONTRACT_ERROR_CODES,
-  BROWSER_CONTRACT_V1_COMMAND_METHODS,
-  BROWSER_CONTRACT_V1_VERSION,
+  BROWSER_CONTRACT_SUPPORTED_VERSIONS,
+  BROWSER_CONTRACT_V3_PLAYWRIGHT_COMMAND_METHODS,
   BROWSER_CONTRACT_VERSION,
   BrowserBackendInfo,
   BrowserContractCommandMethod,
   BrowserContractCommandRegistry,
   BrowserContractValidationError,
+  BrowserLocatorPlanV3,
   BrowserGetInfoResult,
   createBrowserApiManifest,
   createBrowserBackendCapabilities,
@@ -28,6 +29,17 @@ const tab = {
   url: "https://example.com/",
   active: true,
 }
+
+const locatorPlan = {
+  framePath: [],
+  expression: {
+    kind: "role",
+    role: "button",
+    name: { type: "string", value: "Save", exact: true },
+  },
+} as const
+
+const eventID = "00000000-0000-4000-8000-000000000001"
 
 const validParams = {
   "tabs.list": {},
@@ -73,29 +85,92 @@ const validParams = {
   "page.type": { tabId: 7, text: "hello" },
   "page.scroll": { tabId: 7, scrollX: 0, scrollY: 500 },
   "page.waitFor": { tabId: 7, text: "Ready", timeoutMs: 10_000 },
-  "locator.click": {
+  "playwright.domSnapshot": {
     tabId: 7,
-    locator: { role: "button", name: "Save" },
+    maxNodes: 1_000,
+    maxChars: 100_000,
   },
-  "locator.fill": {
+  "playwright.elementInfo": { tabId: 7, x: 10, y: 20 },
+  "playwright.locator.count": { tabId: 7, plan: locatorPlan },
+  "playwright.locator.allTextContents": { tabId: 7, plan: locatorPlan },
+  "playwright.locator.textContent": { tabId: 7, plan: locatorPlan },
+  "playwright.locator.innerText": { tabId: 7, plan: locatorPlan },
+  "playwright.locator.inputValue": { tabId: 7, plan: locatorPlan },
+  "playwright.locator.getAttribute": {
     tabId: 7,
-    locator: { label: "Email" },
-    text: "a@example.com",
+    plan: locatorPlan,
+    name: "aria-label",
   },
-  "locator.textContent": {
+  "playwright.locator.isVisible": { tabId: 7, plan: locatorPlan },
+  "playwright.locator.isEnabled": { tabId: 7, plan: locatorPlan },
+  "playwright.locator.waitFor": {
     tabId: 7,
-    locator: { css: "#status" },
-  },
-  "locator.inputValue": {
-    tabId: 7,
-    locator: { label: "Email" },
-  },
-  "locator.waitFor": {
-    tabId: 7,
-    locator: { text: "Ready" },
+    plan: locatorPlan,
     state: "visible",
   },
+  "playwright.locator.click": {
+    tabId: 7,
+    plan: locatorPlan,
+    button: "left",
+  },
+  "playwright.locator.dblclick": {
+    tabId: 7,
+    plan: locatorPlan,
+    button: "left",
+  },
+  "playwright.locator.fill": {
+    tabId: 7,
+    plan: locatorPlan,
+    value: "hello",
+    sensitive: false,
+  },
+  "playwright.locator.type": {
+    tabId: 7,
+    plan: locatorPlan,
+    value: "hello",
+    sensitive: false,
+  },
+  "playwright.locator.press": {
+    tabId: 7,
+    plan: locatorPlan,
+    value: "Enter",
+  },
+  "playwright.locator.selectOption": {
+    tabId: 7,
+    plan: locatorPlan,
+    values: ["one"],
+  },
+  "playwright.locator.setChecked": {
+    tabId: 7,
+    plan: locatorPlan,
+    checked: true,
+  },
+  "playwright.waitForNavigation": {
+    tabId: 7,
+    fromGeneration: 1,
+    waitUntil: "load",
+  },
+  "playwright.waitForLoadState": { tabId: 7, state: "load" },
+  "playwright.waitForURL": {
+    tabId: 7,
+    url: "https://example.com/",
+    waitUntil: "load",
+  },
+  "playwright.waitForEvent": { tabId: 7, event: "download" },
+  "playwright.download.path": { tabId: 7, eventID },
+  "playwright.fileChooser.setFiles": {
+    tabId: 7,
+    eventID,
+    files: ["C:\\tmp\\upload.txt"],
+  },
 } as const satisfies Record<BrowserContractCommandMethodValue, unknown>
+
+const playwrightResultBase = {
+  tabId: 7,
+  url: tab.url,
+  title: tab.title,
+  documentGeneration: 1,
+} as const
 
 const validResults = {
   "tabs.list": { tabs: [tab] },
@@ -197,55 +272,134 @@ const validResults = {
     matched: true,
     reason: "Text appeared.",
   },
-  "locator.click": {
-    tabId: 7,
-    elementId: "locator-1",
-    url: tab.url,
-    title: tab.title,
+  "playwright.domSnapshot": {
+    ...playwrightResultBase,
+    snapshot: "- button \"Save\"",
+    nodeCount: 1,
+    truncated: false,
   },
-  "locator.fill": {
-    tabId: 7,
-    elementId: "locator-2",
-    textLength: 13,
-    url: tab.url,
-    title: tab.title,
+  "playwright.elementInfo": {
+    ...playwrightResultBase,
+    elements: [],
   },
-  "locator.textContent": {
-    tabId: 7,
-    value: "Ready",
-    url: tab.url,
-    title: tab.title,
+  "playwright.locator.count": {
+    ...playwrightResultBase,
+    count: 1,
   },
-  "locator.inputValue": {
-    tabId: 7,
-    value: "a@example.com",
-    url: tab.url,
-    title: tab.title,
+  "playwright.locator.allTextContents": {
+    ...playwrightResultBase,
+    values: ["Save"],
   },
-  "locator.waitFor": {
-    tabId: 7,
-    url: tab.url,
-    title: tab.title,
+  "playwright.locator.textContent": {
+    ...playwrightResultBase,
+    value: "Save",
+  },
+  "playwright.locator.innerText": {
+    ...playwrightResultBase,
+    value: "Save",
+  },
+  "playwright.locator.inputValue": {
+    ...playwrightResultBase,
+    value: "hello",
+  },
+  "playwright.locator.getAttribute": {
+    ...playwrightResultBase,
+    value: "Save",
+  },
+  "playwright.locator.isVisible": {
+    ...playwrightResultBase,
+    value: true,
+  },
+  "playwright.locator.isEnabled": {
+    ...playwrightResultBase,
+    value: true,
+  },
+  "playwright.locator.waitFor": {
+    ...playwrightResultBase,
     matched: true,
-    reason: "Locator is visible.",
+    state: "visible",
+  },
+  "playwright.locator.click": {
+    ...playwrightResultBase,
+    dispatched: true,
+  },
+  "playwright.locator.dblclick": {
+    ...playwrightResultBase,
+    dispatched: true,
+  },
+  "playwright.locator.fill": {
+    ...playwrightResultBase,
+    dispatched: true,
+  },
+  "playwright.locator.type": {
+    ...playwrightResultBase,
+    dispatched: true,
+  },
+  "playwright.locator.press": {
+    ...playwrightResultBase,
+    dispatched: true,
+  },
+  "playwright.locator.selectOption": {
+    ...playwrightResultBase,
+    dispatched: true,
+  },
+  "playwright.locator.setChecked": {
+    ...playwrightResultBase,
+    dispatched: true,
+  },
+  "playwright.waitForNavigation": {
+    ...playwrightResultBase,
+    matched: true,
+    state: "load",
+  },
+  "playwright.waitForLoadState": {
+    ...playwrightResultBase,
+    matched: true,
+    state: "load",
+  },
+  "playwright.waitForURL": {
+    ...playwrightResultBase,
+    matched: true,
+    state: "load",
+  },
+  "playwright.waitForEvent": {
+    ...playwrightResultBase,
+    event: "download",
+    eventID,
+  },
+  "playwright.download.path": {
+    ...playwrightResultBase,
+    path: "C:\\tmp\\download.bin",
+  },
+  "playwright.fileChooser.setFiles": {
+    ...playwrightResultBase,
+    fileCount: 1,
   },
 } as const satisfies Record<BrowserContractCommandMethodValue, unknown>
 
 describe("Browser Contract command registry", () => {
-  test("keeps immutable v1 and publishes the additive v2 registry", () => {
-    expect(BROWSER_CONTRACT_V1_VERSION).toBe(1)
-    expect(BROWSER_CONTRACT_VERSION).toBe(2)
-    expect(BROWSER_CONTRACT_V1_COMMAND_METHODS).toHaveLength(15)
-    expect(BROWSER_CONTRACT_COMMAND_METHODS).toHaveLength(24)
-    expect(Object.keys(BrowserContractCommandRegistry))
-      .toEqual([...BROWSER_CONTRACT_COMMAND_METHODS])
+  test("publishes one strict v3 registry", () => {
+    expect(BROWSER_CONTRACT_VERSION).toBe(3)
+    expect(BROWSER_CONTRACT_SUPPORTED_VERSIONS).toEqual([3])
+    expect(BROWSER_CONTRACT_V3_PLAYWRIGHT_COMMAND_METHODS).toHaveLength(24)
+    expect(BROWSER_CONTRACT_COMMAND_METHODS).toHaveLength(43)
+    expect(Object.keys(BrowserContractCommandRegistry)).toHaveLength(43)
+    expect(new Set(Object.keys(BrowserContractCommandRegistry)))
+      .toEqual(new Set(BROWSER_CONTRACT_COMMAND_METHODS))
     expect(BrowserContractCommandMethod.safeParse("page.executeScript").success)
       .toBe(false)
     expect(BrowserContractCommandMethod.safeParse("cdp.send").success).toBe(false)
     expect(() => parseBrowserCommandParams(
       "tabs.claim",
       { tabId: 7 },
-      BROWSER_CONTRACT_V1_VERSION,
+      2,
+    )).toThrowError(expect.objectContaining({
+      code: "COMMAND_NOT_SUPPORTED",
+    }))
+    expect(() => parseBrowserCommandParams(
+      "playwright.domSnapshot",
+      { tabId: 7 },
+      4,
     )).toThrowError(expect.objectContaining({
       code: "COMMAND_NOT_SUPPORTED",
     }))
@@ -332,6 +486,156 @@ describe("Browser Contract command registry", () => {
     )
     expect(result.inputs).toEqual([{ sensitive: true }])
   })
+
+  test("bounds immutable locator plans and rejects private selector engines", () => {
+    expect(BrowserLocatorPlanV3.parse(locatorPlan)).toEqual(locatorPlan)
+    expect(BrowserLocatorPlanV3.safeParse({
+      framePath: [],
+      expression: {
+        kind: "nth",
+        source: locatorPlan.expression,
+        index: -2,
+      },
+    }).success).toBe(true)
+    expect(BrowserLocatorPlanV3.safeParse({
+      framePath: ["internal:control=enter-frame"],
+      expression: locatorPlan.expression,
+    }).success).toBe(false)
+    expect(BrowserLocatorPlanV3.safeParse({
+      framePath: [],
+      expression: {
+        kind: "selector",
+        value: "text=/((a+)+)$/",
+      },
+    }).success).toBe(false)
+    expect(BrowserLocatorPlanV3.safeParse({
+      framePath: Array.from({ length: 17 }, () => "iframe"),
+      expression: locatorPlan.expression,
+    }).success).toBe(false)
+
+    let expression: unknown = {
+      kind: "selector",
+      value: "button",
+    }
+    for (let index = 0; index < 64; index += 1) {
+      expression = { kind: "nth", source: expression, index: 0 }
+    }
+    expect(BrowserLocatorPlanV3.safeParse({
+      framePath: [],
+      expression,
+    }).success).toBe(false)
+    let extremelyDeep: unknown = {
+      kind: "selector",
+      value: "button",
+    }
+    for (let index = 0; index < 10_000; index += 1) {
+      extremelyDeep = { kind: "nth", source: extremelyDeep, index: 0 }
+    }
+    expect(() => BrowserLocatorPlanV3.safeParse({
+      framePath: [],
+      expression: extremelyDeep,
+    })).not.toThrow()
+    expect(BrowserLocatorPlanV3.safeParse({
+      framePath: [],
+      expression: extremelyDeep,
+    }).success).toBe(false)
+    const cyclic: Record<string, unknown> = {
+      kind: "nth",
+      index: 0,
+    }
+    cyclic.source = cyclic
+    expect(BrowserLocatorPlanV3.safeParse({
+      framePath: [],
+      expression: cyclic,
+    }).success).toBe(false)
+    expect(BrowserLocatorPlanV3.safeParse({
+      framePath: [],
+      expression: {
+        kind: "text",
+        matcher: {
+          type: "regex",
+          source: "(",
+          flags: "u",
+        },
+      },
+    }).success).toBe(false)
+    expect(BrowserLocatorPlanV3.safeParse({
+      framePath: [],
+      expression: {
+        kind: "text",
+        matcher: {
+          type: "regex",
+          source: "(a|aa){100}$",
+          flags: "u",
+        },
+      },
+    }).success).toBe(false)
+    expect(BrowserLocatorPlanV3.safeParse({
+      framePath: [],
+      expression: {
+        kind: "text",
+        matcher: {
+          type: "regex",
+          source: "(a{1,10}){10}$",
+          flags: "u",
+        },
+      },
+    }).success).toBe(false)
+    expect(BrowserLocatorPlanV3.safeParse({
+      framePath: [],
+      expression: {
+        kind: "text",
+        matcher: {
+          type: "regex",
+          source: "a{1001}",
+          flags: "u",
+        },
+      },
+    }).success).toBe(false)
+    expect(BrowserLocatorPlanV3.safeParse({
+      framePath: [],
+      expression: {
+        kind: "text",
+        matcher: {
+          type: "regex",
+          source: String.raw`(save)\1`,
+          flags: "u",
+        },
+      },
+    }).success).toBe(false)
+    expect(BrowserLocatorPlanV3.safeParse({
+      framePath: [],
+      expression: {
+        kind: "text",
+        matcher: {
+          type: "regex",
+          source: "(a+)+$",
+          flags: "u",
+        },
+      },
+    }).success).toBe(false)
+    expect(BrowserLocatorPlanV3.safeParse({
+      framePath: [],
+      expression: {
+        kind: "text",
+        matcher: {
+          type: "regex",
+          source: "save",
+          flags: "uv",
+        },
+      },
+    }).success).toBe(false)
+    expect(() => parseBrowserCommandParams(
+      "playwright.locator.press",
+      {
+        tabId: 7,
+        plan: locatorPlan,
+        value: "Unsupported+Enter",
+      },
+    )).toThrow(expect.objectContaining({
+      code: "INVALID_COMMAND_PARAMS",
+    }))
+  })
 })
 
 describe("Browser Contract capabilities and manifests", () => {
@@ -341,7 +645,8 @@ describe("Browser Contract capabilities and manifests", () => {
     expect(capabilities.features).toEqual({
       ownership: false,
       claim: false,
-      locator: false,
+      playwrightLocator: false,
+      playwrightApiRevision: 0,
       cancel: false,
       arbitraryJavaScript: false,
       scopedCdp: false,
@@ -404,7 +709,7 @@ describe("Browser Contract capabilities and manifests", () => {
 
   test("generates serializable JSON Schema for all commands, including DOM and waitFor", () => {
     const manifest = createBrowserApiManifest()
-    expect(manifest.commands).toHaveLength(24)
+    expect(manifest.commands).toHaveLength(43)
     expect(manifest.commands.map((entry) => entry.method))
       .toEqual([...BROWSER_CONTRACT_COMMAND_METHODS])
 
@@ -440,6 +745,29 @@ describe("Browser Contract capabilities and manifests", () => {
     expect(JSON.parse(JSON.stringify(manifest))).toEqual(manifest)
   })
 
+  test("advertises the Playwright surface atomically", () => {
+    expect(() => createBrowserBackendCapabilities({
+      commands: ["playwright.domSnapshot"],
+    })).toThrow()
+    expect(() => createBrowserBackendCapabilities({
+      commands: BROWSER_CONTRACT_V3_PLAYWRIGHT_COMMAND_METHODS,
+    })).toThrow()
+
+    const capabilities = createBrowserBackendCapabilities({
+      commands: BROWSER_CONTRACT_V3_PLAYWRIGHT_COMMAND_METHODS,
+      features: {
+        playwrightLocator: true,
+        playwrightApiRevision: 1,
+        playwrightEngineVersion: "1.61.1",
+      },
+    })
+    expect(capabilities.features).toMatchObject({
+      playwrightLocator: true,
+      playwrightApiRevision: 1,
+      playwrightEngineVersion: "1.61.1",
+    })
+  })
+
   test("requires advertised capabilities to use canonical contract order", () => {
     const canonical = createBrowserBackendInfo({
       connected: true,
@@ -467,7 +795,7 @@ describe("Browser Contract capabilities and manifests", () => {
     expect(BrowserBackendInfo.parse(backend)).toEqual(backend)
     expect(BrowserGetInfoResult.parse(info)).toEqual(info)
     expect(info.backend).toMatchObject({
-      contractVersion: 2,
+      contractVersion: 3,
       browserId: "extension",
       kind: "extension",
       connected: true,
@@ -485,5 +813,8 @@ describe("Browser Contract capabilities and manifests", () => {
     expect(BROWSER_CONTRACT_ERROR_CODES).toContain("TAB_NOT_OWNED")
     expect(BROWSER_CONTRACT_ERROR_CODES).toContain("DEADLINE_EXCEEDED")
     expect(BROWSER_CONTRACT_ERROR_CODES).toContain("CANCELLED")
+    expect(BROWSER_CONTRACT_ERROR_CODES).toContain("LOCATOR_STRICT_VIOLATION")
+    expect(BROWSER_CONTRACT_ERROR_CODES).toContain("ACTION_OUTCOME_UNKNOWN")
+    expect(BROWSER_CONTRACT_ERROR_CODES).toContain("EVENT_EXPIRED")
   })
 })

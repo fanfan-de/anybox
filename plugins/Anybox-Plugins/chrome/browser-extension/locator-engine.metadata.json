@@ -1,0 +1,13 @@
+{
+  "engine": "playwright-injected-script",
+  "engineVersion": "1.61.1",
+  "upstreamTag": "v1.61.1",
+  "upstreamCommit": "39e3553a4f283a41134d75d7e404484bd9e6865a",
+  "upstreamEntry": "packages/injected/src/injectedScript.ts",
+  "upstreamEntrySha256": "a5eb8259c5010c66358d08ab4d3e5ad7c0134aaf7918538cbf888dff8ee10ec3",
+  "esbuildVersion": "0.27.2",
+  "bundleSha256": "3ce6afda466d2c04fc8fb5befc699d164322af080f3678e9d6d12425ba2ce7df",
+  "licenseSha256": "45873d00a0dd243596deb4aa23b2493b3d1f0671921bf2538ea431d7380220eb",
+  "noticeSha256": "6d602191187b35b9b01d2cffa01c8469c2c8d9de8a96f1bf868e0f264f51c81d",
+  "license": "Apache-2.0"
+}

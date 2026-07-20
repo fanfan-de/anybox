@@ -21,8 +21,8 @@ export const MAX_BROWSER_IPC_CHUNKS = Math.ceil(
   MAX_BROWSER_IPC_MESSAGE_BYTES / MAX_BROWSER_IPC_CHUNK_BYTES,
 )
 export const BROWSER_IPC_HANDSHAKE_TIMEOUT_MS = 5_000
-export const BROWSER_IPC_RUNTIME_CLIENT_VERSION = "0.11.3"
-export const BROWSER_IPC_NATIVE_HOST_VERSION = "0.11.3"
+export const BROWSER_IPC_RUNTIME_CLIENT_VERSION = "0.12.0"
+export const BROWSER_IPC_NATIVE_HOST_VERSION = "0.12.0"
 
 export const BrowserIpcRole = z.enum(["runtime", "native-host"])
 export type BrowserIpcRole = z.infer<typeof BrowserIpcRole>
@@ -166,10 +166,9 @@ export const BrowserIpcRuntimeCommandRequest = z.object({
   type: z.literal("runtime.request"),
   requestID: z.string().min(1),
   operation: z.literal("command"),
-  // Accept a positive version number at the transport schema so the Agent can
-  // return CONTRACT_VERSION_UNSUPPORTED instead of collapsing negotiation into
-  // a generic malformed-message error.
-  contractVersion: z.number().int().positive().optional(),
+  // Keep the numeric value in the transport envelope so the Host can return a
+  // stable CONTRACT_VERSION_UNSUPPORTED error for stale Runtime clients.
+  contractVersion: z.number().int().positive(),
   method: BrowserIpcRuntimeCommandMethod,
   params: z.unknown().optional(),
   context: BrowserExtensionCommandContext.optional(),

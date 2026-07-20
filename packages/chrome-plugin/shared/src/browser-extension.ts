@@ -25,11 +25,30 @@ export const BrowserExtensionCommandMethod = z.enum([
   "page.type",
   "page.scroll",
   "page.waitFor",
-  "locator.click",
-  "locator.fill",
-  "locator.textContent",
-  "locator.inputValue",
-  "locator.waitFor",
+  "playwright.domSnapshot",
+  "playwright.elementInfo",
+  "playwright.locator.count",
+  "playwright.locator.allTextContents",
+  "playwright.locator.textContent",
+  "playwright.locator.innerText",
+  "playwright.locator.inputValue",
+  "playwright.locator.getAttribute",
+  "playwright.locator.isVisible",
+  "playwright.locator.isEnabled",
+  "playwright.locator.waitFor",
+  "playwright.locator.click",
+  "playwright.locator.dblclick",
+  "playwright.locator.fill",
+  "playwright.locator.type",
+  "playwright.locator.press",
+  "playwright.locator.selectOption",
+  "playwright.locator.setChecked",
+  "playwright.waitForNavigation",
+  "playwright.waitForLoadState",
+  "playwright.waitForURL",
+  "playwright.waitForEvent",
+  "playwright.download.path",
+  "playwright.fileChooser.setFiles",
   "page.executeScript",
   "cdp.send",
 ])
@@ -37,7 +56,6 @@ export type BrowserExtensionCommandMethod = z.infer<typeof BrowserExtensionComma
 
 export const BrowserExtensionCapabilities = z.object({
   contractVersion: z.number().int().positive(),
-  contractVersions: z.array(z.number().int().positive()).min(1).optional(),
   commands: z.array(z.string().min(1).max(128)).max(256),
 }).strict()
 export type BrowserExtensionCapabilities = z.infer<
@@ -60,7 +78,7 @@ export const BrowserExtensionHelloMessage = z.object({
   extensionInstanceID: z.string().min(1),
   extensionID: z.string().min(1),
   version: z.string().min(1),
-  capabilities: BrowserExtensionCapabilities.optional(),
+  capabilities: BrowserExtensionCapabilities,
   lastTransportError: z.string().min(1).optional(),
 }).strict()
 export type BrowserExtensionHelloMessage = z.infer<typeof BrowserExtensionHelloMessage>
@@ -71,7 +89,7 @@ export const BrowserExtensionResultMessage = z.discriminatedUnion("ok", [
     commandID: z.string().min(1),
     ok: z.literal(true),
     data: z.unknown(),
-  }),
+  }).strict(),
   z.object({
     type: z.literal("result"),
     commandID: z.string().min(1),
@@ -79,7 +97,8 @@ export const BrowserExtensionResultMessage = z.discriminatedUnion("ok", [
     error: z.string(),
     code: z.string().min(1).optional(),
     retryable: z.boolean().optional(),
-  }),
+    details: z.record(z.string(), z.unknown()).optional(),
+  }).strict(),
 ])
 export type BrowserExtensionResultMessage = z.infer<typeof BrowserExtensionResultMessage>
 
@@ -107,10 +126,7 @@ export type BrowserExtensionClientMessage = z.infer<typeof BrowserExtensionClien
 export const BrowserExtensionCommandMessage = z.object({
   type: z.literal("command"),
   commandID: z.string().min(1),
-  // Optional within Browser Extension protocol v1 so an older Agent can still
-  // drive a newer extension. An explicit unsupported version is rejected by
-  // the extension before command execution.
-  contractVersion: z.number().int().positive().optional(),
+  contractVersion: z.literal(3),
   method: BrowserExtensionCommandMethod,
   params: z.unknown().optional(),
   context: BrowserExtensionCommandContext.optional(),
@@ -120,11 +136,12 @@ export type BrowserExtensionCommandMessage = z.infer<typeof BrowserExtensionComm
 export const BrowserExtensionHelloAckMessage = z.object({
   type: z.literal("helloAck"),
   protocolVersion: z.literal(BROWSER_EXTENSION_PROTOCOL_VERSION),
-  contractVersion: z.number().int().positive(),
+  contractVersion: z.literal(3),
   browserID: z.string().min(1),
   extensionInstanceID: z.string().min(1),
   heartbeatIntervalMs: z.number().int().positive(),
   heartbeatTimeoutMs: z.number().int().positive(),
+  downloadDirectory: z.string().trim().min(1).max(32_768).optional(),
 }).strict()
 export type BrowserExtensionHelloAckMessage = z.infer<
   typeof BrowserExtensionHelloAckMessage
@@ -365,12 +382,130 @@ export type BrowserExtensionTabsFinalizeResult = z.infer<
   typeof BrowserExtensionTabsFinalizeResult
 >
 
-export const BrowserExtensionLocatorValueResult = z.object({
+const BrowserExtensionPlaywrightResultBase = {
   tabId: z.number().int().positive(),
-  value: z.string().nullable(),
   url: z.string().optional(),
   title: z.string().optional(),
+  documentGeneration: z.number().int().nonnegative(),
+} as const
+
+export const BrowserExtensionPlaywrightDomSnapshotResult = z.object({
+  ...BrowserExtensionPlaywrightResultBase,
+  snapshot: z.string().max(1_000_000),
+  nodeCount: z.number().int().nonnegative(),
+  truncated: z.boolean(),
 }).strict()
-export type BrowserExtensionLocatorValueResult = z.infer<
-  typeof BrowserExtensionLocatorValueResult
+export type BrowserExtensionPlaywrightDomSnapshotResult = z.infer<
+  typeof BrowserExtensionPlaywrightDomSnapshotResult
+>
+
+export const BrowserExtensionPlaywrightElementInfoRect = z.object({
+  x: z.number().finite(),
+  y: z.number().finite(),
+  width: z.number().finite().nonnegative(),
+  height: z.number().finite().nonnegative(),
+}).strict()
+
+export const BrowserExtensionPlaywrightElementInfo = z.object({
+  ariaName: z.string().nullable().optional(),
+  boundingBox: BrowserExtensionPlaywrightElementInfoRect.nullable().optional(),
+  nodeId: z.number().int().nullable().optional(),
+  preview: z.string().max(500),
+  role: z.string().nullable().optional(),
+  selector: z.object({
+    candidates: z.array(z.string().max(2_000)).max(10),
+    frameSelectors: z.array(z.string().max(2_000)).max(16).optional(),
+    primary: z.string().max(2_000).nullable().optional(),
+  }).strict(),
+  tagName: z.string().max(128),
+  testId: z.string().max(512).nullable().optional(),
+  visibleText: z.string().max(2_000).nullable().optional(),
+}).strict()
+export type BrowserExtensionPlaywrightElementInfo = z.infer<
+  typeof BrowserExtensionPlaywrightElementInfo
+>
+
+export const BrowserExtensionPlaywrightElementInfoResult = z.object({
+  ...BrowserExtensionPlaywrightResultBase,
+  elements: z.array(BrowserExtensionPlaywrightElementInfo).max(50),
+}).strict()
+export type BrowserExtensionPlaywrightElementInfoResult = z.infer<
+  typeof BrowserExtensionPlaywrightElementInfoResult
+>
+
+export const BrowserExtensionPlaywrightLocatorCountResult = z.object({
+  ...BrowserExtensionPlaywrightResultBase,
+  count: z.number().int().nonnegative(),
+}).strict()
+export type BrowserExtensionPlaywrightLocatorCountResult = z.infer<
+  typeof BrowserExtensionPlaywrightLocatorCountResult
+>
+
+export const BrowserExtensionPlaywrightLocatorTextsResult = z.object({
+  ...BrowserExtensionPlaywrightResultBase,
+  values: z.array(z.string().max(100_000)).max(5_000),
+}).strict()
+export type BrowserExtensionPlaywrightLocatorTextsResult = z.infer<
+  typeof BrowserExtensionPlaywrightLocatorTextsResult
+>
+
+export const BrowserExtensionPlaywrightLocatorValueResult = z.object({
+  ...BrowserExtensionPlaywrightResultBase,
+  value: z.string().max(1_000_000).nullable(),
+}).strict()
+export type BrowserExtensionPlaywrightLocatorValueResult = z.infer<
+  typeof BrowserExtensionPlaywrightLocatorValueResult
+>
+
+export const BrowserExtensionPlaywrightLocatorBooleanResult = z.object({
+  ...BrowserExtensionPlaywrightResultBase,
+  value: z.boolean(),
+}).strict()
+export type BrowserExtensionPlaywrightLocatorBooleanResult = z.infer<
+  typeof BrowserExtensionPlaywrightLocatorBooleanResult
+>
+
+export const BrowserExtensionPlaywrightActionResult = z.object({
+  ...BrowserExtensionPlaywrightResultBase,
+  dispatched: z.boolean(),
+  values: z.array(z.string().max(2_000)).max(100).optional(),
+}).strict()
+export type BrowserExtensionPlaywrightActionResult = z.infer<
+  typeof BrowserExtensionPlaywrightActionResult
+>
+
+export const BrowserExtensionPlaywrightWaitResult = z.object({
+  ...BrowserExtensionPlaywrightResultBase,
+  matched: z.boolean(),
+  state: z.string().max(128),
+  waiterID: z.string().uuid().optional(),
+}).strict()
+export type BrowserExtensionPlaywrightWaitResult = z.infer<
+  typeof BrowserExtensionPlaywrightWaitResult
+>
+
+export const BrowserExtensionPlaywrightEventResult = z.object({
+  ...BrowserExtensionPlaywrightResultBase,
+  event: z.enum(["download", "filechooser"]),
+  eventID: z.string().uuid(),
+  multiple: z.boolean().optional(),
+}).strict()
+export type BrowserExtensionPlaywrightEventResult = z.infer<
+  typeof BrowserExtensionPlaywrightEventResult
+>
+
+export const BrowserExtensionPlaywrightDownloadPathResult = z.object({
+  ...BrowserExtensionPlaywrightResultBase,
+  path: z.string().nullable(),
+}).strict()
+export type BrowserExtensionPlaywrightDownloadPathResult = z.infer<
+  typeof BrowserExtensionPlaywrightDownloadPathResult
+>
+
+export const BrowserExtensionPlaywrightFileChooserSetFilesResult = z.object({
+  ...BrowserExtensionPlaywrightResultBase,
+  fileCount: z.number().int().nonnegative(),
+}).strict()
+export type BrowserExtensionPlaywrightFileChooserSetFilesResult = z.infer<
+  typeof BrowserExtensionPlaywrightFileChooserSetFilesResult
 >

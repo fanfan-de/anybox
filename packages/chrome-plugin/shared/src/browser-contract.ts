@@ -7,7 +7,17 @@ import {
   BrowserExtensionElementActionResult,
   BrowserExtensionFillResult,
   BrowserExtensionInteractiveSnapshotResult,
-  BrowserExtensionLocatorValueResult,
+  BrowserExtensionPlaywrightActionResult,
+  BrowserExtensionPlaywrightDomSnapshotResult,
+  BrowserExtensionPlaywrightDownloadPathResult,
+  BrowserExtensionPlaywrightElementInfoResult,
+  BrowserExtensionPlaywrightEventResult,
+  BrowserExtensionPlaywrightFileChooserSetFilesResult,
+  BrowserExtensionPlaywrightLocatorBooleanResult,
+  BrowserExtensionPlaywrightLocatorCountResult,
+  BrowserExtensionPlaywrightLocatorTextsResult,
+  BrowserExtensionPlaywrightLocatorValueResult,
+  BrowserExtensionPlaywrightWaitResult,
   BrowserExtensionScreenshotResult,
   BrowserExtensionScrollResult,
   BrowserExtensionSnapshotResult,
@@ -19,19 +29,79 @@ import {
   BrowserExtensionTypeResult,
   BrowserExtensionWaitForResult,
 } from "./browser-extension"
+import {
+  BrowserLocatorExpressionV3,
+  BrowserLocatorPlanV3,
+  BrowserPlaywrightDomSnapshotParams,
+  BrowserPlaywrightElementInfoParams,
+  BrowserPlaywrightEventHandleParams,
+  BrowserPlaywrightFileChooserSetFilesParams,
+  BrowserPlaywrightLocatorClickParams,
+  BrowserPlaywrightLocatorCountParams,
+  BrowserPlaywrightLocatorFillParams,
+  BrowserPlaywrightLocatorGetAttributeParams,
+  BrowserPlaywrightLocatorPressParams,
+  BrowserPlaywrightLocatorReadParams,
+  BrowserPlaywrightLocatorSelectOptionParams,
+  BrowserPlaywrightLocatorSetCheckedParams,
+  BrowserPlaywrightLocatorTypeParams,
+  BrowserPlaywrightLocatorWaitForParams,
+  BrowserPlaywrightRegexMatcherV3,
+  BrowserPlaywrightSelectOptionDescriptor,
+  BrowserPlaywrightSelectOptionInput,
+  BrowserPlaywrightStringMatcherV3,
+  BrowserPlaywrightTextMatcherV3,
+  BrowserPlaywrightWaitForEventParams,
+  BrowserPlaywrightWaitForLoadStateParams,
+  BrowserPlaywrightWaitForNavigationParams,
+  BrowserPlaywrightWaitForURLParams,
+  PLAYWRIGHT_DOM_SNAPSHOT_MAX_CHARS,
+  PLAYWRIGHT_DOM_SNAPSHOT_MAX_NODES,
+  PLAYWRIGHT_LOCATOR_MAX_FRAME_DEPTH,
+  PLAYWRIGHT_LOCATOR_MAX_NODES,
+  PLAYWRIGHT_LOCATOR_MAX_SERIALIZED_BYTES,
+  PLAYWRIGHT_LOCATOR_MAX_TEXT_CHARS,
+  PLAYWRIGHT_LOCATOR_MAX_TIMEOUT_MS,
+} from "./playwright-contract"
 
-export const BROWSER_CONTRACT_V1_VERSION = 1 as const
-export const BROWSER_CONTRACT_VERSION = 2 as const
+export {
+  BrowserLocatorExpressionV3,
+  BrowserLocatorPlanV3,
+  BrowserPlaywrightRegexMatcherV3,
+  BrowserPlaywrightSelectOptionDescriptor,
+  BrowserPlaywrightSelectOptionInput,
+  BrowserPlaywrightStringMatcherV3,
+  BrowserPlaywrightTextMatcherV3,
+  PLAYWRIGHT_DOM_SNAPSHOT_MAX_CHARS,
+  PLAYWRIGHT_DOM_SNAPSHOT_MAX_NODES,
+  PLAYWRIGHT_LOCATOR_MAX_FRAME_DEPTH,
+  PLAYWRIGHT_LOCATOR_MAX_NODES,
+  PLAYWRIGHT_LOCATOR_MAX_SERIALIZED_BYTES,
+  PLAYWRIGHT_LOCATOR_MAX_TEXT_CHARS,
+  PLAYWRIGHT_LOCATOR_MAX_TIMEOUT_MS,
+}
+export type {
+  BrowserLocatorExpressionV3 as BrowserLocatorExpressionV3Type,
+  BrowserLocatorPlanV3 as BrowserLocatorPlanV3Type,
+  BrowserPlaywrightTextMatcherV3 as BrowserPlaywrightTextMatcherV3Type,
+} from "./playwright-contract"
+
+export const BROWSER_CONTRACT_VERSION = 3 as const
 export const BROWSER_CONTRACT_SUPPORTED_VERSIONS = [
-  BROWSER_CONTRACT_V1_VERSION,
   BROWSER_CONTRACT_VERSION,
 ] as const
+export const BrowserContractVersion = z.literal(BROWSER_CONTRACT_VERSION)
+export type BrowserContractVersion = z.infer<typeof BrowserContractVersion>
 
-export const BROWSER_CONTRACT_V1_COMMAND_METHODS = [
+export const BROWSER_CONTRACT_COMMAND_METHODS = [
   "tabs.list",
+  "tabs.listUser",
   "tabs.open",
+  "tabs.claim",
   "tabs.activate",
   "tabs.release",
+  "tabs.markDeliverable",
+  "tabs.finalize",
   "page.snapshot",
   "page.interactiveSnapshot",
   "page.domTree",
@@ -43,22 +113,60 @@ export const BROWSER_CONTRACT_V1_COMMAND_METHODS = [
   "page.type",
   "page.scroll",
   "page.waitFor",
+  "playwright.domSnapshot",
+  "playwright.elementInfo",
+  "playwright.locator.count",
+  "playwright.locator.allTextContents",
+  "playwright.locator.textContent",
+  "playwright.locator.innerText",
+  "playwright.locator.inputValue",
+  "playwright.locator.getAttribute",
+  "playwright.locator.isVisible",
+  "playwright.locator.isEnabled",
+  "playwright.locator.waitFor",
+  "playwright.locator.click",
+  "playwright.locator.dblclick",
+  "playwright.locator.fill",
+  "playwright.locator.type",
+  "playwright.locator.press",
+  "playwright.locator.selectOption",
+  "playwright.locator.setChecked",
+  "playwright.waitForNavigation",
+  "playwright.waitForLoadState",
+  "playwright.waitForURL",
+  "playwright.waitForEvent",
+  "playwright.download.path",
+  "playwright.fileChooser.setFiles",
 ] as const
-export type BrowserContractV1CommandMethod =
-  (typeof BROWSER_CONTRACT_V1_COMMAND_METHODS)[number]
 
-export const BROWSER_CONTRACT_COMMAND_METHODS = [
-  ...BROWSER_CONTRACT_V1_COMMAND_METHODS,
-  "tabs.listUser",
-  "tabs.claim",
-  "tabs.markDeliverable",
-  "tabs.finalize",
-  "locator.click",
-  "locator.fill",
-  "locator.textContent",
-  "locator.inputValue",
-  "locator.waitFor",
+export const BROWSER_CONTRACT_V3_PLAYWRIGHT_COMMAND_METHODS = [
+  "playwright.domSnapshot",
+  "playwright.elementInfo",
+  "playwright.locator.count",
+  "playwright.locator.allTextContents",
+  "playwright.locator.textContent",
+  "playwright.locator.innerText",
+  "playwright.locator.inputValue",
+  "playwright.locator.getAttribute",
+  "playwright.locator.isVisible",
+  "playwright.locator.isEnabled",
+  "playwright.locator.waitFor",
+  "playwright.locator.click",
+  "playwright.locator.dblclick",
+  "playwright.locator.fill",
+  "playwright.locator.type",
+  "playwright.locator.press",
+  "playwright.locator.selectOption",
+  "playwright.locator.setChecked",
+  "playwright.waitForNavigation",
+  "playwright.waitForLoadState",
+  "playwright.waitForURL",
+  "playwright.waitForEvent",
+  "playwright.download.path",
+  "playwright.fileChooser.setFiles",
 ] as const
+export type BrowserContractV3PlaywrightCommandMethod =
+  (typeof BROWSER_CONTRACT_V3_PLAYWRIGHT_COMMAND_METHODS)[number]
 
 export const BrowserContractCommandMethod = z.enum(
   BROWSER_CONTRACT_COMMAND_METHODS,
@@ -91,6 +199,14 @@ export const BROWSER_CONTRACT_ERROR_CODES = [
   "DEADLINE_EXCEEDED",
   "CANCELLED",
   "COMMAND_FAILED",
+  "LOCATOR_PARSE_ERROR",
+  "LOCATOR_NOT_FOUND",
+  "LOCATOR_STRICT_VIOLATION",
+  "LOCATOR_NOT_ACTIONABLE",
+  "STALE_DOCUMENT",
+  "FRAME_DETACHED",
+  "ACTION_OUTCOME_UNKNOWN",
+  "EVENT_EXPIRED",
 ] as const
 
 export const BrowserContractErrorCode = z.enum(
@@ -126,7 +242,7 @@ const RequiredTabID = z.number().int().positive()
 const MouseButton = z.enum(["left", "right", "middle"])
 const RequiredContextID = z.string().trim().min(1).max(256)
 
-export const BrowserCommandExecutionContextV2 = z.object({
+export const BrowserCommandExecutionContext = z.object({
   sessionID: RequiredContextID,
   turnID: RequiredContextID,
   messageID: RequiredContextID,
@@ -134,8 +250,8 @@ export const BrowserCommandExecutionContextV2 = z.object({
   browserID: RequiredContextID,
   extensionInstanceID: RequiredContextID.optional(),
 }).strict()
-export type BrowserCommandExecutionContextV2 = z.infer<
-  typeof BrowserCommandExecutionContextV2
+export type BrowserCommandExecutionContext = z.infer<
+  typeof BrowserCommandExecutionContext
 >
 
 export const BrowserAuthorizationReceipt = z.object({
@@ -164,6 +280,7 @@ export const BrowserAuthorizationChallenge = z.object({
   tabId: RequiredTabID.optional(),
   tabTitle: z.string().max(200).optional(),
   sensitive: z.boolean(),
+  requestFingerprint: z.string().regex(/^[a-f0-9]{64}$/u).optional(),
   issuedAt: z.number().int().nonnegative(),
   expiresAt: z.number().int().positive(),
 }).strict()
@@ -224,53 +341,6 @@ export const BrowserTabsFinalizeParams = z.object({
     "lease-timeout",
     "manual",
   ]).optional(),
-}).strict()
-
-export const BrowserLocator = z.object({
-  role: z.string().trim().min(1).max(128).optional(),
-  name: z.string().trim().min(1).max(512).optional(),
-  text: z.string().trim().min(1).max(2_000).optional(),
-  label: z.string().trim().min(1).max(512).optional(),
-  placeholder: z.string().trim().min(1).max(512).optional(),
-  css: z.string().trim().min(1).max(2_000).optional(),
-  testId: z.string().trim().min(1).max(512).optional(),
-  exact: z.boolean().optional(),
-}).strict().refine(
-  (value) => Object.entries(value).some(([key, item]) =>
-    key !== "exact" && typeof item === "string" && item.length > 0
-  ),
-  "A structured locator requires role, name, text, label, placeholder, css, or testId.",
-)
-export type BrowserLocator = z.infer<typeof BrowserLocator>
-
-const BrowserLocatorBaseParams = {
-  tabId: RequiredTabID,
-  locator: BrowserLocator,
-  timeoutMs: z.number().int().positive().max(60_000).optional(),
-} as const
-
-export const BrowserLocatorClickParams = z.object({
-  ...BrowserLocatorBaseParams,
-  button: MouseButton.optional(),
-}).strict()
-
-export const BrowserLocatorFillParams = z.object({
-  ...BrowserLocatorBaseParams,
-  text: z.string(),
-  sensitive: z.boolean().optional(),
-}).strict()
-
-export const BrowserLocatorTextContentParams = z.object({
-  ...BrowserLocatorBaseParams,
-}).strict()
-
-export const BrowserLocatorInputValueParams = z.object({
-  ...BrowserLocatorBaseParams,
-}).strict()
-
-export const BrowserLocatorWaitForParams = z.object({
-  ...BrowserLocatorBaseParams,
-  state: z.enum(["attached", "visible", "hidden", "enabled"]).optional(),
 }).strict()
 
 export const BrowserPageSnapshotParams = z.object({
@@ -380,6 +450,7 @@ export const BrowserCommandSecurityClass = z.enum([
   "tab-lifecycle",
   "page-content-read",
   "page-interaction",
+  "local-file-read",
 ])
 export type BrowserCommandSecurityClass = z.infer<
   typeof BrowserCommandSecurityClass
@@ -398,7 +469,7 @@ type BrowserContractCommandDefinition<
   result: TResult
 }
 
-export const BrowserContractV1CommandRegistry = Object.freeze({
+const BrowserContractBaseCommandRegistry = {
   "tabs.list": {
     method: "tabs.list",
     apiPath: "browser.tabs.list",
@@ -521,7 +592,7 @@ export const BrowserContractV1CommandRegistry = Object.freeze({
     apiPath: "tab.scroll",
     signature: "tab.scroll(options?)",
     summary: "Scroll a tab by a viewport delta.",
-    security: "page-interaction",
+    security: "page-content-read",
     params: BrowserPageScrollParams,
     result: BrowserExtensionScrollResult,
   },
@@ -534,13 +605,10 @@ export const BrowserContractV1CommandRegistry = Object.freeze({
     params: BrowserPageWaitForParams,
     result: BrowserExtensionWaitForResult,
   },
-} as const satisfies Record<
-  BrowserContractV1CommandMethod,
-  BrowserContractCommandDefinition
->)
+} as const
 
 export const BrowserContractCommandRegistry = {
-  ...BrowserContractV1CommandRegistry,
+  ...BrowserContractBaseCommandRegistry,
   "tabs.listUser": {
     method: "tabs.listUser",
     apiPath: "browser.tabs.listUser",
@@ -577,54 +645,221 @@ export const BrowserContractCommandRegistry = {
     params: BrowserTabsFinalizeParams,
     result: BrowserExtensionTabsFinalizeResult,
   },
-  "page.scroll": {
-    ...BrowserContractV1CommandRegistry["page.scroll"],
+  "playwright.domSnapshot": {
+    method: "playwright.domSnapshot",
+    apiPath: "tab.playwright.domSnapshot",
+    signature: "tab.playwright.domSnapshot(options?)",
+    summary: "Return a bounded semantic DOM snapshot for locator grounding.",
     security: "page-content-read",
+    params: BrowserPlaywrightDomSnapshotParams,
+    result: BrowserExtensionPlaywrightDomSnapshotResult,
   },
-  "locator.click": {
-    method: "locator.click",
-    apiPath: "tab.locator(locator).click",
-    signature: "tab.locator(locator).click(options?)",
-    summary: "Relocate and click a structured locator target.",
+  "playwright.elementInfo": {
+    method: "playwright.elementInfo",
+    apiPath: "tab.playwright.elementInfo",
+    signature: "tab.playwright.elementInfo(options)",
+    summary: "Return locator-oriented metadata at screenshot coordinates.",
+    security: "page-content-read",
+    params: BrowserPlaywrightElementInfoParams,
+    result: BrowserExtensionPlaywrightElementInfoResult,
+  },
+  "playwright.locator.count": {
+    method: "playwright.locator.count",
+    apiPath: "tab.playwright.locator(selector).count",
+    signature: "locator.count()",
+    summary: "Count elements matching an immutable locator plan.",
+    security: "page-content-read",
+    params: BrowserPlaywrightLocatorCountParams,
+    result: BrowserExtensionPlaywrightLocatorCountResult,
+  },
+  "playwright.locator.allTextContents": {
+    method: "playwright.locator.allTextContents",
+    apiPath: "tab.playwright.locator(selector).allTextContents",
+    signature: "locator.allTextContents(options?)",
+    summary: "Return redacted textContent values for all locator matches.",
+    security: "page-content-read",
+    params: BrowserPlaywrightLocatorReadParams,
+    result: BrowserExtensionPlaywrightLocatorTextsResult,
+  },
+  "playwright.locator.textContent": {
+    method: "playwright.locator.textContent",
+    apiPath: "tab.playwright.locator(selector).textContent",
+    signature: "locator.textContent(options?)",
+    summary: "Return redacted textContent for one strict locator match.",
+    security: "page-content-read",
+    params: BrowserPlaywrightLocatorReadParams,
+    result: BrowserExtensionPlaywrightLocatorValueResult,
+  },
+  "playwright.locator.innerText": {
+    method: "playwright.locator.innerText",
+    apiPath: "tab.playwright.locator(selector).innerText",
+    signature: "locator.innerText(options?)",
+    summary: "Return rendered text for one strict locator match.",
+    security: "page-content-read",
+    params: BrowserPlaywrightLocatorReadParams,
+    result: BrowserExtensionPlaywrightLocatorValueResult,
+  },
+  "playwright.locator.inputValue": {
+    method: "playwright.locator.inputValue",
+    apiPath: "tab.playwright.locator(selector).inputValue",
+    signature: "locator.inputValue(options?)",
+    summary: "Return a non-sensitive form value for one strict match.",
+    security: "page-content-read",
+    params: BrowserPlaywrightLocatorReadParams,
+    result: BrowserExtensionPlaywrightLocatorValueResult,
+  },
+  "playwright.locator.getAttribute": {
+    method: "playwright.locator.getAttribute",
+    apiPath: "tab.playwright.locator(selector).getAttribute",
+    signature: "locator.getAttribute(name, options?)",
+    summary: "Return an attribute for one strict locator match.",
+    security: "page-content-read",
+    params: BrowserPlaywrightLocatorGetAttributeParams,
+    result: BrowserExtensionPlaywrightLocatorValueResult,
+  },
+  "playwright.locator.isVisible": {
+    method: "playwright.locator.isVisible",
+    apiPath: "tab.playwright.locator(selector).isVisible",
+    signature: "locator.isVisible()",
+    summary: "Report visibility without scrolling or changing page state.",
+    security: "page-content-read",
+    params: BrowserPlaywrightLocatorReadParams,
+    result: BrowserExtensionPlaywrightLocatorBooleanResult,
+  },
+  "playwright.locator.isEnabled": {
+    method: "playwright.locator.isEnabled",
+    apiPath: "tab.playwright.locator(selector).isEnabled",
+    signature: "locator.isEnabled()",
+    summary: "Report enabled state without changing page state.",
+    security: "page-content-read",
+    params: BrowserPlaywrightLocatorReadParams,
+    result: BrowserExtensionPlaywrightLocatorBooleanResult,
+  },
+  "playwright.locator.waitFor": {
+    method: "playwright.locator.waitFor",
+    apiPath: "tab.playwright.locator(selector).waitFor",
+    signature: "locator.waitFor(options)",
+    summary: "Wait for a locator state using bounded event-driven polling.",
+    security: "page-content-read",
+    params: BrowserPlaywrightLocatorWaitForParams,
+    result: BrowserExtensionPlaywrightWaitResult,
+  },
+  "playwright.locator.click": {
+    method: "playwright.locator.click",
+    apiPath: "tab.playwright.locator(selector).click",
+    signature: "locator.click(options?)",
+    summary: "Strictly resolve, actionability-check, and click a locator.",
     security: "page-interaction",
-    params: BrowserLocatorClickParams,
-    result: BrowserExtensionElementActionResult,
+    params: BrowserPlaywrightLocatorClickParams,
+    result: BrowserExtensionPlaywrightActionResult,
   },
-  "locator.fill": {
-    method: "locator.fill",
-    apiPath: "tab.locator(locator).fill",
-    signature: "tab.locator(locator).fill(text, options?)",
-    summary: "Relocate and fill a structured locator target.",
+  "playwright.locator.dblclick": {
+    method: "playwright.locator.dblclick",
+    apiPath: "tab.playwright.locator(selector).dblclick",
+    signature: "locator.dblclick(options?)",
+    summary: "Strictly resolve and double-click a locator.",
     security: "page-interaction",
-    params: BrowserLocatorFillParams,
-    result: BrowserExtensionFillResult,
+    params: BrowserPlaywrightLocatorClickParams,
+    result: BrowserExtensionPlaywrightActionResult,
   },
-  "locator.textContent": {
-    method: "locator.textContent",
-    apiPath: "tab.locator(locator).textContent",
-    signature: "tab.locator(locator).textContent(options?)",
-    summary: "Read redacted text from a structured locator target.",
-    security: "page-content-read",
-    params: BrowserLocatorTextContentParams,
-    result: BrowserExtensionLocatorValueResult,
+  "playwright.locator.fill": {
+    method: "playwright.locator.fill",
+    apiPath: "tab.playwright.locator(selector).fill",
+    signature: "locator.fill(value, options?)",
+    summary: "Strictly replace the value of a fillable locator target.",
+    security: "page-interaction",
+    params: BrowserPlaywrightLocatorFillParams,
+    result: BrowserExtensionPlaywrightActionResult,
   },
-  "locator.inputValue": {
-    method: "locator.inputValue",
-    apiPath: "tab.locator(locator).inputValue",
-    signature: "tab.locator(locator).inputValue(options?)",
-    summary: "Read a non-sensitive value from a structured locator target.",
-    security: "page-content-read",
-    params: BrowserLocatorInputValueParams,
-    result: BrowserExtensionLocatorValueResult,
+  "playwright.locator.type": {
+    method: "playwright.locator.type",
+    apiPath: "tab.playwright.locator(selector).type",
+    signature: "locator.type(value, options?)",
+    summary: "Strictly type text into a locator target without clearing it.",
+    security: "page-interaction",
+    params: BrowserPlaywrightLocatorTypeParams,
+    result: BrowserExtensionPlaywrightActionResult,
   },
-  "locator.waitFor": {
-    method: "locator.waitFor",
-    apiPath: "tab.locator(locator).waitFor",
-    signature: "tab.locator(locator).waitFor(options?)",
-    summary: "Wait for a structured locator state with bounded retries.",
+  "playwright.locator.press": {
+    method: "playwright.locator.press",
+    apiPath: "tab.playwright.locator(selector).press",
+    signature: "locator.press(value, options?)",
+    summary: "Focus one strict locator match and press a keyboard key.",
+    security: "page-interaction",
+    params: BrowserPlaywrightLocatorPressParams,
+    result: BrowserExtensionPlaywrightActionResult,
+  },
+  "playwright.locator.selectOption": {
+    method: "playwright.locator.selectOption",
+    apiPath: "tab.playwright.locator(selector).selectOption",
+    signature: "locator.selectOption(value, options?)",
+    summary: "Select one or more options on a native select element.",
+    security: "page-interaction",
+    params: BrowserPlaywrightLocatorSelectOptionParams,
+    result: BrowserExtensionPlaywrightActionResult,
+  },
+  "playwright.locator.setChecked": {
+    method: "playwright.locator.setChecked",
+    apiPath: "tab.playwright.locator(selector).setChecked",
+    signature: "locator.setChecked(checked, options?)",
+    summary: "Set the checked state of one strict locator match.",
+    security: "page-interaction",
+    params: BrowserPlaywrightLocatorSetCheckedParams,
+    result: BrowserExtensionPlaywrightActionResult,
+  },
+  "playwright.waitForNavigation": {
+    method: "playwright.waitForNavigation",
+    apiPath: "tab.playwright.expectNavigation",
+    signature: "tab.playwright.expectNavigation(action, options?)",
+    summary: "Wait for navigation from a captured document generation.",
     security: "page-content-read",
-    params: BrowserLocatorWaitForParams,
-    result: BrowserExtensionWaitForResult,
+    params: BrowserPlaywrightWaitForNavigationParams,
+    result: BrowserExtensionPlaywrightWaitResult,
+  },
+  "playwright.waitForLoadState": {
+    method: "playwright.waitForLoadState",
+    apiPath: "tab.playwright.waitForLoadState",
+    signature: "tab.playwright.waitForLoadState(options?)",
+    summary: "Wait for a bounded page lifecycle state.",
+    security: "page-content-read",
+    params: BrowserPlaywrightWaitForLoadStateParams,
+    result: BrowserExtensionPlaywrightWaitResult,
+  },
+  "playwright.waitForURL": {
+    method: "playwright.waitForURL",
+    apiPath: "tab.playwright.waitForURL",
+    signature: "tab.playwright.waitForURL(url, options?)",
+    summary: "Wait for a tab URL and optional lifecycle state.",
+    security: "page-content-read",
+    params: BrowserPlaywrightWaitForURLParams,
+    result: BrowserExtensionPlaywrightWaitResult,
+  },
+  "playwright.waitForEvent": {
+    method: "playwright.waitForEvent",
+    apiPath: "tab.playwright.waitForEvent",
+    signature: "tab.playwright.waitForEvent(event, options?)",
+    summary: "Wait for a one-shot download or file chooser event.",
+    security: "page-content-read",
+    params: BrowserPlaywrightWaitForEventParams,
+    result: BrowserExtensionPlaywrightEventResult,
+  },
+  "playwright.download.path": {
+    method: "playwright.download.path",
+    apiPath: "download.path",
+    signature: "download.path(options?)",
+    summary: "Return the completed path for a one-shot download event.",
+    security: "page-content-read",
+    params: BrowserPlaywrightEventHandleParams,
+    result: BrowserExtensionPlaywrightDownloadPathResult,
+  },
+  "playwright.fileChooser.setFiles": {
+    method: "playwright.fileChooser.setFiles",
+    apiPath: "fileChooser.setFiles",
+    signature: "fileChooser.setFiles(files, options?)",
+    summary: "Upload explicitly approved local files through a chooser.",
+    security: "local-file-read",
+    params: BrowserPlaywrightFileChooserSetFilesParams,
+    result: BrowserExtensionPlaywrightFileChooserSetFilesResult,
   },
 } as const satisfies Record<
   BrowserContractCommandMethod,
@@ -643,24 +878,14 @@ function commandDefinition(
   method: unknown,
   contractVersion: number = BROWSER_CONTRACT_VERSION,
 ) {
-  if (!BROWSER_CONTRACT_SUPPORTED_VERSIONS.includes(
-    contractVersion as (typeof BROWSER_CONTRACT_SUPPORTED_VERSIONS)[number],
-  )) {
+  if (contractVersion !== BROWSER_CONTRACT_VERSION) {
     throw new BrowserContractValidationError(
       "COMMAND_NOT_SUPPORTED",
       `Browser contract version '${contractVersion}' is not supported.`,
     )
   }
   const parsed = BrowserContractCommandMethod.safeParse(method)
-  if (
-    !parsed.success
-    || (
-      contractVersion === BROWSER_CONTRACT_V1_VERSION
-      && !BROWSER_CONTRACT_V1_COMMAND_METHODS.includes(
-        parsed.data as BrowserContractV1CommandMethod,
-      )
-    )
-  ) {
+  if (!parsed.success) {
     throw new BrowserContractValidationError(
       "COMMAND_NOT_SUPPORTED",
       `Browser command '${String(method)}' is not supported by contract v${contractVersion}.`,
@@ -711,7 +936,9 @@ export function parseBrowserCommandResult<
 export const BrowserCapabilityFeatures = z.object({
   ownership: z.boolean(),
   claim: z.boolean(),
-  locator: z.boolean(),
+  playwrightLocator: z.boolean().default(false),
+  playwrightApiRevision: z.number().int().nonnegative().default(0),
+  playwrightEngineVersion: z.string().trim().min(1).max(128).optional(),
   cancel: z.boolean(),
   arbitraryJavaScript: z.boolean(),
   scopedCdp: z.boolean(),
@@ -724,7 +951,8 @@ export type BrowserCapabilityFeatures = z.infer<
 export const DEFAULT_BROWSER_CAPABILITY_FEATURES = {
   ownership: false,
   claim: false,
-  locator: false,
+  playwrightLocator: false,
+  playwrightApiRevision: 0,
   cancel: false,
   arbitraryJavaScript: false,
   scopedCdp: false,
@@ -756,6 +984,52 @@ export const BrowserBackendCapabilities = z.object({
       path: ["commands"],
     })
   }
+  const playwrightCommands = BROWSER_CONTRACT_V3_PLAYWRIGHT_COMMAND_METHODS
+  const advertisesAllPlaywrightCommands = playwrightCommands.every((method) =>
+    unique.has(method)
+  )
+  const advertisesAnyPlaywrightCommand = playwrightCommands.some((method) =>
+    unique.has(method)
+  )
+  if (
+    value.features.playwrightLocator !== advertisesAllPlaywrightCommands
+    || advertisesAnyPlaywrightCommand !== advertisesAllPlaywrightCommands
+  ) {
+    context.addIssue({
+      code: "custom",
+      message:
+        "The Playwright Locator v3 surface must be advertised atomically.",
+      path: ["features", "playwrightLocator"],
+    })
+  }
+  if (
+    value.features.playwrightLocator
+    && (
+      value.features.playwrightApiRevision < 1
+      || !value.features.playwrightEngineVersion
+    )
+  ) {
+    context.addIssue({
+      code: "custom",
+      message:
+        "Playwright Locator capabilities require an API revision and engine version.",
+      path: ["features"],
+    })
+  }
+  if (
+    !value.features.playwrightLocator
+    && (
+      value.features.playwrightApiRevision !== 0
+      || value.features.playwrightEngineVersion !== undefined
+    )
+  ) {
+    context.addIssue({
+      code: "custom",
+      message:
+        "Disabled Playwright Locator capabilities must not claim an engine revision.",
+      path: ["features"],
+    })
+  }
 })
 export type BrowserBackendCapabilities = z.infer<
   typeof BrowserBackendCapabilities
@@ -765,10 +1039,7 @@ export const BrowserBackendKind = z.enum(["extension", "iab", "cdp"])
 export type BrowserBackendKind = z.infer<typeof BrowserBackendKind>
 
 export const BrowserBackendInfo = z.object({
-  contractVersion: z.union([
-    z.literal(BROWSER_CONTRACT_V1_VERSION),
-    z.literal(BROWSER_CONTRACT_VERSION),
-  ]),
+  contractVersion: BrowserContractVersion,
   browserId: z.string().min(1),
   name: z.string().min(1),
   kind: BrowserBackendKind,
@@ -808,7 +1079,7 @@ export function createBrowserBackendCapabilities(input: {
 
 export function createBrowserBackendInfo(input: {
   connected: boolean
-  contractVersion?: typeof BROWSER_CONTRACT_V1_VERSION | typeof BROWSER_CONTRACT_VERSION
+  contractVersion?: BrowserContractVersion
   browserId?: string
   name?: string
   kind?: BrowserBackendKind
@@ -818,6 +1089,11 @@ export function createBrowserBackendInfo(input: {
   commands?: readonly BrowserContractCommandMethod[]
   features?: Partial<BrowserCapabilityFeatures>
 }): BrowserBackendInfo {
+  const commands = input.commands ?? []
+  const hasPlaywrightSurface =
+    BROWSER_CONTRACT_V3_PLAYWRIGHT_COMMAND_METHODS.every((method) =>
+      commands.includes(method)
+    )
   return BrowserBackendInfo.parse({
     contractVersion: input.contractVersion ?? BROWSER_CONTRACT_VERSION,
     browserId: input.browserId ?? "extension",
@@ -828,8 +1104,18 @@ export function createBrowserBackendInfo(input: {
     backendVersion: input.backendVersion,
     instanceID: input.instanceID,
     capabilities: createBrowserBackendCapabilities({
-      commands: input.commands,
-      features: input.features,
+      commands,
+      features: {
+        ...(hasPlaywrightSurface
+          && input.features?.playwrightLocator === undefined
+          ? {
+              playwrightLocator: true,
+              playwrightApiRevision: 1,
+              playwrightEngineVersion: "1.61.1",
+            }
+          : {}),
+        ...input.features,
+      },
     }),
   })
 }
@@ -860,10 +1146,7 @@ export type BrowserApiManifestCommand = z.infer<
 >
 
 export const BrowserApiManifest = z.object({
-  contractVersion: z.union([
-    z.literal(BROWSER_CONTRACT_V1_VERSION),
-    z.literal(BROWSER_CONTRACT_VERSION),
-  ]),
+  contractVersion: BrowserContractVersion,
   commands: z.array(BrowserApiManifestCommand),
 }).strict()
 export type BrowserApiManifest = z.infer<typeof BrowserApiManifest>
@@ -880,10 +1163,7 @@ export type BrowserDocumentationManifestEntry = z.infer<
 >
 
 export const BrowserDocumentationManifest = z.object({
-  contractVersion: z.union([
-    z.literal(BROWSER_CONTRACT_V1_VERSION),
-    z.literal(BROWSER_CONTRACT_VERSION),
-  ]),
+  contractVersion: BrowserContractVersion,
   title: z.string().min(1),
   entries: z.array(BrowserDocumentationManifestEntry),
 }).strict()
@@ -931,17 +1211,11 @@ function publicResult(
 export function createBrowserApiManifest(
   commands: readonly BrowserContractCommandMethod[] =
     BROWSER_CONTRACT_COMMAND_METHODS,
-  contractVersion: typeof BROWSER_CONTRACT_V1_VERSION
-    | typeof BROWSER_CONTRACT_VERSION = BROWSER_CONTRACT_VERSION,
+  contractVersion: BrowserContractVersion = BROWSER_CONTRACT_VERSION,
 ): BrowserApiManifest {
-  const available = contractVersion === BROWSER_CONTRACT_V1_VERSION
-    ? new Set<BrowserContractCommandMethod>(BROWSER_CONTRACT_V1_COMMAND_METHODS)
-    : new Set<BrowserContractCommandMethod>(BROWSER_CONTRACT_COMMAND_METHODS)
   return BrowserApiManifest.parse({
     contractVersion,
-    commands: normalizeCommands(commands).filter((method) =>
-      available.has(method)
-    ).map((method) => {
+    commands: normalizeCommands(commands).map((method) => {
       const definition = commandDefinition(method, contractVersion)
       return {
         method,
@@ -959,18 +1233,12 @@ export function createBrowserApiManifest(
 export function createBrowserDocumentationManifest(
   commands: readonly BrowserContractCommandMethod[] =
     BROWSER_CONTRACT_COMMAND_METHODS,
-  contractVersion: typeof BROWSER_CONTRACT_V1_VERSION
-    | typeof BROWSER_CONTRACT_VERSION = BROWSER_CONTRACT_VERSION,
+  contractVersion: BrowserContractVersion = BROWSER_CONTRACT_VERSION,
 ): BrowserDocumentationManifest {
-  const available = contractVersion === BROWSER_CONTRACT_V1_VERSION
-    ? new Set<BrowserContractCommandMethod>(BROWSER_CONTRACT_V1_COMMAND_METHODS)
-    : new Set<BrowserContractCommandMethod>(BROWSER_CONTRACT_COMMAND_METHODS)
   return BrowserDocumentationManifest.parse({
     contractVersion,
     title: "Anybox Browser Client Runtime",
-    entries: normalizeCommands(commands).filter((method) =>
-      available.has(method)
-    ).map((method) => {
+    entries: normalizeCommands(commands).map((method) => {
       const definition = commandDefinition(method, contractVersion)
       return {
         method,
@@ -996,8 +1264,7 @@ export type BrowserGetInfoResult = z.infer<typeof BrowserGetInfoResult>
 
 export function createBrowserGetInfoResult(
   backend: BrowserBackendInfo,
-  contractVersion: typeof BROWSER_CONTRACT_V1_VERSION
-    | typeof BROWSER_CONTRACT_VERSION = BROWSER_CONTRACT_VERSION,
+  contractVersion: BrowserContractVersion = BROWSER_CONTRACT_VERSION,
 ): BrowserGetInfoResult {
   const parsedBackend = BrowserBackendInfo.parse(backend)
   const commands = parsedBackend.capabilities.commands

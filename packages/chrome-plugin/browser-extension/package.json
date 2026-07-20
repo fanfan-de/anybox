@@ -1,12 +1,14 @@
 {
   "name": "anybox-chrome-extension",
-  "version": "0.11.3",
+  "version": "0.12.0",
   "private": true,
   "description": "Chrome extension bridge for the Anybox Chrome plugin.",
   "type": "module",
   "scripts": {
     "build": "vite build",
+    "sync:locator-engine": "node ./scripts/sync-playwright-locator-engine.mjs",
     "test": "bun test ./Test",
+    "test:e2e": "node --test ./Test/locator-real-chrome.e2e.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
@@ -14,6 +16,8 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "esbuild": "0.27.2",
+    "playwright-core": "1.61.1",
     "typescript": "^5.9.3",
     "vite": "^7.3.1"
   }

@@ -53,6 +53,7 @@ export type BrowserAuthorizationReceiptClaims = {
   origin: string
   tabId?: number
   sensitive: boolean
+  requestFingerprint?: string
   issuedAt: number
   expiresAt: number
 }
@@ -105,6 +106,9 @@ export function signBrowserAuthorizationReceipt(input: {
     origin: readString(challenge, "origin"),
     tabId: typeof challenge.tabId === "number" ? challenge.tabId : undefined,
     sensitive: challenge.sensitive === true,
+    requestFingerprint: typeof challenge.requestFingerprint === "string"
+      ? challenge.requestFingerprint
+      : undefined,
     issuedAt: now,
     expiresAt: Math.min(
       challengeExpiresAt,

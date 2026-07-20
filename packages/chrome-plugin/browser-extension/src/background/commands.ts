@@ -3,7 +3,7 @@ import type {
   BrowserExtensionCommandMethod,
 } from "@anybox/chrome-shared/browser-extension"
 import {
-  BROWSER_CONTRACT_V1_VERSION,
+  BROWSER_CONTRACT_V3_PLAYWRIGHT_COMMAND_METHODS,
   BROWSER_CONTRACT_VERSION,
   BrowserContractCommandMethod,
   BrowserContractValidationError,
@@ -11,6 +11,14 @@ import {
   parseBrowserCommandResult,
   type BrowserContractCommandMethod as BrowserContractCommandMethodValue,
 } from "@anybox/chrome-shared/browser-contract"
+import {
+  commandAbortedError,
+  detachAllDebuggers,
+  detachTabDebugger,
+  sendCdp,
+  throwIfCommandAborted,
+  waitForCommandDelay,
+} from "./cdp-session"
 import {
   createLease,
   finalizeAllLeases,
@@ -22,50 +30,12 @@ import {
   releaseLease,
   requireLease,
 } from "./lease-store"
+import {
+  executePlaywrightCommand,
+  releasePlaywrightTab,
+} from "./playwright-executor"
 
-const attachedTabs = new Set<number>()
-const V1_SAFE_READ_METHODS = new Set<BrowserContractCommandMethodValue>([
-  "tabs.list",
-  "page.snapshot",
-  "page.interactiveSnapshot",
-  "page.domTree",
-  "page.accessibilityTree",
-  "page.screenshot",
-  "page.waitFor",
-])
-
-function commandAbortedError() {
-  return Object.assign(
-    new Error("The browser command was cancelled because the Browser Host connection closed."),
-    {
-      code: "BACKEND_UNAVAILABLE",
-      retryable: true,
-    },
-  )
-}
-
-function throwIfCommandAborted(signal?: AbortSignal) {
-  if (signal?.aborted) throw commandAbortedError()
-}
-
-function waitForCommandDelay(delayMs: number, signal?: AbortSignal) {
-  if (!signal) {
-    return new Promise<void>((resolve) => setTimeout(resolve, delayMs))
-  }
-  throwIfCommandAborted(signal)
-  return new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      signal.removeEventListener("abort", onAbort)
-      resolve()
-    }, delayMs)
-    const onAbort = () => {
-      clearTimeout(timer)
-      signal.removeEventListener("abort", onAbort)
-      reject(commandAbortedError())
-    }
-    signal.addEventListener("abort", onAbort, { once: true })
-  })
-}
+export { detachAllDebuggers, detachTabDebugger } from "./cdp-session"
 
 type TabSummary = {
   id: number
@@ -297,53 +267,6 @@ async function tabInfo(tabId: number) {
   return toTabSummary(tab)
 }
 
-async function attachDebugger(tabId: number) {
-  if (attachedTabs.has(tabId)) return
-  try {
-    await chrome.debugger.attach({ tabId }, "1.3")
-    attachedTabs.add(tabId)
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    if (message.includes("Another debugger") || message.includes("already attached")) {
-      throw new Error(`Cannot control tab ${tabId}: ${message}`)
-    }
-    throw error
-  }
-}
-
-export async function detachTabDebugger(tabId: number) {
-  if (!attachedTabs.has(tabId)) return false
-  try {
-    await chrome.debugger.detach({ tabId })
-  } catch {
-    // Chrome may already have detached during navigation or tab teardown.
-  } finally {
-    attachedTabs.delete(tabId)
-  }
-  return true
-}
-
-export async function detachAllDebuggers() {
-  const tabIds = [...attachedTabs]
-  await Promise.all(tabIds.map((tabId) => detachTabDebugger(tabId)))
-  return tabIds
-}
-
-async function sendCdp(
-  tabId: number,
-  method: string,
-  commandParams?: Record<string, unknown>,
-  signal?: AbortSignal,
-) {
-  throwIfCommandAborted(signal)
-  await attachDebugger(tabId)
-  if (signal?.aborted) {
-    await detachTabDebugger(tabId)
-    throw commandAbortedError()
-  }
-  return await chrome.debugger.sendCommand({ tabId }, method, commandParams)
-}
-
 async function runInPage<T>(
   tabId: number,
   func: (...args: any[]) => T,
@@ -476,7 +399,7 @@ async function claimTab(
   const tabId = readNumber(readRecord(params).tabId)
   if (!tabId || !context?.extensionInstanceID) {
     throw Object.assign(
-      new Error("tabs.claim requires a tab and Browser Contract v2 context."),
+      new Error("tabs.claim requires a tab and Browser Contract v3 context."),
       { code: "SESSION_REQUIRED", retryable: false },
     )
   }
@@ -1550,469 +1473,6 @@ async function waitFor(params: unknown, signal?: AbortSignal) {
   return { tabId, url: tab.url, title: tab.title, matched: false, reason }
 }
 
-type LocatorAction =
-  | "click"
-  | "fill"
-  | "textContent"
-  | "inputValue"
-  | "waitFor"
-
-type LocatorProbe = {
-  found: boolean
-  visible: boolean
-  enabled: boolean
-  receivesPointer: boolean
-  stable: boolean
-  text: string | null
-  value: string | null
-  sensitive: boolean
-  reason?: string
-}
-
-async function probeLocator(
-  tabId: number,
-  locator: Record<string, unknown>,
-  action: LocatorAction,
-  value?: string,
-  button = "left",
-  sensitiveApproved = false,
-  signal?: AbortSignal,
-): Promise<LocatorProbe> {
-  return await runInPage(tabId, async (
-    query: Record<string, unknown>,
-    requestedAction: LocatorAction,
-    nextValue: string | undefined,
-    mouseButton: string,
-    allowSensitive: boolean,
-    sensitivePatternSource: string,
-  ) => {
-    const normalize = (item: unknown) =>
-      String(item ?? "").replace(/\s+/g, " ").trim()
-    const exact = query.exact === true
-    const matchesText = (actual: unknown, expected: unknown) => {
-      const left = normalize(actual)
-      const right = normalize(expected)
-      if (!right) return true
-      return exact ? left === right : left.toLowerCase().includes(right.toLowerCase())
-    }
-    const implicitRole = (element: Element) => {
-      const explicit = element.getAttribute("role")
-      if (explicit) return explicit
-      const tag = element.tagName.toLowerCase()
-      if (tag === "button") return "button"
-      if (tag === "a" && element.hasAttribute("href")) return "link"
-      if (tag === "textarea") return "textbox"
-      if (tag === "select") return "combobox"
-      if (tag === "input") {
-        const type = (element.getAttribute("type") || "text").toLowerCase()
-        if (type === "checkbox") return "checkbox"
-        if (type === "radio") return "radio"
-        if (["button", "submit", "reset"].includes(type)) return "button"
-        return "textbox"
-      }
-      return ""
-    }
-    const accessibleName = (element: Element) => {
-      const root = element.getRootNode() as Document | ShadowRoot
-      const findById = (id: string) =>
-        root.querySelector(`#${CSS.escape(id)}`)
-      const labelledBy = element.getAttribute("aria-labelledby")
-      const labelled = labelledBy
-        ? labelledBy.split(/\s+/)
-            .map((id) => findById(id)?.textContent ?? "")
-            .join(" ")
-        : ""
-      const htmlElement = element as HTMLElement
-      const id = element.getAttribute("id")
-      const label = id
-        ? root.querySelector(`label[for="${CSS.escape(id)}"]`)?.textContent
-        : element.closest("label")?.textContent
-      return normalize(
-        element.getAttribute("aria-label")
-        || labelled
-        || label
-        || element.getAttribute("alt")
-        || element.getAttribute("title")
-        || htmlElement.innerText
-        || element.textContent,
-      )
-    }
-    const elements: Element[] = []
-    const seen = new Set<Element>()
-    const visitRoot = (root: Document | ShadowRoot) => {
-      let rootElements: Element[] = []
-      let candidates: Element[] = []
-      try {
-        rootElements = Array.from(root.querySelectorAll("*"))
-        candidates = query.css
-          ? Array.from(root.querySelectorAll(String(query.css)))
-          : rootElements
-      } catch {
-        return
-      }
-      for (const element of candidates) {
-        if (!seen.has(element)) {
-          seen.add(element)
-          elements.push(element)
-        }
-      }
-      for (const element of rootElements) {
-        const shadow = (element as HTMLElement).shadowRoot
-        if (shadow) visitRoot(shadow)
-        if (element.tagName.toLowerCase() === "iframe") {
-          try {
-            const frameDocument = (element as HTMLIFrameElement).contentDocument
-            if (frameDocument) visitRoot(frameDocument)
-          } catch {
-            // Cross-origin frames are an explicit unsupported boundary.
-          }
-        }
-        if (elements.length >= 20_000) return
-      }
-    }
-    visitRoot(document)
-    const candidate = elements.find((element) => {
-      if (query.testId && element.getAttribute("data-testid") !== query.testId) {
-        return false
-      }
-      if (query.role && implicitRole(element) !== query.role) return false
-      if (query.name && !matchesText(accessibleName(element), query.name)) return false
-      if (query.text && !matchesText(
-        (element as HTMLElement).innerText || element.textContent,
-        query.text,
-      )) {
-        return false
-      }
-      if (query.label) {
-        const root = element.getRootNode() as Document | ShadowRoot
-        const id = element.getAttribute("id")
-        const label = id
-          ? root.querySelector(`label[for="${CSS.escape(id)}"]`)?.textContent
-          : element.closest("label")?.textContent
-        if (!matchesText(label, query.label)) return false
-      }
-      if (
-        query.placeholder
-        && !matchesText(element.getAttribute("placeholder"), query.placeholder)
-      ) {
-        return false
-      }
-      return true
-    })
-    if (!candidate) {
-      return {
-        found: false,
-        visible: false,
-        enabled: false,
-        receivesPointer: false,
-        stable: false,
-        text: null,
-        value: null,
-        sensitive: false,
-        reason: "No matching element was found in the main document, open shadow roots, or same-origin frames.",
-      }
-    }
-
-    const html = candidate as HTMLElement
-    const view = candidate.ownerDocument.defaultView ?? window
-    html.scrollIntoView({ block: "center", inline: "center" })
-    const before = html.getBoundingClientRect()
-    await new Promise<void>((resolve) =>
-      view.requestAnimationFrame(() =>
-        view.requestAnimationFrame(() => resolve())
-      )
-    )
-    const rect = html.getBoundingClientRect()
-    const style = view.getComputedStyle(html)
-    const visible = rect.width > 0
-      && rect.height > 0
-      && style.visibility !== "hidden"
-      && style.display !== "none"
-      && Number(style.opacity || "1") > 0
-    const disabled = (
-      (candidate as HTMLInputElement).disabled === true
-      || candidate.getAttribute("aria-disabled") === "true"
-      || candidate.hasAttribute("inert")
-    )
-    const centerX = Math.max(
-      0,
-      Math.min(view.innerWidth - 1, rect.left + rect.width / 2),
-    )
-    const centerY = Math.max(
-      0,
-      Math.min(view.innerHeight - 1, rect.top + rect.height / 2),
-    )
-    const root = candidate.getRootNode() as Document | ShadowRoot
-    const pointerTarget = root.elementFromPoint(centerX, centerY)
-    const receivesPointer = Boolean(
-      pointerTarget
-      && (pointerTarget === candidate || candidate.contains(pointerTarget)),
-    )
-    const stable = Math.abs(before.x - rect.x) < 0.5
-      && Math.abs(before.y - rect.y) < 0.5
-      && Math.abs(before.width - rect.width) < 0.5
-      && Math.abs(before.height - rect.height) < 0.5
-    const sensitivePattern = new RegExp(sensitivePatternSource, "i")
-    const metadata = [
-      candidate.getAttribute("type"),
-      candidate.getAttribute("name"),
-      candidate.getAttribute("id"),
-      candidate.getAttribute("autocomplete"),
-      candidate.getAttribute("aria-label"),
-      candidate.getAttribute("placeholder"),
-    ].filter(Boolean).join("-")
-    const sensitive = sensitivePattern.test(metadata)
-      || candidate.getAttribute("type")?.toLowerCase() === "password"
-
-    if (requestedAction === "fill" && sensitive && !allowSensitive) {
-      return {
-        found: true,
-        visible,
-        enabled: !disabled,
-        receivesPointer,
-        stable,
-        text: null,
-        value: null,
-        sensitive,
-        reason: "The matching element is sensitive; retry with sensitive: true to request one-time approval.",
-      }
-    }
-
-    if (
-      requestedAction === "click"
-      || requestedAction === "fill"
-    ) {
-      if (!visible || disabled || !receivesPointer || !stable) {
-        return {
-          found: true,
-          visible,
-          enabled: !disabled,
-          receivesPointer,
-          stable,
-          text: null,
-          value: null,
-          sensitive,
-          reason: !visible
-            ? "The matching element is not visible."
-            : disabled
-              ? "The matching element is disabled."
-              : !receivesPointer
-                ? "The matching element is covered by another element."
-                : "The matching element is not stable.",
-        }
-      }
-      html.focus()
-    }
-
-    if (requestedAction === "click") {
-      const eventButton = mouseButton === "right"
-        ? 2
-        : mouseButton === "middle"
-          ? 1
-          : 0
-      for (const type of ["pointerover", "pointerdown", "mousedown", "mouseup", "click"]) {
-        candidate.dispatchEvent(new view.MouseEvent(type, {
-          bubbles: true,
-          cancelable: true,
-          clientX: centerX,
-          clientY: centerY,
-          button: eventButton,
-        }))
-      }
-    } else if (requestedAction === "fill") {
-      const text = String(nextValue ?? "")
-      const tag = candidate.tagName.toLowerCase()
-      if (tag === "input") {
-        const setter = Object.getOwnPropertyDescriptor(
-          view.HTMLInputElement.prototype,
-          "value",
-        )?.set
-        setter?.call(candidate, text)
-      } else if (tag === "textarea") {
-        const setter = Object.getOwnPropertyDescriptor(
-          view.HTMLTextAreaElement.prototype,
-          "value",
-        )?.set
-        setter?.call(candidate, text)
-      } else if ((candidate as HTMLElement).isContentEditable) {
-        candidate.textContent = text
-      } else {
-        return {
-          found: true,
-          visible,
-          enabled: !disabled,
-          receivesPointer,
-          stable,
-          text: null,
-          value: null,
-          sensitive,
-          reason: "The matching element cannot receive text.",
-        }
-      }
-      candidate.dispatchEvent(new view.InputEvent("input", {
-        bubbles: true,
-        inputType: "insertText",
-        data: null,
-      }))
-      candidate.dispatchEvent(new view.Event("change", { bubbles: true }))
-    }
-
-    const rawValue = "value" in candidate
-      ? String((candidate as HTMLInputElement).value ?? "")
-      : null
-    return {
-      found: true,
-      visible,
-      enabled: !disabled,
-      receivesPointer,
-      stable,
-      text: sensitive ? null : normalize(html.innerText || candidate.textContent) || null,
-      value: sensitive ? null : rawValue,
-      sensitive,
-    }
-  }, [
-    locator,
-    action,
-    value,
-    button,
-    sensitiveApproved,
-    SENSITIVE_VALUE_PATTERN.source,
-  ], signal)
-}
-
-async function locatorCommand(
-  params: unknown,
-  action: LocatorAction,
-  signal?: AbortSignal,
-) {
-  const input = readRecord(params)
-  const tabId = await activeTabId(input.tabId)
-  const locator = readRecord(input.locator)
-  const timeout = readClampedInteger(input.timeoutMs, 10_000, 1, 60_000)
-  const deadline = Date.now() + timeout
-  const desiredState = readString(input.state, "visible")
-  let lastProbe: LocatorProbe | undefined
-
-  do {
-    throwIfCommandAborted(signal)
-    try {
-      lastProbe = await probeLocator(
-        tabId,
-        locator,
-        action,
-        typeof input.text === "string" ? input.text : undefined,
-        readString(input.button, "left"),
-        input.sensitive === true,
-        signal,
-      )
-    } catch (error) {
-      throwIfCommandAborted(signal)
-      lastProbe = {
-        found: false,
-        visible: false,
-        enabled: false,
-        receivesPointer: false,
-        stable: false,
-        text: null,
-        value: null,
-        sensitive: false,
-        reason: `The page changed while resolving the locator: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      }
-    }
-    const waitMatched = action === "waitFor" && (
-      desiredState === "hidden"
-        ? !lastProbe.found || !lastProbe.visible
-        : desiredState === "attached"
-          ? lastProbe.found
-          : desiredState === "enabled"
-            ? lastProbe.found && lastProbe.enabled
-            : lastProbe.found && lastProbe.visible
-    )
-    const actionMatched = action === "textContent" || action === "inputValue"
-      ? lastProbe.found
-      : lastProbe.found
-        && lastProbe.visible
-        && lastProbe.enabled
-        && lastProbe.receivesPointer
-        && lastProbe.stable
-    if (waitMatched || (action !== "waitFor" && actionMatched)) break
-    await waitForCommandDelay(100, signal)
-  } while (Date.now() < deadline)
-
-  const tab = await tabInfo(tabId)
-  if (
-    action === "fill"
-    && lastProbe?.sensitive
-    && input.sensitive !== true
-  ) {
-    throw Object.assign(
-      new Error(lastProbe.reason || "Sensitive locator input requires one-time approval."),
-      { code: "PERMISSION_DENIED", retryable: false },
-    )
-  }
-  if (action === "waitFor") {
-    const matched = desiredState === "hidden"
-      ? !lastProbe?.found || !lastProbe.visible
-      : desiredState === "attached"
-        ? lastProbe?.found === true
-        : desiredState === "enabled"
-          ? lastProbe?.found === true && lastProbe.enabled
-          : lastProbe?.found === true && lastProbe.visible
-    return {
-      tabId,
-      url: tab.url,
-      title: tab.title,
-      matched,
-      reason: matched ? `Locator reached state '${desiredState}'.` : lastProbe?.reason,
-    }
-  }
-  if (
-    !lastProbe?.found
-    || (
-      action !== "textContent"
-      && action !== "inputValue"
-      && (
-        !lastProbe.visible
-        || !lastProbe.enabled
-        || !lastProbe.receivesPointer
-        || !lastProbe.stable
-      )
-    )
-  ) {
-    throw Object.assign(
-      new Error(lastProbe?.reason || "The structured locator timed out."),
-      { code: "COMMAND_FAILED", retryable: true },
-    )
-  }
-  if (action === "textContent" || action === "inputValue") {
-    return {
-      tabId,
-      url: tab.url,
-      title: tab.title,
-      value: action === "textContent" ? lastProbe.text : lastProbe.value,
-    }
-  }
-  if (action === "fill") {
-    await showBrowserOverlay(tabId, "Typing")
-    return {
-      tabId,
-      elementId: "locator",
-      url: tab.url,
-      title: tab.title,
-      textLength: typeof input.text === "string" ? input.text.length : 0,
-    }
-  }
-  await showBrowserOverlay(tabId, "Clicking")
-  return {
-    tabId,
-    elementId: "locator",
-    url: tab.url,
-    title: tab.title,
-  }
-}
-
 async function releaseTab(
   params: unknown,
   context?: BrowserExtensionCommandContext,
@@ -2021,6 +1481,7 @@ async function releaseTab(
   if (!tabId) throw new Error("tabs.release requires a tabId.")
   await releaseLease(tabId, context)
   await removeBrowserOverlay(tabId)
+  releasePlaywrightTab(tabId)
   await detachTabDebugger(tabId)
   return { tabId, released: true }
 }
@@ -2066,6 +1527,7 @@ async function executeLeaseCleanup(
     ...result.retainTabIds,
   ]
   await Promise.all(allTabIds.map((tabId) => removeBrowserOverlay(tabId)))
+  allTabIds.forEach((tabId) => releasePlaywrightTab(tabId))
   await Promise.all(allTabIds.map((tabId) => detachTabDebugger(tabId)))
   if (result.closeTabIds.length > 0) {
     await chrome.tabs.remove(result.closeTabIds).catch(() => undefined)
@@ -2102,11 +1564,7 @@ const LEASED_TAB_METHODS = new Set<BrowserContractCommandMethodValue>([
   "page.type",
   "page.scroll",
   "page.waitFor",
-  "locator.click",
-  "locator.fill",
-  "locator.textContent",
-  "locator.inputValue",
-  "locator.waitFor",
+  ...BROWSER_CONTRACT_V3_PLAYWRIGHT_COMMAND_METHODS,
 ])
 
 async function enforceTabLease(
@@ -2129,20 +1587,23 @@ async function handleContractCommand(
   method: BrowserContractCommandMethodValue,
   params: unknown,
   context?: BrowserExtensionCommandContext,
-  contractVersion: number = BROWSER_CONTRACT_VERSION,
   signal?: AbortSignal,
 ) {
   throwIfCommandAborted(signal)
-  if (contractVersion === BROWSER_CONTRACT_VERSION) {
-    await enforceTabLease(method, params, context)
-  }
+  await enforceTabLease(method, params, context)
   throwIfCommandAborted(signal)
+  if (
+    BROWSER_CONTRACT_V3_PLAYWRIGHT_COMMAND_METHODS.includes(method as never)
+  ) {
+    return await executePlaywrightCommand(
+      method as (typeof BROWSER_CONTRACT_V3_PLAYWRIGHT_COMMAND_METHODS)[number],
+      params,
+      signal,
+    )
+  }
   switch (method) {
     case "tabs.list":
-      return await listTabs(
-        context,
-        contractVersion === BROWSER_CONTRACT_VERSION ? "owned" : "all",
-      )
+      return await listTabs(context, "owned")
     case "tabs.listUser":
       return await listTabs(context, "user")
     case "tabs.open":
@@ -2152,12 +1613,7 @@ async function handleContractCommand(
     case "tabs.activate":
       return await activateTab(params, signal)
     case "tabs.release":
-      return contractVersion === BROWSER_CONTRACT_V1_VERSION
-        ? {
-            tabId: readNumber(readRecord(params).tabId)!,
-            released: await detachTabDebugger(readNumber(readRecord(params).tabId)!),
-          }
-        : await releaseTab(params, context)
+      return await releaseTab(params, context)
     case "tabs.markDeliverable":
       return await markTabDeliverable(params, context)
     case "tabs.finalize":
@@ -2184,16 +1640,6 @@ async function handleContractCommand(
       return await scroll(params, signal)
     case "page.waitFor":
       return await waitFor(params, signal)
-    case "locator.click":
-      return await locatorCommand(params, "click", signal)
-    case "locator.fill":
-      return await locatorCommand(params, "fill", signal)
-    case "locator.textContent":
-      return await locatorCommand(params, "textContent", signal)
-    case "locator.inputValue":
-      return await locatorCommand(params, "inputValue", signal)
-    case "locator.waitFor":
-      return await locatorCommand(params, "waitFor", signal)
   }
 }
 
@@ -2202,44 +1648,29 @@ export async function handleBrowserCommand(
   params?: unknown,
   options: {
     context?: BrowserExtensionCommandContext
-    contractVersion?: number
     signal?: AbortSignal
   } = {},
 ) {
   throwIfCommandAborted(options.signal)
   const contractMethod = BrowserContractCommandMethod.safeParse(method)
   if (contractMethod.success) {
-    // An omitted version is the legacy Extension envelope. New Hosts always
-    // negotiate and send an explicit version.
-    const contractVersion = options.contractVersion ?? BROWSER_CONTRACT_V1_VERSION
     const parsedParams = parseBrowserCommandParams(
       contractMethod.data,
       params,
-      contractVersion,
+      BROWSER_CONTRACT_VERSION,
     )
-    if (
-      contractVersion === BROWSER_CONTRACT_V1_VERSION
-      && !V1_SAFE_READ_METHODS.has(contractMethod.data)
-    ) {
-      throw Object.assign(
-        new Error(
-          `Browser extension command '${contractMethod.data}' requires Browser Contract v2 authorization and tab leasing.`,
-        ),
-        {
-          code: "BACKEND_UPDATE_REQUIRED",
-          retryable: false,
-        },
-      )
-    }
     const result = await handleContractCommand(
       contractMethod.data,
       parsedParams,
       options.context,
-      contractVersion,
       options.signal,
     )
     throwIfCommandAborted(options.signal)
-    return parseBrowserCommandResult(contractMethod.data, result, contractVersion)
+    return parseBrowserCommandResult(
+      contractMethod.data,
+      result,
+      BROWSER_CONTRACT_VERSION,
+    )
   }
 
   switch (method) {
@@ -2251,7 +1682,3 @@ export async function handleBrowserCommand(
       )
   }
 }
-
-chrome.debugger.onDetach.addListener((source: any) => {
-  if (typeof source.tabId === "number") attachedTabs.delete(source.tabId)
-})

@@ -16,6 +16,24 @@ export const defaultPluginRoot = path.join(
 )
 
 const MAX_GITHUB_TREE_PACKAGE_BYTES = 5 * 1024 * 1024
+const MAX_MINIFIED_EXTENSION_JS_BYTES = Math.floor(1.5 * 1024 * 1024)
+const PLAYWRIGHT_LOCATOR_ENGINE = Object.freeze({
+  engine: "playwright-injected-script",
+  engineVersion: "1.61.1",
+  upstreamTag: "v1.61.1",
+  upstreamCommit: "39e3553a4f283a41134d75d7e404484bd9e6865a",
+  upstreamEntry: "packages/injected/src/injectedScript.ts",
+  upstreamEntrySha256:
+    "a5eb8259c5010c66358d08ab4d3e5ad7c0134aaf7918538cbf888dff8ee10ec3",
+  esbuildVersion: "0.27.2",
+  bundleSha256:
+    "3ce6afda466d2c04fc8fb5befc699d164322af080f3678e9d6d12425ba2ce7df",
+  licenseSha256:
+    "45873d00a0dd243596deb4aa23b2493b3d1f0671921bf2538ea431d7380220eb",
+  noticeSha256:
+    "6d602191187b35b9b01d2cffa01c8469c2c8d9de8a96f1bf868e0f264f51c81d",
+  license: "Apache-2.0",
+})
 
 export function nativeHostBuildTarget(
   platform = process.platform,
@@ -56,8 +74,21 @@ const requiredPackageFiles = [
   path.join("browser-extension", "manifest.json"),
   path.join("browser-extension", "background.js"),
   path.join("browser-extension", "content.js"),
+  path.join("browser-extension", "locator-engine.js"),
+  path.join("browser-extension", "locator-engine.metadata.json"),
   path.join("browser-extension", "popup.html"),
   path.join("browser-extension", "popup.js"),
+  path.join("browser-extension", "THIRD_PARTY_NOTICES.md"),
+  path.join(
+    "browser-extension",
+    "licenses",
+    "playwright-LICENSE.txt",
+  ),
+  path.join(
+    "browser-extension",
+    "licenses",
+    "playwright-NOTICE.txt",
+  ),
   currentNativeHostTarget.packagePath,
   path.join("scripts", "browser-client.mjs"),
   path.join("scripts", "browser-host.mjs"),
@@ -283,6 +314,81 @@ export async function validateChromePluginPackage(packageRoot) {
   for (const requiredPath of requiredPackageFiles.map(toPosixPath)) {
     if (!normalizedSet.has(requiredPath)) {
       throw new Error(`Chrome plugin package is missing required file: ${requiredPath}`)
+    }
+  }
+
+  const extensionJavaScriptFiles = files.filter((relativePath) => {
+    const normalized = toPosixPath(relativePath)
+    return normalized.startsWith("browser-extension/")
+      && normalized.endsWith(".js")
+  })
+  const extensionJavaScriptBytes = (
+    await Promise.all(extensionJavaScriptFiles.map(async (relativePath) =>
+      (await fsp.stat(path.join(packageRoot, relativePath))).size
+    ))
+  ).reduce((total, size) => total + size, 0)
+  if (extensionJavaScriptBytes > MAX_MINIFIED_EXTENSION_JS_BYTES) {
+    throw new Error(
+      `Chrome extension JavaScript is ${extensionJavaScriptBytes} bytes; the minified Locator v3 package limit is ${MAX_MINIFIED_EXTENSION_JS_BYTES} bytes.`,
+    )
+  }
+
+  const locatorEnginePath = path.join(
+    packageRoot,
+    "browser-extension",
+    "locator-engine.js",
+  )
+  const locatorMetadataPath = path.join(
+    packageRoot,
+    "browser-extension",
+    "locator-engine.metadata.json",
+  )
+  let locatorMetadata
+  try {
+    locatorMetadata = JSON.parse(
+      await fsp.readFile(locatorMetadataPath, "utf8"),
+    )
+  } catch (error) {
+    throw new Error(
+      "Chrome extension Locator engine metadata is not valid JSON.",
+      { cause: error },
+    )
+  }
+  for (const [field, expected] of Object.entries(
+    PLAYWRIGHT_LOCATOR_ENGINE,
+  )) {
+    if (locatorMetadata[field] !== expected) {
+      throw new Error(
+        `Chrome extension Locator engine metadata '${field}' must equal '${expected}'.`,
+      )
+    }
+  }
+  const locatorBundleHash = sha256(await fsp.readFile(locatorEnginePath))
+  if (locatorBundleHash !== PLAYWRIGHT_LOCATOR_ENGINE.bundleSha256) {
+    throw new Error(
+      "Chrome extension Locator engine does not match its pinned Playwright 1.61.1 SHA-256.",
+    )
+  }
+  for (const [fileName, expectedHash] of [
+    [
+      "playwright-LICENSE.txt",
+      PLAYWRIGHT_LOCATOR_ENGINE.licenseSha256,
+    ],
+    [
+      "playwright-NOTICE.txt",
+      PLAYWRIGHT_LOCATOR_ENGINE.noticeSha256,
+    ],
+  ]) {
+    const actualHash = sha256(await fsp.readFile(path.join(
+      packageRoot,
+      "browser-extension",
+      "licenses",
+      fileName,
+    )))
+    if (actualHash !== expectedHash) {
+      throw new Error(
+        `Chrome extension Playwright ${fileName} does not match the pinned upstream SHA-256.`,
+      )
     }
   }
   for (const removedRuntimePath of [

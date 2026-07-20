@@ -117,7 +117,7 @@ describe("Browser IPC runtime command schema", () => {
       role: "runtime" as const,
       brokerInstanceID: "broker-1",
       clientInstanceID: "runtime-1",
-      clientVersion: "0.11.3",
+      clientVersion: "0.12.0",
       nonce: "runtime-nonce-123",
       proof: "runtime-proof-123",
       authorizationPublicKey: "public_key-123",
@@ -149,12 +149,12 @@ describe("Browser IPC runtime command schema", () => {
       brokerInstanceID: "broker-1",
       applicationCapabilities: {
         runtimeOperations: ["status", "getInfo", "command", "turnEnded"],
-        browserContractVersions: [1],
+        browserContractVersions: [3],
       },
     })).toMatchObject({
       applicationCapabilities: {
         runtimeOperations: ["status", "getInfo", "command", "turnEnded"],
-        browserContractVersions: [1],
+        browserContractVersions: [3],
       },
     })
   })
@@ -166,7 +166,7 @@ describe("Browser IPC runtime command schema", () => {
         type: "runtime.request",
         requestID: "request-1",
         operation: "command",
-        contractVersion: 1,
+        contractVersion: 3,
         method,
         params: {},
       }).success).toBe(true)
@@ -183,37 +183,35 @@ describe("Browser IPC runtime command schema", () => {
       type: "runtime.request",
       requestID: "get-info-1",
       operation: "getInfo",
-      contractVersion: 1,
+      contractVersion: 3,
     }
     expect(BrowserIpcRuntimeGetInfoRequest.parse(request)).toEqual(request)
     expect(BrowserIpcRuntimeRequest.parse(request)).toEqual(request)
     expect(BrowserIpcRuntimeRequest.safeParse({
       ...request,
-      contractVersion: 2,
+      contractVersion: 4,
     }).success).toBe(true)
   })
 
-  test("accepts legacy/current commands and defers future versions to the Agent", () => {
-    const legacy = {
+  test("requires an explicit positive contract version for commands", () => {
+    const command = {
       type: "runtime.request",
-      requestID: "legacy-command",
+      requestID: "contract-command",
       operation: "command",
+      contractVersion: 3,
       method: "tabs.list",
       params: {},
     }
-    expect(BrowserIpcRuntimeRequest.safeParse(legacy).success).toBe(true)
+    expect(BrowserIpcRuntimeRequest.safeParse(command).success).toBe(true)
+    const { contractVersion: _, ...withoutVersion } = command
+    expect(BrowserIpcRuntimeRequest.safeParse(withoutVersion).success).toBe(false)
     expect(BrowserIpcRuntimeRequest.safeParse({
-      ...legacy,
-      requestID: "contract-command",
-      contractVersion: 1,
-    }).success).toBe(true)
-    expect(BrowserIpcRuntimeRequest.safeParse({
-      ...legacy,
+      ...command,
       requestID: "future-contract-command",
-      contractVersion: 2,
+      contractVersion: 4,
     }).success).toBe(true)
     expect(BrowserIpcRuntimeRequest.safeParse({
-      ...legacy,
+      ...command,
       requestID: "invalid-contract-command",
       contractVersion: 0,
     }).success).toBe(false)

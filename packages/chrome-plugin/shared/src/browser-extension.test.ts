@@ -23,7 +23,7 @@ describe("Browser Extension result envelope", () => {
     expect(BrowserExtensionResultMessage.parse(result)).toEqual(result)
   })
 
-  test("negotiates an exact optional command capability list", () => {
+  test("advertises one version with an exact optional command capability list", () => {
     const hello = {
       type: "hello",
       protocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
@@ -31,7 +31,7 @@ describe("Browser Extension result envelope", () => {
       extensionID: ANYBOX_CHROME_EXTENSION_ID,
       version: "0.2.0",
       capabilities: {
-        contractVersion: 1,
+        contractVersion: 3,
         commands: ["tabs.list", "page.screenshot"],
       },
     } as const
@@ -46,18 +46,23 @@ describe("Browser Extension result envelope", () => {
     }).success).toBe(true)
   })
 
-  test("accepts a legacy v1 Agent command envelope without a contract version", () => {
-    expect(BrowserExtensionServerMessage.parse({
+  test("requires contract v3 on every Agent command envelope", () => {
+    const command = {
       type: "command",
-      commandID: "legacy-command",
+      commandID: "contract-command",
+      contractVersion: 3,
       method: "tabs.list",
       params: {},
-    })).toEqual({
-      type: "command",
-      commandID: "legacy-command",
-      method: "tabs.list",
-      params: {},
-    })
+    } as const
+
+    expect(BrowserExtensionServerMessage.parse(command)).toEqual(command)
+    const { contractVersion: _, ...withoutVersion } = command
+    expect(BrowserExtensionServerMessage.safeParse(withoutVersion).success)
+      .toBe(false)
+    expect(BrowserExtensionServerMessage.safeParse({
+      ...command,
+      contractVersion: 2,
+    }).success).toBe(false)
   })
 
   test("normalizes bounded command context identifiers and rejects whitespace labels", () => {

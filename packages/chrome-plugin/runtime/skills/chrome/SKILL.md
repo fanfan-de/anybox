@@ -21,7 +21,7 @@ The `js_reset` tool only clears persistent JavaScript state. The `js_add_node_mo
 
 Keep setup details internal. Unless the user asks about implementation, describe progress naturally as connecting to Chrome, inspecting the page, or retrying the connection.
 
-The Browser Client sends only operations advertised by the negotiated Browser Contract to the plugin-owned Browser Host over authenticated local IPC. The client performs an early schema and capability check, and the Browser Host authoritatively validates every command again before it can reach Chrome. The general-purpose Node environment does not provide a browser host-service API; do not call or expect `nodeRepl.requestHost(...)`.
+The Browser Client sends only operations advertised by Browser Contract v3 to the plugin-owned Browser Host over authenticated local IPC. The client performs an early schema and capability check, and the Browser Host authoritatively validates every command again before it can reach Chrome. The general-purpose Node environment does not provide a browser host-service API; do not call or expect `nodeRepl.requestHost(...)`.
 
 ## Bootstrap and reload safely
 
@@ -114,13 +114,61 @@ If a tab is missing, stale, or closed, discard only `globalThis.tab` and obtain 
 
 Prefer the highest-level operation that can complete the task:
 
-- Inspect with `tab.snapshot()`, `interactiveSnapshot()`, `domTree()`, or `accessibilityTree()`.
-- Use `tab.interactiveSnapshot()` before element actions, then pass a current `elementId` to `tab.clickElement()` or `tab.fill()`.
-- Use `tab.waitFor()` with a concrete URL, text, selector, or element condition after navigation or page-changing actions.
-- Use `tab.click()` for coordinates only when element-based interaction is unavailable.
+- When `tab.playwright` is advertised, inspect with `tab.playwright.domSnapshot()` first. Use `elementInfo({ x, y })` to turn screenshot coordinates into role, accessible name, text, test ID, frame path, and stable selector candidates.
+- Construct a semantic Locator with `getByRole()`, `getByLabel()`, `getByPlaceholder()`, `getByTestId()`, or a stable CSS selector. Treat Locator objects as immutable.
+- Use `count()` only when uniqueness is uncertain. A single-element read or action requires exactly one match; use `first()`, `last()`, or `nth()` only as an explicit, inspected disambiguation.
+- Perform one unique action, then verify its specific result with a Locator read, `waitForURL()`, or `waitForLoadState()`.
+- Wrap navigation-producing actions in `expectNavigation(() => action, options)` so the waiter is registered before input dispatch.
+- Use the lower-level `interactiveSnapshot()` and element-ID methods only when the atomic `tab.playwright` surface is unavailable.
 - Structured locators are available only when advertised by the connected Extension. Raw page JavaScript and unrestricted CDP are disabled.
 
 Interactive element IDs can become stale after DOM changes. Take a new interactive snapshot instead of retrying an old ID.
+
+The fixed Locator workflow is:
+
+```js
+const snapshot = await tab.playwright.domSnapshot()
+const save = tab.playwright.getByRole("button", {
+  name: "Save",
+  exact: true,
+})
+const count = await save.count()
+if (count !== 1) return { count, snapshot }
+const saved = tab.playwright.getByRole("status", { name: "Saved" })
+await save.click()
+await saved.waitFor({ state: "visible" })
+return await saved.innerText()
+```
+
+For a navigation-producing action:
+
+```js
+await tab.playwright.expectNavigation(
+  () => tab.playwright.getByRole("link", { name: "Next" }).click(),
+  { waitUntil: "domcontentloaded" },
+)
+return await tab.playwright.domSnapshot()
+```
+
+Register one-shot browser events before the action that produces them:
+
+```js
+const downloadPromise = tab.playwright.waitForEvent("download")
+await tab.playwright.getByRole("button", { name: "Export" }).click()
+const download = await downloadPromise
+return await download.path()
+```
+
+For a file chooser, create the event promise first, click once, then call
+`chooser.setFiles(...)`. The Host will request a new `local-file-read`
+authorization for that exact normalized file set; never print those paths.
+
+After `LOCATOR_PARSE_ERROR`, `LOCATOR_STRICT_VIOLATION`,
+`LOCATOR_NOT_FOUND`, `STALE_DOCUMENT`, `FRAME_DETACHED`, navigation, or a
+deadline, capture a new DOM snapshot before changing or retrying the Locator.
+Never blindly replay an action. `ACTION_OUTCOME_UNKNOWN` is non-retryable:
+the first input event was dispatched but the final state is unknown, so
+inspect the new page state and decide from evidence.
 
 To return a screenshot as an image, emit it instead of returning its base64 data:
 
@@ -135,14 +183,24 @@ Available APIs include:
 - `chrome.tabs.list()`, `listUser()`, `open(url, options)`, `claim(tabId)`, `activate(tabId)`, `get(tabId)`, `current()`, and `finalize()`
 - `tab.info()`, `activate()`, `snapshot()`, `interactiveSnapshot()`, `domTree()`, `accessibilityTree()`, and `screenshot()`
 - `tab.click()`, `clickElement()`, `fill()`, `type()`, `scroll()`, `waitFor()`, `release()`, and `markDeliverable()`
-- `tab.locator(descriptor).click()`, `fill()`, `textContent()`, `inputValue()`, and `waitFor()` when structured locators are advertised
-
-There is no `tab.playwright`, arbitrary page JavaScript, unrestricted CDP,
-general keyboard API, or `waitForSelector()` compatibility alias.
+- `tab.playwright.domSnapshot()`, `elementInfo()`, `locator()`, `frameLocator()`, `getByRole()`, `getByText()`, `getByLabel()`, `getByPlaceholder()`, and `getByTestId()`
+- Locator composition with `locator()`, `filter()`, `and()`, `or()`, `first()`, `last()`, `nth()`, and `all()`
+- Locator reads with `count()`, `allTextContents()`, `textContent()`, `innerText()`, `getAttribute()`, `isVisible()`, `isEnabled()`, and `inputValue()`
+- Locator actions with `click()`, `dblclick()`, `fill()`, `type()`, `press()`, `selectOption()`, `setChecked()`, `check()`, `uncheck()`, and `waitFor()`
+- Page waiting with `expectNavigation()`, `waitForURL()`, `waitForLoadState()`, `waitForTimeout()`, and `waitForEvent("download" | "filechooser")`
+There is no arbitrary page JavaScript, unrestricted CDP, element screenshot,
+`downloadMedia()`, or `waitForSelector()` compatibility alias.
 
 ## Authentication and privacy
 
 Do not inspect cookies, local storage, session storage, browser profiles, passwords, tokens, or other credential stores. Never use raw JavaScript or CDP to bypass this rule.
+
+Pass `sensitive: true` only when the user-authorized task requires filling or
+typing a sensitive field. File chooser paths are a separate
+`local-file-read` permission: the Browser Host validates regular local files
+and requests one-time approval for every upload. Do not print input values or
+file paths. Downloads are written to the Browser Host's managed temporary
+directory and are not a media-download escape hatch.
 
 If authentication blocks a task in explicitly requested Chrome, ask the user to sign in there and tell you when it is ready. Do not use web search, another site, or another browser merely to bypass sign-in.
 

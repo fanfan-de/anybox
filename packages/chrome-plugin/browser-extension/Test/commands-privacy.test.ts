@@ -1,4 +1,8 @@
 import { beforeAll, beforeEach, describe, expect, test } from "bun:test"
+import type {
+  BrowserExtensionCommandContext,
+  BrowserExtensionCommandMethod,
+} from "@anybox/chrome-shared/browser-extension"
 
 type Rect = {
   x: number
@@ -54,6 +58,36 @@ const cdpResponses = new Map<string, unknown>()
 let currentTabUrl = "https://fixture.invalid/form"
 let queriedTabs: Array<Record<string, unknown>> = [{ id: 7, active: true }]
 let currentWindowTabId = 7
+const sessionStorage: Record<string, unknown> = {}
+const commandContext = {
+  sessionID: "privacy-session",
+  turnID: "privacy-turn",
+  messageID: "privacy-message",
+  toolCallID: "privacy-tool",
+  browserID: "extension:privacy-instance",
+  extensionInstanceID: "privacy-instance",
+} satisfies BrowserExtensionCommandContext
+
+function leaseFixture(tabId: number) {
+  const now = Date.now()
+  return {
+    tabId,
+    source: "agent",
+    sessionID: commandContext.sessionID,
+    turnID: commandContext.turnID,
+    state: "active",
+    extensionInstanceID: commandContext.extensionInstanceID,
+    createdAt: now,
+    updatedAt: now,
+    expiresAt: now + 60_000,
+  }
+}
+
+function installLeases(...tabIds: number[]) {
+  sessionStorage["anybox.browser.tabLeases"] = Object.fromEntries(
+    tabIds.map((tabId) => [String(tabId), leaseFixture(tabId)]),
+  )
+}
 
 function installPage(
   fieldsForPage: FakeElement[],
@@ -86,22 +120,28 @@ function installPage(
   })
 }
 
-let handleBrowserCommand: (
-  method:
-    | "page.snapshot"
-    | "page.interactiveSnapshot"
-    | "page.domTree"
-    | "page.accessibilityTree"
-    | "tabs.list"
-    | "tabs.open"
-    | "page.executeScript"
-    | "cdp.send",
+let rawHandleBrowserCommand: (
+  method: BrowserExtensionCommandMethod,
   params?: unknown,
   options?: {
-    contractVersion?: number
+    context?: BrowserExtensionCommandContext
     signal?: AbortSignal
   },
 ) => Promise<unknown>
+
+function handleBrowserCommand(
+  method: BrowserExtensionCommandMethod,
+  params?: unknown,
+  options: {
+    context?: BrowserExtensionCommandContext
+    signal?: AbortSignal
+  } = {},
+) {
+  return rawHandleBrowserCommand(method, params, {
+    context: commandContext,
+    ...options,
+  })
+}
 
 beforeAll(async () => {
   Object.assign(globalThis, {
@@ -119,6 +159,9 @@ beforeAll(async () => {
         },
       },
       tabs: {
+        async create(input: { url: string; active: boolean }) {
+          return { id: 8, ...input }
+        },
         async get(tabId: number) {
           return { id: tabId, title: "Fixture", url: currentTabUrl }
         },
@@ -128,17 +171,31 @@ beforeAll(async () => {
           }
           return queriedTabs
         },
+        async remove() {},
+      },
+      storage: {
+        session: {
+          async get(key: string) {
+            return { [key]: structuredClone(sessionStorage[key]) }
+          },
+          async set(values: Record<string, unknown>) {
+            Object.assign(sessionStorage, structuredClone(values))
+          },
+        },
       },
     },
   })
 
-  ;({ handleBrowserCommand } = await import("../src/background/commands.ts"))
+  ;({ handleBrowserCommand: rawHandleBrowserCommand } = await import(
+    "../src/background/commands.ts"
+  ))
 })
 
 beforeEach(() => {
   cdpResponses.clear()
   queriedTabs = [{ id: 7, active: true }]
   currentWindowTabId = 7
+  installLeases(7)
   installPage([])
 })
 
@@ -154,27 +211,40 @@ describe("browser command contract defense", () => {
       title: "Fixture",
       url: "https://fixture.invalid/private/path?token=secret",
     }]
-    await expect(handleBrowserCommand("tabs.list")).resolves.toEqual({
+    await expect(handleBrowserCommand("tabs.list")).resolves.toMatchObject({
       tabs: [{
         id: 7,
         active: true,
         title: "Fixture",
         url: "https://fixture.invalid/[redacted-path]?[redacted]",
+        lease: {
+          source: "agent",
+          sessionID: commandContext.sessionID,
+          state: "active",
+        },
       }],
     })
 
     queriedTabs = [{ id: 0, active: true }]
-    await expect(handleBrowserCommand("tabs.list")).rejects.toMatchObject({
-      code: "INVALID_COMMAND_RESULT",
+    await expect(handleBrowserCommand("tabs.list")).resolves.toEqual({
+      tabs: [],
     })
   })
 
-  test("keeps the legacy Extension envelope read-only", async () => {
+  test("executes a v3 tab write and records its lease", async () => {
     await expect(handleBrowserCommand("tabs.open", {
       url: "https://fixture.invalid/write",
-    })).rejects.toMatchObject({
-      code: "BACKEND_UPDATE_REQUIRED",
-      retryable: false,
+    })).resolves.toMatchObject({
+      id: 8,
+      active: true,
+      url: "https://fixture.invalid/[redacted-path]",
+    })
+    expect(
+      (sessionStorage["anybox.browser.tabLeases"] as Record<string, unknown>)["8"],
+    ).toMatchObject({
+      tabId: 8,
+      sessionID: commandContext.sessionID,
+      extensionInstanceID: commandContext.extensionInstanceID,
     })
   })
 
@@ -185,7 +255,6 @@ describe("browser command contract defense", () => {
       urlIncludes: "never-matches",
       timeoutMs: 5_000,
     }, {
-      contractVersion: 1,
       signal: controller.signal,
     })
     setTimeout(() => controller.abort(), 20)
@@ -202,8 +271,9 @@ describe("browser command contract defense", () => {
       { id: 9, windowId: 2, active: true },
     ]
     currentWindowTabId = 9
+    installLeases(7, 9)
 
-    await expect(handleBrowserCommand("tabs.list")).resolves.toEqual({
+    await expect(handleBrowserCommand("tabs.list")).resolves.toMatchObject({
       tabs: [
         { id: 9, windowId: 2, active: true },
         { id: 7, windowId: 1, active: true },

@@ -87,9 +87,9 @@ async function createFixture(projectRoot) {
       "export function setupBrowserRuntime() {}",
       "new URL('./browser-host.mjs', import.meta.url)",
       "new URL('./native-host-bootstrap.js', import.meta.url)",
-      "const contractVersion = 1",
+      "const contractVersion = 3",
       "const capabilities = { arbitraryJavaScript: false, fullCdp: false }",
-      "const locatorMethods = ['locator.click', 'locator.fill']",
+      "const locatorMethods = ['playwright.locator.click', 'playwright.locator.fill']",
       "const unavailable = 'CAPABILITY_UNAVAILABLE'",
       "const readinessState = 'needs-extension'",
       "",
@@ -123,6 +123,25 @@ async function createFixture(projectRoot) {
     path.join("chunks", "shared.js"),
   ]) {
     await write(projectRoot, path.join("browser-extension", "dist", file))
+  }
+  for (const file of [
+    "locator-engine.js",
+    "locator-engine.metadata.json",
+    "THIRD_PARTY_NOTICES.md",
+    path.join("licenses", "playwright-LICENSE.txt"),
+    path.join("licenses", "playwright-NOTICE.txt"),
+  ]) {
+    await write(
+      projectRoot,
+      path.join("browser-extension", "dist", file),
+      await fsp.readFile(path.join(
+        import.meta.dirname,
+        "..",
+        "browser-extension",
+        "public",
+        file,
+      )),
+    )
   }
   await write(projectRoot, path.join("browser-extension", "dist", "background.js.map"))
 
@@ -176,9 +195,14 @@ test("synchronizes only installable Chrome files into the distribution directory
       "browser-extension/background.js",
       "browser-extension/chunks/shared.js",
       "browser-extension/content.js",
+      "browser-extension/licenses/playwright-LICENSE.txt",
+      "browser-extension/licenses/playwright-NOTICE.txt",
+      "browser-extension/locator-engine.js",
+      "browser-extension/locator-engine.metadata.json",
       "browser-extension/manifest.json",
       "browser-extension/popup.html",
       "browser-extension/popup.js",
+      "browser-extension/THIRD_PARTY_NOTICES.md",
       nativeHostBuildTarget().packagePath.split(path.sep).join("/"),
       "LICENSE",
       "scripts/browser-client.mjs",
@@ -274,6 +298,71 @@ test("rejects Browser Client output that restores the old capability boundary", 
     await assert.rejects(
       validateChromePluginPackage(pluginRoot),
       /Browser Client, plugin-owned Browser Host, and Native Host boundaries are inconsistent/,
+    )
+  })
+})
+
+test("rejects a Locator engine that differs from the pinned Playwright bundle", async () => {
+  await withFixture("anybox-chrome-locator-integrity-", async ({ projectRoot, pluginRoot }) => {
+    await packageChromePlugin({ projectRoot, pluginRoot })
+    await fsp.appendFile(
+      path.join(pluginRoot, "browser-extension", "locator-engine.js"),
+      "\n// modified\n",
+    )
+    await assert.rejects(
+      validateChromePluginPackage(pluginRoot),
+      /does not match its pinned Playwright 1\.61\.1 SHA-256/,
+    )
+  })
+})
+
+test("rejects Locator metadata that changes its audited upstream source", async () => {
+  await withFixture("anybox-chrome-locator-metadata-", async ({ projectRoot, pluginRoot }) => {
+    await packageChromePlugin({ projectRoot, pluginRoot })
+    const metadataPath = path.join(
+      pluginRoot,
+      "browser-extension",
+      "locator-engine.metadata.json",
+    )
+    const metadata = JSON.parse(await fsp.readFile(metadataPath, "utf8"))
+    metadata.upstreamCommit = "unreviewed"
+    await fsp.writeFile(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`)
+    await assert.rejects(
+      validateChromePluginPackage(pluginRoot),
+      /metadata 'upstreamCommit' must equal/,
+    )
+  })
+})
+
+test("rejects altered Playwright license and notice files", async () => {
+  await withFixture("anybox-chrome-locator-license-", async ({ projectRoot, pluginRoot }) => {
+    await packageChromePlugin({ projectRoot, pluginRoot })
+    await fsp.appendFile(
+      path.join(
+        pluginRoot,
+        "browser-extension",
+        "licenses",
+        "playwright-NOTICE.txt",
+      ),
+      "\nmodified\n",
+    )
+    await assert.rejects(
+      validateChromePluginPackage(pluginRoot),
+      /playwright-NOTICE\.txt does not match the pinned upstream SHA-256/,
+    )
+  })
+})
+
+test("rejects extension JavaScript above the 1.5 MiB Locator v3 limit", async () => {
+  await withFixture("anybox-chrome-extension-size-", async ({ projectRoot, pluginRoot }) => {
+    await packageChromePlugin({ projectRoot, pluginRoot })
+    await fsp.writeFile(
+      path.join(pluginRoot, "browser-extension", "background.js"),
+      Buffer.alloc(Math.floor(1.5 * 1024 * 1024)),
+    )
+    await assert.rejects(
+      validateChromePluginPackage(pluginRoot),
+      /minified Locator v3 package limit/,
     )
   })
 })

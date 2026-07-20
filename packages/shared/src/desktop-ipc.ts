@@ -53,15 +53,6 @@ export const DesktopStorageUsageSnapshotSchema = z.object({
 })
 
 export const DesktopIpcSchemas = {
-  launchApplication: {
-    input: z.object({
-      application: z.literal("chrome"),
-    }),
-    output: z.object({
-      ok: z.literal(true),
-      application: z.literal("chrome"),
-    }),
-  },
   openPath: {
     input: z.object({
       targetPath: z.string().min(1),
@@ -105,8 +96,6 @@ export const DesktopIpcSchemas = {
   },
 } as const
 
-export type DesktopLaunchApplicationInput = z.infer<typeof DesktopIpcSchemas.launchApplication.input>
-export type DesktopLaunchApplicationResult = z.infer<typeof DesktopIpcSchemas.launchApplication.output>
 export type DesktopOpenPathInput = z.infer<typeof DesktopIpcSchemas.openPath.input>
 export type DesktopOpenPathResult = z.infer<typeof DesktopIpcSchemas.openPath.output>
 export type DesktopOpenCinemaProjectInput = z.infer<typeof DesktopIpcSchemas.openCinemaProject.input>

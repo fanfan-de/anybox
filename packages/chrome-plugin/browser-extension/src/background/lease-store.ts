@@ -1,6 +1,6 @@
 import type { BrowserExtensionCommandContext } from "@anybox/chrome-shared/browser-extension"
 
-const LEASE_STORAGE_KEY = "anybox.browser.tabLeases.v2"
+const LEASE_STORAGE_KEY = "anybox.browser.tabLeases"
 const DEFAULT_LEASE_TTL_MS = 30 * 60_000
 
 export type TabLeaseSource = "user" | "agent"
@@ -105,7 +105,7 @@ function requireContext(
   ) {
     throw Object.assign(
       new Error(
-        "Browser Contract v2 requires sessionID, turnID, and extensionInstanceID for tab leases.",
+        "Browser Contract v3 requires sessionID, turnID, and extensionInstanceID for tab leases.",
       ),
       { code: "SESSION_REQUIRED", retryable: false },
     )

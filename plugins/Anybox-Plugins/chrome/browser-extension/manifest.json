@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Anybox Chrome",
   "description": "Connect Chrome to the Anybox Chrome plugin.",
-  "version": "0.11.3",
+  "version": "0.12.0",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA7bU1q4S75C3RZbvbSz0Pivt2yJ6u8zoNnaEjxtjrbl10PmrfT9hUTSOrGNVorEU5gyFBzFqFGMjil/22RaS19HlvuxmN8jZxX3I3JxBJWC+pz0iY4CiieUmioGpryCa1mdCkO/fqgesfwDmFVTCU6+fqlppENLSAuaTPLXH7CbRTkVEu4EAzCsvG2hamv956KRlk2BMDQns9He/EQ5Akwcd87U1hjRS8vwtNXWqVjmE0CIMVouUcOjwZ8YCxekhDGB8Sm99DwIWeZQH9gTDQp/etmyrhF9SGqj8tSJkuYFVgdVrvBWbT6uu9FQ0Wc4uKPBJR5PFzFQth6YTqJZMaGQIDAQAB",
   "icons": {
     "16": "icons/icon16.png",

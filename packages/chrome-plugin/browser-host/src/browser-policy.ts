@@ -47,9 +47,22 @@ const SAFE_SESSION_METHODS = new Set<BrowserContractCommandMethodValue>([
   "page.screenshot",
   "page.scroll",
   "page.waitFor",
-  "locator.textContent",
-  "locator.inputValue",
-  "locator.waitFor",
+  "playwright.domSnapshot",
+  "playwright.elementInfo",
+  "playwright.locator.count",
+  "playwright.locator.allTextContents",
+  "playwright.locator.textContent",
+  "playwright.locator.innerText",
+  "playwright.locator.inputValue",
+  "playwright.locator.getAttribute",
+  "playwright.locator.isVisible",
+  "playwright.locator.isEnabled",
+  "playwright.locator.waitFor",
+  "playwright.waitForNavigation",
+  "playwright.waitForLoadState",
+  "playwright.waitForURL",
+  "playwright.waitForEvent",
+  "playwright.download.path",
 ])
 
 const ORIGIN_SCOPED_ASK_METHODS = new Set<BrowserContractCommandMethodValue>([
@@ -59,8 +72,13 @@ const ORIGIN_SCOPED_ASK_METHODS = new Set<BrowserContractCommandMethodValue>([
   "page.clickElement",
   "page.fill",
   "page.type",
-  "locator.click",
-  "locator.fill",
+  "playwright.locator.click",
+  "playwright.locator.dblclick",
+  "playwright.locator.fill",
+  "playwright.locator.type",
+  "playwright.locator.press",
+  "playwright.locator.selectOption",
+  "playwright.locator.setChecked",
 ])
 
 function configuredOrigins(name: string) {
@@ -111,8 +129,10 @@ export class BrowserPolicyEngine {
     const sensitive = (
       method.data === "page.fill"
       || method.data === "page.type"
-      || method.data === "locator.fill"
+      || method.data === "playwright.locator.fill"
+      || method.data === "playwright.locator.type"
     ) && params.sensitive === true
+      || method.data === "playwright.fileChooser.setFiles"
     const origin = normalizeBrowserOrigin(input.origin)
     const denyOrigins = configuredOrigins("ANYBOX_BROWSER_ORIGIN_DENY")
     const allowOrigins = configuredOrigins("ANYBOX_BROWSER_ORIGIN_ALLOW")
@@ -128,6 +148,10 @@ export class BrowserPolicyEngine {
       permissionAction = "deny"
       risk = "high"
       reason = "This browser origin is explicitly denied."
+    } else if (method.data === "playwright.fileChooser.setFiles") {
+      permissionAction = "ask"
+      risk = "high"
+      reason = "Each local file upload requires a one-time Host decision."
     } else if (sensitive) {
       permissionAction = "ask"
       risk = "high"

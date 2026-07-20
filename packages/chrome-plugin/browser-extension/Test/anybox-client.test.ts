@@ -1,23 +1,23 @@
 import { expect, test } from "bun:test"
 import { BrowserExtensionServerMessage } from "@anybox/chrome-shared/browser-extension"
-import {
-  supportsBrowserCommandContractVersion,
-} from "../src/background/browser-contract-compat"
 
-test("accepts a legacy Browser Host command envelope while rejecting an explicit future contract", () => {
-  const legacy = BrowserExtensionServerMessage.parse({
+test("accepts only an explicit Browser Contract v3 command envelope", () => {
+  const command = {
     type: "command",
-    commandID: "legacy-command",
+    commandID: "contract-command",
+    contractVersion: 3,
     method: "tabs.list",
     params: {},
-  })
+  } as const
 
-  expect(legacy.type).toBe("command")
-  if (legacy.type !== "command") throw new Error("Expected a browser command.")
-  expect(legacy.contractVersion).toBeUndefined()
-  expect(supportsBrowserCommandContractVersion(legacy.contractVersion)).toBe(true)
-  expect(supportsBrowserCommandContractVersion(2)).toBe(true)
-  expect(supportsBrowserCommandContractVersion(3)).toBe(false)
+  expect(BrowserExtensionServerMessage.parse(command)).toEqual(command)
+  const { contractVersion: _, ...withoutVersion } = command
+  expect(BrowserExtensionServerMessage.safeParse(withoutVersion).success)
+    .toBe(false)
+  expect(BrowserExtensionServerMessage.safeParse({
+    ...command,
+    contractVersion: 2,
+  }).success).toBe(false)
 })
 
 test("marks Native transport connected only after helloAck and drops a stale heartbeat", async () => {
@@ -47,7 +47,7 @@ test("marks Native transport connected only after helloAck and drops a stale hea
   ;(globalThis as any).chrome = {
     runtime: {
       id: "hjbejdmgpifdjjlpgmdfmbmbhkedgnjc",
-      getManifest: () => ({ version: "0.11.3" }),
+      getManifest: () => ({ version: "0.12.0" }),
       connectNative: () => port,
       lastError: undefined,
     },
@@ -99,7 +99,7 @@ test("marks Native transport connected only after helloAck and drops a stale hea
   onMessage?.({
     type: "helloAck",
     protocolVersion: 1,
-    contractVersion: 2,
+    contractVersion: 3,
     browserID: "extension:extension-handshake-test",
     extensionInstanceID: "extension-handshake-test",
     heartbeatIntervalMs: 30_000,
@@ -112,7 +112,7 @@ test("marks Native transport connected only after helloAck and drops a stale hea
   expect(localStorage.ANYBOX_BRIDGE_STATUS).toMatchObject({
     state: "connected",
     protocolVersion: 1,
-    contractVersion: 2,
+    contractVersion: 3,
     reconnectCount: 0,
   })
 
@@ -120,7 +120,7 @@ test("marks Native transport connected only after helloAck and drops a stale hea
   const heartbeatDeadline = realNow() + 40_001
   Date.now = () => heartbeatDeadline
   try {
-    onAlarm?.({ name: "anybox-browser-health-v2" })
+    onAlarm?.({ name: "anybox-browser-health" })
     await waitFor(() =>
       (localStorage.ANYBOX_BRIDGE_STATUS as { state?: string })?.state
         === "disconnected"

@@ -178,6 +178,12 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
     devDependencies:
+      esbuild:
+        specifier: 0.27.2
+        version: 0.27.2
+      playwright-core:
+        specifier: 1.61.1
+        version: 1.61.1
       typescript:
         specifier: ^5.9.3
         version: 5.9.3

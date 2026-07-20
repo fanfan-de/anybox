@@ -1,6 +1,6 @@
 # Anybox Chrome 插件
 
-本文是 Chrome 插件工程唯一需要长期维护的实现文档。当前代码基线为 `0.11.3`；版本与安装元数据以
+本文是 Chrome 插件工程唯一需要长期维护的实现文档。当前代码基线为 `0.12.0`；版本与安装元数据以
 [`runtime/.anybox-plugin/plugin.json`](./runtime/.anybox-plugin/plugin.json)
 为准。
 
@@ -27,7 +27,7 @@ flowchart LR
 
 | 组件 | 实现 | 主要职责 |
 |---|---|---|
-| Browser Contract | [`shared`](./shared) | 定义 Contract v1/v2、命令 Schema、能力和 IPC 消息 |
+| Browser Contract | [`shared`](./shared) | 定义唯一的 Contract v3、命令 Schema、能力和 IPC 消息 |
 | Browser Client | [`browser-runtime`](./browser-runtime) | 安装 `agent.browsers`，提供面向 Agent 的对象 API，启动或复用 Browser Host |
 | Browser Host | [`browser-host`](./browser-host) | 权威执行 Schema、能力、租约、Origin 策略和授权凭据校验 |
 | Native Host | [`browser-native-host`](./browser-native-host) | 在 Chrome Native Messaging stdio 与本地 IPC 之间转发和分片 |
@@ -86,8 +86,8 @@ Anybox Registry 指向生成目录中的规范 Manifest，并通过 GitHub Tree 
    认证探测；仍没有浏览器连接时才查找并启动 Chrome，随后有限等待扩展握手。
 6. 扩展通过 `chrome.runtime.connectNative("com.anybox.browser")` 启动 Rust Native Host。
 7. Rust Native Host 读取短期 bootstrap proof，连接 Browser Host 的 native-host IPC 端点。
-8. 扩展发送 `hello`，Host 选择双方最高公共 Contract 版本，并只开放“规范命令与扩展实际声明
-   命令”的安全交集。
+8. 扩展发送 `hello`，Host 只接受精确的 Contract v3，并只开放“规范命令与扩展实际声明命令”的
+   安全交集。版本不一致时连接保持可诊断，但不会接收命令或降级。
 
 `agent.browsers.readiness()` 会读取连接状态，但不会启动 Chrome，也不会主动执行 Native Host 探测。
 `ensureReady({ launch: true })` 默认等待扩展重连约 750 ms、启动 Chrome 后最多等待约 10 秒，并返回
@@ -126,23 +126,49 @@ return await tab.snapshot()
 |---|---|
 | `agent.browsers` | `readiness()`、`ensureReady()`、`list()`、`get()`、`getDefault()`、`getForUrl()` |
 | Browser Context | `status()`、`documentation()`、`tabs.list()`、`listUser()`、`open()`、`claim()`、`activate()`、`get()`、`current()`、`finalize()` |
-| Browser Tab | `info()`、`activate()`、`snapshot()`、`interactiveSnapshot()`、`domTree()`、`accessibilityTree()`、`screenshot()`、`click()`、`clickElement()`、`fill()`、`type()`、`scroll()`、`waitFor()`、`release()`、`markDeliverable()`、`locator()` |
-| Browser Locator | `click()`、`fill()`、`textContent()`、`inputValue()`、`waitFor()` |
+| Browser Tab | 页面/Tab API，以及原子能力 `playwright` |
+| `tab.playwright` | `domSnapshot()`、`elementInfo()`、`locator()`、`frameLocator()`、`getByRole/Text/Label/Placeholder/TestId()`、页面等待和一次性事件 |
+| Playwright Locator | 不可变组合、批量读取、严格单元素读取、actionability 动作和 `waitFor()` |
 
-`documentation()` 由当前协商后的能力动态生成。Locator 只有在连接的扩展实际声明相应命令时才会暴露。
-当前 API 没有 `tab.playwright`、任意页面 JavaScript 或任意 CDP 接口。
+`documentation()` 由扩展实际声明的能力动态生成。只有 v3 后端完整声明全部必需命令时，
+`tab.playwright` 才会作为一个原子能力出现；不暴露部分 API，也不提供旧
+`tab.locator(descriptor)` 适配层。公共 API 仍没有任意页面 JavaScript、任意 CDP、元素截图或
+`downloadMedia()`。
 
 ## Browser Contract 与扩展执行
 
-当前主协议是 Browser Contract v2，同时保留受限的 v1 兼容处理。v2 命令包括：
+当前且唯一支持的协议是 Browser Contract v3。Runtime、Host 和扩展都要求请求显式携带
+`contractVersion: 3`；缺失、v1/v2 或未来版本都会返回稳定的不兼容错误，不进行协商降级。
+v3 提供以下执行面：
 
-- Tab：`tabs.list`、`tabs.listUser`、`tabs.open`、`tabs.claim`、`tabs.activate`、
-  `tabs.release`、`tabs.markDeliverable`、`tabs.finalize`
-- 页面读取：`page.snapshot`、`page.interactiveSnapshot`、`page.domTree`、
-  `page.accessibilityTree`、`page.screenshot`、`page.waitFor`
-- 页面交互：`page.click`、`page.clickElement`、`page.fill`、`page.type`、`page.scroll`
-- Locator：`locator.click`、`locator.fill`、`locator.textContent`、`locator.inputValue`、
-  `locator.waitFor`
+- 定位依据：`playwright.domSnapshot`、`playwright.elementInfo`
+- Locator 读取：`count`、`allTextContents`、`textContent`、`innerText`、`inputValue`、
+  `getAttribute`、`isVisible`、`isEnabled`、`waitFor`
+- Locator 动作：`click`、`dblclick`、`fill`、`type`、`press`、`selectOption`、`setChecked`
+- 页面等待：导航、URL、生命周期、download 和 filechooser 一次性事件
+- 事件后续：Host 管理目录中的 download path、逐次授权的本地文件选择
+
+扩展仍会在 `hello` 中声明命令清单，Host 只采用 v3 规范命令与该清单的交集。Playwright 命令必须
+完整出现才会开放 `tab.playwright`；不完整能力会被整体隐藏。旧扩展会得到
+`needs-extension-update`，需要与桌面端一起更新。
+
+### Locator AST 与固定内核
+
+Browser Client 只构造不可变 `LocatorPlanV3` AST。Host 再次校验后，只有扩展能够把 AST 编译为
+Playwright 内部 selector；客户端不能提交 `internal:` engine、脚本或 CDP 命令。边界为：
+
+- AST 最多 64 个节点、16 层 Frame、32 KiB 序列化大小
+- 单个 selector、matcher 或正则 source 最长 2,000 字符
+- timeout 最长 60 秒；正则以 `source`/`flags` 明确编码，并拒绝非法 flag、反向引用及高风险
+  的嵌套/歧义无界重复
+- `domSnapshot()` 默认最多 5,000 节点和 1 MiB，并在输出内明确标记截断
+
+扩展提交固定的 Playwright `1.61.1` injected selector/actionability 内核，不包含完整
+`playwright-core`、浏览器驱动或 Node server。来源 tag、commit、入口 SHA-256、生成 bundle
+SHA-256、Apache-2.0 License/NOTICE 和离线构建使用的成品均在
+[`browser-extension/public`](./browser-extension/public)；更新脚本是
+[`sync-playwright-locator-engine.mjs`](./browser-extension/scripts/sync-playwright-locator-engine.mjs)。
+普通扩展构建只消费已提交成品，不联网。
 
 扩展的执行方式：
 
@@ -156,17 +182,33 @@ return await tab.snapshot()
 | 截图 | 受限 CDP `Page.captureScreenshot` | 返回 PNG base64；不做像素级脱敏 |
 | 坐标和元素点击 | 受限 CDP Input | 元素 ID 在 DOM 变化后可能失效 |
 | Fill | 固定注入函数 | 使用原生 value setter 和 input/change 事件 |
-| Type | 受限 CDP `Input.insertText` | 只插入文本，不模拟 Enter 或表单提交 |
-| Scroll、Wait | 固定注入函数与有限轮询 | `waitFor` 最长 60 秒 |
-| Locator | 扩展内结构化遍历 | 支持主文档、开放 Shadow Root 和同源 iframe，不支持跨域 iframe |
+| Tab `type()` | 受限 CDP `Input.insertText` | 基础 API，只插入文本 |
+| Frame 路由 | `Target.setAutoAttach(flatten:true)` + Page/Runtime/DOM/Accessibility | 主文档、同源 Frame 和跨域 OOPIF 分别绑定 session/execution context |
+| Playwright Locator | 固定 Playwright injected 内核 | role/name、label、placeholder、text、test ID、CSS、Shadow DOM 和组合 AST |
+| click/dblclick/type/press | CDP Input | 唯一性与 actionability 完成后才派发输入 |
+| fill/select/check | 审计后的固定 DOM 操作 | 验证最终状态；不接受调用方脚本 |
+| 等待 | `MutationObserver`、生命周期事件、rAF 稳定性采样 | 等待期间不再每 100 ms 创建全树元素数组 |
 
-Locator 会按 role、name、text、label、placeholder、CSS、test ID 等结构化条件筛选，并检查目标是否
-可见、可用、未被遮挡且布局稳定。多个元素匹配时使用第一个匹配项。扩展内部虽使用固定脚本和受限
-CDP，但模型不能提供自定义脚本或任意 CDP 方法。
+`frameLocator()` 每一级都严格解析 iframe，再进入对应 session/context。Frame 导航、分离或执行
+上下文重建会清除注入缓存和等待状态；主 Frame、子 Frame 和同文档导航都会递增
+`documentGeneration`。`domSnapshot()` 会组合当前可用 Frame 的语义内容；`elementInfo()` 返回
+角色、可访问名称、可见文本、测试 ID、边界框及排序后的公共 selector/Frame selector 候选。
+
+单元素读取和动作必须恰好匹配一个元素。`first()`、`last()`、`nth()` 是调用方明确消歧，
+`force` 也不能绕过唯一性、目标类型或敏感字段授权。动作按 Playwright 语义检查 visible、stable、
+receives-events、enabled，以及输入场景的 editable；读取和 attached/hidden 等待不会滚动、聚焦
+或修改页面。
+
+动作分为“解析/等待”和“输入派发”两阶段。第一个输入事件派发后，导航、timeout 或传输中断均
+不会触发动作重放；无法确认最终状态时返回非重试的 `ACTION_OUTCOME_UNKNOWN`。导航型动作通过
+`expectNavigation()` 先在扩展注册 waiter 再执行回调，避免 click 后才监听的竞态。download 和
+filechooser 句柄绑定 session、Tab 和 document generation，单次消费且会过期；文件路径由 Host
+规范化、确认是本地普通文件，并以路径及文件身份的 SHA-256 指纹绑定一次性授权回执，避免批准后
+替换上传集合；download 写入 Host 管理且按 24 小时清理的临时目录。
 
 ## 命令校验与授权
 
-Browser Contract v2 请求必须携带由 Node REPL 当前调用上下文提供的：
+Browser Contract v3 请求必须携带由 Node REPL 当前调用上下文提供的：
 
 ```text
 sessionID
@@ -193,7 +235,9 @@ Contract 版本
 Origin 策略支持 `ANYBOX_BROWSER_ORIGIN_ALLOW` 和 `ANYBOX_BROWSER_ORIGIN_DENY`。显式 deny 会直接拒绝；
 敏感字段填写属于高风险；打开、接管、点击、填写和 Locator 写操作通常产生 Origin 范围的权限请求。
 
-即使策略结果是 `allow`，v2 命令仍必须携带有效的授权 receipt。完整流程：
+即使策略结果是 `allow`，v3 命令仍必须携带有效的授权 receipt。
+`playwright.fileChooser.setFiles` 归入独立 `local-file-read` 类别，始终要求单次高风险授权；
+日志和权限摘要都不包含文件路径或输入值。完整流程：
 
 1. Anybox Agent 持有 Ed25519 私钥，只把公钥注入 Node REPL。
 2. Browser Client 校验公钥格式，并把它放入当前 Runtime IPC `hello`；公钥同时进入 HMAC 握手
@@ -270,9 +314,12 @@ Rust Native Host 同时处理两种 framing：
 - 扩展只接受固定 Native Host，Native Host manifest 只接受固定扩展 ID。
 - 公共 API 禁止 raw page JavaScript、任意 CDP、Cookie、Local Storage、Session Storage、Profile
   和 Credential Store 读取。
+- Locator AST 有节点数、Frame 深度、字符串、正则、序列化大小和 timeout 上限；内部 selector
+  engine 只能由扩展编译。
 - URL、DOM、输入框和无障碍文本使用启发式脱敏；这属于 best-effort，不是完整数据防泄漏保证。
 - Screenshot 是原始页面像素，可能包含敏感内容。
-- Host 日志对敏感 key 和 URL 做清理，并执行大小轮转。
+- Host/Extension 诊断只允许记录脱敏的 method、耗时、匹配数、错误码、Frame attach 和 engine
+  init 指标；不记录 selector 原文、输入值、页面文本或文件路径。Host 日志执行大小轮转。
 
 当前 `peerProcessIdentityVerified` 为 `false`：IPC 具备 OS ACL 和 proof 认证，但还没有额外校验对端
 PID/SID/uid，因此不应把它描述为签名级进程来源证明。该字段只报告限制，不会替代
@@ -280,9 +327,10 @@ PID/SID/uid，因此不应把它描述为签名级进程来源证明。该字段
 
 ## 已知限制
 
-- 没有公共 Playwright Page，也没有任意 JavaScript/CDP 逃生接口。
-- Locator 不穿透跨域 iframe，多个匹配默认选择第一个元素。
-- `type()` 只插入文本；需要 Enter、快捷键或复杂键盘序列时，当前 API 可能无法完成。
+- `tab.playwright` 是受限 Locator/Page 等待面，不是完整 Playwright Page；没有任意
+  JavaScript/CDP 逃生接口。
+- 不提供元素截图或 `downloadMedia()`；download 只保存浏览器已经产生的下载。
+- Tab 基础 API 的 `type()` 只插入文本；Playwright Locator 的 `type()` 和 `press()` 提供固定键盘事件。
 - Screenshot 不做像素级隐私脱敏。
 - Contract 当前不声明主动 command cancellation；断连时扩展会通过 `AbortController` 终止本地
   pending command。
@@ -300,7 +348,10 @@ corepack pnpm chrome-plugin:package
 
 该命令会类型检查并打包 Browser Client 和 Browser Host，构建扩展与当前平台 Rust Native Host，
 然后按严格白名单替换 `plugins/Anybox-Plugins/chrome`。最终包拒绝源码、测试、Source Map、依赖、
-缓存、符号链接和未声明文件，并限制总大小。
+缓存、符号链接和未声明文件，限制总大小，并验证固定 Locator bundle SHA-256、Playwright
+License/NOTICE 与扩展 minified JavaScript 总量不超过 1.5 MiB。普通构建不更新 Locator 内核；
+只有显式执行 `pnpm --filter anybox-chrome-extension sync:locator-engine -- --source <playwright-root>`
+才会从已检出的精确 tag 重新生成并校验上游 commit/入口哈希。
 
 运行组件测试和打包回归：
 
@@ -325,7 +376,9 @@ corepack pnpm chrome-plugin:package:check
 4. 扩展 hello、心跳、分片、重连和命令执行。
 5. Native Host 安装、升级、修复、探测和卸载归属。
 6. `chrome-plugin:package:test` 与 `chrome-plugin:package:check`。
-7. 支持平台上的实际 Chrome 安装、扩展连接和代表性端到端命令。
+7. 真实 Chrome 中固定内核与 Playwright 1.61.1 的匹配数/目标指纹差分，以及 Extension CDP
+   执行器的严格定位、Frame、动态 DOM、动作与“不重放”故障注入。
+8. 20,000 节点热语义定位 p95、1,000 次连续定位内存稳定性、License 和 1.5 MiB 体积门禁。
 
 ## 文档维护规则
 

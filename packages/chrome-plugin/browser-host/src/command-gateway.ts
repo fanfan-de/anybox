@@ -1,14 +1,14 @@
 import {
   BrowserExtensionTabSummary,
-  BrowserExtensionTabsListResult,
   type BrowserExtensionCommandContext,
 } from "@anybox/chrome-shared/browser-extension"
+import { createHash } from "node:crypto"
+import { realpathSync, statSync } from "node:fs"
+import { resolve } from "node:path"
 import {
-  BROWSER_CONTRACT_SUPPORTED_VERSIONS,
-  BROWSER_CONTRACT_V1_COMMAND_METHODS,
-  BROWSER_CONTRACT_V1_VERSION,
+  BROWSER_CONTRACT_V3_PLAYWRIGHT_COMMAND_METHODS,
   BROWSER_CONTRACT_VERSION,
-  BrowserCommandExecutionContextV2,
+  BrowserCommandExecutionContext,
   BrowserContractErrorCode,
   BrowserContractValidationError,
   parseBrowserCommandParams,
@@ -44,34 +44,6 @@ export class BrowserCommandGatewayError extends Error {
   }
 }
 
-const LEGACY_OPTIONAL_TAB_METHODS = new Set<BrowserContractCommandMethod>([
-  "tabs.activate",
-  "page.snapshot",
-  "page.interactiveSnapshot",
-  "page.domTree",
-  "page.accessibilityTree",
-  "page.screenshot",
-  "page.click",
-  "page.clickElement",
-  "page.fill",
-  "page.type",
-  "page.scroll",
-  "page.waitFor",
-])
-
-const V1_SAFE_READ_METHODS = new Set<BrowserContractCommandMethod>([
-  "tabs.list",
-  "page.snapshot",
-  "page.interactiveSnapshot",
-  "page.domTree",
-  "page.accessibilityTree",
-  "page.screenshot",
-  "page.waitFor",
-])
-const V1_COMMAND_METHODS = new Set<BrowserContractCommandMethod>(
-  BROWSER_CONTRACT_V1_COMMAND_METHODS,
-)
-
 const LEASE_REQUIRED_METHODS = new Set<BrowserContractCommandMethod>([
   "tabs.activate",
   "tabs.release",
@@ -87,30 +59,29 @@ const LEASE_REQUIRED_METHODS = new Set<BrowserContractCommandMethod>([
   "page.type",
   "page.scroll",
   "page.waitFor",
-  "locator.click",
-  "locator.fill",
-  "locator.textContent",
-  "locator.inputValue",
-  "locator.waitFor",
+  ...BROWSER_CONTRACT_V3_PLAYWRIGHT_COMMAND_METHODS,
 ])
 
-function configuredContractMaxVersion() {
-  const value = Number(process.env.ANYBOX_BROWSER_CONTRACT_MAX_VERSION)
-  return Number.isInteger(value) && value > 0
-    ? Math.min(value, BROWSER_CONTRACT_VERSION)
-    : BROWSER_CONTRACT_VERSION
-}
+const NON_IDEMPOTENT_INPUT_METHODS = new Set<BrowserContractCommandMethod>([
+  "page.click",
+  "page.clickElement",
+  "page.fill",
+  "page.type",
+  "playwright.locator.click",
+  "playwright.locator.dblclick",
+  "playwright.locator.fill",
+  "playwright.locator.type",
+  "playwright.locator.press",
+  "playwright.locator.selectOption",
+  "playwright.locator.setChecked",
+  "playwright.fileChooser.setFiles",
+])
 
 function requestedContractVersion(
   request: Pick<BrowserIpcRuntimeCommandRequest, "contractVersion">,
 ) {
-  const version = request.contractVersion ?? BROWSER_CONTRACT_V1_VERSION
-  if (
-    !BROWSER_CONTRACT_SUPPORTED_VERSIONS.includes(
-      version as (typeof BROWSER_CONTRACT_SUPPORTED_VERSIONS)[number],
-    )
-    || version > configuredContractMaxVersion()
-  ) {
+  const version = request.contractVersion
+  if (version !== BROWSER_CONTRACT_VERSION) {
     throw new BrowserCommandGatewayError(
       "CONTRACT_VERSION_UNSUPPORTED",
       `Browser contract version '${version}' is not supported.`,
@@ -136,53 +107,17 @@ export async function runBrowserRuntimeCommand(
   const contractVersion = requestedContractVersion(request)
   const method = request.method as BrowserContractCommandMethod
   const backend = bridge.backendInfo(request.context?.browserID)
-  if (
-    contractVersion === BROWSER_CONTRACT_V1_VERSION
-    && method === "tabs.open"
-  ) {
-    // Executable URL schemes are a hard prohibition and take precedence over
-    // the migration error returned for all other v1 writes.
-    parseParams(method, request.params, contractVersion)
-  }
-  if (
-    contractVersion === BROWSER_CONTRACT_V1_VERSION
-    && V1_COMMAND_METHODS.has(method)
-    && !V1_SAFE_READ_METHODS.has(method)
-  ) {
-    throw new BrowserCommandGatewayError(
-      "BACKEND_UPDATE_REQUIRED",
-      `Browser command '${method}' requires Browser Contract v2 authorization and tab leasing.`,
-    )
-  }
-  const params = await normalizeCommandParams(
-    request,
+  const params = normalizeLocalFileParams(
     method,
-    contractVersion,
-    bridge,
-    policy,
-    backend,
+    parseParams(method, request.params, contractVersion),
   )
+  const requestFingerprint = authorizationRequestFingerprint(method, params)
 
-  if (
-    contractVersion === BROWSER_CONTRACT_VERSION
-    && backend.contractVersion === BROWSER_CONTRACT_V1_VERSION
-    && !V1_SAFE_READ_METHODS.has(method)
-  ) {
-    throw new BrowserCommandGatewayError(
-      "BACKEND_UPDATE_REQUIRED",
-      `Browser command '${method}' requires an updated Chrome extension backend.`,
-    )
+  const parsedContext = parseCommandContext(request.context)
+  const context = {
+    ...parsedContext,
+    extensionInstanceID: backend.instanceID,
   }
-
-  const parsedContext = contractVersion === BROWSER_CONTRACT_VERSION
-    ? parseV2Context(request.context)
-    : undefined
-  const context = parsedContext
-    ? {
-        ...parsedContext,
-        extensionInstanceID: backend.instanceID,
-      }
-    : undefined
   const tabId = readTabId(params)
   const tab = tabId
     ? await describeTab(bridge, tabId, {
@@ -192,12 +127,7 @@ export async function runBrowserRuntimeCommand(
       })
     : undefined
 
-  if (
-    contractVersion === BROWSER_CONTRACT_VERSION
-    && backend.contractVersion === BROWSER_CONTRACT_VERSION
-  ) {
-    enforceLeaseBeforeForward(method, tabId, tab, context!)
-  }
+  enforceLeaseBeforeForward(method, tabId, tab, context)
 
   const targetUrl = method === "tabs.open"
     ? readStringField(params, "url")
@@ -205,76 +135,72 @@ export async function runBrowserRuntimeCommand(
   const origin = normalizeBrowserOrigin(targetUrl)
   const decision = authorize(policy, method, params, backend, origin)
 
-  if (contractVersion === BROWSER_CONTRACT_VERSION) {
-    if (decision.permissionAction === "deny") {
+  if (decision.permissionAction === "deny") {
+    throw new BrowserCommandGatewayError(
+      "PERMISSION_DENIED",
+      `Browser command '${method}' is denied by origin policy.`,
+    )
+  }
+  if (!authorizationPublicKey) {
+    throw new BrowserCommandGatewayError(
+      "AUTHORIZATION_INVALID",
+      "Browser authorization verification is unavailable.",
+    )
+  }
+  if (!request.authorization?.value) {
+    const extensionInstanceID = backend.instanceID
+    if (!extensionInstanceID) {
       throw new BrowserCommandGatewayError(
-        "PERMISSION_DENIED",
-        `Browser command '${method}' is denied by origin policy.`,
-      )
-    }
-    if (!authorizationPublicKey) {
-      throw new BrowserCommandGatewayError(
-        "AUTHORIZATION_INVALID",
-        "Browser authorization verification is unavailable.",
-      )
-    }
-    if (!request.authorization?.value) {
-      const extensionInstanceID = backend.instanceID
-      if (!extensionInstanceID) {
-        throw new BrowserCommandGatewayError(
-          "BACKEND_UNAVAILABLE",
-          "The Chrome extension backend has no stable instance identity.",
-          true,
-        )
-      }
-      const challenge = browserAuthorizationService.createChallenge({
-        method,
-        security: decision.security,
-        context: context!,
-        extensionInstanceID,
-        origin,
-        tabId,
-        tabTitle: tab?.title,
-        sensitive: decision.sensitive,
-        permissionAction: decision.permissionAction,
-        risk: decision.risk,
-        rationale: decision.reason,
-        authorizationPublicKey,
-      })
-      throw new BrowserCommandGatewayError(
-        "APPROVAL_REQUIRED",
-        `Browser command '${method}' requires an authorization receipt.`,
+        "BACKEND_UNAVAILABLE",
+        "The Chrome extension backend has no stable instance identity.",
         true,
-        { challenge },
       )
     }
-    try {
-      browserAuthorizationService.verify(request.authorization.value, {
-        method,
-        security: decision.security,
-        context: context!,
-        extensionInstanceID: backend.instanceID!,
-        origin,
-        tabId,
-        sensitive: decision.sensitive,
-      }, authorizationPublicKey)
-    } catch (error) {
-      if (error instanceof BrowserAuthorizationError) {
-        throw new BrowserCommandGatewayError(
-          error.code,
-          error.message,
-          false,
-          error.details,
-        )
-      }
-      throw error
+    const challenge = browserAuthorizationService.createChallenge({
+      method,
+      security: decision.security,
+      context,
+      extensionInstanceID,
+      origin,
+      tabId,
+      tabTitle: tab?.title,
+      sensitive: decision.sensitive,
+      permissionAction: decision.permissionAction,
+      risk: decision.risk,
+      rationale: decision.reason,
+      requestFingerprint,
+      authorizationPublicKey,
+    })
+    throw new BrowserCommandGatewayError(
+      "APPROVAL_REQUIRED",
+      `Browser command '${method}' requires an authorization receipt.`,
+      true,
+      { challenge },
+    )
+  }
+  try {
+    browserAuthorizationService.verify(request.authorization.value, {
+      method,
+      security: decision.security,
+      context,
+      extensionInstanceID: backend.instanceID!,
+      origin,
+      tabId,
+      sensitive: decision.sensitive,
+      requestFingerprint,
+    }, authorizationPublicKey)
+  } catch (error) {
+    if (error instanceof BrowserAuthorizationError) {
+      throw new BrowserCommandGatewayError(
+        error.code,
+        error.message,
+        false,
+        error.details,
+      )
     }
+    throw error
   }
 
-  const dispatchVersion =
-    backend.contractVersion === BROWSER_CONTRACT_V1_VERSION
-      ? BROWSER_CONTRACT_V1_VERSION
-      : contractVersion
   let rawResult: unknown
   try {
     rawResult = await bridge.sendCommand(
@@ -284,7 +210,7 @@ export async function runBrowserRuntimeCommand(
         context: request.context,
         timeoutMs: request.timeoutMs,
         browserID: request.context?.browserID,
-        contractVersion: dispatchVersion,
+        contractVersion,
       },
     )
   } catch (error) {
@@ -292,7 +218,7 @@ export async function runBrowserRuntimeCommand(
   }
 
   const result = parseResult(method, rawResult, contractVersion)
-  updateLegacyOwnership(bridge, method, params, result, request.context)
+  updateOwnership(bridge, method, params, result, request.context)
   return result
 }
 
@@ -317,7 +243,7 @@ function enforceLeaseBeforeForward(
   method: BrowserContractCommandMethod,
   tabId: number | undefined,
   tab: BrowserExtensionTabSummary | undefined,
-  context: ReturnType<typeof parseV2Context>,
+  context: ReturnType<typeof parseCommandContext>,
 ) {
   if (method === "tabs.claim") {
     if (
@@ -359,96 +285,73 @@ function enforceLeaseBeforeForward(
   }
 }
 
-function parseV2Context(context: BrowserExtensionCommandContext | undefined) {
-  const parsed = BrowserCommandExecutionContextV2.safeParse(context)
+function parseCommandContext(context: BrowserExtensionCommandContext | undefined) {
+  const parsed = BrowserCommandExecutionContext.safeParse(context)
   if (!parsed.success) {
     throw new BrowserCommandGatewayError(
       "SESSION_REQUIRED",
-      "Browser Contract v2 requires sessionID, turnID, messageID, toolCallID, and browserID.",
+      "Browser Contract v3 requires sessionID, turnID, messageID, toolCallID, and browserID.",
     )
   }
   return parsed.data
 }
 
-async function normalizeCommandParams(
-  request: Pick<
-    BrowserIpcRuntimeCommandRequest,
-    "contractVersion" | "params" | "context" | "timeoutMs"
-  >,
+function normalizeLocalFileParams(
   method: BrowserContractCommandMethod,
-  contractVersion: number,
-  bridge: BrowserExtensionBridge,
-  policy: BrowserPolicyEngine,
-  backend: BrowserBackendInfo,
+  params: unknown,
 ) {
-  if (
-    contractVersion !== BROWSER_CONTRACT_V1_VERSION
-    || request.contractVersion !== undefined
-    || !LEGACY_OPTIONAL_TAB_METHODS.has(method)
-  ) {
-    return parseParams(method, request.params, contractVersion)
-  }
-
-  const legacyParams = legacyParamsRecord(request.params)
-  const hasExplicitTabId =
-    Object.prototype.hasOwnProperty.call(legacyParams, "tabId")
-    && legacyParams.tabId !== undefined
-  const validated = parseParams(
-    method,
-    hasExplicitTabId
-      ? legacyParams
-      : { ...legacyParams, tabId: 1 },
-    contractVersion,
-  )
-  if (hasExplicitTabId) return validated
-
-  let tabId = bridge.preferredTabID(request.context?.sessionID)
-  if (!tabId) {
-    const listParams = parseParams(
-      "tabs.list",
-      {},
-      BROWSER_CONTRACT_V1_VERSION,
-    )
-    authorize(policy, "tabs.list", listParams, backend)
-
-    let rawTabs: unknown
-    try {
-      rawTabs = await bridge.sendCommand(
-        "tabs.list",
-        listParams,
-        {
-          context: request.context,
-          timeoutMs: request.timeoutMs,
-          contractVersion: BROWSER_CONTRACT_V1_VERSION,
-        },
+  if (method !== "playwright.fileChooser.setFiles") return params
+  const input = params as Record<string, unknown>
+  const files = Array.isArray(input.files) ? input.files : []
+  const normalized: string[] = []
+  for (const item of files) {
+    if (typeof item !== "string") {
+      throw new BrowserCommandGatewayError(
+        "INVALID_COMMAND_PARAMS",
+        "File chooser paths must be strings.",
       )
-    } catch (error) {
-      throw backendGatewayError(error, "tabs.list")
     }
-    const listed = BrowserExtensionTabsListResult.parse(
-      parseResult(
-        "tabs.list",
-        rawTabs,
-        BROWSER_CONTRACT_V1_VERSION,
-      ),
-    )
-    tabId = listed.tabs.find((candidate) => candidate.active)?.id
+    try {
+      const canonical = realpathSync.native(resolve(item))
+      if (!statSync(canonical).isFile()) {
+        throw new Error("not a regular file")
+      }
+      normalized.push(canonical)
+    } catch {
+      throw new BrowserCommandGatewayError(
+        "PERMISSION_DENIED",
+        "A requested upload path is unavailable or is not a local regular file.",
+      )
+    }
   }
-
-  if (!tabId) {
-    throw new BrowserCommandGatewayError(
-      "TAB_NOT_FOUND",
-      "The legacy browser command did not identify a tab and Chrome has no active tab.",
-    )
-  }
-
-  return parseParams(method, {
-    ...legacyParams,
-    tabId,
-  }, contractVersion)
+  return { ...input, files: normalized }
 }
 
-function backendGatewayError(
+function authorizationRequestFingerprint(
+  method: BrowserContractCommandMethod,
+  params: unknown,
+) {
+  if (method !== "playwright.fileChooser.setFiles") return undefined
+  const record = params as Record<string, unknown>
+  const files = Array.isArray(record.files)
+    ? record.files.filter((item): item is string => typeof item === "string")
+    : []
+  const resources = files.map((file) => {
+    const stats = statSync(file)
+    return {
+      path: file,
+      device: stats.dev,
+      inode: stats.ino,
+      size: stats.size,
+      modifiedAt: stats.mtimeMs,
+    }
+  })
+  return createHash("sha256")
+    .update(JSON.stringify(resources), "utf8")
+    .digest("hex")
+}
+
+export function backendGatewayError(
   error: unknown,
   method: BrowserContractCommandMethod,
 ) {
@@ -458,7 +361,27 @@ function backendGatewayError(
       ? (error as { code?: unknown }).code
       : undefined,
   )
+  if (
+    extensionCode.success
+    && extensionCode.data === "DEADLINE_EXCEEDED"
+    && NON_IDEMPOTENT_INPUT_METHODS.has(method)
+  ) {
+    return new BrowserCommandGatewayError(
+      "ACTION_OUTCOME_UNKNOWN",
+      publicBackendErrorMessage("ACTION_OUTCOME_UNKNOWN", method),
+      false,
+      {
+        phase: "transport-timeout",
+        action: method,
+      },
+    )
+  }
   if (extensionCode.success) {
+    const details = error && typeof error === "object"
+      ? sanitizeBackendErrorDetails(
+        (error as { details?: unknown }).details,
+      )
+      : undefined
     return new BrowserCommandGatewayError(
       extensionCode.data,
       publicBackendErrorMessage(extensionCode.data, method),
@@ -466,6 +389,18 @@ function backendGatewayError(
         && typeof (error as { retryable?: unknown }).retryable === "boolean"
         ? (error as { retryable: boolean }).retryable
         : false,
+      details,
+    )
+  }
+  if (NON_IDEMPOTENT_INPUT_METHODS.has(method)) {
+    return new BrowserCommandGatewayError(
+      "ACTION_OUTCOME_UNKNOWN",
+      publicBackendErrorMessage("ACTION_OUTCOME_UNKNOWN", method),
+      false,
+      {
+        phase: "transport",
+        action: method,
+      },
     )
   }
   return new BrowserCommandGatewayError(
@@ -499,6 +434,21 @@ function publicBackendErrorMessage(
       return `Browser command '${method}' exceeded its deadline.`
     case "CANCELLED":
       return `Browser command '${method}' was cancelled.`
+    case "LOCATOR_PARSE_ERROR":
+      return `Browser command '${method}' contains an invalid Locator plan.`
+    case "LOCATOR_NOT_FOUND":
+      return `Browser command '${method}' did not find its Locator target.`
+    case "LOCATOR_STRICT_VIOLATION":
+      return `Browser command '${method}' matched more than one Locator target.`
+    case "LOCATOR_NOT_ACTIONABLE":
+      return `Browser command '${method}' found a target that was not actionable.`
+    case "STALE_DOCUMENT":
+    case "FRAME_DETACHED":
+      return `Browser command '${method}' lost its document or frame context.`
+    case "ACTION_OUTCOME_UNKNOWN":
+      return `Browser command '${method}' may have dispatched input; its outcome is unknown and it must not be replayed blindly.`
+    case "EVENT_EXPIRED":
+      return `Browser command '${method}' used an expired browser event handle.`
     case "BACKEND_UNAVAILABLE":
       return "The Chrome extension backend is unavailable."
     default:
@@ -506,15 +456,50 @@ function publicBackendErrorMessage(
   }
 }
 
-function legacyParamsRecord(value: unknown): Record<string, unknown> {
-  if (value === undefined) return {}
+function sanitizeBackendErrorDetails(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new BrowserCommandGatewayError(
-      "INVALID_COMMAND_PARAMS",
-      "Legacy browser command parameters must be an object.",
-    )
+    return undefined
   }
-  return { ...(value as Record<string, unknown>) }
+  const input = value as Record<string, unknown>
+  const output: Record<string, unknown> = {}
+  const stringKeys = [
+    "phase",
+    "action",
+    "reason",
+    "engineMessage",
+    "cause",
+  ] as const
+  for (const key of stringKeys) {
+    if (typeof input[key] === "string") {
+      output[key] = input[key].slice(0, 500)
+    }
+  }
+  for (const key of [
+    "matchCount",
+    "documentGeneration",
+    "fromGeneration",
+  ] as const) {
+    if (typeof input[key] === "number" && Number.isFinite(input[key])) {
+      output[key] = input[key]
+    }
+  }
+  if (Array.isArray(input.candidatePreviews)) {
+    output.candidatePreviews = input.candidatePreviews
+      .filter((item): item is string => typeof item === "string")
+      .slice(0, 10)
+      .map((item) => item.slice(0, 500))
+  }
+  if (Array.isArray(input.framePath)) {
+    output.framePath = input.framePath.slice(0, 16).map((item) => {
+      const frame = item && typeof item === "object" && !Array.isArray(item)
+        ? item as Record<string, unknown>
+        : {}
+      return typeof frame.frameId === "string"
+        ? { frameId: frame.frameId.slice(0, 256) }
+        : {}
+    })
+  }
+  return Object.keys(output).length > 0 ? output : undefined
 }
 
 function authorize(
@@ -568,7 +553,7 @@ function parseResult(
   }
 }
 
-function updateLegacyOwnership(
+function updateOwnership(
   bridge: BrowserExtensionBridge,
   method: BrowserContractCommandMethod,
   params: unknown,
