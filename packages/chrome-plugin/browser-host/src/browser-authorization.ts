@@ -14,7 +14,6 @@ import {
 
 const RECEIPT_VERSION = "v1"
 const CHALLENGE_TTL_MS = 60_000
-const PUBLIC_KEY_ENV = "ANYBOX_BROWSER_AUTH_PUBLIC_KEY"
 
 type AuthorizationFailureCode = Extract<
   BrowserContractErrorCode,
@@ -162,7 +161,10 @@ export function normalizeBrowserOrigin(value: string | undefined) {
 export class BrowserAuthorizationService {
   private readonly challenges = new Map<
     string,
-    BrowserAuthorizationChallengeValue
+    {
+      challenge: BrowserAuthorizationChallengeValue
+      authorizationPublicKey: string
+    }
   >()
   private readonly usedReceiptNonces = new Map<string, number>()
 
@@ -178,6 +180,7 @@ export class BrowserAuthorizationService {
     permissionAction: "allow" | "ask" | "deny"
     risk: "low" | "medium" | "high" | "critical"
     rationale: string
+    authorizationPublicKey: string
   }) {
     const now = Date.now()
     this.prune(now)
@@ -203,15 +206,18 @@ export class BrowserAuthorizationService {
       issuedAt: now,
       expiresAt: now + CHALLENGE_TTL_MS,
     })
-    this.challenges.set(challenge.challengeID, challenge)
+    this.challenges.set(challenge.challengeID, {
+      challenge,
+      authorizationPublicKey: input.authorizationPublicKey,
+    })
     return challenge
   }
 
   verify(
     receipt: string,
     expected: BrowserAuthorizationExpectation,
+    encodedPublicKey: string,
   ) {
-    const encodedPublicKey = process.env[PUBLIC_KEY_ENV]?.trim()
     if (!encodedPublicKey) {
       throw new BrowserAuthorizationError(
         "AUTHORIZATION_INVALID",
@@ -254,9 +260,12 @@ export class BrowserAuthorizationService {
         "Browser authorization receipt was already used.",
       )
     }
-    const challenge = this.challenges.get(claims.challengeID)
+    const pendingChallenge = this.challenges.get(claims.challengeID)
+    const challenge = pendingChallenge?.challenge
     if (
-      !challenge
+      !pendingChallenge
+      || !challenge
+      || pendingChallenge.authorizationPublicKey !== encodedPublicKey
       || !exactMatch(claims, challenge)
       || !matchesCurrentRequest(challenge, expected)
     ) {
@@ -293,8 +302,8 @@ export class BrowserAuthorizationService {
   }
 
   private prune(now: number) {
-    for (const [id, challenge] of this.challenges) {
-      if (challenge.expiresAt <= now) this.challenges.delete(id)
+    for (const [id, pending] of this.challenges) {
+      if (pending.challenge.expiresAt <= now) this.challenges.delete(id)
     }
     for (const [nonce, expiresAt] of this.usedReceiptNonces) {
       if (expiresAt <= now) this.usedReceiptNonces.delete(nonce)

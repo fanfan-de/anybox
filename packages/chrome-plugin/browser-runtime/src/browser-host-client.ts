@@ -6,6 +6,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import {
   BROWSER_IPC_PROTOCOL_VERSION,
+  BrowserAuthorizationPublicKey,
   BrowserIpcFrameDecoder,
   browserIpcProofTranscript,
   encodeBrowserIpcFrame,
@@ -20,10 +21,11 @@ import type {
   BrowserExtensionCommandContext,
 } from "@anybox/chrome-shared/browser-extension"
 
-const BROWSER_HOST_CLIENT_VERSION = "0.11.2"
+const BROWSER_HOST_CLIENT_VERSION = "0.11.3"
 const DEFAULT_CONNECT_TIMEOUT_MS = 5_000
 const HOST_START_TIMEOUT_MS = 8_000
 const HOST_REPLACE_TIMEOUT_MS = 5_000
+const BROWSER_AUTH_PUBLIC_KEY_ENV = "ANYBOX_BROWSER_AUTH_PUBLIC_KEY"
 
 export type BrowserHostRequest =
   | {
@@ -112,6 +114,20 @@ function requiredProcessID(value: unknown, label: string) {
     )
   }
   return Number(value)
+}
+
+function browserAuthorizationPublicKey() {
+  const value = process.env[BROWSER_AUTH_PUBLIC_KEY_ENV]?.trim()
+  if (!value) return undefined
+  const parsed = BrowserAuthorizationPublicKey.safeParse(value)
+  if (!parsed.success) {
+    throw new BrowserHostClientError(
+      "AUTHORIZATION_INVALID",
+      "The Anybox browser authorization public key is invalid.",
+      { retryable: false },
+    )
+  }
+  return parsed.data
 }
 
 function runtimeBootstrapPath() {
@@ -224,7 +240,9 @@ async function replaceIncompatibleHost(bootstrap: RuntimeBootstrap) {
     )
   }
 
-  const authenticatedClient = new BrowserHostRuntimeClient(bootstrap)
+  // Authenticate with the legacy transcript before terminating an older Host.
+  // Older strict hello schemas do not know the per-connection verifier field.
+  const authenticatedClient = new BrowserHostRuntimeClient(bootstrap, false)
   await authenticatedClient.ensureConnected()
   authenticatedClient.close()
 
@@ -322,6 +340,7 @@ async function connectToAvailableHost() {
 
 class BrowserHostRuntimeClient {
   readonly #bootstrap: RuntimeBootstrap
+  readonly #advertiseAuthorizationPublicKey: boolean
   readonly #clientInstanceID = randomUUID()
   readonly #pending = new Map<string, PendingRequest>()
   #socket: Socket | undefined
@@ -329,8 +348,13 @@ class BrowserHostRuntimeClient {
   #connectPromise: Promise<void> | undefined
   #handshake: Handshake | undefined
 
-  constructor(bootstrap: RuntimeBootstrap) {
+  constructor(
+    bootstrap: RuntimeBootstrap,
+    advertiseAuthorizationPublicKey = true,
+  ) {
     this.#bootstrap = bootstrap
+    this.#advertiseAuthorizationPublicKey =
+      advertiseAuthorizationPublicKey
   }
 
   async request<TResult = unknown>(request: BrowserHostRequest) {
@@ -481,6 +505,9 @@ class BrowserHostRuntimeClient {
         nonce: value.nonce,
         clientInstanceID: this.#clientInstanceID,
         clientVersion: BROWSER_HOST_CLIENT_VERSION,
+        authorizationPublicKey: this.#advertiseAuthorizationPublicKey
+          ? browserAuthorizationPublicKey()
+          : undefined,
       }
       socket.write(encodeBrowserIpcFrame({
         type: "hello",

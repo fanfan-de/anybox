@@ -21,8 +21,8 @@ export const MAX_BROWSER_IPC_CHUNKS = Math.ceil(
   MAX_BROWSER_IPC_MESSAGE_BYTES / MAX_BROWSER_IPC_CHUNK_BYTES,
 )
 export const BROWSER_IPC_HANDSHAKE_TIMEOUT_MS = 5_000
-export const BROWSER_IPC_RUNTIME_CLIENT_VERSION = "0.11.2"
-export const BROWSER_IPC_NATIVE_HOST_VERSION = "0.11.2"
+export const BROWSER_IPC_RUNTIME_CLIENT_VERSION = "0.11.3"
+export const BROWSER_IPC_NATIVE_HOST_VERSION = "0.11.3"
 
 export const BrowserIpcRole = z.enum(["runtime", "native-host"])
 export type BrowserIpcRole = z.infer<typeof BrowserIpcRole>
@@ -83,9 +83,21 @@ const BrowserIpcHelloBase = {
   proof: z.string().min(16),
 }
 
+export const BrowserAuthorizationPublicKey = z.string()
+  .trim()
+  .min(1)
+  .max(2_048)
+  .regex(/^[A-Za-z0-9_-]+$/u)
+export type BrowserAuthorizationPublicKey = z.infer<
+  typeof BrowserAuthorizationPublicKey
+>
+
 export const BrowserIpcRuntimeHelloMessage = z.object({
   ...BrowserIpcHelloBase,
   role: z.literal("runtime"),
+  // The Agent owns the private signing key. Its Node REPL passes only this
+  // public verifier to the Browser Host on the authenticated runtime channel.
+  authorizationPublicKey: BrowserAuthorizationPublicKey.optional(),
 }).strict()
 export type BrowserIpcRuntimeHelloMessage = z.infer<typeof BrowserIpcRuntimeHelloMessage>
 
@@ -375,6 +387,7 @@ export function browserIpcProofTranscript(input: {
   nonce: string
   clientInstanceID: string
   clientVersion: string
+  authorizationPublicKey?: string
 }) {
   return [
     `anybox-browser-ipc-v${BROWSER_IPC_PROTOCOL_VERSION}`,
@@ -383,5 +396,11 @@ export function browserIpcProofTranscript(input: {
     input.nonce,
     input.clientInstanceID,
     input.clientVersion,
+    ...(input.authorizationPublicKey
+      ? [
+          "browser-authorization-public-key",
+          input.authorizationPublicKey,
+        ]
+      : []),
   ].join("\n")
 }

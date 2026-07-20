@@ -48,6 +48,11 @@ Browser Host 使用固定的用户级 Named Pipe（Windows）或 Unix Domain Soc
 （macOS/Linux）。多个 Node 会话复用同一 Host；并发启动时只有一个进程取得 endpoint，
 其余 Client 重新读取胜出进程的 bootstrap。
 
+Browser Client 会把 AnyboxAgent 注入 Node REPL 的审批验签公钥加入 HMAC 保护的
+runtime hello。Browser Host 按已认证连接保存公钥，challenge 与 receipt 都绑定该
+连接密钥；Host 自身不从启动环境读取全局公钥，因此可安全跨 Agent/Node 会话复用。
+Ed25519 私钥始终只驻留 AnyboxAgent。
+
 runtime bootstrap 权限在 Unix 上为 `0600`，包含 Host 存活期间使用的 runtime proof。
 Native Host 使用另一份短时、一次性 proof；认证成功后 Browser Host 删除它并在断线时
 轮换。当前仍未验证对端 PID/SID/uid，因此 OS 用户边界和文件/endpoint ACL 是重要的

@@ -135,6 +135,28 @@ describe("built-in Node REPL connector", () => {
     }
   })
 
+  test("gives the built-in Node REPL only the browser receipt public key", async () => {
+    const client = await createClient()
+    try {
+      const result = await client.callTool("js", {
+        code: `const nodeProcess = await import("node:process")
+          return {
+            publicKey: nodeProcess.env.ANYBOX_BROWSER_AUTH_PUBLIC_KEY,
+            privateKey: nodeProcess.env.ANYBOX_BROWSER_AUTH_PRIVATE_KEY
+          }`,
+      })
+      const environment = result.structuredContent?.result as {
+        publicKey?: unknown
+        privateKey?: unknown
+      }
+      expect(typeof environment.publicKey).toBe("string")
+      expect(environment.publicKey).toMatch(/^[A-Za-z0-9_-]+$/u)
+      expect(environment.privateKey).toBeUndefined()
+    } finally {
+      await client.dispose()
+    }
+  })
+
   test("exposes generic per-call metadata without a business host-service bridge", async () => {
     const client = await createClient()
     try {

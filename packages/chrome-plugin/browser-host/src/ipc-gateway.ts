@@ -101,6 +101,7 @@ type GatewayConnection = {
   bridgeConnectionID?: string
   clientInstanceID?: string
   clientVersion?: string
+  authorizationPublicKey?: string
   handshakeTimer: ReturnType<typeof setTimeout>
   requestIDs: Set<string>
   nativeChunks: Map<string, NativeChunkTransfer>
@@ -883,6 +884,9 @@ export class BrowserIpcGateway {
       nonce: connection.challenge.nonce,
       clientInstanceID: hello.clientInstanceID,
       clientVersion: hello.clientVersion,
+      ...(hello.role === "runtime" && hello.authorizationPublicKey
+        ? { authorizationPublicKey: hello.authorizationPublicKey }
+        : {}),
     })
     if (!safeEqual(expectedProof, hello.proof)) {
       throw new BrowserIpcProtocolError(
@@ -895,6 +899,9 @@ export class BrowserIpcGateway {
     connection.authenticated = true
     connection.clientInstanceID = hello.clientInstanceID
     connection.clientVersion = hello.clientVersion
+    connection.authorizationPublicKey = hello.role === "runtime"
+      ? hello.authorizationPublicKey
+      : undefined
 
     if (connection.role === "native-host") {
       this.nativeBootstrap = undefined
@@ -970,10 +977,15 @@ export class BrowserIpcGateway {
     connection.requestIDs.add(request.requestID)
     try {
       const data = request.operation === "status"
-        ? this.runtimeStatus()
+        ? this.runtimeStatus(connection)
         : request.operation === "getInfo"
           ? this.runtimeGetInfo(request.contractVersion, request.browserID)
-          : await runBrowserRuntimeCommand(request, this.bridge, this.policy)
+          : await runBrowserRuntimeCommand(
+              request,
+              this.bridge,
+              this.policy,
+              connection.authorizationPublicKey,
+            )
       if (
         request.operation === "command"
         && request.authorization?.value
@@ -1038,7 +1050,7 @@ export class BrowserIpcGateway {
     }
   }
 
-  private runtimeStatus() {
+  private runtimeStatus(connection: GatewayConnection) {
     const bridgeStatus = this.bridge.status()
     const contract = this.bridge.browserContractCompatibility()
     const ipcStatus = this.status()
@@ -1052,6 +1064,9 @@ export class BrowserIpcGateway {
       runtimeConnections: ipcStatus.runtimeConnections,
       nativeHostConnections: ipcStatus.nativeHostConnections,
       peerProcessIdentityVerified: ipcStatus.peerProcessIdentityVerified,
+      authorizationVerificationAvailable: Boolean(
+        connection.authorizationPublicKey,
+      ),
       backends: bridgeStatus.backends,
       metrics: {
         ...ipcStatus.metrics,

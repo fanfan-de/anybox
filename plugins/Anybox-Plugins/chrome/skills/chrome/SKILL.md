@@ -64,6 +64,10 @@ Check or restore the connection when state is unclear:
 return await agent.browsers.ensureReady({ launch: true })
 ```
 
+`chrome.status().authorizationVerificationAvailable` is the receipt-verification
+readiness signal. `peerProcessIdentityVerified` only reports the current
+PID/SID/uid verification limitation and does not gate browser commands.
+
 Handle the returned state directly instead of treating every failure as a generic disconnect:
 
 - `ready`: continue with the existing `chrome` binding, or initialize it if absent.

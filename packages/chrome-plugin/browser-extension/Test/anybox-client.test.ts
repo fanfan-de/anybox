@@ -47,7 +47,7 @@ test("marks Native transport connected only after helloAck and drops a stale hea
   ;(globalThis as any).chrome = {
     runtime: {
       id: "hjbejdmgpifdjjlpgmdfmbmbhkedgnjc",
-      getManifest: () => ({ version: "0.11.2" }),
+      getManifest: () => ({ version: "0.11.3" }),
       connectNative: () => port,
       lastError: undefined,
     },

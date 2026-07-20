@@ -9,9 +9,9 @@ const RECEIPT_VERSION = "v1"
 const PUBLIC_KEY_ENV = "ANYBOX_BROWSER_AUTH_PUBLIC_KEY"
 const DEFAULT_RECEIPT_TTL_MS = 60_000
 
-// The private key never leaves AnyboxAgent. The Node REPL and Browser Host receive
-// only the public verification key, so model-authored JavaScript cannot forge a
-// receipt by reading its process environment.
+// The private key never leaves AnyboxAgent. The Node REPL receives only the
+// public verification key and binds it into the authenticated Browser Host IPC
+// handshake, so browser receipts cannot be forged from the model runtime.
 const receiptKeyPair = generateKeyPairSync("ed25519")
 const encodedPublicKey = receiptKeyPair.publicKey.export({
   type: "spki",

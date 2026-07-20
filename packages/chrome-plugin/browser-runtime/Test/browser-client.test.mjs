@@ -302,6 +302,35 @@ test("does not open Chrome for an incompatible extension", async () => {
   assert.equal(launchCount, 0)
 })
 
+test("does not report ready when browser receipt verification is unavailable", async () => {
+  let launchCount = 0
+  const { setupBrowserRuntime } = await importRuntime(
+    "readiness-authorization-unavailable",
+  )
+  const agent = await setupBrowserRuntime({
+    globals: {},
+    transport: async () => ({
+      connected: true,
+      extensionConnected: true,
+      contractCompatible: true,
+      authorizationVerificationAvailable: false,
+    }),
+    chromeLauncher: {
+      async launch() {
+        launchCount += 1
+      },
+    },
+  })
+
+  const readiness = await agent.browsers.ensureReady({ launch: true })
+
+  assert.equal(readiness.state, "backend-unavailable")
+  assert.equal(readiness.action, "retry")
+  assert.equal(readiness.error?.code, "AUTHORIZATION_INVALID")
+  assert.equal(readiness.retryable, true)
+  assert.equal(launchCount, 0)
+})
+
 test("distinguishes missing Chrome from Native Host and backend failures", async () => {
   const disconnected = async () => ({
     connected: false,
@@ -711,6 +740,7 @@ test("starts and connects to the plugin-owned Browser Host", async () => {
       "ANYBOX_BROWSER_HOST",
       "ANYBOX_BROWSER_HOST_BOOTSTRAP_PATH",
       "ANYBOX_BROWSER_HOST_ENTRYPOINT",
+      "ANYBOX_BROWSER_AUTH_PUBLIC_KEY",
       "ANYBOX_TEST_HOME",
     ].map((key) => [key, process.env[key]]),
   )
@@ -718,6 +748,7 @@ test("starts and connects to the plugin-owned Browser Host", async () => {
   process.env.ANYBOX_AGENT_DATA_DIR = root
   process.env.ANYBOX_BROWSER_HOST_BOOTSTRAP_PATH = bootstrapPath
   process.env.ANYBOX_BROWSER_HOST_ENTRYPOINT = hostEntrypoint
+  process.env.ANYBOX_BROWSER_AUTH_PUBLIC_KEY = "runtime_public_key"
   process.env.ANYBOX_TEST_HOME = root
   delete process.env.ANYBOX_BROWSER_HOST
 
@@ -731,6 +762,7 @@ test("starts and connects to the plugin-owned Browser Host", async () => {
 
     assert.equal(browser.browserId, "extension")
     assert.equal(status.connected, false)
+    assert.equal(status.authorizationVerificationAvailable, true)
     assert.equal(status.runtimeConnections >= 1, true)
     assert.equal(bootstrap.role, "runtime")
     assert.equal(typeof hostPID, "number")
@@ -768,6 +800,7 @@ test("replaces an authenticated Browser Host from an older plugin version", asyn
       "ANYBOX_BROWSER_HOST",
       "ANYBOX_BROWSER_HOST_BOOTSTRAP_PATH",
       "ANYBOX_BROWSER_HOST_ENTRYPOINT",
+      "ANYBOX_BROWSER_AUTH_PUBLIC_KEY",
       "ANYBOX_TEST_HOME",
     ].map((key) => [key, process.env[key]]),
   )
@@ -775,6 +808,7 @@ test("replaces an authenticated Browser Host from an older plugin version", asyn
   process.env.ANYBOX_AGENT_DATA_DIR = root
   process.env.ANYBOX_BROWSER_HOST_BOOTSTRAP_PATH = bootstrapPath
   process.env.ANYBOX_BROWSER_HOST_ENTRYPOINT = hostEntrypoint
+  process.env.ANYBOX_BROWSER_AUTH_PUBLIC_KEY = "runtime_public_key"
   process.env.ANYBOX_TEST_HOME = root
   delete process.env.ANYBOX_BROWSER_HOST
 
@@ -798,7 +832,7 @@ test("replaces an authenticated Browser Host from an older plugin version", asyn
 
     assert.equal(readiness.state, "needs-browser")
     assert.notEqual(upgradedBootstrap.hostPID, initialBootstrap.hostPID)
-    assert.equal(upgradedBootstrap.hostVersion, "0.11.2")
+    assert.equal(upgradedBootstrap.hostVersion, "0.11.3")
   } finally {
     for (const hostPID of hostPIDs) {
       if (!Number.isInteger(hostPID)) continue

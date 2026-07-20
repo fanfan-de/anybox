@@ -116,6 +116,7 @@ function proofFor(
     nonce: string
     clientInstanceID: string
     clientVersion: string
+    authorizationPublicKey?: string
   },
 ) {
   return createHmac("sha256", secret)
@@ -171,6 +172,7 @@ async function authenticateRuntime(
     proof: string
     protocolVersion: number
     role: string
+    authorizationPublicKey: string
   }> = {},
 ) {
   const client = await connect(gateway.runtimeEndpoint)
@@ -181,6 +183,7 @@ async function authenticateRuntime(
     nonce: overrides.nonce ?? challenge.nonce,
     clientInstanceID: overrides.clientInstanceID ?? `runtime-${randomUUID()}`,
     clientVersion: overrides.clientVersion ?? "test-runtime",
+    authorizationPublicKey: overrides.authorizationPublicKey,
   }
   const hello = {
     type: "hello",
@@ -533,7 +536,9 @@ describe("Browser IPC Gateway transport and authentication", () => {
     })
     await waitFor(() => bridge.status().connected)
 
-    const runtime = await authenticateRuntime(gateway)
+    const runtime = await authenticateRuntime(gateway, {
+      authorizationPublicKey: "public_key-123",
+    })
     expect(runtime.response.type).toBe("ready")
 
     runtime.client.send({
@@ -554,6 +559,7 @@ describe("Browser IPC Gateway transport and authentication", () => {
         protocolVersion: BROWSER_IPC_PROTOCOL_VERSION,
         runtimeConnections: 1,
         nativeHostConnections: 1,
+        authorizationVerificationAvailable: true,
       },
     })
     const publicStatusText = JSON.stringify(publicStatus)

@@ -124,6 +124,7 @@ export type BrowserRuntimeTransport = <TResult = unknown>(
 
 export interface BrowserRuntimeStatus extends Record<string, unknown> {
   connected: boolean
+  authorizationVerificationAvailable?: boolean
   contractCompatible?: boolean
   extensionConnected?: boolean
   backends?: BrowserBackendInfo[]
@@ -595,6 +596,23 @@ function statusReadiness(
   status: BrowserRuntimeStatus,
   launched = false,
 ): BrowserReadiness {
+  if (status.authorizationVerificationAvailable === false) {
+    return {
+      state: "backend-unavailable",
+      action: "retry",
+      connected: false,
+      launched,
+      message:
+        "Browser authorization verification is unavailable in the current Anybox Node REPL session.",
+      retryable: true,
+      status,
+      error: {
+        code: "AUTHORIZATION_INVALID",
+        message: "Browser authorization verification is unavailable.",
+        retryable: true,
+      },
+    }
+  }
   if (status.connected) {
     return {
       state: "ready",

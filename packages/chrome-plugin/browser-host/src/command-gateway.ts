@@ -131,6 +131,7 @@ export async function runBrowserRuntimeCommand(
   >,
   bridge: BrowserExtensionBridge = browserExtensionBridge,
   policy: BrowserPolicyEngine = browserPolicyEngine,
+  authorizationPublicKey?: string,
 ) {
   const contractVersion = requestedContractVersion(request)
   const method = request.method as BrowserContractCommandMethod
@@ -211,6 +212,12 @@ export async function runBrowserRuntimeCommand(
         `Browser command '${method}' is denied by origin policy.`,
       )
     }
+    if (!authorizationPublicKey) {
+      throw new BrowserCommandGatewayError(
+        "AUTHORIZATION_INVALID",
+        "Browser authorization verification is unavailable.",
+      )
+    }
     if (!request.authorization?.value) {
       const extensionInstanceID = backend.instanceID
       if (!extensionInstanceID) {
@@ -232,6 +239,7 @@ export async function runBrowserRuntimeCommand(
         permissionAction: decision.permissionAction,
         risk: decision.risk,
         rationale: decision.reason,
+        authorizationPublicKey,
       })
       throw new BrowserCommandGatewayError(
         "APPROVAL_REQUIRED",
@@ -249,7 +257,7 @@ export async function runBrowserRuntimeCommand(
         origin,
         tabId,
         sensitive: decision.sensitive,
-      })
+      }, authorizationPublicKey)
     } catch (error) {
       if (error instanceof BrowserAuthorizationError) {
         throw new BrowserCommandGatewayError(

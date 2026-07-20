@@ -8,8 +8,10 @@ import {
   BrowserIpcRuntimeGetInfoRequest,
   BrowserIpcRuntimeGetInfoResponse,
   BrowserIpcReadyMessage,
+  BrowserIpcRuntimeHelloMessage,
   BrowserIpcRuntimeRequest,
   BrowserIpcRuntimeResponse,
+  browserIpcProofTranscript,
   encodeBrowserIpcFrame,
 } from "./browser-ipc"
 import {
@@ -108,6 +110,37 @@ describe("Browser IPC framing", () => {
 })
 
 describe("Browser IPC runtime command schema", () => {
+  test("binds a bounded authorization public key into the runtime hello transcript", () => {
+    const hello = {
+      type: "hello" as const,
+      protocolVersion: 1 as const,
+      role: "runtime" as const,
+      brokerInstanceID: "broker-1",
+      clientInstanceID: "runtime-1",
+      clientVersion: "0.11.3",
+      nonce: "runtime-nonce-123",
+      proof: "runtime-proof-123",
+      authorizationPublicKey: "public_key-123",
+    }
+    expect(BrowserIpcRuntimeHelloMessage.parse(hello)).toEqual(hello)
+    expect(BrowserIpcRuntimeHelloMessage.safeParse({
+      ...hello,
+      authorizationPublicKey: "invalid.key",
+    }).success).toBe(false)
+
+    const transcriptInput = {
+      role: hello.role,
+      brokerInstanceID: hello.brokerInstanceID,
+      nonce: hello.nonce,
+      clientInstanceID: hello.clientInstanceID,
+      clientVersion: hello.clientVersion,
+    }
+    expect(browserIpcProofTranscript({
+      ...transcriptInput,
+      authorizationPublicKey: hello.authorizationPublicKey,
+    })).not.toBe(browserIpcProofTranscript(transcriptInput))
+  })
+
   test("advertises Browser Contract application support without changing IPC v1", () => {
     expect(BrowserIpcReadyMessage.parse({
       type: "ready",

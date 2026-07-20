@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { describe, expect, test } from "bun:test"
 import {
   generateKeyPairSync,
   randomUUID,
@@ -20,20 +20,11 @@ import {
   runBrowserRuntimeCommand,
 } from "../src/command-gateway.ts"
 
-const originalPublicKey = process.env.ANYBOX_BROWSER_AUTH_PUBLIC_KEY
 const testKeyPair = generateKeyPairSync("ed25519")
 const encodedPublicKey = testKeyPair.publicKey.export({
   type: "spki",
   format: "der",
 }).toString("base64url")
-
-afterEach(() => {
-  if (originalPublicKey === undefined) {
-    delete process.env.ANYBOX_BROWSER_AUTH_PUBLIC_KEY
-  } else {
-    process.env.ANYBOX_BROWSER_AUTH_PUBLIC_KEY = originalPublicKey
-  }
-})
 
 function context() {
   return {
@@ -56,6 +47,7 @@ function createChallenge(service: BrowserAuthorizationService) {
     permissionAction: "ask",
     risk: "medium",
     rationale: "Origin-scoped approval is required.",
+    authorizationPublicKey: encodedPublicKey,
   })
 }
 
@@ -84,6 +76,7 @@ function expectation(
 function sign(
   challenge: BrowserAuthorizationChallenge,
   overrides: Record<string, unknown> = {},
+  privateKey = testKeyPair.privateKey,
 ) {
   const claims = {
     challengeID: challenge.challengeID,
@@ -110,41 +103,48 @@ function sign(
   const signature = signPayload(
     null,
     Buffer.from(payload, "utf8"),
-    testKeyPair.privateKey,
+    privateKey,
   ).toString("base64url")
   return `v1.${payload}.${signature}`
 }
 
 describe("Browser authorization receipts", () => {
   test("binds a receipt to its method, origin, tool call, and one-time nonce", () => {
-    process.env.ANYBOX_BROWSER_AUTH_PUBLIC_KEY = encodedPublicKey
     const service = new BrowserAuthorizationService()
     const challenge = createChallenge(service)
     expect(challenge.origin).toBe("https://example.com")
 
     const receipt = sign(challenge)
-    expect(service.verify(receipt, expectation(challenge)).challenge.challengeID)
+    expect(service.verify(
+      receipt,
+      expectation(challenge),
+      encodedPublicKey,
+    ).challenge.challengeID)
       .toBe(challenge.challengeID)
-    expect(() => service.verify(receipt, expectation(challenge))).toThrow(
+    expect(() => service.verify(
+      receipt,
+      expectation(challenge),
+      encodedPublicKey,
+    )).toThrow(
       expect.objectContaining({ code: "AUTHORIZATION_REPLAYED" }),
     )
 
     const second = createChallenge(service)
     expect(() => service.verify(sign(second, {
       method: "page.click",
-    }), expectation(second))).toThrow(expect.objectContaining({
+    }), expectation(second), encodedPublicKey)).toThrow(expect.objectContaining({
       code: "AUTHORIZATION_INVALID",
     }))
   })
 
   test("rejects forged and expired receipts before dispatch", () => {
-    process.env.ANYBOX_BROWSER_AUTH_PUBLIC_KEY = encodedPublicKey
     const service = new BrowserAuthorizationService()
     const forgedChallenge = createChallenge(service)
     const forged = sign(forgedChallenge).replace(/\.[^.]+$/, ".forged")
     expect(() => service.verify(
       forged,
       expectation(forgedChallenge),
+      encodedPublicKey,
     )).toThrow(
       expect.objectContaining({ code: "AUTHORIZATION_INVALID" }),
     )
@@ -153,28 +153,48 @@ describe("Browser authorization receipts", () => {
     expect(() => service.verify(sign(expiredChallenge, {
       issuedAt: expiredChallenge.issuedAt,
       expiresAt: expiredChallenge.issuedAt - 1,
-    }), expectation(expiredChallenge))).toThrow(expect.objectContaining({
+    }), expectation(expiredChallenge), encodedPublicKey)).toThrow(expect.objectContaining({
       code: "AUTHORIZATION_EXPIRED",
     }))
   })
 
   test("rejects a valid receipt when the current retry targets another request", () => {
-    process.env.ANYBOX_BROWSER_AUTH_PUBLIC_KEY = encodedPublicKey
     const service = new BrowserAuthorizationService()
     const challenge = createChallenge(service)
     const receipt = sign(challenge)
 
     expect(() => service.verify(receipt, expectation(challenge, {
       method: "page.click",
-    }))).toThrow(expect.objectContaining({
+    }), encodedPublicKey)).toThrow(expect.objectContaining({
       code: "AUTHORIZATION_INVALID",
     }))
-    expect(service.verify(receipt, expectation(challenge)).challenge.challengeID)
+    expect(service.verify(
+      receipt,
+      expectation(challenge),
+      encodedPublicKey,
+    ).challenge.challengeID)
       .toBe(challenge.challengeID)
   })
 
+  test("binds each challenge to the runtime connection public key", () => {
+    const service = new BrowserAuthorizationService()
+    const challenge = createChallenge(service)
+    const otherKeyPair = generateKeyPairSync("ed25519")
+    const otherPublicKey = otherKeyPair.publicKey.export({
+      type: "spki",
+      format: "der",
+    }).toString("base64url")
+
+    expect(() => service.verify(
+      sign(challenge, {}, otherKeyPair.privateKey),
+      expectation(challenge),
+      otherPublicKey,
+    )).toThrow(expect.objectContaining({
+      code: "AUTHORIZATION_INVALID",
+    }))
+  })
+
   test("never forwards a v2 write before a valid Host challenge receipt", async () => {
-    process.env.ANYBOX_BROWSER_AUTH_PUBLIC_KEY = encodedPublicKey
     let forwarded = 0
     const bridge = {
       backendInfo: () => createBrowserBackendInfo({
@@ -211,7 +231,12 @@ describe("Browser authorization receipts", () => {
 
     let challenge: BrowserAuthorizationChallenge | undefined
     try {
-      await runBrowserRuntimeCommand(request, bridge)
+      await runBrowserRuntimeCommand(
+        request,
+        bridge,
+        undefined,
+        encodedPublicKey,
+      )
     } catch (error) {
       expect(error).toMatchObject({
         code: "APPROVAL_REQUIRED",
@@ -226,7 +251,7 @@ describe("Browser authorization receipts", () => {
     await expect(runBrowserRuntimeCommand({
       ...request,
       authorization: { value: sign(challenge!) },
-    }, bridge)).resolves.toMatchObject({ id: 9 })
+    }, bridge, undefined, encodedPublicKey)).resolves.toMatchObject({ id: 9 })
     expect(forwarded).toBe(1)
   })
 
