@@ -11,6 +11,7 @@ import {
   listLeases,
   markDeliverable,
   markHandoff,
+  releaseAllLeases,
   releaseLease,
   requireLease,
 } from "../src/background/lease-store.ts"
@@ -152,6 +153,28 @@ describe("Browser Contract v4 tab lease store", () => {
       turnID: "turn-a",
     })
     expect((await getLease(10))?.mark).toBeUndefined()
+  })
+
+  test("releases every tab without closing it when the user stops control", async () => {
+    await createLease({
+      tabId: 7,
+      source: "agent",
+      context: context(),
+      extensionInstanceID: "extension-a",
+    })
+    await createLease({
+      tabId: 8,
+      source: "user",
+      context: context(),
+      extensionInstanceID: "extension-a",
+    })
+
+    const result = await releaseAllLeases()
+
+    expect(result.closeTabIds).toEqual([])
+    expect(result.releaseTabIds).toEqual([7, 8])
+    expect(result.ungroupTabIds).toEqual([7])
+    expect(await listLeases()).toEqual([])
   })
 
   test("rejects the entire keep list before cleanup or mutation", async () => {

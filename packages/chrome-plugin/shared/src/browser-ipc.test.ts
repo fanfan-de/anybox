@@ -117,7 +117,7 @@ describe("Browser IPC runtime command schema", () => {
       role: "runtime" as const,
       brokerInstanceID: "broker-1",
       clientInstanceID: "runtime-1",
-      clientVersion: "0.14.0",
+      clientVersion: "0.15.0",
       nonce: "runtime-nonce-123",
       proof: "runtime-proof-123",
       authorizationPublicKey: "public_key-123",

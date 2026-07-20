@@ -3673,6 +3673,7 @@ describe("plugin marketplace API", () => {
           "Raw page JavaScript and unrestricted Chrome DevTools Protocol commands are disabled; bounded structured locators are exposed only when the connected Extension advertises their implemented capability.",
           "Registers and runs the plugin-bundled Native Messaging Host for the current user.",
           "Requires the Anybox Chrome extension to be installed, enabled, and connected.",
+          "Groups Agent-created tabs by browser task and manages deliverable, handoff, and temporary-tab cleanup.",
         ],
         required: true,
         reason: "The agent imports this plugin's Browser Client into Anybox's persistent general-purpose Node REPL; all Chrome-specific runtime behavior remains inside the plugin.",

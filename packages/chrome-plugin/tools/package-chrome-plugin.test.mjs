@@ -11,6 +11,15 @@ import {
   validateChromePluginPackage,
 } from "./package-chrome-plugin.mjs"
 
+const allNativeHostTargets = [
+  nativeHostBuildTarget("win32", "x64"),
+  nativeHostBuildTarget("win32", "arm64"),
+  nativeHostBuildTarget("darwin", "x64"),
+  nativeHostBuildTarget("darwin", "arm64"),
+  nativeHostBuildTarget("linux", "x64"),
+  nativeHostBuildTarget("linux", "arm64"),
+]
+
 async function write(root, relativePath, content = relativePath) {
   const target = path.join(root, relativePath)
   await fsp.mkdir(path.dirname(target), { recursive: true })
@@ -41,6 +50,17 @@ async function createFixture(projectRoot) {
         ],
         required: true,
         reason: "Import the Browser Client in Anybox Node REPL.",
+      }],
+      platformArtifacts: [{
+        id: "chrome-native-host",
+        type: "chrome-native-messaging-host",
+        hostName: "com.anybox.browser",
+        extensionIDs: [extensionId],
+        executables: allNativeHostTargets.map((target) => ({
+          platform: target.platform,
+          architecture: target.architecture,
+          path: target.packagePath.split(path.sep).join("/"),
+        })),
       }],
     }, null, 2)}\n`,
   )
@@ -159,6 +179,22 @@ async function createFixture(projectRoot) {
   )
 }
 
+async function createAllNativeHostBuilds(projectRoot) {
+  for (const target of allNativeHostTargets) {
+    await write(
+      projectRoot,
+      path.join(
+        "browser-native-host",
+        "dist",
+        target.platformDirectory,
+        target.architectureDirectory,
+        target.executableName,
+      ),
+      `${target.platform}/${target.architecture}\n`,
+    )
+  }
+}
+
 async function withFixture(prefix, run) {
   const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), prefix))
   const projectRoot = path.join(tempRoot, "packages", "chrome-plugin")
@@ -225,6 +261,112 @@ test("synchronizes only installable Chrome files into the distribution directory
     assert.equal(manifest.mcpRequirements[0].mcp, "node-repl")
     await packageChromePlugin({ projectRoot, pluginRoot, check: true })
     assert.deepEqual(await compareChromePluginPackages(pluginRoot, pluginRoot), [])
+  })
+})
+
+test("assembles and validates every declared Native Host target", async () => {
+  await withFixture("anybox-chrome-portable-package-", async ({ projectRoot, pluginRoot }) => {
+    await createAllNativeHostBuilds(projectRoot)
+    const result = await packageChromePlugin({
+      projectRoot,
+      pluginRoot,
+      nativeHostScope: "all",
+    })
+    const validation = await validateChromePluginPackage(pluginRoot, {
+      nativeHostScope: "all",
+    })
+    const files = new Set(
+      validation.files.map((entry) => entry.split(path.sep).join("/")),
+    )
+
+    assert.equal(result.nativeHostScope, "all")
+    for (const target of allNativeHostTargets) {
+      assert.equal(
+        files.has(target.packagePath.split(path.sep).join("/")),
+        true,
+      )
+    }
+  })
+})
+
+test("strict validation rejects a package with only the current Native Host", async () => {
+  await withFixture("anybox-chrome-incomplete-package-", async ({ projectRoot, pluginRoot }) => {
+    await packageChromePlugin({ projectRoot, pluginRoot })
+    await assert.rejects(
+      validateChromePluginPackage(pluginRoot, { nativeHostScope: "all" }),
+      /missing Native Messaging Host for/,
+    )
+  })
+})
+
+test("rejects a manifest that drops a required platform target", async () => {
+  await withFixture("anybox-chrome-missing-target-", async ({ projectRoot, pluginRoot }) => {
+    await packageChromePlugin({ projectRoot, pluginRoot })
+    const manifestPath = path.join(pluginRoot, ".anybox-plugin", "plugin.json")
+    const manifest = JSON.parse(await fsp.readFile(manifestPath, "utf8"))
+    manifest.platformArtifacts[0].executables.pop()
+    await fsp.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+
+    await assert.rejects(
+      validateChromePluginPackage(pluginRoot),
+      /must declare Native Messaging Hosts for Windows, macOS, and Linux/,
+    )
+  })
+})
+
+test("current-platform packaging preserves previously assembled Native Hosts", async () => {
+  await withFixture("anybox-chrome-preserve-native-", async ({ projectRoot, pluginRoot }) => {
+    await createAllNativeHostBuilds(projectRoot)
+    await packageChromePlugin({
+      projectRoot,
+      pluginRoot,
+      nativeHostScope: "all",
+    })
+    const preservedTarget = allNativeHostTargets.find(
+      (target) =>
+        target.platform !== process.platform
+        || target.architecture !== process.arch,
+    )
+    assert.ok(preservedTarget)
+    const preservedPath = path.join(pluginRoot, preservedTarget.packagePath)
+    const before = await fsp.readFile(preservedPath)
+
+    await packageChromePlugin({ projectRoot, pluginRoot })
+
+    assert.deepEqual(await fsp.readFile(preservedPath), before)
+    await validateChromePluginPackage(pluginRoot, { nativeHostScope: "all" })
+  })
+})
+
+test("does not mix preserved Native Hosts from another plugin version", async () => {
+  await withFixture("anybox-chrome-versioned-native-", async ({ projectRoot, pluginRoot }) => {
+    await createAllNativeHostBuilds(projectRoot)
+    await packageChromePlugin({
+      projectRoot,
+      pluginRoot,
+      nativeHostScope: "all",
+    })
+    const sourceManifestPath = path.join(
+      projectRoot,
+      "runtime",
+      ".anybox-plugin",
+      "plugin.json",
+    )
+    const sourceManifest = JSON.parse(
+      await fsp.readFile(sourceManifestPath, "utf8"),
+    )
+    sourceManifest.version = "1.2.4"
+    await fsp.writeFile(
+      sourceManifestPath,
+      `${JSON.stringify(sourceManifest, null, 2)}\n`,
+    )
+
+    await packageChromePlugin({ projectRoot, pluginRoot })
+
+    await assert.rejects(
+      validateChromePluginPackage(pluginRoot, { nativeHostScope: "all" }),
+      /missing Native Messaging Host for/,
+    )
   })
 })
 

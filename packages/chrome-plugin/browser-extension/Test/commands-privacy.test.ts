@@ -132,6 +132,13 @@ let rawHandleBrowserCommand: (
     signal?: AbortSignal
   },
 ) => Promise<unknown>
+let releaseAllTabLeases: () => Promise<{
+  closedTabIds: number[]
+  releasedTabIds: number[]
+  deliverableTabIds: number[]
+  handoffTabIds: number[]
+  detachedTabIds: number[]
+}>
 
 function handleBrowserCommand(
   method: BrowserExtensionCommandMethod,
@@ -251,9 +258,9 @@ beforeAll(async () => {
     },
   })
 
-  ;({ handleBrowserCommand: rawHandleBrowserCommand } = await import(
-    "../src/background/commands.ts"
-  ))
+  const commands = await import("../src/background/commands.ts")
+  rawHandleBrowserCommand = commands.handleBrowserCommand
+  releaseAllTabLeases = commands.releaseAllTabLeases
 })
 
 beforeEach(() => {
@@ -389,6 +396,52 @@ describe("browser command contract defense", () => {
         Record<string, unknown>
       >)["9"],
     ).toMatchObject({ state: "handoff" })
+  })
+
+  test("stops control while preserving every open tab", async () => {
+    installLeases(7, 8)
+    const leases = sessionStorage["anybox.browser.tabLeases.v4"] as
+      Record<string, Record<string, unknown>>
+    leases["8"]!.source = "user"
+    queriedTabs = [7, 8].map((id) => ({
+      id,
+      windowId: 1,
+      active: id === 7,
+    }))
+    tabGroupByTab.set(7, 1)
+    tabGroupByTab.set(8, 99)
+    localStorage["anybox.browser.tabGroups.v4"] = {
+      [commandContext.sessionID!]: {
+        sessionID: commandContext.sessionID,
+        extensionInstanceID: commandContext.extensionInstanceID,
+        name: "Publish",
+        groupId: 1,
+        windowId: 1,
+        color: "blue",
+        updatedAt: Date.now(),
+      },
+    }
+
+    await expect(releaseAllTabLeases()).resolves.toEqual({
+      sessionID: "user-stop",
+      closedTabIds: [],
+      releasedTabIds: [7, 8],
+      deliverableTabIds: [],
+      handoffTabIds: [],
+      detachedTabIds: [7, 8],
+    })
+
+    expect(tabOperations).not.toContainEqual({
+      method: "remove",
+      tabId: expect.anything(),
+    })
+    expect(tabGroupByTab.get(7)).toBeUndefined()
+    expect(tabGroupByTab.get(8)).toBe(99)
+    expect(
+      Object.keys(
+        sessionStorage["anybox.browser.tabLeases.v4"] as Record<string, unknown>,
+      ),
+    ).toEqual([])
   })
 
   test("navigates and closes a leased tab through the explicit tab APIs", async () => {

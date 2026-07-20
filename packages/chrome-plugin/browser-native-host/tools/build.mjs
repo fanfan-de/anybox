@@ -47,7 +47,7 @@ const destination = path.join(
   architectureDirectory,
   executableName,
 )
-await fsp.rm(distRoot, { recursive: true, force: true })
+await fsp.rm(destination, { force: true })
 await fsp.mkdir(path.dirname(destination), { recursive: true })
 await fsp.copyFile(source, destination)
 if (process.platform !== "win32") await fsp.chmod(destination, 0o755)

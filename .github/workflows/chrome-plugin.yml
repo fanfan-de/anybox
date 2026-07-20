@@ -8,9 +8,9 @@ on:
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
-      - "packages/anyboxagent/Test/chrome-plugin-runtime.test.ts"
-      - "packages/anyboxagent/Test/browser-extension-*.test.ts"
       - "packages/anyboxagent/Test/mcp.test.ts"
+      - "packages/anyboxagent/Test/node-repl-mcp.test.ts"
+      - "packages/anyboxagent/Test/plugin-platform-artifacts.test.ts"
       - "packages/anyboxagent/Test/plugin.test.ts"
       - "packages/anyboxagent/src/browser-extension/**"
       - "packages/anyboxagent/src/mcp/client.ts"
@@ -30,9 +30,9 @@ on:
       - "package.json"
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
-      - "packages/anyboxagent/Test/chrome-plugin-runtime.test.ts"
-      - "packages/anyboxagent/Test/browser-extension-*.test.ts"
       - "packages/anyboxagent/Test/mcp.test.ts"
+      - "packages/anyboxagent/Test/node-repl-mcp.test.ts"
+      - "packages/anyboxagent/Test/plugin-platform-artifacts.test.ts"
       - "packages/anyboxagent/Test/plugin.test.ts"
       - "packages/anyboxagent/src/browser-extension/**"
       - "packages/anyboxagent/src/mcp/client.ts"
@@ -97,6 +97,141 @@ jobs:
         shell: pwsh
         working-directory: packages/anyboxagent
         run: |
-          bun test Test/browser-extension-routes.test.ts Test/browser-extension-bridge.test.ts Test/mcp.test.ts
-          bun test Test/chrome-plugin-runtime.test.ts
-          bun test Test/plugin.test.ts
+          bun test ./Test/mcp.test.ts ./Test/node-repl-mcp.test.ts
+          bun test ./Test/plugin-platform-artifacts.test.ts
+          bun test ./Test/plugin.test.ts
+
+  build-native-hosts:
+    name: Native Host (${{ matrix.platform }} / ${{ matrix.architecture }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            platform: windows
+            architecture: x64
+          - runner: windows-11-arm
+            platform: windows
+            architecture: arm64
+          - runner: macos-15-intel
+            platform: macos
+            architecture: x64
+          - runner: macos-15
+            platform: macos
+            architecture: arm64
+          - runner: ubuntu-24.04
+            platform: linux
+            architecture: x64
+          - runner: ubuntu-24.04-arm
+            platform: linux
+            architecture: arm64
+
+    steps:
+      - name: Check out the exact source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Test the platform Native Messaging Host
+        run: cargo test --locked --manifest-path packages/chrome-plugin/browser-native-host/Cargo.toml
+
+      - name: Build the platform Native Messaging Host
+        run: node packages/chrome-plugin/browser-native-host/tools/build.mjs
+
+      - name: Upload the platform Native Messaging Host
+        uses: actions/upload-artifact@v4
+        with:
+          name: chrome-native-host-${{ matrix.platform }}-${{ matrix.architecture }}
+          path: packages/chrome-plugin/browser-native-host/dist
+          if-no-files-found: error
+          compression-level: 0
+
+  verify-portable-package:
+    name: Verify six-platform package
+    needs:
+      - verify
+      - build-native-hosts
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out the exact source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Enable the pinned pnpm version
+        run: corepack enable
+
+      - name: Install workspace dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Download all Native Messaging Hosts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: chrome-native-host-*
+          path: packages/chrome-plugin/browser-native-host/dist
+          merge-multiple: true
+
+      - name: Build platform-independent Chrome components
+        env:
+          ANYBOX_BROWSER_EXTENSION_SOURCEMAP: "false"
+        run: |
+          corepack pnpm --filter anybox-chrome-browser-host build
+          corepack pnpm --filter anybox-chrome-browser-runtime build
+          corepack pnpm --filter anybox-chrome-extension build
+
+      - name: Assemble and strictly validate the portable package
+        run: node packages/chrome-plugin/tools/package-chrome-plugin.mjs --skip-build --all-native-hosts
+
+      - name: Upload the installable Chrome plugin package
+        uses: actions/upload-artifact@v4
+        with:
+          name: chrome-plugin-portable
+          path: plugins/Anybox-Plugins/chrome
+          if-no-files-found: error
+          compression-level: 0
+
+  publish-portable-package:
+    name: Publish generated six-platform package
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs:
+      - verify-portable-package
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out the verified source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Replace the generated plugin directory
+        run: rm -rf plugins/Anybox-Plugins/chrome
+
+      - name: Download the verified portable package
+        uses: actions/download-artifact@v4
+        with:
+          name: chrome-plugin-portable
+          path: plugins/Anybox-Plugins/chrome
+
+      - name: Commit the generated package when it changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f plugins/Anybox-Plugins/chrome
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "chore(chrome): publish six-platform plugin package [skip ci]"
+          git push origin HEAD:master

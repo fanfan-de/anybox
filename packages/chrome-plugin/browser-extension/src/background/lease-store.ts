@@ -493,6 +493,19 @@ export async function finalizeAllLeases(cleanup?: CleanupExecutor) {
   )
 }
 
+export async function releaseAllLeases(cleanup?: CleanupExecutor) {
+  return finalizeSelectedLeases((leases) => {
+    const plan = emptyPlan()
+    for (const lease of Object.values(leases)) {
+      plan.releaseTabIds.push(lease.tabId)
+      if (lease.source === "agent") {
+        plan.ungroupTabIds.push(lease.tabId)
+      }
+    }
+    return plan
+  }, cleanup)
+}
+
 export function installLeaseInheritance(
   extensionInstanceID: () => Promise<string>,
   groupChildTab?: (

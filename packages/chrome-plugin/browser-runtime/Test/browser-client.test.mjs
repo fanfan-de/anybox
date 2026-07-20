@@ -1356,7 +1356,7 @@ test("replaces an authenticated Browser Host from an older plugin version", asyn
 
     assert.equal(readiness.state, "needs-browser")
     assert.notEqual(upgradedBootstrap.hostPID, initialBootstrap.hostPID)
-    assert.equal(upgradedBootstrap.hostVersion, "0.14.0")
+    assert.equal(upgradedBootstrap.hostVersion, "0.15.0")
   } finally {
     for (const hostPID of hostPIDs) {
       if (!Number.isInteger(hostPID)) continue

@@ -47,7 +47,7 @@ test("marks Native transport connected only after helloAck and drops a stale hea
   ;(globalThis as any).chrome = {
     runtime: {
       id: "hjbejdmgpifdjjlpgmdfmbmbhkedgnjc",
-      getManifest: () => ({ version: "0.14.0" }),
+      getManifest: () => ({ version: "0.15.0" }),
       connectNative: () => port,
       lastError: undefined,
     },
@@ -114,6 +114,23 @@ test("marks Native transport connected only after helloAck and drops a stale hea
     protocolVersion: 1,
     contractVersion: 4,
     reconnectCount: 0,
+  })
+
+  expect(await module.setBrowserControlPaused(true)).toMatchObject({
+    paused: true,
+    activeTabs: 0,
+    handoffTabs: 0,
+  })
+  expect(localStorage.ANYBOX_BRIDGE_STATUS).toMatchObject({
+    state: "connected",
+    controlPaused: true,
+    cleanup: {
+      closed: 0,
+      released: 0,
+    },
+  })
+  expect(await module.setBrowserControlPaused(false)).toMatchObject({
+    paused: false,
   })
 
   const realNow = Date.now

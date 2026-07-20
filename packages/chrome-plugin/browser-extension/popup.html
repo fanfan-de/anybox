@@ -9,34 +9,83 @@
   <body>
     <main class="popup-shell">
       <header class="popup-header">
-        <span class="popup-logo" aria-hidden="true"></span>
+        <img
+          class="popup-logo"
+          src="/icons/icon48.png"
+          width="32"
+          height="32"
+          alt=""
+        />
         <div>
           <h1>Anybox Chrome</h1>
-          <p>Extension bridge</p>
+          <p id="popup-subtitle">Browser bridge</p>
         </div>
       </header>
-      <section class="status-card">
-        <div class="status-row">
+
+      <section class="status-card" aria-labelledby="status-label">
+        <div class="status-row" aria-live="polite">
           <span id="status-dot" class="status-dot" aria-hidden="true"></span>
           <strong id="status-label">Checking</strong>
         </div>
-        <p id="status-detail">Connecting to Anybox Browser Host...</p>
-        <dl id="status-metrics" class="status-metrics" hidden>
+        <p id="status-detail">Checking the Anybox Browser Host…</p>
+
+        <div class="control-section">
+          <div class="control-heading">
+            <h2 id="control-title">Browser control</h2>
+            <span id="control-badge" class="control-badge" hidden></span>
+          </div>
+          <p id="control-detail">Checking active browser tasks…</p>
+        </div>
+
+        <div class="action-row">
+          <button
+            id="control-button"
+            class="button button-secondary"
+            type="button"
+            disabled
+          >
+            Stop control
+          </button>
+          <button
+            id="reconnect-button"
+            class="button button-primary"
+            type="button"
+            disabled
+          >
+            Reconnect
+          </button>
+        </div>
+
+        <p
+          id="action-feedback"
+          class="action-feedback"
+          role="status"
+          aria-live="polite"
+          hidden
+        ></p>
+      </section>
+
+      <details class="diagnostics">
+        <summary id="diagnostics-summary">Diagnostics</summary>
+        <dl class="status-metrics">
           <div>
-            <dt>Protocol</dt>
+            <dt id="protocol-label">Protocol</dt>
             <dd id="status-protocol">—</dd>
           </div>
           <div>
-            <dt>Reconnects</dt>
+            <dt id="reconnects-label">Reconnects</dt>
             <dd id="status-reconnects">0</dd>
           </div>
           <div>
-            <dt>Last cleanup</dt>
+            <dt id="checked-label">Last checked</dt>
+            <dd id="status-checked">—</dd>
+          </div>
+          <div>
+            <dt id="cleanup-label">Last cleanup</dt>
             <dd id="status-cleanup">—</dd>
           </div>
         </dl>
-      </section>
-      <button id="reconnect-button" type="button">Reconnect</button>
+      </details>
     </main>
   </body>
 </html>

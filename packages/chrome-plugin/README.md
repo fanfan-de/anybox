@@ -1,6 +1,6 @@
 # Anybox Chrome 插件
 
-本文是 Chrome 插件工程唯一需要长期维护的实现文档。当前代码基线为 `0.14.0`；版本与安装元数据以
+本文是 Chrome 插件工程唯一需要长期维护的实现文档。当前代码基线为 `0.15.0`；版本与安装元数据以
 [`runtime/.anybox-plugin/plugin.json`](./runtime/.anybox-plugin/plugin.json)
 为准。
 
@@ -103,6 +103,11 @@ Anybox Registry 指向生成目录中的规范 Manifest，并通过 GitHub Tree 
 
 Browser Host 在没有连接后保留一段空闲时间再退出。扩展具有自动重连、握手超时、心跳和断连清理：
 重连延迟在约 1～60 秒之间指数退避，心跳默认每 30 秒发送，断连超过 2 分钟后清理遗留租约。
+
+扩展 Popup 只读展示当前桥接和浏览器控制状态，打开 Popup 本身不会触发重连。未连接时可显式请求
+重连；“停止控制”会中止在途命令、释放全部租约、断开 Debugger 并移出受管 Tab Group，但保留所有
+已打开页面。停止状态持久化在扩展本地存储中，后续命令会以 `CANCELLED` 拒绝，直到用户在 Popup
+中恢复控制。协议版本、重连次数和最近清理结果收纳在折叠的诊断区。
 
 Windows 使用 Named Pipe，macOS/Linux 使用 Unix Domain Socket。Runtime Client 与 Native Host 使用
 不同端点、不同角色和不同 bootstrap proof；生产链路没有 HTTP 或 WebSocket 回退。
@@ -327,9 +332,17 @@ Chrome Native Host manifest 指向 Anybox 管理的 `current` 二进制，不直
 Native Host manifest 只允许固定扩展 ID `hjbejdmgpifdjjlpgmdfmbmbhkedgnjc`。扩展 ID 由提交在
 Manifest 中的固定 key 派生；改变该 key 会破坏既有安装。
 
-当前仓库生成目录只包含 Windows x64 Native Host。虽然源 Manifest 声明六个平台/架构目标，打包器
-每次只构建当前运行平台，因此跨平台发布前必须由对应平台补齐全部声明文件；不能把当前 Windows
-工作树视为完整的六平台发布物。
+本地打包默认只重建当前平台的 Native Host，并保留生成目录中已经汇总的其他平台制品。CI 会在
+Windows、macOS、Linux 的 x64/arm64 原生 Runner 上分别构建六个 Host，再以
+`--all-native-hosts` 汇总为同一个插件目录。严格校验会逐项对照源 Manifest，任一声明文件缺失、
+路径不匹配或出现未声明 Host 都会失败。主分支通过验证后，流水线会把完整生成目录同步回
+`plugins/Anybox-Plugins/chrome`，因此 Registry 的 GitHub Tree 安装始终获得一个六平台包。
+
+本地验证已经下载到 `browser-native-host/dist` 的完整制品时，可运行：
+
+```bash
+node packages/chrome-plugin/tools/package-chrome-plugin.mjs --skip-build --all-native-hosts
+```
 
 Rust Native Host 同时处理两种 framing：
 

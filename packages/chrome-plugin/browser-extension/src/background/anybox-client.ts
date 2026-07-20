@@ -16,10 +16,14 @@ import {
   finalizeDisconnectedTabLeases,
   finalizeExpiredTabLeases,
   handleBrowserCommand,
+  releaseAllTabLeases,
 } from "./commands"
+import { listLeases } from "./lease-store"
 import {
+  CONTROL_PAUSED_STORAGE_KEY,
   EXTENSION_INSTANCE_KEY,
   STATUS_STORAGE_KEY,
+  type BrowserControlSummary,
   type BridgeStatus,
 } from "../shared/status"
 import {
@@ -71,7 +75,13 @@ export async function getExtensionInstanceID() {
 }
 
 async function setStatus(status: BridgeStatus) {
-  await chrome.storage.local.set({ [STATUS_STORAGE_KEY]: status })
+  const stored = await chrome.storage.local.get(CONTROL_PAUSED_STORAGE_KEY)
+  await chrome.storage.local.set({
+    [STATUS_STORAGE_KEY]: {
+      ...status,
+      controlPaused: stored[CONTROL_PAUSED_STORAGE_KEY] === true,
+    },
+  })
 }
 
 async function updateStatus(patch: Partial<BridgeStatus>) {
@@ -193,6 +203,14 @@ async function handleCommand(message: BrowserExtensionCommandMessage) {
       throw Object.assign(
         new Error("The Anybox browser host has not acknowledged this extension connection."),
         { code: "BACKEND_UNAVAILABLE", retryable: true },
+      )
+    }
+    if (await isBrowserControlPaused()) {
+      throw Object.assign(
+        new Error(
+          "Chrome control is stopped from the Anybox Chrome extension. Resume control in the extension popup to continue.",
+        ),
+        { code: "CANCELLED", retryable: false },
       )
     }
     const data = await handleBrowserCommand(message.method, message.params, {
@@ -486,6 +504,42 @@ export function shutdownAnyboxClient() {
   pendingCommands.clear()
   nativeHostChunks.reset()
   transport?.close()
+}
+
+async function isBrowserControlPaused() {
+  const stored = await chrome.storage.local.get(CONTROL_PAUSED_STORAGE_KEY)
+  return stored[CONTROL_PAUSED_STORAGE_KEY] === true
+}
+
+export async function getBrowserControlSummary(): Promise<BrowserControlSummary> {
+  const now = Date.now()
+  const leases = (await listLeases()).filter(
+    (lease) => lease.expiresAt > now,
+  )
+  return {
+    paused: await isBrowserControlPaused(),
+    activeTabs: leases.filter((lease) => lease.state === "active").length,
+    handoffTabs: leases.filter((lease) => lease.state === "handoff").length,
+    agentTabs: leases.filter((lease) => lease.source === "agent").length,
+    userTabs: leases.filter((lease) => lease.source === "user").length,
+    sessionCount: new Set(leases.map((lease) => lease.sessionID)).size,
+    updatedAt: now,
+  }
+}
+
+export async function setBrowserControlPaused(paused: boolean) {
+  await chrome.storage.local.set({ [CONTROL_PAUSED_STORAGE_KEY]: paused })
+  await updateStatus({ controlPaused: paused })
+  if (paused) {
+    for (const controller of pendingCommands.values()) {
+      controller.abort(
+        "Chrome control was stopped from the Anybox Chrome extension.",
+      )
+    }
+    pendingCommands.clear()
+    await recordCleanup(await releaseAllTabLeases())
+  }
+  return getBrowserControlSummary()
 }
 
 export function getBridgeStatusStorageKey() {

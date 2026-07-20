@@ -28,6 +28,7 @@ import {
   listLeases,
   markDeliverable,
   markHandoff,
+  releaseAllLeases,
   releaseLease,
   requireLease,
   type LeaseCleanupPlan,
@@ -1701,6 +1702,14 @@ export async function finalizeDisconnectedTabLeases() {
   )
   await finishAllBrowserSessions()
   return leaseCleanupResult(result, "disconnected")
+}
+
+export async function releaseAllTabLeases() {
+  const result = await releaseAllLeases(
+    (plan) => executeLeaseCleanup(plan),
+  )
+  await finishAllBrowserSessions()
+  return leaseCleanupResult(result, "user-stop")
 }
 
 const LEASED_TAB_METHODS = new Set<BrowserContractCommandMethodValue>([

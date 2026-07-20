@@ -53,6 +53,7 @@ export function nativeHostBuildTarget(
   }
   const executableName = platform === "win32" ? "extension-host.exe" : "extension-host"
   return {
+    architecture,
     architectureDirectory,
     executableName,
     packagePath: path.join(
@@ -61,11 +62,20 @@ export function nativeHostBuildTarget(
       architectureDirectory,
       executableName,
     ),
+    platform,
     platformDirectory,
   }
 }
 
 const currentNativeHostTarget = nativeHostBuildTarget()
+const requiredNativeHostTargetIDs = new Set([
+  "win32/x64",
+  "win32/arm64",
+  "darwin/x64",
+  "darwin/arm64",
+  "linux/x64",
+  "linux/arm64",
+])
 
 const requiredPackageFiles = [
   path.join(".anybox-plugin", "plugin.json"),
@@ -89,7 +99,6 @@ const requiredPackageFiles = [
     "licenses",
     "playwright-NOTICE.txt",
   ),
-  currentNativeHostTarget.packagePath,
   path.join("scripts", "browser-client.mjs"),
   path.join("scripts", "browser-host.mjs"),
   path.join("scripts", "ipc-listener-sidecar.mjs"),
@@ -98,6 +107,68 @@ const requiredPackageFiles = [
   path.join("scripts", "native-host-bootstrap.js"),
   path.join("skills", "chrome", "SKILL.md"),
 ]
+
+function nativeHostTargetsFromManifest(manifest) {
+  const artifacts = Array.isArray(manifest?.platformArtifacts)
+    ? manifest.platformArtifacts.filter(
+      (artifact) => artifact?.type === "chrome-native-messaging-host",
+    )
+    : []
+  if (artifacts.length !== 1 || !Array.isArray(artifacts[0]?.executables)) {
+    throw new Error(
+      "Chrome plugin manifest must declare exactly one Native Messaging Host artifact.",
+    )
+  }
+
+  const targets = artifacts[0].executables.map((executable) => {
+    const target = nativeHostBuildTarget(
+      executable?.platform,
+      executable?.architecture,
+    )
+    if (toPosixPath(executable?.path ?? "") !== toPosixPath(target.packagePath)) {
+      throw new Error(
+        `Chrome Native Messaging Host path for ${target.platform}/${target.architecture} must be '${toPosixPath(target.packagePath)}'.`,
+      )
+    }
+    return target
+  })
+  const targetIDs = targets.map(
+    (target) => `${target.platform}/${target.architecture}`,
+  )
+  if (new Set(targetIDs).size !== targetIDs.length) {
+    throw new Error(
+      "Chrome plugin manifest must not declare duplicate Native Messaging Host targets.",
+    )
+  }
+  if (
+    targetIDs.length !== requiredNativeHostTargetIDs.size
+    || targetIDs.some((targetID) => !requiredNativeHostTargetIDs.has(targetID))
+  ) {
+    throw new Error(
+      "Chrome plugin manifest must declare Native Messaging Hosts for Windows, macOS, and Linux on both x64 and arm64.",
+    )
+  }
+  return targets
+}
+
+function selectedNativeHostTargets(manifest, nativeHostScope) {
+  const targets = nativeHostTargetsFromManifest(manifest)
+  if (nativeHostScope === "all") return targets
+  if (nativeHostScope !== "current") {
+    throw new Error(`Unsupported Native Messaging Host scope: ${nativeHostScope}`)
+  }
+  const current = targets.find(
+    (target) =>
+      target.platform === currentNativeHostTarget.platform
+      && target.architecture === currentNativeHostTarget.architecture,
+  )
+  if (!current) {
+    throw new Error(
+      `Chrome plugin manifest does not support this Native Messaging Host target: ${process.platform}/${process.arch}`,
+    )
+  }
+  return [current]
+}
 
 const allowedTopLevelEntries = new Set([
   ".anybox-plugin",
@@ -268,31 +339,66 @@ async function copyBrowserHostBuild(projectRoot, packageRoot) {
   }
 }
 
-async function copyNativeHostBuild(projectRoot, packageRoot) {
-  const source = path.join(
-    projectRoot,
-    "browser-native-host",
-    "dist",
-    currentNativeHostTarget.platformDirectory,
-    currentNativeHostTarget.architectureDirectory,
-    currentNativeHostTarget.executableName,
-  )
-  if (!(await pathExists(source))) {
-    throw new Error(
-      `Chrome Native Messaging Host build output is missing at ${source}. Run the native host build first.`,
+async function copyNativeHostBuild(projectRoot, packageRoot, targets) {
+  for (const target of targets) {
+    const source = path.join(
+      projectRoot,
+      "browser-native-host",
+      "dist",
+      target.platformDirectory,
+      target.architectureDirectory,
+      target.executableName,
     )
-  }
+    if (!(await pathExists(source))) {
+      throw new Error(
+        `Chrome Native Messaging Host build output is missing for ${target.platform}/${target.architecture} at ${source}.`,
+      )
+    }
 
-  await copyFile(
-    source,
-    path.join(packageRoot, currentNativeHostTarget.packagePath),
-  )
-  if (process.platform !== "win32") {
-    await fsp.chmod(path.join(packageRoot, currentNativeHostTarget.packagePath), 0o755)
+    const destination = path.join(packageRoot, target.packagePath)
+    await copyFile(source, destination)
+    if (target.platform !== "win32") {
+      await fsp.chmod(destination, 0o755)
+    }
   }
 }
 
-export async function validateChromePluginPackage(packageRoot) {
+async function preserveNativeHostBuilds(
+  sourceRoot,
+  packageRoot,
+  targets,
+  selectedTargets,
+  expectedVersion,
+) {
+  if (!sourceRoot || !(await pathExists(sourceRoot))) return
+  try {
+    const sourceManifest = JSON.parse(await fsp.readFile(
+      path.join(sourceRoot, ".anybox-plugin", "plugin.json"),
+      "utf8",
+    ))
+    if (sourceManifest.version !== expectedVersion) return
+  } catch {
+    return
+  }
+  const selectedPaths = new Set(
+    selectedTargets.map((target) => toPosixPath(target.packagePath)),
+  )
+  for (const target of targets) {
+    if (selectedPaths.has(toPosixPath(target.packagePath))) continue
+    const source = path.join(sourceRoot, target.packagePath)
+    if (!(await pathExists(source))) continue
+    const destination = path.join(packageRoot, target.packagePath)
+    await copyFile(source, destination)
+    if (target.platform !== "win32") {
+      await fsp.chmod(destination, 0o755)
+    }
+  }
+}
+
+export async function validateChromePluginPackage(
+  packageRoot,
+  { nativeHostScope = "current" } = {},
+) {
   if (!(await pathExists(packageRoot))) {
     throw new Error(`Chrome plugin package does not exist: ${packageRoot}`)
   }
@@ -451,6 +557,32 @@ export async function validateChromePluginPackage(packageRoot) {
     throw new Error("Chrome plugin manifest must derive its ID from the canonical name.")
   }
 
+  const declaredNativeHostTargets = nativeHostTargetsFromManifest(manifest)
+  const requiredNativeHostTargets = selectedNativeHostTargets(
+    manifest,
+    nativeHostScope,
+  )
+  for (const target of requiredNativeHostTargets) {
+    const requiredPath = toPosixPath(target.packagePath)
+    if (!normalizedSet.has(requiredPath)) {
+      throw new Error(
+        `Chrome plugin package is missing Native Messaging Host for ${target.platform}/${target.architecture}: ${requiredPath}`,
+      )
+    }
+  }
+  const declaredNativeHostPaths = new Set(
+    declaredNativeHostTargets.map((target) => toPosixPath(target.packagePath)),
+  )
+  for (const relativePath of normalizedFiles.filter(
+    (entry) => entry.startsWith("extension-host/"),
+  )) {
+    if (!declaredNativeHostPaths.has(relativePath)) {
+      throw new Error(
+        `Chrome plugin package contains an undeclared Native Messaging Host: ${relativePath}`,
+      )
+    }
+  }
+
   if ("mcpServers" in manifest) {
     throw new Error(
       "Chrome plugin must not bundle its own MCP server.",
@@ -567,7 +699,12 @@ export async function validateChromePluginPackage(packageRoot) {
   }
 }
 
-export async function stageChromePluginPackage({ projectRoot, packageRoot }) {
+export async function stageChromePluginPackage({
+  projectRoot,
+  packageRoot,
+  nativeHostScope = "current",
+  preserveNativeHostsFrom,
+}) {
   const runtimeSourceRoot = path.join(projectRoot, "runtime")
   const manifestPath = path.join(runtimeSourceRoot, ".anybox-plugin", "plugin.json")
   const browserRuntimeProjectPath = path.join(projectRoot, "browser-runtime", "package.json")
@@ -600,17 +737,31 @@ export async function stageChromePluginPackage({ projectRoot, packageRoot }) {
   if ("package" in sourceManifest) {
     throw new Error("Chrome source manifest must not point to a second distribution directory.")
   }
+  const nativeHostTargets = nativeHostTargetsFromManifest(sourceManifest)
+  const selectedTargets = selectedNativeHostTargets(
+    sourceManifest,
+    nativeHostScope,
+  )
 
   await fsp.rm(packageRoot, { recursive: true, force: true })
   await fsp.mkdir(packageRoot, { recursive: true })
   await copyDirectoryContents(runtimeSourceRoot, packageRoot)
   await copyBrowserRuntimeBuild(projectRoot, packageRoot)
   await copyBrowserHostBuild(projectRoot, packageRoot)
-  await copyNativeHostBuild(projectRoot, packageRoot)
+  await copyNativeHostBuild(projectRoot, packageRoot, selectedTargets)
+  await preserveNativeHostBuilds(
+    preserveNativeHostsFrom,
+    packageRoot,
+    nativeHostTargets,
+    selectedTargets,
+    sourceManifest.version,
+  )
   await copyFile(licensePath, path.join(packageRoot, "LICENSE"))
   await copyChromeExtensionBuild(projectRoot, packageRoot)
 
-  const validation = await validateChromePluginPackage(packageRoot)
+  const validation = await validateChromePluginPackage(packageRoot, {
+    nativeHostScope,
+  })
   return {
     ...validation,
     sourceManifest,
@@ -660,6 +811,7 @@ export async function packageChromePlugin({
   projectRoot = defaultProjectRoot,
   pluginRoot = defaultPluginRoot,
   check = false,
+  nativeHostScope = "current",
 } = {}) {
   if (isSameOrInside(projectRoot, pluginRoot) || isSameOrInside(pluginRoot, projectRoot)) {
     throw new Error("Chrome source project and generated plugin directory must remain separate.")
@@ -672,6 +824,9 @@ export async function packageChromePlugin({
     const staged = await stageChromePluginPackage({
       projectRoot,
       packageRoot: stagedPackageRoot,
+      nativeHostScope,
+      preserveNativeHostsFrom:
+        nativeHostScope === "current" ? pluginRoot : undefined,
     })
 
     if (check) {
@@ -687,13 +842,14 @@ export async function packageChromePlugin({
       await fsp.rm(pluginRoot, { recursive: true, force: true })
       await fsp.mkdir(path.dirname(pluginRoot), { recursive: true })
       await fsp.cp(stagedPackageRoot, pluginRoot, { recursive: true })
-      await validateChromePluginPackage(pluginRoot)
+      await validateChromePluginPackage(pluginRoot, { nativeHostScope })
     }
 
     return {
       check,
       files: staged.files,
       manifest: staged.manifest,
+      nativeHostScope,
       pluginRoot,
       version: staged.version,
     }
@@ -757,6 +913,7 @@ function parseArgs(argv) {
   const options = {
     build: true,
     check: false,
+    nativeHostScope: "current",
   }
 
   for (const value of argv) {
@@ -764,6 +921,8 @@ function parseArgs(argv) {
       options.build = false
     } else if (value === "--check") {
       options.check = true
+    } else if (value === "--all-native-hosts") {
+      options.nativeHostScope = "all"
     } else if (value === "--help" || value === "-h") {
       options.help = true
     } else {
@@ -782,9 +941,10 @@ function printHelp() {
     "  node tools/package-chrome-plugin.mjs [options]",
     "",
     "Options:",
-    "  --skip-build  Reuse the current Browser Client, Browser Host, extension, and Native Host outputs.",
-    "  --check       Verify the tracked plugin directory without modifying it.",
-    "  -h, --help    Show this help.",
+    "  --skip-build        Reuse the current Browser Client, Browser Host, extension, and Native Host outputs.",
+    "  --all-native-hosts  Require and package every platform/architecture declared by the manifest.",
+    "  --check             Verify the tracked plugin directory without modifying it.",
+    "  -h, --help          Show this help.",
     "",
   ].join("\n"))
 }
@@ -797,14 +957,23 @@ async function main() {
   }
 
   if (options.build) {
+    if (options.nativeHostScope === "all") {
+      throw new Error(
+        "--all-native-hosts requires prebuilt outputs from each native runner; use it with --skip-build.",
+      )
+    }
     buildBrowserHost()
     buildBrowserRuntime()
     buildChromeExtension()
     buildNativeHost()
   }
-  const result = await packageChromePlugin({ check: options.check })
+  const result = await packageChromePlugin({
+    check: options.check,
+    nativeHostScope: options.nativeHostScope,
+  })
   process.stdout.write(`${JSON.stringify({
     check: result.check,
+    nativeHostScope: result.nativeHostScope,
     pluginRoot: result.pluginRoot,
     version: result.version,
     files: result.files.length,
