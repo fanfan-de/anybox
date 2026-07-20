@@ -1,16 +1,20 @@
+import { randomBytes } from "node:crypto"
 import { type Stream } from "node:stream"
 import { pathToFileURL } from "node:url"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
-import { ElicitRequestSchema, ListRootsRequestSchema } from "@modelcontextprotocol/sdk/types.js"
+import { ElicitRequestSchema, ListRootsRequestSchema, RequestSchema } from "@modelcontextprotocol/sdk/types.js"
 import type {
   ElicitRequest,
   ElicitResult,
+  Notification,
   ReadResourceResult,
   Resource,
   ResourceTemplate,
+  Result,
 } from "@modelcontextprotocol/sdk/types.js"
+import z from "zod"
 import type { McpServerSummary } from "#config/config.ts"
 import type { ResolvedConnectorRuntime } from "#connector/connector.ts"
 import * as BuiltinMcp from "#mcp/builtin.ts"
@@ -55,6 +59,7 @@ export interface McpClientOptions {
   server: McpServerSummary
   worktree: string
   onElicitation?: (request: ElicitRequest) => Promise<ElicitResult>
+  onPluginCapabilityCall?: (request: McpPluginCapabilityCall) => Promise<McpToolCallResult>
 }
 
 export interface McpToolRequestContext {
@@ -62,6 +67,62 @@ export interface McpToolRequestContext {
   turnID?: string
   messageID?: string
   toolCallID?: string
+}
+
+export interface McpPluginCapabilityCall {
+  capability: string
+  operation: string
+  arguments: Record<string, unknown>
+  context: Required<McpToolRequestContext>
+  signal?: AbortSignal
+  claimMutation(): void
+}
+
+const PluginCapabilityRequestSchema = RequestSchema.extend({
+  method: z.literal("anybox/plugin-capability/call"),
+  params: z.object({
+    token: z.string().trim().min(32).max(256),
+    capability: z.string().trim().regex(/^[a-z0-9][a-z0-9_-]*$/u),
+    operation: z.string().trim().min(1).max(128),
+    arguments: z.record(z.string(), z.unknown()),
+    context: z.object({
+      sessionID: z.string().trim().min(1).max(256),
+      turnID: z.string().trim().min(1).max(256),
+      messageID: z.string().trim().min(1).max(256),
+      toolCallID: z.string().trim().min(1).max(256),
+    }).strict(),
+  }).strict(),
+})
+type PluginCapabilityRequest = z.infer<typeof PluginCapabilityRequestSchema>
+type PluginCapabilityResult = Result & McpToolCallResult
+type AnyboxMcpSdkClient = Client<PluginCapabilityRequest, Notification, PluginCapabilityResult>
+
+type PluginCapabilityGrant = {
+  context: Required<McpToolRequestContext>
+  signal?: AbortSignal
+  mutationClaimed: boolean
+}
+
+export interface McpClientLike {
+  dispose(): Promise<void>
+  listTools(): Promise<McpToolDefinition[]>
+  listResources(): Promise<McpResourceDefinition[]>
+  listResourceTemplates(): Promise<McpResourceTemplateDefinition[]>
+  readResource(uri: string, abort?: AbortSignal): Promise<McpResourceReadResult>
+  callTool(
+    toolName: string,
+    args: Record<string, unknown> | undefined,
+    abort?: AbortSignal,
+    context?: McpToolRequestContext,
+  ): Promise<McpToolCallResult>
+  notifyLifecycle(input: {
+    type: string
+    context: {
+      sessionID: string
+      turnID: string
+    }
+    detail?: Record<string, unknown>
+  }): Promise<void>
 }
 
 function getToolDisplayName(tool: McpToolDefinition) {
@@ -98,6 +159,21 @@ function normalizedRequestContext(
     }),
   )
   return Object.keys(normalized).length > 0 ? normalized : undefined
+}
+
+function completeRequestContext(
+  context: McpToolRequestContext | undefined,
+): Required<McpToolRequestContext> | undefined {
+  const normalized = normalizedRequestContext(context)
+  if (
+    !normalized?.sessionID
+    || !normalized.turnID
+    || !normalized.messageID
+    || !normalized.toolCallID
+  ) {
+    return undefined
+  }
+  return normalized as Required<McpToolRequestContext>
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -272,11 +348,12 @@ function normalizeCallResult(result: unknown): McpToolCallResult {
 }
 
 export class McpClient {
-  private client?: Client
+  private client?: AnyboxMcpSdkClient
   private closed = false
   private initializePromise?: Promise<void>
   private readonly options: McpClientOptions
   private readonly stderrLines: string[] = []
+  private readonly pluginCapabilityGrants = new Map<string, PluginCapabilityGrant>()
   private stderrStream?: Stream | null
   private transport?: StdioClientTransport | StreamableHTTPClientTransport
 
@@ -305,6 +382,7 @@ export class McpClient {
     this.transport = undefined
     this.client = undefined
     this.initializePromise = undefined
+    this.pluginCapabilityGrants.clear()
   }
 
   async listTools(): Promise<McpToolDefinition[]> {
@@ -377,26 +455,52 @@ export class McpClient {
   ): Promise<McpToolCallResult> {
     await this.ensureInitialized()
     const requestContext = normalizedRequestContext(context)
+    const completeContext = completeRequestContext(context)
+    const pluginCapabilityToken =
+      isAnyboxNodeReplServer(this.options.server)
+      && toolName === "js"
+      && completeContext
+      && this.options.onPluginCapabilityCall
+        ? randomBytes(32).toString("base64url")
+        : undefined
+    if (pluginCapabilityToken && completeContext) {
+      this.pluginCapabilityGrants.set(pluginCapabilityToken, {
+        context: completeContext,
+        signal: abort,
+        mutationClaimed: false,
+      })
+    }
     const requestMeta = isAnyboxNodeReplServer(this.options.server)
-      ? requestContext
-        ? { ...requestContext } as Record<string, unknown>
+      ? requestContext || pluginCapabilityToken
+        ? {
+            ...(requestContext ?? {}),
+            ...(pluginCapabilityToken
+              ? { "anybox/pluginCapabilityToken": pluginCapabilityToken }
+              : {}),
+          } as Record<string, unknown>
         : undefined
       : undefined
 
-    return normalizeCallResult(await this.client!.callTool(
-      {
-        name: toolName,
-        arguments: args,
-        ...(requestMeta ? { _meta: requestMeta } : {}),
-      },
-      undefined,
-      {
-        signal: abort,
-        timeout: isAnyboxNodeReplServer(this.options.server)
-          ? Math.max(this.options.requestTimeoutMs, 250_000)
-          : this.options.requestTimeoutMs,
-      },
-    ))
+    try {
+      return normalizeCallResult(await this.client!.callTool(
+        {
+          name: toolName,
+          arguments: args,
+          ...(requestMeta ? { _meta: requestMeta } : {}),
+        },
+        undefined,
+        {
+          signal: abort,
+          timeout: isAnyboxNodeReplServer(this.options.server)
+            ? Math.max(this.options.requestTimeoutMs, 250_000)
+            : this.options.requestTimeoutMs,
+        },
+      ))
+    } finally {
+      if (pluginCapabilityToken) {
+        this.pluginCapabilityGrants.delete(pluginCapabilityToken)
+      }
+    }
   }
 
   async notifyLifecycle(input: {
@@ -423,7 +527,7 @@ export class McpClient {
         throw new Error(`MCP server '${this.options.server.id}' is closed.`)
       }
 
-      const client = new Client(
+      const client = new Client<PluginCapabilityRequest, Notification, PluginCapabilityResult>(
         {
           name: "anyboxagent",
           version: "1.0.0",
@@ -481,6 +585,12 @@ export class McpClient {
           ElicitRequestSchema,
           this.options.onElicitation ?? handleAnyboxPermissionElicitation,
         )
+        if (this.options.onPluginCapabilityCall) {
+          client.setRequestHandler(
+            PluginCapabilityRequestSchema,
+            async (request) => await this.handlePluginCapabilityCall(request),
+          )
+        }
       }
       const transport = await this.createTransport()
       transport.onerror = (error) => {
@@ -523,6 +633,65 @@ export class McpClient {
 
     this.initializePromise = promise
     return await promise
+  }
+
+  private async handlePluginCapabilityCall(
+    request: PluginCapabilityRequest,
+  ): Promise<PluginCapabilityResult> {
+    const failure = (error: unknown): PluginCapabilityResult => {
+      const message = error instanceof Error ? error.message : String(error)
+      const code = error && typeof error === "object" && "code" in error
+        && typeof error.code === "string"
+        ? error.code
+        : "PLUGIN_CAPABILITY_DENIED"
+      return {
+        content: [{ type: "text", text: message }],
+        structuredContent: { error: message, code },
+        isError: true,
+      }
+    }
+
+    try {
+      const handler = this.options.onPluginCapabilityCall
+      if (!handler) {
+        throw Object.assign(new Error("Plugin capability calls are not enabled for this Node REPL."), {
+          code: "PLUGIN_CAPABILITY_DISABLED",
+        })
+      }
+      const grant = this.pluginCapabilityGrants.get(request.params.token)
+      if (!grant) {
+        throw Object.assign(new Error("The plugin capability grant is missing or expired."), {
+          code: "PLUGIN_CAPABILITY_EXPIRED",
+        })
+      }
+      for (const key of ["sessionID", "turnID", "messageID", "toolCallID"] as const) {
+        if (request.params.context[key] !== grant.context[key]) {
+          throw Object.assign(new Error("The plugin capability context does not match the active JavaScript call."), {
+            code: "PLUGIN_CAPABILITY_CONTEXT_MISMATCH",
+          })
+        }
+      }
+
+      const result = await handler({
+        capability: request.params.capability,
+        operation: request.params.operation,
+        arguments: request.params.arguments,
+        context: grant.context,
+        signal: grant.signal,
+        claimMutation: () => {
+          if (grant.mutationClaimed) {
+            throw Object.assign(
+              new Error("Only one state-changing plugin capability operation is allowed per JavaScript call."),
+              { code: "PLUGIN_CAPABILITY_MUTATION_LIMIT" },
+            )
+          }
+          grant.mutationClaimed = true
+        },
+      })
+      return { ...result } as PluginCapabilityResult
+    } catch (error) {
+      return failure(error)
+    }
   }
 
   private async disposeTransport() {

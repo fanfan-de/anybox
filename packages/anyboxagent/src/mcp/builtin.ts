@@ -10,9 +10,27 @@ const log = Log.create({ service: "mcp.builtin" })
 
 const BUILD_NODE_REPL_MCP_PATH = ["mcp", "node-repl"] as const
 const SOURCE_NODE_REPL_MCP_PATH = ["mcp", "node-repl"] as const
+const COMPUTER_USE_TOOL_NAMES = [
+  "computer_health_check",
+  "list_apps",
+  "list_windows",
+  "get_window",
+  "get_window_state",
+  "launch_app",
+  "activate_window",
+  "click",
+  "scroll",
+  "press_key",
+  "type_text",
+  "set_value",
+  "perform_secondary_action",
+  "drag",
+] as const
 
 export const NODE_REPL_DEFINITION_ID = "node-repl"
 export const NODE_REPL_SERVER_ID = "anybox.node-repl"
+export const COMPUTER_USE_DEFINITION_ID = "computer-use"
+export const COMPUTER_USE_SERVER_ID = "anybox.computer-use"
 export const LEGACY_NODE_REPL_SERVER_ID = "connector.node-repl.default"
 export const LEGACY_NODE_REPL_CONNECTOR_ID = "connector:node-repl:default"
 
@@ -45,6 +63,7 @@ export interface BuiltinMcpDefinition {
   risk: "low" | "medium" | "high" | "critical"
   permissions: string[]
   tools: BuiltinMcpToolPreview[]
+  modelExposure?: "tools" | "plugin-capability"
   installReview: string[]
   available: boolean
   runtime: Config.McpStdioServerInput
@@ -77,6 +96,31 @@ function builtinNodeReplEnvironment() {
   return getProcessEnvValue("ANYBOX_NODE_RUN_AS_NODE") === "1"
     ? { ELECTRON_RUN_AS_NODE: "1" }
     : undefined
+}
+
+function computerUseRuntimePaths() {
+  const packagedFacade = resolve(bundledRuntimeRoot(), "mcp", "computer-use", "server.js")
+  const packagedHelper = resolve(
+    bundledRuntimeRoot(),
+    "computer-use",
+    "win32-x64",
+    "computer-use-helper.exe",
+  )
+  const sourceRoot = packageRootFromAnyboxAgentRoot(
+    "..",
+    "..",
+    "plugins",
+    "Anybox-Plugins",
+    "computer-use-windows",
+  )
+  return {
+    facade: existsSync(packagedFacade)
+      ? packagedFacade
+      : resolve(sourceRoot, "scripts", "server.js"),
+    helper: existsSync(packagedHelper)
+      ? packagedHelper
+      : resolve(sourceRoot, "helper", "win32-x64", "computer-use-helper.exe"),
+  }
 }
 
 function nodeReplDefinition(): BuiltinMcpDefinition {
@@ -145,8 +189,81 @@ function nodeReplDefinition(): BuiltinMcpDefinition {
   }
 }
 
+function computerUseDefinition(): BuiltinMcpDefinition {
+  const paths = computerUseRuntimePaths()
+  const readOnly = new Set([
+    "computer_health_check",
+    "list_apps",
+    "list_windows",
+    "get_window",
+    "get_window_state",
+  ])
+  const titles: Record<string, string> = {
+    computer_health_check: "Computer Use Health Check",
+    list_apps: "List Apps",
+    list_windows: "List Windows",
+    get_window: "Get Window",
+    get_window_state: "Get Window State",
+    launch_app: "Launch App",
+    activate_window: "Activate Window",
+    click: "Click",
+    scroll: "Scroll",
+    press_key: "Press Key",
+    type_text: "Type Text",
+    drag: "Drag",
+    set_value: "Set Value",
+    perform_secondary_action: "Perform Secondary Action",
+  }
+  return {
+    id: COMPUTER_USE_DEFINITION_ID,
+    serverID: COMPUTER_USE_SERVER_ID,
+    name: "Computer Use",
+    description: "Observe and control approved Windows application windows through the Anybox host broker.",
+    publisher: "Anybox",
+    icon: "CU",
+    risk: "high",
+    permissions: [
+      "Lists visible Windows applications and windows.",
+      "Captures selected window screenshots and bounded accessibility content.",
+      "Sends mouse and keyboard input only through the host-owned Windows helper.",
+      "Requires a per-application once, session, or persistent approval before control.",
+    ],
+    tools: COMPUTER_USE_TOOL_NAMES.map((name) => ({
+      name,
+      title: titles[name],
+      description: titles[name] ?? name,
+      readOnly: readOnly.has(name),
+      destructive: false,
+    })),
+    modelExposure: "plugin-capability",
+    installReview: [
+      "The broker and native helper belong to Anybox, not to the requesting plugin.",
+      "Only one active agent turn can hold the global desktop-control lease.",
+      "Physical Escape interrupts the active Computer Use lease.",
+    ],
+    available:
+      process.platform === "win32"
+      && existsSync(paths.facade)
+      && existsSync(paths.helper),
+    runtime: {
+      name: "Computer Use",
+      transport: "stdio",
+      command: "__anybox_in_process__",
+      args: [],
+      toolPolicies: Object.fromEntries(
+        COMPUTER_USE_TOOL_NAMES.map((name) => [
+          name,
+          { policy: readOnly.has(name) ? "auto" : "ask" },
+        ]),
+      ),
+      enabled: true,
+      timeoutMs: 120_000,
+    },
+  }
+}
+
 export function listDefinitions(): BuiltinMcpDefinition[] {
-  return [nodeReplDefinition()]
+  return [nodeReplDefinition(), computerUseDefinition()]
 }
 
 export function getDefinition(definitionID: string) {
@@ -184,38 +301,98 @@ export function isNodeReplServer(server: Config.McpServerSummary) {
   )
 }
 
+export function isComputerUseServer(server: Config.McpServerSummary) {
+  return (
+    server.id === COMPUTER_USE_SERVER_ID
+    && server.owner?.kind === "anybox"
+    && server.owner.bindingID === COMPUTER_USE_DEFINITION_ID
+  )
+}
+
+export function isModelToolServer(server: Config.McpServerSummary) {
+  if (server.owner?.kind !== "anybox") return true
+  const definition = getDefinition(server.owner.bindingID)
+  if (!definition || definition.serverID !== server.id) return true
+  return definition.modelExposure !== "plugin-capability"
+}
+
+export function getPluginCapabilityDefinition(capabilityID: string) {
+  const definition = getDefinition(capabilityID)
+  return definition?.modelExposure === "plugin-capability" ? definition : undefined
+}
+
 export async function syncBuiltinMcpRuntimeBindings() {
   const definition = nodeReplDefinition()
   const existing = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, definition.serverID)
   const legacy = await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, LEGACY_NODE_REPL_SERVER_ID)
 
-  if (existing?.owner && !isCanonicalNodeReplOwner(existing.owner)) {
+  const canManageNodeRepl =
+    !existing?.owner || isCanonicalNodeReplOwner(existing.owner)
+  if (!canManageNodeRepl) {
     log.warn("built-in MCP binding id is owned by another source", {
       serverID: definition.serverID,
       owner: existing.owner,
     })
-    return
+  } else {
+    const previousControls =
+      existing ?? (isLegacyNodeReplServer(legacy) ? legacy : undefined)
+    await Config.setManagedMcpServer(
+      Config.GLOBAL_CONFIG_ID,
+      definition.serverID,
+      {
+        ...definition.runtime,
+        enabled: previousControls?.enabled ?? definition.runtime.enabled,
+        toolPolicies:
+          previousControls?.toolPolicies ?? definition.runtime.toolPolicies,
+      },
+      {
+        kind: "anybox",
+        bindingID: definition.id,
+      },
+    )
+
+    if (isLegacyNodeReplServer(legacy)) {
+      await Config.replaceSelectedMcpServerIDInAllProjects(
+        LEGACY_NODE_REPL_SERVER_ID,
+        definition.serverID,
+      )
+      await Config.removeMcpServer(
+        Config.GLOBAL_CONFIG_ID,
+        LEGACY_NODE_REPL_SERVER_ID,
+      )
+    }
   }
 
-  const previousControls = existing ?? (isLegacyNodeReplServer(legacy) ? legacy : undefined)
+  const computerUse = computerUseDefinition()
+  const existingComputerUse = await Config.getMcpServer(
+    Config.GLOBAL_CONFIG_ID,
+    computerUse.serverID,
+  )
+  if (
+    existingComputerUse?.owner
+    && !(
+      existingComputerUse.owner.kind === "anybox"
+      && existingComputerUse.owner.bindingID === COMPUTER_USE_DEFINITION_ID
+    )
+  ) {
+    log.warn("built-in Computer Use MCP binding id is owned by another source", {
+      serverID: computerUse.serverID,
+      owner: existingComputerUse.owner,
+    })
+    return
+  }
   await Config.setManagedMcpServer(
     Config.GLOBAL_CONFIG_ID,
-    definition.serverID,
+    computerUse.serverID,
     {
-      ...definition.runtime,
-      enabled: previousControls?.enabled ?? definition.runtime.enabled,
-      toolPolicies: previousControls?.toolPolicies ?? definition.runtime.toolPolicies,
+      ...computerUse.runtime,
+      enabled: existingComputerUse?.enabled ?? computerUse.runtime.enabled,
+      toolPolicies:
+        existingComputerUse?.toolPolicies ?? computerUse.runtime.toolPolicies,
     },
     {
       kind: "anybox",
-      bindingID: definition.id,
+      bindingID: computerUse.id,
     },
   )
-
-  if (!isLegacyNodeReplServer(legacy)) return
-  await Config.replaceSelectedMcpServerIDInAllProjects(
-    LEGACY_NODE_REPL_SERVER_ID,
-    definition.serverID,
-  )
-  await Config.removeMcpServer(Config.GLOBAL_CONFIG_ID, LEGACY_NODE_REPL_SERVER_ID)
 }

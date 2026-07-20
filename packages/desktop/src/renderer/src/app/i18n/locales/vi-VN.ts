@@ -1,5 +1,6 @@
 import type { TranslationKey } from "../translations"
 import { subscriptionTranslations } from "../subscription-translations"
+import { computerUseTranslations } from "../computer-use-translations"
 import { skillLibraryTranslations } from "../skill-library-translations"
 import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
 
@@ -145,6 +146,7 @@ export const viVN = {
   "settings.nav.storage": "Bộ nhớ",
   "settings.nav.archive": "Phiên đã lưu trữ",
   ...subscriptionTranslations["vi-VN"],
+  ...computerUseTranslations["vi-VN"],
   ...skillLibraryTranslations["vi-VN"],
   "settings.about.version": "Phiên bản",
   "settings.about.checkUpdates": "Kiểm tra cập nhật",

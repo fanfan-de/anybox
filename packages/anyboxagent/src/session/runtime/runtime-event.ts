@@ -156,6 +156,28 @@ const TaskStateUpdatedPayload = z.object({
   state: Task.SessionTaskListView,
 })
 
+const ComputerUseStartedPayload = z.object({
+  leaseID: z.string(),
+  appID: z.string().optional(),
+  appDisplayName: z.string().optional(),
+})
+
+const ComputerUseAppChangedPayload = z.object({
+  leaseID: z.string(),
+  appID: z.string(),
+  appDisplayName: z.string(),
+})
+
+const ComputerUseInterruptedPayload = z.object({
+  leaseID: z.string(),
+  reason: z.enum(["physical-escape", "desktop-escape", "user", "shutdown"]),
+})
+
+const ComputerUseStoppedPayload = z.object({
+  leaseID: z.string(),
+  reason: z.enum(["turn-terminal", "interrupted", "expired", "shutdown"]),
+})
+
 const SubagentCreatedPayload = z.object({
   taskID: Identifier.schema("task"),
   childSessionID: Identifier.schema("session"),
@@ -348,6 +370,26 @@ export const ToolCallDeniedEvent = RuntimeEventBase.extend({
   payload: ToolCallPayload,
 })
 
+export const ComputerUseStartedEvent = RuntimeEventBase.extend({
+  type: z.literal("computer.use.started"),
+  payload: ComputerUseStartedPayload,
+})
+
+export const ComputerUseAppChangedEvent = RuntimeEventBase.extend({
+  type: z.literal("computer.use.app_changed"),
+  payload: ComputerUseAppChangedPayload,
+})
+
+export const ComputerUseInterruptedEvent = RuntimeEventBase.extend({
+  type: z.literal("computer.use.interrupted"),
+  payload: ComputerUseInterruptedPayload,
+})
+
+export const ComputerUseStoppedEvent = RuntimeEventBase.extend({
+  type: z.literal("computer.use.stopped"),
+  payload: ComputerUseStoppedPayload,
+})
+
 export const ToolCallCancelledEvent = RuntimeEventBase.extend({
   type: z.literal("tool.call.cancelled"),
   payload: ToolCallPayload,
@@ -437,6 +479,10 @@ export const RuntimeEvent = z.discriminatedUnion("type", [
   TurnCompletedEvent,
   TurnFailedEvent,
   TurnCancelledEvent,
+  ComputerUseStartedEvent,
+  ComputerUseAppChangedEvent,
+  ComputerUseInterruptedEvent,
+  ComputerUseStoppedEvent,
   TurnErrorContextEvent,
   TextPartStartedEvent,
   TextPartDeltaEvent,
@@ -489,6 +535,10 @@ export type RuntimeEventPayloadByType = {
   "turn.completed": z.infer<typeof TurnCompletedPayload>
   "turn.failed": z.infer<typeof TurnFailedPayload>
   "turn.cancelled": z.infer<typeof TurnCancelledPayload>
+  "computer.use.started": z.infer<typeof ComputerUseStartedPayload>
+  "computer.use.app_changed": z.infer<typeof ComputerUseAppChangedPayload>
+  "computer.use.interrupted": z.infer<typeof ComputerUseInterruptedPayload>
+  "computer.use.stopped": z.infer<typeof ComputerUseStoppedPayload>
   "turn.error.context": z.infer<typeof TurnErrorContextPayload>
   "text.part.started": z.infer<typeof TextPartStartedPayload>
   "text.part.delta": z.infer<typeof TextPartDeltaPayload>

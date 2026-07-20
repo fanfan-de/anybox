@@ -9,9 +9,11 @@ const DEFAULT_MIN_VISIBLE_MS = 700
 const DEFAULT_IDLE_HIDE_MS = 250
 
 export interface ComputerUseOverlayContext {
+  appDisplayName?: string
   backendSessionID: string
   callID?: string
   clientTurnID?: string
+  leaseID?: string
   title?: string
   tool?: string
   turnID?: string
@@ -38,6 +40,13 @@ export type ComputerUseRuntimeEvent =
     }
   | {
       type: "turn-settled"
+      turnID?: string
+    }
+  | {
+      type: "app-changed"
+      callKey: string
+      appDisplayName: string
+      leaseID: string
       turnID?: string
     }
 
@@ -142,6 +151,47 @@ export function readComputerUseRuntimeEvent(input: {
   if (input.event !== "runtime" || !isRecord(input.data)) return null
 
   const runtimeType = readString(input.data.type)
+  const runtimePayload = isRecord(input.data.payload) ? input.data.payload : {}
+  const leaseID = readString(runtimePayload.leaseID)
+  if (runtimeType === "computer.use.started" && leaseID) {
+    const appDisplayName = readString(runtimePayload.appDisplayName)
+    return {
+      type: "tool-started",
+      callKey: buildCallKey(input.data, leaseID),
+      callID: leaseID,
+      title: appDisplayName
+        ? `Computer Use · ${appDisplayName}`
+        : "Computer Use",
+      tool: "mcp_anybox_computer_use",
+      turnID: readString(input.data.turnID),
+    }
+  }
+  if (runtimeType === "computer.use.app_changed" && leaseID) {
+    return {
+      type: "app-changed",
+      callKey: buildCallKey(input.data, leaseID),
+      appDisplayName:
+        readString(runtimePayload.appDisplayName) ?? "Windows application",
+      leaseID,
+      turnID: readString(input.data.turnID),
+    }
+  }
+  if (
+    (
+      runtimeType === "computer.use.interrupted"
+      || runtimeType === "computer.use.stopped"
+    )
+    && leaseID
+  ) {
+    return {
+      type: "tool-settled",
+      callKey: buildCallKey(input.data, leaseID),
+      callID: leaseID,
+      title: "Computer Use",
+      tool: "mcp_anybox_computer_use",
+      turnID: readString(input.data.turnID),
+    }
+  }
   if (runtimeType === "turn.completed" || runtimeType === "turn.failed" || runtimeType === "turn.cancelled") {
     return {
       type: "turn-settled",
@@ -232,11 +282,31 @@ export class ComputerUseOverlayManager {
       return
     }
 
+    if (event.type === "app-changed") {
+      const current = this.activeCalls.get(event.callKey)
+      if (!current) return
+      const context = {
+        ...current,
+        appDisplayName: event.appDisplayName,
+        leaseID: event.leaseID,
+        title: `Computer Use · ${event.appDisplayName}`,
+      }
+      this.activeCalls.set(event.callKey, context)
+      this.activeTurns.set(this.contextTurnKey(context), context)
+      this.latestContext = context
+      this.show()
+      return
+    }
+
     if (event.type === "tool-started") {
       const context: ComputerUseOverlayContext = {
+        appDisplayName: event.title?.startsWith("Computer Use · ")
+          ? event.title.slice("Computer Use · ".length)
+          : undefined,
         backendSessionID: input.backendSessionID,
         callID: event.callID,
         clientTurnID: input.clientTurnID,
+        leaseID: event.callID.startsWith("cu_lease_") ? event.callID : undefined,
         title: event.title,
         tool: event.tool,
         turnID: event.turnID,

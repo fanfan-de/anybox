@@ -50,13 +50,20 @@ export interface PermissionRequestPrompt {
   createdAt: number
   turnID?: string
   continuation?: PermissionContinuation
-  scope?: {
-    kind: "browser-origin"
-    sessionID: string
-    extensionInstanceID: string
-    origin: string
-    browserID?: string
-  }
+  scope?:
+    | {
+        kind: "browser-origin"
+        sessionID: string
+        extensionInstanceID: string
+        origin: string
+        browserID?: string
+      }
+    | {
+        kind: "computer-use-app"
+        sessionID: string
+        appID: string
+        appDisplayName: string
+      }
   grantID?: string
   prompt: PermissionPromptSnapshot
   resolution?: PermissionRequestResolutionRecord

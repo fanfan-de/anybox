@@ -4,13 +4,27 @@ import { isAbsolute, resolve as resolvePath } from "node:path"
 import type { JSONValue } from "@ai-sdk/provider"
 import z from "zod"
 import * as Config from "#config/config.ts"
-import { NODE_REPL_SERVER_ID } from "#mcp/builtin.ts"
+import {
+  NODE_REPL_SERVER_ID,
+  getPluginCapabilityDefinition,
+  isComputerUseServer,
+  isModelToolServer,
+  isNodeReplServer,
+} from "#mcp/builtin.ts"
 import { Instance } from "#project/instance.ts"
 import * as Tool from "#tool/tool.ts"
 import * as EventStore from "#session/runtime/event-store.ts"
 import * as Log from "#util/log.ts"
 import {
+  assessComputerUsePermission,
+  assessComputerUseOperation,
+  describeComputerUseApproval,
+  describeComputerUseOperation,
+} from "#mcp/computer-use/permission-advisor.ts"
+import {
   McpClient,
+  type McpClientLike,
+  type McpPluginCapabilityCall,
   type McpResourceDefinition,
   type McpResourceReadResult,
   type McpResourceTemplateDefinition,
@@ -25,7 +39,7 @@ const log = Log.create({ service: "mcp.manager" })
 type JsonSchemaObject = Record<string, unknown>
 
 type ManagedServer = {
-  client?: McpClient
+  client?: McpClientLike
   config: Config.McpServerSummary
   configKey: string
   resourcesPromise?: Promise<McpResourceDefinition[]>
@@ -329,6 +343,7 @@ export class McpManager {
 
     for (const server of servers) {
       if (!server.enabled) continue
+      if (!isModelToolServer(server)) continue
 
       const handle = this.handles.get(server.id)
       if (!handle) continue
@@ -636,23 +651,38 @@ export class McpManager {
         }
 
         if (policy) {
-          runtime.assessPermission = async (_args, ctx) => ({
-            action: policy === "disabled" ? "deny" : policy === "auto" ? "allow" : "ask",
-            risk: mcpToolPermissionRisk(definition),
-            reason: mcpToolPolicyReason(server, definition, policy),
-            forceAsk: policy === "ask" ? true : undefined,
-            resource: {
-              workdir: ctx.cwd,
-              body: `MCP server: ${server.name ?? server.id}\nTool: ${definition.name}`,
-            },
-          })
+          runtime.assessPermission = async (args, ctx) => {
+            const advised = assessComputerUsePermission({
+              server,
+              tool: definition,
+              args: args as Record<string, unknown>,
+              configuredPolicy: policy,
+            })
+            if (advised) return advised
+            return {
+              action: policy === "disabled" ? "deny" : policy === "auto" ? "allow" : "ask",
+              risk: mcpToolPermissionRisk(definition),
+              reason: mcpToolPolicyReason(server, definition, policy),
+              forceAsk: policy === "ask" ? true : undefined,
+              resource: {
+                workdir: ctx.cwd,
+                body: `MCP server: ${server.name ?? server.id}\nTool: ${definition.name}`,
+              },
+            }
+          }
           runtime.describeApproval = async (args, ctx) => ({
-            title: displayName,
-            summary: `Run MCP tool ${definition.name} from ${server.name ?? server.id}.`,
-            details: {
-              workdir: ctx.cwd,
-              body: summarizeMcpToolArguments(args as Record<string, unknown>),
-            },
+            ...(describeComputerUseApproval({
+              server,
+              tool: definition,
+              args: args as Record<string, unknown>,
+            }) ?? {
+              title: displayName,
+              summary: `Run MCP tool ${definition.name} from ${server.name ?? server.id}.`,
+              details: {
+                workdir: ctx.cwd,
+                body: summarizeMcpToolArguments(args as Record<string, unknown>),
+              },
+            }),
           })
         }
 
@@ -696,25 +726,151 @@ export class McpManager {
     return await client.callTool(toolName, args, abort, context)
   }
 
-  private async serverTools(handle: ManagedServer) {
+  private async callPluginCapability(
+    request: McpPluginCapabilityCall,
+  ): Promise<McpToolCallResult> {
+    const definition = getPluginCapabilityDefinition(request.capability)
+    if (!definition) {
+      throw Object.assign(
+        new Error(`Plugin capability '${request.capability}' is not registered for Node REPL access.`),
+        { code: "PLUGIN_CAPABILITY_NOT_REGISTERED" },
+      )
+    }
+
+    const [selectedServers, discoverableServers] = await Promise.all([
+      Config.resolveProjectMcpServers(this.projectID),
+      Config.resolveDiscoverableProjectMcpServers(this.projectID),
+    ])
+    await this.reconcile(discoverableServers)
+    const server = selectedServers.find((candidate) => candidate.id === definition.serverID)
+    if (
+      !server
+      || !server.enabled
+      || server.owner?.kind !== "anybox"
+      || server.owner.bindingID !== definition.id
+    ) {
+      throw Object.assign(
+        new Error(`Plugin capability '${request.capability}' is not enabled for this project.`),
+        { code: "PLUGIN_CAPABILITY_NOT_ENABLED" },
+      )
+    }
+    const handle = this.handles.get(server.id)
+    if (!handle) {
+      throw Object.assign(new Error(`Plugin capability '${request.capability}' is unavailable.`), {
+        code: "PLUGIN_CAPABILITY_UNAVAILABLE",
+      })
+    }
+
+    const listedTools: McpToolDefinition[] = await this.serverTools(handle)
+    const operation: McpToolDefinition | undefined = this.filterTools(server, listedTools).find(
+      (tool) => tool.name === request.operation,
+    )
+    if (!operation) {
+      throw Object.assign(
+        new Error(`Operation '${request.operation}' is not authorized for plugin capability '${request.capability}'.`),
+        { code: "PLUGIN_CAPABILITY_OPERATION_DENIED" },
+      )
+    }
+
+    const configuredPolicy = effectiveToolPolicy(server, operation)
+      ?? recommendedToolPolicy(operation)
+    const intent: Tool.ToolPermissionIntent = isComputerUseServer(server)
+      ? assessComputerUseOperation({
+          operation: operation.name,
+          args: request.arguments,
+          configuredPolicy,
+        })
+      : {
+          action: configuredPolicy === "disabled"
+            ? "deny" as const
+            : configuredPolicy === "auto"
+              ? "allow" as const
+              : "ask" as const,
+          risk: mcpToolPermissionRisk(operation),
+          reason: mcpToolPolicyReason(server, operation, configuredPolicy),
+        }
+
+    if (intent.action === "deny") {
+      throw Object.assign(new Error(intent.reason || "The plugin capability operation is denied."), {
+        code: "PLUGIN_CAPABILITY_OPERATION_DENIED",
+      })
+    }
+    if (operation.annotations?.readOnlyHint !== true) {
+      request.claimMutation()
+    }
+
+    if (intent.action === "ask") {
+      const descriptor = isComputerUseServer(server)
+        ? describeComputerUseOperation({
+            operation: operation.name,
+            title: operation.title,
+            args: request.arguments,
+          })
+        : undefined
+      const title = descriptor?.title || getMcpToolDisplayName(server, operation)
+      const summary = descriptor?.summary
+        || `Run ${operation.name} through ${definition.name}.`
+      const permissionModule = await import("#permission/permission.ts")
+      const permission = await permissionModule.requestInProcessPermission({
+        context: request.context,
+        scope: {
+          kind: "plugin-capability",
+          sessionID: request.context.sessionID,
+          capabilityID: definition.id,
+          capabilityDisplayName: definition.name,
+          operationTitle: title,
+          operationSummary: summary,
+          operationBody: descriptor?.details?.body
+            || intent.resource?.body
+            || summarizeMcpToolArguments(request.arguments),
+        },
+        method: operation.name,
+        risk: intent.risk,
+        sensitive: true,
+        action: "ask",
+        rationale: intent.reason,
+        timeoutMs: Math.min(server.timeoutMs ?? 120_000, 120_000),
+      })
+      if (permission.decision === "deny") {
+        throw Object.assign(new Error("The plugin capability operation was denied by the user."), {
+          code: "PERMISSION_DENIED",
+        })
+      }
+    }
+
+    const client: McpClientLike = await this.clientFor(handle)
+    return await client.callTool(
+      operation.name,
+      request.arguments,
+      request.signal,
+      request.context,
+    )
+  }
+
+  private async serverTools(handle: ManagedServer): Promise<McpToolDefinition[]> {
     handle.toolsPromise ??= this.clientFor(handle).then((client) => client.listTools())
     return await handle.toolsPromise
   }
 
-  private async serverResources(handle: ManagedServer) {
+  private async serverResources(handle: ManagedServer): Promise<McpResourceDefinition[]> {
     handle.resourcesPromise ??= this.clientFor(handle).then((client) => client.listResources())
     return await handle.resourcesPromise
   }
 
-  private async serverResourceTemplates(handle: ManagedServer) {
+  private async serverResourceTemplates(handle: ManagedServer): Promise<McpResourceTemplateDefinition[]> {
     handle.resourceTemplatesPromise ??= this.clientFor(handle).then((client) => client.listResourceTemplates())
     return await handle.resourceTemplatesPromise
   }
 
-  private async clientFor(handle: ManagedServer) {
+  private async clientFor(handle: ManagedServer): Promise<McpClientLike> {
     if (handle.client) return handle.client
 
     const timeout = handle.config.timeoutMs ?? (await Config.get(this.projectID)).experimental?.mcp_timeout ?? 30_000
+    if (isComputerUseServer(handle.config)) {
+      const { ComputerUseFacadeClient } = await import("#mcp/computer-use/facade-client.ts")
+      handle.client = new ComputerUseFacadeClient()
+      return handle.client
+    }
     handle.client = new McpClient({
       cwd: handle.config.transport === "stdio" ? resolveServerCwd(handle.config.cwd) : Instance.directory,
       onToolsChanged: () => {
@@ -727,6 +883,12 @@ export class McpManager {
       requestTimeoutMs: timeout,
       server: handle.config,
       worktree: Instance.worktree,
+      ...(isNodeReplServer(handle.config)
+        ? {
+            onPluginCapabilityCall: async (request: McpPluginCapabilityCall): Promise<McpToolCallResult> =>
+              await this.callPluginCapability(request),
+          }
+        : {}),
     })
 
     return handle.client
@@ -886,12 +1048,14 @@ export async function diagnoseServer(server: Config.McpServerSummary): Promise<M
 
   const timeout = server.timeoutMs ?? (await Config.get(Config.GLOBAL_CONFIG_ID)).experimental?.mcp_timeout ?? 30_000
   const cwd = server.transport === "stdio" ? resolveConfiguredCwd(server.cwd, GLOBAL_MCP_WORKDIR) : GLOBAL_MCP_WORKDIR
-  const client = new McpClient({
-    cwd,
-    requestTimeoutMs: timeout,
-    server,
-    worktree: cwd,
-  })
+  const client: McpClientLike = isComputerUseServer(server)
+    ? new (await import("#mcp/computer-use/facade-client.ts")).ComputerUseFacadeClient()
+    : new McpClient({
+        cwd,
+        requestTimeoutMs: timeout,
+        server,
+        worktree: cwd,
+      })
 
   try {
     const listedTools = await client.listTools()

@@ -1,10 +1,12 @@
 # Codex Computer Use 实现解析与 Anybox 插件开发报告
 
-> 报告版本：1.0  
+> 报告版本：1.1
 > 核验日期：2026-07-21  
 > 目标平台：Windows 11 x64  
 > 目标读者：Anybox Agent、Desktop 与插件开发者  
 > 核心目标：读完本报告后，可以基于 Anybox 现有 `computer-use-windows` 原型，开发出可用、可审计、可逐步达到 Codex 同类能力的 Anybox Computer Use 插件。
+
+> **M7 架构修订（2026-07-21）**：最终模型调用面已按 Codex 调整为通用 `anybox.node-repl` + 插件内 `sky` client。本文后续提到的“Computer Use MCP facade”应理解为**不向模型暴露的宿主内部能力适配层**；14 个底层操作只用于宿主校验、诊断和 broker 调用。Node REPL 不包含 Computer Use 方法或状态语义，Computer Use API 映射、窗口/状态缓存、截图回传和使用文档均属于插件。
 
 快速阅读路线：
 
@@ -746,7 +748,9 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    L["LLM / Skill"] --> MCP["Computer Use MCP facade"]
+    L["LLM / Skill"] --> REPL["通用 anybox.node-repl"]
+    REPL --> SKY["插件内 sky / Computer Use client"]
+    SKY -->|"通用、单次 capability bridge"| MCP["隐藏的 Computer Use host facade"]
     MCP -->|"受限 broker client"| B["Anybox ComputerUseBroker"]
     B --> LEASE["Global desktop turn lease"]
     B --> APPROVAL["App approval store/UI"]
@@ -759,7 +763,8 @@ flowchart TD
 
 阶段 B 的原则是：
 
-- 插件只描述能力、工具和 Skill；
+- 插件拥有 `sky` API、窗口/状态映射、动作参数、截图发射、文档和 Skill 等 Computer Use 业务逻辑；
+- 内建 Node REPL 保持通用，只提供中性的短生命周期插件能力桥；
 - Anybox Agent 决定谁能连接 helper；
 - Desktop 只负责可信 UI，不直接执行输入；
 - helper 不信任插件传入的 HWND、坐标、风险分类或 app approval；
@@ -767,17 +772,17 @@ flowchart TD
 - 一个 active turn 独占桌面控制 lease；
 - 中止、授权与 policy 都绑定 session/turn。
 
-## 5.3 为什么要保留 MCP facade
+## 5.3 为什么要保留隐藏宿主 facade
 
-即使最终由宿主持有 helper，也建议保留 MCP 工具接口：
+即使模型只调用通用 Node REPL，宿主仍需保留一个不进入模型工具列表的内部 facade：
 
-- Anybox 现有模型工具发现、审批、附件与审计链都围绕 MCP 工作；
-- 插件仍可独立迭代 Skill 与工具描述；
-- Windows、macOS 和未来 Linux 可以共享工具 contract；
-- native broker 可以作为 MCP facade 的内部依赖，而不是暴露给任意插件；
-- 现有插件安装、启用和项目选择流程无需推倒重来。
+- 插件可独立迭代 `sky` API、Skill 与操作指导，Node REPL 无需知道 Computer Use 方法名；
+- 通用 capability bridge 只把当前 `js` 调用绑定的 session/turn/message/toolCall 交给宿主；
+- 宿主在可信边界执行动态审批、动作槽限制、turn lease、helper 完整性/签名和 app policy；
+- Windows、macOS 和未来 Linux 可以在插件层共享 API，在宿主层使用各自 broker；
+- 14 个底层操作仍可用于配置和诊断，但不会作为模型可见 MCP 工具出现。
 
-不要让模型直接调用 named pipe，也不要把原始 native API 暴露成通用 Node 模块。
+不要让模型直接调用 named pipe，也不要把 Computer Use 方法写进通用 Node REPL。插件只能通过宿主授权的通用 bridge 访问隐藏能力。
 
 ## 6. 插件包设计
 

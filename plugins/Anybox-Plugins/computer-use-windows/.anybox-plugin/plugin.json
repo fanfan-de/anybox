@@ -1,7 +1,7 @@
 {
   "name": "computer-use-windows",
-  "version": "0.1.1",
-  "description": "Controlled Windows desktop automation through guarded window snapshots and input actions.",
+  "version": "0.2.0",
+  "description": "Guarded Windows desktop observation and input automation using short-lived, one-action window state.",
   "author": {
     "name": "Anybox"
   },
@@ -18,12 +18,12 @@
       "zh-CN": "Windows 电脑控制"
     },
     "shortDescription": {
-      "en-US": "Observe and control selected Windows app windows with approval gates.",
-      "zh-CN": "在审批保护下观察并控制选定的 Windows 应用窗口。"
+      "en-US": "Observe and control approved Windows app windows from fresh state.",
+      "zh-CN": "基于最新状态观察并控制经过批准的 Windows 应用窗口。"
     },
     "longDescription": {
-      "en-US": "A local high-risk Computer Use plugin for Windows. It exposes read-only window discovery and snapshot tools plus approval-gated input actions through a local stdio MCP server.",
-      "zh-CN": "适用于 Windows 的本地高风险 Computer Use 插件。它通过本地 stdio MCP server 提供只读窗口发现和截图工具，并提供需要审批的输入操作。"
+      "en-US": "A high-risk local Windows automation plugin with window-scoped screenshots, bounded accessibility state, one-action stale-state guards, and approval-gated input.",
+      "zh-CN": "高风险本地 Windows 自动化插件，提供窗口级截图、有界可访问性状态、一次性过期状态保护和需要审批的输入。"
     },
     "developerName": "Anybox",
     "category": "Automation",
@@ -31,147 +31,59 @@
       "desktop",
       "windows",
       "screenshots",
+      "accessibility",
       "input"
     ],
     "logo": "CU",
     "brandColor": "#2563EB"
   },
   "skills": "skills",
-  "mcpServers": [
+  "mcpRequirements": [
     {
-      "id": "windows",
-      "name": "Computer Use Windows",
-      "description": "Controlled Windows desktop observation and input automation.",
-      "risk": "high",
-      "permissions": [
-        "Lists visible Windows application windows.",
-        "Captures screenshots of selected windows.",
-        "Can send mouse and keyboard input to selected windows after approval."
-      ],
+      "mcp": "node-repl",
       "tools": [
-        {
-          "name": "computer_health_check",
-          "title": "Computer Use Health Check",
-          "description": "Check whether the local Windows helper is available.",
-          "readOnly": true,
-          "destructive": false
-        },
-        {
-          "name": "list_windows",
-          "title": "List Windows",
-          "description": "List controllable desktop windows.",
-          "readOnly": true,
-          "destructive": false
-        },
-        {
-          "name": "get_window",
-          "title": "Get Window",
-          "description": "Resolve a window by reference, title, or process name.",
-          "readOnly": true,
-          "destructive": false
-        },
-        {
-          "name": "get_window_state",
-          "title": "Get Window State",
-          "description": "Capture screenshot metadata and optional image content for a selected window.",
-          "readOnly": true,
-          "destructive": false
-        },
-        {
-          "name": "activate_window",
-          "title": "Activate Window",
-          "description": "Bring a selected window to the foreground.",
-          "readOnly": false,
-          "destructive": false
-        },
-        {
-          "name": "click",
-          "title": "Click",
-          "description": "Click inside a selected window using snapshot-relative coordinates.",
-          "readOnly": false,
-          "destructive": false
-        },
-        {
-          "name": "scroll",
-          "title": "Scroll",
-          "description": "Scroll inside a selected window using snapshot-relative coordinates.",
-          "readOnly": false,
-          "destructive": false
-        },
-        {
-          "name": "press_key",
-          "title": "Press Key",
-          "description": "Press keyboard keys or shortcuts in a selected window.",
-          "readOnly": false,
-          "destructive": false
-        },
-        {
-          "name": "type_text",
-          "title": "Type Text",
-          "description": "Type text into a selected window.",
-          "readOnly": false,
-          "destructive": false
-        },
-        {
-          "name": "drag",
-          "title": "Drag",
-          "description": "Drag inside a selected window using snapshot-relative coordinates.",
-          "readOnly": false,
-          "destructive": false
-        }
+        "js",
+        "js_reset"
       ],
-      "installReview": [
-        "This plugin can observe and interact with local desktop applications.",
-        "Input actions require approval by default.",
-        "Do not enable this plugin for untrusted projects."
+      "permissions": [
+        "Loads this plugin's Computer Use client inside Anybox's persistent, general-purpose Node REPL.",
+        "Uses a short-lived host capability that is bound to the current JavaScript tool call."
       ],
-      "runtime": {
-        "transport": "stdio",
-        "command": "node",
-        "args": [
-          "${PLUGIN_ROOT}/scripts/server.js"
-        ],
-        "cwd": "${PLUGIN_ROOT}",
-        "timeoutMs": 30000,
-        "toolPolicies": {
-          "computer_health_check": {
-            "policy": "auto"
-          },
-          "list_windows": {
-            "policy": "auto"
-          },
-          "get_window": {
-            "policy": "auto"
-          },
-          "get_window_state": {
-            "policy": "auto"
-          },
-          "activate_window": {
-            "policy": "ask"
-          },
-          "click": {
-            "policy": "ask"
-          },
-          "scroll": {
-            "policy": "ask"
-          },
-          "press_key": {
-            "policy": "ask"
-          },
-          "type_text": {
-            "policy": "ask"
-          },
-          "drag": {
-            "policy": "ask"
-          }
-        }
-      }
+      "required": true,
+      "reason": "Provides the Codex-style model surface: persistent JavaScript state with the plugin-owned sky API."
+    },
+    {
+      "mcp": "computer-use",
+      "tools": [
+        "computer_health_check",
+        "list_apps",
+        "list_windows",
+        "get_window",
+        "get_window_state",
+        "launch_app",
+        "activate_window",
+        "click",
+        "scroll",
+        "press_key",
+        "type_text",
+        "set_value",
+        "perform_secondary_action",
+        "drag"
+      ],
+      "permissions": [
+        "Lists visible Windows applications and windows.",
+        "Captures screenshots and bounded accessibility content from approved applications.",
+        "Sends mouse and keyboard input through the Anybox host-owned helper.",
+        "Requires per-application approval and a globally exclusive turn lease."
+      ],
+      "required": true,
+      "reason": "Provides a hidden, guarded host capability used by the plugin's sky client; its low-level tools are not exposed to the model."
     }
   ],
   "skillPreviews": [
     {
       "name": "Computer Use Windows",
-      "description": "Control Windows desktop apps through the guarded Computer Use Windows plugin.",
+      "description": "Operate one approved Windows application at a time through fresh, one-action window state.",
       "directory": "computer-use"
     }
   ]

@@ -6,6 +6,7 @@ import * as ProviderAuth from "#auth/provider-auth.ts"
 import * as Config from "#config/config.ts"
 import * as Connector from "#connector/connector.ts"
 import * as Mcp from "#mcp/manager.ts"
+import * as ComputerUseAppPolicy from "#mcp/computer-use/app-policy.ts"
 import * as Plugin from "#plugin/plugin.ts"
 import * as ModelsDev from "#provider/modelsdev.ts"
 import * as AnyboxHTTP from "#provider/anybox-http.ts"
@@ -43,6 +44,18 @@ const defaultRuntimeDependencies: SettingsRuntimeDependencies = {
 }
 
 let runtimeDependencies = defaultRuntimeDependencies
+
+export function listComputerUseAppDecisions() {
+  return ComputerUseAppPolicy.listComputerUseAppDecisions()
+}
+
+export function revokeComputerUseAppDecision(appID: string) {
+  const normalized = z.string().trim().min(1).max(512).parse(appID)
+  return {
+    appID: normalized,
+    revoked: ComputerUseAppPolicy.revokeComputerUseApp(normalized),
+  }
+}
 
 export function setRuntimeDependenciesForTesting(overrides: Partial<SettingsRuntimeDependencies>) {
   const previousDependencies = runtimeDependencies

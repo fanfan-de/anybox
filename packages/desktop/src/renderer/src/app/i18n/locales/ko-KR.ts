@@ -1,5 +1,6 @@
 import type { TranslationKey } from "../translations"
 import { subscriptionTranslations } from "../subscription-translations"
+import { computerUseTranslations } from "../computer-use-translations"
 import { skillLibraryTranslations } from "../skill-library-translations"
 import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
 
@@ -145,6 +146,7 @@ export const koKR = {
   "settings.nav.storage": "저장소",
   "settings.nav.archive": "보관된 세션",
   ...subscriptionTranslations["ko-KR"],
+  ...computerUseTranslations["ko-KR"],
   ...skillLibraryTranslations["ko-KR"],
   "settings.about.version": "버전",
   "settings.about.checkUpdates": "업데이트 확인",

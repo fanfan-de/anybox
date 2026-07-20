@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { mkdtemp, readFile, rm } from "node:fs/promises"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import { tmpdir } from "node:os"
 import * as BuiltinMcp from "../src/mcp/builtin"
 import { McpClient } from "../src/mcp/client"
@@ -26,6 +26,7 @@ function nodeReplServer() {
 
 async function createClient(options: {
   onElicitation?: ConstructorParameters<typeof McpClient>[0]["onElicitation"]
+  onPluginCapabilityCall?: ConstructorParameters<typeof McpClient>[0]["onPluginCapabilityCall"]
 } = {}) {
   const root = await mkdtemp(join(tmpdir(), "anybox-node-repl-"))
   temporaryRoots.push(root)
@@ -35,6 +36,7 @@ async function createClient(options: {
     requestTimeoutMs: 10_000,
     server: nodeReplServer(),
     onElicitation: options.onElicitation,
+    onPluginCapabilityCall: options.onPluginCapabilityCall,
   })
 }
 
@@ -66,7 +68,12 @@ describe("built-in Node REPL MCP", () => {
     })
     expect(configuredRuntime?.cwd).toBeUndefined()
 
-    const source = await readFile(configuredRuntime?.args?.[0] ?? "", "utf8")
+    const serverPath = configuredRuntime?.args?.[0] ?? ""
+    const source = await readFile(serverPath, "utf8")
+    const packageBoundary = JSON.parse(
+      await readFile(join(dirname(serverPath), "package.json"), "utf8"),
+    )
+    expect(packageBoundary).toMatchObject({ private: true, type: "commonjs" })
     expect(source).toContain("anybox-node-repl")
     expect(source).not.toMatch(
       /Chrome|browser|native-host|requestHost|getCapability/,
@@ -103,7 +110,8 @@ describe("built-in Node REPL MCP", () => {
           processType: typeof process,
           agentType: typeof agent,
           capabilityType: typeof nodeRepl.getCapability,
-          requestHostType: typeof nodeRepl.requestHost
+          requestHostType: typeof nodeRepl.requestHost,
+          pluginCapabilityType: typeof nodeRepl.callPluginCapability
         }`,
       })
       expect(result.structuredContent?.result).toMatchObject({
@@ -112,6 +120,7 @@ describe("built-in Node REPL MCP", () => {
         agentType: "undefined",
         capabilityType: "undefined",
         requestHostType: "undefined",
+        pluginCapabilityType: "function",
       })
 
       await client.callTool("js_reset", {})
@@ -146,7 +155,7 @@ describe("built-in Node REPL MCP", () => {
     }
   })
 
-  test("exposes generic per-call metadata without a business host-service bridge", async () => {
+  test("exposes generic per-call metadata without a business-specific host-service bridge", async () => {
     const client = await createClient()
     try {
       const result = await client.callTool(
@@ -184,6 +193,109 @@ describe("built-in Node REPL MCP", () => {
         code: "return nodeRepl.requestMeta",
       })
       expect(nextCall.structuredContent?.result).toBeNull()
+    } finally {
+      await client.dispose()
+    }
+  })
+
+  test("binds generic plugin capability calls to one JavaScript invocation", async () => {
+    const calls: Array<Record<string, unknown>> = []
+    const client = await createClient({
+      onPluginCapabilityCall: async (request) => {
+        calls.push({
+          capability: request.capability,
+          operation: request.operation,
+          arguments: request.arguments,
+          context: request.context,
+        })
+        if (request.operation === "write") request.claimMutation()
+        return {
+          content: [{ type: "text", text: "ok" }],
+          structuredContent: { value: request.arguments.value ?? null },
+          isError: false,
+        }
+      },
+    })
+    try {
+      const result = await client.callTool(
+        "js",
+        {
+          code: `const read = await nodeRepl.callPluginCapability(
+              "fixture",
+              "read",
+              { value: 41 }
+            )
+            const write = await nodeRepl.callPluginCapability(
+              "fixture",
+              "write",
+              { value: Number(read.structuredContent.value) + 1 }
+            )
+            return write.structuredContent.value`,
+        },
+        undefined,
+        {
+          sessionID: "session-node-repl",
+          turnID: "turn-node-repl",
+          messageID: "message-node-repl",
+          toolCallID: "tool-node-repl-capability",
+        },
+      )
+
+      expect(result.isError).toBe(false)
+      expect(result.structuredContent?.result).toBe(42)
+      expect(calls).toHaveLength(2)
+      expect(calls[0]).toMatchObject({
+        capability: "fixture",
+        operation: "read",
+        context: {
+          sessionID: "session-node-repl",
+          turnID: "turn-node-repl",
+          messageID: "message-node-repl",
+          toolCallID: "tool-node-repl-capability",
+        },
+      })
+
+      const missingContext = await client.callTool("js", {
+        code: `return await nodeRepl.callPluginCapability("fixture", "read", {})`,
+      })
+      expect(missingContext.isError).toBe(true)
+      expect(missingContext.structuredContent?.code).toBe("PLUGIN_CAPABILITY_CONTEXT_REQUIRED")
+    } finally {
+      await client.dispose()
+    }
+  })
+
+  test("allows at most one state-changing plugin capability operation per JavaScript call", async () => {
+    let executed = 0
+    const client = await createClient({
+      onPluginCapabilityCall: async (request) => {
+        request.claimMutation()
+        executed += 1
+        return {
+          content: [{ type: "text", text: "ok" }],
+          structuredContent: { executed },
+          isError: false,
+        }
+      },
+    })
+    try {
+      const result = await client.callTool(
+        "js",
+        {
+          code: `await nodeRepl.callPluginCapability("fixture", "first", {})
+            return await nodeRepl.callPluginCapability("fixture", "second", {})`,
+        },
+        undefined,
+        {
+          sessionID: "session-node-repl",
+          turnID: "turn-node-repl",
+          messageID: "message-node-repl",
+          toolCallID: "tool-node-repl-mutation-limit",
+        },
+      )
+      expect(result.isError).toBe(true)
+      expect(result.structuredContent?.code).toBe("PLUGIN_CAPABILITY_MUTATION_LIMIT")
+      expect(executed).toBe(1)
     } finally {
       await client.dispose()
     }

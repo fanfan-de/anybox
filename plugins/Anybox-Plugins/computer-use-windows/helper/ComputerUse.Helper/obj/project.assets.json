@@ -1,7 +1,19 @@
 {
   "version": 3,
   "targets": {
-    "net9.0-windows7.0": {
+    "net9.0-windows10.0.19041": {
+      "Interop.UIAutomationClient/10.19041.0": {
+        "type": "package",
+        "compile": {
+          "lib/netcoreapp3.0/Interop.UIAutomationClient.dll": {}
+        },
+        "runtime": {
+          "lib/netcoreapp3.0/Interop.UIAutomationClient.dll": {}
+        },
+        "build": {
+          "build/Interop.UIAutomationClient.targets": {}
+        }
+      },
       "Microsoft.NET.ILLink.Tasks/9.0.8": {
         "type": "package",
         "build": {
@@ -9,7 +21,19 @@
         }
       }
     },
-    "net9.0-windows7.0/win-x64": {
+    "net9.0-windows10.0.19041/win-x64": {
+      "Interop.UIAutomationClient/10.19041.0": {
+        "type": "package",
+        "compile": {
+          "lib/netcoreapp3.0/Interop.UIAutomationClient.dll": {}
+        },
+        "runtime": {
+          "lib/netcoreapp3.0/Interop.UIAutomationClient.dll": {}
+        },
+        "build": {
+          "build/Interop.UIAutomationClient.targets": {}
+        }
+      },
       "Microsoft.NET.ILLink.Tasks/9.0.8": {
         "type": "package",
         "build": {
@@ -19,6 +43,26 @@
     }
   },
   "libraries": {
+    "Interop.UIAutomationClient/10.19041.0": {
+      "sha512": "Me5vKNZ1JSg6txTsPQXaWx7fVNh+fmcUPPwtDKJtqvbMM0N8aoa/l/QPolkJIRnasCabCNt4v2zG4p1Q9HU98A==",
+      "type": "package",
+      "path": "interop.uiautomationclient/10.19041.0",
+      "hasTools": true,
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "LICENSE.txt",
+        "build/Interop.UIAutomationClient.targets",
+        "interop.uiautomationclient.10.19041.0.nupkg.sha512",
+        "interop.uiautomationclient.nuspec",
+        "lib/net35/Interop.UIAutomationClient.dll",
+        "lib/net40/Interop.UIAutomationClient.dll",
+        "lib/net45/Interop.UIAutomationClient.dll",
+        "lib/netcoreapp3.0/Interop.UIAutomationClient.dll",
+        "lib/netstandard2.0/Interop.UIAutomationClient.dll",
+        "tools/install.ps1"
+      ]
+    },
     "Microsoft.NET.ILLink.Tasks/9.0.8": {
       "sha512": "rd1CbIsMtVPtZNTIVD6Xydue//klYOOQIDpRgu3BHtv17AlpRs74/6QFbcYgMm/jL+naVU2T3OFLxVSLV5lQLQ==",
       "type": "package",
@@ -72,7 +116,8 @@
     }
   },
   "projectFileDependencyGroups": {
-    "net9.0-windows7.0": [
+    "net9.0-windows10.0.19041": [
+      "Interop.UIAutomationClient >= 10.19041.0",
       "Microsoft.NET.ILLink.Tasks >= 9.0.8"
     ]
   },
@@ -81,7 +126,7 @@
     "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages": {}
   },
   "project": {
-    "version": "1.0.0",
+    "version": "0.2.0",
     "restore": {
       "projectUniqueName": "C:\\Projects\\Anybox\\plugins\\Anybox-Plugins\\computer-use-windows\\helper\\ComputerUse.Helper\\ComputerUse.Helper.csproj",
       "projectName": "computer-use-helper",
@@ -98,7 +143,7 @@
         "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
       ],
       "originalTargetFrameworks": [
-        "net9.0-windows"
+        "net9.0-windows10.0.19041.0"
       ],
       "sources": {
         "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
@@ -106,8 +151,8 @@
         "https://api.nuget.org/v3/index.json": {}
       },
       "frameworks": {
-        "net9.0-windows7.0": {
-          "targetAlias": "net9.0-windows",
+        "net9.0-windows10.0.19041": {
+          "targetAlias": "net9.0-windows10.0.19041.0",
           "projectReferences": {}
         }
       },
@@ -124,9 +169,13 @@
       "SdkAnalysisLevel": "9.0.300"
     },
     "frameworks": {
-      "net9.0-windows7.0": {
-        "targetAlias": "net9.0-windows",
+      "net9.0-windows10.0.19041": {
+        "targetAlias": "net9.0-windows10.0.19041.0",
         "dependencies": {
+          "Interop.UIAutomationClient": {
+            "target": "Package",
+            "version": "[10.19041.0, )"
+          },
           "Microsoft.NET.ILLink.Tasks": {
             "suppressParent": "All",
             "target": "Package",
@@ -155,12 +204,19 @@
             "version": "[9.0.8, 9.0.8]"
           },
           {
+            "name": "Microsoft.Windows.SDK.NET.Ref",
+            "version": "[10.0.19041.57, 10.0.19041.57]"
+          },
+          {
             "name": "Microsoft.WindowsDesktop.App.Runtime.win-x64",
             "version": "[9.0.8, 9.0.8]"
           }
         ],
         "frameworkReferences": {
           "Microsoft.NETCore.App": {
+            "privateAssets": "all"
+          },
+          "Microsoft.Windows.SDK.NET.Ref.Windows": {
             "privateAssets": "all"
           },
           "Microsoft.WindowsDesktop.App.WindowsForms": {

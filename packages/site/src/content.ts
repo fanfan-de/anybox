@@ -13,8 +13,6 @@ export type SiteContent = {
     description: string
     githubLabel: string
     note: string
-    previewAlt: string
-    previewCaption: string
     title: string
   }
   capabilities: {
@@ -63,8 +61,6 @@ export const siteContent = {
         "Anybox 是开源的本地 AI Agent 工作台。让 Agent 读取项目、调用工具、执行命令，并把每一步留在你可检查的工作空间里。",
       githubLabel: "查看 GitHub",
       note: "支持 Windows x64、macOS Apple Silicon、Linux x64 与 Android。",
-      previewAlt: "Anybox 桌面端中的本地项目、会话和 AI Agent 工作区",
-      previewCaption: "项目、会话、模型和执行过程集中在同一个工作空间。",
     },
     signals: ["开源", "本地项目", "多模型", "权限确认", "可审计工具调用"],
     workflow: {
@@ -142,8 +138,6 @@ export const siteContent = {
         "Anybox is an open-source workspace for local AI agents. Let agents read projects, call tools, run commands, and keep every step visible in a workspace you control.",
       githubLabel: "View on GitHub",
       note: "Available for Windows x64, macOS Apple Silicon, Linux x64, and Android.",
-      previewAlt: "Local projects, sessions, and an AI agent workspace in Anybox for desktop",
-      previewCaption: "Projects, sessions, models, and execution history stay in one workspace.",
     },
     signals: ["Open source", "Local projects", "Multiple models", "Permission control", "Auditable tool calls"],
     workflow: {

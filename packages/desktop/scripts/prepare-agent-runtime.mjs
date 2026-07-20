@@ -3,6 +3,7 @@ import fs from "node:fs"
 import fsp from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { writeComputerUseSupplyChainMetadata } from "./computer-use-supply-chain.mjs"
 import { prepareWorkspaceDependencies } from "./prepare-workspace-dependencies.mjs"
 import { prepareMediaTools } from "./prepare-media-tools.mjs"
 
@@ -18,6 +19,12 @@ const cinemaProviderManifestsSourceDir = path.join(agentDir, "src", "cinema", "p
 const gmailConnectorSourceDir = path.join(agentDir, "plugins", "builtin", "gmail", "0.1.0", "connectors", "gmail")
 const feishuConnectorSourceDir = path.join(agentDir, "plugins", "builtin", "feishu", "0.1.0", "connectors", "feishu")
 const nodeReplMcpSourceDir = path.join(agentDir, "mcp", "node-repl")
+const computerUsePluginSourceDir = path.join(
+  repoRoot,
+  "plugins",
+  "Anybox-Plugins",
+  "computer-use-windows",
+)
 
 const bunExecutableName = process.platform === "win32" ? "bun.exe" : "bun"
 const connectorBuildConfigFile = path.join(runtimeDir, "config", "connectors.json")
@@ -140,22 +147,66 @@ async function copyBundledPlatformRuntimes() {
   const gmailConnectorTargetDir = path.join(runtimeDir, "connectors", "gmail")
   const feishuConnectorTargetDir = path.join(runtimeDir, "connectors", "feishu")
   const nodeReplMcpTargetDir = path.join(runtimeDir, "mcp", "node-repl")
+  const computerUseMcpTargetDir = path.join(runtimeDir, "mcp", "computer-use")
   if (!(await pathExists(path.join(gmailConnectorSourceDir, "server.js")))) {
     throw new Error(`Missing Gmail connector server at ${gmailConnectorSourceDir}`)
   }
   if (!(await pathExists(path.join(feishuConnectorSourceDir, "server.js")))) {
     throw new Error(`Missing Feishu connector server at ${feishuConnectorSourceDir}`)
   }
-  if (!(await pathExists(path.join(nodeReplMcpSourceDir, "server.js")))) {
+  if (
+    !(await pathExists(path.join(nodeReplMcpSourceDir, "server.js")))
+    || !(await pathExists(path.join(nodeReplMcpSourceDir, "package.json")))
+  ) {
     throw new Error(`Missing built-in Node REPL MCP server at ${nodeReplMcpSourceDir}`)
+  }
+  if (!(await pathExists(path.join(computerUsePluginSourceDir, "scripts", "server.js")))) {
+    throw new Error("Missing host-bundled Computer Use facade.")
   }
 
   await fsp.mkdir(gmailConnectorTargetDir, { recursive: true })
   await fsp.mkdir(feishuConnectorTargetDir, { recursive: true })
   await fsp.mkdir(nodeReplMcpTargetDir, { recursive: true })
+  await fsp.mkdir(computerUseMcpTargetDir, { recursive: true })
   await fsp.copyFile(path.join(gmailConnectorSourceDir, "server.js"), path.join(gmailConnectorTargetDir, "server.js"))
   await fsp.copyFile(path.join(feishuConnectorSourceDir, "server.js"), path.join(feishuConnectorTargetDir, "server.js"))
   await fsp.copyFile(path.join(nodeReplMcpSourceDir, "server.js"), path.join(nodeReplMcpTargetDir, "server.js"))
+  await fsp.copyFile(
+    path.join(nodeReplMcpSourceDir, "package.json"),
+    path.join(nodeReplMcpTargetDir, "package.json"),
+  )
+  await fsp.copyFile(
+    path.join(computerUsePluginSourceDir, "scripts", "server.js"),
+    path.join(computerUseMcpTargetDir, "server.js"),
+  )
+  await fsp.cp(
+    path.join(computerUsePluginSourceDir, "scripts", "lib"),
+    path.join(computerUseMcpTargetDir, "lib"),
+    { recursive: true },
+  )
+  await fsp.writeFile(
+    path.join(computerUseMcpTargetDir, "package.json"),
+    `${JSON.stringify({ private: true, type: "commonjs" }, null, 2)}\n`,
+  )
+
+  if (process.platform === "win32") {
+    const helperSourceDir = path.join(computerUsePluginSourceDir, "helper", "win32-x64")
+    const helperTargetDir = path.join(runtimeDir, "computer-use", "win32-x64")
+    for (const name of ["computer-use-helper.exe", "computer-use-helper.sha256"]) {
+      if (!(await pathExists(path.join(helperSourceDir, name)))) {
+        throw new Error(`Missing packaged Computer Use helper file: ${name}`)
+      }
+    }
+    await fsp.mkdir(helperTargetDir, { recursive: true })
+    await fsp.copyFile(
+      path.join(helperSourceDir, "computer-use-helper.exe"),
+      path.join(helperTargetDir, "computer-use-helper.exe"),
+    )
+    await fsp.copyFile(
+      path.join(helperSourceDir, "computer-use-helper.sha256"),
+      path.join(helperTargetDir, "computer-use-helper.sha256"),
+    )
+  }
 }
 
 async function copyCinemaWebDist() {
@@ -236,6 +287,11 @@ async function main() {
     dependenciesDir: path.join(runtimeDir, "dependencies"),
   })
   await prepareMediaTools({ runtimeDir })
+  await writeComputerUseSupplyChainMetadata({
+    runtimeDir,
+    repoRoot,
+    sourceRoot: computerUsePluginSourceDir,
+  })
 
   console.log(`[desktop][build] prepared managed agent runtime at ${runtimeDir}`)
 }

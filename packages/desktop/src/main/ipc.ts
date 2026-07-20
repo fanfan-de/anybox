@@ -43,6 +43,7 @@ import type {
   DesktopSessionRollbackInput,
   DesktopSessionRollbackResult,
   DesktopStorageUsageSnapshot,
+  ComputerUseAppDecision,
   DesktopSubscriptionOrderResponse,
   DesktopSubscriptionOverview,
   DesktopSubscriptionPlan,
@@ -3238,8 +3239,23 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
   async function cancelAgentSessionFromComputerUseOverlay(input: {
     backendSessionID: string
     clientTurnID?: string
+    turnID?: string
     webContentsID: number
   }) {
+    if (input.turnID) {
+      await requestAgentJSON<{ interrupted: boolean }>(
+        `/api/sessions/${encodeURIComponent(input.backendSessionID)}/computer-use/interrupt`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            turnID: input.turnID,
+          }),
+        },
+      ).catch(() => undefined)
+    }
     await interruptAgentSessionBackendFirst({
       backendSessionID: input.backendSessionID,
       clientTurnID: input.clientTurnID,
@@ -5024,6 +5040,25 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
 
     return result.data
   })
+
+  handleDesktopIpc("desktop:get-computer-use-app-decisions", async () => {
+    const result = await requestAgentJSON<ComputerUseAppDecision[]>(
+      "/api/computer-use/apps",
+    )
+    return result.data
+  })
+
+  handleDesktopIpc(
+    "desktop:revoke-computer-use-app-decision",
+    async (_event, input: { appID: string }) => {
+      const appID = input.appID.trim()
+      const result = await requestAgentJSON<{ appID: string; revoked: boolean }>(
+        `/api/computer-use/apps/${encodeURIComponent(appID)}`,
+        { method: "DELETE" },
+      )
+      return result.data
+    },
+  )
 
   handleDesktopIpc("desktop:get-plugin-catalog", async (
     _event,

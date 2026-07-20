@@ -284,6 +284,192 @@ test("in-process browser permissions scope session grants and fail closed", asyn
   }
 }, 120000)
 
+test("Computer Use app permissions are not bypassed by full access mode", async () => {
+  const repositoryRoot = await mkdtemp(
+    path.join(tmpdir(), "anybox-permission-computer-use-app-"),
+  )
+  try {
+    await createGitRepo(repositoryRoot, "computer-use-app-permission")
+    await Instance.provide({
+      directory: repositoryRoot,
+      async fn() {
+        await Config.setPermissionMode(Config.GLOBAL_CONFIG_ID, "full_access")
+        const session = await Session.createSession({
+          directory: Instance.directory,
+          projectID: Instance.project.id,
+        })
+        const assistant: Message.Assistant = {
+          id: Identifier.ascending("message"),
+          sessionID: session.id,
+          role: "assistant",
+          created: Date.now(),
+          parentID: "",
+          modelID: "test-model",
+          providerID: "test-provider",
+          agent: "default",
+          path: { cwd: Instance.directory, root: Instance.worktree },
+          cost: 0,
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+        }
+        Session.DataBaseCreate("messages", assistant)
+        const turn = Orchestrator.startTurn({ sessionID: session.id })
+        const request = (toolCallID: string) =>
+          Permission.requestInProcessPermission({
+            context: {
+              sessionID: session.id,
+              turnID: turn.turnID,
+              messageID: assistant.id,
+              toolCallID,
+            },
+            scope: {
+              kind: "computer-use-app",
+              sessionID: session.id,
+              appID: "app_notepad",
+              appDisplayName: "Notepad",
+            },
+            method: "get_window_state",
+            risk: "high",
+            action: "ask",
+          })
+        try {
+          const pendingResult = request("computer_use_first")
+          const pending = await waitForPendingBrowserPermission(
+            session.id,
+            "computer_use_first",
+          )
+          expect(pending.scope).toMatchObject({
+            kind: "computer-use-app",
+            appID: "app_notepad",
+          })
+          expect(pending.prompt?.allowedDecisions).toEqual([
+            "deny",
+            "allow-once",
+            "allow-session",
+            "allow",
+          ])
+          await Permission.resolveRequest(pending.id, {
+            decision: "allow-session",
+          })
+          await expect(pendingResult).resolves.toMatchObject({
+            decision: "allow-session",
+          })
+          await expect(request("computer_use_reused")).resolves.toMatchObject({
+            decision: "allow-session",
+          })
+        } finally {
+          await Permission.clearInProcessPermissionSession(session.id)
+          Orchestrator.finishTurn(turn)
+          await Config.setPermissionMode(Config.GLOBAL_CONFIG_ID, "default")
+        }
+      },
+    })
+  } finally {
+    await rm(repositoryRoot, { recursive: true, force: true })
+  }
+}, 120000)
+
+test("plugin capability actions always require a one-time decision", async () => {
+  const repositoryRoot = await mkdtemp(
+    path.join(tmpdir(), "anybox-permission-plugin-capability-"),
+  )
+  try {
+    await createGitRepo(repositoryRoot, "plugin-capability-permission")
+    await Instance.provide({
+      directory: repositoryRoot,
+      async fn() {
+        await Config.setPermissionMode(Config.GLOBAL_CONFIG_ID, "full_access")
+        const session = await Session.createSession({
+          directory: Instance.directory,
+          projectID: Instance.project.id,
+        })
+        const assistant: Message.Assistant = {
+          id: Identifier.ascending("message"),
+          sessionID: session.id,
+          role: "assistant",
+          created: Date.now(),
+          parentID: "",
+          modelID: "test-model",
+          providerID: "test-provider",
+          agent: "default",
+          path: { cwd: Instance.directory, root: Instance.worktree },
+          cost: 0,
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+        }
+        Session.DataBaseCreate("messages", assistant)
+        const turn = Orchestrator.startTurn({ sessionID: session.id })
+        const request = (toolCallID: string) =>
+          Permission.requestInProcessPermission({
+            context: {
+              sessionID: session.id,
+              turnID: turn.turnID,
+              messageID: assistant.id,
+              toolCallID,
+            },
+            scope: {
+              kind: "plugin-capability",
+              sessionID: session.id,
+              capabilityID: "computer-use",
+              capabilityDisplayName: "Computer Use",
+              operationTitle: "Click",
+              operationSummary: "Click the selected control.",
+              operationBody: "Action: click\nArguments: {\"text\":\"<redacted>\"}",
+            },
+            method: "click",
+            risk: "medium",
+            action: "ask",
+          })
+        try {
+          const firstResult = request("plugin_capability_first")
+          const first = await waitForPendingBrowserPermission(
+            session.id,
+            "plugin_capability_first",
+          )
+          expect(first.scope).toMatchObject({
+            kind: "plugin-capability",
+            capabilityID: "computer-use",
+            operationTitle: "Click",
+          })
+          expect(first.prompt).toMatchObject({
+            title: "Computer Use: Click",
+            summary: "Click the selected control.",
+            allowedDecisions: ["deny", "allow-once"],
+            details: {
+              body: expect.stringContaining("<redacted>"),
+            },
+          })
+          await Permission.resolveRequest(first.id, { decision: "allow-once" })
+          await expect(firstResult).resolves.toMatchObject({ decision: "allow-once" })
+
+          const secondResult = request("plugin_capability_second")
+          const second = await waitForPendingBrowserPermission(
+            session.id,
+            "plugin_capability_second",
+          )
+          expect(second.id).not.toBe(first.id)
+          await Permission.resolveRequest(second.id, { decision: "deny" })
+          await expect(secondResult).resolves.toMatchObject({ decision: "deny" })
+        } finally {
+          await Permission.clearInProcessPermissionSession(session.id)
+          Orchestrator.finishTurn(turn)
+          await Config.setPermissionMode(Config.GLOBAL_CONFIG_ID, "default")
+        }
+      },
+    })
+  } finally {
+    await rm(repositoryRoot, { recursive: true, force: true })
+  }
+}, 120000)
+
 test("permission defaults auto-run safe reads and writes while honoring tool deny intents", async () => {
   const repositoryRoot = await mkdtemp(path.join(tmpdir(), "anybox-permission-defaults-"))
 

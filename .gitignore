@@ -54,6 +54,11 @@ packages/**/pencil-exports/
 packages/**/attachment-*.txt
 packages/**/skill-test-output.txt
 packages/**/test_file.txt
+plugins/Anybox-Plugins/computer-use-windows/.cache/
+plugins/Anybox-Plugins/computer-use-windows/helper/ComputerUse.Helper/bin/
+plugins/Anybox-Plugins/computer-use-windows/helper/ComputerUse.Helper/obj/Release/
+plugins/Anybox-Plugins/computer-use-windows/tests/fixtures/ComputerUse.TestApp/bin/
+plugins/Anybox-Plugins/computer-use-windows/tests/fixtures/ComputerUse.TestApp/obj/
 
 # One-off migration/debug scripts
 const

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { DownloadCta } from "./DownloadCta"
+import { HomeDemoVideo, HomePlayableDemoVideo } from "./HomeDemoVideo"
 import { ProductMedia } from "./ProductMedia"
 import { RibbonBackground } from "./RibbonBackground"
 import { SiteFooter, SiteHeader } from "./SiteChrome"
@@ -139,18 +140,14 @@ export function App() {
               <p className="home-hero-note">{content.hero.note}</p>
             </div>
           </div>
-
-          <div className="home-hero-preview">
-            <ProductMedia
-              alt={content.hero.previewAlt}
-              caption={content.hero.previewCaption}
-              variant="desktop"
-            />
-          </div>
         </div>
       </section>
 
-      <section className="signal-section" id="product" aria-label={language === "zh" ? "产品关键信号" : "Product highlights"}>
+      <HomeDemoVideo language={language} />
+
+      <HomePlayableDemoVideo language={language} />
+
+      <section className="signal-section" aria-label={language === "zh" ? "产品关键信号" : "Product highlights"}>
         <ul>
           {content.signals.map((signal) => <li key={signal}>{signal}</li>)}
         </ul>

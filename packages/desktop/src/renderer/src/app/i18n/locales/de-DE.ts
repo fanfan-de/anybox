@@ -1,5 +1,6 @@
 import type { TranslationKey } from "../translations"
 import { subscriptionTranslations } from "../subscription-translations"
+import { computerUseTranslations } from "../computer-use-translations"
 import { skillLibraryTranslations } from "../skill-library-translations"
 import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
 
@@ -145,6 +146,7 @@ export const deDE = {
   "settings.nav.storage": "Speicher",
   "settings.nav.archive": "Archivierte Sitzungen",
   ...subscriptionTranslations["de-DE"],
+  ...computerUseTranslations["de-DE"],
   ...skillLibraryTranslations["de-DE"],
   "settings.about.version": "Version",
   "settings.about.checkUpdates": "Nach Updates suchen",

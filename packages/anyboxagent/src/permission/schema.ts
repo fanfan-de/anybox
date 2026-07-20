@@ -25,16 +25,82 @@ export const Continuation = z.enum(["tool-retry", "in-process"]).meta({
 })
 export type Continuation = z.infer<typeof Continuation>
 
+type BrowserOriginScope = {
+  kind: "browser-origin"
+  sessionID: string
+  extensionInstanceID: string
+  origin: string
+  browserID?: string
+}
+
+type ComputerUseAppScope = {
+  kind: "computer-use-app"
+  sessionID: string
+  appID: string
+  appDisplayName: string
+}
+
+type PluginCapabilityScope = {
+  kind: "plugin-capability"
+  sessionID: string
+  capabilityID: string
+  capabilityDisplayName: string
+  operationTitle: string
+  operationSummary: string
+  operationBody?: string
+}
+
+export type Scope = BrowserOriginScope | ComputerUseAppScope | PluginCapabilityScope
+
 export const Scope = z.object({
-  kind: z.literal("browser-origin"),
+  kind: z.enum(["browser-origin", "computer-use-app", "plugin-capability"]),
   sessionID: Identifier.schema("session"),
-  extensionInstanceID: z.string().trim().min(1).max(256),
-  origin: z.string().trim().min(1).max(2_048),
+  extensionInstanceID: z.string().trim().min(1).max(256).optional(),
+  origin: z.string().trim().min(1).max(2_048).optional(),
   browserID: z.string().trim().min(1).max(256).optional(),
-}).strict().meta({
+  appID: z.string().trim().min(1).max(512).optional(),
+  appDisplayName: z.string().trim().min(1).max(256).optional(),
+  capabilityID: z.string().trim().regex(/^[a-z0-9][a-z0-9_-]*$/u).optional(),
+  capabilityDisplayName: z.string().trim().min(1).max(256).optional(),
+  operationTitle: z.string().trim().min(1).max(256).optional(),
+  operationSummary: z.string().trim().min(1).max(1_000).optional(),
+  operationBody: z.string().trim().min(1).max(4_000).optional(),
+}).strict().superRefine((scope, context) => {
+  if (
+    scope.kind === "browser-origin"
+    && (!scope.extensionInstanceID || !scope.origin)
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Browser origin scope requires extensionInstanceID and origin.",
+    })
+  }
+  if (
+    scope.kind === "computer-use-app"
+    && (!scope.appID || !scope.appDisplayName)
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Computer Use app scope requires appID and appDisplayName.",
+    })
+  }
+  if (
+    scope.kind === "plugin-capability"
+    && (
+      !scope.capabilityID
+      || !scope.capabilityDisplayName
+      || !scope.operationTitle
+      || !scope.operationSummary
+    )
+  ) {
+    context.addIssue({
+      code: "custom",
+      message: "Plugin capability scope requires capability and operation display metadata.",
+    })
+  }
+}).meta({
   ref: "PermissionScope",
-})
-export type Scope = z.infer<typeof Scope>
+}) as unknown as z.ZodType<Scope>
 
 export const RequestStatus = z.enum(["pending", "approved", "denied", "expired"]).meta({
   ref: "PermissionRequestStatus",

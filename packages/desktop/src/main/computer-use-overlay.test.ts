@@ -40,6 +40,68 @@ afterEach(() => {
 })
 
 describe("computer use overlay runtime event detection", () => {
+  it("uses explicit Computer Use lease events without tool-name coupling", () => {
+    const started = readComputerUseRuntimeEvent({
+      event: "runtime",
+      data: {
+        sessionID: "ses_1",
+        turnID: "trn_1",
+        type: "computer.use.started",
+        payload: {
+          leaseID: "cu_lease_1",
+          appDisplayName: "Notepad",
+        },
+      },
+    })
+    const stopped = readComputerUseRuntimeEvent({
+      event: "runtime",
+      data: {
+        sessionID: "ses_1",
+        turnID: "trn_1",
+        type: "computer.use.stopped",
+        payload: {
+          leaseID: "cu_lease_1",
+          reason: "turn-terminal",
+        },
+      },
+    })
+
+    expect(started).toEqual({
+      type: "tool-started",
+      callKey: "ses_1:trn_1:cu_lease_1",
+      callID: "cu_lease_1",
+      title: "Computer Use · Notepad",
+      tool: "mcp_anybox_computer_use",
+      turnID: "trn_1",
+    })
+    expect(stopped).toMatchObject({
+      type: "tool-settled",
+      callKey: "ses_1:trn_1:cu_lease_1",
+    })
+  })
+
+  it("reads explicit app changes", () => {
+    expect(readComputerUseRuntimeEvent({
+      event: "runtime",
+      data: {
+        sessionID: "ses_1",
+        turnID: "trn_1",
+        type: "computer.use.app_changed",
+        payload: {
+          leaseID: "cu_lease_1",
+          appID: "app_1",
+          appDisplayName: "Calculator",
+        },
+      },
+    })).toEqual({
+      type: "app-changed",
+      callKey: "ses_1:trn_1:cu_lease_1",
+      appDisplayName: "Calculator",
+      leaseID: "cu_lease_1",
+      turnID: "trn_1",
+    })
+  })
+
   it("detects Computer Use Windows tool starts", () => {
     const event = readComputerUseRuntimeEvent({
       event: "runtime",

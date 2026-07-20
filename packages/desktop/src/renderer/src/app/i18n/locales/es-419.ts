@@ -1,5 +1,6 @@
 import type { TranslationKey } from "../translations"
 import { subscriptionTranslations } from "../subscription-translations"
+import { computerUseTranslations } from "../computer-use-translations"
 import { skillLibraryTranslations } from "../skill-library-translations"
 import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
 
@@ -145,6 +146,7 @@ export const es419 = {
   "settings.nav.storage": "Almacenamiento",
   "settings.nav.archive": "Sesiones archivadas",
   ...subscriptionTranslations["es-419"],
+  ...computerUseTranslations["es-419"],
   ...skillLibraryTranslations["es-419"],
   "settings.about.version": "Versión",
   "settings.about.checkUpdates": "Buscar actualizaciones",

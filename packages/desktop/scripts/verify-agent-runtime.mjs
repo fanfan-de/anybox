@@ -8,6 +8,7 @@ import {
   validateMediaRuntimeLock,
   verifyMediaRuntime,
 } from "./verify-media-runtime.mjs"
+import { verifyComputerUseSupplyChainMetadata } from "./computer-use-supply-chain.mjs"
 import { LINUX_PYTHON_DISTRIBUTION } from "./prepare-workspace-dependencies.mjs"
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
@@ -15,6 +16,7 @@ const desktopDir = path.resolve(scriptDir, "..")
 const agentDir = path.resolve(desktopDir, "..", "anyboxagent")
 const runtimeBuildDir = path.join(desktopDir, "build")
 const runtimeDir = resolveRuntimeOutputDirectory()
+const releaseStrict = process.argv.includes("--release-strict")
 const dependenciesDir = path.join(runtimeDir, "dependencies")
 const bunExecutableName = process.platform === "win32" ? "bun.exe" : "bun"
 
@@ -119,6 +121,18 @@ const requiredFiles = [
   path.join(runtimeDir, "connectors", "gmail", "server.js"),
   path.join(runtimeDir, "connectors", "feishu", "server.js"),
   path.join(runtimeDir, "mcp", "node-repl", "server.js"),
+  path.join(runtimeDir, "mcp", "node-repl", "package.json"),
+  path.join(runtimeDir, "mcp", "computer-use", "server.js"),
+  path.join(runtimeDir, "mcp", "computer-use", "lib", "tool-definitions.js"),
+  ...(process.platform === "win32"
+    ? [
+        path.join(runtimeDir, "computer-use", "win32-x64", "computer-use-helper.exe"),
+        path.join(runtimeDir, "computer-use", "win32-x64", "computer-use-helper.sha256"),
+        path.join(runtimeDir, "computer-use", "manifest.json"),
+        path.join(runtimeDir, "computer-use", "sbom.cdx.json"),
+        path.join(runtimeDir, "computer-use", "provenance.intoto.json"),
+      ]
+    : []),
   path.join(runtimeDir, bunExecutableName),
   path.join(runtimeDir, "node_modules", "node-pty", "package.json"),
   path.join(dependenciesDir, "manifest.json"),
@@ -133,6 +147,35 @@ if (missing.length > 0) {
     console.error(`- ${filePath}`)
   }
   process.exit(1)
+}
+
+if (process.platform === "win32") {
+  const helperDir = path.join(runtimeDir, "computer-use", "win32-x64")
+  const helperPath = path.join(helperDir, "computer-use-helper.exe")
+  const expected = fs
+    .readFileSync(path.join(helperDir, "computer-use-helper.sha256"), "utf8")
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)[0]
+  const actual = await sha256(helperPath)
+  if (!/^[a-f0-9]{64}$/.test(expected) || expected !== actual) {
+    console.error("[desktop][build] Computer Use helper digest mismatch")
+    process.exit(1)
+  }
+  try {
+    const supplyChain = await verifyComputerUseSupplyChainMetadata({
+      runtimeDir,
+      releaseStrict,
+    })
+    console.log(
+      `[desktop][computer-use] verified ${supplyChain.files} artifacts; Authenticode=${supplyChain.authenticodeStatus}`,
+    )
+  } catch (error) {
+    console.error(
+      `[desktop][build] ${error instanceof Error ? error.message : error}`,
+    )
+    process.exit(1)
+  }
 }
 
 const pluginOwnedRuntimeFiles = [
@@ -253,7 +296,6 @@ if (nodeSmoke.status !== 0) {
 }
 
 try {
-  const releaseStrict = process.argv.includes("--release-strict")
   const mediaToolsDir = path.join(runtimeDir, "media-tools")
   const deliverBetaBuild = process.env.ANYBOX_DELIVER_BETA_BUILD === "1"
   if (deliverBetaBuild && fs.existsSync(mediaToolsDir)) {

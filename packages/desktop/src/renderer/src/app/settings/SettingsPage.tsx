@@ -46,6 +46,7 @@ import {
   MinimizeIcon,
   GeneralSettingsIcon,
   ModelSettingsIcon,
+  McpIcon,
   PaletteIcon,
   PlusIcon,
   ProviderSettingsIcon,
@@ -85,6 +86,7 @@ import type {
 } from "../types"
 import { McpToolsPolicyPanel } from "../mcp/McpToolsPolicyPanel"
 import { SubscriptionSettingsPanel } from "./SubscriptionSettingsPanel"
+import { ComputerUseSettingsPanel } from "./ComputerUseSettingsPanel"
 import {
   buildMcpServerPluginSourceMap,
   getMcpServerPluginSource,
@@ -2651,6 +2653,7 @@ type SettingsSectionKey =
   | "defaults"
   | "mcp"
   | "appearance"
+  | "computer-use"
   | "developer"
   | "storage"
   | "archive"
@@ -3842,6 +3845,7 @@ export function SettingsPage({
           { key: "services" as const, label: t("settings.nav.provider"), Icon: ProviderSettingsIcon },
           { key: "defaults" as const, label: t("settings.nav.models"), Icon: ModelSettingsIcon },
           { key: "appearance" as const, label: t("settings.nav.appearance"), Icon: PaletteIcon },
+          { key: "computer-use" as const, label: t("settings.nav.computerUse"), Icon: McpIcon },
           { key: "developer" as const, label: t("settings.nav.developer"), Icon: CodeModeIcon },
           { key: "storage" as const, label: t("settings.nav.storage"), Icon: StorageSettingsIcon },
           { key: "archive" as const, label: t("settings.nav.archive"), Icon: ArchiveRestoreIcon },
@@ -4188,6 +4192,8 @@ export function SettingsPage({
                   onHtmlBackgroundConfigChange={onHtmlBackgroundConfigChange}
                   onOpenAppearanceWindow={() => void openAppearanceWindow()}
                 />
+              ) : activeSection === "computer-use" ? (
+                <ComputerUseSettingsPanel />
               ) : activeSection === "developer" ? (
                 <div className="settings-developer-layout">
                   <SettingsDisclosurePanel

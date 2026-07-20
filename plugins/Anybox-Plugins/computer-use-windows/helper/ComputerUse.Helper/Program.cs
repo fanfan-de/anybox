@@ -1,858 +1,452 @@
-using System.Diagnostics;
-using System.Drawing;
-using System.Drawing.Imaging;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
+using ComputerUse.Helper.Accessibility;
+using ComputerUse.Helper.Apps;
+using ComputerUse.Helper.Capture;
+using ComputerUse.Helper.Input;
+using ComputerUse.Helper.Policy;
+using ComputerUse.Helper.Protocol;
+using ComputerUse.Helper.State;
+using ComputerUse.Helper.Windows;
+using static ComputerUse.Helper.Windows.NativeMethods;
+
+namespace ComputerUse.Helper;
 
 internal static class Program
 {
-    private static readonly JsonSerializerOptions Options = new()
+    private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = false,
     };
 
+    private static bool _initialized;
+    private static HostBrokerConnection? _hostBroker;
+
     [STAThread]
-    public static void Main()
+    public static void Main(string[] args)
     {
         Console.InputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
         Console.OutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
-        SetDpiAwareness();
+        TrySetDpiAwareness();
+        _hostBroker = HostBrokerConnection.TryAccept(args);
+        using var hostBroker = _hostBroker;
+        var input = hostBroker?.Stream ?? Console.OpenStandardInput();
+        var output = hostBroker?.Stream ?? Console.OpenStandardOutput();
+        PhysicalInputState.SetPhysicalEscapeHandler(
+            hostBroker is null
+                ? null
+                : () => WriteNotification(output, "physical_escape", new
+                {
+                    inputEpoch = PhysicalInputState.Epoch,
+                })
+        );
+        using var physicalInputMonitor = PhysicalInputMonitor.Start();
 
-        string? line;
-        while ((line = Console.ReadLine()) is not null)
+        while (true)
         {
-            if (string.IsNullOrWhiteSpace(line))
-            {
-                continue;
-            }
-
+            JsonDocument? document;
             try
             {
-                using var document = JsonDocument.Parse(line);
-                var root = document.RootElement;
-                var id = root.TryGetProperty("id", out var idElement) ? idElement.GetString() ?? "" : "";
-                var command = root.TryGetProperty("command", out var commandElement) ? commandElement.GetString() ?? "" : "";
-                var parameters = root.TryGetProperty("params", out var paramsElement) ? paramsElement : default;
+                document = FrameProtocol.Read(input);
+            }
+            catch (ComputerUseException error)
+            {
+                WriteError(output, null, error);
+                break;
+            }
+            if (document is null)
+            {
+                break;
+            }
 
-                var result = command switch
+            using (document)
+            {
+                HandleRequest(document.RootElement, output);
+            }
+        }
+        PhysicalInputState.SetPhysicalEscapeHandler(null);
+    }
+
+    private static void HandleRequest(JsonElement root, Stream output)
+    {
+        JsonElement? id = null;
+        try
+        {
+            if (
+                root.ValueKind != JsonValueKind.Object
+                || JsonArgs.String(root, "jsonrpc") != "2.0"
+            )
+            {
+                throw new ComputerUseException(
+                    "CU_PROTOCOL_MISMATCH",
+                    "Computer Use helper requires JSON-RPC 2.0."
+                );
+            }
+            var idElement = JsonArgs.Property(root, "id");
+            if (idElement.ValueKind is not (JsonValueKind.String or JsonValueKind.Number))
+            {
+                throw new ComputerUseException(
+                    "CU_PROTOCOL_MISMATCH",
+                    "Computer Use helper requires a string or numeric request id."
+                );
+            }
+            id = idElement.Clone();
+            AssertDeadline(root);
+            AssertHostMetadata(root);
+            var method = JsonArgs.String(root, "method", required: true);
+            var parameters = JsonArgs.PropertyOrDefault(root, "params");
+            if (parameters.ValueKind == JsonValueKind.Undefined)
+            {
+                using var empty = JsonDocument.Parse("{}");
+                parameters = empty.RootElement.Clone();
+            }
+
+            object result;
+            if (method == "initialize")
+            {
+                result = Initialize(parameters);
+                _initialized = true;
+            }
+            else
+            {
+                if (!_initialized)
                 {
-                    "health_check" => HealthCheck(),
-                    "list_windows" => ListWindows(),
-                    "resolve_window" => ResolveWindow(parameters),
-                    "activate_window" => ActivateWindow(parameters),
-                    "capture_window" => CaptureWindow(parameters),
-                    "send_input" => SendInputCommand(parameters),
-                    _ => throw new InvalidOperationException($"Unknown helper command: {command}"),
-                };
-
-                WriteJson(new { id, ok = true, result }, Options);
+                    throw new ComputerUseException(
+                        "CU_PROTOCOL_MISMATCH",
+                        "Computer Use helper must be initialized before use."
+                    );
+                }
+                result = Dispatch(method, parameters);
             }
-            catch (Exception error)
+            FrameProtocol.Write(output, new
             {
-                var id = TryReadID(line);
-                WriteJson(new { id, ok = false, error = error.Message }, Options);
-            }
+                jsonrpc = "2.0",
+                id,
+                result,
+            }, SerializerOptions);
+        }
+        catch (ComputerUseException error)
+        {
+            WriteError(output, id, error);
+        }
+        catch (Exception error)
+        {
+            WriteError(
+                output,
+                id,
+                new ComputerUseException(
+                    "CU_INTERNAL_ERROR",
+                    "Computer Use helper encountered an internal error.",
+                    retryable: true,
+                    innerException: error
+                )
+            );
         }
     }
 
-static object HealthCheck()
-{
-    return new
+    private static object Initialize(JsonElement parameters)
     {
-        platform = "win32",
-        helper = "computer-use-helper",
-        version = "0.1.1",
-        captureBackend = "win32-copy-from-screen",
-        inputBackend = "SendInput",
-    };
-}
-
-static object ListWindows()
-{
-    var windows = new List<object>();
-    EnumWindows((hwnd, _) =>
-    {
-        if (!IsCandidateWindow(hwnd))
+        var protocolVersion = JsonArgs.Int32(parameters, "protocolVersion");
+        var maxFrameBytes = JsonArgs.Int32(parameters, "maxFrameBytes");
+        if (
+            protocolVersion != BuildInfo.ProtocolVersion
+            || maxFrameBytes != BuildInfo.MaxFrameBytes
+        )
         {
-            return true;
+            throw new ComputerUseException(
+                "CU_PROTOCOL_MISMATCH",
+                $"Helper protocol {BuildInfo.ProtocolVersion} is not compatible with the client."
+            );
         }
-
-        var info = WindowInfo.FromHandle(hwnd);
-        if (info is not null)
+        if (_hostBroker is not null)
         {
-            windows.Add(info.ToPublicObject());
+            _hostBroker.AssertAndConsumeToken(
+                JsonArgs.String(parameters, "brokerToken", required: true)
+            );
         }
-
-        return true;
-    }, IntPtr.Zero);
-
-    return new { windows };
-}
-
-static object ResolveWindow(JsonElement parameters)
-{
-    var hwnd = GetHwnd(parameters);
-    var info = WindowInfo.FromHandle(hwnd) ?? throw new InvalidOperationException("Window is no longer available.");
-    return new { window = info.ToPublicObject() };
-}
-
-static object ActivateWindow(JsonElement parameters)
-{
-    var hwnd = GetHwnd(parameters);
-    var info = EnsureWindow(hwnd);
-    RestoreAndActivate(hwnd);
-    Thread.Sleep(80);
-    info = WindowInfo.FromHandle(hwnd) ?? info;
-    return new { window = info.ToPublicObject() };
-}
-
-static object CaptureWindow(JsonElement parameters)
-{
-    var hwnd = GetHwnd(parameters);
-    RestoreAndActivate(hwnd);
-    Thread.Sleep(120);
-
-    var info = WindowInfo.FromHandle(hwnd) ?? throw new InvalidOperationException("Window is no longer available.");
-    if (info.Bounds.Width <= 0 || info.Bounds.Height <= 0)
-    {
-        throw new InvalidOperationException("Window has invalid capture bounds.");
-    }
-
-    using var bitmap = new Bitmap(info.Bounds.Width, info.Bounds.Height);
-    using (var graphics = Graphics.FromImage(bitmap))
-    {
-        graphics.CopyFromScreen(info.Bounds.Left, info.Bounds.Top, 0, 0, new Size(info.Bounds.Width, info.Bounds.Height), CopyPixelOperation.SourceCopy);
-    }
-
-    using var stream = new MemoryStream();
-    bitmap.Save(stream, ImageFormat.Png);
-
-    return new
-    {
-        window = info.ToPublicObject(),
-        imageBase64 = Convert.ToBase64String(stream.ToArray()),
-        imageWidth = info.Bounds.Width,
-        imageHeight = info.Bounds.Height,
-        accessibility = (object?)null,
-    };
-}
-
-static object SendInputCommand(JsonElement parameters)
-{
-    var hwnd = GetHwnd(parameters);
-    var action = GetString(parameters, "action", required: true);
-    var info = EnsureWindow(hwnd);
-    RestoreAndActivate(hwnd);
-    Thread.Sleep(60);
-
-    switch (action)
-    {
-        case "click":
-            Click(info.Bounds, GetInt(parameters, "x"), GetInt(parameters, "y"), GetString(parameters, "button", false) ?? "left", GetInt(parameters, "clickCount", 1));
-            break;
-        case "scroll":
-            Scroll(info.Bounds, GetInt(parameters, "x"), GetInt(parameters, "y"), GetInt(parameters, "deltaY", 0), GetInt(parameters, "deltaX", 0));
-            break;
-        case "press_key":
-            PressKeys(ReadStringArray(parameters, "keys"));
-            break;
-        case "type_text":
-            TypeText(GetString(parameters, "text", required: true));
-            break;
-        case "drag":
-            Drag(info.Bounds, GetInt(parameters, "fromX"), GetInt(parameters, "fromY"), GetInt(parameters, "toX"), GetInt(parameters, "toY"));
-            break;
-        default:
-            throw new InvalidOperationException($"Unsupported input action: {action}");
-    }
-
-    return new { ok = true };
-}
-
-static WindowInfo EnsureWindow(IntPtr hwnd)
-{
-    if (!IsWindow(hwnd))
-    {
-        throw new InvalidOperationException("Window is no longer available.");
-    }
-
-    return WindowInfo.FromHandle(hwnd) ?? throw new InvalidOperationException("Window is not controllable.");
-}
-
-static void RestoreAndActivate(IntPtr hwnd)
-{
-    if (IsIconic(hwnd))
-    {
-        ShowWindowAsync(hwnd, 9);
-    }
-
-    SetForegroundWindow(hwnd);
-}
-
-static bool IsCandidateWindow(IntPtr hwnd)
-{
-    if (hwnd == IntPtr.Zero || !IsWindow(hwnd) || !IsWindowVisible(hwnd))
-    {
-        return false;
-    }
-
-    if (IsCloaked(hwnd))
-    {
-        return false;
-    }
-
-    var title = GetWindowTitle(hwnd);
-    if (string.IsNullOrWhiteSpace(title))
-    {
-        return false;
-    }
-
-    if (!TryGetWindowBounds(hwnd, out var bounds) || bounds.Width <= 0 || bounds.Height <= 0)
-    {
-        return false;
-    }
-
-    return true;
-}
-
-static bool IsCloaked(IntPtr hwnd)
-{
-    var cloaked = 0;
-    var result = DwmGetWindowAttribute(hwnd, 14, out cloaked, Marshal.SizeOf<int>());
-    return result == 0 && cloaked != 0;
-}
-
-static string GetWindowTitle(IntPtr hwnd)
-{
-    var length = GetWindowTextLength(hwnd);
-    if (length <= 0)
-    {
-        return "";
-    }
-
-    var builder = new StringBuilder(length + 1);
-    GetWindowText(hwnd, builder, builder.Capacity);
-    return builder.ToString();
-}
-
-static bool TryGetWindowBounds(IntPtr hwnd, out Rect bounds)
-{
-    if (DwmGetWindowAttribute(hwnd, 9, out RECT extendedFrame, Marshal.SizeOf<RECT>()) == 0 &&
-        extendedFrame.Right > extendedFrame.Left &&
-        extendedFrame.Bottom > extendedFrame.Top)
-    {
-        bounds = Rect.FromRECT(extendedFrame);
-        return true;
-    }
-
-    if (GetWindowRect(hwnd, out var rect))
-    {
-        bounds = Rect.FromRECT(rect);
-        return true;
-    }
-
-    bounds = default;
-    return false;
-}
-
-static Rect GetClientBounds(IntPtr hwnd, Rect windowBounds)
-{
-    if (!GetClientRect(hwnd, out var clientRect))
-    {
-        return new Rect(0, 0, windowBounds.Width, windowBounds.Height);
-    }
-
-    var topLeft = new POINT { X = 0, Y = 0 };
-    ClientToScreen(hwnd, ref topLeft);
-
-    return new Rect(
-        topLeft.X - windowBounds.Left,
-        topLeft.Y - windowBounds.Top,
-        clientRect.Right - clientRect.Left,
-        clientRect.Bottom - clientRect.Top
-    );
-}
-
-static IntPtr GetHwnd(JsonElement parameters)
-{
-    var raw = GetString(parameters, "hwnd", required: true);
-    if (!long.TryParse(raw, out var value))
-    {
-        throw new InvalidOperationException("Invalid hwnd.");
-    }
-
-    return new IntPtr(value);
-}
-
-static string GetString(JsonElement parameters, string name, bool required = false)
-{
-    if (parameters.ValueKind == JsonValueKind.Object &&
-        parameters.TryGetProperty(name, out var value) &&
-        value.ValueKind == JsonValueKind.String)
-    {
-        return value.GetString() ?? "";
-    }
-
-    if (required)
-    {
-        throw new InvalidOperationException($"Missing required parameter: {name}");
-    }
-
-    return "";
-}
-
-static int GetInt(JsonElement parameters, string name, int? fallback = null)
-{
-    if (parameters.ValueKind == JsonValueKind.Object &&
-        parameters.TryGetProperty(name, out var value))
-    {
-        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number))
+        return new
         {
-            return number;
-        }
-
-        if (value.ValueKind == JsonValueKind.String && int.TryParse(value.GetString(), out number))
-        {
-            return number;
-        }
-    }
-
-    if (fallback.HasValue)
-    {
-        return fallback.Value;
-    }
-
-    throw new InvalidOperationException($"Missing required numeric parameter: {name}");
-}
-
-static string[] ReadStringArray(JsonElement parameters, string name)
-{
-    if (parameters.ValueKind != JsonValueKind.Object ||
-        !parameters.TryGetProperty(name, out var value) ||
-        value.ValueKind != JsonValueKind.Array)
-    {
-        throw new InvalidOperationException($"Missing required array parameter: {name}");
-    }
-
-    return value.EnumerateArray()
-        .Where(item => item.ValueKind == JsonValueKind.String)
-        .Select(item => item.GetString() ?? "")
-        .Where(item => !string.IsNullOrWhiteSpace(item))
-        .ToArray();
-}
-
-static void Click(Rect bounds, int x, int y, string button, int clickCount)
-{
-    var screenX = bounds.Left + x;
-    var screenY = bounds.Top + y;
-    SetCursorPos(screenX, screenY);
-    Thread.Sleep(30);
-
-    var down = button.Equals("right", StringComparison.OrdinalIgnoreCase) ? MouseFlags.RightDown : MouseFlags.LeftDown;
-    var up = button.Equals("right", StringComparison.OrdinalIgnoreCase) ? MouseFlags.RightUp : MouseFlags.LeftUp;
-    var count = Math.Clamp(clickCount, 1, 2);
-
-    for (var index = 0; index < count; index++)
-    {
-        SendMouse(down, 0);
-        Thread.Sleep(25);
-        SendMouse(up, 0);
-        Thread.Sleep(80);
-    }
-}
-
-static void Scroll(Rect bounds, int x, int y, int deltaY, int deltaX)
-{
-    SetCursorPos(bounds.Left + x, bounds.Top + y);
-    Thread.Sleep(30);
-
-    if (deltaY != 0)
-    {
-        SendMouse(MouseFlags.Wheel, deltaY);
-    }
-
-    if (deltaX != 0)
-    {
-        SendMouse(MouseFlags.HWheel, deltaX);
-    }
-}
-
-static void Drag(Rect bounds, int fromX, int fromY, int toX, int toY)
-{
-    var startX = bounds.Left + fromX;
-    var startY = bounds.Top + fromY;
-    var endX = bounds.Left + toX;
-    var endY = bounds.Top + toY;
-
-    SetCursorPos(startX, startY);
-    Thread.Sleep(40);
-    SendMouse(MouseFlags.LeftDown, 0);
-    Thread.Sleep(60);
-
-    const int steps = 18;
-    for (var step = 1; step <= steps; step++)
-    {
-        var x = startX + (endX - startX) * step / steps;
-        var y = startY + (endY - startY) * step / steps;
-        SetCursorPos(x, y);
-        Thread.Sleep(12);
-    }
-
-    SendMouse(MouseFlags.LeftUp, 0);
-}
-
-static void TypeText(string text)
-{
-    if (text.Any(character => character > 0x7F))
-    {
-        PasteText(text);
-        return;
-    }
-
-    foreach (var character in text)
-    {
-        SendUnicode(character, keyUp: false);
-        SendUnicode(character, keyUp: true);
-    }
-}
-
-static void PasteText(string text)
-{
-    var capturedClipboard = TryCaptureClipboard(out var previousClipboard);
-
-    try
-    {
-        RunClipboardAction(() => System.Windows.Forms.Clipboard.SetText(text, System.Windows.Forms.TextDataFormat.UnicodeText));
-        Thread.Sleep(80);
-        PressKeys(["ctrl", "v"]);
-        Thread.Sleep(400);
-    }
-    finally
-    {
-        if (capturedClipboard)
-        {
-            TryRestoreClipboard(previousClipboard);
-        }
-    }
-}
-
-static bool TryCaptureClipboard(out System.Windows.Forms.IDataObject? data)
-{
-    try
-    {
-        data = RunClipboardFunc(System.Windows.Forms.Clipboard.GetDataObject);
-        return true;
-    }
-    catch
-    {
-        data = null;
-        return false;
-    }
-}
-
-static void TryRestoreClipboard(System.Windows.Forms.IDataObject? data)
-{
-    try
-    {
-        if (data is null)
-        {
-            RunClipboardAction(System.Windows.Forms.Clipboard.Clear);
-            return;
-        }
-
-        RunClipboardAction(() => System.Windows.Forms.Clipboard.SetDataObject(data, copy: true));
-    }
-    catch
-    {
-        // Best-effort clipboard restoration. The typed text is more important than
-        // failing the helper after the target app already received input.
-    }
-}
-
-static T RunClipboardFunc<T>(Func<T> action)
-{
-    Exception? lastError = null;
-    for (var attempt = 0; attempt < 6; attempt++)
-    {
-        try
-        {
-            return action();
-        }
-        catch (ExternalException error)
-        {
-            lastError = error;
-            Thread.Sleep(50);
-        }
-        catch (InvalidOperationException error)
-        {
-            lastError = error;
-            Thread.Sleep(50);
-        }
-    }
-
-    throw lastError ?? new InvalidOperationException("Clipboard operation failed.");
-}
-
-static void RunClipboardAction(Action action)
-{
-    RunClipboardFunc(() =>
-    {
-        action();
-        return true;
-    });
-}
-
-static void PressKeys(string[] keys)
-{
-    if (keys.Length == 0)
-    {
-        throw new InvalidOperationException("press_key requires at least one key.");
-    }
-
-    var virtualKeys = keys.Select(KeyToVirtualKey).ToArray();
-    foreach (var key in virtualKeys)
-    {
-        SendKey(key, keyUp: false);
-    }
-
-    Thread.Sleep(30);
-
-    for (var index = virtualKeys.Length - 1; index >= 0; index--)
-    {
-        SendKey(virtualKeys[index], keyUp: true);
-    }
-}
-
-static ushort KeyToVirtualKey(string key)
-{
-    var normalized = key.Trim().ToLowerInvariant();
-    return normalized switch
-    {
-        "ctrl" or "control" => 0x11,
-        "shift" => 0x10,
-        "alt" => 0x12,
-        "win" or "meta" => 0x5B,
-        "enter" or "return" => 0x0D,
-        "tab" => 0x09,
-        "escape" or "esc" => 0x1B,
-        "backspace" => 0x08,
-        "delete" or "del" => 0x2E,
-        "space" => 0x20,
-        "up" or "arrowup" => 0x26,
-        "down" or "arrowdown" => 0x28,
-        "left" or "arrowleft" => 0x25,
-        "right" or "arrowright" => 0x27,
-        "home" => 0x24,
-        "end" => 0x23,
-        "pageup" => 0x21,
-        "pagedown" => 0x22,
-        _ when normalized.Length == 1 => (ushort)char.ToUpperInvariant(normalized[0]),
-        _ when normalized.StartsWith('f') && int.TryParse(normalized[1..], out var number) && number is >= 1 and <= 24 => (ushort)(0x70 + number - 1),
-        _ => throw new InvalidOperationException($"Unsupported key: {key}"),
-    };
-}
-
-static void SendMouse(MouseFlags flags, int mouseData)
-{
-    var input = new INPUT
-    {
-        type = 0,
-        union = new InputUnion
-        {
-            mi = new MOUSEINPUT
+            protocolVersion = BuildInfo.ProtocolVersion,
+            helperVersion = BuildInfo.HelperVersion,
+            minClientVersion = BuildInfo.HelperVersion,
+            capabilities = new
             {
-                dwFlags = (uint)flags,
-                mouseData = mouseData,
+                wgc = WgcCapture.IsSupported(),
+                uia = UiaSnapshot.IsSupported(),
+                listApps = true,
+                launchApp = true,
+                elementActions = UiaSnapshot.IsSupported(),
+                physicalInputEpoch = PhysicalInputState.IsAvailable,
+                physicalEscape = _hostBroker is not null,
+                hostBroker = _hostBroker is not null,
             },
-        },
-    };
-
-    SendInputs(input);
-}
-
-static void SendKey(ushort virtualKey, bool keyUp)
-{
-    var input = new INPUT
-    {
-        type = 1,
-        union = new InputUnion
-        {
-            ki = new KEYBDINPUT
-            {
-                wVk = virtualKey,
-                dwFlags = keyUp ? 0x0002u : 0u,
-            },
-        },
-    };
-
-    SendInputs(input);
-}
-
-static void SendUnicode(char character, bool keyUp)
-{
-    var input = new INPUT
-    {
-        type = 1,
-        union = new InputUnion
-        {
-            ki = new KEYBDINPUT
-            {
-                wScan = character,
-                dwFlags = 0x0004u | (keyUp ? 0x0002u : 0u),
-            },
-        },
-    };
-
-    SendInputs(input);
-}
-
-static void SendInputs(INPUT input)
-{
-    var inputs = new[] { input };
-    var sent = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
-    if (sent != inputs.Length)
-    {
-        throw new InvalidOperationException("SendInput failed.");
-    }
-}
-
-static void SetDpiAwareness()
-{
-    try
-    {
-        SetProcessDpiAwarenessContext(new IntPtr(-4));
-    }
-    catch
-    {
-        // DPI awareness is a best-effort setup.
-    }
-}
-
-static string TryReadID(string raw)
-{
-    try
-    {
-        using var document = JsonDocument.Parse(raw);
-        return document.RootElement.TryGetProperty("id", out var id) ? id.GetString() ?? "" : "";
-    }
-    catch
-    {
-        return "";
-    }
-}
-
-static void WriteJson(object payload, JsonSerializerOptions options)
-{
-    Console.Out.WriteLine(JsonSerializer.Serialize(payload, options));
-    Console.Out.Flush();
-}
-
-sealed record WindowInfo(
-    string Hwnd,
-    int Pid,
-    string Title,
-    string ProcessName,
-    string? ProcessPath,
-    Rect Bounds,
-    Rect ClientBounds,
-    double DpiScale
-)
-{
-    public static WindowInfo? FromHandle(IntPtr hwnd)
-    {
-        if (!IsWindow(hwnd))
-        {
-            return null;
-        }
-
-        GetWindowThreadProcessId(hwnd, out var pid);
-        var title = GetWindowTitle(hwnd);
-        if (!TryGetWindowBounds(hwnd, out var bounds))
-        {
-            return null;
-        }
-
-        var processName = "";
-        string? processPath = null;
-        try
-        {
-            using var process = Process.GetProcessById((int)pid);
-            processName = process.ProcessName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
-                ? process.ProcessName
-                : $"{process.ProcessName}.exe";
-            processPath = process.MainModule?.FileName;
-        }
-        catch
-        {
-            processName = $"pid-{pid}";
-        }
-
-        uint dpi = 96;
-        try
-        {
-            dpi = GetDpiForWindow(hwnd);
-        }
-        catch
-        {
-            dpi = 96;
-        }
-
-        return new WindowInfo(
-            hwnd.ToInt64().ToString(),
-            (int)pid,
-            title,
-            processName,
-            processPath,
-            bounds,
-            GetClientBounds(hwnd, bounds),
-            Math.Round(dpi / 96.0, 4)
-        );
+        };
     }
 
-    public object ToPublicObject()
+    private static object Dispatch(string method, JsonElement parameters)
+    {
+        return method switch
+        {
+            "health_check" => HealthCheck(),
+            "list_apps" => AppCatalog.ListApps(),
+            "list_windows" => ListWindows(),
+            "resolve_window" => ResolveWindow(parameters),
+            "activate_window" => ActivateWindow(parameters),
+            "get_window_state" => GetWindowState(parameters),
+            "launch_app" => LaunchApp(parameters),
+            "perform_action" => InputController.Perform(parameters),
+            "end_turn" => EndTurn(),
+            _ => throw new ComputerUseException(
+                "CU_PROTOCOL_MISMATCH",
+                $"Unknown Computer Use helper method: {method}"
+            ),
+        };
+    }
+
+    private static object EndTurn()
+    {
+        NativeStateRegistry.InvalidateAll();
+        return new { ended = true };
+    }
+
+    private static object HealthCheck()
     {
         return new
         {
-            hwnd = Hwnd,
-            pid = Pid,
-            title = Title,
-            processName = ProcessName,
-            processPath = ProcessPath,
-            bounds = Bounds,
-            clientBounds = ClientBounds,
-            dpiScale = DpiScale,
+            protocolVersion = BuildInfo.ProtocolVersion,
+            helperVersion = BuildInfo.HelperVersion,
+            platform = "win32-x64",
+            captureBackend = "windows-graphics-capture",
+            accessibilityBackend = UiaSnapshot.IsSupported() ? "uia" : "unavailable",
+            accessibilityDiagnostic = UiaSnapshot.SupportDiagnostic,
+            physicalInputDiagnostic = PhysicalInputState.Diagnostic,
+            inputBackend = "send-input",
+            helperIntegrityLevel = IntegrityInspector.CurrentLevel,
+            features = new
+            {
+                listApps = true,
+                launchApp = true,
+                elementActions = UiaSnapshot.IsSupported(),
+                physicalInputEpoch = PhysicalInputState.IsAvailable,
+                physicalEscape = _hostBroker is not null,
+                hostBroker = _hostBroker is not null,
+            },
         };
     }
-}
 
-readonly record struct Rect(int Left, int Top, int Width, int Height)
-{
-    public static Rect FromRECT(RECT rect)
+    private static object ListWindows()
     {
-        return new Rect(rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top);
+        var windows = WindowInfo
+            .EnumerateCandidates()
+            .Select(window => window.ToProtocolObject())
+            .ToList();
+        return new { windows, inputEpoch = PhysicalInputState.Epoch };
     }
-}
 
-[Flags]
-enum MouseFlags : uint
-{
-    LeftDown = 0x0002,
-    LeftUp = 0x0004,
-    RightDown = 0x0008,
-    RightUp = 0x0010,
-    Wheel = 0x0800,
-    HWheel = 0x01000,
-}
+    private static object LaunchApp(JsonElement parameters)
+    {
+        foreach (var property in parameters.EnumerateObject())
+        {
+            if (property.Name is not ("catalogRef" or "appId"))
+            {
+                throw new ComputerUseException(
+                    "CU_INVALID_ARGUMENT",
+                    "launch_app accepts only catalogRef and appId; paths, arguments, URLs, and commands are forbidden."
+                );
+            }
+        }
+        NativeStateRegistry.InvalidateAll();
+        return AppCatalog.Launch(
+            JsonArgs.String(parameters, "catalogRef", required: true),
+            JsonArgs.String(parameters, "appId", required: true)
+        );
+    }
 
-delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
+    private static object ResolveWindow(JsonElement parameters)
+    {
+        var window = WindowInfo.FromExpected(JsonArgs.Property(parameters, "expectedIdentity"));
+        return new
+        {
+            window = window.ToProtocolObject(),
+            inputEpoch = PhysicalInputState.Epoch,
+        };
+    }
 
-[DllImport("user32.dll")]
-static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
+    private static object ActivateWindow(JsonElement parameters)
+    {
+        DesktopGuard.AssertInteractive();
+        var window = WindowInfo.FromExpected(JsonArgs.Property(parameters, "expectedIdentity"));
+        TargetPolicy.AssertAllowed(window);
+        NativeStateRegistry.InvalidateWindow(window);
+        window = WindowGuard.ActivateAndVerify(window);
+        return new
+        {
+            window = window.ToProtocolObject(),
+            inputEpoch = PhysicalInputState.Epoch,
+        };
+    }
 
-[DllImport("user32.dll")]
-static extern bool IsWindow(IntPtr hwnd);
+    private static object GetWindowState(JsonElement parameters)
+    {
+        DesktopGuard.AssertInteractive();
+        var includeScreenshot = JsonArgs.Boolean(parameters, "includeScreenshot", true);
+        var includeAccessibility = JsonArgs.Boolean(parameters, "includeAccessibility", true);
+        var includeDocumentText = JsonArgs.Boolean(parameters, "includeDocumentText", false);
+        var window = WindowInfo.FromExpected(JsonArgs.Property(parameters, "expectedIdentity"));
+        TargetPolicy.AssertAllowed(window);
+        if (!includeScreenshot && !includeAccessibility)
+        {
+            throw new ComputerUseException(
+                "CU_INVALID_ARGUMENT",
+                "At least one observation backend must be requested."
+            );
+        }
+        CapturedFrame? frame = includeScreenshot ? WgcCapture.Capture(window) : null;
+        UiaSnapshot? accessibility = null;
+        string? accessibilityStatus = null;
+        if (includeAccessibility)
+        {
+            try
+            {
+                accessibility = UiaSnapshot.Capture(window, includeDocumentText);
+                accessibilityStatus = "ok";
+            }
+            catch (ComputerUseException)
+            {
+                accessibilityStatus = "unavailable";
+                if (!includeScreenshot)
+                {
+                    throw;
+                }
+            }
+        }
 
-[DllImport("user32.dll")]
-static extern bool IsWindowVisible(IntPtr hwnd);
+        var current = WindowInfo.FromExpected(JsonArgs.Property(parameters, "expectedIdentity"));
+        if (
+            current.Bounds != window.Bounds
+            || Math.Abs(current.DpiScale - window.DpiScale) > 0.001
+        )
+        {
+            throw new ComputerUseException(
+                "CU_WINDOW_CHANGED",
+                "Window bounds or DPI changed during observation.",
+                retryable: true,
+                requiresFreshState: true
+            );
+        }
+        var inputEpoch = PhysicalInputState.Epoch;
+        var nativeState = NativeStateRegistry.Create(
+            current,
+            inputEpoch,
+            frame,
+            accessibility
+        );
+        return new
+        {
+            window = current.ToProtocolObject(),
+            inputEpoch,
+            nativeStateRef = nativeState.NativeStateRef,
+            screenshot = frame is null
+                ? null
+                : new
+                {
+                    imageBase64 = Convert.ToBase64String(frame.Png),
+                    width = frame.Width,
+                    height = frame.Height,
+                    originX = frame.OriginX,
+                    originY = frame.OriginY,
+                },
+            accessibility = accessibility?.ToProtocolObject(),
+            accessibilityStatus,
+        };
+    }
 
-[DllImport("user32.dll")]
-static extern int GetWindowTextLength(IntPtr hwnd);
+    private static void AssertDeadline(JsonElement root)
+    {
+        var meta = JsonArgs.PropertyOrDefault(root, "meta");
+        var deadline = JsonArgs.PropertyOrDefault(meta, "deadlineUnixMs");
+        if (deadline.ValueKind == JsonValueKind.Number && deadline.TryGetInt64(out var unixMs))
+        {
+            if (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > unixMs)
+            {
+                throw new ComputerUseException(
+                    "CU_TIMEOUT",
+                    "Computer Use helper request deadline elapsed.",
+                    retryable: true,
+                    requiresFreshState: true
+                );
+            }
+        }
+    }
 
-[DllImport("user32.dll", CharSet = CharSet.Unicode)]
-static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int count);
+    private static void AssertHostMetadata(JsonElement root)
+    {
+        if (_hostBroker is null || JsonArgs.String(root, "method") == "initialize")
+        {
+            return;
+        }
+        var meta = JsonArgs.PropertyOrDefault(root, "meta");
+        foreach (var name in new[] { "sessionId", "turnId", "toolCallId" })
+        {
+            if (string.IsNullOrWhiteSpace(JsonArgs.String(meta, name)))
+            {
+                throw new ComputerUseException(
+                    "CU_PROTOCOL_MISMATCH",
+                    $"Computer Use broker request is missing {name} metadata."
+                );
+            }
+        }
+    }
 
-[DllImport("user32.dll")]
-static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
+    private static void WriteError(Stream output, JsonElement? id, ComputerUseException error)
+    {
+        try
+        {
+            FrameProtocol.Write(output, new
+            {
+                jsonrpc = "2.0",
+                id,
+                error = new
+                {
+                    code = -32020,
+                    message = error.Message,
+                    data = new
+                    {
+                        computerUseCode = error.Code,
+                        retryable = error.Retryable,
+                        requiresFreshState = error.RequiresFreshState,
+                        effectMayHaveOccurred = error.EffectMayHaveOccurred,
+                    },
+                },
+            }, SerializerOptions);
+        }
+        catch
+        {
+            // stdout is the protocol channel. If an error frame cannot be written,
+            // terminating is safer than emitting partial or textual diagnostics.
+        }
+    }
 
-[DllImport("user32.dll")]
-static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
+    private static void WriteNotification(Stream output, string method, object parameters)
+    {
+        FrameProtocol.Write(output, new
+        {
+            jsonrpc = "2.0",
+            method,
+            @params = parameters,
+        }, SerializerOptions);
+    }
 
-[DllImport("user32.dll")]
-static extern bool GetClientRect(IntPtr hwnd, out RECT rect);
-
-[DllImport("user32.dll")]
-static extern bool ClientToScreen(IntPtr hwnd, ref POINT point);
-
-[DllImport("user32.dll")]
-static extern bool IsIconic(IntPtr hwnd);
-
-[DllImport("user32.dll")]
-static extern bool ShowWindowAsync(IntPtr hwnd, int command);
-
-[DllImport("user32.dll")]
-static extern bool SetForegroundWindow(IntPtr hwnd);
-
-[DllImport("user32.dll")]
-static extern bool SetCursorPos(int x, int y);
-
-[DllImport("user32.dll")]
-static extern uint GetDpiForWindow(IntPtr hwnd);
-
-[DllImport("user32.dll")]
-static extern bool SetProcessDpiAwarenessContext(IntPtr dpiContext);
-
-[DllImport("user32.dll", SetLastError = true)]
-static extern uint SendInput(uint inputCount, INPUT[] inputs, int size);
-
-[DllImport("dwmapi.dll")]
-static extern int DwmGetWindowAttribute(IntPtr hwnd, int attribute, out RECT rect, int size);
-
-[DllImport("dwmapi.dll")]
-static extern int DwmGetWindowAttribute(IntPtr hwnd, int attribute, out int value, int size);
-
-[StructLayout(LayoutKind.Sequential)]
-struct RECT
-{
-    public int Left;
-    public int Top;
-    public int Right;
-    public int Bottom;
-}
-
-[StructLayout(LayoutKind.Sequential)]
-struct POINT
-{
-    public int X;
-    public int Y;
-}
-
-[StructLayout(LayoutKind.Sequential)]
-struct INPUT
-{
-    public uint type;
-    public InputUnion union;
-}
-
-[StructLayout(LayoutKind.Explicit)]
-struct InputUnion
-{
-    [FieldOffset(0)]
-    public MOUSEINPUT mi;
-
-    [FieldOffset(0)]
-    public KEYBDINPUT ki;
-}
-
-[StructLayout(LayoutKind.Sequential)]
-struct MOUSEINPUT
-{
-    public int dx;
-    public int dy;
-    public int mouseData;
-    public uint dwFlags;
-    public uint time;
-    public IntPtr dwExtraInfo;
-}
-
-[StructLayout(LayoutKind.Sequential)]
-struct KEYBDINPUT
-{
-    public ushort wVk;
-    public ushort wScan;
-    public uint dwFlags;
-    public uint time;
-    public IntPtr dwExtraInfo;
-}
+    private static void TrySetDpiAwareness()
+    {
+        try
+        {
+            SetProcessDpiAwarenessContext(new IntPtr(-4));
+        }
+        catch
+        {
+            // Per-monitor V2 awareness is best effort during startup.
+        }
+    }
 }
