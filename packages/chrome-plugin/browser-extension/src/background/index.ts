@@ -4,8 +4,15 @@ import {
   getExtensionInstanceID,
 } from "./anybox-client"
 import { installLeaseInheritance } from "./lease-store"
+import {
+  groupAgentTab,
+  initializeManagedTabGroups,
+  installTabGroupLifecycle,
+} from "./tab-group-store"
 
-installLeaseInheritance(getExtensionInstanceID)
+installTabGroupLifecycle()
+void initializeManagedTabGroups()
+installLeaseInheritance(getExtensionInstanceID, groupAgentTab)
 connectAnybox()
 
 chrome.runtime.onInstalled.addListener(() => {

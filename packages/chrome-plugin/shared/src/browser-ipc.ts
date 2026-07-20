@@ -21,8 +21,8 @@ export const MAX_BROWSER_IPC_CHUNKS = Math.ceil(
   MAX_BROWSER_IPC_MESSAGE_BYTES / MAX_BROWSER_IPC_CHUNK_BYTES,
 )
 export const BROWSER_IPC_HANDSHAKE_TIMEOUT_MS = 5_000
-export const BROWSER_IPC_RUNTIME_CLIENT_VERSION = "0.13.0"
-export const BROWSER_IPC_NATIVE_HOST_VERSION = "0.13.0"
+export const BROWSER_IPC_RUNTIME_CLIENT_VERSION = "0.14.0"
+export const BROWSER_IPC_NATIVE_HOST_VERSION = "0.14.0"
 
 export const BrowserIpcRole = z.enum(["runtime", "native-host"])
 export type BrowserIpcRole = z.infer<typeof BrowserIpcRole>

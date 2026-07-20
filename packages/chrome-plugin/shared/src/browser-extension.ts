@@ -6,6 +6,7 @@ export const ANYBOX_CHROME_EXTENSION_ID = "hjbejdmgpifdjjlpgmdfmbmbhkedgnjc"
 export const ANYBOX_CHROME_NATIVE_HOST_NAME = "com.anybox.browser"
 
 export const BrowserExtensionCommandMethod = z.enum([
+  "browser.nameSession",
   "tabs.list",
   "tabs.listUser",
   "tabs.open",
@@ -18,6 +19,7 @@ export const BrowserExtensionCommandMethod = z.enum([
   "tabs.close",
   "tabs.release",
   "tabs.markDeliverable",
+  "tabs.markHandoff",
   "tabs.finalize",
   "page.snapshot",
   "page.interactiveSnapshot",
@@ -131,7 +133,7 @@ export type BrowserExtensionClientMessage = z.infer<typeof BrowserExtensionClien
 export const BrowserExtensionCommandMessage = z.object({
   type: z.literal("command"),
   commandID: z.string().min(1),
-  contractVersion: z.literal(3),
+  contractVersion: z.literal(4),
   method: BrowserExtensionCommandMethod,
   params: z.unknown().optional(),
   context: BrowserExtensionCommandContext.optional(),
@@ -141,7 +143,7 @@ export type BrowserExtensionCommandMessage = z.infer<typeof BrowserExtensionComm
 export const BrowserExtensionHelloAckMessage = z.object({
   type: z.literal("helloAck"),
   protocolVersion: z.literal(BROWSER_EXTENSION_PROTOCOL_VERSION),
-  contractVersion: z.literal(3),
+  contractVersion: z.literal(4),
   browserID: z.string().min(1),
   extensionInstanceID: z.string().min(1),
   heartbeatIntervalMs: z.number().int().positive(),
@@ -175,8 +177,8 @@ export const BrowserExtensionTabSummary = z.object({
     source: z.enum(["user", "agent"]),
     sessionID: z.string().min(1),
     turnID: z.string().min(1),
-    state: z.enum(["active", "deliverable", "handoff", "released"]),
-    retained: z.boolean().optional(),
+    state: z.enum(["active", "handoff"]),
+    mark: z.enum(["deliverable", "handoff"]).optional(),
     extensionInstanceID: z.string().min(1),
     expiresAt: z.number().int().positive(),
   }).strict().optional(),
@@ -374,6 +376,13 @@ export const BrowserExtensionTabsCloseResult = z.object({
 }).strict()
 export type BrowserExtensionTabsCloseResult = z.infer<typeof BrowserExtensionTabsCloseResult>
 
+export const BrowserExtensionNameSessionResult = z.object({
+  name: z.string().trim().min(1).max(128),
+}).strict()
+export type BrowserExtensionNameSessionResult = z.infer<
+  typeof BrowserExtensionNameSessionResult
+>
+
 export const BrowserExtensionTabsMarkDeliverableResult = z.object({
   tabId: z.number().int().positive(),
   state: z.literal("deliverable"),
@@ -382,11 +391,20 @@ export type BrowserExtensionTabsMarkDeliverableResult = z.infer<
   typeof BrowserExtensionTabsMarkDeliverableResult
 >
 
+export const BrowserExtensionTabsMarkHandoffResult = z.object({
+  tabId: z.number().int().positive(),
+  state: z.literal("handoff"),
+}).strict()
+export type BrowserExtensionTabsMarkHandoffResult = z.infer<
+  typeof BrowserExtensionTabsMarkHandoffResult
+>
+
 export const BrowserExtensionTabsFinalizeResult = z.object({
   sessionID: z.string().min(1),
   closedTabIds: z.array(z.number().int().positive()),
   releasedTabIds: z.array(z.number().int().positive()),
-  retainedTabIds: z.array(z.number().int().positive()),
+  deliverableTabIds: z.array(z.number().int().positive()),
+  handoffTabIds: z.array(z.number().int().positive()),
   detachedTabIds: z.array(z.number().int().positive()),
 }).strict()
 export type BrowserExtensionTabsFinalizeResult = z.infer<

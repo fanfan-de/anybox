@@ -31,7 +31,7 @@ describe("Browser Extension result envelope", () => {
       extensionID: ANYBOX_CHROME_EXTENSION_ID,
       version: "0.2.0",
       capabilities: {
-        contractVersion: 3,
+        contractVersion: 4,
         commands: ["tabs.list", "page.screenshot"],
       },
     } as const
@@ -46,11 +46,11 @@ describe("Browser Extension result envelope", () => {
     }).success).toBe(true)
   })
 
-  test("requires contract v3 on every Agent command envelope", () => {
+  test("requires contract v4 on every Agent command envelope", () => {
     const command = {
       type: "command",
       commandID: "contract-command",
-      contractVersion: 3,
+      contractVersion: 4,
       method: "tabs.list",
       params: {},
     } as const
@@ -61,7 +61,7 @@ describe("Browser Extension result envelope", () => {
       .toBe(false)
     expect(BrowserExtensionServerMessage.safeParse({
       ...command,
-      contractVersion: 2,
+      contractVersion: 3,
     }).success).toBe(false)
   })
 

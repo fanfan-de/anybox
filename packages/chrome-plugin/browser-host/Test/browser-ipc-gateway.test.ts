@@ -531,7 +531,7 @@ describe("Browser IPC Gateway transport and authentication", () => {
     })
   })
 
-  test("routes v3 status and rejects mismatched writes at the Browser Host", async () => {
+  test("routes v4 status and rejects mismatched writes at the Browser Host", async () => {
     const { bridge, gateway } = gatewayFixture()
     await gateway.start()
     const native = await authenticateNative(gateway)
@@ -652,7 +652,7 @@ describe("Browser IPC Gateway transport and authentication", () => {
       type: "runtime.request",
       requestID: "future-runtime-info",
       operation: "getInfo",
-      contractVersion: 4,
+      contractVersion: 5,
     })
     expect(await runtime.client.next()).toMatchObject({
       type: "runtime.response",
@@ -755,7 +755,7 @@ describe("Browser IPC Gateway transport and authentication", () => {
         extensionID: ANYBOX_CHROME_EXTENSION_ID,
         version: "0.2.0",
         capabilities: {
-          contractVersion: 4,
+          contractVersion: 5,
           commands: ["tabs.list"],
         },
       },
@@ -814,7 +814,7 @@ describe("Browser IPC Gateway transport and authentication", () => {
       type: "runtime.request",
       requestID: "future-contract-version",
       operation: "command",
-      contractVersion: 4,
+      contractVersion: 5,
       method: "tabs.list",
       params: {},
     })

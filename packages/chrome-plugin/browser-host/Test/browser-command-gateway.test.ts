@@ -45,7 +45,7 @@ function bridgeStub(input: {
 }
 
 describe("Browser command gateway contract boundary", () => {
-  test.each([2, BROWSER_CONTRACT_VERSION + 1])(
+  test.each([BROWSER_CONTRACT_VERSION - 1, BROWSER_CONTRACT_VERSION + 1])(
     "rejects contract version %i instead of negotiating",
     async (contractVersion) => {
       const events: string[] = []
@@ -73,7 +73,7 @@ describe("Browser command gateway contract boundary", () => {
     })
   })
 
-  test("rejects malformed v3 params before authorization or dispatch", async () => {
+  test("rejects malformed v4 params before authorization or dispatch", async () => {
     const events: string[] = []
     await expect(runBrowserRuntimeCommand({
       contractVersion: BROWSER_CONTRACT_VERSION,
@@ -87,7 +87,7 @@ describe("Browser command gateway contract boundary", () => {
     expect(events).toEqual([])
   })
 
-  test("requires the complete v3 execution context", async () => {
+  test("requires the complete v4 execution context", async () => {
     const events: string[] = []
     await expect(runBrowserRuntimeCommand({
       contractVersion: BROWSER_CONTRACT_VERSION,

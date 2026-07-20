@@ -238,7 +238,7 @@ describe("Browser authorization receipts", () => {
     }))
   })
 
-  test("never forwards a v3 write before a valid Host challenge receipt", async () => {
+  test("never forwards a v4 write before a valid Host challenge receipt", async () => {
     let forwarded = 0
     const bridge = {
       backendInfo: () => createBrowserBackendInfo({

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { existsSync } from "node:fs"
+import { existsSync, readdirSync } from "node:fs"
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { createServer } from "node:http"
 import os from "node:os"
@@ -62,6 +62,52 @@ function chromeExecutable() {
     process.platform === "linux" ? "/usr/bin/chromium" : undefined,
   ].filter(Boolean)
   return candidates.find((candidate) => existsSync(candidate))
+}
+
+function extensionTestExecutable() {
+  const configured =
+    process.env.ANYBOX_BROWSER_CHROME_FOR_TESTING_PATH?.trim()
+  if (configured && existsSync(configured)) return configured
+  const cacheRoots = process.platform === "win32"
+    ? [path.join(os.homedir(), "AppData", "Local", "ms-playwright")]
+    : [path.join(os.homedir(), ".cache", "ms-playwright")]
+  for (const root of cacheRoots) {
+    if (!existsSync(root)) continue
+    const versions = readdirSync(root)
+      .filter((entry) => /^chromium-\d+$/u.test(entry))
+      .sort((left, right) => right.localeCompare(left, undefined, {
+        numeric: true,
+      }))
+    for (const version of versions) {
+      const candidates = process.platform === "win32"
+        ? [path.join(root, version, "chrome-win64", "chrome.exe")]
+        : process.platform === "darwin"
+          ? [
+              path.join(
+                root,
+                version,
+                "chrome-mac-arm64",
+                "Chromium.app",
+                "Contents",
+                "MacOS",
+                "Chromium",
+              ),
+              path.join(
+                root,
+                version,
+                "chrome-mac",
+                "Chromium.app",
+                "Contents",
+                "MacOS",
+                "Chromium",
+              ),
+            ]
+          : [path.join(root, version, "chrome-linux", "chrome")]
+      const executable = candidates.find((candidate) => existsSync(candidate))
+      if (executable) return executable
+    }
+  }
+  return undefined
 }
 
 async function listen(server) {
@@ -436,7 +482,219 @@ test("pinned Anybox engine matches Playwright 1.61.1 in real Chrome", {
   }
 })
 
-test("Extension v3 executor drives real Chrome without replaying input", {
+test("Browser Contract v4 groups and finalizes tabs in real Chrome", {
+  skip: extensionTestExecutable()
+    ? false
+    : "Chrome for Testing/Chromium is required because branded Chrome 137+ blocks --load-extension; set ANYBOX_BROWSER_CHROME_FOR_TESTING_PATH.",
+  timeout: 45_000,
+}, async () => {
+  const temporaryRoot = await mkdtemp(
+    path.join(os.tmpdir(), "anybox-tab-groups-real-chrome-"),
+  )
+  const userDataDir = path.join(temporaryRoot, "profile")
+  const extensionDir = path.join(temporaryRoot, "extension")
+  let context
+  try {
+    await build({
+      stdin: {
+        contents: `
+          import { handleBrowserCommand } from "./src/background/commands.ts"
+          globalThis.__anyboxTestCommand = async (input) => {
+            try {
+              return {
+                ok: true,
+                data: await handleBrowserCommand(
+                  input.method,
+                  input.params,
+                  { context: input.context },
+                ),
+              }
+            } catch (error) {
+              return {
+                ok: false,
+                error: error instanceof Error ? error.message : String(error),
+                code: error?.code,
+                retryable: error?.retryable,
+              }
+            }
+          }
+        `,
+        resolveDir: extensionRoot,
+        sourcefile: "tab-group-e2e-entry.ts",
+        loader: "ts",
+      },
+      outfile: path.join(extensionDir, "background.js"),
+      bundle: true,
+      format: "esm",
+      platform: "browser",
+      target: "chrome120",
+      sourcemap: false,
+      alias: {
+        "@anybox/chrome-shared/browser-contract": path.join(
+          extensionRoot,
+          "..",
+          "shared",
+          "src",
+          "browser-contract.ts",
+        ),
+        "@anybox/chrome-shared/browser-extension": path.join(
+          extensionRoot,
+          "..",
+          "shared",
+          "src",
+          "browser-extension.ts",
+        ),
+      },
+    })
+    await writeFile(
+      path.join(extensionDir, "manifest.json"),
+      JSON.stringify({
+        manifest_version: 3,
+        name: "Anybox Tab Group E2E",
+        version: "0.14.0",
+        background: {
+          service_worker: "background.js",
+          type: "module",
+        },
+        permissions: [
+          "debugger",
+          "scripting",
+          "storage",
+          "tabs",
+          "tabGroups",
+        ],
+        host_permissions: ["<all_urls>"],
+      }),
+      "utf8",
+    )
+
+    context = await chromium.launchPersistentContext(userDataDir, {
+      executablePath: extensionTestExecutable(),
+      // Chrome's current headless mode ignores side-loaded MV3 extensions.
+      // Use a temporary isolated profile in headful mode for this API test.
+      headless: false,
+      args: [
+        `--disable-extensions-except=${extensionDir}`,
+        `--load-extension=${extensionDir}`,
+        "--disable-background-networking",
+        "--disable-component-update",
+        "--disable-default-apps",
+        "--no-first-run",
+      ],
+    })
+    const worker = context.serviceWorkers()[0]
+      ?? await context.waitForEvent("serviceworker", { timeout: 10_000 })
+    const command = async (method, params, turnID = "turn-1") => {
+      const response = await worker.evaluate(
+        async ({ method: commandMethod, params: commandParams, commandContext }) =>
+          await globalThis.__anyboxTestCommand({
+            method: commandMethod,
+            params: commandParams,
+            context: commandContext,
+          }),
+        {
+          method,
+          params,
+          commandContext: {
+            sessionID: "session-e2e",
+            turnID,
+            extensionInstanceID: "extension-e2e",
+          },
+        },
+      )
+      assert.equal(
+        response.ok,
+        true,
+        `${method} failed: ${response.code ?? ""} ${response.error ?? ""}`,
+      )
+      return response.data
+    }
+
+    await command("browser.nameSession", {
+      name: "✍️ Publish Zhihu update",
+    })
+    const deliverable = await command("tabs.open", {
+      url: "https://example.invalid/result",
+      active: false,
+    })
+    const handoff = await command("tabs.open", {
+      url: "https://example.invalid/login",
+      active: false,
+    })
+    const temporary = await command("tabs.open", {
+      url: "https://example.invalid/helper",
+      active: false,
+    })
+    const grouped = await worker.evaluate(async (tabIds) => {
+      const tabs = await Promise.all(tabIds.map((tabId) => chrome.tabs.get(tabId)))
+      const group = await chrome.tabGroups.get(tabs[0].groupId)
+      return { tabs, group }
+    }, [deliverable.id, handoff.id, temporary.id])
+    assert.ok(grouped.tabs[0].groupId >= 0)
+    assert.equal(grouped.tabs[1].groupId, grouped.tabs[0].groupId)
+    assert.equal(grouped.tabs[2].groupId, grouped.tabs[0].groupId)
+    assert.equal(grouped.group.title, "✍️ Publish Zhihu update")
+    assert.equal(grouped.group.collapsed, false)
+
+    const finalized = await command("tabs.finalize", {
+      keep: [
+        { tabId: deliverable.id, status: "deliverable" },
+        { tabId: handoff.id, status: "handoff" },
+      ],
+    })
+    assert.deepEqual(finalized.deliverableTabIds, [deliverable.id])
+    assert.deepEqual(finalized.handoffTabIds, [handoff.id])
+    assert.deepEqual(finalized.closedTabIds, [temporary.id])
+    const afterFinalize = await worker.evaluate(async (tabIds) => {
+      const read = async (tabId) => {
+        try {
+          return await chrome.tabs.get(tabId)
+        } catch {
+          return null
+        }
+      }
+      return await Promise.all(tabIds.map(read))
+    }, [deliverable.id, handoff.id, temporary.id])
+    assert.equal(afterFinalize[0].groupId, -1)
+    assert.ok(afterFinalize[1].groupId >= 0)
+    assert.equal(afterFinalize[2], null)
+
+    await command("tabs.markHandoff", { tabId: handoff.id }, "turn-2")
+    await command("tabs.finalize", {
+      keep: [{ tabId: handoff.id, status: "handoff" }],
+    }, "turn-2")
+    const resumed = await worker.evaluate(
+      async (tabId) => await chrome.tabs.get(tabId),
+      handoff.id,
+    )
+    assert.ok(resumed.groupId >= 0)
+
+    const userTab = await worker.evaluate(async () => {
+      const tab = await chrome.tabs.create({
+        url: "https://example.invalid/user",
+        active: false,
+      })
+      const groupId = await chrome.tabs.group({ tabIds: [tab.id] })
+      await chrome.tabGroups.update(groupId, {
+        title: "User group",
+        color: "red",
+      })
+      return { tabId: tab.id, groupId }
+    })
+    await command("tabs.claim", { tabId: userTab.tabId }, "turn-3")
+    await command("tabs.finalize", { keep: [] }, "turn-3")
+    const userAfterFinalize = await worker.evaluate(
+      async (tabId) => await chrome.tabs.get(tabId),
+      userTab.tabId,
+    )
+    assert.equal(userAfterFinalize.groupId, userTab.groupId)
+  } finally {
+    await context?.close()
+    await rm(temporaryRoot, { recursive: true, force: true })
+  }
+})
+
+test("Extension v4 executor drives real Chrome without replaying input", {
   skip: chromeExecutable()
     ? false
     : "Google Chrome is not installed; set ANYBOX_BROWSER_CHROME_PATH to run.",

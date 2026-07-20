@@ -53,6 +53,7 @@ const LEASE_REQUIRED_METHODS = new Set<BrowserContractCommandMethod>([
   "tabs.close",
   "tabs.release",
   "tabs.markDeliverable",
+  "tabs.markHandoff",
   "page.snapshot",
   "page.interactiveSnapshot",
   "page.domTree",
@@ -258,7 +259,6 @@ function enforceLeaseBeforeForward(
   if (method === "tabs.claim") {
     if (
       tab?.lease
-      && tab.lease.state !== "released"
       && (
         tab.lease.sessionID !== context.sessionID
         || tab.lease.extensionInstanceID !== context.extensionInstanceID
@@ -272,7 +272,7 @@ function enforceLeaseBeforeForward(
     return
   }
   if (!LEASE_REQUIRED_METHODS.has(method)) return
-  if (!tabId || !tab?.lease || tab.lease.state === "released") {
+  if (!tabId || !tab?.lease) {
     throw new BrowserCommandGatewayError(
       "TAB_CLAIM_REQUIRED",
       "The requested tab must be claimed before this command can run.",
@@ -300,7 +300,7 @@ function parseCommandContext(context: BrowserExtensionCommandContext | undefined
   if (!parsed.success) {
     throw new BrowserCommandGatewayError(
       "SESSION_REQUIRED",
-      "Browser Contract v3 requires sessionID, turnID, messageID, toolCallID, and browserID.",
+      "Browser Contract v4 requires sessionID, turnID, messageID, toolCallID, and browserID.",
     )
   }
   return parsed.data
@@ -570,7 +570,7 @@ function updateOwnership(
   result: unknown,
   context: BrowserExtensionCommandContext | undefined,
 ) {
-  if (method === "tabs.open") {
+  if (method === "tabs.open" || method === "tabs.claim") {
     const parsedTab = BrowserExtensionTabSummary.safeParse(result)
     if (parsedTab.success) bridge.markOwnedTab(parsedTab.data, context)
     return
@@ -578,6 +578,39 @@ function updateOwnership(
   if (method === "tabs.release" || method === "tabs.close") {
     const tabId = readTabId(params)
     if (tabId) bridge.releaseOwnedTab(tabId, context?.sessionID)
+    return
+  }
+  if (
+    method === "tabs.finalize"
+    && result
+    && typeof result === "object"
+    && !Array.isArray(result)
+  ) {
+    const cleanup = result as {
+      closedTabIds?: unknown
+      releasedTabIds?: unknown
+      deliverableTabIds?: unknown
+      handoffTabIds?: unknown
+    }
+    for (const value of [
+      cleanup.closedTabIds,
+      cleanup.releasedTabIds,
+      cleanup.deliverableTabIds,
+    ]) {
+      if (!Array.isArray(value)) continue
+      for (const tabId of value) {
+        if (Number.isInteger(tabId) && Number(tabId) > 0) {
+          bridge.releaseOwnedTab(Number(tabId), context?.sessionID)
+        }
+      }
+    }
+    if (Array.isArray(cleanup.handoffTabIds)) {
+      for (const tabId of cleanup.handoffTabIds) {
+        if (Number.isInteger(tabId) && Number(tabId) > 0) {
+          bridge.touchTab(Number(tabId), context)
+        }
+      }
+    }
     return
   }
   bridge.touchTab(readTabId(result) ?? readTabId(params), context)

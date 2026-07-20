@@ -60,6 +60,9 @@ let queriedTabs: Array<Record<string, unknown>> = [{ id: 7, active: true }]
 let currentWindowTabId = 7
 let tabOperations: Array<Record<string, unknown>> = []
 const sessionStorage: Record<string, unknown> = {}
+const localStorage: Record<string, unknown> = {}
+const tabGroupByTab = new Map<number, number>()
+let groupOperationFails = false
 const commandContext = {
   sessionID: "privacy-session",
   turnID: "privacy-turn",
@@ -85,7 +88,7 @@ function leaseFixture(tabId: number) {
 }
 
 function installLeases(...tabIds: number[]) {
-  sessionStorage["anybox.browser.tabLeases"] = Object.fromEntries(
+  sessionStorage["anybox.browser.tabLeases.v4"] = Object.fromEntries(
     tabIds.map((tabId) => [String(tabId), leaseFixture(tabId)]),
   )
 }
@@ -164,7 +167,13 @@ beforeAll(async () => {
           return { id: 8, ...input }
         },
         async get(tabId: number) {
-          return { id: tabId, title: "Fixture", url: currentTabUrl }
+          return {
+            id: tabId,
+            windowId: 1,
+            groupId: tabGroupByTab.get(tabId) ?? -1,
+            title: "Fixture",
+            url: currentTabUrl,
+          }
         },
         async update(tabId: number, properties: Record<string, unknown>) {
           tabOperations.push({ method: "update", tabId, properties })
@@ -191,8 +200,19 @@ beforeAll(async () => {
           }
           return queriedTabs
         },
-        async remove(tabId: number) {
+        async remove(tabId: number | number[]) {
           tabOperations.push({ method: "remove", tabId })
+          const tabIds = Array.isArray(tabId) ? tabId : [tabId]
+          tabIds.forEach((id) => tabGroupByTab.delete(id))
+        },
+        async group(input: { groupId?: number; tabIds: number[] }) {
+          if (groupOperationFails) throw new Error("Grouping failed")
+          const groupId = input.groupId ?? 1
+          input.tabIds.forEach((tabId) => tabGroupByTab.set(tabId, groupId))
+          return groupId
+        },
+        async ungroup(tabId: number) {
+          tabGroupByTab.delete(tabId)
         },
         async sendMessage() {},
       },
@@ -204,6 +224,28 @@ beforeAll(async () => {
           async set(values: Record<string, unknown>) {
             Object.assign(sessionStorage, structuredClone(values))
           },
+          async remove(key: string) {
+            delete sessionStorage[key]
+          },
+        },
+        local: {
+          async get(key: string) {
+            return { [key]: structuredClone(localStorage[key]) }
+          },
+          async set(values: Record<string, unknown>) {
+            Object.assign(localStorage, structuredClone(values))
+          },
+        },
+      },
+      tabGroups: {
+        async get(groupId: number) {
+          if (![...tabGroupByTab.values()].includes(groupId)) {
+            throw new Error("Group not found")
+          }
+          return { id: groupId, windowId: 1 }
+        },
+        async update(groupId: number, values: Record<string, unknown>) {
+          return { id: groupId, windowId: 1, ...values }
         },
       },
     },
@@ -219,6 +261,10 @@ beforeEach(() => {
   queriedTabs = [{ id: 7, active: true }]
   currentWindowTabId = 7
   tabOperations = []
+  groupOperationFails = false
+  tabGroupByTab.clear()
+  for (const key of Object.keys(localStorage)) delete localStorage[key]
+  for (const key of Object.keys(sessionStorage)) delete sessionStorage[key]
   installLeases(7)
   installPage([])
 })
@@ -255,7 +301,7 @@ describe("browser command contract defense", () => {
     })
   })
 
-  test("executes a v3 tab write and records its lease", async () => {
+  test("executes a v4 tab write, groups it, and records its lease", async () => {
     await expect(handleBrowserCommand("tabs.open", {
       url: "https://fixture.invalid/write",
     })).resolves.toMatchObject({
@@ -264,12 +310,85 @@ describe("browser command contract defense", () => {
       url: "https://fixture.invalid/[redacted-path]",
     })
     expect(
-      (sessionStorage["anybox.browser.tabLeases"] as Record<string, unknown>)["8"],
+      (sessionStorage["anybox.browser.tabLeases.v4"] as Record<string, unknown>)["8"],
     ).toMatchObject({
       tabId: 8,
       sessionID: commandContext.sessionID,
       extensionInstanceID: commandContext.extensionInstanceID,
     })
+    expect(tabGroupByTab.get(8)).toBe(1)
+  })
+
+  test("rolls back a newly opened tab and lease when grouping fails", async () => {
+    groupOperationFails = true
+    await expect(handleBrowserCommand("tabs.open", {
+      url: "https://fixture.invalid/write",
+    })).rejects.toMatchObject({
+      code: "COMMAND_FAILED",
+      retryable: true,
+    })
+    expect(tabOperations).toContainEqual({ method: "remove", tabId: 8 })
+    expect(
+      (sessionStorage["anybox.browser.tabLeases.v4"] as Record<string, unknown>)
+        ["8"],
+    ).toBeUndefined()
+  })
+
+  test("finalizes deliverable, handoff, temporary, and user tabs", async () => {
+    installLeases(7, 8, 9, 10)
+    const leases = sessionStorage["anybox.browser.tabLeases.v4"] as
+      Record<string, Record<string, unknown>>
+    leases["10"]!.source = "user"
+    queriedTabs = [7, 8, 9, 10].map((id) => ({
+      id,
+      windowId: 1,
+      active: id === 7,
+    }))
+    tabGroupByTab.set(7, 1)
+    tabGroupByTab.set(8, 1)
+    tabGroupByTab.set(9, 1)
+    tabGroupByTab.set(10, 99)
+    localStorage["anybox.browser.tabGroups.v4"] = {
+      [commandContext.sessionID!]: {
+        sessionID: commandContext.sessionID,
+        extensionInstanceID: commandContext.extensionInstanceID,
+        name: "Publish",
+        groupId: 1,
+        windowId: 1,
+        color: "blue",
+        updatedAt: Date.now(),
+      },
+    }
+
+    await expect(handleBrowserCommand("tabs.finalize", {
+      keep: [
+        { tabId: 8, status: "deliverable" },
+        { tabId: 9, status: "handoff" },
+      ],
+    })).resolves.toEqual({
+      sessionID: commandContext.sessionID,
+      closedTabIds: [7],
+      releasedTabIds: [10],
+      deliverableTabIds: [8],
+      handoffTabIds: [9],
+      detachedTabIds: [7, 10, 8, 9],
+    })
+
+    expect(tabOperations).toContainEqual({ method: "remove", tabId: [7] })
+    expect(tabGroupByTab.get(8)).toBeUndefined()
+    expect(tabGroupByTab.get(9)).toBe(1)
+    expect(tabGroupByTab.get(10)).toBe(99)
+    expect(
+      Object.keys(
+        sessionStorage["anybox.browser.tabLeases.v4"] as Record<string, unknown>,
+      ),
+    ).toEqual(["9"])
+    expect(
+      (sessionStorage["anybox.browser.tabLeases.v4"] as Record<
+        string,
+        Record<string, unknown>
+      >)["9"],
+    ).toMatchObject({ state: "handoff" })
   })
 
   test("navigates and closes a leased tab through the explicit tab APIs", async () => {
@@ -303,10 +422,8 @@ describe("browser command contract defense", () => {
       { method: "remove", tabId: 7 },
     ])
     expect(
-      (sessionStorage["anybox.browser.tabLeases"] as Record<string, {
-        state: string
-      }>)["7"]?.state,
-    ).toBe("released")
+      (sessionStorage["anybox.browser.tabLeases.v4"] as Record<string, unknown>)["7"],
+    ).toBeUndefined()
   })
 
   test("aborts an in-flight wait when the Browser Host connection closes", async () => {

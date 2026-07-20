@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test"
 import { BrowserExtensionServerMessage } from "@anybox/chrome-shared/browser-extension"
 
-test("accepts only an explicit Browser Contract v3 command envelope", () => {
+test("accepts only an explicit Browser Contract v4 command envelope", () => {
   const command = {
     type: "command",
     commandID: "contract-command",
-    contractVersion: 3,
+    contractVersion: 4,
     method: "tabs.list",
     params: {},
   } as const
@@ -16,7 +16,7 @@ test("accepts only an explicit Browser Contract v3 command envelope", () => {
     .toBe(false)
   expect(BrowserExtensionServerMessage.safeParse({
     ...command,
-    contractVersion: 2,
+    contractVersion: 3,
   }).success).toBe(false)
 })
 
@@ -47,7 +47,7 @@ test("marks Native transport connected only after helloAck and drops a stale hea
   ;(globalThis as any).chrome = {
     runtime: {
       id: "hjbejdmgpifdjjlpgmdfmbmbhkedgnjc",
-      getManifest: () => ({ version: "0.13.0" }),
+      getManifest: () => ({ version: "0.14.0" }),
       connectNative: () => port,
       lastError: undefined,
     },
@@ -99,7 +99,7 @@ test("marks Native transport connected only after helloAck and drops a stale hea
   onMessage?.({
     type: "helloAck",
     protocolVersion: 1,
-    contractVersion: 3,
+    contractVersion: 4,
     browserID: "extension:extension-handshake-test",
     extensionInstanceID: "extension-handshake-test",
     heartbeatIntervalMs: 30_000,
@@ -112,7 +112,7 @@ test("marks Native transport connected only after helloAck and drops a stale hea
   expect(localStorage.ANYBOX_BRIDGE_STATUS).toMatchObject({
     state: "connected",
     protocolVersion: 1,
-    contractVersion: 3,
+    contractVersion: 4,
     reconnectCount: 0,
   })
 

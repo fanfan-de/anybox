@@ -11,6 +11,14 @@ const runtimeURL = pathToFileURL(
 process.env.ANYBOX_BROWSER_NATIVE_INSTALL = "off"
 
 const COMMAND_METADATA = {
+  "browser.nameSession": {
+    apiPath: "browser.nameSession",
+    signature: "browser.nameSession(name)",
+    summary: "Name the current browser task and its managed Chrome tab group.",
+    security: "tab-lifecycle",
+    publicReceiver: "browser",
+    publicResult: "command-result",
+  },
   "tabs.list": {
     apiPath: "browser.tabs.list",
     signature: "browser.tabs.list()",
@@ -33,6 +41,22 @@ const COMMAND_METADATA = {
     summary: "Retain a leased tab as a user deliverable during finalization.",
     security: "tab-lifecycle",
     publicReceiver: "tab",
+    publicResult: "command-result",
+  },
+  "tabs.markHandoff": {
+    apiPath: "tab.markHandoff",
+    signature: "tab.markHandoff()",
+    summary: "Mark a leased tab as a handoff candidate for the current turn.",
+    security: "tab-lifecycle",
+    publicReceiver: "tab",
+    publicResult: "command-result",
+  },
+  "tabs.finalize": {
+    apiPath: "browser.tabs.finalize",
+    signature: "browser.tabs.finalize(options?)",
+    summary: "Atomically classify and finalize tab leases for the current turn.",
+    security: "tab-lifecycle",
+    publicReceiver: "browser",
     publicResult: "command-result",
   },
   "tabs.activate": {
@@ -100,7 +124,7 @@ function importRuntime(label) {
 function getInfo(commands = ["tabs.list"]) {
   return {
     backend: {
-      contractVersion: 3,
+      contractVersion: 4,
       browserId: "extension",
       name: "Anybox Chrome Extension",
       kind: "extension",
@@ -123,7 +147,7 @@ function getInfo(commands = ["tabs.list"]) {
       },
     },
     apiManifest: {
-      contractVersion: 3,
+      contractVersion: 4,
       commands: commands.map((method) => ({
         method,
         apiPath: COMMAND_METADATA[method].apiPath,
@@ -135,7 +159,7 @@ function getInfo(commands = ["tabs.list"]) {
       })),
     },
     documentationManifest: {
-      contractVersion: 3,
+      contractVersion: 4,
       title: "Anybox Browser Client Runtime",
       entries: commands.map((method) => ({
         method,
@@ -194,7 +218,7 @@ test("installs a discovery-backed BrowserManager on the provided globals", async
   assert.equal(forUrl.browserId, "extension")
   assert.equal(
     requests.filter(({ type }) => type === "getInfo").every((request) =>
-      request.contractVersion === 3
+      request.contractVersion === 4
     ),
     true,
   )
@@ -571,7 +595,7 @@ test("filters API manifests and documentation from backend capabilities", async 
   assert.equal(requests.filter(({ type }) => type === "command").length, 0)
 })
 
-test("routes tabs and Tab APIs through the v3 CommandRouter", async () => {
+test("routes tabs and Tab APIs through the v4 CommandRouter", async () => {
   const requests = []
   const commands = [
     "tabs.list",
@@ -642,8 +666,6 @@ test("routes tabs and Tab APIs through the v3 CommandRouter", async () => {
   const tabs = await browser.tabs.list()
   const opened = await browser.tabs.open("https://example.com/open", {
     active: false,
-    keepOpen: false,
-    url: "https://should-not-override.example/",
   })
   const screenshot = await opened.screenshot({ fullPage: true })
   const current = await browser.tabs.current()
@@ -665,14 +687,14 @@ test("routes tabs and Tab APIs through the v3 CommandRouter", async () => {
   const commandRequests = requests.filter(({ type }) => type === "command")
   assert.deepEqual(commandRequests[0], {
     type: "command",
-    contractVersion: 3,
+    contractVersion: 4,
     method: "tabs.list",
     params: {},
     browserID: "extension",
   })
   assert.deepEqual(commandRequests[1], {
     type: "command",
-    contractVersion: 3,
+    contractVersion: 4,
     method: "tabs.open",
     params: {
       url: "https://example.com/open",
@@ -682,7 +704,7 @@ test("routes tabs and Tab APIs through the v3 CommandRouter", async () => {
   })
   assert.deepEqual(commandRequests[2], {
     type: "command",
-    contractVersion: 3,
+    contractVersion: 4,
     method: "page.screenshot",
     params: {
       tabId: 43,
@@ -729,12 +751,15 @@ test("routes tabs and Tab APIs through the v3 CommandRouter", async () => {
   )
 })
 
-test("keeps new tabs open by default and supports temporary tabs", async () => {
+test("opens temporary tabs and serializes explicit final classifications", async () => {
   const requests = []
   let nextTabId = 50
   const commands = [
+    "browser.nameSession",
     "tabs.open",
     "tabs.markDeliverable",
+    "tabs.markHandoff",
+    "tabs.finalize",
   ]
   const transport = backendTransport({
     commands,
@@ -755,6 +780,25 @@ test("keeps new tabs open by default and supports temporary tabs", async () => {
           state: "deliverable",
         }
       }
+      if (request.method === "browser.nameSession") {
+        return { name: request.params.name }
+      }
+      if (request.method === "tabs.markHandoff") {
+        return {
+          tabId: request.params.tabId,
+          state: "handoff",
+        }
+      }
+      if (request.method === "tabs.finalize") {
+        return {
+          sessionID: "session-test",
+          closedTabIds: [],
+          releasedTabIds: [],
+          deliverableTabIds: [request.params.keep[0].tabId],
+          handoffTabIds: [request.params.keep[1].tabId],
+          detachedTabIds: request.params.keep.map(({ tabId }) => tabId),
+        }
+      }
       throw new Error(`Unexpected method: ${request.method}`)
     },
   })
@@ -762,32 +806,59 @@ test("keeps new tabs open by default and supports temporary tabs", async () => {
   const { setupBrowserRuntime } = await importRuntime("tab-retention")
   const agent = await setupBrowserRuntime({ globals: {}, transport })
   const browser = await agent.browsers.get()
-  const retained = await browser.tabs.open("https://example.com/result")
-  const temporary = await browser.tabs.open("https://example.com/helper", {
+  await browser.nameSession("✍️ Publish update")
+  const deliverable = await browser.tabs.open("https://example.com/result")
+  const handoff = await browser.tabs.open("https://example.com/helper", {
     active: false,
-    keepOpen: false,
+  })
+  await deliverable.markDeliverable()
+  await handoff.markHandoff()
+  const finalized = await browser.tabs.finalize({
+    keep: [
+      { tab: deliverable, status: "deliverable" },
+      { tab: handoff, status: "handoff" },
+    ],
   })
 
-  assert.equal(retained.tabId, 51)
-  assert.equal(temporary.tabId, 52)
+  assert.equal(deliverable.tabId, 51)
+  assert.equal(handoff.tabId, 52)
+  assert.deepEqual(finalized.deliverableTabIds, [51])
+  assert.deepEqual(finalized.handoffTabIds, [52])
   assert.deepEqual(
     requests
       .filter(({ type }) => type === "command")
       .map(({ method, params }) => ({ method, params })),
     [
       {
-        method: "tabs.open",
-        params: { url: "https://example.com/result" },
+        method: "browser.nameSession",
+        params: { name: "✍️ Publish update" },
       },
       {
-        method: "tabs.markDeliverable",
-        params: { tabId: 51 },
+        method: "tabs.open",
+        params: { url: "https://example.com/result" },
       },
       {
         method: "tabs.open",
         params: {
           url: "https://example.com/helper",
           active: false,
+        },
+      },
+      {
+        method: "tabs.markDeliverable",
+        params: { tabId: 51 },
+      },
+      {
+        method: "tabs.markHandoff",
+        params: { tabId: 52 },
+      },
+      {
+        method: "tabs.finalize",
+        params: {
+          keep: [
+            { tabId: 51, status: "deliverable" },
+            { tabId: 52, status: "handoff" },
+          ],
         },
       },
     ],
@@ -798,6 +869,73 @@ test("keeps new tabs open by default and supports temporary tabs", async () => {
       keepOpen: "yes",
     }),
     (error) => error.code === "INVALID_COMMAND_PARAMS",
+  )
+
+  const foreignBrowser = await agent.browsers.get()
+  const foreignTab = await foreignBrowser.tabs.get(99)
+  await assert.rejects(
+    browser.tabs.finalize({
+      keep: [{ tab: foreignTab, status: "deliverable" }],
+    }),
+    (error) => error.code === "TAB_NOT_OWNED",
+  )
+  await assert.rejects(
+    browser.tabs.finalize({
+      keep: [
+        { tab: deliverable, status: "deliverable" },
+        { tab: deliverable, status: "handoff" },
+      ],
+    }),
+    (error) => error.code === "INVALID_COMMAND_PARAMS",
+  )
+})
+
+test("uses an empty keep list for automatic lifecycle finalization", async () => {
+  const requests = []
+  let lifecycleHook
+  const transport = backendTransport({
+    commands: ["tabs.finalize"],
+    requests,
+    command(request) {
+      assert.equal(request.method, "tabs.finalize")
+      return {
+        sessionID: "session-test",
+        closedTabIds: [],
+        releasedTabIds: [],
+        deliverableTabIds: [],
+        handoffTabIds: [],
+        detachedTabIds: [],
+      }
+    },
+  })
+  const { setupBrowserRuntime } = await importRuntime("lifecycle-finalize")
+  await setupBrowserRuntime({
+    globals: {
+      nodeRepl: {
+        addLifecycleHook(callback) {
+          lifecycleHook = callback
+        },
+      },
+    },
+    transport,
+  })
+
+  await lifecycleHook({ type: "turn-end" })
+  await lifecycleHook({ type: "turn-end" })
+  assert.deepEqual(
+    requests
+      .filter(({ type }) => type === "command")
+      .map(({ method, params }) => ({ method, params })),
+    [
+      {
+        method: "tabs.finalize",
+        params: { keep: [], reason: "turn-end" },
+      },
+      {
+        method: "tabs.finalize",
+        params: { keep: [], reason: "turn-end" },
+      },
+    ],
   )
 })
 
@@ -1218,7 +1356,7 @@ test("replaces an authenticated Browser Host from an older plugin version", asyn
 
     assert.equal(readiness.state, "needs-browser")
     assert.notEqual(upgradedBootstrap.hostPID, initialBootstrap.hostPID)
-    assert.equal(upgradedBootstrap.hostVersion, "0.13.0")
+    assert.equal(upgradedBootstrap.hostVersion, "0.14.0")
   } finally {
     for (const hostPID of hostPIDs) {
       if (!Number.isInteger(hostPID)) continue

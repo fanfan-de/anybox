@@ -21,7 +21,7 @@ The `js_reset` tool only clears persistent JavaScript state. The `js_add_node_mo
 
 Keep setup details internal. Unless the user asks about implementation, describe progress naturally as connecting to Chrome, inspecting the page, or retrying the connection.
 
-The Browser Client sends only operations advertised by Browser Contract v3 to the plugin-owned Browser Host over authenticated local IPC. The client performs an early schema and capability check, and the Browser Host authoritatively validates every command again before it can reach Chrome. The general-purpose Node environment does not provide a browser host-service API; do not call or expect `nodeRepl.requestHost(...)`.
+The Browser Client sends only operations advertised by Browser Contract v4 to the plugin-owned Browser Host over authenticated local IPC. The client performs an early schema and capability check, and the Browser Host authoritatively validates every command again before it can reach Chrome. The general-purpose Node environment does not provide a browser host-service API; do not call or expect `nodeRepl.requestHost(...)`.
 
 ## Bootstrap and reload safely
 
@@ -81,6 +81,19 @@ Do not keep polling or repeatedly open Chrome after `ensureReady` returns a non-
 
 ## Work with tabs
 
+At the start of every browser task, name the Session before opening or
+claiming a tab. Use a short, user-readable description of the outcome:
+
+```js
+await chrome.nameSession("✍️ Publish Zhihu update")
+```
+
+The first Agent-created tab starts an expanded Chrome Tab Group with this
+name and a random Chrome color. Later Agent-created tabs, including child tabs
+opened by page actions, join the same group. If no name is supplied the
+extension uses `Anybox`, but do not intentionally skip naming. An empty name
+is invalid.
+
 List tabs before opening a duplicate:
 
 ```js
@@ -106,22 +119,19 @@ globalThis.tab = await chrome.tabs.open("https://example.com/")
 return await tab.snapshot()
 ```
 
-Tabs opened through the Browser Client stay open after automatic Turn and
-Session finalization by default so the user can inspect the resulting page.
-Pass `{ keepOpen: false }` only for temporary helper tabs that should be
-closed automatically when the task ends:
+Tabs opened through the Browser Client are temporary by default. Do not pass
+`keepOpen`; it is not part of Browser Contract v4. Open helper tabs normally
+and omit them from the final keep list:
 
 ```js
 const temporaryTab = await chrome.tabs.open("https://example.com/helper", {
   active: false,
-  keepOpen: false,
 })
 ```
 
 Do not close the final user-facing page merely because the requested workflow
-has completed. Close a tab only when the user asked for it to be closed or
-when a temporary helper tab is no longer needed. A temporary tab can be
-retained later with `tab.markDeliverable()`.
+has completed. Classify it as a deliverable during finalization. Use
+`tab.close()` only when a page should disappear before task finalization.
 
 Navigate an existing leased tab directly instead of opening a duplicate:
 
@@ -140,6 +150,43 @@ Chrome; a successfully closed tab does not also need `release()`.
 An item returned by `chrome.tabs.list()` also contains a bound `runtime` property that can be used within the same call. Prefer an explicit tab binding across calls.
 
 If a tab is missing, stale, or closed, discard only `globalThis.tab` and obtain or create a fresh tab from the existing `chrome` binding. An empty tab list does not invalidate the browser binding.
+
+## Finalize every browser turn
+
+`chrome.tabs.finalize(...)` must be the final Chrome action of every turn that
+uses this plugin. Classify only Agent-created tabs that must remain:
+
+- `deliverable`: a completed result the user should inspect. It remains open,
+  leaves the Anybox group, and its control Lease is released.
+- `handoff`: a page that needs user input or must continue in the next turn.
+  It remains in the Anybox group and keeps its Lease.
+- Temporary/intermediate Agent tabs: omit them. They close automatically.
+- Claimed user tabs: omit them. They always remain open, keep their original
+  window and group, and are released from Agent control.
+
+```js
+await chrome.tabs.finalize({
+  keep: [
+    { tab: resultTab, status: "deliverable" },
+    { tab: loginTab, status: "handoff" },
+  ],
+})
+```
+
+The keep list accepts only `BrowserTab` objects created by this exact
+`chrome` binding. Do not pass raw tab IDs, duplicate tabs, tabs from another
+BrowserContext, or tabs from an earlier turn. The extension validates the
+entire list before changing any page.
+
+`tab.markDeliverable()` and `tab.markHandoff()` are optional current-turn
+signals and may overwrite each other. They never replace the final keep list;
+`finalize({ keep })` is authoritative. A handoff resumed in the next turn
+loses its old mark and must be classified again.
+
+If the turn ends without an explicit finalize call, the runtime performs an
+empty-keep fallback. That safely releases claimed user tabs and closes
+unclassified Agent tabs. Therefore always finalize explicitly when a result
+or handoff page must remain.
 
 ## Inspect and interact
 
@@ -210,10 +257,10 @@ await nodeRepl.emitImage(await tab.screenshot())
 Available APIs include:
 
 - `agent.browsers.readiness()`, `ensureReady({ launch })`, `list()`, `get("extension")`, `getDefault()`, and `getForUrl(url)`
-- `chrome.browserId`, `chrome.capabilities`, `chrome.status()`, and capability-filtered `chrome.documentation()`
-- `chrome.tabs.list()`, `listUser()`, `open(url, { active?, keepOpen? })`, `claim(tabId)`, `activate(tabId)`, `get(tabId)`, `current()`, and `finalize()`
+- `chrome.browserId`, `chrome.capabilities`, `chrome.status()`, `chrome.nameSession(name)`, and capability-filtered `chrome.documentation()`
+- `chrome.tabs.list()`, `listUser()`, `open(url, { active? })`, `claim(tabId)`, `activate(tabId)`, `get(tabId)`, `current()`, and `finalize({ keep })`
 - `tab.info()`, `activate()`, `goto(url)`, `back()`, `forward()`, `reload()`, `close()`, `snapshot()`, `interactiveSnapshot()`, `domTree()`, `accessibilityTree()`, and `screenshot()`
-- `tab.click()`, `clickElement()`, `fill()`, `type()`, `scroll()`, `waitFor()`, `release()`, and `markDeliverable()`
+- `tab.click()`, `clickElement()`, `fill()`, `type()`, `scroll()`, `waitFor()`, `release()`, `markDeliverable()`, and `markHandoff()`
 - `tab.playwright.domSnapshot()`, `elementInfo()`, `locator()`, `frameLocator()`, `getByRole()`, `getByText()`, `getByLabel()`, `getByPlaceholder()`, and `getByTestId()`
 - Locator composition with `locator()`, `filter()`, `and()`, `or()`, `first()`, `last()`, `nth()`, and `all()`
 - Locator reads with `count()`, `allTextContents()`, `textContent()`, `innerText()`, `getAttribute()`, `isVisible()`, `isEnabled()`, and `inputValue()`

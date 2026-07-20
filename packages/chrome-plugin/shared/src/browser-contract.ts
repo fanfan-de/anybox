@@ -7,6 +7,7 @@ import {
   BrowserExtensionElementActionResult,
   BrowserExtensionFillResult,
   BrowserExtensionInteractiveSnapshotResult,
+  BrowserExtensionNameSessionResult,
   BrowserExtensionPlaywrightActionResult,
   BrowserExtensionPlaywrightDomSnapshotResult,
   BrowserExtensionPlaywrightDownloadPathResult,
@@ -26,6 +27,7 @@ import {
   BrowserExtensionTabsListResult,
   BrowserExtensionTabsFinalizeResult,
   BrowserExtensionTabsMarkDeliverableResult,
+  BrowserExtensionTabsMarkHandoffResult,
   BrowserExtensionTabsReleaseResult,
   BrowserExtensionTypeResult,
   BrowserExtensionWaitForResult,
@@ -87,7 +89,7 @@ export type {
   BrowserPlaywrightTextMatcherV3 as BrowserPlaywrightTextMatcherV3Type,
 } from "./playwright-contract"
 
-export const BROWSER_CONTRACT_VERSION = 3 as const
+export const BROWSER_CONTRACT_VERSION = 4 as const
 export const BROWSER_CONTRACT_SUPPORTED_VERSIONS = [
   BROWSER_CONTRACT_VERSION,
 ] as const
@@ -95,6 +97,7 @@ export const BrowserContractVersion = z.literal(BROWSER_CONTRACT_VERSION)
 export type BrowserContractVersion = z.infer<typeof BrowserContractVersion>
 
 export const BROWSER_CONTRACT_COMMAND_METHODS = [
+  "browser.nameSession",
   "tabs.list",
   "tabs.listUser",
   "tabs.open",
@@ -107,6 +110,7 @@ export const BROWSER_CONTRACT_COMMAND_METHODS = [
   "tabs.close",
   "tabs.release",
   "tabs.markDeliverable",
+  "tabs.markHandoff",
   "tabs.finalize",
   "page.snapshot",
   "page.interactiveSnapshot",
@@ -247,6 +251,7 @@ export class BrowserContractValidationError extends Error {
 const RequiredTabID = z.number().int().positive()
 const MouseButton = z.enum(["left", "right", "middle"])
 const RequiredContextID = z.string().trim().min(1).max(256)
+const RequiredSessionName = z.string().trim().min(1).max(128)
 
 export const BrowserCommandExecutionContext = z.object({
   sessionID: RequiredContextID,
@@ -316,6 +321,10 @@ const BrowserTargetUrl = z.string()
 export const BrowserTabsListParams = z.object({}).strict()
 export const BrowserTabsListUserParams = z.object({}).strict()
 
+export const BrowserNameSessionParams = z.object({
+  name: RequiredSessionName,
+}).strict()
+
 export const BrowserTabsOpenParams = z.object({
   url: BrowserTargetUrl,
   active: z.boolean().optional(),
@@ -358,7 +367,22 @@ export const BrowserTabsMarkDeliverableParams = z.object({
   tabId: RequiredTabID,
 }).strict()
 
+export const BrowserTabsMarkHandoffParams = z.object({
+  tabId: RequiredTabID,
+}).strict()
+
+export const BrowserTabFinalizeStatus = z.enum(["deliverable", "handoff"])
+export type BrowserTabFinalizeStatus = z.infer<
+  typeof BrowserTabFinalizeStatus
+>
+
+export const BrowserTabsFinalizeKeepEntry = z.object({
+  tabId: RequiredTabID,
+  status: BrowserTabFinalizeStatus,
+}).strict()
+
 export const BrowserTabsFinalizeParams = z.object({
+  keep: z.array(BrowserTabsFinalizeKeepEntry).max(256).default([]),
   reason: z.enum([
     "turn-end",
     "session-end",
@@ -368,7 +392,19 @@ export const BrowserTabsFinalizeParams = z.object({
     "lease-timeout",
     "manual",
   ]).optional(),
-}).strict()
+}).strict().superRefine((value, context) => {
+  const seen = new Set<number>()
+  value.keep.forEach((entry, index) => {
+    if (seen.has(entry.tabId)) {
+      context.addIssue({
+        code: "custom",
+        message: `Tab ${entry.tabId} appears more than once in the final keep list.`,
+        path: ["keep", index, "tabId"],
+      })
+    }
+    seen.add(entry.tabId)
+  })
+})
 
 export const BrowserPageSnapshotParams = z.object({
   tabId: RequiredTabID,
@@ -497,6 +533,15 @@ type BrowserContractCommandDefinition<
 }
 
 const BrowserContractBaseCommandRegistry = {
+  "browser.nameSession": {
+    method: "browser.nameSession",
+    apiPath: "browser.nameSession",
+    signature: "browser.nameSession(name)",
+    summary: "Name the current browser task and its managed Chrome tab group.",
+    security: "tab-lifecycle",
+    params: BrowserNameSessionParams,
+    result: BrowserExtensionNameSessionResult,
+  },
   "tabs.list": {
     method: "tabs.list",
     apiPath: "browser.tabs.list",
@@ -708,11 +753,20 @@ export const BrowserContractCommandRegistry = {
     params: BrowserTabsMarkDeliverableParams,
     result: BrowserExtensionTabsMarkDeliverableResult,
   },
+  "tabs.markHandoff": {
+    method: "tabs.markHandoff",
+    apiPath: "tab.markHandoff",
+    signature: "tab.markHandoff()",
+    summary: "Mark a leased tab as a handoff candidate for the current turn.",
+    security: "tab-lifecycle",
+    params: BrowserTabsMarkHandoffParams,
+    result: BrowserExtensionTabsMarkHandoffResult,
+  },
   "tabs.finalize": {
     method: "tabs.finalize",
     apiPath: "browser.tabs.finalize",
     signature: "browser.tabs.finalize(options?)",
-    summary: "Finalize all tab leases for the current session.",
+    summary: "Atomically classify and finalize tab leases for the current turn.",
     security: "tab-lifecycle",
     params: BrowserTabsFinalizeParams,
     result: BrowserExtensionTabsFinalizeResult,
@@ -1254,7 +1308,8 @@ function toJsonSchema(schema: z.ZodType): Record<string, unknown> {
 function publicReceiver(
   method: BrowserContractCommandMethod,
 ): BrowserApiReceiver {
-  return method === "tabs.list"
+  return method === "browser.nameSession"
+    || method === "tabs.list"
     || method === "tabs.listUser"
     || method === "tabs.open"
     || method === "tabs.claim"

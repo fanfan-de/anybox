@@ -225,7 +225,7 @@ describe("BrowserExtensionBridge command result ownership", () => {
     })
   })
 
-  test("accepts only v3 and hides an incomplete Playwright surface", () => {
+  test("accepts only v4 and hides an incomplete Playwright surface", () => {
     const partialBridge = new BrowserExtensionBridge()
     const partial = createSocket()
     const partialID = partialBridge.register(partial.socket, {
@@ -234,7 +234,7 @@ describe("BrowserExtensionBridge command result ownership", () => {
     partialBridge.handleRawMessage(partialID, {
       type: "hello",
       protocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
-      extensionInstanceID: "partial-v3-extension",
+      extensionInstanceID: "partial-v4-extension",
       extensionID: ANYBOX_CHROME_EXTENSION_ID,
       version: "0.3.0",
       capabilities: {
@@ -254,13 +254,13 @@ describe("BrowserExtensionBridge command result ownership", () => {
       ),
     ).toBe(false)
 
-    const v3Bridge = new BrowserExtensionBridge()
-    const v3 = createSocket()
-    const v3ID = v3Bridge.register(v3.socket, { transport: "native" })
-    v3Bridge.handleRawMessage(v3ID, {
+    const v4Bridge = new BrowserExtensionBridge()
+    const v4 = createSocket()
+    const v4ID = v4Bridge.register(v4.socket, { transport: "native" })
+    v4Bridge.handleRawMessage(v4ID, {
       type: "hello",
       protocolVersion: BROWSER_EXTENSION_PROTOCOL_VERSION,
-      extensionInstanceID: "v3-extension",
+      extensionInstanceID: "v4-extension",
       extensionID: ANYBOX_CHROME_EXTENSION_ID,
       version: "0.3.0",
       capabilities: {
@@ -268,7 +268,7 @@ describe("BrowserExtensionBridge command result ownership", () => {
         commands: BROWSER_CONTRACT_COMMAND_METHODS,
       },
     })
-    expect(v3Bridge.backendInfo()).toMatchObject({
+    expect(v4Bridge.backendInfo()).toMatchObject({
       contractVersion: BROWSER_CONTRACT_VERSION,
       capabilities: {
         features: {
@@ -280,7 +280,7 @@ describe("BrowserExtensionBridge command result ownership", () => {
     })
     expect(
       BROWSER_CONTRACT_V3_PLAYWRIGHT_COMMAND_METHODS.every((method) =>
-        v3Bridge.backendInfo().capabilities.commands.includes(method)
+        v4Bridge.backendInfo().capabilities.commands.includes(method)
       ),
     ).toBe(true)
   })

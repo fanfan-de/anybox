@@ -1,6 +1,6 @@
 # Anybox Chrome 插件
 
-本文是 Chrome 插件工程唯一需要长期维护的实现文档。当前代码基线为 `0.13.0`；版本与安装元数据以
+本文是 Chrome 插件工程唯一需要长期维护的实现文档。当前代码基线为 `0.14.0`；版本与安装元数据以
 [`runtime/.anybox-plugin/plugin.json`](./runtime/.anybox-plugin/plugin.json)
 为准。
 
@@ -27,7 +27,7 @@ flowchart LR
 
 | 组件 | 实现 | 主要职责 |
 |---|---|---|
-| Browser Contract | [`shared`](./shared) | 定义唯一的 Contract v3、命令 Schema、能力和 IPC 消息 |
+| Browser Contract | [`shared`](./shared) | 定义唯一的 Contract v4、命令 Schema、能力和 IPC 消息 |
 | Browser Client | [`browser-runtime`](./browser-runtime) | 安装 `agent.browsers`，提供面向 Agent 的对象 API，启动或复用 Browser Host |
 | Browser Host | [`browser-host`](./browser-host) | 权威执行 Schema、能力、租约、Origin 策略和授权凭据校验 |
 | Native Host | [`browser-native-host`](./browser-native-host) | 在 Chrome Native Messaging stdio 与本地 IPC 之间转发和分片 |
@@ -86,7 +86,7 @@ Anybox Registry 指向生成目录中的规范 Manifest，并通过 GitHub Tree 
    认证探测；仍没有浏览器连接时才查找并启动 Chrome，随后有限等待扩展握手。
 6. 扩展通过 `chrome.runtime.connectNative("com.anybox.browser")` 启动 Rust Native Host。
 7. Rust Native Host 读取短期 bootstrap proof，连接 Browser Host 的 native-host IPC 端点。
-8. 扩展发送 `hello`，Host 只接受精确的 Contract v3，并只开放“规范命令与扩展实际声明命令”的
+8. 扩展发送 `hello`，Host 只接受精确的 Contract v4，并只开放“规范命令与扩展实际声明命令”的
    安全交集。版本不一致时连接保持可诊断，但不会接收命令或降级。
 
 `agent.browsers.readiness()` 会读取连接状态，但不会启动 Chrome，也不会主动执行 Native Host 探测。
@@ -116,9 +116,14 @@ const readiness = await agent.browsers.ensureReady({ launch: true })
 if (readiness.state !== "ready") return readiness
 
 globalThis.chrome = await agent.browsers.getDefault()
+await chrome.nameSession("Research example documentation")
 globalThis.tab = await chrome.tabs.open("https://example.com/")
 await tab.goto("https://example.com/docs")
-return await tab.snapshot()
+const result = await tab.snapshot()
+await chrome.tabs.finalize({
+  keep: [{ tab, status: "deliverable" }],
+})
+return result
 ```
 
 当前对象模型：
@@ -126,22 +131,24 @@ return await tab.snapshot()
 | 对象 | API |
 |---|---|
 | `agent.browsers` | `readiness()`、`ensureReady()`、`list()`、`get()`、`getDefault()`、`getForUrl()` |
-| Browser Context | `status()`、`documentation()`、`tabs.list()`、`listUser()`、`open()`、`claim()`、`activate()`、`get()`、`current()`、`finalize()` |
-| Browser Tab | `info()`、`activate()`、`goto()`、`back()`、`forward()`、`reload()`、`close()`、页面 API，以及原子能力 `playwright` |
+| Browser Context | `status()`、`documentation()`、`nameSession()`、`tabs.list()`、`listUser()`、`open()`、`claim()`、`activate()`、`get()`、`current()`、`finalize({ keep })` |
+| Browser Tab | `info()`、`activate()`、`goto()`、`back()`、`forward()`、`reload()`、`close()`、`markDeliverable()`、`markHandoff()`、页面 API，以及原子能力 `playwright` |
 | `tab.playwright` | `domSnapshot()`、`elementInfo()`、`locator()`、`frameLocator()`、`getByRole/Text/Label/Placeholder/TestId()`、页面等待和一次性事件 |
 | Playwright Locator | 不可变组合、批量读取、严格单元素读取、actionability 动作和 `waitFor()` |
 
-`documentation()` 由扩展实际声明的能力动态生成。只有 v3 后端完整声明全部必需命令时，
+`documentation()` 由扩展实际声明的能力动态生成。只有 v4 后端完整声明全部必需命令时，
 `tab.playwright` 才会作为一个原子能力出现；不暴露部分 API，也不提供旧
 `tab.locator(descriptor)` 适配层。公共 API 仍没有任意页面 JavaScript、任意 CDP、元素截图或
 `downloadMedia()`。
 
 ## Browser Contract 与扩展执行
 
-当前且唯一支持的协议是 Browser Contract v3。Runtime、Host 和扩展都要求请求显式携带
-`contractVersion: 3`；缺失、v1/v2 或未来版本都会返回稳定的不兼容错误，不进行协商降级。
-v3 提供以下执行面：
+当前且唯一支持的协议是 Browser Contract v4。Runtime、Host 和扩展都要求请求显式携带
+`contractVersion: 4`；缺失、v1/v2/v3 或未来版本都会返回稳定的不兼容错误，不进行协商降级。
+v4 提供以下执行面：
 
+- 任务生命周期：`browser.nameSession`、`tabs.markDeliverable`、`tabs.markHandoff` 和
+  `tabs.finalize({ keep })`
 - Tab 导航：`goto`、`back`、`forward`、`reload` 和 `close`
 - 定位依据：`playwright.domSnapshot`、`playwright.elementInfo`
 - Locator 读取：`count`、`allTextContents`、`textContent`、`innerText`、`inputValue`、
@@ -150,7 +157,7 @@ v3 提供以下执行面：
 - 页面等待：导航、URL、生命周期、download 和 filechooser 一次性事件
 - 事件后续：Host 管理目录中的 download path、逐次授权的本地文件选择
 
-扩展仍会在 `hello` 中声明命令清单，Host 只采用 v3 规范命令与该清单的交集。Playwright 命令必须
+扩展仍会在 `hello` 中声明命令清单，Host 只采用 v4 规范命令与该清单的交集。Playwright 命令必须
 完整出现才会开放 `tab.playwright`；不完整能力会被整体隐藏。旧扩展会得到
 `needs-extension-update`，需要与桌面端一起更新。
 
@@ -177,6 +184,7 @@ SHA-256、Apache-2.0 License/NOTICE 和离线构建使用的成品均在
 | 操作 | 底层实现 | 说明 |
 |---|---|---|
 | Tab 查询、创建、激活、导航、刷新、关闭 | `chrome.tabs` | 输出 URL 会移除 path、query 和 hash，只保留 Origin |
+| 任务分组、命名、随机色和解组 | `chrome.tabs` + `chrome.tabGroups` | 只管理 Agent 创建的任务组，不改动用户原有分组 |
 | 普通快照 | 固定的 `chrome.scripting.executeScript` | 提取受限的正文、链接、按钮和输入框信息 |
 | 交互快照 | 固定注入函数 | 为当前交互元素生成临时 `data-anybox-element-id` |
 | DOM 树 | 受限 CDP `DOM.getDocument` | 限制深度和节点数，并执行文本脱敏 |
@@ -210,7 +218,7 @@ filechooser 句柄绑定 session、Tab 和 document generation，单次消费且
 
 ## 命令校验与授权
 
-Browser Contract v3 请求必须携带由 Node REPL 当前调用上下文提供的：
+Browser Contract v4 请求必须携带由 Node REPL 当前调用上下文提供的：
 
 ```text
 sessionID
@@ -237,7 +245,7 @@ Contract 版本
 Origin 策略支持 `ANYBOX_BROWSER_ORIGIN_ALLOW` 和 `ANYBOX_BROWSER_ORIGIN_DENY`。显式 deny 会直接拒绝；
 敏感字段填写属于高风险；打开、接管、点击、填写和 Locator 写操作通常产生 Origin 范围的权限请求。
 
-即使策略结果是 `allow`，v3 命令仍必须携带有效的授权 receipt。
+即使策略结果是 `allow`，v4 命令仍必须携带有效的授权 receipt。
 `playwright.fileChooser.setFiles` 归入独立 `local-file-read` 类别，始终要求单次高风险授权；
 日志和权限摘要都不包含文件路径或输入值。完整流程：
 
@@ -258,28 +266,48 @@ Origin 策略支持 `ANYBOX_BROWSER_ORIGIN_ALLOW` 和 `ANYBOX_BROWSER_ORIGIN_DEN
 
 ## Tab 租约与生命周期
 
-扩展使用 `chrome.storage.session` 保存 Tab 租约，默认 TTL 为 30 分钟。租约包含 Tab 来源、Session、
-Turn、状态、保留标记和扩展实例 ID：
+扩展使用 `chrome.storage.session` 保存 v4 Tab 租约，使用 `chrome.storage.local` 保存受管 Group
+及 Session 名称。租约默认 TTL 为 30 分钟，包含 Tab 来源、Session、Turn、活动/交接状态、
+当前 Turn 标记和扩展实例 ID：
 
+- `browser.nameSession()` 在首次打开或接管 Tab 前保存任务名；未命名时使用 `Anybox`。
 - `tabs.open()` 创建 Agent 所有的 Tab。
 - `tabs.list()` 只列出当前 Session 已拥有的 Tab。
 - `tabs.listUser()` 列出可以认领的用户 Tab。
 - `tabs.claim()` 为现有用户 Tab 建立租约。
 - `tab.goto()`、`back()`、`forward()` 和 `reload()` 只作用于当前 Session 已租用的 Tab。
 - `tab.close()` 关闭 Tab，并释放租约、调试器和 Locator 执行状态；关闭后无需再调用 `release()`。
-- 通过已有租约 Tab 打开的新 Tab 会继承租约。
+- 通过已有租约 Tab 打开的新 Tab 始终成为 Agent Tab；即使 opener 是接管的用户 Tab，也不会把
+  子 Tab 误判为用户页面。
 - 跨 Session 操作会被 Browser Host 和扩展双重拒绝。
 
-结束处理：
+每个 Session 使用一个“任务名 + Chrome 九种合法颜色之一”的展开 Group。首个 Agent Tab 在当前普通
+窗口创建 Group，后续 Agent Tab 固定在该 Group 的窗口创建并加入同组。接管的用户 Tab 保持原窗口
+和原 Group。用户手动移动或解组页面后，扩展不会强制移回。Service Worker 启动时验证持久化 Group
+ID；Chrome 重启后失效的 ID 会被丢弃。
 
-- Browser Client 新建的 Tab 默认标记为结果页，任务结束后保留在用户的 Chrome 中。
-- `tabs.open(url, { keepOpen: false })` 创建临时 Agent Tab；这类 Tab 在任务结束时自动关闭。
-- 用户 Tab 只释放控制权，不关闭。
-- 临时 Tab 后续调用 `markDeliverable()` 后会转为保留的结果页。
-- `tab.close()` 始终显式关闭对应页面；完成任务本身不应触发关闭最终结果页。
-- `finalize()` 会同时清理 Debugger 附着和页面提示层。
-- Browser Client 在 Turn、Session、REPL reset 或传输关闭时注册自动 finalize。
-- 扩展异常断连超过清理宽限期后，也会回收租约。
+扩展 Manifest 为此声明 `tabGroups` 权限。从旧版本升级到 `0.14.0` 时，Chrome 可能暂停扩展并要求
+用户重新确认“管理标签页组”权限；空 Group 由 Chrome 自动移除。
+
+Turn 收尾以 `tabs.finalize({ keep })` 为唯一最终分类：
+
+| 分类 | 页面 | Group | Lease |
+|---|---|---|---|
+| `deliverable` | 保留 | 从 Anybox Group 移出 | 删除 |
+| `handoff` | 保留 | 留在 Anybox Group | 保留到下一 Turn |
+| keep 中未出现的 Agent Tab | 关闭 | 随页面清理 | 删除 |
+| 接管的用户 Tab | 保留 | 不改变 | 删除 |
+
+keep 清单只接受当前 BrowserContext、当前 Session 和当前 Turn 的 `BrowserTab`，拒绝重复、未知和
+跨域所有权条目。扩展在执行任何关闭前原子验证整份清单。`markDeliverable()` 与 `markHandoff()`
+只保存当前 Turn 可覆盖的标记；最终 keep 清单始终具有决定权。下一 Turn 恢复 handoff 时会清除旧
+标记，必须重新分类。
+
+清理顺序是：校验清单、停止页面提示层、释放 Playwright 状态、断开 Debugger、移出 deliverable、
+关闭临时页、提交 Lease、清理空 Group。解组失败不会把 deliverable 误关。显式 `finalize()` 应是
+当前 Turn 最后一个 Chrome 动作；漏调时 Browser Client 生命周期钩子以空 keep 自动收尾。Session
+结束、断连或超时会保留 handoff 页面但将其解组并释放，避免永久残留任务组。v3 遗留 Lease 升级时
+只清除元数据，不关闭升级前已存在的页面。
 
 ## Native Host 安装与分发
 

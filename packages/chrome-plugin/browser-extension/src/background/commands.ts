@@ -27,13 +27,24 @@ import {
   finalizeTurnLeases,
   listLeases,
   markDeliverable,
+  markHandoff,
   releaseLease,
   requireLease,
+  type LeaseCleanupPlan,
 } from "./lease-store"
 import {
   executePlaywrightCommand,
   releasePlaywrightTab,
 } from "./playwright-executor"
+import {
+  finishAllBrowserSessions,
+  finishBrowserSession,
+  getSessionGroupWindow,
+  groupAgentTab,
+  nameBrowserSession,
+  ungroupAnyManagedTabs,
+  ungroupManagedTabs,
+} from "./tab-group-store"
 
 export { detachAllDebuggers, detachTabDebugger } from "./cdp-session"
 
@@ -47,8 +58,8 @@ type TabSummary = {
     source: "user" | "agent"
     sessionID: string
     turnID: string
-    state: "active" | "deliverable" | "handoff" | "released"
-    retained?: boolean
+    state: "active" | "handoff"
+    mark?: "deliverable" | "handoff"
     extensionInstanceID: string
     expiresAt: number
   }
@@ -331,7 +342,7 @@ async function listTabs(
               sessionID: lease.sessionID,
               turnID: lease.turnID,
               state: lease.state,
-              retained: lease.retained,
+              mark: lease.mark,
               extensionInstanceID: lease.extensionInstanceID,
               expiresAt: lease.expiresAt,
             },
@@ -342,13 +353,11 @@ async function listTabs(
     summaries = summaries.filter((tab) =>
       tab.lease?.sessionID === context?.sessionID
       && tab.lease?.extensionInstanceID === context?.extensionInstanceID
-      && tab.lease?.state !== "released"
     )
   } else if (mode === "user") {
     summaries = summaries.filter((tab) =>
       !tab.lease
       || tab.lease.source === "user"
-      || (tab.lease.state === "released" && tab.lease.retained === true)
     )
   }
   if (typeof selectedTabId === "number") {
@@ -361,6 +370,20 @@ async function listTabs(
   }
 }
 
+async function nameSession(
+  params: unknown,
+  context?: BrowserExtensionCommandContext,
+) {
+  const name = readString(readRecord(params).name).trim()
+  if (!name) {
+    throw Object.assign(
+      new Error("browser.nameSession requires a non-empty name."),
+      { code: "INVALID_COMMAND_PARAMS", retryable: false },
+    )
+  }
+  return nameBrowserSession(name, context)
+}
+
 async function openTab(
   params: unknown,
   context?: BrowserExtensionCommandContext,
@@ -369,11 +392,22 @@ async function openTab(
   const input = readRecord(params)
   const url = readString(input.url)
   if (!url) throw new Error("tabs.open requires a URL.")
+  if (!context?.extensionInstanceID) {
+    throw Object.assign(
+      new Error("tabs.open requires a Browser Contract v4 session."),
+      { code: "SESSION_REQUIRED", retryable: false },
+    )
+  }
   throwIfCommandAborted(signal)
-  const tab = await chrome.tabs.create({ url, active: input.active !== false })
+  const windowId = await getSessionGroupWindow(context)
+  const tab = await chrome.tabs.create({
+    url,
+    active: input.active !== false,
+    ...(typeof windowId === "number" ? { windowId } : {}),
+  })
   try {
     throwIfCommandAborted(signal)
-    if (typeof tab.id === "number" && context?.extensionInstanceID) {
+    if (typeof tab.id === "number") {
       await createLease({
         tabId: tab.id,
         source: "agent",
@@ -381,9 +415,21 @@ async function openTab(
         extensionInstanceID: context.extensionInstanceID,
         openerTabId: typeof tab.openerTabId === "number" ? tab.openerTabId : undefined,
       })
+      try {
+        await groupAgentTab(tab.id, context)
+      } catch (cause) {
+        throw Object.assign(
+          new Error(
+            `Chrome could not add tab ${tab.id} to the Anybox task group.`,
+            { cause },
+          ),
+          { code: "COMMAND_FAILED", retryable: true },
+        )
+      }
     }
   } catch (error) {
-    if (signal?.aborted && typeof tab.id === "number") {
+    if (typeof tab.id === "number") {
+      await releaseLease(tab.id, context).catch(() => undefined)
       await chrome.tabs.remove(tab.id).catch(() => undefined)
     }
     throw error
@@ -399,7 +445,7 @@ async function claimTab(
   const tabId = readNumber(readRecord(params).tabId)
   if (!tabId || !context?.extensionInstanceID) {
     throw Object.assign(
-      new Error("tabs.claim requires a tab and Browser Contract v3 context."),
+      new Error("tabs.claim requires a tab and Browser Contract v4 context."),
       { code: "SESSION_REQUIRED", retryable: false },
     )
   }
@@ -1549,57 +1595,112 @@ async function markTabDeliverable(
   return { tabId, state: "deliverable" as const }
 }
 
+async function markTabHandoff(
+  params: unknown,
+  context?: BrowserExtensionCommandContext,
+) {
+  const tabId = readNumber(readRecord(params).tabId)
+  if (!tabId) throw new Error("tabs.markHandoff requires a tabId.")
+  await markHandoff(tabId, context)
+  return { tabId, state: "handoff" as const }
+}
+
 async function finalizeTabs(
   params: unknown,
   context?: BrowserExtensionCommandContext,
 ) {
-  if (!context?.sessionID || !context.turnID) {
+  if (
+    !context?.sessionID
+    || !context.turnID
+    || !context.extensionInstanceID
+  ) {
     throw Object.assign(
       new Error("tabs.finalize requires an active session."),
       { code: "SESSION_REQUIRED", retryable: false },
     )
   }
-  const reason = readString(readRecord(params).reason, "manual")
-  const result = reason === "turn-end"
-    ? await finalizeTurnLeases(context.sessionID, context.turnID)
-    : await finalizeSessionLeases(context.sessionID)
-  return executeLeaseCleanup(result, context.sessionID)
+  const input = readRecord(params)
+  const reason = readString(input.reason, "manual")
+  const keep = Array.isArray(input.keep)
+    ? input.keep as Array<{
+        tabId: number
+        status: "deliverable" | "handoff"
+      }>
+    : []
+  const terminal = reason !== "manual" && reason !== "turn-end"
+  const result = terminal
+    ? await finalizeSessionLeases(
+        context.sessionID,
+        context.extensionInstanceID,
+        (plan) => executeLeaseCleanup(plan, context),
+      )
+    : await finalizeTurnLeases(
+        context,
+        keep,
+        (plan) => executeLeaseCleanup(plan, context),
+      )
+  await finishBrowserSession(context)
+  return leaseCleanupResult(result, context.sessionID)
 }
 
 async function executeLeaseCleanup(
-  result: {
-    closeTabIds: number[]
-    releaseTabIds: number[]
-    retainTabIds: number[]
-  },
-  sessionID = "all",
+  result: LeaseCleanupPlan,
+  context?: BrowserExtensionCommandContext,
 ) {
   const allTabIds = [
     ...result.closeTabIds,
     ...result.releaseTabIds,
-    ...result.retainTabIds,
+    ...result.deliverableTabIds,
+    ...result.handoffTabIds,
   ]
   await Promise.all(allTabIds.map((tabId) => removeBrowserOverlay(tabId)))
   allTabIds.forEach((tabId) => releasePlaywrightTab(tabId))
   await Promise.all(allTabIds.map((tabId) => detachTabDebugger(tabId)))
+  if (context) {
+    await ungroupManagedTabs(result.ungroupTabIds, context)
+  } else {
+    await ungroupAnyManagedTabs(result.ungroupTabIds)
+  }
   if (result.closeTabIds.length > 0) {
     await chrome.tabs.remove(result.closeTabIds).catch(() => undefined)
   }
+}
+
+function leaseCleanupResult(
+  result: LeaseCleanupPlan,
+  sessionID = "all",
+) {
+  const detachedTabIds = Array.from(new Set([
+    ...result.closeTabIds,
+    ...result.releaseTabIds,
+    ...result.deliverableTabIds,
+    ...result.handoffTabIds,
+  ]))
   return {
     sessionID,
     closedTabIds: result.closeTabIds,
     releasedTabIds: result.releaseTabIds,
-    retainedTabIds: result.retainTabIds,
-    detachedTabIds: allTabIds,
+    deliverableTabIds: result.deliverableTabIds,
+    handoffTabIds: result.handoffTabIds,
+    detachedTabIds,
   }
 }
 
 export async function finalizeExpiredTabLeases() {
-  return executeLeaseCleanup(await finalizeExpiredLeases(), "expired")
+  const result = await finalizeExpiredLeases(
+    Date.now(),
+    (plan) => executeLeaseCleanup(plan),
+  )
+  await finishAllBrowserSessions()
+  return leaseCleanupResult(result, "expired")
 }
 
 export async function finalizeDisconnectedTabLeases() {
-  return executeLeaseCleanup(await finalizeAllLeases(), "disconnected")
+  const result = await finalizeAllLeases(
+    (plan) => executeLeaseCleanup(plan),
+  )
+  await finishAllBrowserSessions()
+  return leaseCleanupResult(result, "disconnected")
 }
 
 const LEASED_TAB_METHODS = new Set<BrowserContractCommandMethodValue>([
@@ -1611,6 +1712,7 @@ const LEASED_TAB_METHODS = new Set<BrowserContractCommandMethodValue>([
   "tabs.close",
   "tabs.release",
   "tabs.markDeliverable",
+  "tabs.markHandoff",
   "page.snapshot",
   "page.interactiveSnapshot",
   "page.domTree",
@@ -1660,6 +1762,8 @@ async function handleContractCommand(
     )
   }
   switch (method) {
+    case "browser.nameSession":
+      return await nameSession(params, context)
     case "tabs.list":
       return await listTabs(context, "owned")
     case "tabs.listUser":
@@ -1684,6 +1788,8 @@ async function handleContractCommand(
       return await releaseTab(params, context)
     case "tabs.markDeliverable":
       return await markTabDeliverable(params, context)
+    case "tabs.markHandoff":
+      return await markTabHandoff(params, context)
     case "tabs.finalize":
       return await finalizeTabs(params, context)
     case "page.snapshot":

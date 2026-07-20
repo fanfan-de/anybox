@@ -22,7 +22,8 @@ type Status = {
   cleanup?: {
     closed: number
     released: number
-    retained: number
+    deliverable: number
+    handoff: number
     detached: number
     completedAt: number
   }
@@ -65,7 +66,7 @@ function renderStatus(status: Status | null | undefined) {
   if (statusCleanup) {
     const cleanup = status?.cleanup
     statusCleanup.textContent = cleanup
-      ? `${cleanup.closed} closed · ${cleanup.released} released · ${cleanup.retained} kept`
+      ? `${cleanup.closed} closed · ${cleanup.released} released · ${cleanup.deliverable} delivered · ${cleanup.handoff} handoff`
       : "—"
   }
 }

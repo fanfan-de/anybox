@@ -34,11 +34,13 @@ export class BrowserPolicyError extends Error {
 }
 
 const SAFE_SESSION_METHODS = new Set<BrowserContractCommandMethodValue>([
+  "browser.nameSession",
   "tabs.list",
   "tabs.listUser",
   "tabs.activate",
   "tabs.release",
   "tabs.markDeliverable",
+  "tabs.markHandoff",
   "tabs.finalize",
   "page.snapshot",
   "page.interactiveSnapshot",

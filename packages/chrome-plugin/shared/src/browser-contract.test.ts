@@ -42,6 +42,7 @@ const locatorPlan = {
 const eventID = "00000000-0000-4000-8000-000000000001"
 
 const validParams = {
+  "browser.nameSession": { name: "✍️ Publish update" },
   "tabs.list": {},
   "tabs.listUser": {},
   "tabs.open": { url: "https://example.com/", active: true },
@@ -54,7 +55,11 @@ const validParams = {
   "tabs.close": { tabId: 7 },
   "tabs.release": { tabId: 7 },
   "tabs.markDeliverable": { tabId: 7 },
-  "tabs.finalize": { reason: "turn-end" },
+  "tabs.markHandoff": { tabId: 7 },
+  "tabs.finalize": {
+    keep: [{ tabId: 7, status: "deliverable" }],
+    reason: "turn-end",
+  },
   "page.snapshot": { tabId: 7, maxTextChars: 20_000 },
   "page.interactiveSnapshot": { tabId: 7, maxElements: 200 },
   "page.domTree": {
@@ -178,6 +183,7 @@ const playwrightResultBase = {
 } as const
 
 const validResults = {
+  "browser.nameSession": { name: "✍️ Publish update" },
   "tabs.list": { tabs: [tab] },
   "tabs.listUser": { tabs: [tab] },
   "tabs.open": tab,
@@ -190,11 +196,13 @@ const validResults = {
   "tabs.close": { tabId: 7, closed: true },
   "tabs.release": { tabId: 7, released: true },
   "tabs.markDeliverable": { tabId: 7, state: "deliverable" },
+  "tabs.markHandoff": { tabId: 7, state: "handoff" },
   "tabs.finalize": {
     sessionID: "session-test",
     closedTabIds: [],
     releasedTabIds: [7],
-    retainedTabIds: [],
+    deliverableTabIds: [],
+    handoffTabIds: [],
     detachedTabIds: [7],
   },
   "page.snapshot": {
@@ -388,12 +396,12 @@ const validResults = {
 } as const satisfies Record<BrowserContractCommandMethodValue, unknown>
 
 describe("Browser Contract command registry", () => {
-  test("publishes one strict v3 registry", () => {
-    expect(BROWSER_CONTRACT_VERSION).toBe(3)
-    expect(BROWSER_CONTRACT_SUPPORTED_VERSIONS).toEqual([3])
+  test("publishes one strict v4 registry", () => {
+    expect(BROWSER_CONTRACT_VERSION).toBe(4)
+    expect(BROWSER_CONTRACT_SUPPORTED_VERSIONS).toEqual([4])
     expect(BROWSER_CONTRACT_V3_PLAYWRIGHT_COMMAND_METHODS).toHaveLength(24)
-    expect(BROWSER_CONTRACT_COMMAND_METHODS).toHaveLength(48)
-    expect(Object.keys(BrowserContractCommandRegistry)).toHaveLength(48)
+    expect(BROWSER_CONTRACT_COMMAND_METHODS).toHaveLength(50)
+    expect(Object.keys(BrowserContractCommandRegistry)).toHaveLength(50)
     expect(new Set(Object.keys(BrowserContractCommandRegistry)))
       .toEqual(new Set(BROWSER_CONTRACT_COMMAND_METHODS))
     expect(BrowserContractCommandMethod.safeParse("page.executeScript").success)
@@ -402,14 +410,14 @@ describe("Browser Contract command registry", () => {
     expect(() => parseBrowserCommandParams(
       "tabs.claim",
       { tabId: 7 },
-      2,
+      3,
     )).toThrowError(expect.objectContaining({
       code: "COMMAND_NOT_SUPPORTED",
     }))
     expect(() => parseBrowserCommandParams(
       "playwright.domSnapshot",
       { tabId: 7 },
-      4,
+      5,
     )).toThrowError(expect.objectContaining({
       code: "COMMAND_NOT_SUPPORTED",
     }))
@@ -463,6 +471,27 @@ describe("Browser Contract command registry", () => {
     })).toMatchObject({
       selector: "button[data-ready]",
     })
+  })
+
+  test("trims session names and requires a unique final keep list", () => {
+    expect(parseBrowserCommandParams("browser.nameSession", {
+      name: "  ✍️ Publish update  ",
+    })).toEqual({ name: "✍️ Publish update" })
+    expect(() => parseBrowserCommandParams("browser.nameSession", {
+      name: "   ",
+    })).toThrowError(expect.objectContaining({
+      code: "INVALID_COMMAND_PARAMS",
+    }))
+    expect(() => parseBrowserCommandParams("tabs.finalize", {
+      keep: [
+        { tabId: 7, status: "deliverable" },
+        { tabId: 7, status: "handoff" },
+      ],
+    })).toThrowError(expect.objectContaining({
+      code: "INVALID_COMMAND_PARAMS",
+    }))
+    expect(parseBrowserCommandParams("tabs.finalize", {}))
+      .toEqual({ keep: [] })
   })
 
   test.each([
@@ -724,7 +753,7 @@ describe("Browser Contract capabilities and manifests", () => {
 
   test("generates serializable JSON Schema for all commands, including DOM and waitFor", () => {
     const manifest = createBrowserApiManifest()
-    expect(manifest.commands).toHaveLength(48)
+    expect(manifest.commands).toHaveLength(50)
     expect(manifest.commands.map((entry) => entry.method))
       .toEqual([...BROWSER_CONTRACT_COMMAND_METHODS])
 
@@ -810,7 +839,7 @@ describe("Browser Contract capabilities and manifests", () => {
     expect(BrowserBackendInfo.parse(backend)).toEqual(backend)
     expect(BrowserGetInfoResult.parse(info)).toEqual(info)
     expect(info.backend).toMatchObject({
-      contractVersion: 3,
+      contractVersion: 4,
       browserId: "extension",
       kind: "extension",
       connected: true,

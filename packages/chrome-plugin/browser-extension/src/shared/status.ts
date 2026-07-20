@@ -14,7 +14,8 @@ export type BridgeStatus = {
   cleanup?: {
     closed: number
     released: number
-    retained: number
+    deliverable: number
+    handoff: number
     detached: number
     completedAt: number
   }

@@ -26,6 +26,7 @@ import type {
   BrowserExtensionElementActionResult,
   BrowserExtensionFillResult,
   BrowserExtensionInteractiveSnapshotResult,
+  BrowserExtensionNameSessionResult,
   BrowserExtensionScreenshotResult,
   BrowserExtensionScrollResult,
   BrowserExtensionSnapshotResult,
@@ -34,6 +35,7 @@ import type {
   BrowserExtensionTabsListResult,
   BrowserExtensionTabsFinalizeResult,
   BrowserExtensionTabsMarkDeliverableResult,
+  BrowserExtensionTabsMarkHandoffResult,
   BrowserExtensionTabsReleaseResult,
   BrowserExtensionTypeResult,
   BrowserExtensionWaitForResult,
@@ -62,12 +64,12 @@ export {
 const NATIVE_INSTALL_ENV = "ANYBOX_BROWSER_NATIVE_INSTALL"
 let nativeMessagingHostReady: Promise<void> | undefined
 
-type TabsOpenOptions = Omit<BrowserContractCommandParams<"tabs.open">, "url"> & {
-  /**
-   * Keep the new tab open after automatic turn/session finalization.
-   * Defaults to true. Set false only for temporary helper tabs.
-   */
-  keepOpen?: boolean
+type TabsOpenOptions = Omit<BrowserContractCommandParams<"tabs.open">, "url">
+type TabsFinalizeOptions = {
+  keep?: ReadonlyArray<{
+    tab: BrowserTab
+    status: "deliverable" | "handoff"
+  }>
 }
 type SnapshotOptions = Omit<BrowserContractCommandParams<"page.snapshot">, "tabId">
 type InteractiveSnapshotOptions = Omit<
@@ -279,7 +281,7 @@ function pluginBrowserTransport(
     ) {
       throw new BrowserRuntimeError(
         "SESSION_REQUIRED",
-        "Browser Contract v3 requires active Node REPL session, turn, message, and tool-call metadata.",
+        "Browser Contract v4 requires active Node REPL session, turn, message, and tool-call metadata.",
       )
     }
     const context = {
@@ -319,8 +321,11 @@ function pluginBrowserTransport(
                 released: Array.isArray(record.releasedTabIds)
                   ? record.releasedTabIds.length
                   : 0,
-                retained: Array.isArray(record.retainedTabIds)
-                  ? record.retainedTabIds.length
+                deliverable: Array.isArray(record.deliverableTabIds)
+                  ? record.deliverableTabIds.length
+                  : 0,
+                handoff: Array.isArray(record.handoffTabIds)
+                  ? record.handoffTabIds.length
                   : 0,
               }
             : undefined,
@@ -807,6 +812,8 @@ export class CommandRouter {
   }
 }
 
+const browserTabRouters = new WeakMap<BrowserTab, CommandRouter>()
+
 export class BrowserTab {
   readonly #router: CommandRouter
   declare readonly playwright: BrowserPlaywrightAPI
@@ -814,6 +821,7 @@ export class BrowserTab {
 
   constructor(tabId: number, router: CommandRouter) {
     this.#router = router
+    browserTabRouters.set(this, router)
     this.tabId = validateTabId(tabId)
     const hasPlaywright = router.capabilities.features.playwrightLocator
       && BROWSER_CONTRACT_V3_PLAYWRIGHT_COMMAND_METHODS.every((method) =>
@@ -827,7 +835,7 @@ export class BrowserTab {
         writable: false,
       })
     } else {
-      return new Proxy(this, {
+      const proxy = new Proxy(this, {
         get(target, property) {
           if (property === "playwright") return undefined
           const value = Reflect.get(target, property, target)
@@ -842,6 +850,8 @@ export class BrowserTab {
           return Reflect.getOwnPropertyDescriptor(target, property)
         },
       })
+      browserTabRouters.set(proxy, router)
+      return proxy
     }
   }
 
@@ -1006,6 +1016,10 @@ export class BrowserTab {
     return this.#router.run("tabs.markDeliverable", { tabId: this.tabId })
   }
 
+  async markHandoff(): Promise<BrowserExtensionTabsMarkHandoffResult> {
+    return this.#router.run("tabs.markHandoff", { tabId: this.tabId })
+  }
+
 }
 
 function renderDocumentation(
@@ -1051,7 +1065,7 @@ export class BrowserContext {
     activate(tabId: number): Promise<BrowserTab>
     get(tabId: number): Promise<BrowserTab>
     current(): Promise<BrowserTab>
-    finalize(options?: BrowserContractCommandParams<"tabs.finalize">): Promise<
+    finalize(options?: TabsFinalizeOptions): Promise<
       BrowserExtensionTabsFinalizeResult
     >
   }
@@ -1094,35 +1108,10 @@ export class BrowserContext {
       },
       open: async (url, options = {}) => {
         const target = validateBrowserUrl(url)
-        if (
-          options.keepOpen !== undefined
-          && typeof options.keepOpen !== "boolean"
-        ) {
-          throw new BrowserRuntimeError(
-            "INVALID_COMMAND_PARAMS",
-            "Browser tab option 'keepOpen' must be a boolean.",
-          )
-        }
-        const {
-          keepOpen = true,
-          ...commandOptions
-        } = options
-        if (
-          keepOpen
-          && !this.#router.supports("tabs.markDeliverable")
-        ) {
-          throw new BrowserRuntimeError(
-            "CAPABILITY_UNAVAILABLE",
-            "The connected Chrome extension cannot retain a new tab after task completion.",
-          )
-        }
         const tab = await this.#router.run(
           "tabs.open",
-          { ...commandOptions, url: target.href },
+          { ...options, url: target.href },
         )
-        if (keepOpen) {
-          await this.#router.run("tabs.markDeliverable", { tabId: tab.id })
-        }
         return new BrowserTab(tab.id, this.#router)
       },
       claim: async (tabId) => {
@@ -1151,9 +1140,73 @@ export class BrowserContext {
         }
         return new BrowserTab(current.id, this.#router)
       },
-      finalize: async (options = {}) =>
-        this.#router.run("tabs.finalize", options),
+      finalize: async (options = {}) => {
+        if (!isRecord(options)) {
+          throw new BrowserRuntimeError(
+            "INVALID_COMMAND_PARAMS",
+            "browser.tabs.finalize(options) requires an options object.",
+          )
+        }
+        const unexpected = Object.keys(options).filter((key) => key !== "keep")
+        if (unexpected.length > 0) {
+          throw new BrowserRuntimeError(
+            "INVALID_COMMAND_PARAMS",
+            `browser.tabs.finalize only accepts 'keep'; received '${unexpected[0]}'.`,
+          )
+        }
+        const keep = options.keep ?? []
+        if (!Array.isArray(keep)) {
+          throw new BrowserRuntimeError(
+            "INVALID_COMMAND_PARAMS",
+            "browser.tabs.finalize keep must be an array.",
+          )
+        }
+        const tabIds = new Set<number>()
+        const serialized = keep.map((entry, index) => {
+          if (
+            !isRecord(entry)
+            || !(entry.tab instanceof BrowserTab)
+            || browserTabRouters.get(entry.tab) !== this.#router
+          ) {
+            throw new BrowserRuntimeError(
+              "TAB_NOT_OWNED",
+              `browser.tabs.finalize keep[${index}] must contain a BrowserTab from this BrowserContext.`,
+            )
+          }
+          if (
+            entry.status !== "deliverable"
+            && entry.status !== "handoff"
+          ) {
+            throw new BrowserRuntimeError(
+              "INVALID_COMMAND_PARAMS",
+              `browser.tabs.finalize keep[${index}] has an invalid status.`,
+            )
+          }
+          if (tabIds.has(entry.tab.tabId)) {
+            throw new BrowserRuntimeError(
+              "INVALID_COMMAND_PARAMS",
+              `Tab ${entry.tab.tabId} appears more than once in the final keep list.`,
+            )
+          }
+          tabIds.add(entry.tab.tabId)
+          return {
+            tabId: entry.tab.tabId,
+            status: entry.status,
+          }
+        })
+        return this.#router.run("tabs.finalize", { keep: serialized })
+      },
     }
+  }
+
+  async nameSession(name: string): Promise<BrowserExtensionNameSessionResult> {
+    return this.#router.run("browser.nameSession", { name })
+  }
+
+  async finalizeForLifecycle(
+    reason: BrowserContractCommandParams<"tabs.finalize">["reason"],
+  ): Promise<BrowserExtensionTabsFinalizeResult> {
+    return this.#router.run("tabs.finalize", { keep: [], reason })
   }
 
   async status(): Promise<BrowserRuntimeStatus> {
@@ -1364,7 +1417,7 @@ export class BrowserManager implements BrowserCollection {
     return Promise.all(
       browsers.map((browser) =>
         browser.capabilities.commands.includes("tabs.finalize")
-          ? browser.tabs.finalize({ reason })
+          ? browser.finalizeForLifecycle(reason)
           : Promise.resolve(undefined)
       ),
     )

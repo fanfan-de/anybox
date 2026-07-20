@@ -117,14 +117,16 @@ function cancelDisconnectCleanup() {
 async function recordCleanup(result: {
   closedTabIds: number[]
   releasedTabIds: number[]
-  retainedTabIds: number[]
+  deliverableTabIds: number[]
+  handoffTabIds: number[]
   detachedTabIds: number[]
 }) {
   await updateStatus({
     cleanup: {
       closed: result.closedTabIds.length,
       released: result.releasedTabIds.length,
-      retained: result.retainedTabIds.length,
+      deliverable: result.deliverableTabIds.length,
+      handoff: result.handoffTabIds.length,
       detached: result.detachedTabIds.length,
       completedAt: Date.now(),
     },

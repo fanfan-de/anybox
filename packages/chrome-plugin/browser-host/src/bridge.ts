@@ -192,7 +192,8 @@ export class BrowserExtensionBridge {
     sessionID?: string
     closed: number
     released: number
-    retained: number
+    deliverable: number
+    handoff: number
     detached: number
     completedAt: number
   } | undefined
@@ -720,8 +721,11 @@ export class BrowserExtensionBridge {
               released: Array.isArray(cleanup.releasedTabIds)
                 ? cleanup.releasedTabIds.length
                 : 0,
-              retained: Array.isArray(cleanup.retainedTabIds)
-                ? cleanup.retainedTabIds.length
+              deliverable: Array.isArray(cleanup.deliverableTabIds)
+                ? cleanup.deliverableTabIds.length
+                : 0,
+              handoff: Array.isArray(cleanup.handoffTabIds)
+                ? cleanup.handoffTabIds.length
                 : 0,
               detached: Array.isArray(cleanup.detachedTabIds)
                 ? cleanup.detachedTabIds.length

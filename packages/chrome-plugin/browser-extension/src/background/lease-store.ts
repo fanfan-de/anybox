@@ -1,10 +1,14 @@
-import type { BrowserExtensionCommandContext } from "@anybox/chrome-shared/browser-extension"
+import type {
+  BrowserExtensionCommandContext,
+} from "@anybox/chrome-shared/browser-extension"
 
-const LEASE_STORAGE_KEY = "anybox.browser.tabLeases"
+const LEASE_STORAGE_KEY = "anybox.browser.tabLeases.v4"
+const LEGACY_LEASE_STORAGE_KEY = "anybox.browser.tabLeases"
 const DEFAULT_LEASE_TTL_MS = 30 * 60_000
 
 export type TabLeaseSource = "user" | "agent"
-export type TabLeaseState = "active" | "deliverable" | "handoff" | "released"
+export type TabLeaseState = "active" | "handoff"
+export type TabLeaseMark = "deliverable" | "handoff"
 
 export type TabLease = {
   tabId: number
@@ -12,7 +16,7 @@ export type TabLease = {
   sessionID: string
   turnID: string
   state: TabLeaseState
-  retained?: boolean
+  mark?: TabLeaseMark
   extensionInstanceID: string
   openerTabId?: number
   createdAt: number
@@ -20,12 +24,21 @@ export type TabLease = {
   expiresAt: number
 }
 
-type LeaseMap = Record<string, TabLease>
-type LeaseCleanupPlan = {
+export type FinalizeKeepEntry = {
+  tabId: number
+  status: TabLeaseMark
+}
+
+export type LeaseCleanupPlan = {
   closeTabIds: number[]
   releaseTabIds: number[]
-  retainTabIds: number[]
+  deliverableTabIds: number[]
+  handoffTabIds: number[]
+  ungroupTabIds: number[]
 }
+
+type LeaseMap = Record<string, TabLease>
+type CleanupExecutor = (plan: LeaseCleanupPlan) => void | Promise<void>
 
 let leaseMutationTail: Promise<void> = Promise.resolve()
 
@@ -39,24 +52,31 @@ function isLease(value: unknown): value is TabLease {
     && Boolean(lease.sessionID)
     && typeof lease.turnID === "string"
     && Boolean(lease.turnID)
+    && (lease.state === "active" || lease.state === "handoff")
     && (
-      lease.state === "active"
-      || lease.state === "deliverable"
-      || lease.state === "handoff"
-      || lease.state === "released"
+      lease.mark === undefined
+      || lease.mark === "deliverable"
+      || lease.mark === "handoff"
     )
     && typeof lease.extensionInstanceID === "string"
     && Boolean(lease.extensionInstanceID)
-    && (
-      lease.retained === undefined
-      || typeof lease.retained === "boolean"
-    )
     && typeof lease.createdAt === "number"
     && typeof lease.updatedAt === "number"
     && typeof lease.expiresAt === "number"
 }
 
+async function clearLegacyLeaseMap() {
+  const legacy = await chrome.storage.session.get(LEGACY_LEASE_STORAGE_KEY)
+  if (legacy[LEGACY_LEASE_STORAGE_KEY] === undefined) return
+  if (typeof chrome.storage.session.remove === "function") {
+    await chrome.storage.session.remove(LEGACY_LEASE_STORAGE_KEY)
+  } else {
+    await chrome.storage.session.set({ [LEGACY_LEASE_STORAGE_KEY]: {} })
+  }
+}
+
 async function readLeaseMapRaw(): Promise<LeaseMap> {
+  await clearLegacyLeaseMap()
   const stored = await chrome.storage.session.get(LEASE_STORAGE_KEY)
   const raw = stored[LEASE_STORAGE_KEY]
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {}
@@ -105,11 +125,18 @@ function requireContext(
   ) {
     throw Object.assign(
       new Error(
-        "Browser Contract v3 requires sessionID, turnID, and extensionInstanceID for tab leases.",
+        "Browser Contract v4 requires sessionID, turnID, and extensionInstanceID for tab leases.",
       ),
       { code: "SESSION_REQUIRED", retryable: false },
     )
   }
+}
+
+function stableLeaseError(
+  message: string,
+  code: "TAB_CLAIM_REQUIRED" | "TAB_NOT_OWNED" | "LEASE_EXPIRED" | "TURN_ENDED" | "INVALID_COMMAND_PARAMS",
+) {
+  return Object.assign(new Error(message), { code, retryable: false })
 }
 
 export async function listLeases() {
@@ -138,26 +165,13 @@ export async function createLease(input: {
     if (
       existing
       && (
-        (
-          existing.state !== "released"
-          && (
-            existing.sessionID !== input.context.sessionID
-            || existing.extensionInstanceID !== input.extensionInstanceID
-          )
-        )
-        || (
-          existing.source === "agent"
-          && existing.retained !== true
-          && (
-            existing.sessionID !== input.context.sessionID
-            || existing.extensionInstanceID !== input.extensionInstanceID
-          )
-        )
+        existing.sessionID !== input.context.sessionID
+        || existing.extensionInstanceID !== input.extensionInstanceID
       )
     ) {
-      throw Object.assign(
-        new Error(`Tab ${input.tabId} belongs to a different browser session.`),
-        { code: "TAB_NOT_OWNED", retryable: false },
+      throw stableLeaseError(
+        `Tab ${input.tabId} belongs to a different browser session.`,
+        "TAB_NOT_OWNED",
       )
     }
     const lease: TabLease = {
@@ -166,7 +180,6 @@ export async function createLease(input: {
       sessionID: input.context.sessionID!,
       turnID: input.context.turnID!,
       state: "active",
-      retained: existing?.retained,
       extensionInstanceID: input.extensionInstanceID,
       openerTabId: input.openerTabId,
       createdAt: existing?.createdAt ?? now,
@@ -185,28 +198,53 @@ function ownedLease(
 ) {
   requireContext(context)
   const lease = leases[String(tabId)]
-  if (!lease || lease.state === "released") {
-    throw Object.assign(
-      new Error(`Tab ${tabId} must be claimed before it can be controlled.`),
-      { code: "TAB_CLAIM_REQUIRED", retryable: false },
+  if (!lease) {
+    throw stableLeaseError(
+      `Tab ${tabId} must be claimed before it can be controlled.`,
+      "TAB_CLAIM_REQUIRED",
     )
   }
   if (
     lease.sessionID !== context.sessionID
     || lease.extensionInstanceID !== context.extensionInstanceID
   ) {
-    throw Object.assign(
-      new Error(`Tab ${tabId} belongs to a different browser session.`),
-      { code: "TAB_NOT_OWNED", retryable: false },
+    throw stableLeaseError(
+      `Tab ${tabId} belongs to a different browser session.`,
+      "TAB_NOT_OWNED",
     )
   }
   if (lease.expiresAt <= Date.now()) {
-    throw Object.assign(
-      new Error(`The lease for tab ${tabId} has expired.`),
-      { code: "LEASE_EXPIRED", retryable: false },
+    throw stableLeaseError(
+      `The lease for tab ${tabId} has expired.`,
+      "LEASE_EXPIRED",
     )
   }
   return { lease, context }
+}
+
+function resumeLeaseForTurn(
+  lease: TabLease,
+  context: BrowserExtensionCommandContext & {
+    sessionID: string
+    turnID: string
+    extensionInstanceID: string
+  },
+) {
+  if (lease.state === "handoff" && lease.turnID === context.turnID) {
+    throw stableLeaseError(
+      `Turn '${context.turnID}' has already finalized tab ${lease.tabId}.`,
+      "TURN_ENDED",
+    )
+  }
+  const now = Date.now()
+  return {
+    ...lease,
+    turnID: context.turnID,
+    state: "active" as const,
+    mark: lease.turnID === context.turnID ? lease.mark : undefined,
+    updatedAt: now,
+    expiresAt: now + DEFAULT_LEASE_TTL_MS,
+  }
 }
 
 export async function requireLease(
@@ -215,14 +253,24 @@ export async function requireLease(
 ) {
   return mutateLeaseMap((leases) => {
     const owned = ownedLease(leases, tabId, context)
-    const lease = owned.lease
-    const activeContext = owned.context
-    const now = Date.now()
-    const next = {
-      ...lease,
-      turnID: activeContext.turnID,
-      updatedAt: now,
-      expiresAt: now + DEFAULT_LEASE_TTL_MS,
+    const next = resumeLeaseForTurn(owned.lease, owned.context)
+    leases[String(tabId)] = next
+    return next
+  })
+}
+
+async function markLease(
+  tabId: number,
+  mark: TabLeaseMark,
+  context: BrowserExtensionCommandContext | undefined,
+) {
+  return mutateLeaseMap((leases) => {
+    const owned = ownedLease(leases, tabId, context)
+    const active = resumeLeaseForTurn(owned.lease, owned.context)
+    const next: TabLease = {
+      ...active,
+      mark,
+      updatedAt: Date.now(),
     }
     leases[String(tabId)] = next
     return next
@@ -233,17 +281,14 @@ export async function markDeliverable(
   tabId: number,
   context: BrowserExtensionCommandContext | undefined,
 ) {
-  return mutateLeaseMap((leases) => {
-    const { lease } = ownedLease(leases, tabId, context)
-    const next: TabLease = {
-      ...lease,
-      state: "deliverable",
-      retained: true,
-      updatedAt: Date.now(),
-    }
-    leases[String(tabId)] = next
-    return next
-  })
+  return markLease(tabId, "deliverable", context)
+}
+
+export async function markHandoff(
+  tabId: number,
+  context: BrowserExtensionCommandContext | undefined,
+) {
+  return markLease(tabId, "handoff", context)
 }
 
 export async function releaseLease(
@@ -252,117 +297,209 @@ export async function releaseLease(
 ) {
   return mutateLeaseMap((leases) => {
     const { lease } = ownedLease(leases, tabId, context)
-    leases[String(tabId)] = {
-      ...lease,
-      state: "released",
-      updatedAt: Date.now(),
-      expiresAt: Date.now(),
-    }
+    delete leases[String(tabId)]
     return lease
   })
 }
 
-function finalizeSelectedLeases(
+function emptyPlan(): LeaseCleanupPlan {
+  return {
+    closeTabIds: [],
+    releaseTabIds: [],
+    deliverableTabIds: [],
+    handoffTabIds: [],
+    ungroupTabIds: [],
+  }
+}
+
+function validateKeepList(
   leases: LeaseMap,
-  selected: TabLease[],
-): LeaseCleanupPlan {
-  const closeTabIds: number[] = []
-  const releaseTabIds: number[] = []
-  const retainTabIds: number[] = []
-  const now = Date.now()
-  for (const lease of selected) {
+  keep: readonly FinalizeKeepEntry[],
+  context: BrowserExtensionCommandContext & {
+    sessionID: string
+    turnID: string
+    extensionInstanceID: string
+  },
+) {
+  const result = new Map<number, TabLeaseMark>()
+  for (const entry of keep) {
+    if (result.has(entry.tabId)) {
+      throw stableLeaseError(
+        `Tab ${entry.tabId} appears more than once in the final keep list.`,
+        "INVALID_COMMAND_PARAMS",
+      )
+    }
+    const lease = leases[String(entry.tabId)]
     if (
-      lease.retained === true
-      || lease.state === "deliverable"
-      || lease.state === "handoff"
+      !lease
+      || lease.sessionID !== context.sessionID
+      || lease.extensionInstanceID !== context.extensionInstanceID
     ) {
-      retainTabIds.push(lease.tabId)
-      leases[String(lease.tabId)] = {
-        ...lease,
-        state: "released",
-        retained: true,
-        updatedAt: now,
-        expiresAt: now,
-      }
-    } else if (lease.source === "agent") {
-      closeTabIds.push(lease.tabId)
-      delete leases[String(lease.tabId)]
+      throw stableLeaseError(
+        `Tab ${entry.tabId} does not belong to the current browser session.`,
+        "TAB_NOT_OWNED",
+      )
+    }
+    if (lease.turnID !== context.turnID || lease.state !== "active") {
+      throw stableLeaseError(
+        `Tab ${entry.tabId} does not belong to the current turn.`,
+        "TURN_ENDED",
+      )
+    }
+    if (lease.expiresAt <= Date.now()) {
+      throw stableLeaseError(
+        `The lease for tab ${entry.tabId} has expired.`,
+        "LEASE_EXPIRED",
+      )
+    }
+    result.set(entry.tabId, entry.status)
+  }
+  return result
+}
+
+function planTurnCleanup(
+  leases: LeaseMap,
+  keep: ReadonlyMap<number, TabLeaseMark>,
+  context: BrowserExtensionCommandContext & {
+    sessionID: string
+    turnID: string
+    extensionInstanceID: string
+  },
+) {
+  const plan = emptyPlan()
+  const selected = Object.values(leases).filter((lease) =>
+    lease.sessionID === context.sessionID
+    && lease.extensionInstanceID === context.extensionInstanceID
+    && lease.turnID === context.turnID
+    && lease.state === "active"
+  )
+  for (const lease of selected) {
+    if (lease.source === "user") {
+      plan.releaseTabIds.push(lease.tabId)
+      continue
+    }
+    const status = keep.get(lease.tabId)
+    if (status === "deliverable") {
+      plan.deliverableTabIds.push(lease.tabId)
+      plan.ungroupTabIds.push(lease.tabId)
+    } else if (status === "handoff") {
+      plan.handoffTabIds.push(lease.tabId)
     } else {
-      releaseTabIds.push(lease.tabId)
-      leases[String(lease.tabId)] = {
-        ...lease,
-        state: "released",
-        updatedAt: now,
-        expiresAt: now,
-      }
+      plan.closeTabIds.push(lease.tabId)
     }
   }
-  return { closeTabIds, releaseTabIds, retainTabIds }
+  return plan
 }
 
-export async function finalizeSessionLeases(sessionID: string) {
-  return mutateLeaseMap((leases) => finalizeSelectedLeases(
-    leases,
-    Object.values(leases).filter(
-      (lease) =>
-        lease.sessionID === sessionID
-        && (
-          lease.state !== "released"
-          || (lease.source === "agent" && lease.retained !== true)
-        ),
-    ),
-  ))
-}
-
-export async function finalizeTurnLeases(sessionID: string, turnID: string) {
-  return mutateLeaseMap((leases) => finalizeSelectedLeases(
-    leases,
-    Object.values(leases).filter(
-      (lease) =>
-        lease.sessionID === sessionID
-        && lease.turnID === turnID
-        && (
-          lease.state !== "released"
-          || (lease.source === "agent" && lease.retained !== true)
-        ),
-    ),
-  ))
-}
-
-export async function finalizeExpiredLeases(now = Date.now()) {
-  return mutateLeaseMap((leases) => {
-    const result = finalizeSelectedLeases(
-      leases,
-      Object.values(leases).filter(
-        (lease) =>
-          lease.expiresAt <= now
-          && (
-            lease.state !== "released"
-            || (lease.source === "agent" && lease.retained !== true)
-          ),
-      ),
-    )
-    for (const [key, lease] of Object.entries(leases)) {
-      if (lease.state === "released" && now - lease.updatedAt > 60 * 60_000) {
-        delete leases[key]
-      }
+function planTerminalCleanup(selected: readonly TabLease[]) {
+  const plan = emptyPlan()
+  for (const lease of selected) {
+    if (lease.source === "user") {
+      plan.releaseTabIds.push(lease.tabId)
+    } else if (lease.state === "handoff") {
+      plan.releaseTabIds.push(lease.tabId)
+      plan.ungroupTabIds.push(lease.tabId)
+    } else {
+      plan.closeTabIds.push(lease.tabId)
     }
-    return result
+  }
+  return plan
+}
+
+function commitCleanup(
+  leases: LeaseMap,
+  plan: LeaseCleanupPlan,
+) {
+  for (const tabId of [
+    ...plan.closeTabIds,
+    ...plan.releaseTabIds,
+    ...plan.deliverableTabIds,
+  ]) {
+    delete leases[String(tabId)]
+  }
+  const now = Date.now()
+  for (const tabId of plan.handoffTabIds) {
+    const lease = leases[String(tabId)]
+    if (!lease) continue
+    leases[String(tabId)] = {
+      ...lease,
+      state: "handoff",
+      mark: undefined,
+      updatedAt: now,
+      expiresAt: now + DEFAULT_LEASE_TTL_MS,
+    }
+  }
+}
+
+async function finalizeSelectedLeases(
+  selectAndPlan: (leases: LeaseMap) => LeaseCleanupPlan,
+  cleanup: CleanupExecutor = async () => undefined,
+) {
+  return mutateLeaseMap(async (leases) => {
+    const plan = selectAndPlan(leases)
+    await cleanup(plan)
+    commitCleanup(leases, plan)
+    return plan
   })
 }
 
-export async function finalizeAllLeases() {
-  return mutateLeaseMap((leases) => finalizeSelectedLeases(
-    leases,
-    Object.values(leases).filter(
-      (lease) =>
-        lease.state !== "released"
-        || (lease.source === "agent" && lease.retained !== true),
-    ),
-  ))
+export async function finalizeTurnLeases(
+  context: BrowserExtensionCommandContext | undefined,
+  keep: readonly FinalizeKeepEntry[] = [],
+  cleanup?: CleanupExecutor,
+) {
+  requireContext(context)
+  return finalizeSelectedLeases((leases) => {
+    const validatedKeep = validateKeepList(leases, keep, context)
+    return planTurnCleanup(leases, validatedKeep, context)
+  }, cleanup)
 }
 
-export function installLeaseInheritance(extensionInstanceID: () => Promise<string>) {
+export async function finalizeSessionLeases(
+  sessionID: string,
+  extensionInstanceID?: string,
+  cleanup?: CleanupExecutor,
+) {
+  return finalizeSelectedLeases(
+    (leases) => planTerminalCleanup(
+      Object.values(leases).filter((lease) =>
+        lease.sessionID === sessionID
+        && (
+          extensionInstanceID === undefined
+          || lease.extensionInstanceID === extensionInstanceID
+        )
+      ),
+    ),
+    cleanup,
+  )
+}
+
+export async function finalizeExpiredLeases(
+  now = Date.now(),
+  cleanup?: CleanupExecutor,
+) {
+  return finalizeSelectedLeases(
+    (leases) => planTerminalCleanup(
+      Object.values(leases).filter((lease) => lease.expiresAt <= now),
+    ),
+    cleanup,
+  )
+}
+
+export async function finalizeAllLeases(cleanup?: CleanupExecutor) {
+  return finalizeSelectedLeases(
+    (leases) => planTerminalCleanup(Object.values(leases)),
+    cleanup,
+  )
+}
+
+export function installLeaseInheritance(
+  extensionInstanceID: () => Promise<string>,
+  groupChildTab?: (
+    tabId: number,
+    context: BrowserExtensionCommandContext,
+  ) => Promise<unknown>,
+) {
   chrome.tabs.onCreated.addListener((tab: any) => {
     if (
       typeof tab?.id !== "number"
@@ -372,23 +509,32 @@ export function installLeaseInheritance(extensionInstanceID: () => Promise<strin
     }
     void (async () => {
       const opener = await getLease(tab.openerTabId)
-      if (!opener || opener.state === "released" || opener.expiresAt <= Date.now()) {
+      if (
+        !opener
+        || opener.state !== "active"
+        || opener.expiresAt <= Date.now()
+      ) {
         return
       }
       const currentExtensionInstanceID = await extensionInstanceID()
       if (currentExtensionInstanceID !== opener.extensionInstanceID) return
+      const childContext = {
+        sessionID: opener.sessionID,
+        turnID: opener.turnID,
+        extensionInstanceID: opener.extensionInstanceID,
+      }
       await createLease({
         tabId: tab.id,
-        source: opener.source,
-        context: {
-          sessionID: opener.sessionID,
-          turnID: opener.turnID,
-          extensionInstanceID: opener.extensionInstanceID,
-        },
+        source: "agent",
+        context: childContext,
         extensionInstanceID: currentExtensionInstanceID,
         openerTabId: tab.openerTabId,
       })
-    })()
+      await groupChildTab?.(tab.id, childContext)
+    })().catch(() => {
+      // Child tabs remain leased when Chrome rejects grouping. Finalization
+      // will still close or release them safely.
+    })
   })
   chrome.tabs.onRemoved.addListener((tabId: number) => {
     void mutateLeaseMap((leases) => {
@@ -400,4 +546,8 @@ export function installLeaseInheritance(extensionInstanceID: () => Promise<strin
 
 export function getLeaseStorageKey() {
   return LEASE_STORAGE_KEY
+}
+
+export function getLegacyLeaseStorageKey() {
+  return LEGACY_LEASE_STORAGE_KEY
 }
