@@ -27,6 +27,14 @@ const COMMAND_METADATA = {
     publicReceiver: "browser",
     publicResult: "tab-runtime-handle",
   },
+  "tabs.markDeliverable": {
+    apiPath: "tab.markDeliverable",
+    signature: "tab.markDeliverable()",
+    summary: "Retain a leased tab as a user deliverable during finalization.",
+    security: "tab-lifecycle",
+    publicReceiver: "tab",
+    publicResult: "command-result",
+  },
   "tabs.activate": {
     apiPath: "browser.tabs.activate",
     signature: "browser.tabs.activate(tabId)",
@@ -634,6 +642,7 @@ test("routes tabs and Tab APIs through the v3 CommandRouter", async () => {
   const tabs = await browser.tabs.list()
   const opened = await browser.tabs.open("https://example.com/open", {
     active: false,
+    keepOpen: false,
     url: "https://should-not-override.example/",
   })
   const screenshot = await opened.screenshot({ fullPage: true })
@@ -716,6 +725,78 @@ test("routes tabs and Tab APIs through the v3 CommandRouter", async () => {
   )
   await assert.rejects(
     browser.tabs.get(0),
+    (error) => error.code === "INVALID_COMMAND_PARAMS",
+  )
+})
+
+test("keeps new tabs open by default and supports temporary tabs", async () => {
+  const requests = []
+  let nextTabId = 50
+  const commands = [
+    "tabs.open",
+    "tabs.markDeliverable",
+  ]
+  const transport = backendTransport({
+    commands,
+    requests,
+    command(request) {
+      if (request.method === "tabs.open") {
+        nextTabId += 1
+        return {
+          id: nextTabId,
+          title: "Opened",
+          url: request.params.url,
+          active: request.params.active,
+        }
+      }
+      if (request.method === "tabs.markDeliverable") {
+        return {
+          tabId: request.params.tabId,
+          state: "deliverable",
+        }
+      }
+      throw new Error(`Unexpected method: ${request.method}`)
+    },
+  })
+
+  const { setupBrowserRuntime } = await importRuntime("tab-retention")
+  const agent = await setupBrowserRuntime({ globals: {}, transport })
+  const browser = await agent.browsers.get()
+  const retained = await browser.tabs.open("https://example.com/result")
+  const temporary = await browser.tabs.open("https://example.com/helper", {
+    active: false,
+    keepOpen: false,
+  })
+
+  assert.equal(retained.tabId, 51)
+  assert.equal(temporary.tabId, 52)
+  assert.deepEqual(
+    requests
+      .filter(({ type }) => type === "command")
+      .map(({ method, params }) => ({ method, params })),
+    [
+      {
+        method: "tabs.open",
+        params: { url: "https://example.com/result" },
+      },
+      {
+        method: "tabs.markDeliverable",
+        params: { tabId: 51 },
+      },
+      {
+        method: "tabs.open",
+        params: {
+          url: "https://example.com/helper",
+          active: false,
+        },
+      },
+    ],
+  )
+
+  await assert.rejects(
+    browser.tabs.open("https://example.com/invalid", {
+      keepOpen: "yes",
+    }),
     (error) => error.code === "INVALID_COMMAND_PARAMS",
   )
 })

@@ -62,7 +62,13 @@ export {
 const NATIVE_INSTALL_ENV = "ANYBOX_BROWSER_NATIVE_INSTALL"
 let nativeMessagingHostReady: Promise<void> | undefined
 
-type TabsOpenOptions = Omit<BrowserContractCommandParams<"tabs.open">, "url">
+type TabsOpenOptions = Omit<BrowserContractCommandParams<"tabs.open">, "url"> & {
+  /**
+   * Keep the new tab open after automatic turn/session finalization.
+   * Defaults to true. Set false only for temporary helper tabs.
+   */
+  keepOpen?: boolean
+}
 type SnapshotOptions = Omit<BrowserContractCommandParams<"page.snapshot">, "tabId">
 type InteractiveSnapshotOptions = Omit<
   BrowserContractCommandParams<"page.interactiveSnapshot">,
@@ -1087,10 +1093,36 @@ export class BrowserContext {
         }))
       },
       open: async (url, options = {}) => {
+        const target = validateBrowserUrl(url)
+        if (
+          options.keepOpen !== undefined
+          && typeof options.keepOpen !== "boolean"
+        ) {
+          throw new BrowserRuntimeError(
+            "INVALID_COMMAND_PARAMS",
+            "Browser tab option 'keepOpen' must be a boolean.",
+          )
+        }
+        const {
+          keepOpen = true,
+          ...commandOptions
+        } = options
+        if (
+          keepOpen
+          && !this.#router.supports("tabs.markDeliverable")
+        ) {
+          throw new BrowserRuntimeError(
+            "CAPABILITY_UNAVAILABLE",
+            "The connected Chrome extension cannot retain a new tab after task completion.",
+          )
+        }
         const tab = await this.#router.run(
           "tabs.open",
-          { ...options, url },
+          { ...commandOptions, url: target.href },
         )
+        if (keepOpen) {
+          await this.#router.run("tabs.markDeliverable", { tabId: tab.id })
+        }
         return new BrowserTab(tab.id, this.#router)
       },
       claim: async (tabId) => {

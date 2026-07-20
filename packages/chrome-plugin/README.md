@@ -272,9 +272,11 @@ Turn、状态、保留标记和扩展实例 ID：
 
 结束处理：
 
-- Agent 新建的 Tab 默认关闭。
+- Browser Client 新建的 Tab 默认标记为结果页，任务结束后保留在用户的 Chrome 中。
+- `tabs.open(url, { keepOpen: false })` 创建临时 Agent Tab；这类 Tab 在任务结束时自动关闭。
 - 用户 Tab 只释放控制权，不关闭。
-- `markDeliverable()` 标记的结果 Tab 会保留。
+- 临时 Tab 后续调用 `markDeliverable()` 后会转为保留的结果页。
+- `tab.close()` 始终显式关闭对应页面；完成任务本身不应触发关闭最终结果页。
 - `finalize()` 会同时清理 Debugger 附着和页面提示层。
 - Browser Client 在 Turn、Session、REPL reset 或传输关闭时注册自动 finalize。
 - 扩展异常断连超过清理宽限期后，也会回收租约。

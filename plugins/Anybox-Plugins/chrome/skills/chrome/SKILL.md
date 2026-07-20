@@ -106,6 +106,23 @@ globalThis.tab = await chrome.tabs.open("https://example.com/")
 return await tab.snapshot()
 ```
 
+Tabs opened through the Browser Client stay open after automatic Turn and
+Session finalization by default so the user can inspect the resulting page.
+Pass `{ keepOpen: false }` only for temporary helper tabs that should be
+closed automatically when the task ends:
+
+```js
+const temporaryTab = await chrome.tabs.open("https://example.com/helper", {
+  active: false,
+  keepOpen: false,
+})
+```
+
+Do not close the final user-facing page merely because the requested workflow
+has completed. Close a tab only when the user asked for it to be closed or
+when a temporary helper tab is no longer needed. A temporary tab can be
+retained later with `tab.markDeliverable()`.
+
 Navigate an existing leased tab directly instead of opening a duplicate:
 
 ```js
@@ -117,8 +134,8 @@ return await tab.playwright.domSnapshot()
 promise that the destination has finished loading. After any of them, use
 `waitForURL()` or `waitForLoadState()` when advertised, then take a fresh DOM
 or interactive snapshot before reusing selectors or element IDs. Use
-`tab.close()` when the requested workflow is finished with that tab; a
-successfully closed tab does not also need `release()`.
+`tab.close()` only when the tab should actually disappear from the user's
+Chrome; a successfully closed tab does not also need `release()`.
 
 An item returned by `chrome.tabs.list()` also contains a bound `runtime` property that can be used within the same call. Prefer an explicit tab binding across calls.
 
@@ -194,7 +211,7 @@ Available APIs include:
 
 - `agent.browsers.readiness()`, `ensureReady({ launch })`, `list()`, `get("extension")`, `getDefault()`, and `getForUrl(url)`
 - `chrome.browserId`, `chrome.capabilities`, `chrome.status()`, and capability-filtered `chrome.documentation()`
-- `chrome.tabs.list()`, `listUser()`, `open(url, options)`, `claim(tabId)`, `activate(tabId)`, `get(tabId)`, `current()`, and `finalize()`
+- `chrome.tabs.list()`, `listUser()`, `open(url, { active?, keepOpen? })`, `claim(tabId)`, `activate(tabId)`, `get(tabId)`, `current()`, and `finalize()`
 - `tab.info()`, `activate()`, `goto(url)`, `back()`, `forward()`, `reload()`, `close()`, `snapshot()`, `interactiveSnapshot()`, `domTree()`, `accessibilityTree()`, and `screenshot()`
 - `tab.click()`, `clickElement()`, `fill()`, `type()`, `scroll()`, `waitFor()`, `release()`, and `markDeliverable()`
 - `tab.playwright.domSnapshot()`, `elementInfo()`, `locator()`, `frameLocator()`, `getByRole()`, `getByText()`, `getByLabel()`, `getByPlaceholder()`, and `getByTestId()`
