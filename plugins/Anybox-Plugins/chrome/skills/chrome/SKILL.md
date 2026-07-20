@@ -1,42 +1,42 @@
 ---
 name: Chrome
-description: "Control the user's Chrome browser through a persistent Node REPL when tasks depend on existing tabs, signed-in sessions, extensions, visible page state, or UI interaction. Prefer purpose-built connectors, APIs, or CLIs for semantic resource operations."
+description: "通过持久化 Node REPL 控制用户的 Chrome 浏览器，适用于依赖现有标签页、已登录会话、扩展程序、页面可见状态或 UI 交互的任务。对资源执行语义操作时，优先使用专用连接器、API 或 CLI。"
 ---
 
 # Chrome
 
-## Stop: choose the right surface before browser action
+## 停止：执行浏览器操作前，先选择正确的操作方式
 
-Explicit Chrome intent wins. If the user names Chrome or this plugin, asks to open or navigate to a page in Chrome, wants the page's visual or interactive state inspected, or requests UI interaction, continue with this skill and do not silently substitute another browser.
+用户明确表达的 Chrome 使用意图优先。如果用户点名 Chrome 或本插件，要求在 Chrome 中打开页面或导航到某个页面、检查页面的视觉或交互状态，或执行 UI 交互，请继续使用本技能，不要擅自改用其他浏览器。
 
-Otherwise, treat a URL or open tab as context rather than browser intent. Before each semantic operation on a linked resource, inspect available tools and use tool discovery when available to find an applicable connector, API, or CLI. Prefer that purpose-built surface when it can complete the operation. Use Chrome when no such surface exists, it lacks the required capability, existing Chrome state matters, or UI work remains.
+否则，应将 URL 或已打开的标签页视为上下文，而不是浏览器操作意图。在对链接资源执行每一项语义操作前，先检查可用工具；如果支持工具发现，则通过工具发现查找适用的连接器、API 或 CLI。当专用操作方式能够完成任务时，优先使用它。仅在不存在此类操作方式、它缺少所需能力、任务依赖 Chrome 现有状态，或仍需执行 UI 操作时使用 Chrome。
 
-Use this skill for navigating, inspecting visible page state, testing local web apps, clicking, filling, typing, scrolling, waiting for page changes, and taking screenshots.
+将本技能用于导航、检查页面可见状态、测试本地 Web 应用、点击、填写、输入、滚动、等待页面变化和截图。
 
-## Use only the Anybox Node REPL
+## 仅使用 Anybox Node REPL
 
-Control Chrome only through the general-purpose Anybox Node REPL `js` tool. Its full Anybox tool ID normally resembles `mcp__connector_node_repl_default__js`. Do not use per-action `browser_*` MCP tools, Computer Use, standalone Playwright, or another browser-control plugin for this Chrome surface.
+只能通过 Anybox 通用 Node REPL 的 `js` 工具控制 Chrome。其完整的 Anybox 工具 ID 通常类似于 `mcp__connector_node_repl_default__js`。不要为此 Chrome 操作界面使用逐项操作的 `browser_*` MCP 工具、Computer Use、独立 Playwright 或其他浏览器控制插件。
 
-The `js_reset` tool only clears persistent JavaScript state. The `js_add_node_module_dir` tool only changes CommonJS module resolution. Do not call either helper while trying to expose `js`.
+`js_reset` 工具只能清除持久化 JavaScript 状态。`js_add_node_module_dir` 工具只能更改 CommonJS 模块解析路径。在尝试启用 `js` 时，不要调用这两个辅助工具。
 
-Keep setup details internal. Unless the user asks about implementation, describe progress naturally as connecting to Chrome, inspecting the page, or retrying the connection.
+将配置细节保留在内部。除非用户询问具体实现，否则请用自然语言描述进度，例如正在连接 Chrome、检查页面或重试连接。
 
-The Browser Client sends only operations advertised by the negotiated Browser Contract to the plugin-owned Browser Host over authenticated local IPC. The client performs an early schema and capability check, and the Browser Host authoritatively validates every command again before it can reach Chrome. The general-purpose Node environment does not provide a browser host-service API; do not call or expect `nodeRepl.requestHost(...)`.
+Browser Client 只会将协商后的 Browser Contract 所声明的操作，通过已认证的本地 IPC 发送给插件自带的 Browser Host。客户端会先执行 schema 和能力检查，Browser Host 则会再次对每条命令进行权威校验，然后才允许命令到达 Chrome。通用 Node 环境不提供浏览器 Host Service API；不要调用或期待存在 `nodeRepl.requestHost(...)`。
 
-## Bootstrap and reload safely
+## 安全地初始化和重新加载
 
-The Node REPL is a general Anybox environment. It preloads `nodeRepl`, but it does not preload `browser-client`, `setupBrowserRuntime`, `agent`, or Chrome-specific capabilities.
+Node REPL 是 Anybox 通用环境。它会预加载 `nodeRepl`，但不会预加载 `browser-client`、`setupBrowserRuntime`、`agent` 或 Chrome 专用能力。
 
-Importing and initializing the Browser Client starts or reconnects the Browser Host from this same plugin package as needed. Keep that lifecycle internal unless the user explicitly asks about implementation.
+导入并初始化 Browser Client 时，会按需从同一个插件包中启动 Browser Host 或与其重新连接。除非用户明确询问具体实现，否则将该生命周期保留在内部。
 
-The absolute path shown when this Skill is loaded ends in `skills/chrome/SKILL.md`. Resolve this plugin's package root by moving two directories up from that Skill directory. The bundled Browser Client is `scripts/browser-client.mjs` under that package root. Import exactly that file through an absolute file URL. Never import an external or built-in `browser-client` package. If the bundled file is missing, stop and report that the Chrome plugin package is incomplete.
+加载本技能时显示的绝对路径以 `skills/chrome/SKILL.md` 结尾。从该技能目录向上移动两级，解析出本插件的包根目录。随插件提供的 Browser Client 位于包根目录下的 `scripts/browser-client.mjs`。必须通过绝对文件 URL 导入这个文件。绝不要导入外部或内置的 `browser-client` 包。如果随插件提供的文件缺失，请停止并报告 Chrome 插件包不完整。
 
-Import the Browser Client from the currently loaded plugin package. Reuse it while that package version remains active, but replace a Browser Client retained from an older plugin version before using Chrome. Initialize one persistent Chrome binding and read its complete runtime documentation on first use:
+从当前加载的插件包中导入 Browser Client。只要该插件包版本仍在使用，就复用这个客户端；使用 Chrome 前，应替换从旧版插件中保留下来的 Browser Client。初始化一个持久化 Chrome 绑定，并在首次使用时完整读取其运行时文档：
 
 ```js
 const { resolve } = require("node:path")
 const { pathToFileURL } = require("node:url")
-const pluginRoot = "<absolute plugin root derived from this Skill's loaded path>"
+const pluginRoot = "<根据本技能的加载路径推导出的插件绝对根目录>"
 const browserClientPath = resolve(pluginRoot, "scripts", "browser-client.mjs")
 const { setupBrowserRuntime } = await import(pathToFileURL(browserClientPath).href)
 if (
@@ -54,34 +54,32 @@ if (globalThis.chrome == null) {
 }
 ```
 
-Reuse `globalThis.chrome` across later calls and user turns while the imported setup function still matches `globalThis.setupBrowserRuntime`. A mismatch means the persistent REPL retained an older plugin version, so reinitialize from the currently loaded package and discard the stale Chrome binding. Do not initialize another browser runtime merely because the user sent a new message.
+在导入的配置函数仍与 `globalThis.setupBrowserRuntime` 匹配时，跨后续调用和用户轮次复用 `globalThis.chrome`。如果两者不匹配，说明持久化 REPL 保留了旧版插件；此时请使用当前加载的插件包重新初始化，并丢弃过期的 Chrome 绑定。不要仅仅因为用户发送了一条新消息，就初始化另一个浏览器运行时。
 
-`agent.browsers.readiness()` reports the current connection state without launching Chrome or running the Native Host probe. During an explicit Chrome task, `agent.browsers.ensureReady({ launch: true })` first allows an in-flight extension reconnect to settle, verifies the installed Native Messaging Host through its authenticated local IPC probe, opens Chrome at most once when needed, and waits for a bounded extension handshake. It never scans Chrome profiles or credential stores.
+`agent.browsers.readiness()` 会报告当前连接状态，但不会启动 Chrome，也不会运行 Native Host 探测。在明确的 Chrome 任务中，`agent.browsers.ensureReady({ launch: true })` 会先等待正在进行的扩展重新连接，随后通过已认证的本地 IPC 探测验证已安装的 Native Messaging Host；必要时最多打开 Chrome 一次，并在有限时间内等待扩展握手。它绝不会扫描 Chrome 配置文件或凭据存储。
 
-Check or restore the connection when state is unclear:
+连接状态不明确时，检查或恢复连接：
 
 ```js
 return await agent.browsers.ensureReady({ launch: true })
 ```
 
-`chrome.status().authorizationVerificationAvailable` is the receipt-verification
-readiness signal. `peerProcessIdentityVerified` only reports the current
-PID/SID/uid verification limitation and does not gate browser commands.
+`chrome.status().authorizationVerificationAvailable` 是回执验证是否就绪的信号。`peerProcessIdentityVerified` 仅报告当前 PID/SID/uid 验证的限制，不会阻止浏览器命令。
 
-Handle the returned state directly instead of treating every failure as a generic disconnect:
+请直接根据返回状态进行处理，不要把所有失败都当作普通的断开连接：
 
-- `ready`: continue with the existing `chrome` binding, or initialize it if absent.
-- `needs-extension`: Chrome opened, but the extension did not connect. Ask the user to install or enable the Anybox Chrome extension and then retry.
-- `needs-extension-update`: ask the user to update the Anybox Chrome extension; do not bypass the Contract mismatch.
-- `needs-native-host-repair`: the Native Messaging Host installation or authenticated local channel failed; ask the user to repair or reinstall the Chrome plugin.
-- `browser-not-installed`: report that Google Chrome could not be found.
-- `backend-unavailable`: retry once only when `retryable` is true; if it persists, report the returned `error.code` and `error.message`.
+- `ready`：继续使用现有的 `chrome` 绑定；如果绑定不存在，则初始化它。
+- `needs-extension`：Chrome 已打开，但扩展没有连接。要求用户安装或启用 Anybox Chrome 扩展，然后重试。
+- `needs-extension-update`：要求用户更新 Anybox Chrome 扩展；不要绕过 Browser Contract 不匹配的问题。
+- `needs-native-host-repair`：Native Messaging Host 安装或已认证的本地通道失败；要求用户修复或重新安装 Chrome 插件。
+- `browser-not-installed`：报告未找到 Google Chrome。
+- `backend-unavailable`：仅当 `retryable` 为 `true` 时重试一次；如果问题仍然存在，请报告返回的 `error.code` 和 `error.message`。
 
-Do not keep polling or repeatedly open Chrome after `ensureReady` returns a non-ready state.
+当 `ensureReady` 返回非就绪状态后，不要持续轮询或反复打开 Chrome。
 
-## Work with tabs
+## 使用标签页
 
-List tabs before opening a duplicate:
+打开新标签页前，先列出现有标签页，避免重复打开：
 
 ```js
 return (await chrome.tabs.list()).map(({ id, title, url, active }) => ({
@@ -92,58 +90,57 @@ return (await chrome.tabs.list()).map(({ id, title, url, active }) => ({
 }))
 ```
 
-Bind the selected tab explicitly and persist it:
+明确绑定选中的标签页，并将其持久保存：
 
 ```js
-globalThis.tab = await chrome.tabs.get(123) // Replace 123 with a returned tab ID.
+globalThis.tab = await chrome.tabs.get(123) // 将 123 替换为返回的标签页 ID。
 return await tab.snapshot()
 ```
 
-For a new tab, persist the object returned by `open`:
+打开新标签页时，持久保存 `open` 返回的对象：
 
 ```js
 globalThis.tab = await chrome.tabs.open("https://example.com/")
 return await tab.snapshot()
 ```
 
-An item returned by `chrome.tabs.list()` also contains a bound `runtime` property that can be used within the same call. Prefer an explicit tab binding across calls.
+`chrome.tabs.list()` 返回的条目还包含一个已绑定的 `runtime` 属性，可在同一次调用中使用。跨多次调用时，优先使用明确的标签页绑定。
 
-If a tab is missing, stale, or closed, discard only `globalThis.tab` and obtain or create a fresh tab from the existing `chrome` binding. An empty tab list does not invalidate the browser binding.
+如果标签页丢失、过期或已关闭，只丢弃 `globalThis.tab`，然后从现有 `chrome` 绑定中获取或创建新的标签页。标签页列表为空不会使浏览器绑定失效。
 
-## Inspect and interact
+## 检查与交互
 
-Prefer the highest-level operation that can complete the task:
+优先使用能够完成任务的最高层级操作：
 
-- Inspect with `tab.snapshot()`, `interactiveSnapshot()`, `domTree()`, or `accessibilityTree()`.
-- Use `tab.interactiveSnapshot()` before element actions, then pass a current `elementId` to `tab.clickElement()` or `tab.fill()`.
-- Use `tab.waitFor()` with a concrete URL, text, selector, or element condition after navigation or page-changing actions.
-- Use `tab.click()` for coordinates only when element-based interaction is unavailable.
-- Structured locators are available only when advertised by the connected Extension. Raw page JavaScript and unrestricted CDP are disabled.
+- 使用 `tab.snapshot()`、`interactiveSnapshot()`、`domTree()` 或 `accessibilityTree()` 检查页面。
+- 执行元素操作前，先使用 `tab.interactiveSnapshot()`，再将当前的 `elementId` 传给 `tab.clickElement()` 或 `tab.fill()`。
+- 导航或执行会改变页面的操作后，使用带有具体 URL、文本、选择器或元素条件的 `tab.waitFor()`。
+- 只有在无法使用基于元素的交互时，才使用基于坐标的 `tab.click()`。
+- 只有已连接的扩展声明支持结构化定位器时，才能使用它。原始页面 JavaScript 和不受限制的 CDP 均已禁用。
 
-Interactive element IDs can become stale after DOM changes. Take a new interactive snapshot instead of retrying an old ID.
+DOM 发生变化后，交互元素 ID 可能会过期。请重新获取交互快照，不要重试旧 ID。
 
-To return a screenshot as an image, emit it instead of returning its base64 data:
+若要将截图作为图片返回，请发送图片，而不是返回其 base64 数据：
 
 ```js
 await nodeRepl.emitImage(await tab.screenshot())
 ```
 
-Available APIs include:
+可用 API 包括：
 
-- `agent.browsers.readiness()`, `ensureReady({ launch })`, `list()`, `get("extension")`, `getDefault()`, and `getForUrl(url)`
-- `chrome.browserId`, `chrome.capabilities`, `chrome.status()`, and capability-filtered `chrome.documentation()`
-- `chrome.tabs.list()`, `listUser()`, `open(url, options)`, `claim(tabId)`, `activate(tabId)`, `get(tabId)`, `current()`, and `finalize()`
-- `tab.info()`, `activate()`, `snapshot()`, `interactiveSnapshot()`, `domTree()`, `accessibilityTree()`, and `screenshot()`
-- `tab.click()`, `clickElement()`, `fill()`, `type()`, `scroll()`, `waitFor()`, `release()`, and `markDeliverable()`
-- `tab.locator(descriptor).click()`, `fill()`, `textContent()`, `inputValue()`, and `waitFor()` when structured locators are advertised
+- `agent.browsers.readiness()`、`ensureReady({ launch })`、`list()`、`get("extension")`、`getDefault()` 和 `getForUrl(url)`
+- `chrome.browserId`、`chrome.capabilities`、`chrome.status()` 和根据能力过滤的 `chrome.documentation()`
+- `chrome.tabs.list()`、`listUser()`、`open(url, options)`、`claim(tabId)`、`activate(tabId)`、`get(tabId)`、`current()` 和 `finalize()`
+- `tab.info()`、`activate()`、`snapshot()`、`interactiveSnapshot()`、`domTree()`、`accessibilityTree()` 和 `screenshot()`
+- `tab.click()`、`clickElement()`、`fill()`、`type()`、`scroll()`、`waitFor()`、`release()` 和 `markDeliverable()`
+- 当扩展声明支持结构化定位器时，可使用 `tab.locator(descriptor).click()`、`fill()`、`textContent()`、`inputValue()` 和 `waitFor()`
 
-There is no `tab.playwright`, arbitrary page JavaScript, unrestricted CDP,
-general keyboard API, or `waitForSelector()` compatibility alias.
+不存在 `tab.playwright`、任意页面 JavaScript、不受限制的 CDP、通用键盘 API 或 `waitForSelector()` 兼容别名。
 
-## Authentication and privacy
+## 身份验证与隐私
 
-Do not inspect cookies, local storage, session storage, browser profiles, passwords, tokens, or other credential stores. Never use raw JavaScript or CDP to bypass this rule.
+不要检查 Cookie、本地存储、会话存储、浏览器配置文件、密码、令牌或其他凭据存储。绝不要使用原始 JavaScript 或 CDP 绕过此规则。
 
-If authentication blocks a task in explicitly requested Chrome, ask the user to sign in there and tell you when it is ready. Do not use web search, another site, or another browser merely to bypass sign-in.
+如果用户明确要求使用 Chrome，而身份验证阻止了任务，请要求用户在 Chrome 中登录，并在准备好后告知你。不要仅仅为了绕过登录而使用网页搜索、其他网站或其他浏览器。
 
-<!-- CHROME_SKILL_EOF: This is the complete Anybox Chrome skill. -->
+<!-- CHROME_SKILL_EOF：这是完整的 Anybox Chrome 技能。 -->
