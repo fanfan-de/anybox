@@ -562,7 +562,7 @@
 .home-demo-frame::after {
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: 2;
   border: 1px solid color-mix(in srgb, var(--hero-stage-text) 8%, transparent);
   border-radius: inherit;
   content: "";
@@ -577,11 +577,27 @@
   object-fit: cover;
 }
 
+.home-demo-poster {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  object-fit: cover;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.home-demo-poster.is-visible {
+  opacity: 1;
+}
+
 .home-demo-playback {
   position: absolute;
   right: 14px;
   bottom: 14px;
-  z-index: 2;
+  z-index: 3;
   display: inline-flex;
   align-items: center;
   justify-content: center;

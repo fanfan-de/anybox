@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import type { SiteLanguage } from "./language"
 
-type HomeDemoVideoProps = {
+type HomeDemoVideosProps = {
   language: SiteLanguage
 }
 
@@ -97,49 +97,67 @@ const demos = {
   titleId: string
 }>
 
-type HomeDemoSectionProps = HomeDemoVideoProps & {
+const demoVariants = ["streaming", "playable"] as const
+const minimumPlaybackRatio = 0.25
+const scrollResumeDelay = 180
+const visibilityThresholds = [0, 0.1, 0.25, 0.5, 0.75, 1]
+
+type HomeDemoSectionProps = HomeDemoVideosProps & {
+  isPlaybackActive: boolean
+  isPlaybackSuspended: boolean
+  onRequestPlayback: (variant: DemoVariant) => void
+  onVisibilityChange: (variant: DemoVariant, ratio: number) => void
   variant: DemoVariant
 }
 
-function HomeDemoSection({ language, variant }: HomeDemoSectionProps) {
+function HomeDemoSection({
+  isPlaybackActive,
+  isPlaybackSuspended,
+  language,
+  onRequestPlayback,
+  onVisibilityChange,
+  variant,
+}: HomeDemoSectionProps) {
   const demo = demos[variant]
   const copy = demo.copy[language]
   const videoRef = useRef<HTMLVideoElement>(null)
-  const isInViewRef = useRef(false)
   const userPausedRef = useRef(false)
   const [isPlaying, setIsPlaying] = useState(false)
+  const [showPoster, setShowPoster] = useState(true)
 
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
 
-    const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)")
-
-    const syncPlayback = () => {
-      if (isInViewRef.current && !motionPreference.matches && !userPausedRef.current) {
-        void video.play().catch(() => setIsPlaying(false))
-        return
-      }
-
-      video.pause()
-    }
-
     const observer = new IntersectionObserver(([entry]) => {
-      isInViewRef.current = Boolean(entry?.isIntersecting)
-      syncPlayback()
-    }, { threshold: 0.45 })
+      const ratio = entry?.intersectionRatio ?? 0
+      onVisibilityChange(variant, ratio)
 
-    const handleMotionPreferenceChange = () => syncPlayback()
+      if (ratio === 0) {
+        video.pause()
+        setShowPoster(true)
+      }
+    }, { threshold: visibilityThresholds })
 
     observer.observe(video)
-    motionPreference.addEventListener("change", handleMotionPreferenceChange)
 
     return () => {
       observer.disconnect()
-      motionPreference.removeEventListener("change", handleMotionPreferenceChange)
       video.pause()
     }
-  }, [])
+  }, [onVisibilityChange, variant])
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+
+    if (isPlaybackActive && !isPlaybackSuspended && !userPausedRef.current) {
+      void video.play().catch(() => setIsPlaying(false))
+      return
+    }
+
+    video.pause()
+  }, [isPlaybackActive, isPlaybackSuspended])
 
   const togglePlayback = () => {
     const video = videoRef.current
@@ -147,7 +165,10 @@ function HomeDemoSection({ language, variant }: HomeDemoSectionProps) {
 
     if (video.paused) {
       userPausedRef.current = false
-      void video.play().catch(() => setIsPlaying(false))
+      onRequestPlayback(variant)
+      if (isPlaybackActive && !isPlaybackSuspended) {
+        void video.play().catch(() => setIsPlaying(false))
+      }
       return
     }
 
@@ -191,12 +212,21 @@ function HomeDemoSection({ language, variant }: HomeDemoSectionProps) {
                 muted
                 onPause={() => setIsPlaying(false)}
                 onPlay={() => setIsPlaying(true)}
+                onPlaying={() => setShowPoster(false)}
                 playsInline
                 poster={demo.poster}
                 preload="metadata"
               >
                 <source src={demo.source} type="video/mp4" />
               </video>
+              <img
+                alt=""
+                aria-hidden="true"
+                className={`home-demo-poster${showPoster ? " is-visible" : ""}`}
+                decoding="async"
+                loading="lazy"
+                src={demo.poster}
+              />
               <button
                 className="home-demo-playback"
                 type="button"
@@ -213,10 +243,82 @@ function HomeDemoSection({ language, variant }: HomeDemoSectionProps) {
   )
 }
 
-export function HomeDemoVideo({ language }: HomeDemoVideoProps) {
-  return <HomeDemoSection language={language} variant="streaming" />
-}
+export function HomeDemoVideos({ language }: HomeDemoVideosProps) {
+  const visibilityRatiosRef = useRef<Record<DemoVariant, number>>({
+    playable: 0,
+    streaming: 0,
+  })
+  const scrollEndTimerRef = useRef<number | undefined>(undefined)
+  const isScrollingRef = useRef(false)
+  const [activeVariant, setActiveVariant] = useState<DemoVariant | null>(null)
+  const [isScrolling, setIsScrolling] = useState(false)
+  const [reduceMotion, setReduceMotion] = useState(false)
 
-export function HomePlayableDemoVideo({ language }: HomeDemoVideoProps) {
-  return <HomeDemoSection language={language} variant="playable" />
+  const updateActiveVariant = useCallback(() => {
+    const nextVariant = demoVariants.reduce((mostVisible, candidate) => (
+      visibilityRatiosRef.current[candidate] > visibilityRatiosRef.current[mostVisible]
+        ? candidate
+        : mostVisible
+    ))
+    const nextRatio = visibilityRatiosRef.current[nextVariant]
+    setActiveVariant(nextRatio >= minimumPlaybackRatio ? nextVariant : null)
+  }, [])
+
+  const handleVisibilityChange = useCallback((variant: DemoVariant, ratio: number) => {
+    visibilityRatiosRef.current[variant] = ratio
+    updateActiveVariant()
+  }, [updateActiveVariant])
+
+  const handleRequestPlayback = useCallback((variant: DemoVariant) => {
+    setActiveVariant(variant)
+  }, [])
+
+  useEffect(() => {
+    const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)")
+    const handleMotionPreferenceChange = () => setReduceMotion(motionPreference.matches)
+
+    handleMotionPreferenceChange()
+    motionPreference.addEventListener("change", handleMotionPreferenceChange)
+
+    return () => motionPreference.removeEventListener("change", handleMotionPreferenceChange)
+  }, [])
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (!isScrollingRef.current) {
+        isScrollingRef.current = true
+        setIsScrolling(true)
+      }
+
+      window.clearTimeout(scrollEndTimerRef.current)
+      scrollEndTimerRef.current = window.setTimeout(() => {
+        isScrollingRef.current = false
+        setIsScrolling(false)
+        updateActiveVariant()
+      }, scrollResumeDelay)
+    }
+
+    window.addEventListener("scroll", handleScroll, { passive: true })
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll)
+      window.clearTimeout(scrollEndTimerRef.current)
+    }
+  }, [updateActiveVariant])
+
+  return (
+    <>
+      {demoVariants.map((variant) => (
+        <HomeDemoSection
+          key={variant}
+          isPlaybackActive={activeVariant === variant}
+          isPlaybackSuspended={isScrolling || reduceMotion}
+          language={language}
+          onRequestPlayback={handleRequestPlayback}
+          onVisibilityChange={handleVisibilityChange}
+          variant={variant}
+        />
+      ))}
+    </>
+  )
 }

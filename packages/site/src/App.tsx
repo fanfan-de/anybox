@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { DownloadCta } from "./DownloadCta"
-import { HomeDemoVideo, HomePlayableDemoVideo } from "./HomeDemoVideo"
+import { HomeDemoVideos } from "./HomeDemoVideo"
 import { ProductMedia } from "./ProductMedia"
 import { RibbonBackground } from "./RibbonBackground"
 import { SiteFooter, SiteHeader } from "./SiteChrome"
@@ -143,9 +143,7 @@ export function App() {
         </div>
       </section>
 
-      <HomeDemoVideo language={language} />
-
-      <HomePlayableDemoVideo language={language} />
+      <HomeDemoVideos language={language} />
 
       <section className="signal-section" aria-label={language === "zh" ? "产品关键信号" : "Product highlights"}>
         <ul>
