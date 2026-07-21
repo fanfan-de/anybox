@@ -12,6 +12,7 @@ import type { LanguageModelUsage } from "ai"
 import type { TurnContext } from "#session/runtime/orchestrator.ts"
 import * as StreamEvents from "#session/runtime/stream-events.ts"
 import * as TurnError from "#session/core/turn-error.ts"
+import * as ToolResultPersistence from "#session/support/tool-result-persistence.ts"
 import {
     createAskUserQuestionMetadataFromInput,
     isAnsweredAskUserQuestionMetadata,
@@ -650,6 +651,8 @@ async function extractToolResultState(
     let text = Message.normalizeToolOutputText(output)
     let title = typeof fallbackTitle === "string" ? fallbackTitle : ""
     let metadata = fallbackMetadata ?? {}
+    let data: unknown
+    let toolAttachments: Tool.ToolAttachment[] | undefined
     let attachments: Message.AttachmentPart[] | undefined
 
     if (output && typeof output === "object" && !Array.isArray(output)) {
@@ -667,23 +670,69 @@ async function extractToolResultState(
             metadata = candidate.metadata as Record<string, unknown>
         }
 
-        if (toolPart && Array.isArray(candidate.attachments)) {
-            const mapped = candidate.attachments
-                .map((attachment) => toAttachmentPart(attachment, toolPart))
-                .filter((attachment): attachment is Message.AttachmentPart => Boolean(attachment))
-
-            if (mapped.length > 0) {
-                attachments = mapped
-            }
+        data = candidate.data
+        if (Array.isArray(candidate.attachments)) {
+            toolAttachments = candidate.attachments
+                .filter((attachment): attachment is Tool.ToolAttachment => Boolean(
+                    attachment &&
+                    typeof attachment === "object" &&
+                    !Array.isArray(attachment) &&
+                    typeof (attachment as Record<string, unknown>).url === "string" &&
+                    typeof (attachment as Record<string, unknown>).mime === "string",
+                ))
         }
     }
 
+    const alreadyPersisted = ToolResultPersistence.readPersistedOutputMetadata(metadata)
+    if (alreadyPersisted) {
+        if (toolPart && toolAttachments) {
+            const mapped = toolAttachments
+                .map((attachment) => toAttachmentPart(attachment, toolPart))
+                .filter((attachment): attachment is Message.AttachmentPart => Boolean(attachment))
+            attachments = mapped.length > 0 ? mapped : undefined
+        }
+        return {
+            output: text,
+            title,
+            metadata,
+            attachments,
+            modelOutput: undefined,
+        }
+    }
+
+    const processed = toolPart
+        ? await ToolResultPersistence.maybePersistToolResult({
+            sessionID: toolPart.sessionID,
+            toolCallID: toolPart.callID,
+            toolName: toolPart.tool,
+            output: text,
+            metadata,
+            modelOutput: output,
+            data,
+            attachments: toolAttachments,
+            rawResult: output,
+        })
+        : {
+            output: text,
+            metadata,
+            modelOutput: output,
+            data,
+            attachments: toolAttachments,
+        }
+
+    if (toolPart && processed.attachments) {
+        const mapped = processed.attachments
+            .map((attachment) => toAttachmentPart(attachment, toolPart))
+            .filter((attachment): attachment is Message.AttachmentPart => Boolean(attachment))
+        attachments = mapped.length > 0 ? mapped : undefined
+    }
+
     return {
-        output: text,
+        output: processed.output,
         title,
-        metadata,
+        metadata: processed.metadata,
         attachments,
-        modelOutput: output,
+        modelOutput: processed.modelOutput,
     }
 }
 

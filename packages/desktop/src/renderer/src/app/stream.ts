@@ -25,6 +25,7 @@ import type {
 import { toDraftPatchPreview } from "./streaming-patch-preview"
 import { deriveActiveMessages, reconcileThreadTurns } from "./thread-turn-state"
 import { compactText, createID } from "./utils"
+import { toLocalImageProtocolUrl } from "../../../shared/local-image-protocol"
 
 const STREAM_TEXT_RENDER_LIMIT = 160_000
 const STREAM_TOOL_INPUT_RENDER_LIMIT = 120_000
@@ -952,7 +953,8 @@ function buildToolAttachmentTraceItems(
       const metadata = readRecord(attachment.metadata)
       const width = readOptionalNumber(attachment.width) ?? readOptionalNumber(metadata?.width)
       const height = readOptionalNumber(attachment.height) ?? readOptionalNumber(metadata?.height)
-      const src = readString(attachment.url) || readString(attachment.src)
+      const rawSrc = readString(attachment.url) || readString(attachment.src)
+      const src = toLocalImageProtocolUrl(rawSrc) ?? rawSrc
       const title = readString(attachment.filename) || `Tool attachment ${index + 1}`
       const dimensions = width && height ? `${width}x${height}` : ""
       const detail = [mime, dimensions].filter(Boolean).join(" | ")

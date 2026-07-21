@@ -128,7 +128,10 @@ export async function createToolExecution(input: {
       toolName: input.item.id,
       output: output.text,
       metadata: output.metadata ?? {},
-      modelOutput: output,
+      modelOutput: undefined,
+      data: output.data,
+      attachments: output.attachments,
+      rawResult: output,
       maxResultSizeChars: input.item.maxResultSizeChars,
     })
 
@@ -140,7 +143,8 @@ export async function createToolExecution(input: {
       ...output,
       text: processed.output,
       metadata: processed.metadata,
-      data: undefined,
+      data: processed.data,
+      attachments: processed.attachments,
     }
   }
 
