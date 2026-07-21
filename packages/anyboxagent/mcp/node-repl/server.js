@@ -28,7 +28,7 @@ const tools = [
   {
     name: "js",
     title: "Node REPL JavaScript",
-    description: "Run JavaScript in a persistent general-purpose Node.js environment.",
+    description: "Run JavaScript in a persistent general-purpose Node.js environment. Code runs as an async function body; use an explicit return (or nodeRepl.write) to expose values.",
     inputSchema: {
       type: "object",
       properties: {

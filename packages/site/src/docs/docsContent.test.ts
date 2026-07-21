@@ -20,6 +20,7 @@ describe("docs content", () => {
       expect(toolsArticle).toBeDefined()
       expect(configureSection.items).toContain(toolsArticle)
       expect(toolsArticle?.content).toContain("tool_search")
+      expect(toolsArticle?.content).toContain("anybox_tool_search")
       expect(toolsArticle?.content).toContain("JavaScript Exec")
       expect(toolsArticle?.content).toContain("QuickJS")
       expect(toolsArticle?.content).toContain("tools.read_file")

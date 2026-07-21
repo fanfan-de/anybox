@@ -117,12 +117,12 @@ Sending every full MCP tool definition to the model at once can add substantial 
 
 1. Built-ins, persistently configured project MCP servers, and MCP servers explicitly selected for the current task are directly visible.
 2. Other eligible MCP tools remain registered as deferred tools.
-3. The model calls `tool_search` to search candidates by capability, source, name, or schema field.
+3. The model calls `anybox_tool_search` to search candidates by capability, source, name, or schema field.
 4. Full definitions for matching tools are activated for the current user turn and become visible on the next model call.
 
 Search covers deferred MCP tools only and does not duplicate directly visible tools. The index combines tool IDs, model names, titles, descriptions, MCP source metadata, and input schemas, with tokenization for English and CJK text.
 
-If `tool_search` is disabled, denied by the active agent, or has no deferred candidates, the runtime falls back to direct visibility so an available tool cannot become impossible to discover.
+If the internal `tool_search` switch is disabled, denied by the active agent, or has no deferred candidates, the runtime falls back to direct visibility so an available tool cannot become impossible to discover. `anybox_tool_search` is its model-facing alias, chosen to avoid provider-reserved name collisions.
 
 ## JavaScript Exec orchestration
 
@@ -167,7 +167,7 @@ These limits control runaway loops, memory use, and context growth. QuickJS perf
 
 - To block a capability, turn it off and save. To return to registry defaults, choose Reset to default.
 - If an enabled tool is still absent from the model, check the agent tool policy, read-only session restrictions, and whether the current platform registered it.
-- If an MCP tool is not immediately visible, check whether its server is a persistent project connection, attached to the current task, or discoverable through `tool_search`.
+- If an MCP tool is not immediately visible, check whether its server is a persistent project connection, attached to the current task, or discoverable through `anybox_tool_search`.
 - If `exec` reports that a child tool is unavailable, check whether global or agent policy disabled it. Write, shell, and MCP tools cannot currently run inside `exec`.
 - If `exec` reports an unconsumed call, make sure every `tools.*` Promise is awaited, returned, or included in an awaited `Promise.all`.
 - Treat the input schema as the final source for parameter names and types. Titles and descriptions aid reading but do not replace stable IDs.

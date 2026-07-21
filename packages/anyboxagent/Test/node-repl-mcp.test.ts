@@ -94,11 +94,19 @@ describe("built-in Node REPL MCP", () => {
   test("keeps JavaScript state and exposes only generic Node helpers", async () => {
     const client = await createClient()
     try {
-      expect((await client.listTools()).map((tool) => tool.name)).toEqual([
+      const listedTools = await client.listTools()
+      expect(listedTools.map((tool) => tool.name)).toEqual([
         "js",
         "js_reset",
         "js_add_node_module_dir",
       ])
+      expect(listedTools.find((tool) => tool.name === "js")?.description)
+        .toContain("explicit return")
+
+      const bareExpression = await client.callTool("js", { code: "1 + 1" })
+      expect(bareExpression.structuredContent?.result).toBeNull()
+      const returnedExpression = await client.callTool("js", { code: "return 1 + 1" })
+      expect(returnedExpression.structuredContent?.result).toBe(2)
 
       await client.callTool("js", { code: "globalThis.counter = 40" })
       const result = await client.callTool("js", {

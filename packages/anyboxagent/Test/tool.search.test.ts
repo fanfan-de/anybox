@@ -15,6 +15,10 @@ import {
 import type * as Message from "#session/core/message.ts"
 import * as Tool from "#tool/tool.ts"
 import * as ToolRegistry from "#tool/registry.ts"
+import {
+  TOOL_SEARCH_ID,
+  TOOL_SEARCH_MODEL_NAME,
+} from "#tool/tool-search.ts"
 
 const GMAIL_MODEL_TOOL_NAME = "mcp_gmail_search_messages"
 setDefaultTimeout(20_000)
@@ -100,22 +104,28 @@ async function withDeferredTool<T>(
 }
 
 describe("deferred tool planning", () => {
-  it("keeps deferred tools registered but initially exposes only tool_search", async () => {
+  it("keeps deferred tools registered but exposes a non-reserved search alias", async () => {
     await withDeferredTool(async ({ base }) => {
       const plan = await resolveToolPlan(base)
 
+      expect(TOOL_SEARCH_MODEL_NAME).not.toBe(TOOL_SEARCH_ID)
       expect(plan.registryTools[GMAIL_MODEL_TOOL_NAME]).toBeDefined()
       expect(plan.visibleTools[GMAIL_MODEL_TOOL_NAME]).toBeUndefined()
       expect(plan.activeToolNames).not.toContain(GMAIL_MODEL_TOOL_NAME)
-      expect(plan.activeToolNames).toContain("tool_search")
-      expect(plan.registryTools.tool_search?.description).toContain("gmail: Gmail")
-      expect(plan.registryTools.tool_search?.description).not.toContain("search_messages")
+      expect(plan.activeToolNames).toContain(TOOL_SEARCH_MODEL_NAME)
+      expect(plan.activeToolNames).not.toContain(TOOL_SEARCH_ID)
+      expect(plan.registryTools[TOOL_SEARCH_MODEL_NAME]?.description).toContain("gmail: Gmail")
+      expect(plan.registryTools[TOOL_SEARCH_MODEL_NAME]?.description).not.toContain("search_messages")
+      expect(plan.entries.find((entry) => entry.item.id === TOOL_SEARCH_ID)).toMatchObject({
+        modelName: TOOL_SEARCH_MODEL_NAME,
+        exposure: "direct",
+      })
       expect(plan.entries.find((entry) => entry.modelName === GMAIL_MODEL_TOOL_NAME)).toMatchObject({
         exposure: "deferred",
         discovered: false,
       })
 
-      const searchTool = plan.registryTools.tool_search
+      const searchTool = plan.registryTools[TOOL_SEARCH_MODEL_NAME]
       const output = await searchTool?.execute?.(
         { query: "email sender" },
         {
@@ -158,7 +168,9 @@ describe("deferred tool planning", () => {
         exposure: "deferred",
         discovered: true,
       })
-      expect(plan.registryTools.tool_search).toBeUndefined()
+      expect(plan.registryTools[TOOL_SEARCH_MODEL_NAME]?.description ?? "").not.toContain(
+        "gmail: Gmail",
+      )
     })
   })
 
@@ -174,7 +186,9 @@ describe("deferred tool planning", () => {
         exposure: "direct",
         discovered: false,
       })
-      expect(plan.registryTools.tool_search).toBeUndefined()
+      expect(plan.registryTools[TOOL_SEARCH_MODEL_NAME]?.description ?? "").not.toContain(
+        "gmail: Gmail",
+      )
     })
   })
 
@@ -186,7 +200,7 @@ describe("deferred tool planning", () => {
       })
 
       expect(plan.activeToolNames).toContain(GMAIL_MODEL_TOOL_NAME)
-      expect(plan.registryTools.tool_search).toBeUndefined()
+      expect(plan.registryTools[TOOL_SEARCH_MODEL_NAME]).toBeUndefined()
     })
   })
 
@@ -195,14 +209,14 @@ describe("deferred tool planning", () => {
       const previousSelection = await Config.getToolSelection(Config.GLOBAL_CONFIG_ID)
       await Config.setToolSelection(Config.GLOBAL_CONFIG_ID, {
         ...previousSelection.tools,
-        tool_search: false,
+        [TOOL_SEARCH_ID]: false,
       })
 
       try {
         const plan = await resolveToolPlan(base)
 
         expect(plan.activeToolNames).toContain(GMAIL_MODEL_TOOL_NAME)
-        expect(plan.registryTools.tool_search).toBeUndefined()
+        expect(plan.registryTools[TOOL_SEARCH_MODEL_NAME]).toBeUndefined()
         expect(plan.entries.find((entry) => entry.modelName === GMAIL_MODEL_TOOL_NAME)).toMatchObject({
           exposure: "direct",
           discovered: false,
@@ -220,13 +234,13 @@ describe("deferred tool planning", () => {
         agent: {
           ...base.agent,
           tools: {
-            tool_search: false,
+            [TOOL_SEARCH_ID]: false,
           },
         },
       })
 
       expect(plan.activeToolNames).toContain(GMAIL_MODEL_TOOL_NAME)
-      expect(plan.registryTools.tool_search).toBeUndefined()
+      expect(plan.registryTools[TOOL_SEARCH_MODEL_NAME]).toBeUndefined()
       expect(plan.entries.find((entry) => entry.modelName === GMAIL_MODEL_TOOL_NAME)).toMatchObject({
         exposure: "direct",
         discovered: false,
@@ -234,7 +248,7 @@ describe("deferred tool planning", () => {
     })
   })
 
-  it("restores discoveries only from tool_search results after the current user message", () => {
+  it("restores discoveries from the current alias and legacy tool_search history", () => {
     const messages = [
       {
         info: {
@@ -250,7 +264,7 @@ describe("deferred tool planning", () => {
         },
         parts: [{
           type: "tool",
-          tool: "tool_search",
+          tool: TOOL_SEARCH_MODEL_NAME,
           state: {
             status: "completed",
             metadata: {
@@ -283,7 +297,7 @@ describe("deferred tool planning", () => {
         },
         parts: [{
           type: "tool",
-          tool: "tool_search",
+          tool: TOOL_SEARCH_ID,
           state: {
             status: "completed",
             metadata: {

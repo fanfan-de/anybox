@@ -30,6 +30,7 @@ import * as Permission from "#permission/schema.ts"
 import * as Log from "#util/log.ts"
 import * as ToolResultPersistence from "#session/support/tool-result-persistence.ts"
 import * as Tool from "#tool/tool.ts"
+import { TOOL_SEARCH_ID, TOOL_SEARCH_MODEL_NAME } from "#tool/tool-search.ts"
 import { ReasoningEffortSchema } from "@anybox/shared"
 
 export const OutputLengthError = NamedError.create("MessageOutputLengthError", z.object({}))
@@ -56,8 +57,13 @@ export type APIError = z.infer<typeof APIError.Schema>
 
 const log = Log.create({ service: "session.message" })
 
-function modelSafeToolName(toolName: string) {
-    return Tool.toModelToolName(toolName)
+function modelSafeToolName(toolName: string, providerExecuted = false) {
+    const modelName = Tool.toModelToolName(toolName)
+    // Old Anybox turns persisted the ordinary deferred-search function under
+    // OpenAI's reserved `tool_search` name. Rewrite only Anybox-executed calls
+    // during replay; a provider-executed native call must keep its protocol name.
+    if (!providerExecuted && modelName === TOOL_SEARCH_ID) return TOOL_SEARCH_MODEL_NAME
+    return modelName
 }
 
 function summarizeAttachmentPartForLog(part: FilePart | ImagePart) {
@@ -1229,7 +1235,7 @@ export async function toModelMessages(
                     state.status === "denied" ||
                     state.status === "cancelled"
                 ) {
-                    const toolName = modelSafeToolName(part.tool)
+                    const toolName = modelSafeToolName(part.tool, part.providerExecuted)
                     const toolCallProviderOptions = providerOptionsFromMetadata(part.metadata)
                     assistantContent.push({
                         type: "tool-call" as const,

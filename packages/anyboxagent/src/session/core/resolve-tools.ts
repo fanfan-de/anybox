@@ -19,6 +19,7 @@ import {
 import * as ToolRegistry from "#tool/registry.ts"
 import {
   TOOL_SEARCH_ID,
+  TOOL_SEARCH_MODEL_NAME,
   ToolSearchParameters,
 } from "#tool/tool-search.ts"
 import * as Log from "#util/log.ts"
@@ -94,7 +95,11 @@ export function readTurnDiscoveredToolNames(
     if (message.info.role !== "assistant") continue
 
     for (const part of message.parts) {
-      if (part.type !== "tool" || Tool.toModelToolName(part.tool) !== TOOL_SEARCH_ID) continue
+      if (part.type !== "tool") continue
+      const modelName = Tool.toModelToolName(part.tool)
+      // Accept the old model-facing name so unfinished or persisted turns from
+      // before the OpenAI reserved-name fix can still restore discoveries.
+      if (modelName !== TOOL_SEARCH_MODEL_NAME && modelName !== TOOL_SEARCH_ID) continue
       for (const toolName of readToolSearchMetadata(part) ?? []) {
         result.add(Tool.toModelToolName(toolName))
       }
@@ -227,8 +232,8 @@ export async function resolveToolPlan(input: ResolveToolsInput): Promise<Resolve
   const registeredMcpServerIDs = new Set<string>()
 
   for (const item of registry) {
-    // tool_search is statically cataloged, but its executable runtime must be
-    // bound to the current Turn's deferred candidates below.
+    // The search tool is statically cataloged under TOOL_SEARCH_ID, but its
+    // executable model alias is bound to this Turn's deferred candidates below.
     if (item.id === TOOL_SEARCH_ID) continue
 
     if (getToolAccessFailure({
@@ -330,10 +335,10 @@ export async function resolveToolPlan(input: ResolveToolsInput): Promise<Resolve
     toolSearchCatalogItem &&
     searchDefinitions.length > 0
   ) {
-    registryTools[TOOL_SEARCH_ID] = createSearchTool(searchDefinitions)
+    registryTools[TOOL_SEARCH_MODEL_NAME] = createSearchTool(searchDefinitions)
     entries.push({
       item: toolSearchCatalogItem,
-      modelName: TOOL_SEARCH_ID,
+      modelName: TOOL_SEARCH_MODEL_NAME,
       exposure: "direct",
       discovered: false,
     })

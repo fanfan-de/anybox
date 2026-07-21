@@ -38,6 +38,7 @@ import { StopBackgroundTaskTool } from "#tool/stop-background-task.ts"
 import { TerminalReadTool, TerminalRunCommandTool, TerminalWriteInputTool } from "#tool/terminal-tools.ts"
 import * as Tool from "#tool/tool.ts"
 import * as ToolRegistry from "#tool/registry.ts"
+import { TOOL_SEARCH_ID, TOOL_SEARCH_MODEL_NAME } from "#tool/tool-search.ts"
 import { WebFetchTool } from "#tool/web-fetch.ts"
 import {
   LoadWorkspaceDependenciesTool,
@@ -997,6 +998,98 @@ describe("tool contract", () => {
       },
     })
     expect(JSON.stringify(assistantMessage?.content[1]?.providerOptions)).not.toContain("questionID")
+  })
+
+  it("rewrites legacy Anybox tool_search history without renaming native provider calls", async () => {
+    const model = {
+      capabilities: {
+        reasoning: false,
+        attachment: false,
+        toolcall: true,
+        input: {
+          text: true,
+          audio: false,
+          image: false,
+          video: false,
+          pdf: false,
+        },
+      },
+    } as any
+
+    const messages = await Message.toModelMessages(
+      [
+        {
+          info: {
+            id: "assistant-tool-search-history",
+            sessionID: "session-tool-search-history",
+            role: "assistant",
+            created: Date.now(),
+            parentID: "user-tool-search-history",
+            modelID: "test-model",
+            providerID: "test-provider",
+            agent: "plan",
+            path: { cwd: ".", root: "." },
+            cost: 0,
+            tokens: {
+              input: 0,
+              output: 0,
+              reasoning: 0,
+              cache: { read: 0, write: 0 },
+            },
+          } satisfies Message.Assistant,
+          parts: [
+            {
+              id: "part-a-legacy-search",
+              sessionID: "session-tool-search-history",
+              messageID: "assistant-tool-search-history",
+              type: "tool",
+              callID: "call-legacy-search",
+              tool: TOOL_SEARCH_ID,
+              state: {
+                status: "denied",
+                input: { query: "computer use", limit: 8 },
+                reason: "test denial",
+                time: { start: 1, end: 2 },
+              },
+            } as Message.ToolPart,
+            {
+              id: "part-b-native-search",
+              sessionID: "session-tool-search-history",
+              messageID: "assistant-tool-search-history",
+              type: "tool",
+              callID: "call-native-search",
+              tool: TOOL_SEARCH_ID,
+              providerExecuted: true,
+              state: {
+                status: "completed",
+                input: { arguments: { query: "native" } },
+                output: "native search result",
+                modelOutput: { type: "text", value: "native search result" },
+                title: "Native search",
+                metadata: {},
+                time: { start: 1, end: 2 },
+              },
+            } as Message.ToolPart,
+          ],
+        },
+      ],
+      model,
+    )
+
+    const assistantMessage = messages.find((item) => item.role === "assistant") as any
+    const legacyCall = assistantMessage?.content.find(
+      (part: any) => part.type === "tool-call" && part.toolCallId === "call-legacy-search",
+    )
+    const nativeCall = assistantMessage?.content.find(
+      (part: any) => part.type === "tool-call" && part.toolCallId === "call-native-search",
+    )
+    const legacyResult = (messages.find((item) => item.role === "tool") as any)?.content.find(
+      (part: any) => part.toolCallId === "call-legacy-search",
+    )
+
+    expect(legacyCall?.toolName).toBe(TOOL_SEARCH_MODEL_NAME)
+    expect(legacyResult?.toolName).toBe(TOOL_SEARCH_MODEL_NAME)
+    expect(nativeCall?.toolName).toBe(TOOL_SEARCH_ID)
   })
 
   it("exposes git_bash_command runtime hooks with structured behavior", async () => {

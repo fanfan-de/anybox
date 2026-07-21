@@ -39,7 +39,7 @@ function initialize(id = "init", protocolVersion = 1) {
     method: "initialize",
     params: {
       protocolVersion,
-      client: { name: "test", version: "0.3.3" },
+      client: { name: "test", version: "0.3.4" },
       maxFrameBytes: MAX_FRAME_BYTES,
     },
     meta: {

@@ -5,7 +5,7 @@ discovers applications and windows, captures one selected window with Windows
 Graphics Capture, inspects a bounded UI Automation tree, and sends guarded
 mouse or keyboard input from a fresh one-action state.
 
-The current plugin version is `0.3.3`. The bundled native helper component is
+The current plugin version is `0.3.4`. The bundled native helper component is
 version `0.2.2`. The supported release target is Windows
 11 x64.
 
@@ -109,6 +109,11 @@ list_apps/list_windows
 → perform exactly one approved action
 → get_window_state again and verify
 ```
+
+Anybox Node REPL executes submitted code as an async function body. Agent code
+must explicitly `return` every value it needs to inspect; bare expressions run
+but produce a `null` tool result. Reusable app, window, and state handles should
+be stored on `globalThis` between calls.
 
 Native `windowRef` and `stateRef` values never enter the public `sky` surface.
 A state expires after 30 seconds and can authorize at most one action,

@@ -2,14 +2,20 @@
 
 Load the plugin client in Anybox Node REPL, then use the persistent global `sky` object.
 
+Node REPL code runs as an async function body, so values are visible only when
+they are explicitly returned or written. Preserve reusable handles on
+`globalThis`; a bare expression such as `await sky.list_apps()` executes but
+produces a `null` tool result.
+
 ```js
-const apps = await sky.list_apps();
-const window = apps.flatMap((app) => app.windows)[0];
-const state = await sky.get_window_state({
-  window,
+globalThis.computerUseApps = await sky.list_apps();
+globalThis.computerUseWindow = globalThis.computerUseApps.flatMap((app) => app.windows)[0];
+globalThis.computerUseState = await sky.get_window_state({
+  window: globalThis.computerUseWindow,
   include_screenshot: true,
   include_text: true,
 });
+return globalThis.computerUseState;
 ```
 
 Supported surface:

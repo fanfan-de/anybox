@@ -14,7 +14,7 @@ function createTurnRecorder(sessionID: string) {
     events,
     turn: {
       sessionID,
-      turnID: "turn-test",
+      turnID: "trn_test",
       emit(type: string, payload: unknown) {
         events.push({
           type,
@@ -24,7 +24,7 @@ function createTurnRecorder(sessionID: string) {
         return {
           eventID: `${type}-${events.length}`,
           sessionID,
-          turnID: "turn-test",
+          turnID: "trn_test",
           seq: events.length,
           timestamp: Date.now(),
           type,

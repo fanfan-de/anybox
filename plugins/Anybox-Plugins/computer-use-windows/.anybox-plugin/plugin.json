@@ -1,6 +1,6 @@
 {
   "name": "computer-use-windows",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Guarded Windows desktop observation and input automation using short-lived, one-action window state.",
   "author": {
     "name": "Anybox"
