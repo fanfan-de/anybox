@@ -211,6 +211,67 @@ describe("useThreadScrollController projection layout transactions", () => {
   })
 })
 
+describe("useThreadScrollController user scroll intent", () => {
+  it("keeps an upward wheel gesture detached when a same-position programmatic scroll arrives first", () => {
+    const threadColumn = document.createElement("div")
+    threadColumn.className = "thread-column"
+    document.body.append(threadColumn)
+    setScrollMetrics(threadColumn, {
+      clientHeight: 400,
+      scrollHeight: 800,
+      scrollTop: 400,
+    })
+    const saveScrollSnapshot = vi.fn()
+    const { result, unmount } = renderScrollController(threadColumn, { saveScrollSnapshot })
+
+    act(() => result.current.handleThreadWheelIntent({
+      currentTarget: threadColumn,
+      deltaY: -120,
+    } as never))
+    expect(result.current.isThreadScrollFollowing()).toBe(false)
+
+    act(() => result.current.handleThreadScroll())
+    expect(result.current.isThreadScrollFollowing()).toBe(false)
+
+    threadColumn.scrollTop = 280
+    act(() => result.current.handleThreadScroll())
+    expect(result.current.isThreadScrollFollowing()).toBe(false)
+    expect(saveScrollSnapshot).toHaveBeenLastCalledWith(
+      "session:scroll-controller-test",
+      expect.objectContaining({ pinnedToBottom: false, scrollTop: 280 }),
+    )
+
+    unmount()
+  })
+
+  it("clears an old wheel direction when a pointer scrollbar gesture starts", () => {
+    const threadColumn = document.createElement("div")
+    threadColumn.className = "thread-column"
+    document.body.append(threadColumn)
+    setScrollMetrics(threadColumn, {
+      clientHeight: 400,
+      scrollHeight: 800,
+      scrollTop: 400,
+    })
+    const { result, unmount } = renderScrollController(threadColumn)
+
+    act(() => result.current.handleThreadWheelIntent({
+      currentTarget: threadColumn,
+      deltaY: -120,
+    } as never))
+    threadColumn.scrollTop = 280
+    act(() => result.current.handleThreadScroll())
+    expect(result.current.isThreadScrollFollowing()).toBe(false)
+
+    act(() => result.current.handleThreadScrollIntent({ currentTarget: threadColumn }))
+    threadColumn.scrollTop = 400
+    act(() => result.current.handleThreadScroll())
+    expect(result.current.isThreadScrollFollowing()).toBe(true)
+
+    unmount()
+  })
+})
+
 describe("useThreadScrollController semantic snapshots", () => {
   it("restores legacy detached snapshots by scrollTop", () => {
     const threadColumn = document.createElement("div")

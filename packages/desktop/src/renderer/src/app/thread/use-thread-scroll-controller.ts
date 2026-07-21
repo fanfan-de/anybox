@@ -46,6 +46,7 @@ export interface ThreadFollowScrollTarget {
 }
 
 type ThreadScrollMode = "follow" | "detached"
+type ThreadScrollIntentDirection = "up" | "down" | null
 
 interface ThreadSmoothFollowScroll {
   duration: number
@@ -204,7 +205,7 @@ export function useThreadScrollController({
   const latestScrollSnapshotKeyRef = useRef<string | null>(null)
   const smoothFollowScrollRef = useRef<ThreadSmoothFollowScroll | null>(null)
   const lastUserScrollIntentAtRef = useRef(0)
-  const lastUserScrollIntentDirectionRef = useRef<"up" | "down" | null>(null)
+  const lastUserScrollIntentDirectionRef = useRef<ThreadScrollIntentDirection>(null)
   const followScrollSyncSuppressedUntilRef = useRef(0)
   const userScrollIntentConsumedRef = useRef(false)
   const lastKnownScrollTopRef = useRef(0)
@@ -702,10 +703,14 @@ export function useThreadScrollController({
     return currentScrollStateKeyRef.current === key && scrollModeRef.current === "follow"
   }
 
-  function handleThreadScrollIntent(event?: { currentTarget: HTMLDivElement }) {
+  function handleThreadScrollIntent(
+    event?: { currentTarget: HTMLDivElement },
+    direction: ThreadScrollIntentDirection = null,
+  ) {
     cancelSmoothFollowScroll()
     cancelActiveThreadProjectionLayoutTransaction()
     lastUserScrollIntentAtRef.current = Date.now()
+    lastUserScrollIntentDirectionRef.current = direction
     userScrollIntentConsumedRef.current = false
     if (event?.currentTarget) {
       lastKnownScrollTopRef.current = event.currentTarget.scrollTop
@@ -718,25 +723,25 @@ export function useThreadScrollController({
   }
 
   function handleThreadKeyDownIntent(event: KeyboardEvent<HTMLDivElement>) {
-    handleThreadScrollIntent(event)
-
     if (event.key === "ArrowUp" || event.key === "PageUp" || event.key === "Home") {
-      lastUserScrollIntentDirectionRef.current = "up"
+      handleThreadScrollIntent(event, "up")
       detachThreadScrollFromFollow(event.currentTarget)
     } else if (event.key === "ArrowDown" || event.key === "PageDown" || event.key === "End") {
-      lastUserScrollIntentDirectionRef.current = "down"
+      handleThreadScrollIntent(event, "down")
+    } else {
+      handleThreadScrollIntent(event)
     }
   }
 
   function handleThreadWheelIntent(event: ReactWheelEvent<HTMLDivElement>) {
     if (event.deltaY < 0) {
-      lastUserScrollIntentDirectionRef.current = "up"
+      handleThreadScrollIntent(event, "up")
       detachThreadScrollFromFollow(event.currentTarget)
     } else if (event.deltaY > 0) {
-      lastUserScrollIntentDirectionRef.current = "down"
+      handleThreadScrollIntent(event, "down")
+    } else {
+      handleThreadScrollIntent(event)
     }
-
-    handleThreadScrollIntent(event)
 
     if (event.deltaY < 0 && event.currentTarget.scrollTop <= THREAD_TOP_RESET_THRESHOLD_PX) {
       rememberThreadTopScrollSnapshot(event.currentTarget)
@@ -761,12 +766,26 @@ export function useThreadScrollController({
     const threadColumn = threadColumnRef.current
     if (!threadColumn) return
 
+    if (hasRecentUpwardThreadScrollIntent()) {
+      userScrollIntentConsumedRef.current = true
+      if (threadColumn.scrollTop <= THREAD_TOP_RESET_THRESHOLD_PX) {
+        rememberThreadTopScrollSnapshot(threadColumn, scrollStateKey)
+        return
+      }
+
+      const snapshot = {
+        ...readThreadScrollSnapshot(threadColumn),
+        pinnedToBottom: false,
+      }
+      scrollModeRef.current = "detached"
+      lastKnownScrollTopRef.current = snapshot.scrollTop
+      rememberThreadScrollSnapshot(scrollStateKey, snapshot)
+      saveThreadScrollSnapshotValue(scrollStateKey, snapshot)
+      return
+    }
+
     if (!hasRecentThreadScrollIntent()) {
       if (threadColumn.scrollTop <= THREAD_TOP_RESET_THRESHOLD_PX) {
-        if (hasRecentUpwardThreadScrollIntent()) {
-          rememberThreadTopScrollSnapshot(threadColumn, scrollStateKey)
-          return
-        }
         if (restoreDetachedThreadPositionIfNeeded(scrollStateKey)) {
           return
         }

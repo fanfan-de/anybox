@@ -504,11 +504,13 @@ debug 信息由 developer mode 和 trace visibility 控制。默认不应该干�
 
 ### 自动滚动
 
-`ThreadView` 维护 `isPinnedToBottomRef`：
+`ThreadView` 通过 `useThreadScrollController` 维护 `follow / detached` 两种滚动模式：
 
 - 切换 session 时强制滚动到底部。
 - 如果用户当前接近底部，新的 message 或权限请求到来时继续锁底。
 - 如果用户向上阅读历史，后续更新不会强行打断阅读位置。
+- 向上的 wheel、`ArrowUp`、`PageUp` 和 `Home` 会在浏览器提交 `scroll` 事件前立即切换到 `detached`。向上意图在 `THREAD_USER_SCROLL_INTENT_WINDOW_MS = 800` 的窗口内保持权威；即使期间先到达同位置的程序化事件或 virtualizer 行高补偿事件，也不得根据 32px 底部阈值重新判定为 `follow`。向下 wheel、键盘或新的 pointer 拖动意图会覆盖旧方向。
+- `useThreadVirtualList` 的 `scrollToFn` 只写入 `scrollTop`，依赖浏览器随后产生的原生 `scroll` 事件更新 virtualizer 与 controller，不同步手工派发事件。一次行高测量可能连续算出多个补偿 offset；同步派发会把浏览器原本可在同一帧合并的中间值暴露给 React，形成“向上滚动 → 中间值回到底边 → 再向上”的抖动。jsdom 不会为 `scrollTop` 赋值生成原生事件，因此相关虚拟跳转测试显式补发 `fireEvent.scroll`。
 - 点击 `ThreadTurnNavigator` 的轮次节点时，`useThreadVirtualList` 通过目标 display row index 获取 TanStack virtualizer 的 start offset，并减去少量顶部阅读留白；即使目标 row 尚未挂载到 DOM，也不依赖 `scrollIntoView()`。
 - 轮次跳转通过 `useThreadScrollController.navigateThreadToOffset()` 明确切换为 `detached`，同时保存 `pinnedToBottom: false` 的 scroll snapshot。点击最后一轮也只定位到该轮 user message，不会滚到 thread 最底部；用户随后手动回到底部时仍由原有 scroll intent 规则恢复 follow。
 - 点击任务完成系统通知时，主进程把完成事件的 `turnID` 随 `focus-session` 事件传到目标窗口。工作区聚焦对应 session 后发出一次性 thread navigation request，复用轮次导航的 virtual row offset 定位到该轮 user message；若历史刷新后仍没有对应 turn，则回退到当前最后一轮 user message。

@@ -6525,6 +6525,9 @@ describe("ThreadView turn navigator", () => {
 
     expect(screen.queryByText("Prompt 99")).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole("button", { name: "跳转到第 100 / 120 轮：Prompt 99" }))
+    // jsdom does not emit the native scroll event that browsers produce for
+    // the virtualizer's scrollTop assignment.
+    fireEvent.scroll(threadColumn)
 
     await waitFor(() => expect(screen.getByText("Prompt 99")).toBeInTheDocument())
     expect(threadColumn.scrollTop).toBeGreaterThan(0)
@@ -6558,6 +6561,7 @@ describe("ThreadView turn navigator", () => {
         navigationRequest={{ requestID: 1, turnID: "turn-99" }}
       />,
     )
+    fireEvent.scroll(threadColumn)
 
     await waitFor(() => expect(screen.getByText("Prompt 99")).toBeInTheDocument())
     expect(threadColumn.scrollTop).toBeGreaterThan(0)

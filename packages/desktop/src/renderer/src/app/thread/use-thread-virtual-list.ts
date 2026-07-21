@@ -242,10 +242,10 @@ export function useThreadVirtualList({
     if (!scrollElement) return
 
     const nextScrollTop = offset + (options.adjustments ?? 0)
+    // The browser emits the real scroll event after this assignment. Avoid
+    // dispatching a synchronous echo: it can expose an intermediate virtual
+    // measurement adjustment before the browser coalesces the final offset.
     scrollElement.scrollTop = nextScrollTop
-    if (typeof Event !== "undefined") {
-      scrollElement.dispatchEvent(new Event("scroll"))
-    }
   }, [])
 
   const rowVirtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({

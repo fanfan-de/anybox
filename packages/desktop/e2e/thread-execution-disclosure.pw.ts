@@ -100,6 +100,72 @@ test("real ThreadView preserves its semantic anchor when a completed turn collap
   expect(pageErrors).toEqual([])
 })
 
+test("upward wheel scrolling leaves bottom follow without virtualizer scroll bounce", async ({ page }) => {
+  const pageErrors: string[] = []
+  page.on("pageerror", (error) => pageErrors.push(error.message))
+
+  await page.goto("/e2e/thread-execution-harness.html")
+  const thread = page.locator(".thread-column.is-virtualized")
+  await expect(thread).toBeVisible()
+
+  await thread.evaluate((column) => {
+    column.scrollTop = column.scrollHeight
+  })
+  await page.waitForTimeout(250)
+
+  const before = await thread.evaluate((column) => ({
+    distanceFromBottom: column.scrollHeight - column.scrollTop - column.clientHeight,
+    scrollTop: column.scrollTop,
+  }))
+  expect(before.distanceFromBottom).toBeLessThanOrEqual(32)
+
+  await thread.evaluate((column) => {
+    const typedWindow = window as typeof window & {
+      __threadWheelScrollEvents?: Array<{ isTrusted: boolean; scrollTop: number }>
+    }
+    typedWindow.__threadWheelScrollEvents = []
+    column.addEventListener("scroll", (event) => {
+      typedWindow.__threadWheelScrollEvents!.push({
+        isTrusted: event.isTrusted,
+        scrollTop: column.scrollTop,
+      })
+    })
+  })
+
+  const bounds = await thread.boundingBox()
+  if (!bounds) throw new Error("Thread viewport has no browser bounds")
+  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
+  await page.mouse.wheel(0, -120)
+
+  await expect.poll(async () => page.evaluate(() => {
+    const typedWindow = window as typeof window & {
+      __threadWheelScrollEvents?: Array<{ isTrusted: boolean; scrollTop: number }>
+    }
+    return typedWindow.__threadWheelScrollEvents?.length ?? 0
+  })).toBeGreaterThan(0)
+  await page.waitForTimeout(100)
+
+  const result = await thread.evaluate((column) => {
+    const typedWindow = window as typeof window & {
+      __threadWheelScrollEvents?: Array<{ isTrusted: boolean; scrollTop: number }>
+    }
+    const events = typedWindow.__threadWheelScrollEvents ?? []
+    const hasDownwardReversal = events.some((event, index) => (
+      index > 0 && event.scrollTop > events[index - 1]!.scrollTop + 1
+    ))
+    return {
+      events,
+      finalScrollTop: column.scrollTop,
+      hasDownwardReversal,
+    }
+  })
+
+  expect(result.events.every((event) => event.isTrusted)).toBe(true)
+  expect(result.hasDownwardReversal, JSON.stringify(result.events)).toBe(false)
+  expect(result.finalScrollTop).toBeLessThan(before.scrollTop - 80)
+  expect(pageErrors).toEqual([])
+})
+
 test("pending turn canonicalization never exposes duplicate processing summaries", async ({ page }) => {
   const pageErrors: string[] = []
   page.on("pageerror", (error) => pageErrors.push(error.message))
