@@ -1,6 +1,6 @@
 {
   "name": "computer-use-windows",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Guarded Windows desktop observation and input automation using short-lived, one-action window state.",
   "author": {
     "name": "Anybox"
@@ -9,8 +9,7 @@
     "windows",
     "computer-use",
     "desktop",
-    "automation",
-    "mcp"
+    "automation"
   ],
   "interface": {
     "displayName": {
@@ -46,38 +45,12 @@
         "js_reset"
       ],
       "permissions": [
-        "Loads this plugin's Computer Use client inside Anybox's persistent, general-purpose Node REPL.",
-        "Uses a short-lived host capability that is bound to the current JavaScript tool call."
+        "Loads this plugin's Computer Use runtime inside Anybox's persistent, general-purpose Node REPL.",
+        "Starts the native helper shipped inside this plugin package after verifying its SHA-256 integrity.",
+        "Captures selected Windows app windows and sends approval-gated mouse or keyboard input."
       ],
       "required": true,
       "reason": "Provides the Codex-style model surface: persistent JavaScript state with the plugin-owned sky API."
-    },
-    {
-      "mcp": "computer-use",
-      "tools": [
-        "computer_health_check",
-        "list_apps",
-        "list_windows",
-        "get_window",
-        "get_window_state",
-        "launch_app",
-        "activate_window",
-        "click",
-        "scroll",
-        "press_key",
-        "type_text",
-        "set_value",
-        "perform_secondary_action",
-        "drag"
-      ],
-      "permissions": [
-        "Lists visible Windows applications and windows.",
-        "Captures screenshots and bounded accessibility content from approved applications.",
-        "Sends mouse and keyboard input through the Anybox host-owned helper.",
-        "Requires per-application approval and a globally exclusive turn lease."
-      ],
-      "required": true,
-      "reason": "Provides a hidden, guarded host capability used by the plugin's sky client; its low-level tools are not exposed to the model."
     }
   ],
   "skillPreviews": [

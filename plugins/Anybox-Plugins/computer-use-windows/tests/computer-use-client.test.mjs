@@ -15,13 +15,14 @@ function fixtureWindow() {
 function createGlobals() {
   const calls = []
   const images = []
+  const permissions = []
   const responseMeta = []
   const lifecycleHooks = new Set()
+  const afterSubmittedCodeHooks = new Set()
   let stateCounter = 0
-  const nodeRepl = {
-    async callPluginCapability(capability, operation, args) {
-      calls.push({ capability, operation, args })
-      assert.equal(capability, "computer-use")
+  const runtime = {
+    async callOperation(operation, args, context) {
+      calls.push({ operation, args, context })
       if (operation === "list_windows") {
         return result({ windows: [fixtureWindow()] })
       }
@@ -60,9 +61,22 @@ function createGlobals() {
             selectedElements: [],
             documentText: "Fixture",
           },
-        }, [{ type: "image", data: Buffer.from("png").toString("base64"), mimeType: "image/png" }])
+        }, [{ data: Buffer.from("png").toString("base64"), mimeType: "image/png" }])
       }
       return result({ stateConsumed: operation !== "launch_app" })
+    },
+    close() {},
+  }
+  const nodeRepl = {
+    requestMeta: {
+      sessionID: "session-fixture",
+      turnID: "turn-fixture",
+      messageID: "message-fixture",
+      toolCallID: "tool-fixture",
+    },
+    async requestPermission(input) {
+      permissions.push(input)
+      return { allowed: true, decision: "allow-once", action: "accept" }
     },
     async emitImage(image) {
       images.push(image)
@@ -74,29 +88,41 @@ function createGlobals() {
       lifecycleHooks.add(hook)
       return () => lifecycleHooks.delete(hook)
     },
+    addAfterSubmittedCodeHook(hook) {
+      afterSubmittedCodeHooks.add(hook)
+      return () => afterSubmittedCodeHooks.delete(hook)
+    },
   }
   return {
     globals: { nodeRepl },
+    runtime,
     calls,
     images,
+    permissions,
     responseMeta,
     emitLifecycle: async (type) => {
       for (const hook of lifecycleHooks) await hook({ type })
     },
+    emitSubmitted: async () => {
+      for (const hook of afterSubmittedCodeHooks) await hook({ ok: true })
+    },
   }
 }
 
-function result(structuredContent, extraContent = []) {
+function result(data, images = []) {
   return {
-    content: [{ type: "text", text: "ok" }, ...extraContent],
-    structuredContent: { ok: true, ...structuredContent },
-    isError: false,
+    summary: "ok",
+    data: { ok: true, ...data },
+    images,
   }
 }
 
-test("installs a Codex-style sky API while using only the generic plugin bridge", async () => {
+test("installs a Codex-style sky API backed by the plugin-owned runtime", async () => {
   const fixture = createGlobals()
-  const sky = await setupComputerUseRuntime({ globals: fixture.globals })
+  const sky = await setupComputerUseRuntime({
+    globals: fixture.globals,
+    runtime: fixture.runtime,
+  })
   assert.equal(fixture.globals.sky, sky)
   assert.equal(sky.target, "windows")
 
@@ -124,7 +150,6 @@ test("installs a Codex-style sky API while using only the generic plugin bridge"
   await sky.click({ window: windows[0], element_index: 7 })
   const click = fixture.calls.at(-1)
   assert.deepEqual(click, {
-    capability: "computer-use",
     operation: "click",
     args: {
       windowRef: "win_fixture",
@@ -135,7 +160,17 @@ test("installs a Codex-style sky API while using only the generic plugin bridge"
       clickCount: 1,
       elementIndex: 7,
     },
+    context: {
+      signal: click.context.signal,
+      requestMeta: fixture.globals.nodeRepl.requestMeta,
+    },
   })
+  assert.equal(fixture.permissions.length, 2)
+  assert.equal(fixture.permissions[0].scope.kind, "plugin-action")
+  assert.equal(fixture.permissions[0].scope.pluginID, "computer-use-windows")
+  assert.equal(fixture.permissions[0].method, "get_window_state")
+  assert.equal(fixture.permissions[1].method, "click")
+  assert.equal(fixture.permissions[1].scope.actionBody.includes("state_1"), false)
   await assert.rejects(
     sky.click({ window: windows[0], element_index: 7 }),
     /No fresh state exists/u,
@@ -148,7 +183,10 @@ test("installs a Codex-style sky API while using only the generic plugin bridge"
 
 test("maps app launch, key chords, coordinates, and lifecycle state inside the plugin", async () => {
   const fixture = createGlobals()
-  const sky = await setupComputerUseRuntime({ globals: fixture.globals })
+  const sky = await setupComputerUseRuntime({
+    globals: fixture.globals,
+    runtime: fixture.runtime,
+  })
   const apps = await sky.list_apps()
   assert.equal(apps[0].id, "win32:notepad.exe:fixture")
   assert.equal(apps[0].windows[0].id, 1)
@@ -156,6 +194,7 @@ test("maps app launch, key chords, coordinates, and lifecycle state inside the p
   await sky.launch_app({ app: apps[0].id })
   assert.equal(fixture.calls.at(-1).operation, "launch_app")
   assert.equal(fixture.calls.at(-1).args.appId, apps[0].id)
+  await fixture.emitSubmitted()
   await assert.rejects(
     sky.launch_app({ app: "C:\\Windows\\notepad.exe" }),
     /not in the current approved catalog/u,
@@ -165,6 +204,7 @@ test("maps app launch, key chords, coordinates, and lifecycle state inside the p
   await sky.get_window_state({ window: windows[0] })
   await sky.press_key({ window: windows[0], key: "Control_L + Shift_L + period" })
   assert.deepEqual(fixture.calls.at(-1).args.keys, ["ctrl", "shift", "."])
+  await fixture.emitSubmitted()
 
   await sky.get_window_state({ window: windows[0] })
   await sky.scroll({
@@ -175,6 +215,7 @@ test("maps app launch, key chords, coordinates, and lifecycle state inside the p
     scrollY: 100,
   })
   assert.equal(fixture.calls.at(-1).args.screenshotId, "shot_2")
+  await fixture.emitSubmitted()
 
   await sky.get_window_state({ window: windows[0] })
   await fixture.emitLifecycle("turn-end")

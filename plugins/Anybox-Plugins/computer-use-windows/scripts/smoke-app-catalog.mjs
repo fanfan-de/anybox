@@ -94,6 +94,11 @@ async function main() {
     helperPath,
     cwd: pluginRoot,
     defaultTimeoutMs: 20_000,
+    defaultContext: {
+      sessionID: "smoke-app-catalog",
+      turnID: "smoke-app-catalog",
+      toolCallID: "smoke-app-catalog",
+    },
   })
   let fixture
   let launchedPid

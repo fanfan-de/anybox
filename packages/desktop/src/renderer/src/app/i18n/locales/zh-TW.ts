@@ -1,6 +1,5 @@
 import type { TranslationKey } from "../translations"
 import { subscriptionTranslations } from "../subscription-translations"
-import { computerUseTranslations } from "../computer-use-translations"
 import { skillLibraryTranslations } from "../skill-library-translations"
 import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
 
@@ -146,7 +145,6 @@ export const zhTW = {
   "settings.nav.storage": "儲存",
   "settings.nav.archive": "歸檔工作階段",
   ...subscriptionTranslations["zh-TW"],
-  ...computerUseTranslations["zh-TW"],
   ...skillLibraryTranslations["zh-TW"],
   "settings.about.version": "版本",
   "settings.about.checkUpdates": "檢查更新",

@@ -1,12 +1,39 @@
 # Codex Computer Use 实现解析与 Anybox 插件开发报告
 
-> 报告版本：1.1
+> 报告版本：1.2
 > 核验日期：2026-07-21  
 > 目标平台：Windows 11 x64  
 > 目标读者：Anybox Agent、Desktop 与插件开发者  
 > 核心目标：读完本报告后，可以基于 Anybox 现有 `computer-use-windows` 原型，开发出可用、可审计、可逐步达到 Codex 同类能力的 Anybox Computer Use 插件。
 
-> **M7 架构修订（2026-07-21）**：最终模型调用面已按 Codex 调整为通用 `anybox.node-repl` + 插件内 `sky` client。本文后续提到的“Computer Use MCP facade”应理解为**不向模型暴露的宿主内部能力适配层**；14 个底层操作只用于宿主校验、诊断和 broker 调用。Node REPL 不包含 Computer Use 方法或状态语义，Computer Use API 映射、窗口/状态缓存、截图回传和使用文档均属于插件。
+> **M8 最终架构修订（2026-07-21）**：Computer Use 已完全退出专用 MCP/宿主 facade 体系。功能由 `computer-use-windows` 插件包中的 `computer-use-client.mjs`、`runtime.cjs`、策略/状态模块和 Windows helper 完整提供。Anybox 核心只保留通用 `anybox.node-repl` 及业务无关的权限、图片和生命周期 API。不存在 `anybox.computer-use` server、专用 broker、Computer Use permission scope、Desktop 设置页或打包复制。本文后续保留的 M1～M7 facade/broker 方案仅是历史研究与决策记录，不再是实现要求；当前规范以本节和 [`computer-use-windows-implementation.md`](./computer-use-windows-implementation.md) 为准。
+
+## 0. M8 当前规范（优先于后续历史章节）
+
+最终调用链：
+
+```text
+Agent
+  → 通用 anybox.node-repl / js
+  → 从已安装插件 import computer-use-client.mjs
+  → 插件内 sky client
+  → 插件内 runtime.cjs
+  → 插件内 HelperClient + 随包 Windows helper
+  → WGC + UIA + SendInput + Win32
+```
+
+不可回退的边界：
+
+1. 插件 manifest 不声明 Computer Use MCP server，只依赖通用 Node REPL。
+2. Node REPL 不含 Computer Use 方法、操作枚举、helper 路径、策略或状态。
+3. client、14 个内部操作、窗口/状态映射、审批说明与脱敏、helper 生命周期均属于插件。
+4. Anybox 通用权限引擎只显示插件构造的 `plugin-action` 请求，不解释 Computer Use 参数。
+5. 每个 turn 首次观察应用需要插件发起授权；每个状态改变动作单独授权；敏感类别由插件硬拒绝。
+6. helper 从插件安装目录启动，插件校验 SHA-256/可选 Authenticode，并持有随机 current-user pipe。
+7. 禁用或卸载插件即移除 Computer Use；平台 Node REPL 可继续服务其他插件。
+8. 核心出现历史 server ID 只能用于精确删除旧 Anybox-owned 配置，绝不能注册、启动或展示它。
+
+M8 验收证据包括插件单测、真实 Windows Manager→Node REPL→plugin→helper 集成测试、旧 binding 迁移测试、安装/升级/降级/卸载测试，以及 Desktop 打包后“只有 Node REPL、没有 Computer Use runtime”的 smoke。
 
 快速阅读路线：
 

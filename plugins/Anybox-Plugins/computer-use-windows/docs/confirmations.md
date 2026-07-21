@@ -1,10 +1,19 @@
 # Confirmations and approvals
 
-Computer Use has two independent approval boundaries:
+The plugin uses Anybox's generic permission continuation API, but owns all
+Computer Use approval logic and presentation data.
 
-1. Application access authorizes observation/control of a specific app once, for the session, or persistently.
-2. Every state-changing action requires a separate one-time host decision. Full-access mode and persistent app approval do not bypass it.
+There are two independent boundaries:
 
-Read-only discovery may run automatically according to the configured MCP policy, but the selected application remains broker-gated. Actions labeled as authentication/secret entry, finance, or security-setting changes are rejected. Send, submit, delete, upload, install, publish, and purchase intent is shown as elevated risk.
+1. The first `get_window_state` observation for an application in each Agent
+   turn asks before exposing its screenshot and bounded accessibility state.
+2. Every launch or input operation asks for a separate one-time decision.
 
-Approval details redact `text` and `value` payloads. Denial or timeout resumes the same JavaScript promise with an error; it does not authorize a retry.
+Listing app/window identifiers does not capture pixels or UIA document content
+and may run automatically. Observation approval never authorizes an action.
+Full-access mode does not bypass plugin-action prompts.
+
+`auth_or_secret`, `finance`, and `security_settings` are rejected before a
+prompt. Typed text and assigned values appear only as character counts in the
+approval details. Denial or timeout resumes the same JavaScript promise with an
+error and never authorizes an automatic retry.

@@ -365,10 +365,7 @@ function inProcessGrantKey(scope: Schema.Scope) {
   if (scope.kind === "browser-origin") {
     return [scope.kind, scope.sessionID, scope.extensionInstanceID, scope.origin].join("\u0000")
   }
-  if (scope.kind === "computer-use-app") {
-    return [scope.kind, scope.sessionID, scope.appID].join("\u0000")
-  }
-  return [scope.kind, scope.sessionID, scope.capabilityID].join("\u0000")
+  return [scope.kind, scope.sessionID, scope.pluginID].join("\u0000")
 }
 
 function safeDisplayText(value: string | undefined, fallback: string, max = 200) {
@@ -403,9 +400,7 @@ async function auditInProcess(
     projectID: Instance.project.id,
     tool: input.scope.kind === "browser-origin"
       ? `browser.${safeDisplayText(input.method, "unknown", 128)}`
-      : input.scope.kind === "computer-use-app"
-        ? `computer-use.${safeDisplayText(input.method, "unknown", 128)}`
-        : `plugin-capability.${input.scope.capabilityID}.${safeDisplayText(input.method, "unknown", 128)}`,
+      : `plugin-action.${input.scope.pluginID}.${safeDisplayText(input.method, "unknown", 128)}`,
     action,
     reason,
     risk,
@@ -413,16 +408,11 @@ async function auditInProcess(
       method: safeDisplayText(input.method, "unknown", 128),
       ...(input.scope.kind === "browser-origin"
         ? { origin: input.scope.origin, tabID: input.tabID }
-        : input.scope.kind === "computer-use-app"
-          ? {
-            appID: input.scope.appID,
-            appDisplayName: input.scope.appDisplayName,
-          }
-          : {
-              capabilityID: input.scope.capabilityID,
-              capabilityDisplayName: input.scope.capabilityDisplayName,
-              operationTitle: input.scope.operationTitle,
-            }),
+        : {
+            pluginID: input.scope.pluginID,
+            pluginDisplayName: input.scope.pluginDisplayName,
+            actionTitle: input.scope.actionTitle,
+          }),
       sensitive: input.sensitive === true,
     }),
     createdAt: Date.now(),
@@ -606,34 +596,28 @@ export async function requestInProcessPermission(
   )
   const risk = Schema.Risk.parse(input.risk)
   const grant = sessionInProcessGrants.get(inProcessGrantKey(scope))
-  const isPluginCapability = scope.kind === "plugin-capability"
-  const forceSingle = input.sensitive === true || isPluginCapability
-  const isComputerUseApp = scope.kind === "computer-use-app"
+  const isPluginAction = scope.kind === "plugin-action"
+  const forceSingle = input.sensitive === true || isPluginAction
 
   if (input.action === "deny") {
     const reason = input.rationale?.trim() || (
-      isComputerUseApp
-        ? "Computer Use access to this app is prohibited by policy."
-        : isPluginCapability
-          ? "This plugin capability operation is prohibited by policy."
-          : "The browser action is prohibited by policy."
+      isPluginAction
+        ? "This plugin action is prohibited by policy."
+        : "The browser action is prohibited by policy."
     )
     await auditInProcess(input, "deny", reason, risk)
     return { decision: "deny", grantID }
   }
 
   if (!forceSingle && grant) {
-    const reason = isComputerUseApp
-      ? "This application is allowed for Computer Use in the current session."
-      : "The browser origin is allowed for the current session."
+    const reason = "The browser origin is allowed for the current session."
     await auditInProcess(input, "allow", reason, risk)
     return { decision: "allow-session", grantID: grant.grantID }
   }
 
   const permissionMode = await Config.getPermissionMode(Config.GLOBAL_CONFIG_ID)
   if (
-    !isComputerUseApp
-    && !forceSingle
+    !forceSingle
     && (input.action === "allow" || permissionMode.mode === "full_access")
   ) {
     const reason = input.action === "allow"
@@ -650,11 +634,7 @@ export async function requestInProcessPermission(
 
   const method = safeDisplayText(
     input.method,
-    isComputerUseApp
-      ? "computer use"
-      : isPluginCapability
-        ? "plugin operation"
-        : "browser action",
+    isPluginAction ? "plugin action" : "browser action",
     128,
   )
   const origin = scope.kind === "browser-origin"
@@ -663,36 +643,27 @@ export async function requestInProcessPermission(
   const tabTitle = scope.kind === "browser-origin"
     ? safeDisplayText(input.tabTitle, "Untitled tab")
     : undefined
-  const appDisplayName = scope.kind === "computer-use-app"
-    ? safeDisplayText(scope.appDisplayName, "Unknown application")
-    : undefined
-  const capabilityDisplayName = scope.kind === "plugin-capability"
-    ? safeDisplayText(scope.capabilityDisplayName, "Plugin capability")
+  const pluginDisplayName = scope.kind === "plugin-action"
+    ? safeDisplayText(scope.pluginDisplayName, "Plugin")
     : undefined
   const rationale = safeDisplayText(
     input.rationale,
     forceSingle
       ? "This action may enter a sensitive value and always requires a one-time decision."
-      : isComputerUseApp
-        ? "This application has not been authorized for desktop observation and control."
-        : "This origin has not been authorized for the current session.",
+      : "This origin has not been authorized for the current session.",
     500,
   )
   const requestID = Identifier.ascending("permission")
   const prompt = buildPromptSnapshot({
     descriptor: {
-      title: isComputerUseApp
-        ? `Computer Use: ${appDisplayName}`
-        : isPluginCapability
-          ? `${capabilityDisplayName}: ${safeDisplayText(scope.operationTitle, method)}`
+      title: isPluginAction
+        ? `${pluginDisplayName}: ${safeDisplayText(scope.actionTitle, method)}`
         : `Browser permission: ${method}`,
-      summary: isComputerUseApp
-        ? `Allow Anybox to observe and control ${appDisplayName}.`
-        : isPluginCapability
-          ? safeDisplayText(scope.operationSummary, `Run ${method}.`, 1_000)
+      summary: isPluginAction
+        ? safeDisplayText(scope.actionSummary, `Run ${method}.`, 1_000)
         : `${method} on ${origin} in “${tabTitle}”.`,
-      details: isPluginCapability && scope.operationBody
-        ? { body: scope.operationBody }
+      details: isPluginAction && scope.actionBody
+        ? { body: scope.actionBody }
         : undefined,
     },
     rationale,
@@ -701,11 +672,9 @@ export async function requestInProcessPermission(
       paths: [],
       workdir: undefined,
       command: undefined,
-      body: isPluginCapability ? scope.operationBody : undefined,
+      body: isPluginAction ? scope.actionBody : undefined,
     },
-    allowedDecisions: isComputerUseApp
-      ? ["deny", "allow-once", "allow-session", "allow"]
-      : forceSingle
+    allowedDecisions: forceSingle
       ? ["deny", "allow-once"]
       : ["deny", "allow-once", "allow-session"],
     recommendedDecision: "allow-once",
@@ -719,10 +688,8 @@ export async function requestInProcessPermission(
     toolCallID: context.toolCallID,
     projectID: Instance.project.id,
     agent: "default",
-    tool: isComputerUseApp
-      ? `computer-use.${method}`
-      : isPluginCapability
-        ? `plugin-capability.${scope.capabilityID}.${method}`
+    tool: isPluginAction
+      ? `plugin-action.${scope.pluginID}.${method}`
         : `browser.${method}`,
     toolKind: "interaction",
     title: prompt.title,
@@ -733,35 +700,29 @@ export async function requestInProcessPermission(
     grantID,
     input: {
       method,
-      ...(isComputerUseApp
-        ? { appID: scope.appID, appDisplayName }
-        : isPluginCapability
-          ? {
-              capabilityID: scope.capabilityID,
-              capabilityDisplayName,
-              operationTitle: scope.operationTitle,
-            }
+      ...(isPluginAction
+        ? {
+            pluginID: scope.pluginID,
+            pluginDisplayName,
+            actionTitle: scope.actionTitle,
+          }
           : { origin, tabID: input.tabID, tabTitle }),
       sensitive: forceSingle,
     },
     prompt,
     runtime: {
-      tool: isComputerUseApp
-        ? `computer-use.${method}`
-        : isPluginCapability
-          ? `plugin-capability.${scope.capabilityID}.${method}`
+      tool: isPluginAction
+        ? `plugin-action.${scope.pluginID}.${method}`
           : `browser.${method}`,
       toolKind: "interaction",
       input: {
         method,
-        ...(isComputerUseApp
-          ? { appID: scope.appID, appDisplayName }
-          : isPluginCapability
-            ? {
-                capabilityID: scope.capabilityID,
-                capabilityDisplayName,
-                operationTitle: scope.operationTitle,
-              }
+        ...(isPluginAction
+          ? {
+              pluginID: scope.pluginID,
+              pluginDisplayName,
+              actionTitle: scope.actionTitle,
+            }
             : { origin, tabID: input.tabID }),
         sensitive: forceSingle,
       },

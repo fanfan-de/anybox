@@ -43,7 +43,6 @@ import type {
   DesktopSessionRollbackInput,
   DesktopSessionRollbackResult,
   DesktopStorageUsageSnapshot,
-  ComputerUseAppDecision,
   DesktopSubscriptionOrderResponse,
   DesktopSubscriptionOverview,
   DesktopSubscriptionPlan,
@@ -69,7 +68,6 @@ import {
   saveAppearanceTheme,
   setActiveAppearanceTheme,
 } from "./appearance-themes-config"
-import { ComputerUseOverlayManager } from "./computer-use-overlay"
 import { filterAvailableExternalEditorsForTarget, listAvailableExternalEditors, openInExternalEditor } from "./external-editors"
 import { buildFolderWorkspaceForDirectory, buildFolderWorkspaces } from "./folder-workspaces"
 import {
@@ -3236,53 +3234,6 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
     }
   }
 
-  async function cancelAgentSessionFromComputerUseOverlay(input: {
-    backendSessionID: string
-    clientTurnID?: string
-    turnID?: string
-    webContentsID: number
-  }) {
-    if (input.turnID) {
-      await requestAgentJSON<{ interrupted: boolean }>(
-        `/api/sessions/${encodeURIComponent(input.backendSessionID)}/computer-use/interrupt`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({
-            turnID: input.turnID,
-          }),
-        },
-      ).catch(() => undefined)
-    }
-    await interruptAgentSessionBackendFirst({
-      backendSessionID: input.backendSessionID,
-      clientTurnID: input.clientTurnID,
-      webContentsID: input.webContentsID,
-      requestBackendCancel: async (backendSessionID) => {
-        const result = await requestAgentJSON<AgentSessionBackendCancelResult>(
-          `/api/sessions/${encodeURIComponent(backendSessionID)}/cancel`,
-          {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-            },
-            body: JSON.stringify({
-              cancelQueued: true,
-              reason: "user",
-            }),
-          },
-        )
-        return result.data
-      },
-    })
-  }
-
-  const computerUseOverlay = new ComputerUseOverlayManager({
-    appName: "Anybox",
-    onCancel: cancelAgentSessionFromComputerUseOverlay,
-  })
   const agentCompletionNotifications = new AgentCompletionNotificationManager({
     onNotificationClick: ({ sessionID, target, turnID }) => {
       if (!sessionID || target.isDestroyed()) return
@@ -3338,10 +3289,6 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
 
     const dispose = () => {
       disposed = true
-      computerUseOverlay.clearForRequest({
-        backendSessionID: sessionID,
-        webContentsID: target.id,
-      })
       sendUnifiedSubscriptionState("closed")
       if (restartTimer) {
         clearTimeout(restartTimer)
@@ -3381,12 +3328,6 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
             lastEventID = item.id
           }
 
-          computerUseOverlay.handleSessionStreamEvent({
-            backendSessionID: sessionID,
-            data: item.data,
-            event: item.event,
-            target,
-          })
           void agentCompletionNotifications.handleSessionStreamEvent({
             data: item.data,
             id: item.id,
@@ -5041,25 +4982,6 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
     return result.data
   })
 
-  handleDesktopIpc("desktop:get-computer-use-app-decisions", async () => {
-    const result = await requestAgentJSON<ComputerUseAppDecision[]>(
-      "/api/computer-use/apps",
-    )
-    return result.data
-  })
-
-  handleDesktopIpc(
-    "desktop:revoke-computer-use-app-decision",
-    async (_event, input: { appID: string }) => {
-      const appID = input.appID.trim()
-      const result = await requestAgentJSON<{ appID: string; revoked: boolean }>(
-        `/api/computer-use/apps/${encodeURIComponent(appID)}`,
-        { method: "DELETE" },
-      )
-      return result.data
-    },
-  )
-
   handleDesktopIpc("desktop:get-plugin-catalog", async (
     _event,
     input?: DesktopIpcInput<"desktop:get-plugin-catalog">,
@@ -6575,7 +6497,6 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
     activeAgentSessionRequests.set(agentSessionRequestKey(target.id, clientTurnID), request)
     const abortOnTargetDestroyed = () => {
       request.cancelRequested = true
-      computerUseOverlay.clearForWebContents(target.id)
       request.controller.abort()
     }
     target.once("destroyed", abortOnTargetDestroyed)
@@ -6604,13 +6525,6 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
       requestId = response.headers.get("x-request-id") ?? undefined
 
       await readAgentSSEStream(response, (item) => {
-        computerUseOverlay.handleSessionStreamEvent({
-          backendSessionID,
-          clientTurnID,
-          data: item.data,
-          event: item.event,
-          target,
-        })
         void agentCompletionNotifications.handleSessionStreamEvent({
           data: item.data,
           dedupKey: clientTurnID,
@@ -6653,11 +6567,6 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
     } finally {
       target.off("destroyed", abortOnTargetDestroyed)
       removeActiveAgentSessionRequest(target.id, clientTurnID, request)
-      computerUseOverlay.clearForRequest({
-        backendSessionID,
-        clientTurnID,
-        webContentsID: target.id,
-      })
     }
 
     return {

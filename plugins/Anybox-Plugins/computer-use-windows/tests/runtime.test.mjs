@@ -3,7 +3,7 @@ import test from "node:test"
 import { createRequire } from "node:module"
 
 const require = createRequire(import.meta.url)
-const { ComputerUseServer } = require("../scripts/server")
+const { ComputerUseRuntime } = require("../scripts/runtime.cjs")
 
 const identity = {
   hwnd: "200",
@@ -105,18 +105,18 @@ class MockHelper {
 
 test("requires a fresh state for input and consumes it after one action", async () => {
   const helper = new MockHelper()
-  const server = new ComputerUseServer({ helper })
-  const listed = await server.callTool("list_windows")
-  const windowRef = listed.structuredContent.windows[0].windowRef
-  const observed = await server.callTool("get_window_state", {
+  const runtime = new ComputerUseRuntime({ helper })
+  const listed = await runtime.callOperation("list_windows")
+  const windowRef = listed.data.windows[0].windowRef
+  const observed = await runtime.callOperation("get_window_state", {
     windowRef,
     includeScreenshot: true,
     includeAccessibility: false,
   })
-  const stateRef = observed.structuredContent.stateRef
-  const screenshotId = observed.structuredContent.screenshots[0].id
+  const stateRef = observed.data.stateRef
+  const screenshotId = observed.data.screenshots[0].id
 
-  const clicked = await server.callTool("click", {
+  const clicked = await runtime.callOperation("click", {
     windowRef,
     stateRef,
     screenshotId,
@@ -125,11 +125,11 @@ test("requires a fresh state for input and consumes it after one action", async 
     purpose: "Open a local menu",
     safety: "normal",
   })
-  assert.equal(clicked.structuredContent.stateConsumed, true)
+  assert.equal(clicked.data.stateConsumed, true)
   assert.equal(helper.actions.length, 1)
 
   await assert.rejects(
-    server.callTool("click", {
+    runtime.callOperation("click", {
       windowRef,
       stateRef,
       screenshotId,
@@ -141,7 +141,7 @@ test("requires a fresh state for input and consumes it after one action", async 
     (error) => error.code === "CU_STATE_CONSUMED",
   )
   await assert.rejects(
-    server.callTool("press_key", {
+    runtime.callOperation("press_key", {
       windowRef,
       keys: ["ctrl", "s"],
       purpose: "Save",
@@ -151,41 +151,41 @@ test("requires a fresh state for input and consumes it after one action", async 
   )
 })
 
-test("MCP structured content never duplicates screenshot base64", async () => {
-  const server = new ComputerUseServer({ helper: new MockHelper() })
-  const listed = await server.callTool("list_windows")
-  const observed = await server.callTool("get_window_state", {
-    windowRef: listed.structuredContent.windows[0].windowRef,
+test("plugin runtime data never duplicates screenshot base64", async () => {
+  const runtime = new ComputerUseRuntime({ helper: new MockHelper() })
+  const listed = await runtime.callOperation("list_windows")
+  const observed = await runtime.callOperation("get_window_state", {
+    windowRef: listed.data.windows[0].windowRef,
     includeScreenshot: true,
     includeAccessibility: false,
   })
-  assert.equal(observed.content[1].type, "image")
-  assert.equal(JSON.stringify(observed.structuredContent).includes(Buffer.from("png").toString("base64")), false)
+  assert.equal(observed.images[0].mimeType, "image/png")
+  assert.equal(JSON.stringify(observed.data).includes(Buffer.from("png").toString("base64")), false)
 })
 
 test("an injected helper failure still consumes the action state", async () => {
   const helper = new MockHelper()
-  const server = new ComputerUseServer({ helper })
-  const listed = await server.callTool("list_windows")
-  const windowRef = listed.structuredContent.windows[0].windowRef
-  const observed = await server.callTool("get_window_state", {
+  const runtime = new ComputerUseRuntime({ helper })
+  const listed = await runtime.callOperation("list_windows")
+  const windowRef = listed.data.windows[0].windowRef
+  const observed = await runtime.callOperation("get_window_state", {
     windowRef,
     includeScreenshot: true,
     includeAccessibility: false,
   })
   const args = {
     windowRef,
-    stateRef: observed.structuredContent.stateRef,
-    screenshotId: observed.structuredContent.screenshots[0].id,
+    stateRef: observed.data.stateRef,
+    screenshotId: observed.data.screenshots[0].id,
     x: 10,
     y: 10,
     purpose: "Test failure handling",
     safety: "normal",
   }
   helper.failNextAction = true
-  await assert.rejects(server.callTool("click", args))
+  await assert.rejects(runtime.callOperation("click", args))
   await assert.rejects(
-    server.callTool("click", args),
+    runtime.callOperation("click", args),
     (error) => error.code === "CU_STATE_CONSUMED",
   )
 })
@@ -207,20 +207,20 @@ test("element actions carry the native token and UIA revision from one fresh sta
     elementIndexes: [0, 7, 8, 9],
   }
   const helper = new MockHelper({ accessibility })
-  const server = new ComputerUseServer({ helper })
-  const listed = await server.callTool("list_windows")
-  const windowRef = listed.structuredContent.windows[0].windowRef
+  const runtime = new ComputerUseRuntime({ helper })
+  const listed = await runtime.callOperation("list_windows")
+  const windowRef = listed.data.windows[0].windowRef
 
-  const observe = () => server.callTool("get_window_state", {
+  const observe = () => runtime.callOperation("get_window_state", {
     windowRef,
     includeScreenshot: true,
     includeAccessibility: true,
   })
 
   const clickState = await observe()
-  await server.callTool("click", {
+  await runtime.callOperation("click", {
     windowRef,
-    stateRef: clickState.structuredContent.stateRef,
+    stateRef: clickState.data.stateRef,
     elementIndex: 7,
     purpose: "Increment the controlled fixture",
     safety: "normal",
@@ -230,9 +230,9 @@ test("element actions carry the native token and UIA revision from one fresh sta
   assert.match(helper.requests.at(-1).nativeStateRef, /^native_/u)
 
   const valueState = await observe()
-  await server.callTool("set_value", {
+  await runtime.callOperation("set_value", {
     windowRef,
-    stateRef: valueState.structuredContent.stateRef,
+    stateRef: valueState.data.stateRef,
     elementIndex: 8,
     value: "after",
     purpose: "Update the controlled fixture",
@@ -245,9 +245,9 @@ test("element actions carry the native token and UIA revision from one fresh sta
   })
 
   const toggleState = await observe()
-  await server.callTool("perform_secondary_action", {
+  await runtime.callOperation("perform_secondary_action", {
     windowRef,
-    stateRef: toggleState.structuredContent.stateRef,
+    stateRef: toggleState.data.stateRef,
     elementIndex: 9,
     action: "toggle",
     purpose: "Toggle the controlled fixture",
@@ -257,11 +257,11 @@ test("element actions carry the native token and UIA revision from one fresh sta
 
   const ambiguousState = await observe()
   await assert.rejects(
-    server.callTool("click", {
+    runtime.callOperation("click", {
       windowRef,
-      stateRef: ambiguousState.structuredContent.stateRef,
+      stateRef: ambiguousState.data.stateRef,
       elementIndex: 7,
-      screenshotId: ambiguousState.structuredContent.screenshots[0].id,
+      screenshotId: ambiguousState.data.screenshots[0].id,
       x: 10,
       y: 10,
       purpose: "Reject ambiguous target mode",
@@ -273,13 +273,13 @@ test("element actions carry the native token and UIA revision from one fresh sta
 
 test("launch_app accepts only a current app catalog selector and never forwards paths", async () => {
   const helper = new MockHelper()
-  const server = new ComputerUseServer({ helper })
-  const listed = await server.callTool("list_apps")
-  const app = listed.structuredContent.apps[0]
+  const runtime = new ComputerUseRuntime({ helper })
+  const listed = await runtime.callOperation("list_apps")
+  const app = listed.data.apps[0]
   assert.match(app.appRef, /^app_/u)
   assert.equal(JSON.stringify(app).includes("catalog_fixture"), false)
 
-  await server.callTool("launch_app", {
+  await runtime.callOperation("launch_app", {
     appRef: app.appRef,
     purpose: "Open the controlled fixture",
     safety: "normal",
@@ -290,7 +290,7 @@ test("launch_app accepts only a current app catalog selector and never forwards 
   }])
 
   await assert.rejects(
-    server.callTool("launch_app", {
+    runtime.callOperation("launch_app", {
       appId: "win32:forged.exe:0000000000000000",
       executablePath: "C:\\Windows\\System32\\cmd.exe",
       arguments: ["/c", "whoami"],
@@ -300,7 +300,7 @@ test("launch_app accepts only a current app catalog selector and never forwards 
     (error) => error.code === "CU_INVALID_ARGUMENT",
   )
   await assert.rejects(
-    server.callTool("launch_app", {
+    runtime.callOperation("launch_app", {
       appId: "win32:forged.exe:0000000000000000",
       purpose: "Reject a forged ID",
       safety: "normal",

@@ -1,8 +1,6 @@
-#!/usr/bin/env node
 "use strict"
 
 const path = require("node:path")
-const readline = require("node:readline")
 const {
   CAPTURE_HELPER_TIMEOUT_MS,
   PLUGIN_VERSION,
@@ -10,7 +8,7 @@ const {
   STATE_TTL_MS,
 } = require("./lib/build-info")
 const { AppRegistry } = require("./lib/app-registry")
-const { asComputerUseError, cuError, errorPayload } = require("./lib/errors")
+const { cuError } = require("./lib/errors")
 const { HelperClient } = require("./lib/helper-client")
 const {
   assertWindowAllowed,
@@ -21,39 +19,26 @@ const {
 } = require("./lib/policy")
 const { SerialQueue } = require("./lib/serial-queue")
 const { StateRegistry, makeRef } = require("./lib/state-registry")
-const { TOOL_DEFINITIONS } = require("./lib/tool-definitions")
 const { WindowRegistry, normalizeProcessName } = require("./lib/window-registry")
 
 const PLUGIN_ROOT = path.resolve(__dirname, "..")
 const DEFAULT_HELPER_EXE = path.join(PLUGIN_ROOT, "helper", "win32-x64", "computer-use-helper.exe")
 
-function textResult(text, structuredContent = {}) {
+function runtimeResult(summary, data = {}) {
   return {
-    content: [{ type: "text", text }],
-    structuredContent: { ok: true, ...structuredContent },
-    isError: false,
+    summary,
+    data: { ok: true, ...data },
+    images: [],
   }
 }
 
-function imageResult(text, imageBase64, structuredContent = {}) {
-  const content = [{ type: "text", text }]
-  if (imageBase64) content.push({ type: "image", data: imageBase64, mimeType: "image/png" })
+function imageResult(summary, imageBase64, data = {}) {
   return {
-    content,
-    structuredContent: { ok: true, ...structuredContent },
-    isError: false,
-  }
-}
-
-function errorResult(error) {
-  const normalized = asComputerUseError(error)
-  return {
-    content: [{ type: "text", text: normalized.message }],
-    structuredContent: {
-      ok: false,
-      error: errorPayload(normalized),
-    },
-    isError: true,
+    summary,
+    data: { ok: true, ...data },
+    images: imageBase64
+      ? [{ data: imageBase64, mimeType: "image/png" }]
+      : [],
   }
 }
 
@@ -105,7 +90,7 @@ function validateCoordinate(state, x, y, label = "coordinate") {
   }
 }
 
-class ComputerUseServer {
+class ComputerUseRuntime {
   constructor(options = {}) {
     this.windows = options.windows ?? new WindowRegistry(options.windowRegistryOptions)
     this.apps = options.apps ?? new AppRegistry(options.appRegistryOptions)
@@ -115,9 +100,10 @@ class ComputerUseServer {
         ?? process.env.ANYBOX_COMPUTER_USE_HELPER_PATH
         ?? DEFAULT_HELPER_EXE,
       cwd: options.pluginRoot ?? PLUGIN_ROOT,
+      onPhysicalEscape: options.onPhysicalEscape,
+      requireAuthenticode: options.requireAuthenticode,
     })
     this.actions = options.actions ?? new SerialQueue()
-    this.definitions = TOOL_DEFINITIONS
     this.handlers = new Map([
       ["computer_health_check", (args, context) => this.healthCheck(args, context)],
       ["list_apps", (args, context) => this.listApps(args, context)],
@@ -136,20 +122,24 @@ class ComputerUseServer {
     ])
   }
 
-  toolDefinitions() {
-    return this.definitions
+  async callOperation(name, args = {}, context = {}) {
+    const handler = this.handlers.get(name)
+    if (!handler) throw cuError("CU_INVALID_ARGUMENT", `Unknown Computer Use operation: ${name}`)
+    return handler(args, context)
   }
 
-  async callTool(name, args = {}, context = {}) {
-    const handler = this.handlers.get(name)
-    if (!handler) throw cuError("CU_INVALID_ARGUMENT", `Unknown tool: ${name}`)
-    return handler(args, context)
+  helperOptions(context, extra = {}) {
+    return {
+      ...extra,
+      signal: context?.signal,
+      context: context?.requestMeta,
+    }
   }
 
   async healthCheck(_args, context) {
     const handshake = await this.helper.ensureInitialized()
-    const result = await this.helper.call("health_check", {}, { signal: context.signal })
-    return textResult("Computer Use Windows helper is available.", {
+    const result = await this.helper.call("health_check", {}, this.helperOptions(context))
+    return runtimeResult("Computer Use Windows helper is available.", {
       protocolVersion: PROTOCOL_VERSION,
       pluginVersion: PLUGIN_VERSION,
       helperVersion: result.helperVersion ?? handshake.helperVersion,
@@ -163,12 +153,12 @@ class ComputerUseServer {
 
   async listWindows(_args, context) {
     this.states.cleanup()
-    const result = await this.helper.call("list_windows", {}, { signal: context.signal })
+    const result = await this.helper.call("list_windows", {}, this.helperOptions(context))
     const windows = (result.windows ?? []).map((window) => {
       const record = this.windows.upsert(window)
       return this.windows.publicWindow(record, classifyWindow(record.window))
     })
-    return textResult(
+    return runtimeResult(
       windows.length > 0
         ? windows.map((window) =>
             `${window.windowRef}: ${window.processName} - ${window.title}${window.blocked ? " [blocked]" : ""}`,
@@ -180,10 +170,9 @@ class ComputerUseServer {
 
   async listApps(_args, context) {
     this.states.cleanup()
-    const result = await this.helper.call("list_apps", {}, {
-      signal: context.signal,
+    const result = await this.helper.call("list_apps", {}, this.helperOptions(context, {
       timeoutMs: CAPTURE_HELPER_TIMEOUT_MS,
-    })
+    }))
     const apps = (result.apps ?? []).map((rawApp) => {
       const windows = (rawApp.windows ?? []).map((rawWindow) => {
         const windowRecord = this.windows.upsert(rawWindow)
@@ -206,7 +195,7 @@ class ComputerUseServer {
       })
       return this.apps.publicApp(appRecord, windows)
     })
-    return textResult(
+    return runtimeResult(
       apps.length > 0
         ? apps.map((app) =>
             `${app.appRef}: ${app.displayName} (${app.appId})${app.blocked ? " [blocked]" : ""}`,
@@ -219,7 +208,7 @@ class ComputerUseServer {
   async refreshRecord(record, context) {
     const result = await this.helper.call("resolve_window", {
       expectedIdentity: record.identity,
-    }, { signal: context.signal })
+    }, this.helperOptions(context))
     const refreshed = this.windows.upsert(result.window)
     if (refreshed.identityDigest !== record.identityDigest) {
       this.states.invalidateWindow(record.windowRef)
@@ -238,7 +227,7 @@ class ComputerUseServer {
     if (!titleQuery && !processName) {
       throw cuError("CU_INVALID_ARGUMENT", "get_window requires windowRef, titleQuery, or processName.")
     }
-    const result = await this.helper.call("list_windows", {}, { signal: context.signal })
+    const result = await this.helper.call("list_windows", {}, this.helperOptions(context))
     const matches = (result.windows ?? [])
       .map((window) => this.windows.upsert(window))
       .filter((record) => {
@@ -260,7 +249,7 @@ class ComputerUseServer {
   async getWindow(args, context) {
     const record = await this.findWindow(args, context)
     const window = this.windows.publicWindow(record, classifyWindow(record.window))
-    return textResult(`${window.windowRef}: ${window.processName} - ${window.title}`, { window })
+    return runtimeResult(`${window.windowRef}: ${window.processName} - ${window.title}`, { window })
   }
 
   async getWindowState(args, context) {
@@ -279,10 +268,9 @@ class ComputerUseServer {
       includeScreenshot,
       includeAccessibility,
       includeDocumentText,
-    }, {
-      signal: context.signal,
+    }, this.helperOptions(context, {
       timeoutMs: CAPTURE_HELPER_TIMEOUT_MS,
-    })
+    }))
     if (typeof result.nativeStateRef !== "string" || !result.nativeStateRef) {
       throw cuError(
         "CU_PROTOCOL_MISMATCH",
@@ -363,9 +351,9 @@ class ComputerUseServer {
       try {
         const result = await this.helper.call("activate_window", {
           expectedIdentity: record.identity,
-        }, { signal: context.signal })
+        }, this.helperOptions(context))
         const nextRecord = this.windows.upsert(result.window)
-        return textResult(`Activated ${nextRecord.window.processName} - ${nextRecord.window.title}.`, {
+        return runtimeResult(`Activated ${nextRecord.window.processName} - ${nextRecord.window.title}.`, {
           window: this.windows.publicWindow(nextRecord, classifyWindow(nextRecord.window)),
         })
       } finally {
@@ -396,8 +384,8 @@ class ComputerUseServer {
         await this.helper.call("launch_app", {
           catalogRef: app.catalogRef,
           appId: app.appId,
-        }, { signal: context.signal })
-        return textResult(`Launched ${app.displayName}.`, {
+        }, this.helperOptions(context))
+        return runtimeResult(`Launched ${app.displayName}.`, {
           app: this.apps.publicApp(app, []),
         })
       } finally {
@@ -475,8 +463,8 @@ class ComputerUseServer {
         await this.helper.call("perform_action", {
           ...this.helperState(record, state),
           action,
-        }, { signal: context.signal })
-        return textResult(
+        }, this.helperOptions(context))
+        return runtimeResult(
           type === "click"
             ? `Clicked UI Automation element ${elementIndex}.`
             : `Scrolled UI Automation element ${elementIndex}.`,
@@ -507,8 +495,8 @@ class ComputerUseServer {
       await this.helper.call("perform_action", {
         ...this.helperState(record, state),
         action,
-      }, { signal: context.signal })
-      return textResult(
+      }, this.helperOptions(context))
+      return runtimeResult(
         type === "click" ? `Clicked ${action.button} at ${x}, ${y}.` : `Scrolled at ${x}, ${y}.`,
         { windowRef: record.windowRef, stateConsumed: true },
       )
@@ -526,8 +514,8 @@ class ComputerUseServer {
       await this.helper.call("perform_action", {
         ...this.helperState(record, state),
         action: { type: "set_value", elementIndex, value },
-      }, { signal: context.signal })
-      return textResult(`Set UI Automation element ${elementIndex} to a ${value.length}-character value.`, {
+      }, this.helperOptions(context))
+      return runtimeResult(`Set UI Automation element ${elementIndex} to a ${value.length}-character value.`, {
         windowRef: record.windowRef,
         stateConsumed: true,
         elementIndex,
@@ -551,8 +539,8 @@ class ComputerUseServer {
           elementIndex,
           secondaryAction,
         },
-      }, { signal: context.signal })
-      return textResult(`Performed ${secondaryAction} on UI Automation element ${elementIndex}.`, {
+      }, this.helperOptions(context))
+      return runtimeResult(`Performed ${secondaryAction} on UI Automation element ${elementIndex}.`, {
         windowRef: record.windowRef,
         stateConsumed: true,
         elementIndex,
@@ -568,8 +556,8 @@ class ComputerUseServer {
       await this.helper.call("perform_action", {
         ...this.helperState(record, state),
         action: { type: "press_key", keys },
-      }, { signal: context.signal })
-      return textResult(`Pressed ${keys.join("+")}.`, {
+      }, this.helperOptions(context))
+      return runtimeResult(`Pressed ${keys.join("+")}.`, {
         windowRef: record.windowRef,
         stateConsumed: true,
         keys,
@@ -587,8 +575,8 @@ class ComputerUseServer {
       await this.helper.call("perform_action", {
         ...this.helperState(record, state),
         action: { type: "type_text", text },
-      }, { signal: context.signal })
-      return textResult(`Typed ${text.length} character(s).`, {
+      }, this.helperOptions(context))
+      return runtimeResult(`Typed ${text.length} character(s).`, {
         windowRef: record.windowRef,
         stateConsumed: true,
         characterCount: text.length,
@@ -609,8 +597,8 @@ class ComputerUseServer {
       await this.helper.call("perform_action", {
         ...this.helperState(record, state),
         action: { type: "drag", fromX, fromY, toX, toY },
-      }, { signal: context.signal })
-      return textResult(`Dragged from ${fromX}, ${fromY} to ${toX}, ${toY}.`, {
+      }, this.helperOptions(context))
+      return runtimeResult(`Dragged from ${fromX}, ${fromY} to ${toX}, ${toY}.`, {
         windowRef: record.windowRef,
         stateConsumed: true,
       })
@@ -623,102 +611,9 @@ class ComputerUseServer {
   }
 }
 
-function send(payload) {
-  process.stdout.write(`${JSON.stringify(payload)}\n`)
-}
-
-function startMcpServer(server = new ComputerUseServer()) {
-  const controllers = new Map()
-  const rl = readline.createInterface({ input: process.stdin })
-
-  rl.on("line", (line) => {
-    void (async () => {
-      if (!line.trim()) return
-      let message
-      try {
-        message = JSON.parse(line)
-      } catch {
-        send({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Invalid MCP JSON." } })
-        return
-      }
-
-      if (message.method === "initialize") {
-        send({
-          jsonrpc: "2.0",
-          id: message.id,
-          result: {
-            protocolVersion: "2025-06-18",
-            capabilities: { tools: { listChanged: false } },
-            serverInfo: { name: "computer-use-windows", version: PLUGIN_VERSION },
-          },
-        })
-        return
-      }
-      if (message.method === "notifications/cancelled") {
-        controllers.get(String(message.params?.requestId))?.abort()
-        return
-      }
-      if (String(message.method || "").startsWith("notifications/")) return
-      if (message.method === "tools/list") {
-        send({ jsonrpc: "2.0", id: message.id, result: { tools: server.toolDefinitions() } })
-        return
-      }
-      if (message.method === "tools/call") {
-        const id = String(message.id)
-        const controller = new AbortController()
-        controllers.set(id, controller)
-        try {
-          const result = await server.callTool(
-            message.params?.name,
-            message.params?.arguments ?? {},
-            { signal: controller.signal },
-          )
-          send({ jsonrpc: "2.0", id: message.id, result })
-        } catch (error) {
-          send({ jsonrpc: "2.0", id: message.id, result: errorResult(error) })
-        } finally {
-          controllers.delete(id)
-        }
-        return
-      }
-      if (message.method === "ping") {
-        send({ jsonrpc: "2.0", id: message.id, result: {} })
-        return
-      }
-      if (message.method === "roots/list") {
-        send({ jsonrpc: "2.0", id: message.id, result: { roots: [] } })
-        return
-      }
-      if (message.id !== undefined) {
-        send({
-          jsonrpc: "2.0",
-          id: message.id,
-          error: { code: -32601, message: `Unknown method: ${message.method}` },
-        })
-      }
-    })().catch((error) => {
-      send({
-        jsonrpc: "2.0",
-        id: null,
-        error: { code: -32603, message: asComputerUseError(error).message },
-      })
-    })
-  })
-
-  rl.on("close", () => {
-    for (const controller of controllers.values()) controller.abort()
-    server.close()
-  })
-  return { rl, server }
-}
-
-if (require.main === module) startMcpServer()
-
 module.exports = {
-  ComputerUseServer,
-  errorResult,
+  ComputerUseRuntime,
   imageResult,
-  startMcpServer,
-  textResult,
+  runtimeResult,
   validateCoordinate,
 }

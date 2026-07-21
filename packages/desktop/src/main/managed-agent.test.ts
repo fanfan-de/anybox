@@ -258,7 +258,6 @@ describe("managed agent workspace dependencies", () => {
     await withProcessEnv({
       ANYBOX_FFMPEG_BINARY: "C:/unverified/ffmpeg.exe",
       ANYBOX_FFPROBE_BINARY: "C:/unverified/ffprobe.exe",
-      ANYBOX_COMPUTER_USE_REQUIRE_SIGNATURE: "0",
     }, () => {
       const env = managedAgentInternals.buildManagedAgentStartEnv({
         label: "packaged media runtime",
@@ -271,7 +270,6 @@ describe("managed agent workspace dependencies", () => {
       expect(env[managedAgentInternals.env.ffprobeBinary]).toBe(ffprobe)
       expect(env[managedAgentInternals.env.mediaRuntimeStrict]).toBe("1")
       expect(env[managedAgentInternals.env.timelineDelivery]).toBe("1")
-      expect(env[managedAgentInternals.env.computerUseRequireSignature]).toBe("1")
     })
 
     await writeFile(path.join(mediaToolsDir, "manifest.json"), JSON.stringify({

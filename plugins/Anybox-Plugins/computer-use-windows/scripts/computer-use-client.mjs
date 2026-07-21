@@ -1,9 +1,30 @@
 import { readFile } from "node:fs/promises"
+import { createRequire } from "node:module"
 
-const CAPABILITY_ID = "computer-use"
+const require = createRequire(import.meta.url)
+const { ComputerUseRuntime } = require("./runtime.cjs")
+
+const PLUGIN_ID = "computer-use-windows"
+const PLUGIN_DISPLAY_NAME = "Computer Use Windows"
 const RUNTIME_KEY = Symbol.for("anybox.computer-use-windows.runtime")
 const TOOL_SURFACE_META_KEY = "anybox/toolSurface"
 const DOCUMENTATION_NAMES = new Set(["api", "confirmations", "guidance"])
+const MUTATING_OPERATIONS = new Set([
+  "activate_window",
+  "click",
+  "drag",
+  "launch_app",
+  "perform_secondary_action",
+  "press_key",
+  "scroll",
+  "set_value",
+  "type_text",
+])
+const HARD_REJECT_SAFETY = new Set([
+  "auth_or_secret",
+  "finance",
+  "security_settings",
+])
 const SAFETY_VALUES = new Set([
   "normal",
   "submit_or_send",
@@ -15,16 +36,26 @@ const SAFETY_VALUES = new Set([
   "security_settings",
 ])
 
-export async function setupComputerUseRuntime({ globals = globalThis } = {}) {
+export async function setupComputerUseRuntime({ globals = globalThis, runtime: providedRuntime } = {}) {
   const nodeRepl = globals?.nodeRepl
-  if (!nodeRepl || typeof nodeRepl.callPluginCapability !== "function") {
+  if (
+    !nodeRepl
+    || typeof nodeRepl.requestPermission !== "function"
+    || typeof nodeRepl.emitImage !== "function"
+  ) {
     throw new Error(
-      "Computer Use Windows requires the Anybox Node REPL plugin-capability bridge.",
+      "Computer Use Windows requires the general-purpose Anybox Node REPL runtime.",
     )
   }
 
   await globals[RUNTIME_KEY]?.close?.().catch(() => {})
-  const client = new PluginComputerUseClient(nodeRepl)
+  let client
+  const runtime = providedRuntime ?? new ComputerUseRuntime({
+    onPhysicalEscape(error) {
+      client?.handlePhysicalEscape(error)
+    },
+  })
+  client = new PluginComputerUseClient(nodeRepl, runtime)
   const sky = instrumentComputerUseClient(client, globals)
   Object.defineProperty(globals, RUNTIME_KEY, {
     configurable: true,
@@ -44,19 +75,29 @@ export async function readDocumentation(name) {
 }
 
 class PluginComputerUseClient {
-  constructor(nodeRepl) {
+  constructor(nodeRepl, runtime) {
     this.nodeRepl = nodeRepl
+    this.runtime = runtime
     this.target = "windows"
     this.nextWindowID = 1
     this.windowsByID = new Map()
     this.windowIDByRef = new Map()
     this.appsByID = new Map()
     this.latestStateByWindowRef = new Map()
+    this.observationApprovals = new Set()
+    this.activeControllers = new Set()
+    this.interrupted = false
+    this.mutationClaimed = false
     this.removeLifecycleHook = typeof nodeRepl.addLifecycleHook === "function"
       ? nodeRepl.addLifecycleHook((event) => {
           if (["turn-end", "session-end", "reset", "transport-close"].includes(event?.type)) {
-            this.clearState()
+            this.endLifecycleBoundary()
           }
+        })
+      : undefined
+    this.removeAfterSubmittedCodeHook = typeof nodeRepl.addAfterSubmittedCodeHook === "function"
+      ? nodeRepl.addAfterSubmittedCodeHook(() => {
+          this.mutationClaimed = false
         })
       : undefined
   }
@@ -68,6 +109,28 @@ class PluginComputerUseClient {
   async close() {
     this.removeLifecycleHook?.()
     this.removeLifecycleHook = undefined
+    this.removeAfterSubmittedCodeHook?.()
+    this.removeAfterSubmittedCodeHook = undefined
+    this.abortActiveCalls()
+    this.runtime.close()
+    this.clearState()
+  }
+
+  endLifecycleBoundary() {
+    this.abortActiveCalls()
+    this.runtime.close()
+    this.interrupted = false
+    this.mutationClaimed = false
+    this.clearState()
+  }
+
+  abortActiveCalls() {
+    for (const controller of this.activeControllers) controller.abort()
+    this.activeControllers.clear()
+  }
+
+  handlePhysicalEscape() {
+    this.interrupted = true
     this.clearState()
   }
 
@@ -76,11 +139,102 @@ class PluginComputerUseClient {
     this.windowsByID.clear()
     this.windowIDByRef.clear()
     this.appsByID.clear()
+    this.observationApprovals.clear()
     this.nextWindowID = 1
   }
 
   async call(operation, args = {}) {
-    return await this.nodeRepl.callPluginCapability(CAPABILITY_ID, operation, args)
+    if (this.interrupted) {
+      throw computerUseError(
+        "CU_INTERRUPTED",
+        "Computer Use was interrupted by physical Escape; wait for the next turn before continuing.",
+      )
+    }
+    if (MUTATING_OPERATIONS.has(operation)) {
+      if (this.mutationClaimed) {
+        throw computerUseError(
+          "CU_BUSY",
+          "Only one state-changing Computer Use action is allowed per JavaScript submission.",
+        )
+      }
+      this.mutationClaimed = true
+      await this.requestActionPermission(operation, args)
+    }
+
+    const controller = new AbortController()
+    this.activeControllers.add(controller)
+    try {
+      return await this.runtime.callOperation(operation, args, {
+        signal: controller.signal,
+        requestMeta: this.nodeRepl.requestMeta,
+      })
+    } catch (error) {
+      if (error?.code === "CU_INTERRUPTED") {
+        this.interrupted = true
+        this.clearState()
+      }
+      throw error
+    } finally {
+      this.activeControllers.delete(controller)
+    }
+  }
+
+  async requestActionPermission(operation, args) {
+    const descriptor = describePluginAction(operation, args, this)
+    if (HARD_REJECT_SAFETY.has(descriptor.safety)) {
+      throw computerUseError(
+        "CU_APP_BLOCKED",
+        `Computer Use does not permit ${descriptor.safety.replaceAll("_", " ")} actions.`,
+      )
+    }
+    await this.requestPluginPermission(operation, descriptor)
+  }
+
+  async requestObservationPermission(binding) {
+    if (this.observationApprovals.has(binding.app)) return
+    const descriptor = {
+      title: "Observe application window",
+      summary: "Capture the selected application window and inspect its bounded accessibility state.",
+      body: [
+        `Plugin: ${PLUGIN_DISPLAY_NAME}`,
+        "Action: Observe application window",
+        `Target application: ${safePermissionText(binding.app, "selected application", 300)}`,
+        "Data: window screenshot and bounded accessibility text",
+        "Duration: until the current Agent turn ends",
+      ].join("\n"),
+      rationale: "This plugin is about to expose visible application content to the active Agent turn.",
+      risk: "high",
+    }
+    await this.requestPluginPermission("get_window_state", descriptor)
+    this.observationApprovals.add(binding.app)
+  }
+
+  async requestPluginPermission(operation, descriptor) {
+    const result = await this.nodeRepl.requestPermission({
+      message: descriptor.summary,
+      scope: {
+        kind: "plugin-action",
+        pluginID: PLUGIN_ID,
+        pluginDisplayName: PLUGIN_DISPLAY_NAME,
+        actionTitle: descriptor.title,
+        actionSummary: descriptor.summary,
+        actionBody: descriptor.body,
+      },
+      method: operation,
+      risk: descriptor.risk,
+      sensitive: true,
+      permissionAction: "ask",
+      rationale: descriptor.rationale,
+      timeoutMs: 120_000,
+    })
+    if (!result.allowed) {
+      const error = computerUseError(
+        "CU_APP_APPROVAL_REQUIRED",
+        "The Computer Use request was denied by the user.",
+      )
+      error.code = "PERMISSION_DENIED"
+      throw error
+    }
   }
 
   async list_windows() {
@@ -141,6 +295,7 @@ class PluginComputerUseClient {
 
   async get_window_state(input) {
     const binding = this.resolveWindow(input?.window)
+    await this.requestObservationPermission(binding)
     const includeScreenshot = input?.include_screenshot !== false
     const includeText = input?.include_text === true
     const result = await this.call("get_window_state", {
@@ -150,8 +305,8 @@ class PluginComputerUseClient {
       includeDocumentText: includeText,
     })
     const data = structured(result)
-    const images = array(result.content).filter(
-      (block) => block?.type === "image" && typeof block.data === "string",
+    const images = array(result.images).filter(
+      (image) => typeof image?.data === "string",
     )
     for (const image of images) {
       await this.nodeRepl.emitImage({
@@ -388,10 +543,10 @@ function instrumentComputerUseClient(client, globals) {
 }
 
 function structured(result) {
-  if (!result || typeof result !== "object" || !result.structuredContent) {
+  if (!result || typeof result !== "object" || !result.data) {
     throw new Error("Computer Use returned an invalid structured response.")
   }
-  return result.structuredContent
+  return result.data
 }
 
 function array(value) {
@@ -465,6 +620,138 @@ function actionIntent(input, fallbackPurpose) {
   const safety = optionalString(input?.safety)?.toLowerCase() || "normal"
   if (!SAFETY_VALUES.has(safety)) throw new Error(`Unsupported Computer Use safety value: ${safety}`)
   return { purpose, safety }
+}
+
+const ACTION_DESCRIPTORS = Object.freeze({
+  activate_window: {
+    title: "Activate window",
+    summary: "Bring the selected Windows application window to the foreground.",
+    risk: "medium",
+  },
+  click: {
+    title: "Click",
+    summary: "Send a click to the selected Windows application window.",
+    risk: "medium",
+  },
+  drag: {
+    title: "Drag",
+    summary: "Drag between two points in the selected Windows application window.",
+    risk: "medium",
+  },
+  launch_app: {
+    title: "Launch application",
+    summary: "Launch an application selected from the plugin-owned Windows app catalog.",
+    risk: "high",
+  },
+  perform_secondary_action: {
+    title: "Change control state",
+    summary: "Change the state of the selected accessibility control.",
+    risk: "medium",
+  },
+  press_key: {
+    title: "Press keys",
+    summary: "Send a key or key chord to the selected Windows application window.",
+    risk: "high",
+  },
+  scroll: {
+    title: "Scroll",
+    summary: "Scroll the selected Windows application window.",
+    risk: "medium",
+  },
+  set_value: {
+    title: "Set value",
+    summary: "Set the value of the selected accessibility control.",
+    risk: "high",
+  },
+  type_text: {
+    title: "Type text",
+    summary: "Type text into the selected Windows application window.",
+    risk: "high",
+  },
+})
+
+function describePluginAction(operation, args, client) {
+  const definition = ACTION_DESCRIPTORS[operation]
+  if (!definition) {
+    throw computerUseError("CU_INVALID_ARGUMENT", `Unknown state-changing operation: ${operation}`)
+  }
+  const safety = optionalString(args?.safety)?.toLowerCase() || "normal"
+  if (!SAFETY_VALUES.has(safety)) {
+    throw computerUseError("CU_INVALID_ARGUMENT", `Unsupported Computer Use safety value: ${safety}`)
+  }
+  const body = [
+    `Plugin: ${PLUGIN_DISPLAY_NAME}`,
+    `Action: ${definition.title}`,
+    `Target: ${permissionTarget(args, client)}`,
+    `Purpose: ${safePermissionText(args?.purpose, "Operate the selected application", 500)}`,
+    `Safety: ${safety}`,
+    ...permissionActionDetails(operation, args),
+  ].join("\n")
+  return {
+    ...definition,
+    safety,
+    body,
+    rationale: "This plugin is about to send input or change application state and requires a one-time decision.",
+  }
+}
+
+function permissionTarget(args, client) {
+  const appID = optionalString(args?.appId)
+  if (appID) {
+    const app = client.appsByID.get(appID)
+    return safePermissionText(app?.displayName || appID, "selected application", 300)
+  }
+  const windowRef = optionalString(args?.windowRef)
+  if (windowRef) {
+    const binding = [...client.windowsByID.values()].find(
+      (candidate) => candidate.windowRef === windowRef,
+    )
+    return safePermissionText(binding?.app, "selected window", 300)
+  }
+  return "selected application"
+}
+
+function permissionActionDetails(operation, args) {
+  switch (operation) {
+    case "click":
+      return args?.elementIndex !== undefined
+        ? [`Accessibility element: ${Number(args.elementIndex)}`]
+        : [`Screenshot coordinate: ${Number(args?.x)}, ${Number(args?.y)}`]
+    case "drag":
+      return [
+        `From: ${Number(args?.fromX)}, ${Number(args?.fromY)}`,
+        `To: ${Number(args?.toX)}, ${Number(args?.toY)}`,
+      ]
+    case "perform_secondary_action":
+      return [
+        `Accessibility element: ${Number(args?.elementIndex)}`,
+        `Control action: ${safePermissionText(args?.action, "unknown", 80)}`,
+      ]
+    case "press_key":
+      return [`Keys: ${array(args?.keys).map((key) => safePermissionText(key, "?", 40)).join("+")}`]
+    case "scroll":
+      return [`Scroll delta: ${Number(args?.deltaX)}, ${Number(args?.deltaY)}`]
+    case "set_value":
+      return [`Value: <redacted; ${typeof args?.value === "string" ? args.value.length : 0} characters>`]
+    case "type_text":
+      return [`Text: <redacted; ${typeof args?.text === "string" ? args.text.length : 0} characters>`]
+    default:
+      return []
+  }
+}
+
+function safePermissionText(value, fallback, max) {
+  const normalized = typeof value === "string"
+    ? value
+        .replace(/[\u0000-\u001f\u007f]+/gu, " ")
+        .replace(/\s+/gu, " ")
+        .trim()
+    : ""
+  return (normalized || fallback).slice(0, max)
+}
+
+function computerUseError(code, message) {
+  return Object.assign(new Error(message), { code })
 }
 
 function toAccessibilityState(value) {

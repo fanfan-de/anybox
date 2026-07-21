@@ -116,14 +116,6 @@ import type {
   ReasoningEffort,
 } from "@anybox/shared"
 
-export interface ComputerUseAppDecision {
-  appID: string
-  displayName: string
-  decision: "allow"
-  source: "user" | "managed"
-  createdAt: number
-  updatedAt: number
-}
 import type {
   CinemaProviderAuthState,
   CinemaVideoProvider,
@@ -1823,14 +1815,6 @@ export interface DesktopIpcContract {
     input: { serverID: string }
     output: { serverID: string; removed: boolean }
   }
-  "desktop:get-computer-use-app-decisions": {
-    input: void
-    output: ComputerUseAppDecision[]
-  }
-  "desktop:revoke-computer-use-app-decision": {
-    input: { appID: string }
-    output: { appID: string; revoked: boolean }
-  }
   "desktop:get-plugin-catalog": {
     input: DesktopPluginCatalogInput | void
     output: AgentPluginCatalogItem[]
@@ -2523,8 +2507,6 @@ export interface DesktopApiMethods {
   getGlobalMcpServerDiagnostic(input: DesktopIpcInput<"desktop:get-global-mcp-server-diagnostic">): Promise<DesktopIpcOutput<"desktop:get-global-mcp-server-diagnostic">>
   updateGlobalMcpServer(input: DesktopIpcInput<"desktop:update-global-mcp-server">): Promise<DesktopIpcOutput<"desktop:update-global-mcp-server">>
   deleteGlobalMcpServer(input: DesktopIpcInput<"desktop:delete-global-mcp-server">): Promise<DesktopIpcOutput<"desktop:delete-global-mcp-server">>
-  getComputerUseAppDecisions(): Promise<DesktopIpcOutput<"desktop:get-computer-use-app-decisions">>
-  revokeComputerUseAppDecision(input: DesktopIpcInput<"desktop:revoke-computer-use-app-decision">): Promise<DesktopIpcOutput<"desktop:revoke-computer-use-app-decision">>
   getPluginCatalog(input?: DesktopIpcInput<"desktop:get-plugin-catalog">): Promise<DesktopIpcOutput<"desktop:get-plugin-catalog">>
   getInstalledPlugins(): Promise<DesktopIpcOutput<"desktop:get-installed-plugins">>
   importPluginFromURL(input: DesktopIpcInput<"desktop:import-plugin-from-url">): Promise<DesktopIpcOutput<"desktop:import-plugin-from-url">>

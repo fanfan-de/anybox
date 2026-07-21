@@ -158,6 +158,11 @@ async function main() {
     helperPath,
     cwd: pluginRoot,
     defaultTimeoutMs: 10_000,
+    defaultContext: {
+      sessionID: "smoke-safety",
+      turnID: "smoke-safety",
+      toolCallID: "smoke-safety",
+    },
   })
   let target
   let occluder

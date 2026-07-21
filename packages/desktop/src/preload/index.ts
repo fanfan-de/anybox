@@ -660,16 +660,6 @@ try {
         serverID: string
         removed: boolean
       }>,
-    getComputerUseAppDecisions: () =>
-      invokeDesktop("desktop:get-computer-use-app-decisions") as Promise<
-        DesktopIpcOutput<"desktop:get-computer-use-app-decisions">
-      >,
-    revokeComputerUseAppDecision: (
-      input: DesktopIpcInput<"desktop:revoke-computer-use-app-decision">,
-    ) =>
-      invokeDesktop("desktop:revoke-computer-use-app-decision", input) as Promise<
-        DesktopIpcOutput<"desktop:revoke-computer-use-app-decision">
-      >,
     getPluginCatalog: (input?: { freshness?: "cached" | "fresh" }) =>
       invokeDesktop("desktop:get-plugin-catalog", input) as Promise<PluginCatalogItem[]>,
     getInstalledPlugins: () =>

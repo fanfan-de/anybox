@@ -1,6 +1,5 @@
 import type { TranslationKey } from "../translations"
 import { subscriptionTranslations } from "../subscription-translations"
-import { computerUseTranslations } from "../computer-use-translations"
 import { skillLibraryTranslations } from "../skill-library-translations"
 import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
 
@@ -146,7 +145,6 @@ export const trTR = {
   "settings.nav.storage": "Depolama",
   "settings.nav.archive": "Arşivlenen Oturumlar",
   ...subscriptionTranslations["tr-TR"],
-  ...computerUseTranslations["tr-TR"],
   ...skillLibraryTranslations["tr-TR"],
   "settings.about.version": "Sürüm",
   "settings.about.checkUpdates": "Güncellemeleri kontrol et",

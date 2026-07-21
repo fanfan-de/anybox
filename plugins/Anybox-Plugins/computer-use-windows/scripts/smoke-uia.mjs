@@ -128,6 +128,11 @@ async function main() {
     helperPath,
     cwd: pluginRoot,
     defaultTimeoutMs: 10_000,
+    defaultContext: {
+      sessionID: "smoke-uia",
+      turnID: "smoke-uia",
+      toolCallID: "smoke-uia",
+    },
   })
   let fixture
   try {

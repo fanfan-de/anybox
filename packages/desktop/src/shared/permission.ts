@@ -59,10 +59,13 @@ export interface PermissionRequestPrompt {
         browserID?: string
       }
     | {
-        kind: "computer-use-app"
+        kind: "plugin-action"
         sessionID: string
-        appID: string
-        appDisplayName: string
+        pluginID: string
+        pluginDisplayName: string
+        actionTitle: string
+        actionSummary: string
+        actionBody?: string
       }
   grantID?: string
   prompt: PermissionPromptSnapshot

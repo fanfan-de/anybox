@@ -41,7 +41,6 @@ const csharpProtocol = Number(/ProtocolVersion\s*=\s*(\d+)/u.exec(csharpBuildInf
 const csharpProjectVersion = /<Version>([^<]+)<\/Version>/u.exec(csharpProject)?.[1]
 
 assert.equal(manifest.version, PLUGIN_VERSION, "manifest and Node plugin versions differ")
-assert.equal(HELPER_VERSION, PLUGIN_VERSION, "Node helper and plugin versions differ")
 assert.equal(csharpVersion, HELPER_VERSION, "C# helper and Node helper versions differ")
 assert.equal(csharpProjectVersion, HELPER_VERSION, "C# project and helper versions differ")
 assert.equal(csharpProtocol, PROTOCOL_VERSION, "C# helper and Node protocol versions differ")
@@ -59,7 +58,13 @@ assert.equal(actualHash, expectedHash, "packaged helper SHA-256 does not match")
 const client = new HelperClient({ helperPath, cwd: pluginRoot })
 try {
   const handshake = await client.ensureInitialized()
-  const health = await client.call("health_check")
+  const health = await client.call("health_check", {}, {
+    context: {
+      sessionID: "plugin-package-verification",
+      turnID: "plugin-package-verification",
+      toolCallID: "plugin-package-verification",
+    },
+  })
   assert.equal(handshake.protocolVersion, PROTOCOL_VERSION)
   assert.equal(handshake.helperVersion, HELPER_VERSION)
   assert.equal(handshake.capabilities?.uia, true)

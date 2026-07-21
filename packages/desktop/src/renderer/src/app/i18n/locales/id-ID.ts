@@ -1,6 +1,5 @@
 import type { TranslationKey } from "../translations"
 import { subscriptionTranslations } from "../subscription-translations"
-import { computerUseTranslations } from "../computer-use-translations"
 import { skillLibraryTranslations } from "../skill-library-translations"
 import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
 
@@ -146,7 +145,6 @@ export const idID = {
   "settings.nav.storage": "Penyimpanan",
   "settings.nav.archive": "Sesi yang Diarsipkan",
   ...subscriptionTranslations["id-ID"],
-  ...computerUseTranslations["id-ID"],
   ...skillLibraryTranslations["id-ID"],
   "settings.about.version": "Versi",
   "settings.about.checkUpdates": "Periksa pembaruan",

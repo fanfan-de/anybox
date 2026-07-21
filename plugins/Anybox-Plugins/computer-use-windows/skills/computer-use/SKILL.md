@@ -20,7 +20,7 @@ if (!globalThis.sky) {
 }
 ```
 
-Do not spawn the native helper, open its named pipe, call low-level Computer Use MCP tools, or implement another protocol client. The plugin client uses Anybox's short-lived, host-authorized capability bridge.
+Do not spawn the native helper, open its named pipe, or implement another protocol client. Importing the plugin client is the only supported initialization path; it owns the Computer Use runtime and helper lifecycle.
 
 ## Operating loop
 
@@ -41,7 +41,7 @@ Use `await sky.documentation("api")` for the supported API, `"guidance"` for ope
 - Operate one explicit target window at a time.
 - Never control Anybox itself, terminals or shells, authentication/secret prompts, payment flows, CAPTCHA, password managers, security settings, UAC/secure desktop, lock screens, or browser security warnings.
 - Prefer Anybox's Chrome integration for browser DOM work.
-- Application access and every state-changing desktop action remain separately host-approved.
+- The first application observation in a turn and every state-changing desktop action require separate approvals constructed by the plugin.
 - `sky.launch_app` accepts only an app id returned by the current `sky.list_apps()` catalog; it never accepts arbitrary paths, arguments, URLs, or commands.
-- If an action could send, submit, delete, upload, install, publish, or purchase, set a concise `purpose` and the matching optional `safety` value; host policy may raise or reject it.
+- If an action could send, submit, delete, upload, install, publish, or purchase, set a concise `purpose` and the matching optional `safety` value; plugin policy may raise or reject it.
 - If Computer Use returns `CU_INTERRUPTED`, stop using it for the rest of the turn.

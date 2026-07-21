@@ -9,21 +9,25 @@ const require = createRequire(import.meta.url)
 const directory = path.dirname(fileURLToPath(import.meta.url))
 const pluginRoot = path.resolve(directory, "..")
 const { PLUGIN_VERSION } = require("../scripts/lib/build-info")
-const { TOOL_DEFINITIONS } = require("../scripts/lib/tool-definitions")
 const manifest = JSON.parse(
   fs.readFileSync(path.join(pluginRoot, ".anybox-plugin", "plugin.json"), "utf8"),
 )
 
-test("manifest, MCP definitions, and tool policies stay synchronized", () => {
+test("manifest exposes only generic Node REPL while the runtime stays in the plugin package", () => {
   assert.equal(manifest.version, PLUGIN_VERSION)
   assert.equal(manifest.mcpServers, undefined)
-  const nodeRepl = manifest.mcpRequirements.find((item) => item.mcp === "node-repl")
+  assert.equal(manifest.mcpRequirements.length, 1)
+  const nodeRepl = manifest.mcpRequirements[0]
+  assert.equal(nodeRepl.mcp, "node-repl")
   assert.equal(nodeRepl.required, true)
   assert.deepEqual(nodeRepl.tools, ["js", "js_reset"])
-  const requirement = manifest.mcpRequirements.find((item) => item.mcp === "computer-use")
-  assert.equal(requirement.required, true)
-  assert.deepEqual(
-    requirement.tools,
-    TOOL_DEFINITIONS.map((tool) => tool.name),
-  )
+  assert.equal(manifest.keywords.includes("mcp"), false)
+  assert.equal(fs.existsSync(path.join(pluginRoot, "scripts", "runtime.cjs")), true)
+  assert.equal(fs.existsSync(path.join(pluginRoot, "scripts", "lib", "helper-client.js")), true)
+  assert.equal(fs.existsSync(path.join(
+    pluginRoot,
+    "helper",
+    "win32-x64",
+    "computer-use-helper.exe",
+  )), true)
 })

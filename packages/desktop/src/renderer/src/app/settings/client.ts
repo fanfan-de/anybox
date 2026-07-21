@@ -46,18 +46,3 @@ export async function getStoragePaths(): Promise<DesktopIpcOutput<"desktop:get-s
 export async function getStorageUsage(): Promise<DesktopIpcOutput<"desktop:get-storage-usage"> | null> {
   return window.desktop?.getStorageUsage?.() ?? null
 }
-
-export async function getComputerUseAppDecisions(): Promise<
-  DesktopIpcOutput<"desktop:get-computer-use-app-decisions"> | null
-> {
-  return window.desktop?.getComputerUseAppDecisions?.() ?? null
-}
-
-export async function revokeComputerUseAppDecision(
-  appID: string,
-): Promise<DesktopIpcOutput<"desktop:revoke-computer-use-app-decision"> | null> {
-  const input: DesktopIpcInput<"desktop:revoke-computer-use-app-decision"> = {
-    appID,
-  }
-  return window.desktop?.revokeComputerUseAppDecision?.(input) ?? null
-}

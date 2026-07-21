@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import path from "node:path"
 import test from "node:test"
 import { createRequire } from "node:module"
+import { tmpdir } from "node:os"
 import { fileURLToPath } from "node:url"
 
 const require = createRequire(import.meta.url)
@@ -9,6 +10,9 @@ const { HelperClient } = require("../scripts/lib/helper-client")
 
 const directory = path.dirname(fileURLToPath(import.meta.url))
 const fixture = path.join(directory, "fixtures", "mock-helper.mjs")
+const pipePath = (name) => process.platform === "win32"
+  ? `\\\\.\\pipe\\${name}`
+  : path.join(tmpdir(), `${name}.sock`)
 
 function createClient(options = {}) {
   return new HelperClient({
@@ -16,6 +20,9 @@ function createClient(options = {}) {
     helperArgs: [fixture],
     cwd: directory,
     defaultTimeoutMs: 1000,
+    pipePath,
+    platform: "win32",
+    verifyIntegrity: false,
     ...options,
   })
 }
@@ -59,6 +66,24 @@ test("helper client aborts an in-flight request and reports possible action effe
       pending,
       (error) => error.code === "CU_INTERRUPTED" && error.effectMayHaveOccurred,
     )
+  } finally {
+    client.stop()
+  }
+})
+
+test("helper client treats physical Escape as a non-bypassable interruption", async () => {
+  let physicalEscapes = 0
+  const client = createClient({
+    onPhysicalEscape() {
+      physicalEscapes += 1
+    },
+  })
+  try {
+    await assert.rejects(
+      client.call("emit_physical_escape"),
+      (error) => error.code === "CU_INTERRUPTED",
+    )
+    assert.equal(physicalEscapes, 1)
   } finally {
     client.stop()
   }

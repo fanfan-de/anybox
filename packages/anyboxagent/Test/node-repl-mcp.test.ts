@@ -26,7 +26,6 @@ function nodeReplServer() {
 
 async function createClient(options: {
   onElicitation?: ConstructorParameters<typeof McpClient>[0]["onElicitation"]
-  onPluginCapabilityCall?: ConstructorParameters<typeof McpClient>[0]["onPluginCapabilityCall"]
 } = {}) {
   const root = await mkdtemp(join(tmpdir(), "anybox-node-repl-"))
   temporaryRoots.push(root)
@@ -36,7 +35,6 @@ async function createClient(options: {
     requestTimeoutMs: 10_000,
     server: nodeReplServer(),
     onElicitation: options.onElicitation,
-    onPluginCapabilityCall: options.onPluginCapabilityCall,
   })
 }
 
@@ -111,7 +109,8 @@ describe("built-in Node REPL MCP", () => {
           agentType: typeof agent,
           capabilityType: typeof nodeRepl.getCapability,
           requestHostType: typeof nodeRepl.requestHost,
-          pluginCapabilityType: typeof nodeRepl.callPluginCapability
+          pluginCapabilityType: typeof nodeRepl.callPluginCapability,
+          permissionType: typeof nodeRepl.requestPermission
         }`,
       })
       expect(result.structuredContent?.result).toMatchObject({
@@ -120,7 +119,8 @@ describe("built-in Node REPL MCP", () => {
         agentType: "undefined",
         capabilityType: "undefined",
         requestHostType: "undefined",
-        pluginCapabilityType: "function",
+        pluginCapabilityType: "undefined",
+        permissionType: "function",
       })
 
       await client.callTool("js_reset", {})
@@ -198,109 +198,6 @@ describe("built-in Node REPL MCP", () => {
     }
   })
 
-  test("binds generic plugin capability calls to one JavaScript invocation", async () => {
-    const calls: Array<Record<string, unknown>> = []
-    const client = await createClient({
-      onPluginCapabilityCall: async (request) => {
-        calls.push({
-          capability: request.capability,
-          operation: request.operation,
-          arguments: request.arguments,
-          context: request.context,
-        })
-        if (request.operation === "write") request.claimMutation()
-        return {
-          content: [{ type: "text", text: "ok" }],
-          structuredContent: { value: request.arguments.value ?? null },
-          isError: false,
-        }
-      },
-    })
-    try {
-      const result = await client.callTool(
-        "js",
-        {
-          code: `const read = await nodeRepl.callPluginCapability(
-              "fixture",
-              "read",
-              { value: 41 }
-            )
-            const write = await nodeRepl.callPluginCapability(
-              "fixture",
-              "write",
-              { value: Number(read.structuredContent.value) + 1 }
-            )
-            return write.structuredContent.value`,
-        },
-        undefined,
-        {
-          sessionID: "session-node-repl",
-          turnID: "turn-node-repl",
-          messageID: "message-node-repl",
-          toolCallID: "tool-node-repl-capability",
-        },
-      )
-
-      expect(result.isError).toBe(false)
-      expect(result.structuredContent?.result).toBe(42)
-      expect(calls).toHaveLength(2)
-      expect(calls[0]).toMatchObject({
-        capability: "fixture",
-        operation: "read",
-        context: {
-          sessionID: "session-node-repl",
-          turnID: "turn-node-repl",
-          messageID: "message-node-repl",
-          toolCallID: "tool-node-repl-capability",
-        },
-      })
-
-      const missingContext = await client.callTool("js", {
-        code: `return await nodeRepl.callPluginCapability("fixture", "read", {})`,
-      })
-      expect(missingContext.isError).toBe(true)
-      expect(missingContext.structuredContent?.code).toBe("PLUGIN_CAPABILITY_CONTEXT_REQUIRED")
-    } finally {
-      await client.dispose()
-    }
-  })
-
-  test("allows at most one state-changing plugin capability operation per JavaScript call", async () => {
-    let executed = 0
-    const client = await createClient({
-      onPluginCapabilityCall: async (request) => {
-        request.claimMutation()
-        executed += 1
-        return {
-          content: [{ type: "text", text: "ok" }],
-          structuredContent: { executed },
-          isError: false,
-        }
-      },
-    })
-    try {
-      const result = await client.callTool(
-        "js",
-        {
-          code: `await nodeRepl.callPluginCapability("fixture", "first", {})
-            return await nodeRepl.callPluginCapability("fixture", "second", {})`,
-        },
-        undefined,
-        {
-          sessionID: "session-node-repl",
-          turnID: "turn-node-repl",
-          messageID: "message-node-repl",
-          toolCallID: "tool-node-repl-mutation-limit",
-        },
-      )
-      expect(result.isError).toBe(true)
-      expect(result.structuredContent?.code).toBe("PLUGIN_CAPABILITY_MUTATION_LIMIT")
-      expect(executed).toBe(1)
-    } finally {
-      await client.dispose()
-    }
-  })
-
   test("continues the same JavaScript promise after an in-process permission decision", async () => {
     let receivedMeta: Record<string, unknown> | undefined
     const client = await createClient({
@@ -322,13 +219,15 @@ describe("built-in Node REPL MCP", () => {
         {
           code: `globalThis.permissionContinuation = ["before"]
             const permission = await nodeRepl.requestPermission({
-              message: "Allow click?",
-              method: "page.click",
+              message: "Allow plugin action?",
+              method: "fixture.action",
               scope: {
-                kind: "browser-origin",
+                kind: "plugin-action",
                 sessionID: "spoofed-session",
-                extensionInstanceID: "extension-test",
-                origin: "https://example.com"
+                pluginID: "fixture-plugin",
+                pluginDisplayName: "Fixture Plugin",
+                actionTitle: "Fixture action",
+                actionSummary: "Run the fixture action."
               }
             })
             globalThis.permissionContinuation.push("after")
@@ -356,6 +255,10 @@ describe("built-in Node REPL MCP", () => {
       })
       expect(receivedMeta?.continuation).toBe("in-process")
       expect(receivedMeta?.timeoutMs).toBe(120_000)
+      expect(receivedMeta?.scope).toMatchObject({
+        kind: "plugin-action",
+        pluginID: "fixture-plugin",
+      })
       expect(receivedMeta?.context).toEqual({
         sessionID: "session-node-repl",
         turnID: "turn-node-repl",

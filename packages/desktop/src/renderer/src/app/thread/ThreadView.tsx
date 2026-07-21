@@ -1461,11 +1461,7 @@ function formatPermissionRiskLabel(risk: PermissionRequest["prompt"]["risk"], tr
 function formatPermissionDecisionLabel(
   decision: PermissionDecision,
   translate: (key: TranslationKey) => string,
-  request?: PermissionRequest,
 ) {
-  if (decision === "allow" && request?.scope?.kind === "computer-use-app") {
-    return translate("settings.computerUse.alwaysAllowAction")
-  }
   return translate(permissionDecisionTranslationKeys[decision])
 }
 
@@ -5151,7 +5147,7 @@ function PermissionRequestCard({
       <div className="permission-request-controls">
         <div className="settings-inline-actions permission-request-actions">
           {permissionDecisions.map((decision) => {
-            const decisionLabel = formatPermissionDecisionLabel(decision, t, request)
+            const decisionLabel = formatPermissionDecisionLabel(decision, t)
             return (
               <button
                 key={decision}

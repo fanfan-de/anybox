@@ -21,19 +21,6 @@ export function SettingsRoutes() {
 
   app.get("/models", async (c) => ok(c, await SettingsUseCase.listModels()))
 
-  app.get("/computer-use/apps", (c) =>
-    ok(c, SettingsUseCase.listComputerUseAppDecisions()),
-  )
-
-  app.delete("/computer-use/apps/:appID", (c) =>
-    ok(
-      c,
-      SettingsUseCase.revokeComputerUseAppDecision(
-        decodeURIComponent(c.req.param("appID")),
-      ),
-    ),
-  )
-
   app.get("/model-catalog", async (c) => ok(c, await SettingsUseCase.listModelCatalog()))
 
   app.post("/providers/custom", async (c) => {

@@ -33,38 +33,29 @@ type BrowserOriginScope = {
   browserID?: string
 }
 
-type ComputerUseAppScope = {
-  kind: "computer-use-app"
+type PluginActionScope = {
+  kind: "plugin-action"
   sessionID: string
-  appID: string
-  appDisplayName: string
+  pluginID: string
+  pluginDisplayName: string
+  actionTitle: string
+  actionSummary: string
+  actionBody?: string
 }
 
-type PluginCapabilityScope = {
-  kind: "plugin-capability"
-  sessionID: string
-  capabilityID: string
-  capabilityDisplayName: string
-  operationTitle: string
-  operationSummary: string
-  operationBody?: string
-}
-
-export type Scope = BrowserOriginScope | ComputerUseAppScope | PluginCapabilityScope
+export type Scope = BrowserOriginScope | PluginActionScope
 
 export const Scope = z.object({
-  kind: z.enum(["browser-origin", "computer-use-app", "plugin-capability"]),
+  kind: z.enum(["browser-origin", "plugin-action"]),
   sessionID: Identifier.schema("session"),
   extensionInstanceID: z.string().trim().min(1).max(256).optional(),
   origin: z.string().trim().min(1).max(2_048).optional(),
   browserID: z.string().trim().min(1).max(256).optional(),
-  appID: z.string().trim().min(1).max(512).optional(),
-  appDisplayName: z.string().trim().min(1).max(256).optional(),
-  capabilityID: z.string().trim().regex(/^[a-z0-9][a-z0-9_-]*$/u).optional(),
-  capabilityDisplayName: z.string().trim().min(1).max(256).optional(),
-  operationTitle: z.string().trim().min(1).max(256).optional(),
-  operationSummary: z.string().trim().min(1).max(1_000).optional(),
-  operationBody: z.string().trim().min(1).max(4_000).optional(),
+  pluginID: z.string().trim().regex(/^[a-z0-9][a-z0-9_-]*$/u).optional(),
+  pluginDisplayName: z.string().trim().min(1).max(256).optional(),
+  actionTitle: z.string().trim().min(1).max(256).optional(),
+  actionSummary: z.string().trim().min(1).max(1_000).optional(),
+  actionBody: z.string().trim().min(1).max(4_000).optional(),
 }).strict().superRefine((scope, context) => {
   if (
     scope.kind === "browser-origin"
@@ -76,26 +67,17 @@ export const Scope = z.object({
     })
   }
   if (
-    scope.kind === "computer-use-app"
-    && (!scope.appID || !scope.appDisplayName)
-  ) {
-    context.addIssue({
-      code: "custom",
-      message: "Computer Use app scope requires appID and appDisplayName.",
-    })
-  }
-  if (
-    scope.kind === "plugin-capability"
+    scope.kind === "plugin-action"
     && (
-      !scope.capabilityID
-      || !scope.capabilityDisplayName
-      || !scope.operationTitle
-      || !scope.operationSummary
+      !scope.pluginID
+      || !scope.pluginDisplayName
+      || !scope.actionTitle
+      || !scope.actionSummary
     )
   ) {
     context.addIssue({
       code: "custom",
-      message: "Plugin capability scope requires capability and operation display metadata.",
+      message: "Plugin action scope requires plugin and action display metadata.",
     })
   }
 }).meta({

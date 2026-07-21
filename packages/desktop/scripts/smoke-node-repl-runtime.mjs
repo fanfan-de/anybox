@@ -9,7 +9,7 @@ const runtimeDir = path.resolve(
     ?? path.join(import.meta.dirname, "..", "build", "agent-runtime"),
 )
 const bunName = process.platform === "win32" ? "bun.exe" : "bun"
-const dataDir = await mkdtemp(path.join(tmpdir(), "anybox-computer-use-runtime-"))
+const dataDir = await mkdtemp(path.join(tmpdir(), "anybox-node-repl-runtime-"))
 const port = 41_000 + Math.floor(Math.random() * 1_000)
 const child = spawn(
   path.join(runtimeDir, bunName),
@@ -58,8 +58,10 @@ try {
   const servers = await request("/api/mcp/servers")
   const nodeRepl = servers.data?.find?.((item) => item.id === "anybox.node-repl")
   if (!nodeRepl) throw new Error("Packaged Agent did not register anybox.node-repl.")
-  const computerUse = servers.data?.find?.((item) => item.id === "anybox.computer-use")
-  if (!computerUse) throw new Error("Packaged Agent did not register anybox.computer-use.")
+  const retiredComputerUse = servers.data?.find?.((item) => item.id === "anybox.computer-use")
+  if (retiredComputerUse) {
+    throw new Error("Packaged Agent still registers the retired anybox.computer-use MCP.")
+  }
   const nodeReplDiagnostic = await request(
     "/api/mcp/servers/anybox.node-repl/diagnostic",
     30_000,
@@ -69,22 +71,16 @@ try {
       `Packaged Node REPL diagnostic failed: ${JSON.stringify(nodeReplDiagnostic.data)}`,
     )
   }
-  const computerUseDiagnostic = await request(
-    "/api/mcp/servers/anybox.computer-use/diagnostic",
-    30_000,
-  )
-  if (!computerUseDiagnostic.data?.ok || computerUseDiagnostic.data?.toolCount !== 14) {
-    throw new Error(
-      `Packaged Computer Use diagnostic failed: ${JSON.stringify(computerUseDiagnostic.data)}`,
-    )
-  }
   const packagedNodeReplSource = await readFile(
     path.join(runtimeDir, "mcp", "node-repl", "server.js"),
     "utf8",
   )
-  for (const marker of ["callPluginCapability", "anybox/plugin-capability/call"]) {
-    if (!packagedNodeReplSource.includes(marker)) {
-      throw new Error(`Packaged Node REPL is missing the generic capability bridge marker '${marker}'.`)
+  if (!packagedNodeReplSource.includes("requestPermission")) {
+    throw new Error("Packaged Node REPL is missing generic in-process permission support.")
+  }
+  for (const retiredMarker of ["callPluginCapability", "anybox/plugin-capability/call"]) {
+    if (packagedNodeReplSource.includes(retiredMarker)) {
+      throw new Error(`Packaged Node REPL still contains retired capability bridge marker '${retiredMarker}'.`)
     }
   }
   console.log(JSON.stringify({
@@ -94,13 +90,7 @@ try {
       owner: nodeRepl.owner,
       toolCount: nodeReplDiagnostic.data.toolCount,
       toolNames: nodeReplDiagnostic.data.toolNames,
-      genericPluginCapabilityBridge: true,
-    },
-    computerUse: {
-      serverID: computerUse.id,
-      owner: computerUse.owner,
-      internalToolCount: computerUseDiagnostic.data.toolCount,
-      internalToolNames: computerUseDiagnostic.data.toolNames,
+      genericPermissionRequests: true,
     },
   }, null, 2))
 } finally {

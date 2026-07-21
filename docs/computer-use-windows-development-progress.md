@@ -1,17 +1,17 @@
 # Anybox Computer Use Windows 开发进度
 
-> 本文档由 Codex 在开发过程中持续增量更新，作为实时进度、验证证据和未决风险的唯一跟踪入口。  
-> 目标规范：[`codex-computer-use-anybox-development-report.md`](./codex-computer-use-anybox-development-report.md)  
-> 当前目标：在已完成的 Windows 执行与宿主安全基础上，将模型调用面迁移为 Codex 风格的通用 Node REPL + 插件内 `sky` API（M7）。  
-> 最后更新：2026-07-21 07:33 +08:00
+> 本文档由 Codex 在开发过程中持续增量更新，作为实时进度、验证证据和未决风险的唯一跟踪入口。
+> 目标规范：[`codex-computer-use-anybox-development-report.md`](./codex-computer-use-anybox-development-report.md)
+> 当前目标：将 Computer Use 从 Anybox 内置 MCP/宿主能力体系彻底迁出，改为插件包自带运行时、Helper、安全策略与 `sky` API；Anybox 核心只提供通用 Node REPL 和通用插件动作授权（M8）。
+> 最后更新：2026-07-21 09:04 +08:00
 
 ## 当前状态
 
 | 项目 | 状态 |
 |---|---|
-| 总体阶段 | M0～M7 工程实现完成；进入发布认证门 |
-| 当前里程碑 | M7 已完成 |
-| 当前工作 | 通用 Node REPL + 插件内 `sky` + 隐藏宿主安全能力已完成并通过本机验收 |
+| 总体阶段 | M8 工程实现与本机验收完成 |
+| 当前里程碑 | M8：完全插件化、退出专用 MCP 体系（完成） |
+| 当前工作 | 等待正式签名与剩余 Windows 发布矩阵；开发版可继续做产品体验验收 |
 | 阻塞项 | Authenticode 正式签名需要发布证书；125/150/200% DPI、锁屏、device-loss 需要独立 Windows 矩阵 |
 | 工作目录 | `C:\Projects\Anybox` |
 | 插件目录 | `plugins/Anybox-Plugins/computer-use-windows` |
@@ -50,7 +50,7 @@
   - [x] identity、integrity、foreground、point ownership 校验
   - [x] physical input epoch 与安全剪贴板事务
   - [x] 终端、Anybox、安全/凭据/高权限目标硬拒绝
-- [x] M5：Anybox 宿主 broker
+- [x] M5：Anybox 宿主 broker（历史里程碑，相关实现已由 M8 退役）
   - [x] `anybox.computer-use` 内建 MCP 与受信任 helper 生命周期
   - [x] named pipe ACL、随机名、一次性 token、turn lease
   - [x] app once/session/always approval 与撤销
@@ -65,13 +65,21 @@
   - [x] 隐私安全遥测与 helper crash recovery
   - [x] 安装/诊断/选择/卸载 E2E 与升级/降级测试
   - [ ] clean checkout 发布复现与剩余 Windows 实机矩阵
-- [x] M7：Codex Node REPL 调用面对齐
+- [x] M7：Codex Node REPL 调用面对齐（历史过渡架构，相关 bridge/facade 已由 M8 退役）
   - [x] 为通用 Node REPL 增加单次、受限、不可伪造的插件能力桥接
   - [x] 在插件内实现 `sky` 风格 API、状态映射、截图回传与动作封装
   - [x] 插件同时声明通用 Node REPL 与隐藏 Computer Use 宿主能力依赖
   - [x] 从模型工具列表隐藏 14 个底层 Computer Use MCP 工具
   - [x] 将动作审批迁到受信任宿主调用边界，保持每动作一次审批
   - [x] 完成安全回归、插件测试、packaged runtime 与真实 Windows smoke
+- [x] M8：Computer Use 完全插件化、退出 MCP 体系
+  - [x] 明确最终职责边界：核心只保留通用 Node REPL/插件机制，不再拥有 Computer Use 业务或内置 MCP
+  - [x] 插件 `sky` 直接加载插件包内运行时并管理 Helper，不再调用宿主 capability/MCP
+  - [x] 删除 `anybox.computer-use` 注册、broker/facade、专用 permission scope 与运行时复制
+  - [x] 删除 Computer Use 专用 Settings/overlay/IPC；保留插件 Helper 的物理 Esc 与硬拒绝策略
+  - [x] 将动作前确认接入通用插件动作授权，不在核心出现 Computer Use 名称或操作枚举
+  - [x] 更新 manifest、安装/卸载、Skill/API/安全文档和测试
+  - [x] 完成 Agent、Desktop、插件、packaged runtime 与真实 Windows 回归
 
 ## 增量日志
 
@@ -492,6 +500,61 @@
   - Agent 全项目 TypeScript 仍仅有开发前已知 3 个测试类型错误，M7 新增源码无错误。
 - M7 工程实现与本机验收关闭。剩余项目均为发布外部条件：正式 Authenticode 证书、clean-checkout 复现和 125/150/200% DPI、锁屏、device-loss 独立 Windows 矩阵。
 
+### 2026-07-21 08:13 +08:00 — M8 启动：Computer Use 彻底退出 MCP 体系
+
+- 用户确认最终产品边界：Computer Use 的全部业务能力必须由 `computer-use-windows` 插件包带来；插件详情、MCP 管理、Agent 内建定义和 Desktop 设置中均不得再出现 `anybox.computer-use`。
+- M7 的“模型不可见但仍由隐藏宿主 MCP 执行”方案被明确视为过渡架构，M8 将删除该隐藏层，而不只是继续隐藏 UI。
+- 目标职责重新划分：
+  - Anybox 核心：通用 Node REPL、插件安装/发现、通用插件动作授权与图片回传；
+  - Computer Use 插件：`sky` API、操作映射、Helper 生命周期、窗口/状态缓存、一次动作约束、应用/输入安全策略、完整性校验、物理 Esc 中断和文档；
+  - 不再存在：Computer Use 内建 MCP、host facade/broker、Computer Use 专用 permission scope、专用 Settings/overlay/IPC 和构建时向 Agent runtime 复制插件 Helper。
+- 已开始全仓审计旧链路；下一步先完成插件直连运行时和通用动作授权，再删除核心旧实现，以保持每个提交阶段可验证。
+
+### 2026-07-21 08:42 +08:00 — 插件直连运行时与核心退役完成
+
+- 插件侧已经不再包含 Computer Use MCP server：
+  - `scripts/server.js` 已迁移为普通 CommonJS `scripts/runtime.cjs`，删除 MCP initialize/tools/list/tools/call、MCP tool schema 与 MCP-shaped result；
+  - `computer-use-client.mjs` 直接实例化该插件运行时，并由运行时启动插件包内 `helper/win32-x64/computer-use-helper.exe`；
+  - Helper 通道改为插件自建的 CurrentUserOnly named pipe、随机 pipe/token、父 PID/客户端 PID 校验，启动前验证插件包内 SHA-256；
+  - 物理 Esc 由插件 Helper 通过 broker notification 熔断，插件会阻止当前 turn 内再次启动；turn/session/reset 时终止 Helper 并清空私有窗口状态；
+  - 一次 JavaScript submission 仍最多执行一个状态变更动作，规则现在由插件客户端实现。
+- 通用 Node REPL 已删除 `callPluginCapability`、capability token 与反向 Host RPC；保留的 `requestPermission`/`emitImage`/lifecycle hook 均为通用能力。
+- 权限核心已把 `computer-use-app` 和 `plugin-capability` 两种专用 scope 收敛为中性的 `plugin-action`：字段只有 plugin/action 展示元数据，核心没有 Computer Use 操作枚举；插件负责参数脱敏与风险说明，`type_text`/`set_value` 原文不会进入审批详情。
+- Anybox Agent 已删除 Computer Use built-in definition、facade、broker、host helper transport、turn lease、app policy、advisor 和 telemetry；同步时只识别并删除历史 canonical `anybox.computer-use` 记录及项目选择，不会创建新记录，也不会删除同名用户自有 server。
+- Desktop 已删除专用 Settings 面板、持久应用授权 IPC、session interrupt route、runtime events、overlay、Esc global shortcut 与 managed-Agent 签名环境注入；Desktop/Agent runtime 构建不再复制插件 facade 或 Helper。
+- 插件 manifest 现在只有通用 `node-repl` 依赖；`computer-use` requirement 和 `mcp` keyword 已移除。
+- 第一轮插件回归：26/26 tests 通过，新增覆盖 plugin-broker handshake、超时/abort 重启、物理 Esc 熔断、插件原生 result、manifest 无 Computer Use MCP 和 `sky` 通用动作审批。
+- 下一步：完成 Agent/Plugin 生命周期测试迁移、Desktop 类型检查、插件安装副本验证、packaged runtime 无旧 MCP smoke，以及真实 Helper 的 plugin-broker Windows 集成回归。
+
+### 2026-07-21 08:50 +08:00 — 应用观察授权收回插件、跨层定向测试通过
+
+- 修复第一轮跨层测试发现的两处测试夹具问题；Agent 定向矩阵当前 69 项中原有 67 项通过，修复后失败用例分别复验通过，插件安装/升级/降级继续保留 `runtime.cjs` 和唯一的通用 Node REPL requirement。
+- 新增并通过真实 Windows `McpManager → anybox.node-repl → plugin client → plugin runtime → plugin helper` 集成：
+  - 核心不存在 `anybox.computer-use` definition 或模型工具；
+  - 插件通过真实 helper 枚举窗口；
+  - finance 在插件内硬拒绝；
+  - 观察授权和输入授权均通过中性 `plugin-action` continuation 依次完成；
+  - `type_text` 审批详情仅包含字符数，拒绝返回 `PERMISSION_DENIED`。
+- 宿主 app broker 删除后，截图/UIA 的隐私授权也已收回插件：每个 Agent turn 对每个应用首次 `get_window_state` 由插件请求一次观察许可，动作仍逐次许可；turn 结束时审批缓存与窗口状态一起清空。
+- 插件全套测试保持 26/26 通过；真实 Windows 跨层集成 1/1 通过。
+- 插件 README、安全/隐私、审批、发布、guidance 和 Skill 已改为完全插件所有制描述；实现说明已重写，目标开发报告升级到 1.2，并将 M1～M7 的 facade/broker 内容明确标为历史决策记录。
+- 下一步：执行 Agent/desktop 类型检查与回归，重建 packaged Agent runtime，确认只含通用 Node REPL，并运行插件 package verifier 与最终静态残留扫描。
+
+### 2026-07-21 09:04 +08:00 — M8 完成：实时 API 与 packaged runtime 均无专用 MCP
+
+- 插件版本提升到 `0.3.0`，用于让已缓存/安装的 `0.2.0` 过渡 manifest 被正常识别为可升级版本；原生 helper 无 native 代码变更，组件版本独立保持 `0.2.0`，package verifier 分别校验两者。
+- 当前正在运行的开发版 managed Agent 实时 API 已确认：
+  - catalog 中 `computer-use-windows@0.3.0` 的 `mcpServers=[]`；
+  - `mcpRequirements` 只有通用 `node-repl`；
+  - `/api/mcp/servers` 不含 `anybox.computer-use`，仍含 `anybox.node-repl`。
+- Agent 定向回归 69/69、699 assertions 通过；插件安装 + 真实 Windows 集成复验 50/50、608 assertions 通过；插件全套 26/26 通过。
+- Desktop TypeScript typecheck 通过；本次变更覆盖的 managed Agent、Settings、Thread、permission service 与 i18n 6 个测试文件合计 271/271 通过。Desktop 全量 Vitest 曾在 124 秒外部上限内未结束且未给出失败，本次变更覆盖集已独立完成。
+- 插件 package verifier 通过：plugin `0.3.0`、helper `0.2.0`、protocol `1`、SHA-256、plugin-owned named-pipe handshake、WGC、UIA 与 physical-input epoch 均正常。
+- 隔离重建 `build/agent-runtime-m8-verify` 成功；runtime verifier 与 smoke 通过：仅注册 `anybox.node-repl` 的 `js/js_reset/js_add_node_module_dir` 三个通用工具，无旧 capability bridge marker，产物文件中没有 Computer Use artifact。
+- 四组真实 Windows smoke 全部通过：WGC 遮挡/负坐标/最小化、UIA 与一次性 state、应用目录/受控启动、physical input epoch/integrity/point ownership/密码/剪贴板。
+- `git diff --check` 通过；Agent 源码类型错误已清零，完整 Agent typecheck 只剩开发前既有的 Cinema/server 三处测试类型错误；i18n audit 仍报告仓库既有的非本次 Computer Use 文案项。
+- M8 工程实现与本机验收关闭。剩余外部发布条件：正式 Authenticode 证书、clean-checkout 复现，以及 125/150/200% DPI、锁屏和 device-loss 独立矩阵。
+
 ## 验证记录
 
 - 显式枚举 `tests/*.test.mjs` 后执行 `node --test`：25/25 通过。
@@ -504,12 +567,13 @@
 - Anybox 本地 catalog 加载：通过；ID `computer-use-windows`、MCP `plugin.computer-use-windows.windows`、Skill `plugin:computer-use-windows:computer-use` 均正确。
 - `bun test Test/plugin.test.ts`：49/49 通过，591 assertions。
 - M7 最终 Computer Use 相关跨层矩阵：Agent 92/92、Desktop 71/71、插件 25/25、supply-chain 2/2；独立 packaged runtime 验证 3-tool 通用 Node REPL + 14-operation 隐藏宿主能力。
+- M8 最终验证：Agent 69/69、Desktop 影响面 271/271、插件 26/26、安装 + 真实插件集成 50/50；package verifier、packaged Agent verifier、无 Computer Use artifact smoke 与四组 Windows hardware smoke 全部通过。
 
 ## 已知风险与边界
 
-- 阶段 A 的旧 plugin-owned helper 路径不具备可信边界；当前 M7 模型链路不使用该路径，而由宿主 broker 持有 helper。
 - Windows Computer Use 必须在活动桌面前台运行；WGC 改善遮挡截图，但不承诺锁屏、最小化或后台桌面输入。
-- 宿主 permission advisor 已支持参数动态审批，但所有输入和应用启动动作仍保持 `ask`；应用访问授权是与工具审批分离的第二道门。
+- 插件通过通用 permission continuation 自行实现观察与动作审批；Anybox 核心不会验证 Computer Use 参数语义，安全硬拒绝必须同时由插件 runtime/policy 与原生 helper 保持。
 - 截图、UIA 文本、窗口标题、输入文本与剪贴板内容不得写入普通日志。
-- 当前 helper 未签名，不能作为 production release；正式打包版已经强制 `Valid` Authenticode，必须先取得发布证书。
+- 当前 helper 未签名，不能作为 production release；正式插件包必须在签名后生成 SHA-256，并以 `ANYBOX_COMPUTER_USE_REQUIRE_SIGNATURE=1` 复验 `Valid` Authenticode。
 - UAC secure desktop、锁屏桌面与更高完整性级别目标不在可控范围内，且不会尝试绕过。
+- 核心暂时保留历史 `anybox.computer-use` canonical ID 的精确删除墓碑，仅用于升级清理；它不注册、启动或展示能力，并保护同名用户自有 server。

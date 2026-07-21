@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from "bun:test"
 import "./sqlite.cleanup.ts"
 import { $ } from "bun"
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { pathToFileURL } from "node:url"
@@ -25,7 +25,7 @@ afterEach(async () => {
   )
 })
 
-async function waitForCapabilityPermission(sessionID: string, toolCallID: string) {
+async function waitForPluginActionPermission(sessionID: string, toolCallID: string) {
   const deadline = Date.now() + 5_000
   while (Date.now() < deadline) {
     const request = (await Permission.listRequests({
@@ -39,26 +39,19 @@ async function waitForCapabilityPermission(sessionID: string, toolCallID: string
 }
 
 test.skipIf(process.platform !== "win32")(
-  "runs the plugin-owned sky API through Node REPL while hiding low-level Computer Use tools",
+  "runs the plugin-owned Computer Use runtime directly inside the generic Node REPL",
   async () => {
-    const root = await mkdtemp(join(tmpdir(), "anybox-computer-use-node-repl-"))
+    const root = await mkdtemp(join(tmpdir(), "anybox-computer-use-plugin-runtime-"))
     temporaryRoots.push(root)
     await mkdir(root, { recursive: true })
-    await writeFile(join(root, "README.md"), "# computer-use-node-repl\n")
+    await writeFile(join(root, "README.md"), "# computer-use-plugin-runtime\n")
     await $`git init`.cwd(root).quiet()
     await $`git config user.email test@example.com`.cwd(root).quiet()
     await $`git config user.name anybox-test`.cwd(root).quiet()
     await $`git add README.md`.cwd(root).quiet()
     await $`git commit -m init`.cwd(root).quiet()
 
-    await Config.removeMcpServer(
-      Config.GLOBAL_CONFIG_ID,
-      BuiltinMcp.NODE_REPL_SERVER_ID,
-    )
-    await Config.removeMcpServer(
-      Config.GLOBAL_CONFIG_ID,
-      BuiltinMcp.COMPUTER_USE_SERVER_ID,
-    )
+    await Config.removeMcpServer(Config.GLOBAL_CONFIG_ID, BuiltinMcp.NODE_REPL_SERVER_ID)
     await BuiltinMcp.syncBuiltinMcpRuntimeBindings()
 
     await Instance.provide({
@@ -66,14 +59,13 @@ test.skipIf(process.platform !== "win32")(
       async fn() {
         await Config.setSelectedMcpServerIDs(Instance.project.id, [
           BuiltinMcp.NODE_REPL_SERVER_ID,
-          BuiltinMcp.COMPUTER_USE_SERVER_ID,
         ])
         const manager = new McpManager(Instance.project.id)
         try {
+          expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "anybox.computer-use"))
+            .toBeUndefined()
           const tools = await manager.tools()
-          expect(
-            tools.some((tool) => tool.source?.id === BuiltinMcp.COMPUTER_USE_SERVER_ID),
-          ).toBe(false)
+          expect(tools.some((tool) => tool.source?.id === "anybox.computer-use")).toBe(false)
           const js = tools.find(
             (tool) => tool.source?.id === BuiltinMcp.NODE_REPL_SERVER_ID
               && tool.id.endsWith("__js"),
@@ -95,21 +87,21 @@ test.skipIf(process.platform !== "win32")(
           const output = Tool.normalizeToolOutput(await runtime.execute({
             code: `const { setupComputerUseRuntime } = await import(${JSON.stringify(pluginClientURL)})
               await setupComputerUseRuntime({ globals: globalThis })
-              const windows = await sky.list_windows()
+              globalThis.computerUseWindows = await sky.list_windows()
               return {
                 target: sky.target,
-                windowCount: windows.length,
-                validWindows: windows.every((window) =>
+                windowCount: computerUseWindows.length,
+                validWindows: computerUseWindows.every((window) =>
                   typeof window.id === "number"
                   && typeof window.app === "string"
                   && !("windowRef" in window)
                 )
               }`,
           }, {
-            sessionID: "session_computer_use_node_repl",
-            turnID: "turn_computer_use_node_repl",
-            messageID: "message_computer_use_node_repl",
-            toolCallID: "tool_computer_use_node_repl",
+            sessionID: "session_computer_use_plugin",
+            turnID: "turn_computer_use_plugin",
+            messageID: "message_computer_use_plugin",
+            toolCallID: "tool_computer_use_plugin",
             cwd: Instance.directory,
             worktree: Instance.worktree,
           }))
@@ -123,23 +115,22 @@ test.skipIf(process.platform !== "win32")(
             isError: false,
           })
 
-          const denied = Tool.normalizeToolOutput(await runtime.execute({
-            code: `return await nodeRepl.callPluginCapability("computer-use", "click", {
+          const blocked = Tool.normalizeToolOutput(await runtime.execute({
+            code: `return await sky.activate_window({
+              window: computerUseWindows[0],
               safety: "finance",
               purpose: "Attempt a financial action"
             })`,
           }, {
-            sessionID: "session_computer_use_node_repl",
-            turnID: "turn_computer_use_node_repl",
-            messageID: "message_computer_use_node_repl",
-            toolCallID: "tool_computer_use_node_repl_denied",
+            sessionID: "session_computer_use_plugin",
+            turnID: "turn_computer_use_plugin",
+            messageID: "message_computer_use_plugin",
+            toolCallID: "tool_computer_use_plugin_blocked",
             cwd: Instance.directory,
             worktree: Instance.worktree,
           }))
-          expect(denied.data).toMatchObject({
-            structuredContent: {
-              code: "PLUGIN_CAPABILITY_OPERATION_DENIED",
-            },
+          expect(blocked.data).toMatchObject({
+            structuredContent: { code: "CU_APP_BLOCKED" },
             isError: true,
           })
 
@@ -168,13 +159,20 @@ test.skipIf(process.platform !== "win32")(
           Session.DataBaseCreate("messages", assistant)
           const turn = Orchestrator.startTurn({ sessionID: session.id })
           try {
-            const toolCallID = "tool_computer_use_node_repl_prompt"
+            const toolCallID = "tool_computer_use_plugin_prompt"
             const pendingAction = runtime.execute({
-              code: `return await nodeRepl.callPluginCapability("computer-use", "type_text", {
-                safety: "normal",
-                purpose: "Fill a local draft field",
-                text: "private integration fixture"
-              })`,
+              code: `globalThis.computerUseWindows = await sky.list_windows()
+                await sky.get_window_state({
+                  window: computerUseWindows[0],
+                  include_screenshot: false,
+                  include_text: true
+                })
+                return await sky.type_text({
+                  window: computerUseWindows[0],
+                  safety: "normal",
+                  purpose: "Fill a local draft field",
+                  text: "private integration fixture"
+                })`,
             }, {
               sessionID: session.id,
               turnID: turn.turnID,
@@ -183,18 +181,36 @@ test.skipIf(process.platform !== "win32")(
               cwd: Instance.directory,
               worktree: Instance.worktree,
             })
-            const prompt = await waitForCapabilityPermission(session.id, toolCallID)
-            expect(prompt).toMatchObject({
-              tool: "plugin-capability.computer-use.type_text",
+            const observationPrompt = await waitForPluginActionPermission(
+              session.id,
+              toolCallID,
+            )
+            expect(observationPrompt).toMatchObject({
+              tool: "plugin-action.computer-use-windows.get_window_state",
               scope: {
-                kind: "plugin-capability",
-                capabilityID: "computer-use",
+                kind: "plugin-action",
+                pluginID: "computer-use-windows",
+              },
+              prompt: {
+                allowedDecisions: ["deny", "allow-once"],
+              },
+            })
+            await Permission.resolveRequest(observationPrompt.id, {
+              decision: "allow-once",
+            })
+            const prompt = await waitForPluginActionPermission(session.id, toolCallID)
+            expect(prompt).toMatchObject({
+              tool: "plugin-action.computer-use-windows.type_text",
+              scope: {
+                kind: "plugin-action",
+                pluginID: "computer-use-windows",
               },
               prompt: {
                 allowedDecisions: ["deny", "allow-once"],
               },
             })
             expect(prompt.prompt?.details?.body).not.toContain("private integration fixture")
+            expect(prompt.prompt?.details?.body).toContain("<redacted;")
             await Permission.resolveRequest(prompt.id, { decision: "deny" })
             const actionOutput = Tool.normalizeToolOutput(await pendingAction)
             expect(actionOutput.data).toMatchObject({

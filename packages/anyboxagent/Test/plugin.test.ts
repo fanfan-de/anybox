@@ -1113,8 +1113,9 @@ async function writeComputerUsePluginPackage() {
   const targetRoot = join(pluginLocalRoot(), "computer-use-windows")
   await mkdir(join(targetRoot, ".anybox-plugin"), { recursive: true })
   await mkdir(join(targetRoot, "skills", "computer-use"), { recursive: true })
-  await mkdir(join(targetRoot, "scripts"), { recursive: true })
+  await mkdir(join(targetRoot, "scripts", "lib"), { recursive: true })
   await mkdir(join(targetRoot, "docs"), { recursive: true })
+  await mkdir(join(targetRoot, "helper", "win32-x64"), { recursive: true })
   await cp(
     join(sourceRoot, ".anybox-plugin", "plugin.json"),
     join(targetRoot, ".anybox-plugin", "plugin.json"),
@@ -1126,6 +1127,22 @@ async function writeComputerUsePluginPackage() {
   await cp(
     join(sourceRoot, "scripts", "computer-use-client.mjs"),
     join(targetRoot, "scripts", "computer-use-client.mjs"),
+  )
+  await cp(
+    join(sourceRoot, "scripts", "runtime.cjs"),
+    join(targetRoot, "scripts", "runtime.cjs"),
+  )
+  await cp(join(sourceRoot, "scripts", "lib"), join(targetRoot, "scripts", "lib"), {
+    recursive: true,
+  })
+  const fixtureHelper = Buffer.from("plugin-owned-helper-fixture")
+  await writeFile(
+    join(targetRoot, "helper", "win32-x64", "computer-use-helper.exe"),
+    fixtureHelper,
+  )
+  await writeFile(
+    join(targetRoot, "helper", "win32-x64", "computer-use-helper.sha256"),
+    `${createHash("sha256").update(fixtureHelper).digest("hex")}  computer-use-helper.exe\n`,
   )
   await cp(join(sourceRoot, "docs"), join(targetRoot, "docs"), { recursive: true })
   return targetRoot
@@ -3802,7 +3819,7 @@ describe("plugin marketplace API", () => {
       .toBeDefined()
   })
 
-  test("installs, diagnoses, and removes Computer Use through Node REPL and the hidden host capability", async () => {
+  test("installs and removes Computer Use as a fully plugin-owned Node REPL runtime", async () => {
     await useTempDatabase()
     await writeComputerUsePluginPackage()
     await BuiltinMcp.syncBuiltinMcpRuntimeBindings()
@@ -3815,20 +3832,13 @@ describe("plugin marketplace API", () => {
     )
     expect(catalogResponse.status).toBe(200)
     expect(plugin?.mcpServers).toEqual([])
-    expect(plugin?.mcpRequirements).toHaveLength(2)
-    expect(plugin?.mcpRequirements.find((item) => item.mcp === "node-repl")).toMatchObject({
+    expect(plugin?.mcpRequirements).toHaveLength(1)
+    expect(plugin?.mcpRequirements[0]).toMatchObject({
       mcp: "node-repl",
       required: true,
       tools: ["js", "js_reset"],
     })
-    const computerUseRequirement = plugin?.mcpRequirements.find(
-      (item) => item.mcp === "computer-use",
-    )
-    expect(computerUseRequirement).toMatchObject({
-      mcp: "computer-use",
-      required: true,
-    })
-    expect(computerUseRequirement?.tools).toHaveLength(14)
+    expect(plugin?.mcpRequirements.some((item) => item.mcp === "computer-use")).toBe(false)
 
     const installResponse = await app.request(
       "/api/plugins/installed/computer-use-windows",
@@ -3841,10 +3851,22 @@ describe("plugin marketplace API", () => {
     const installed = (await installResponse.json()) as InstalledPluginEnvelope
     expect(installResponse.status).toBe(200)
     expect(installed.data?.mcpServerIDs).toEqual([])
-    expect(installed.data?.mcpRequirementIDs).toEqual([
-      BuiltinMcp.NODE_REPL_SERVER_ID,
-      BuiltinMcp.COMPUTER_USE_SERVER_ID,
-    ])
+    expect(installed.data?.mcpRequirementIDs).toEqual([BuiltinMcp.NODE_REPL_SERVER_ID])
+
+    const installedRoot = join(
+      pluginInstallRoot(),
+      "computer-use-windows",
+      plugin?.version ?? "missing-version",
+    )
+    expect(existsSync(join(installedRoot, "scripts", "computer-use-client.mjs"))).toBe(true)
+    expect(existsSync(join(installedRoot, "scripts", "runtime.cjs"))).toBe(true)
+    expect(existsSync(join(installedRoot, "scripts", "lib", "helper-client.js"))).toBe(true)
+    expect(existsSync(join(
+      installedRoot,
+      "helper",
+      "win32-x64",
+      "computer-use-helper.exe",
+    ))).toBe(true)
 
     await Config.setSelectedPluginIDs("computer-use-project", [
       "computer-use-windows",
@@ -3852,45 +3874,19 @@ describe("plugin marketplace API", () => {
     expect(
       (await Config.resolveProjectMcpServers("computer-use-project"))
         .map((server) => server.id),
-    ).toEqual(expect.arrayContaining([
-      BuiltinMcp.NODE_REPL_SERVER_ID,
-      BuiltinMcp.COMPUTER_USE_SERVER_ID,
-    ]))
+    ).toEqual([BuiltinMcp.NODE_REPL_SERVER_ID])
 
     const diagnosticResponse = await app.request(
-      `/api/mcp/servers/${BuiltinMcp.COMPUTER_USE_SERVER_ID}/diagnostic`,
+      `/api/mcp/servers/${BuiltinMcp.NODE_REPL_SERVER_ID}/diagnostic`,
     )
     const diagnostic = (await diagnosticResponse.json()) as DiagnosticEnvelope
     expect(diagnosticResponse.status).toBe(200)
     expect(diagnostic.data).toMatchObject({
       ok: true,
-      toolCount: 14,
+      toolCount: 3,
     })
-
-    const builtIn = await Config.getMcpServer(
-      Config.GLOBAL_CONFIG_ID,
-      BuiltinMcp.COMPUTER_USE_SERVER_ID,
-    )
-    expect(builtIn?.transport).toBe("stdio")
-    if (!builtIn || builtIn.transport !== "stdio") {
-      throw new Error("Computer Use built-in MCP was not synchronized.")
-    }
-    const { id: _id, owner: _owner, ...builtInInput } = builtIn
-    await Config.setManagedMcpServer(
-      Config.GLOBAL_CONFIG_ID,
-      BuiltinMcp.COMPUTER_USE_SERVER_ID,
-      {
-        ...builtInInput,
-        toolPolicies: {
-          ...builtIn.toolPolicies,
-          click: { policy: "disabled" },
-        },
-      },
-      {
-        kind: "anybox",
-        bindingID: BuiltinMcp.COMPUTER_USE_DEFINITION_ID,
-      },
-    )
+    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "anybox.computer-use"))
+      .toBeUndefined()
 
     const deleteResponse = await app.request(
       "/api/plugins/installed/computer-use-windows",
@@ -3898,13 +3894,11 @@ describe("plugin marketplace API", () => {
     )
     expect(deleteResponse.status).toBe(200)
     expect(Plugin.getInstalled("computer-use-windows")).toBeNull()
-    expect(await Config.getMcpServer(
-      Config.GLOBAL_CONFIG_ID,
-      BuiltinMcp.COMPUTER_USE_SERVER_ID,
-    )).toBeDefined()
+    expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, BuiltinMcp.NODE_REPL_SERVER_ID))
+      .toBeDefined()
   })
 
-  test("preserves Computer Use requirement and host policies across plugin upgrade and downgrade", async () => {
+  test("preserves the plugin-owned runtime and generic Node REPL requirement across upgrade and downgrade", async () => {
     await useTempDatabase()
     const localPackageRoot = await writeComputerUseUpgradeFixturePackage()
     await BuiltinMcp.syncBuiltinMcpRuntimeBindings()
@@ -3919,46 +3913,22 @@ describe("plugin marketplace API", () => {
       },
     )).status).toBe(200)
 
-    const builtIn = await Config.getMcpServer(
-      Config.GLOBAL_CONFIG_ID,
-      BuiltinMcp.COMPUTER_USE_SERVER_ID,
-    )
-    if (!builtIn || builtIn.transport !== "stdio") {
-      throw new Error("Computer Use built-in MCP was not synchronized.")
-    }
-    const { id: _id, owner: _owner, ...builtInInput } = builtIn
-    await Config.setManagedMcpServer(
-      Config.GLOBAL_CONFIG_ID,
-      BuiltinMcp.COMPUTER_USE_SERVER_ID,
-      {
-        ...builtInInput,
-        toolPolicies: {
-          ...builtIn.toolPolicies,
-          click: { policy: "disabled" },
-        },
-      },
-      {
-        kind: "anybox",
-        bindingID: BuiltinMcp.COMPUTER_USE_DEFINITION_ID,
-      },
-    )
-
     const localManifestPath = join(
       localPackageRoot,
-      ".anybox-plugin",
-      "plugin.json",
-    )
-    const installedManifestPath = join(
-      pluginInstallRoot(),
-      "computer-use-upgrade-lab",
-      "0.2.0",
       ".anybox-plugin",
       "plugin.json",
     )
     const manifest = JSON.parse(
       await readFile(localManifestPath, "utf8"),
     ) as Record<string, unknown>
-    for (const version of ["0.2.1", "0.1.9"]) {
+    const installedManifestPath = join(
+      pluginInstallRoot(),
+      "computer-use-upgrade-lab",
+      String(manifest.version),
+      ".anybox-plugin",
+      "plugin.json",
+    )
+    for (const version of ["0.3.1", "0.2.9"]) {
       manifest.version = version
       const serialized = JSON.stringify(manifest, null, 2)
       await writeFile(localManifestPath, serialized)
@@ -3977,16 +3947,18 @@ describe("plugin marketplace API", () => {
       ).toBe(version)
       expect(
         Plugin.getInstalled("computer-use-upgrade-lab")?.mcpRequirementIDs,
-      ).toEqual([
-        BuiltinMcp.NODE_REPL_SERVER_ID,
-        BuiltinMcp.COMPUTER_USE_SERVER_ID,
-      ])
-      expect(
-        (await Config.getMcpServer(
-          Config.GLOBAL_CONFIG_ID,
-          BuiltinMcp.COMPUTER_USE_SERVER_ID,
-        ))?.toolPolicies?.click?.policy,
-      ).toBe("disabled")
+      ).toEqual([BuiltinMcp.NODE_REPL_SERVER_ID])
+      const installedPackageRoot = Plugin.getInstalled(
+        "computer-use-upgrade-lab",
+      )?.packageRoot
+      expect(installedPackageRoot).toBeDefined()
+      expect(existsSync(join(
+        installedPackageRoot!,
+        "scripts",
+        "runtime.cjs",
+      ))).toBe(true)
+      expect(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, "anybox.computer-use"))
+        .toBeUndefined()
     }
   })
 

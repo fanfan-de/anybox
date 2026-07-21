@@ -222,6 +222,11 @@ async function main() {
     helperPath,
     cwd: pluginRoot,
     defaultTimeoutMs: 10_000,
+    defaultContext: {
+      sessionID: "smoke-wgc",
+      turnID: "smoke-wgc",
+      toolCallID: "smoke-wgc",
+    },
   })
   let target
   let occluder

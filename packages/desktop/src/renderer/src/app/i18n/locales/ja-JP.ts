@@ -1,6 +1,5 @@
 import type { TranslationKey } from "../translations"
 import { subscriptionTranslations } from "../subscription-translations"
-import { computerUseTranslations } from "../computer-use-translations"
 import { skillLibraryTranslations } from "../skill-library-translations"
 import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
 
@@ -146,7 +145,6 @@ export const jaJP = {
   "settings.nav.storage": "ストレージ",
   "settings.nav.archive": "アーカイブ済みセッション",
   ...subscriptionTranslations["ja-JP"],
-  ...computerUseTranslations["ja-JP"],
   ...skillLibraryTranslations["ja-JP"],
   "settings.about.version": "バージョン",
   "settings.about.checkUpdates": "アップデートを確認",

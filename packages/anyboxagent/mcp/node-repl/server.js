@@ -308,74 +308,6 @@ function resetKernel() {
       images.push(image)
       return image
     },
-    async callPluginCapability(capability, operation, args = {}) {
-      const context = requestContext.getStore()
-      const publicMeta = publicRequestMeta()
-      const token = context && typeof context.pluginCapabilityToken === "string"
-        ? context.pluginCapabilityToken
-        : undefined
-      if (
-        !token
-        || !publicMeta?.sessionID
-        || !publicMeta.turnID
-        || !publicMeta.messageID
-        || !publicMeta.toolCallID
-      ) {
-        const error = new Error(
-          "callPluginCapability requires an active, host-authorized JavaScript tool context.",
-        )
-        error.code = "PLUGIN_CAPABILITY_CONTEXT_REQUIRED"
-        throw error
-      }
-      const capabilityID = String(capability || "").trim()
-      const operationName = String(operation || "").trim()
-      if (!/^[a-z0-9][a-z0-9_-]*$/u.test(capabilityID)) {
-        throw new Error("callPluginCapability requires a valid capability id.")
-      }
-      if (!operationName || operationName.length > 128) {
-        throw new Error("callPluginCapability requires a valid operation name.")
-      }
-      if (!args || typeof args !== "object" || Array.isArray(args)) {
-        throw new Error("callPluginCapability arguments must be an object.")
-      }
-
-      const execution = executionTimeoutContext.getStore()
-      execution?.pause()
-      let result
-      try {
-        result = await requestClient("anybox/plugin-capability/call", {
-          token,
-          capability: capabilityID,
-          operation: operationName,
-          arguments: args,
-          context: publicMeta,
-        }, MAX_TIMEOUT_MS)
-      } finally {
-        execution?.resume()
-      }
-      if (!result || typeof result !== "object" || !Array.isArray(result.content)) {
-        const error = new Error("The plugin capability client returned an invalid response.")
-        error.code = "PLUGIN_CAPABILITY_INVALID_RESPONSE"
-        throw error
-      }
-      if (result.isError) {
-        const details = result.structuredContent && typeof result.structuredContent === "object"
-          ? result.structuredContent
-          : undefined
-        const message = typeof details?.error === "string"
-          ? details.error
-          : result.content.find((block) => block && block.type === "text")?.text
-            || "Plugin capability operation failed."
-        const error = new Error(message)
-        error.code = typeof details?.code === "string"
-          ? details.code
-          : "PLUGIN_CAPABILITY_FAILED"
-        if (typeof details?.retryable === "boolean") error.retryable = details.retryable
-        if (details?.details && typeof details.details === "object") error.details = details.details
-        throw error
-      }
-      return result
-    },
     async requestPermission(input) {
       if (!input || typeof input !== "object" || Array.isArray(input)) {
         throw new Error("requestPermission expects an object.")
@@ -668,10 +600,6 @@ function readRequestContext(message) {
       (candidate) => typeof candidate === "string" && candidate.trim(),
     )
     if (typeof value === "string") context[target] = value.trim()
-  }
-  const pluginCapabilityToken = meta["anybox/pluginCapabilityToken"]
-  if (typeof pluginCapabilityToken === "string" && pluginCapabilityToken.trim()) {
-    context.pluginCapabilityToken = pluginCapabilityToken.trim()
   }
   return Object.keys(context).length > 0 ? context : undefined
 }

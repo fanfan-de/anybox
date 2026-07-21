@@ -6,11 +6,6 @@ import type { AppEnv } from "#server/types.ts"
 import type { PtyRegistry } from "#pty/registry.ts"
 import * as SessionUseCase from "#server/usecases/session.ts"
 import * as ImageAssets from "#session/support/image-assets.ts"
-import { computerUseBroker } from "#mcp/computer-use/broker.ts"
-
-const InterruptComputerUseBody = z.object({
-  turnID: z.string().trim().min(1),
-}).strict()
 
 export { createSessionExecutionStream } from "#server/usecases/session.ts"
 
@@ -176,23 +171,6 @@ export function SessionRoutes(options: { ptyRegistry: PtyRegistry }) {
       {},
     )
     return ok(c, await SessionUseCase.cancelSession(c.req.param("id"), payload))
-  })
-
-  app.post("/:id/computer-use/interrupt", async (c) => {
-    const payload = await parseJsonBody(
-      c,
-      InterruptComputerUseBody,
-      "Body must include the active turnID.",
-    )
-    return ok(c, {
-      interrupted: computerUseBroker().interrupt(
-        {
-          sessionID: c.req.param("id"),
-          turnID: payload.turnID,
-        },
-        "desktop-escape",
-      ),
-    })
   })
 
   app.post("/:id/questions/answer", async (c) => {
