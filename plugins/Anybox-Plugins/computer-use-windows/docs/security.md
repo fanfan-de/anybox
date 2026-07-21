@@ -104,9 +104,10 @@ text, document text, selected text, clipboard data, or typed/assigned values.
   mismatches can make a valid request fail safely.
 - DPI, multi-monitor, lock-screen, and graphics-device-loss cases remain part
   of the Windows release hardware matrix.
-- The safety overlay uses fixed light, dark, and Windows high-contrast palettes
-  with no animation. Chinese Windows uses Chinese notice text; other UI
-  languages use English.
+- The safety overlay uses fixed light, dark, and Windows high-contrast palettes.
+  Its edge pulse and status-text shimmer are cosmetic, stop with the overlay,
+  respect the Windows UI-effects preference, and are disabled in high-contrast
+  mode. Chinese Windows uses Chinese notice text; other UI languages use English.
 - The checked-in development helper is hash-verified but unsigned. A production
   package must be signed before its adjacent digest is generated.
 

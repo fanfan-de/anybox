@@ -5,8 +5,8 @@ discovers applications and windows, captures one selected window with Windows
 Graphics Capture, inspects a bounded UI Automation tree, and sends guarded
 mouse or keyboard input from a fresh one-action state.
 
-The current plugin version is `0.3.2`. The bundled native helper component is
-version `0.2.1`. The supported release target is Windows
+The current plugin version is `0.3.3`. The bundled native helper component is
+version `0.2.2`. The supported release target is Windows
 11 x64.
 
 ## Ownership boundary
@@ -44,6 +44,12 @@ Display/DPI changes rebuild the registered window set. Only those exact HWNDs
 are ignored during point-ownership checks; every other occluding window remains
 blocking.
 
+The visual treatment follows the Codex Windows overlay: a compact, segmented
+status pill sits below the top edge while a blue edge treatment gently pulses
+around each display. The status text carries a restrained shimmer when Windows
+UI effects are enabled. Light, dark, reduced-effects, and high-contrast modes
+remain independently legible.
+
 Overlay availability is a protocol capability and a hard precondition for
 desktop access. Creation, show, display synchronization, or capture-exclusion
 failure returns `CU_OVERLAY_UNAVAILABLE` and terminates the current Computer Use
@@ -60,7 +66,8 @@ session. There is no production disable switch.
    and connected client process IDs.
 5. During initialization the helper creates and validates one hidden native
    overlay window per active display. Before any desktop observation or
-   control, it synchronously shows a blue border and “Press Esc to stop” notice.
+   control, it synchronously shows a blue edge treatment and a segmented
+   “Press Esc to stop” status pill.
 6. Routine observation and ordinary local interaction run directly without a
    plugin approval prompt.
 7. Send/submit, delete, upload, and install actions receive a separate,

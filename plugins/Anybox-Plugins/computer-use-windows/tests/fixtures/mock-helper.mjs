@@ -58,7 +58,7 @@ function startBroker(brokerToken) {
         const result = message.method === "initialize"
           ? {
               protocolVersion: 1,
-              helperVersion: "0.2.1",
+              helperVersion: "0.2.2",
               capabilities: {
                 hostBroker: message.params?.brokerToken === brokerToken,
                 physicalEscape: true,

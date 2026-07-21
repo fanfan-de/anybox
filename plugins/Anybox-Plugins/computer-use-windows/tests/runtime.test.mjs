@@ -36,14 +36,14 @@ class MockHelper {
   }
 
   async ensureInitialized() {
-    return { protocolVersion: 1, helperVersion: "0.2.1", capabilities: { overlay: true } }
+    return { protocolVersion: 1, helperVersion: "0.2.2", capabilities: { overlay: true } }
   }
 
   async call(method, params) {
     if (method === "health_check") {
       return {
         protocolVersion: 1,
-        helperVersion: "0.2.1",
+        helperVersion: "0.2.2",
         platform: "win32-x64",
         captureBackend: "test",
         accessibilityBackend: "test",

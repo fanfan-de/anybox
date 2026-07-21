@@ -80,8 +80,9 @@ The release workstation matrix must additionally cover Windows 11 x64 at
 windows; lock/unlock; device loss; integrity mismatch; physical Escape during
 observation/action; and plugin install, upgrade, downgrade, disable, and
 uninstall. Overlay inspection must cover its localized notice, light/dark/high
-contrast palettes, one window per display, topmost/no-activate/click-through
-styles, taskbar/catalog exclusion, capture exclusion, 700 ms normal cleanup,
-and immediate physical-Escape cleanup.
+contrast palettes, reduced-effects behavior, segmented status-pill layout,
+one window per display, topmost/no-activate/click-through styles,
+taskbar/catalog exclusion, capture exclusion, 700 ms normal cleanup, and
+immediate physical-Escape cleanup.
 
 Record results in `docs/computer-use-windows-development-progress.md`.

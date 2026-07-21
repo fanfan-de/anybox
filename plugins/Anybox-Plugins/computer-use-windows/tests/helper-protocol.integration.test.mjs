@@ -39,7 +39,7 @@ function initialize(id = "init", protocolVersion = 1) {
     method: "initialize",
     params: {
       protocolVersion,
-      client: { name: "test", version: "0.3.2" },
+      client: { name: "test", version: "0.3.3" },
       maxFrameBytes: MAX_FRAME_BYTES,
     },
     meta: {
@@ -61,7 +61,7 @@ test("real helper accepts fragmented frames and multiple frames in one write", a
     child.stdin.write(frame.subarray(19))
     const initialized = await next()
     assert.equal(initialized.result.protocolVersion, 1)
-    assert.equal(initialized.result.helperVersion, "0.2.1")
+    assert.equal(initialized.result.helperVersion, "0.2.2")
     assert.equal(initialized.result.capabilities.overlay, true)
 
     child.stdin.write(Buffer.concat([
@@ -82,7 +82,7 @@ test("real helper accepts fragmented frames and multiple frames in one write", a
     ]))
     const health = await next()
     const unknown = await next()
-    assert.equal(health.result.helperVersion, "0.2.1")
+    assert.equal(health.result.helperVersion, "0.2.2")
     assert.equal(health.result.features.overlay, true)
     assert.equal(unknown.error.data.computerUseCode, "CU_PROTOCOL_MISMATCH")
   } finally {
