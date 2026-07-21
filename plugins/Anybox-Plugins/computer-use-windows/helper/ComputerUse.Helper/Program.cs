@@ -4,6 +4,7 @@ using ComputerUse.Helper.Accessibility;
 using ComputerUse.Helper.Apps;
 using ComputerUse.Helper.Capture;
 using ComputerUse.Helper.Input;
+using ComputerUse.Helper.Overlay;
 using ComputerUse.Helper.Policy;
 using ComputerUse.Helper.Protocol;
 using ComputerUse.Helper.State;
@@ -22,6 +23,7 @@ internal static class Program
 
     private static bool _initialized;
     private static HostBrokerConnection? _hostBroker;
+    private static OverlayManager? _overlay;
 
     [STAThread]
     public static void Main(string[] args)
@@ -33,39 +35,46 @@ internal static class Program
         using var hostBroker = _hostBroker;
         var input = hostBroker?.Stream ?? Console.OpenStandardInput();
         var output = hostBroker?.Stream ?? Console.OpenStandardOutput();
-        PhysicalInputState.SetPhysicalEscapeHandler(
-            hostBroker is null
-                ? null
-                : () => WriteNotification(output, "physical_escape", new
-                {
-                    inputEpoch = PhysicalInputState.Epoch,
-                })
-        );
-        using var physicalInputMonitor = PhysicalInputMonitor.Start();
-
-        while (true)
+        using var overlay = new OverlayManager(error => HandleOverlayFailure(output, error));
+        _overlay = overlay;
+        try
         {
-            JsonDocument? document;
-            try
-            {
-                document = FrameProtocol.Read(input);
-            }
-            catch (ComputerUseException error)
-            {
-                WriteError(output, null, error);
-                break;
-            }
-            if (document is null)
-            {
-                break;
-            }
+            PhysicalInputState.SetPhysicalEscapeHandler(
+                hostBroker is null
+                    ? null
+                    : () => HandlePhysicalEscape(output)
+            );
+            using var physicalInputMonitor = PhysicalInputMonitor.Start();
 
-            using (document)
+            while (true)
             {
-                HandleRequest(document.RootElement, output);
+                JsonDocument? document;
+                try
+                {
+                    document = FrameProtocol.Read(input);
+                }
+                catch (ComputerUseException error)
+                {
+                    WriteError(output, null, error);
+                    break;
+                }
+                if (document is null)
+                {
+                    break;
+                }
+
+                using (document)
+                {
+                    HandleRequest(document.RootElement, output);
+                }
             }
         }
-        PhysicalInputState.SetPhysicalEscapeHandler(null);
+        finally
+        {
+            PhysicalInputState.SetPhysicalEscapeHandler(null);
+            NativeStateRegistry.InvalidateAll();
+            _overlay = null;
+        }
     }
 
     private static void HandleRequest(JsonElement root, Stream output)
@@ -165,6 +174,11 @@ internal static class Program
                 JsonArgs.String(parameters, "brokerToken", required: true)
             );
         }
+        var overlay = _overlay ?? throw new ComputerUseException(
+            "CU_OVERLAY_UNAVAILABLE",
+            "The Computer Use safety overlay manager is unavailable."
+        );
+        overlay.Initialize();
         return new
         {
             protocolVersion = BuildInfo.ProtocolVersion,
@@ -180,13 +194,22 @@ internal static class Program
                 physicalInputEpoch = PhysicalInputState.IsAvailable,
                 physicalEscape = _hostBroker is not null,
                 hostBroker = _hostBroker is not null,
+                overlay = true,
             },
         };
     }
 
     private static object Dispatch(string method, JsonElement parameters)
     {
-        return method switch
+        var overlay = _overlay ?? throw new ComputerUseException(
+            "CU_OVERLAY_UNAVAILABLE",
+            "The Computer Use safety overlay manager is unavailable."
+        );
+        if (RequiresOverlay(method))
+        {
+            overlay.ShowForDesktopAccess();
+        }
+        var result = method switch
         {
             "health_check" => HealthCheck(),
             "list_apps" => AppCatalog.ListApps(),
@@ -202,16 +225,23 @@ internal static class Program
                 $"Unknown Computer Use helper method: {method}"
             ),
         };
+        if (RequiresOverlay(method))
+        {
+            overlay.AssertAvailable();
+        }
+        return result;
     }
 
     private static object EndTurn()
     {
         NativeStateRegistry.InvalidateAll();
+        _overlay?.EndTurn();
         return new { ended = true };
     }
 
     private static object HealthCheck()
     {
+        var overlay = _overlay?.Status();
         return new
         {
             protocolVersion = BuildInfo.ProtocolVersion,
@@ -221,6 +251,8 @@ internal static class Program
             accessibilityBackend = UiaSnapshot.IsSupported() ? "uia" : "unavailable",
             accessibilityDiagnostic = UiaSnapshot.SupportDiagnostic,
             physicalInputDiagnostic = PhysicalInputState.Diagnostic,
+            overlayDiagnostic = overlay?.Diagnostic,
+            overlayStatus = overlay,
             inputBackend = "send-input",
             helperIntegrityLevel = IntegrityInspector.CurrentLevel,
             features = new
@@ -231,8 +263,42 @@ internal static class Program
                 physicalInputEpoch = PhysicalInputState.IsAvailable,
                 physicalEscape = _hostBroker is not null,
                 hostBroker = _hostBroker is not null,
+                overlay = overlay?.Available == true,
             },
         };
+    }
+
+    private static bool RequiresOverlay(string method)
+    {
+        return method is
+            "list_apps" or
+            "list_windows" or
+            "resolve_window" or
+            "activate_window" or
+            "get_window_state" or
+            "launch_app" or
+            "perform_action";
+    }
+
+    private static void HandlePhysicalEscape(Stream output)
+    {
+        _overlay?.InterruptImmediately();
+        NativeStateRegistry.InvalidateAll();
+        WriteNotification(output, "physical_escape", new
+        {
+            inputEpoch = PhysicalInputState.Epoch,
+        });
+    }
+
+    private static void HandleOverlayFailure(Stream output, ComputerUseException error)
+    {
+        NativeStateRegistry.InvalidateAll();
+        WriteNotification(output, "overlay_unavailable", new
+        {
+            computerUseCode = error.Code,
+            retryable = error.Retryable,
+            requiresFreshState = error.RequiresFreshState,
+        });
     }
 
     private static object ListWindows()

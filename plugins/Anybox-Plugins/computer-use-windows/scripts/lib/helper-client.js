@@ -31,6 +31,7 @@ class HelperClient {
     this.requireAuthenticode = options.requireAuthenticode
       ?? process.env.ANYBOX_COMPUTER_USE_REQUIRE_SIGNATURE?.trim() === "1"
     this.onPhysicalEscape = options.onPhysicalEscape
+    this.onOverlayUnavailable = options.onOverlayUnavailable
     this.defaultContext = options.defaultContext
     this.maxFrameBytes = options.maxFrameBytes ?? MAX_FRAME_BYTES
     this.defaultTimeoutMs = options.defaultTimeoutMs ?? DEFAULT_HELPER_TIMEOUT_MS
@@ -170,6 +171,12 @@ class HelperClient {
           "Computer Use helper returned an incompatible plugin-broker handshake.",
         )
       }
+      if (result?.capabilities?.overlay !== true) {
+        throw cuError(
+          "CU_OVERLAY_UNAVAILABLE",
+          "Computer Use helper did not provide the required safety overlay.",
+        )
+      }
       return result
     } catch (error) {
       const normalized = error instanceof ComputerUseError
@@ -293,6 +300,20 @@ class HelperClient {
         this.stopChild(child, interrupted)
         return
       }
+      if (message.jsonrpc === "2.0" && message.method === "overlay_unavailable") {
+        const unavailable = cuError(
+          "CU_OVERLAY_UNAVAILABLE",
+          "The Computer Use safety overlay became unavailable; desktop access was stopped.",
+          { retryable: true, requiresFreshState: true },
+        )
+        try {
+          this.onOverlayUnavailable?.(unavailable)
+        } catch {
+          // A plugin callback cannot weaken fail-closed overlay handling.
+        }
+        this.stopChild(child, unavailable)
+        return
+      }
       if (message.jsonrpc !== "2.0" || message.id === undefined) {
         this.stopChild(
           child,
@@ -391,6 +412,24 @@ class HelperClient {
 
   stop(error = cuError("CU_INTERNAL_ERROR", "Computer Use helper stopped.")) {
     if (this.process) this.stopChild(this.process, error)
+  }
+
+  async endTurnAndStop(options = {}) {
+    const child = this.process
+    if (!child) return
+    try {
+      await this.queue.run(async () => {
+        if (this.process !== child || !this.initialized) return
+        await this.requestRaw("end_turn", {}, options)
+      })
+    } finally {
+      if (this.process === child) {
+        this.stopChild(
+          child,
+          cuError("CU_INTERNAL_ERROR", "Computer Use helper stopped after turn cleanup."),
+        )
+      }
+    }
   }
 
   stopChild(child, error, kill = true) {

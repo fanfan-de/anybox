@@ -2,7 +2,7 @@
 
 ## Security objective
 
-The plugin may observe only an explicitly approved application during the
+The plugin may observe only an explicitly selected application during the
 active Agent turn and may act only from a just-observed window state. One state
 permits one explicit action. Physical input, window or desktop changes, turn
 completion, reset, transport close, or physical Escape invalidates control.
@@ -26,14 +26,16 @@ and Anybox's business-neutral permission display/continuation service.
   256-bit token, an 8 MiB frame limit, parent PID validation, and connected
   client PID validation.
 - Plugin lifecycle hooks close the helper and erase window/state mappings at
-  turn end, session end, REPL reset, and transport close.
+  turn end, session end, REPL reset, and transport close. Normal cleanup sends
+  `end_turn` and awaits native overlay cleanup before stopping the process.
 
 ## Enforced invariants
 
-- The first screenshot/UIA observation for an application in a turn requires
-  a one-time generic plugin-action decision.
-- Every launch or input operation requires another one-time decision. At most
-  one state-changing operation may be claimed per submitted JavaScript snippet.
+- Routine screenshots/UIA observations and `normal` local interactions run
+  without a plugin prompt. At most one state-changing operation may be claimed
+  per submitted JavaScript snippet.
+- `submit_or_send`, `delete`, `upload`, and `install` actions require a one-time
+  generic plugin-action decision at the action boundary.
 - `auth_or_secret`, `finance`, and `security_settings` are hard denied before a
   prompt. High-impact intent remains prominently described in approval UI.
 - Window identity includes HWND, PID, process start time, root owner,
@@ -52,6 +54,17 @@ and Anybox's business-neutral permission display/continuation service.
   if no user or application write replaced the temporary value.
 - Physical Escape terminates the helper and blocks further plugin operations
   until the next turn.
+- Every desktop-access method requires a validated native overlay on every
+  active display. `initialize` creates the windows hidden; `health_check` never
+  shows them. App/window listing, resolution, screenshot/UIA observation,
+  launch/activation, and input show them before touching the desktop.
+- Overlay windows are topmost, non-activating, mouse-transparent, absent from
+  taskbar/app/window catalogs, and marked `WDA_EXCLUDEFROMCAPTURE`. Point
+  ownership ignores only the Helper's registered overlay HWNDs, so unrelated
+  occluders remain blocking.
+- Overlay creation, display, capture exclusion, monitor synchronization, or UI
+  thread failure returns `CU_OVERLAY_UNAVAILABLE` and stops the current
+  Computer Use session. There is no production setting to bypass this guard.
 
 ## Blocked targets
 
@@ -76,9 +89,9 @@ results do not duplicate screenshot base64. Native window handles, executable
 paths, state references, and helper launch selectors remain private to the
 plugin runtime.
 
-Permission descriptions do not contain screenshot pixels, UIA text, document
-text, selected text, clipboard data, or typed/assigned values. `type_text` and
-`set_value` payloads are reduced to character counts.
+High-impact permission descriptions do not contain screenshot pixels, UIA
+text, document text, selected text, clipboard data, or typed/assigned values.
+`type_text` and `set_value` payloads are reduced to character counts.
 
 ## Known limitations
 
@@ -91,6 +104,9 @@ text, selected text, clipboard data, or typed/assigned values. `type_text` and
   mismatches can make a valid request fail safely.
 - DPI, multi-monitor, lock-screen, and graphics-device-loss cases remain part
   of the Windows release hardware matrix.
+- The safety overlay uses fixed light, dark, and Windows high-contrast palettes
+  with no animation. Chinese Windows uses Chinese notice text; other UI
+  languages use English.
 - The checked-in development helper is hash-verified but unsigned. A production
   package must be signed before its adjacent digest is generated.
 

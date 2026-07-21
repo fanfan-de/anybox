@@ -31,17 +31,19 @@ class MockHelper {
     this.launches = []
     this.failNextAction = false
     this.accessibility = options.accessibility ?? null
+    this.stopped = false
+    this.ended = false
   }
 
   async ensureInitialized() {
-    return { protocolVersion: 1, helperVersion: "0.2.0", capabilities: {} }
+    return { protocolVersion: 1, helperVersion: "0.2.1", capabilities: { overlay: true } }
   }
 
   async call(method, params) {
     if (method === "health_check") {
       return {
         protocolVersion: 1,
-        helperVersion: "0.2.0",
+        helperVersion: "0.2.1",
         platform: "win32-x64",
         captureBackend: "test",
         accessibilityBackend: "test",
@@ -97,10 +99,16 @@ class MockHelper {
       return { launched: true, appId: params.appId }
     }
     if (method === "activate_window") return { window, inputEpoch: 0 }
+    if (method === "end_turn") {
+      this.ended = true
+      return { ended: true }
+    }
     throw new Error(`Unexpected method: ${method}`)
   }
 
-  stop() {}
+  stop() {
+    this.stopped = true
+  }
 }
 
 test("requires a fresh state for input and consumes it after one action", async () => {
@@ -307,4 +315,20 @@ test("launch_app accepts only a current app catalog selector and never forwards 
     }),
     (error) => error.code === "CU_APP_APPROVAL_REQUIRED",
   )
+})
+
+test("runtime sends end_turn before stopping the helper", async () => {
+  const helper = new MockHelper()
+  const runtime = new ComputerUseRuntime({ helper })
+
+  await runtime.close({
+    requestMeta: {
+      sessionID: "session",
+      turnID: "turn",
+      toolCallID: "tool",
+    },
+  })
+
+  assert.equal(helper.ended, true)
+  assert.equal(helper.stopped, true)
 })

@@ -17,6 +17,7 @@ function createGlobals() {
   const images = []
   const permissions = []
   const responseMeta = []
+  const closes = []
   const lifecycleHooks = new Set()
   const afterSubmittedCodeHooks = new Set()
   let stateCounter = 0
@@ -65,7 +66,10 @@ function createGlobals() {
       }
       return result({ stateConsumed: operation !== "launch_app" })
     },
-    close() {},
+    async close(context) {
+      await Promise.resolve()
+      closes.push(context)
+    },
   }
   const nodeRepl = {
     requestMeta: {
@@ -100,6 +104,7 @@ function createGlobals() {
     images,
     permissions,
     responseMeta,
+    closes,
     emitLifecycle: async (type) => {
       for (const hook of lifecycleHooks) await hook({ type })
     },
@@ -165,12 +170,7 @@ test("installs a Codex-style sky API backed by the plugin-owned runtime", async 
       requestMeta: fixture.globals.nodeRepl.requestMeta,
     },
   })
-  assert.equal(fixture.permissions.length, 2)
-  assert.equal(fixture.permissions[0].scope.kind, "plugin-action")
-  assert.equal(fixture.permissions[0].scope.pluginID, "computer-use-windows")
-  assert.equal(fixture.permissions[0].method, "get_window_state")
-  assert.equal(fixture.permissions[1].method, "click")
-  assert.equal(fixture.permissions[1].scope.actionBody.includes("state_1"), false)
+  assert.equal(fixture.permissions.length, 0)
   await assert.rejects(
     sky.click({ window: windows[0], element_index: 7 }),
     /No fresh state exists/u,
@@ -179,6 +179,32 @@ test("installs a Codex-style sky API backed by the plugin-owned runtime", async 
     fixture.responseMeta.some((meta) => meta["anybox/toolSurface"]?.kind === "computerUse"),
     true,
   )
+})
+
+test("asks only for high-impact actions and keeps entered text redacted", async () => {
+  const fixture = createGlobals()
+  const sky = await setupComputerUseRuntime({
+    globals: fixture.globals,
+    runtime: fixture.runtime,
+  })
+  const windows = await sky.list_windows()
+
+  await sky.get_window_state({ window: windows[0] })
+  await sky.type_text({
+    window: windows[0],
+    text: "private fixture text",
+    purpose: "Send a fixture message",
+    safety: "submit_or_send",
+  })
+
+  assert.equal(fixture.permissions.length, 1)
+  assert.equal(fixture.permissions[0].scope.kind, "plugin-action")
+  assert.equal(fixture.permissions[0].scope.pluginID, "computer-use-windows")
+  assert.equal(fixture.permissions[0].method, "type_text")
+  assert.equal(fixture.permissions[0].risk, "high")
+  assert.equal(fixture.permissions[0].sensitive, true)
+  assert.equal(fixture.permissions[0].scope.actionBody.includes("private fixture text"), false)
+  assert.equal(fixture.permissions[0].scope.actionBody.includes("<redacted; 20 characters>"), true)
 })
 
 test("maps app launch, key chords, coordinates, and lifecycle state inside the plugin", async () => {
@@ -219,6 +245,8 @@ test("maps app launch, key chords, coordinates, and lifecycle state inside the p
 
   await sky.get_window_state({ window: windows[0] })
   await fixture.emitLifecycle("turn-end")
+  assert.equal(fixture.closes.length, 1)
+  assert.deepEqual(fixture.closes[0]?.requestMeta, fixture.globals.nodeRepl.requestMeta)
   await assert.rejects(
     sky.type_text({ window: windows[0], text: "blocked after turn" }),
     /unknown or expired|Window returned/u,

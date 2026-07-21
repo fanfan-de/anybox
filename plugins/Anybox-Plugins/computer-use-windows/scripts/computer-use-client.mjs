@@ -25,6 +25,12 @@ const HARD_REJECT_SAFETY = new Set([
   "finance",
   "security_settings",
 ])
+const APPROVAL_REQUIRED_SAFETY = new Set([
+  "submit_or_send",
+  "delete",
+  "upload",
+  "install",
+])
 const SAFETY_VALUES = new Set([
   "normal",
   "submit_or_send",
@@ -53,6 +59,9 @@ export async function setupComputerUseRuntime({ globals = globalThis, runtime: p
   const runtime = providedRuntime ?? new ComputerUseRuntime({
     onPhysicalEscape(error) {
       client?.handlePhysicalEscape(error)
+    },
+    onOverlayUnavailable(error) {
+      client?.handleOverlayUnavailable(error)
     },
   })
   client = new PluginComputerUseClient(nodeRepl, runtime)
@@ -84,14 +93,13 @@ class PluginComputerUseClient {
     this.windowIDByRef = new Map()
     this.appsByID = new Map()
     this.latestStateByWindowRef = new Map()
-    this.observationApprovals = new Set()
     this.activeControllers = new Set()
     this.interrupted = false
     this.mutationClaimed = false
     this.removeLifecycleHook = typeof nodeRepl.addLifecycleHook === "function"
-      ? nodeRepl.addLifecycleHook((event) => {
+      ? nodeRepl.addLifecycleHook(async (event) => {
           if (["turn-end", "session-end", "reset", "transport-close"].includes(event?.type)) {
-            this.endLifecycleBoundary()
+            await this.endLifecycleBoundary()
           }
         })
       : undefined
@@ -112,16 +120,23 @@ class PluginComputerUseClient {
     this.removeAfterSubmittedCodeHook?.()
     this.removeAfterSubmittedCodeHook = undefined
     this.abortActiveCalls()
-    this.runtime.close()
-    this.clearState()
+    try {
+      await this.runtime.close({ requestMeta: this.nodeRepl.requestMeta })
+    } finally {
+      this.clearState()
+    }
   }
 
-  endLifecycleBoundary() {
+  async endLifecycleBoundary() {
     this.abortActiveCalls()
-    this.runtime.close()
-    this.interrupted = false
-    this.mutationClaimed = false
-    this.clearState()
+    try {
+      await this.runtime.close({ requestMeta: this.nodeRepl.requestMeta })
+    } finally {
+      this.interrupted = false
+      this.overlayUnavailable = undefined
+      this.mutationClaimed = false
+      this.clearState()
+    }
   }
 
   abortActiveCalls() {
@@ -134,12 +149,19 @@ class PluginComputerUseClient {
     this.clearState()
   }
 
+  handleOverlayUnavailable(error) {
+    this.overlayUnavailable = error ?? computerUseError(
+      "CU_OVERLAY_UNAVAILABLE",
+      "The Computer Use safety overlay became unavailable.",
+    )
+    this.clearState()
+  }
+
   clearState() {
     this.latestStateByWindowRef.clear()
     this.windowsByID.clear()
     this.windowIDByRef.clear()
     this.appsByID.clear()
-    this.observationApprovals.clear()
     this.nextWindowID = 1
   }
 
@@ -150,6 +172,13 @@ class PluginComputerUseClient {
         "Computer Use was interrupted by physical Escape; wait for the next turn before continuing.",
       )
     }
+    if (this.overlayUnavailable) {
+      throw computerUseError(
+        "CU_OVERLAY_UNAVAILABLE",
+        this.overlayUnavailable.message
+          ?? "The Computer Use safety overlay became unavailable.",
+      )
+    }
     if (MUTATING_OPERATIONS.has(operation)) {
       if (this.mutationClaimed) {
         throw computerUseError(
@@ -158,7 +187,7 @@ class PluginComputerUseClient {
         )
       }
       this.mutationClaimed = true
-      await this.requestActionPermission(operation, args)
+      await this.authorizeAction(operation, args)
     }
 
     const controller = new AbortController()
@@ -173,13 +202,16 @@ class PluginComputerUseClient {
         this.interrupted = true
         this.clearState()
       }
+      if (error?.code === "CU_OVERLAY_UNAVAILABLE") {
+        this.handleOverlayUnavailable(error)
+      }
       throw error
     } finally {
       this.activeControllers.delete(controller)
     }
   }
 
-  async requestActionPermission(operation, args) {
+  async authorizeAction(operation, args) {
     const descriptor = describePluginAction(operation, args, this)
     if (HARD_REJECT_SAFETY.has(descriptor.safety)) {
       throw computerUseError(
@@ -187,26 +219,8 @@ class PluginComputerUseClient {
         `Computer Use does not permit ${descriptor.safety.replaceAll("_", " ")} actions.`,
       )
     }
+    if (!APPROVAL_REQUIRED_SAFETY.has(descriptor.safety)) return
     await this.requestPluginPermission(operation, descriptor)
-  }
-
-  async requestObservationPermission(binding) {
-    if (this.observationApprovals.has(binding.app)) return
-    const descriptor = {
-      title: "Observe application window",
-      summary: "Capture the selected application window and inspect its bounded accessibility state.",
-      body: [
-        `Plugin: ${PLUGIN_DISPLAY_NAME}`,
-        "Action: Observe application window",
-        `Target application: ${safePermissionText(binding.app, "selected application", 300)}`,
-        "Data: window screenshot and bounded accessibility text",
-        "Duration: until the current Agent turn ends",
-      ].join("\n"),
-      rationale: "This plugin is about to expose visible application content to the active Agent turn.",
-      risk: "high",
-    }
-    await this.requestPluginPermission("get_window_state", descriptor)
-    this.observationApprovals.add(binding.app)
   }
 
   async requestPluginPermission(operation, descriptor) {
@@ -295,7 +309,6 @@ class PluginComputerUseClient {
 
   async get_window_state(input) {
     const binding = this.resolveWindow(input?.window)
-    await this.requestObservationPermission(binding)
     const includeScreenshot = input?.include_screenshot !== false
     const includeText = input?.include_text === true
     const result = await this.call("get_window_state", {
@@ -690,8 +703,9 @@ function describePluginAction(operation, args, client) {
   return {
     ...definition,
     safety,
+    risk: APPROVAL_REQUIRED_SAFETY.has(safety) ? "high" : definition.risk,
     body,
-    rationale: "This plugin is about to send input or change application state and requires a one-time decision.",
+    rationale: "This action may send, remove, upload, or install data or software and requires a one-time decision.",
   }
 }
 

@@ -41,7 +41,8 @@ Use `await sky.documentation("api")` for the supported API, `"guidance"` for ope
 - Operate one explicit target window at a time.
 - Never control Anybox itself, terminals or shells, authentication/secret prompts, payment flows, CAPTCHA, password managers, security settings, UAC/secure desktop, lock screens, or browser security warnings.
 - Prefer Anybox's Chrome integration for browser DOM work.
-- The first application observation in a turn and every state-changing desktop action require separate approvals constructed by the plugin.
+- Routine observation and ordinary local interaction run without approval prompts. Before any action that can send/submit, delete, upload, or install, set the matching `safety` value so the plugin requests a one-time decision at the action boundary.
+- Desktop access must show the Helper-owned blue per-display safety border and Esc notice. Treat it only as an activity indicator; it is not approval and must never be bypassed or disabled.
 - `sky.launch_app` accepts only an app id returned by the current `sky.list_apps()` catalog; it never accepts arbitrary paths, arguments, URLs, or commands.
 - If an action could send, submit, delete, upload, install, publish, or purchase, set a concise `purpose` and the matching optional `safety` value; plugin policy may raise or reject it.
-- If Computer Use returns `CU_INTERRUPTED`, stop using it for the rest of the turn.
+- If Computer Use returns `CU_INTERRUPTED` or `CU_OVERLAY_UNAVAILABLE`, stop using it for the rest of the turn.

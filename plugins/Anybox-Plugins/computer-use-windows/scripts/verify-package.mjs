@@ -70,6 +70,7 @@ try {
   assert.equal(handshake.capabilities?.uia, true)
   assert.equal(handshake.capabilities?.elementActions, true)
   assert.equal(handshake.capabilities?.physicalInputEpoch, true)
+  assert.equal(handshake.capabilities?.overlay, true)
   assert.equal(handshake.capabilities?.listApps, true)
   assert.equal(handshake.capabilities?.launchApp, true)
   assert.equal(health.protocolVersion, PROTOCOL_VERSION)
@@ -77,6 +78,7 @@ try {
   assert.equal(health.accessibilityBackend, "uia")
   assert.equal(health.features?.elementActions, true)
   assert.equal(health.features?.physicalInputEpoch, true)
+  assert.equal(health.features?.overlay, true)
   assert.equal(health.features?.listApps, true)
   assert.equal(health.features?.launchApp, true)
   process.stdout.write(`${JSON.stringify({
@@ -89,6 +91,8 @@ try {
     accessibilityDiagnostic: health.accessibilityDiagnostic,
     physicalInputEpoch: health.features?.physicalInputEpoch,
     physicalInputDiagnostic: health.physicalInputDiagnostic,
+    overlay: health.features?.overlay,
+    overlayDiagnostic: health.overlayDiagnostic,
     sha256: actualHash,
   }, null, 2)}\n`)
 } finally {

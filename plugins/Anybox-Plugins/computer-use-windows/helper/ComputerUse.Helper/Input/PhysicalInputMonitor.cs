@@ -171,23 +171,7 @@ internal static class PhysicalInputState
         if (code >= 0)
         {
             var input = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(data);
-            var physical = Observe(input.ExtraInfo);
-            var messageValue = message.ToUInt64();
-            if (
-                physical
-                && input.VirtualKey == VkEscape
-                && messageValue is WmKeyDown or WmSysKeyDown
-            )
-            {
-                try
-                {
-                    Volatile.Read(ref _physicalEscapeHandler)?.Invoke();
-                }
-                catch
-                {
-                    // A closed broker transport must never break the input hook.
-                }
-            }
+            HandleKeyboardInput(input.VirtualKey, message.ToUInt64(), input.ExtraInfo);
         }
         return CallNextHookEx(IntPtr.Zero, code, message, data);
     }
@@ -204,11 +188,41 @@ internal static class PhysicalInputState
 
     private static bool Observe(IntPtr extraInfo)
     {
-        if (extraInfo != InputController.SyntheticInputMarker)
+        if (IsPhysicalInput(extraInfo))
         {
             Interlocked.Increment(ref _epoch);
             return true;
         }
         return false;
+    }
+
+    internal static bool IsPhysicalInput(IntPtr extraInfo)
+    {
+        return extraInfo != InputController.SyntheticInputMarker;
+    }
+
+    internal static bool HandleKeyboardInput(
+        uint virtualKey,
+        ulong message,
+        IntPtr extraInfo
+    )
+    {
+        var physical = Observe(extraInfo);
+        if (
+            physical
+            && virtualKey == VkEscape
+            && message is WmKeyDown or WmSysKeyDown
+        )
+        {
+            try
+            {
+                Volatile.Read(ref _physicalEscapeHandler)?.Invoke();
+            }
+            catch
+            {
+                // A closed broker transport must never break the input hook.
+            }
+        }
+        return physical;
     }
 }

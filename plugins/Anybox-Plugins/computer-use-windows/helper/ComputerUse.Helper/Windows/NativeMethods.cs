@@ -9,8 +9,23 @@ internal static class NativeMethods
     internal const uint GA_ROOT = 2;
     internal const uint GA_ROOTOWNER = 3;
     internal const int SW_RESTORE = 9;
+    internal const int SW_HIDE = 0;
+    internal const int SW_SHOWNOACTIVATE = 4;
     internal const int WH_KEYBOARD_LL = 13;
     internal const int WH_MOUSE_LL = 14;
+    internal const int GWL_EXSTYLE = -20;
+    internal const uint GW_HWNDNEXT = 2;
+    internal const long WS_EX_TOPMOST = 0x00000008L;
+    internal const long WS_EX_TRANSPARENT = 0x00000020L;
+    internal const long WS_EX_TOOLWINDOW = 0x00000080L;
+    internal const long WS_EX_LAYERED = 0x00080000L;
+    internal const long WS_EX_NOACTIVATE = 0x08000000L;
+    internal const uint SWP_NOSIZE = 0x0001;
+    internal const uint SWP_NOMOVE = 0x0002;
+    internal const uint SWP_NOACTIVATE = 0x0010;
+    internal const uint SWP_SHOWWINDOW = 0x0040;
+    internal const uint SWP_NOOWNERZORDER = 0x0200;
+    internal const uint WDA_EXCLUDEFROMCAPTURE = 0x00000011;
     internal const uint WM_QUIT = 0x0012;
     internal const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
     internal const uint TH32CS_SNAPPROCESS = 0x00000002;
@@ -22,6 +37,7 @@ internal static class NativeMethods
     internal const int SM_YVIRTUALSCREEN = 77;
     internal const int SM_CXVIRTUALSCREEN = 78;
     internal const int SM_CYVIRTUALSCREEN = 79;
+    internal static readonly IntPtr HWND_TOPMOST = new(-1);
 
     internal delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
     internal delegate IntPtr HookProc(int code, UIntPtr wParam, IntPtr lParam);
@@ -234,6 +250,36 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     internal static extern IntPtr WindowFromPoint(POINT point);
+
+    [DllImport("user32.dll")]
+    internal static extern IntPtr GetWindow(IntPtr hwnd, uint command);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
+    internal static extern IntPtr GetWindowLongPtr(IntPtr hwnd, int index);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool SetWindowPos(
+        IntPtr hwnd,
+        IntPtr insertAfter,
+        int x,
+        int y,
+        int width,
+        int height,
+        uint flags
+    );
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool ShowWindow(IntPtr hwnd, int command);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool SetWindowDisplayAffinity(IntPtr hwnd, uint affinity);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool GetWindowDisplayAffinity(IntPtr hwnd, out uint affinity);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

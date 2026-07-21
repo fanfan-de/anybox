@@ -39,7 +39,12 @@ if (-not $Check) {
     New-Item -ItemType Directory -Path $destinationDirectory -Force | Out-Null
     Copy-Item -LiteralPath $stagedExecutable -Destination $destination -Force
     $hash = (Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash.ToLowerInvariant()
-    Set-Content -LiteralPath $hashFile -Value "$hash  computer-use-helper.exe" -Encoding utf8NoBOM
+    $utf8WithoutBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText(
+        $hashFile,
+        "$hash  computer-use-helper.exe$([Environment]::NewLine)",
+        $utf8WithoutBom
+    )
 }
 
 node $verifyScript

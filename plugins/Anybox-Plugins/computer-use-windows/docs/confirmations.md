@@ -3,17 +3,28 @@
 The plugin uses Anybox's generic permission continuation API, but owns all
 Computer Use approval logic and presentation data.
 
-There are two independent boundaries:
+Routine Computer Use does not show plugin approval prompts. This includes
+listing apps/windows, observing screenshots and bounded accessibility state,
+launching or activating a pre-existing app, and actions explicitly classified
+as `normal` such as navigation, clicking, scrolling, dragging, local typing,
+and changing ordinary controls.
 
-1. The first `get_window_state` observation for an application in each Agent
-   turn asks before exposing its screenshot and bounded accessibility state.
-2. Every launch or input operation asks for a separate one-time decision.
+One-time approval is required immediately before actions classified as:
 
-Listing app/window identifiers does not capture pixels or UIA document content
-and may run automatically. Observation approval never authorizes an action.
-Full-access mode does not bypass plugin-action prompts.
+- `submit_or_send`
+- `delete`
+- `upload`
+- `install`
 
 `auth_or_secret`, `finance`, and `security_settings` are rejected before a
-prompt. Typed text and assigned values appear only as character counts in the
-approval details. Denial or timeout resumes the same JavaScript promise with an
-error and never authorizes an automatic retry.
+prompt. The Agent must set the matching `safety` value whenever an action can
+cross one of these boundaries; content observed inside an app is never itself
+authorization. Typed text and assigned values appear only as character counts
+in approval details. Denial or timeout resumes the same JavaScript promise with
+an error and never authorizes an automatic retry.
+
+The native blue overlay is independent of approval. Waiting for an approval
+does not start the Helper or show the overlay; after approval, the Helper must
+show and validate the overlay before the requested desktop operation begins.
+Denial does not start the Helper for an otherwise unopened session. The overlay
+is only a safety notice and never grants permission or weakens a hard denial.

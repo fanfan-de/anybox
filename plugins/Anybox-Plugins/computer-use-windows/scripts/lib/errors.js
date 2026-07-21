@@ -17,6 +17,7 @@ const ERROR_DEFINITIONS = Object.freeze({
   CU_WINDOW_NOT_FOREGROUND: { retryable: true, requiresFreshState: true },
   CU_HIGHER_INTEGRITY_TARGET: { retryable: false, requiresFreshState: false },
   CU_DESKTOP_LOCKED: { retryable: true, requiresFreshState: true },
+  CU_OVERLAY_UNAVAILABLE: { retryable: true, requiresFreshState: true },
   CU_INTERRUPTED: { retryable: false, requiresFreshState: false },
   CU_BUSY: { retryable: true, requiresFreshState: false },
   CU_TIMEOUT: { retryable: true, requiresFreshState: true },

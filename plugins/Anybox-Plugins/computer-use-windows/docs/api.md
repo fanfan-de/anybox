@@ -77,3 +77,8 @@ sky.activate_window({ window, purpose?, safety? }): Promise<void>;
 Key chords use `+`, such as `Control_L+a`, `Ctrl+Shift+s`, `Return`, or `Escape`. Windows-key shortcuts, secure attention sequences, and unsupported keys are rejected.
 
 Unlike Codex's broader Windows client, `launch_app` intentionally accepts only a current catalog id from `list_apps`; arbitrary executable paths are outside this plugin's security contract.
+
+All desktop-access methods display the Helper-owned blue safety overlay before
+observing or controlling Windows. `initialize` and `computer_health_check` keep
+it hidden. `CU_OVERLAY_UNAVAILABLE` is fail-closed: stop Computer Use for the
+current turn rather than retrying without the indicator.

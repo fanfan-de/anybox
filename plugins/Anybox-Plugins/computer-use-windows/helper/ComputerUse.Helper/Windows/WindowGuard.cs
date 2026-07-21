@@ -1,4 +1,5 @@
 using ComputerUse.Helper.Protocol;
+using ComputerUse.Helper.Overlay;
 using static ComputerUse.Helper.Windows.NativeMethods;
 
 namespace ComputerUse.Helper.Windows;
@@ -112,7 +113,9 @@ internal static class WindowGuard
 
     public static void AssertPointOwnedBy(WindowInfo target, int screenX, int screenY)
     {
-        var pointWindow = WindowFromPoint(new POINT { X = screenX, Y = screenY });
+        var pointWindow = OverlayWindowRegistry.WindowFromPointIgnoringOverlays(
+            new POINT { X = screenX, Y = screenY }
+        );
         var pointRoot = pointWindow == IntPtr.Zero ? IntPtr.Zero : GetAncestor(pointWindow, GA_ROOTOWNER);
         if (pointRoot == IntPtr.Zero)
         {

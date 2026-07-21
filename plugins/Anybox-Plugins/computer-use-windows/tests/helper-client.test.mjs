@@ -88,3 +88,47 @@ test("helper client treats physical Escape as a non-bypassable interruption", as
     client.stop()
   }
 })
+
+test("helper client fails closed when the required overlay capability is absent", async () => {
+  const client = createClient({ helperArgs: [fixture, "--without-overlay"] })
+  try {
+    await assert.rejects(
+      client.ensureInitialized(),
+      (error) => error.code === "CU_OVERLAY_UNAVAILABLE",
+    )
+  } finally {
+    client.stop()
+  }
+})
+
+test("helper client stops the session when overlay capability is lost", async () => {
+  let failures = 0
+  const client = createClient({
+    onOverlayUnavailable(error) {
+      assert.equal(error.code, "CU_OVERLAY_UNAVAILABLE")
+      failures += 1
+    },
+  })
+  try {
+    await assert.rejects(
+      client.call("emit_overlay_unavailable"),
+      (error) => error.code === "CU_OVERLAY_UNAVAILABLE",
+    )
+    assert.equal(failures, 1)
+  } finally {
+    client.stop()
+  }
+})
+
+test("helper client waits for end_turn before stopping the helper", async () => {
+  const client = createClient()
+  await client.ensureInitialized()
+  await client.endTurnAndStop({
+    context: {
+      sessionID: "session",
+      turnID: "turn",
+      toolCallID: "tool",
+    },
+  })
+  assert.equal(client.process, undefined)
+})

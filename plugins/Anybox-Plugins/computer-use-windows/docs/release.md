@@ -51,6 +51,10 @@ also requires Authenticode status `Valid` before spawn.
 $tests = (Get-ChildItem tests -Filter '*.test.mjs' -File).FullName
 node --test $tests
 
+# Native overlay state machine and interactive Win32 invariants
+dotnet test helper/ComputerUse.Helper.Tests/ComputerUse.Helper.Tests.csproj `
+  -c Release
+
 # Controlled Windows fixtures
 node scripts/smoke-wgc.mjs
 node scripts/smoke-uia.mjs
@@ -75,6 +79,9 @@ The release workstation matrix must additionally cover Windows 11 x64 at
 100%, 125%, 150%, and 200% scale; multiple displays; obscured/minimized
 windows; lock/unlock; device loss; integrity mismatch; physical Escape during
 observation/action; and plugin install, upgrade, downgrade, disable, and
-uninstall.
+uninstall. Overlay inspection must cover its localized notice, light/dark/high
+contrast palettes, one window per display, topmost/no-activate/click-through
+styles, taskbar/catalog exclusion, capture exclusion, 700 ms normal cleanup,
+and immediate physical-Escape cleanup.
 
 Record results in `docs/computer-use-windows-development-progress.md`.

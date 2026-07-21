@@ -3,7 +3,7 @@
 > 本文档由 Codex 在开发过程中持续增量更新，作为实时进度、验证证据和未决风险的唯一跟踪入口。
 > 目标规范：[`codex-computer-use-anybox-development-report.md`](./codex-computer-use-anybox-development-report.md)
 > 当前目标：将 Computer Use 从 Anybox 内置 MCP/宿主能力体系彻底迁出，改为插件包自带运行时、Helper、安全策略与 `sky` API；Anybox 核心只提供通用 Node REPL 和通用插件动作授权（M8）。
-> 最后更新：2026-07-21 09:04 +08:00
+> 最后更新：2026-07-22
 
 ## 当前状态
 
@@ -11,7 +11,7 @@
 |---|---|
 | 总体阶段 | M8 工程实现与本机验收完成 |
 | 当前里程碑 | M8：完全插件化、退出专用 MCP 体系（完成） |
-| 当前工作 | 等待正式签名与剩余 Windows 发布矩阵；开发版可继续做产品体验验收 |
+| 当前工作 | 插件 Helper 原生安全 Overlay 已实现；等待正式签名与剩余 Windows 发布矩阵 |
 | 阻塞项 | Authenticode 正式签名需要发布证书；125/150/200% DPI、锁屏、device-loss 需要独立 Windows 矩阵 |
 | 工作目录 | `C:\Projects\Anybox` |
 | 插件目录 | `plugins/Anybox-Plugins/computer-use-windows` |
@@ -76,7 +76,7 @@
   - [x] 明确最终职责边界：核心只保留通用 Node REPL/插件机制，不再拥有 Computer Use 业务或内置 MCP
   - [x] 插件 `sky` 直接加载插件包内运行时并管理 Helper，不再调用宿主 capability/MCP
   - [x] 删除 `anybox.computer-use` 注册、broker/facade、专用 permission scope 与运行时复制
-  - [x] 删除 Computer Use 专用 Settings/overlay/IPC；保留插件 Helper 的物理 Esc 与硬拒绝策略
+  - [x] 删除 Desktop 所有的 Computer Use 专用 Settings/overlay/IPC；插件 Helper 自行提供原生安全 Overlay、物理 Esc 与硬拒绝策略
   - [x] 将动作前确认接入通用插件动作授权，不在核心出现 Computer Use 名称或操作枚举
   - [x] 更新 manifest、安装/卸载、Skill/API/安全文档和测试
   - [x] 完成 Agent、Desktop、插件、packaged runtime 与真实 Windows 回归
@@ -554,6 +554,24 @@
 - 四组真实 Windows smoke 全部通过：WGC 遮挡/负坐标/最小化、UIA 与一次性 state、应用目录/受控启动、physical input epoch/integrity/point ownership/密码/剪贴板。
 - `git diff --check` 通过；Agent 源码类型错误已清零，完整 Agent typecheck 只剩开发前既有的 Cinema/server 三处测试类型错误；i18n audit 仍报告仓库既有的非本次 Computer Use 文案项。
 - M8 工程实现与本机验收关闭。剩余外部发布条件：正式 Authenticode 证书、clean-checkout 复现，以及 125/150/200% DPI、锁屏和 device-loss 独立矩阵。
+
+### 2026-07-22 — 审批策略改为仅高影响动作确认
+
+- 移除每个 Agent turn 首次截图/UIA 观察审批；窗口枚举、观察、启动/激活已有应用和 `normal` 本地交互现在直接执行。
+- `submit_or_send`、`delete`、`upload`、`install` 仍在动作边界请求一次性审批，并统一提升为高风险展示；输入文本和值继续只显示字符数。
+- `auth_or_secret`、`finance`、`security_settings` 继续在插件与运行时边界硬拒绝，短生命周期 state、一次动作、物理输入 epoch、目标窗口和 Esc 熔断等原生安全约束不变。
+- 插件版本提升到 `0.3.1`，同步更新 manifest、README、安全说明、审批说明、内置 Skill 和宿主真实 Windows 集成测试。
+- 定向验证通过：插件测试 27/27、真实 Node REPL 跨层集成 1/1、package verifier；helper 仍为 `0.2.0`、protocol `1`，无需重建原生二进制。
+
+### 2026-07-22 — 插件 Helper 原生蓝色安全 Overlay
+
+- 不向 Agent/Desktop 恢复 Computer Use 专用逻辑；插件 Helper 新增独立 STA UI 线程，在每个活动显示器上预创建隐藏的原生 Overlay，并在桌面枚举、解析、观察、启动与输入前同步显示蓝色边框和 Esc 提示。
+- Overlay HWND 置顶、不激活、鼠标穿透、不进入任务栏/应用与窗口目录，并使用 `WDA_EXCLUDEFROMCAPTURE` 排除截图；点命中只跳过 Helper 登记的 Overlay HWND，其他遮挡仍严格拒绝。
+- `initialize` 握手增加 `capabilities.overlay=true`；创建、显示、显示器/DPI 同步或捕获排除失败统一返回 `CU_OVERLAY_UNAVAILABLE` 并熔断当前 Computer Use 会话。生产环境没有关闭安全 Overlay 的设置。
+- Overlay 在同一 turn 内保持显示，正常 `end_turn` 至少展示 700ms 后隐藏；插件生命周期改为异步等待 `end_turn` 再停止 Helper。物理 Esc 立即隐藏并沿用 `CU_INTERRUPTED`，带 Helper marker 的合成 Esc 不触发中断。
+- 浅色、深色与 Windows 高对比度配色集中定义且无动画；中文 Windows 显示中文提示，其他 UI 语言显示英文提示。Desktop 仍无专用 Overlay 或 IPC。
+- 版本提升到插件 `0.3.2`、Helper `0.2.1`，protocol 保持 `1`；打包后 SHA-256 为 `6c4091fe76df3afedff07b77c66774369ce76a4ec1da34c416de7c4a296f2288`。
+- 自动验证通过：Helper 10/10、插件 32/32、Agent/插件目录与真实 Node REPL 53/53；package verifier 与 WGC、UIA、应用目录、安全四组 Windows smoke 全部通过。125/150/200% DPI、人工物理 Esc、锁屏与 device-loss 仍由发布硬件矩阵验收。
 
 ## 验证记录
 

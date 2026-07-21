@@ -101,6 +101,7 @@ class ComputerUseRuntime {
         ?? DEFAULT_HELPER_EXE,
       cwd: options.pluginRoot ?? PLUGIN_ROOT,
       onPhysicalEscape: options.onPhysicalEscape,
+      onOverlayUnavailable: options.onOverlayUnavailable,
       requireAuthenticode: options.requireAuthenticode,
     })
     this.actions = options.actions ?? new SerialQueue()
@@ -605,9 +606,19 @@ class ComputerUseRuntime {
     })
   }
 
-  close() {
+  async close(context = {}) {
     this.states.invalidateAll()
-    this.helper.stop()
+    try {
+      if (typeof this.helper.endTurnAndStop === "function") {
+        await this.helper.endTurnAndStop(this.helperOptions(context))
+      } else {
+        await this.helper.call("end_turn", {}, this.helperOptions(context))
+      }
+    } catch {
+      // Connection loss and physical interruption already force native cleanup.
+    } finally {
+      this.helper.stop()
+    }
   }
 }
 

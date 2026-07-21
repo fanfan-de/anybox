@@ -169,8 +169,8 @@ test.skipIf(process.platform !== "win32")(
                 })
                 return await sky.type_text({
                   window: computerUseWindows[0],
-                  safety: "normal",
-                  purpose: "Fill a local draft field",
+                  safety: "submit_or_send",
+                  purpose: "Send a fixture message",
                   text: "private integration fixture"
                 })`,
             }, {
@@ -180,23 +180,6 @@ test.skipIf(process.platform !== "win32")(
               toolCallID,
               cwd: Instance.directory,
               worktree: Instance.worktree,
-            })
-            const observationPrompt = await waitForPluginActionPermission(
-              session.id,
-              toolCallID,
-            )
-            expect(observationPrompt).toMatchObject({
-              tool: "plugin-action.computer-use-windows.get_window_state",
-              scope: {
-                kind: "plugin-action",
-                pluginID: "computer-use-windows",
-              },
-              prompt: {
-                allowedDecisions: ["deny", "allow-once"],
-              },
-            })
-            await Permission.resolveRequest(observationPrompt.id, {
-              decision: "allow-once",
             })
             const prompt = await waitForPluginActionPermission(session.id, toolCallID)
             expect(prompt).toMatchObject({

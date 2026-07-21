@@ -1,6 +1,6 @@
 {
   "name": "computer-use-windows",
-  "version": "0.3.0",
+  "version": "0.3.2",
   "description": "Guarded Windows desktop observation and input automation using short-lived, one-action window state.",
   "author": {
     "name": "Anybox"
@@ -17,12 +17,12 @@
       "zh-CN": "Windows 电脑控制"
     },
     "shortDescription": {
-      "en-US": "Observe and control approved Windows app windows from fresh state.",
-      "zh-CN": "基于最新状态观察并控制经过批准的 Windows 应用窗口。"
+      "en-US": "Observe and control selected Windows app windows from fresh state.",
+      "zh-CN": "基于最新状态观察并控制选定的 Windows 应用窗口。"
     },
     "longDescription": {
-      "en-US": "A high-risk local Windows automation plugin with window-scoped screenshots, bounded accessibility state, one-action stale-state guards, and approval-gated input.",
-      "zh-CN": "高风险本地 Windows 自动化插件，提供窗口级截图、有界可访问性状态、一次性过期状态保护和需要审批的输入。"
+      "en-US": "A high-risk local Windows automation plugin with a native per-display safety overlay, window-scoped screenshots, bounded accessibility state, one-action stale-state guards, and risk-gated input.",
+      "zh-CN": "高风险本地 Windows 自动化插件，提供原生全显示器安全提示、窗口级截图、有界可访问性状态、一次性过期状态保护和按风险审批的输入。"
     },
     "developerName": "Anybox",
     "category": "Automation",
@@ -47,7 +47,8 @@
       "permissions": [
         "Loads this plugin's Computer Use runtime inside Anybox's persistent, general-purpose Node REPL.",
         "Starts the native helper shipped inside this plugin package after verifying its SHA-256 integrity.",
-        "Captures selected Windows app windows and sends approval-gated mouse or keyboard input."
+        "Shows a non-disableable native blue safety indicator on every active display before desktop access.",
+        "Captures selected Windows app windows and sends mouse or keyboard input, prompting only for high-impact actions."
       ],
       "required": true,
       "reason": "Provides the Codex-style model surface: persistent JavaScript state with the plugin-owned sky API."

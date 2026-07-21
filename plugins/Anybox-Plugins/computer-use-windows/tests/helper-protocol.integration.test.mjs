@@ -39,7 +39,7 @@ function initialize(id = "init", protocolVersion = 1) {
     method: "initialize",
     params: {
       protocolVersion,
-      client: { name: "test", version: "0.2.0" },
+      client: { name: "test", version: "0.3.2" },
       maxFrameBytes: MAX_FRAME_BYTES,
     },
     meta: {
@@ -61,6 +61,8 @@ test("real helper accepts fragmented frames and multiple frames in one write", a
     child.stdin.write(frame.subarray(19))
     const initialized = await next()
     assert.equal(initialized.result.protocolVersion, 1)
+    assert.equal(initialized.result.helperVersion, "0.2.1")
+    assert.equal(initialized.result.capabilities.overlay, true)
 
     child.stdin.write(Buffer.concat([
       encodeFrame({
@@ -80,7 +82,8 @@ test("real helper accepts fragmented frames and multiple frames in one write", a
     ]))
     const health = await next()
     const unknown = await next()
-    assert.equal(health.result.helperVersion, "0.2.0")
+    assert.equal(health.result.helperVersion, "0.2.1")
+    assert.equal(health.result.features.overlay, true)
     assert.equal(unknown.error.data.computerUseCode, "CU_PROTOCOL_MISMATCH")
   } finally {
     child.kill()
@@ -110,5 +113,59 @@ test("real helper rejects an incompatible handshake and oversized frame", async 
     } finally {
       child.kill()
     }
+  }
+})
+
+test("real helper keeps the overlay hidden until desktop access and ends it gracefully", async () => {
+  const { child, next } = startHelper()
+  const send = (id, method, params = {}) => child.stdin.write(encodeFrame({
+    jsonrpc: "2.0",
+    id,
+    method,
+    params,
+    meta: { deadlineUnixMs: Date.now() + 5000 },
+  }))
+  try {
+    child.stdin.write(encodeFrame(initialize()))
+    await next()
+
+    send("health-before", "health_check")
+    const before = await next()
+    assert.equal(before.result.overlayStatus.available, true)
+    assert.equal(before.result.overlayStatus.visible, false)
+    assert.ok(before.result.overlayStatus.windowCount >= 1)
+    assert.ok(before.result.overlayStatus.windows.every((window) => !window.visible))
+
+    send("list", "list_windows")
+    const listed = await next()
+    assert.ok(Array.isArray(listed.result.windows))
+    assert.ok(listed.result.windows.every(
+      (window) => window.processName !== "computer-use-helper.exe",
+    ))
+
+    send("health-visible", "health_check")
+    const visible = await next()
+    assert.equal(visible.result.overlayStatus.visible, true)
+    assert.ok(visible.result.overlayStatus.windows.every((window) => (
+      window.visible
+      && window.topmost
+      && window.noActivate
+      && window.mouseTransparent
+      && window.toolWindow
+      && window.captureExcluded
+    )))
+
+    const started = Date.now()
+    send("end", "end_turn")
+    const ended = await next()
+    assert.equal(ended.result.ended, true)
+    assert.ok(Date.now() - started >= 550)
+
+    send("health-after", "health_check")
+    const after = await next()
+    assert.equal(after.result.overlayStatus.visible, false)
+    assert.ok(after.result.overlayStatus.windows.every((window) => !window.visible))
+  } finally {
+    child.kill()
   }
 })

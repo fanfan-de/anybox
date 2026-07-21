@@ -43,13 +43,26 @@ function startBroker(brokerToken) {
           })
           continue
         }
+        if (message.method === "emit_overlay_unavailable") {
+          send({
+            jsonrpc: "2.0",
+            method: "overlay_unavailable",
+            params: {
+              computerUseCode: "CU_OVERLAY_UNAVAILABLE",
+              retryable: true,
+              requiresFreshState: true,
+            },
+          })
+          continue
+        }
         const result = message.method === "initialize"
           ? {
               protocolVersion: 1,
-              helperVersion: "0.2.0",
+              helperVersion: "0.2.1",
               capabilities: {
                 hostBroker: message.params?.brokerToken === brokerToken,
                 physicalEscape: true,
+                overlay: !process.argv.includes("--without-overlay"),
               },
             }
           : {

@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using ComputerUse.Helper.Apps;
+using ComputerUse.Helper.Overlay;
 using ComputerUse.Helper.Policy;
 using ComputerUse.Helper.Protocol;
 using static ComputerUse.Helper.Windows.NativeMethods;
@@ -168,7 +169,13 @@ internal sealed record WindowInfo(
 
     public static bool IsCandidate(IntPtr hwnd)
     {
-        if (hwnd == IntPtr.Zero || !IsWindow(hwnd) || !IsWindowVisible(hwnd) || IsCloaked(hwnd))
+        if (
+            hwnd == IntPtr.Zero
+            || OverlayWindowRegistry.IsOverlay(hwnd)
+            || !IsWindow(hwnd)
+            || !IsWindowVisible(hwnd)
+            || IsCloaked(hwnd)
+        )
         {
             return false;
         }
