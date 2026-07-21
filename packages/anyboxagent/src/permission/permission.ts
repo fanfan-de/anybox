@@ -90,6 +90,28 @@ const sessionInProcessGrants = new Map<string, {
   createdAt: number
 }>()
 
+function resolvedInProcessDecision(request: Request): Decision {
+  if (request.status !== "approved") return "deny"
+  return request.resolution?.decision === "allow-session"
+    ? "allow-session"
+    : "allow-once"
+}
+
+function settleInProcessWaiter(
+  request: Request,
+  decision = resolvedInProcessDecision(request),
+) {
+  const waiter = inProcessWaiters.get(request.id)
+  if (!waiter) return false
+  clearTimeout(waiter.timer)
+  inProcessWaiters.delete(request.id)
+  waiter.resolve({
+    decision,
+    grantID: request.grantID ?? request.approvalID,
+  })
+  return true
+}
+
 type ToolDescriptor = {
   id: string
   kind: Tool.ToolKind
@@ -390,6 +412,7 @@ async function auditInProcess(
   action: Action,
   reason: string,
   risk: Risk,
+  projectID: string,
 ) {
   ensurePermissionTables()
   const record = Schema.Audit.parse({
@@ -397,7 +420,7 @@ async function auditInProcess(
     sessionID: input.context.sessionID,
     messageID: input.context.messageID,
     toolCallID: input.context.toolCallID,
-    projectID: Instance.project.id,
+    projectID,
     tool: input.scope.kind === "browser-origin"
       ? `browser.${safeDisplayText(input.method, "unknown", 128)}`
       : `plugin-action.${input.scope.pluginID}.${safeDisplayText(input.method, "unknown", 128)}`,
@@ -478,7 +501,7 @@ async function expireInProcessRequest(requestID: string) {
       method: next.input.method as string,
       tabID: typeof next.input.tabID === "number" ? next.input.tabID : undefined,
       sensitive: next.input.sensitive === true,
-    }, "deny", next.resolutionReason!, next.risk)
+    }, "deny", next.resolutionReason!, next.risk, next.projectID)
   } catch (error) {
     log.error("failed to persist expired in-process permission", {
       requestID,
@@ -543,7 +566,7 @@ export async function clearInProcessPermissionSession(sessionID: string) {
           ? next.input.tabID
           : undefined,
         sensitive: next.input.sensitive === true,
-      }, "deny", reason, next.risk)
+      }, "deny", reason, next.risk, next.projectID)
     } catch (error) {
       log.error("failed to persist cancelled in-process permission", {
         requestID,
@@ -562,6 +585,7 @@ export async function requestInProcessPermission(
   rawInput: InProcessPermissionInput,
 ): Promise<InProcessPermissionResult> {
   ensurePermissionTables()
+  const projectID = Instance.project.id
   const context = {
     sessionID: Identifier.schema("session").parse(rawInput.context.sessionID),
     turnID: Identifier.schema("turn").parse(rawInput.context.turnID),
@@ -605,13 +629,13 @@ export async function requestInProcessPermission(
         ? "This plugin action is prohibited by policy."
         : "The browser action is prohibited by policy."
     )
-    await auditInProcess(input, "deny", reason, risk)
+    await auditInProcess(input, "deny", reason, risk, projectID)
     return { decision: "deny", grantID }
   }
 
   if (!forceSingle && grant) {
     const reason = "The browser origin is allowed for the current session."
-    await auditInProcess(input, "allow", reason, risk)
+    await auditInProcess(input, "allow", reason, risk, projectID)
     return { decision: "allow-session", grantID: grant.grantID }
   }
 
@@ -623,7 +647,7 @@ export async function requestInProcessPermission(
     const reason = input.action === "allow"
       ? "The browser action is allowed by the safe-read policy."
       : "The browser action is allowed by full access mode."
-    await auditInProcess(input, "allow", reason, risk)
+    await auditInProcess(input, "allow", reason, risk, projectID)
     return { decision: "allow-once", grantID }
   }
 
@@ -686,7 +710,7 @@ export async function requestInProcessPermission(
     turnID: context.turnID,
     messageID: context.messageID,
     toolCallID: context.toolCallID,
-    projectID: Instance.project.id,
+    projectID,
     agent: "default",
     tool: isPluginAction
       ? `plugin-action.${scope.pluginID}.${method}`
@@ -750,7 +774,7 @@ export async function requestInProcessPermission(
   })
   try {
     emitOrPersistPermissionEvent("permission.requested", record, part)
-    await auditInProcess(input, "ask", rationale, risk)
+    await auditInProcess(input, "ask", rationale, risk, projectID)
   } catch (error) {
     const waiter = inProcessWaiters.get(requestID)
     if (waiter) {
@@ -1609,6 +1633,9 @@ export async function resolveRequest(id: string, resolution: Schema.RequestResol
     throw new Error(`Permission request '${id}' was not found.`)
   }
   if (existing.status !== "pending") {
+    if ((existing.continuation ?? "tool-retry") === "in-process") {
+      settleInProcessWaiter(existing)
+    }
     return {
       request: existing,
     }
@@ -1647,20 +1674,18 @@ export async function resolveRequest(id: string, resolution: Schema.RequestResol
   })
 
   if ((existing.continuation ?? "tool-retry") === "in-process") {
-    const waiter = inProcessWaiters.get(existing.id)
-    if (waiter) {
-      clearTimeout(waiter.timer)
-      inProcessWaiters.delete(existing.id)
+    if (!inProcessWaiters.has(existing.id)) {
+      throw new Error(
+        `In-process permission request '${existing.id}' is no longer active.`,
+      )
     }
-    if (resolution.decision === "allow-session" && next.scope) {
-      sessionInProcessGrants.set(inProcessGrantKey(next.scope), {
-        grantID: next.grantID ?? next.approvalID,
-        sessionID: next.scope.sessionID,
-        scope: next.scope,
-        createdAt: Date.now(),
-      })
-    }
-    emitOrPersistPermissionEvent("permission.resolved", next, part)
+
+    const continuationDecision: Decision = approved
+      ? resolution.decision === "allow-session"
+        ? "allow-session"
+        : "allow-once"
+      : "deny"
+
     await auditInProcess({
       context: {
         sessionID: next.sessionID,
@@ -1675,11 +1700,18 @@ export async function resolveRequest(id: string, resolution: Schema.RequestResol
       sensitive: next.input.sensitive === true,
     }, approved ? "allow" : "deny", resolution.note?.trim() || (
       approved ? "The in-process action was approved by the user." : "The in-process action was denied by the user."
-    ), next.risk)
-    waiter?.resolve({
-      decision: resolution.decision,
-      grantID: next.grantID ?? next.approvalID,
-    })
+    ), next.risk, next.projectID)
+
+    emitOrPersistPermissionEvent("permission.resolved", next, part)
+    if (continuationDecision === "allow-session" && next.scope) {
+      sessionInProcessGrants.set(inProcessGrantKey(next.scope), {
+        grantID: next.grantID ?? next.approvalID,
+        sessionID: next.scope.sessionID,
+        scope: next.scope,
+        createdAt: Date.now(),
+      })
+    }
+    settleInProcessWaiter(next, continuationDecision)
     return {
       request: next,
     }

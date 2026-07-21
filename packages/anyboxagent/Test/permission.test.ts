@@ -381,6 +381,110 @@ test("plugin actions always require a one-time decision", async () => {
   }
 }, 120000)
 
+test("in-process plugin approval resolves outside the project instance context", async () => {
+  const repositoryRoot = await mkdtemp(
+    path.join(tmpdir(), "anybox-permission-plugin-resolution-"),
+  )
+
+  try {
+    await createGitRepo(repositoryRoot, "plugin-action-resolution")
+    const setup = await Instance.provide({
+      directory: repositoryRoot,
+      async fn() {
+        const session = await Session.createSession({
+          directory: Instance.directory,
+          projectID: Instance.project.id,
+        })
+        const assistant: Message.Assistant = {
+          id: Identifier.ascending("message"),
+          sessionID: session.id,
+          role: "assistant",
+          created: Date.now(),
+          parentID: "",
+          modelID: "test-model",
+          providerID: "test-provider",
+          agent: "default",
+          path: { cwd: Instance.directory, root: Instance.worktree },
+          cost: 0,
+          tokens: {
+            input: 0,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+        }
+        Session.DataBaseCreate("messages", assistant)
+        const turn = Orchestrator.startTurn({ sessionID: session.id })
+
+        try {
+          const pendingResult = Permission.requestInProcessPermission({
+            context: {
+              sessionID: session.id,
+              turnID: turn.turnID,
+              messageID: assistant.id,
+              toolCallID: "plugin_resolution_outside_instance",
+            },
+            scope: {
+              kind: "plugin-action",
+              sessionID: session.id,
+              pluginID: "desktop-automation",
+              pluginDisplayName: "Desktop Automation",
+              actionTitle: "Observe application window",
+              actionSummary: "Capture the selected application window.",
+            },
+            method: "get_window_state",
+            risk: "high",
+            action: "ask",
+          })
+          const request = await waitForPendingBrowserPermission(
+            session.id,
+            "plugin_resolution_outside_instance",
+          )
+          return { session, turn, pendingResult, request }
+        } catch (error) {
+          await Permission.clearInProcessPermissionSession(session.id)
+          Orchestrator.finishTurn(turn)
+          throw error
+        }
+      },
+    })
+
+    try {
+      const resolved = await Permission.resolveRequest(setup.request.id, {
+        decision: "allow-once",
+      })
+      expect(resolved.request.status).toBe("approved")
+      await expect(Promise.race([
+        setup.pendingResult,
+        Bun.sleep(2_500).then(() => {
+          throw new Error("Approved in-process permission did not settle.")
+        }),
+      ])).resolves.toMatchObject({
+        decision: "allow-once",
+        grantID: setup.request.grantID,
+      })
+
+      const audits = db.findManyWithSchema(
+        "permission_audits",
+        Permission.Audit,
+        {
+          where: [{ column: "sessionID", value: setup.session.id }],
+        },
+      )
+      expect(audits).toContainEqual(expect.objectContaining({
+        action: "allow",
+        projectID: setup.session.projectID,
+        toolCallID: "plugin_resolution_outside_instance",
+      }))
+    } finally {
+      await Permission.clearInProcessPermissionSession(setup.session.id)
+      Orchestrator.finishTurn(setup.turn)
+    }
+  } finally {
+    await rm(repositoryRoot, { recursive: true, force: true })
+  }
+}, 120000)
+
 test("permission defaults auto-run safe reads and writes while honoring tool deny intents", async () => {
   const repositoryRoot = await mkdtemp(path.join(tmpdir(), "anybox-permission-defaults-"))
 
