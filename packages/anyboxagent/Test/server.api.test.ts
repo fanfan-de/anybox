@@ -5388,7 +5388,8 @@ describe("server api", () => {
     expect(raw).toContain(`"type":"turn.completed"`)
     expect(raw).toContain(`"turnID":"${turnID}"`)
     expect(raw).toContain(`"seq":3`)
-    expect(raw).toContain(`:${turnID}:3`)
+    expect(raw).toContain("id: v2.")
+    expect(raw).not.toContain(`:${turnID}:3`)
   })
 
   test("runtime event schema treats cancelled turns as terminal events", () => {

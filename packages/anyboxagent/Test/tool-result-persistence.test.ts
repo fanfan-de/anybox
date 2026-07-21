@@ -62,6 +62,7 @@ test("makePreview prefers a nearby newline boundary", () => {
   const preview = ToolResultPersistence.makePreview(text, 1_200)
   expect(preview.endsWith("\n")).toBe(false)
   expect(preview).toBe("a".repeat(900))
+  expect(ToolResultPersistence.makeSafeFileSegment("..")).toMatch(/^tool_[a-f0-9]{16}$/)
 })
 
 test("maybePersistToolResult writes large output and keeps Infinity below the hard byte cap", async () => {

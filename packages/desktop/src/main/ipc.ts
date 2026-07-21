@@ -2888,14 +2888,14 @@ type RawArtifactCandidate = {
 }
 
 function managedArtifactSessionSegment(sessionID: string) {
-  return /^[A-Za-z0-9._-]+$/.test(sessionID)
+  return /^[A-Za-z0-9._-]+$/.test(sessionID) && sessionID !== "." && sessionID !== ".."
     ? sessionID
     : `tool_${createHash("sha256").update(sessionID).digest("hex").slice(0, 16)}`
 }
 
 function isStrictChildPath(parent: string, candidate: string) {
   const relative = path.relative(path.resolve(parent), path.resolve(candidate))
-  return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative)
+  return relative !== "" && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)
 }
 
 function portableTracePath(...segments: string[]) {

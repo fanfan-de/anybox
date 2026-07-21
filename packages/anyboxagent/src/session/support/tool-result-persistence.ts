@@ -99,7 +99,7 @@ export function getEffectiveThreshold(maxResultSizeChars?: number) {
 }
 
 export function makeSafeFileSegment(value: string) {
-  if (SAFE_SEGMENT_PATTERN.test(value)) return value
+  if (SAFE_SEGMENT_PATTERN.test(value) && value !== "." && value !== "..") return value
   return `tool_${createHash("sha256").update(value).digest("hex").slice(0, 16)}`
 }
 
@@ -115,7 +115,7 @@ function assertWithin(parent: string, child: string) {
   const resolvedParent = path.resolve(parent)
   const resolvedChild = path.resolve(child)
   const relative = path.relative(resolvedParent, resolvedChild)
-  if (relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative))) {
+  if (relative === "" || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative))) {
     return
   }
 
@@ -253,7 +253,13 @@ function decodeInlineAttachment(url: string, fallbackMime: string) {
       mime,
       bytes: dataUrl[2]
         ? Buffer.from(data.replace(/\s+/g, ""), "base64")
-        : Buffer.from(decodeURIComponent(data), "utf8"),
+        : Buffer.from((() => {
+            try {
+              return decodeURIComponent(data)
+            } catch {
+              return data
+            }
+          })(), "utf8"),
     }
   }
 
