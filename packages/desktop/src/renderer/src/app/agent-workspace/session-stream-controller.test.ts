@@ -310,11 +310,11 @@ function createTaskListView(): SessionTaskListView {
 }
 
 describe("session stream controller helpers", () => {
-  it("resolves request/session cursors and backend turn IDs from runtime and legacy events", () => {
+  it("prefers opaque SSE cursors and falls back to runtime event IDs", () => {
     const runtimeData = createRuntimeEvent("turn.completed")
 
-    expect(resolveStreamCursor({ id: "runtime-cursor-1", data: runtimeData })).toBe("456:backend-turn-1:7")
-    expect(resolveStreamCursor({ data: runtimeData })).toBe("456:backend-turn-1:7")
+    expect(resolveStreamCursor({ id: "v2.process-epoch.42", data: runtimeData })).toBe("v2.process-epoch.42")
+    expect(resolveStreamCursor({ data: runtimeData })).toBe("runtime-cursor-1")
     expect(resolveStreamTurnID({ data: runtimeData })).toBe("backend-turn-1")
 
     expect(resolveStreamCursor({ data: { cursor: "legacy-cursor-1", turnID: "legacy-turn-1" } })).toBe("legacy-cursor-1")

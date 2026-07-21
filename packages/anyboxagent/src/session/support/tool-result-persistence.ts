@@ -152,6 +152,11 @@ export function makePreview(text: string, maxChars = PREVIEW_CHARS) {
   return slice
 }
 
+function scrubInlineDataForPreview(text: string) {
+  return text.replace(/data:(?:([a-z0-9.+/-]+))?(?:;[^,\s"']*)?,[^\s"']+/gi, (_match, mime?: string) =>
+    `[DATA_URL:${mime || "application/octet-stream"};saved-as-artifact]`)
+}
+
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
   const units = ["KiB", "MiB", "GiB"]
@@ -254,13 +259,17 @@ function decodeInlineAttachment(url: string, fallbackMime: string) {
 
   // Some MCP providers expose a bare base64 string as the attachment URL.
   // Restrict detection to long, scheme-less values so normal relative paths are untouched.
+  const normalized = url.replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/")
   if (
     url.length >= 128 &&
     !url.includes("://") &&
-    !url.includes("/") &&
-    /^[A-Za-z0-9+_=\r\n-]+$/.test(url)
+    !url.includes("\\") &&
+    !url.startsWith("/") &&
+    !url.startsWith("./") &&
+    !url.startsWith("../") &&
+    normalized.length % 4 === 0 &&
+    /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(normalized)
   ) {
-    const normalized = url.replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/")
     return {
       mime: fallbackMime || "application/octet-stream",
       bytes: Buffer.from(normalized, "base64"),
@@ -272,6 +281,19 @@ function decodeInlineAttachment(url: string, fallbackMime: string) {
 
 function containsInlineAttachment(attachments: AttachmentLike[] | undefined) {
   return attachments?.some((attachment) => Boolean(decodeInlineAttachment(attachment.url, attachment.mime))) ?? false
+}
+
+function containsInlineData(value: unknown, key = "", mime = "application/octet-stream", depth = 0): boolean {
+  if (typeof value === "string") {
+    if (value.startsWith("data:")) return Boolean(decodeInlineAttachment(value, mime))
+    return key === "url" && Boolean(decodeInlineAttachment(value, mime))
+  }
+  if (!value || typeof value !== "object" || depth > 20) return false
+  if (Array.isArray(value)) return value.some((item) => containsInlineData(item, key, mime, depth + 1))
+  const record = value as Record<string, unknown>
+  const nextMime = typeof record.mime === "string" ? record.mime : mime
+  return Object.entries(record).some(([childKey, child]) =>
+    containsInlineData(child, childKey, nextMime, depth + 1))
 }
 
 function shouldScrubMetadataString(key: string, value: string) {
@@ -504,7 +526,8 @@ export async function maybePersistToolResult(input: PersistToolResultInput): Pro
   const requiresPersistence =
     input.output.length > threshold ||
     serializedBytes > SERIALIZED_RESULT_MAX_BYTES ||
-    containsInlineAttachment(input.attachments)
+    containsInlineAttachment(input.attachments) ||
+    containsInlineData(resultEnvelope(input))
 
   if (!requiresPersistence) {
     return {
@@ -517,7 +540,7 @@ export async function maybePersistToolResult(input: PersistToolResultInput): Pro
   }
 
   const outputBytes = Buffer.byteLength(input.output, "utf8")
-  const preview = makePreview(input.output, PREVIEW_CHARS)
+  const preview = makePreview(scrubInlineDataForPreview(input.output), PREVIEW_CHARS)
   const hasMore = input.output.length > preview.length || serializedBytes > outputBytes
 
   try {

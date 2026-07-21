@@ -47,6 +47,17 @@ describe("agent session event router", () => {
     expect(router.getTurnTarget("backend-1", "turn-1")).toBeNull()
   })
 
+  it("can clear replay cursors without discarding turn targets", () => {
+    const router = createAgentSessionEventRouter()
+    router.rememberSeenCursor("session-a", "v2.epoch.1")
+    router.setTurnTarget("backend-a", "turn-a", { sessionID: "session-a", turnID: "turn-a" })
+
+    router.clearSeenCursors("session-a")
+
+    expect(router.rememberSeenCursor("session-a", "v2.epoch.1")).toBe(false)
+    expect(router.getTurnTarget("backend-a", "turn-a")).not.toBeNull()
+  })
+
   it("remembers settled backend turns with bounded retention", () => {
     const router = createAgentSessionEventRouter({ maxSettledTurns: 2 })
 

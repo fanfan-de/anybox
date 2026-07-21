@@ -18,6 +18,19 @@
   --brand-soft: #e3f0ec;
   --shadow-overlay: 0 18px 48px rgba(25, 31, 27, 0.12);
 
+  --semantic-docs-code-surface-light: #101820;
+  --semantic-docs-code-surface-dark: #0b0e0d;
+  --semantic-docs-code-border-light: #2a3946;
+  --semantic-docs-code-border-dark: #303934;
+  --semantic-docs-code-text-light: #edf3f7;
+  --semantic-docs-code-text-dark: #e4ebe5;
+  --semantic-docs-code-muted-light: #a8b7c4;
+  --semantic-docs-code-muted-dark: #9ba79f;
+  --semantic-docs-code-surface: var(--semantic-docs-code-surface-light);
+  --semantic-docs-code-border: var(--semantic-docs-code-border-light);
+  --semantic-docs-code-text: var(--semantic-docs-code-text-light);
+  --semantic-docs-code-muted: var(--semantic-docs-code-muted-light);
+
   --hero-stage-background: #020304;
   --hero-stage-surface: rgba(2, 5, 7, 0.74);
   --hero-stage-surface-strong: rgba(2, 5, 7, 0.94);
@@ -102,4 +115,8 @@
   --brand-primary: #76b8ad;
   --brand-soft: #203a35;
   --shadow-overlay: 0 18px 48px rgba(0, 0, 0, 0.28);
+  --semantic-docs-code-surface: var(--semantic-docs-code-surface-dark);
+  --semantic-docs-code-border: var(--semantic-docs-code-border-dark);
+  --semantic-docs-code-text: var(--semantic-docs-code-text-dark);
+  --semantic-docs-code-muted: var(--semantic-docs-code-muted-dark);
 }

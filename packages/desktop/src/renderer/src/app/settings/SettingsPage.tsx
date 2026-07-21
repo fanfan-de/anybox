@@ -2881,6 +2881,7 @@ interface SettingsPageProps {
   archivedSessionsError: string | null
   storageUsage: DesktopStorageUsageSnapshot | null
   storageUsageError: string | null
+  storageOptimizeMessage: { tone: "success" | "error"; text: string } | null
   catalog: ProviderCatalogItem[]
   cinemaVideoProviders: CinemaVideoProvider[]
   deletingArchivedSessionID: string | null
@@ -2898,6 +2899,7 @@ interface SettingsPageProps {
   isLoading: boolean
   isLoadingArchivedSessions: boolean
   isLoadingStorageUsage: boolean
+  isOptimizingStorage: boolean
   isOpen: boolean
   appUpdateState: DesktopAppUpdateState | null
   appUpdateStatus: AppUpdateStatus | null
@@ -2966,6 +2968,7 @@ interface SettingsPageProps {
   onRefreshCinemaVideoProviderCatalog: () => boolean | Promise<boolean>
   onLoadArchivedSessions: () => void | Promise<void>
   onLoadStorageUsage: () => void | Promise<void>
+  onOptimizeStorage: () => boolean | Promise<boolean>
   onOpenUpdateCenter: () => void
   onRestoreArchivedSession: (sessionID: string) => boolean | Promise<boolean>
   onSaveMcpServer: () => boolean | Promise<boolean>
@@ -3009,6 +3012,7 @@ export function SettingsPage({
   archivedSessionsError,
   storageUsage,
   storageUsageError,
+  storageOptimizeMessage,
   catalog,
   cinemaVideoProviders,
   deletingArchivedSessionID,
@@ -3026,6 +3030,7 @@ export function SettingsPage({
   isLoading,
   isLoadingArchivedSessions,
   isLoadingStorageUsage,
+  isOptimizingStorage,
   isOpen,
   appUpdateState,
   isCheckingAppUpdate,
@@ -3085,6 +3090,7 @@ export function SettingsPage({
   onRefreshCinemaVideoProviderCatalog,
   onLoadArchivedSessions,
   onLoadStorageUsage,
+  onOptimizeStorage,
   onOpenUpdateCenter,
   onRestoreArchivedSession,
   onSaveMcpServer,
@@ -3233,10 +3239,27 @@ export function SettingsPage({
           {
             key: "free",
             label: t("settings.storage.summary.reclaimable"),
-            value: storageUsage.database.freelistBytes === null
-              ? t("settings.storage.unknown")
-              : formatStorageBytes(storageUsage.database.freelistBytes),
+            value: formatStorageBytes(storageUsage.maintenance.reclaimableBytes),
             detail: t("settings.storage.summary.reclaimableCopy"),
+            approximate: false,
+          },
+          {
+            key: "trace",
+            label: t("settings.storage.summary.trace"),
+            value: formatStorageBytes(storageUsage.trace.estimatedBytes),
+            detail: t("settings.storage.summary.traceCopy", {
+              count: storageUsage.trace.count,
+              days: storageUsage.trace.retentionDays,
+            }),
+            approximate: true,
+          },
+          {
+            key: "artifacts",
+            label: t("settings.storage.summary.artifacts"),
+            value: formatStorageBytes(storageUsage.toolArtifacts.bytes),
+            detail: t("settings.storage.summary.artifactsCopy", {
+              count: storageUsage.toolArtifacts.fileCount,
+            }),
             approximate: false,
           },
         ]
@@ -4448,15 +4471,34 @@ export function SettingsPage({
                         <h3>{t("settings.storage.title")}</h3>
                       </div>
                       <p>{t("settings.storage.copy")}</p>
-                      <button
-                        className="secondary-button"
-                        disabled={isLoadingStorageUsage}
-                        type="button"
-                        onClick={() => void onLoadStorageUsage()}
-                      >
-                        {isLoadingStorageUsage ? t("settings.storage.refreshing") : t("settings.storage.refresh")}
-                      </button>
+                      <div className="settings-storage-header-actions">
+                        <button
+                          className="secondary-button settings-storage-optimize-button"
+                          disabled={isLoadingStorageUsage || isOptimizingStorage}
+                          type="button"
+                          onClick={() => void onOptimizeStorage()}
+                        >
+                          {isOptimizingStorage ? t("settings.storage.optimizing") : t("settings.storage.optimize")}
+                        </button>
+                        <button
+                          className="secondary-button"
+                          disabled={isLoadingStorageUsage || isOptimizingStorage}
+                          type="button"
+                          onClick={() => void onLoadStorageUsage()}
+                        >
+                          {isLoadingStorageUsage ? t("settings.storage.refreshing") : t("settings.storage.refresh")}
+                        </button>
+                      </div>
                     </div>
+
+                    {storageOptimizeMessage ? (
+                      <p
+                        className={`settings-about-status is-${storageOptimizeMessage.tone}`}
+                        role={storageOptimizeMessage.tone === "error" ? "alert" : "status"}
+                      >
+                        {storageOptimizeMessage.text}
+                      </p>
+                    ) : null}
 
                     {storageUsage ? (
                       <div className="settings-storage-content">
@@ -4502,6 +4544,34 @@ export function SettingsPage({
                                     })
                                   : t("settings.storage.unknown")}
                               </strong>
+                            </div>
+                          </div>
+                        </section>
+
+                        <section className="settings-storage-block">
+                          <div className="settings-storage-block-header">
+                            <h4>{t("settings.storage.traceArtifactsTitle")}</h4>
+                            <span>{t("settings.storage.traceArtifactsCopy")}</span>
+                          </div>
+                          <div className="settings-storage-detail-list">
+                            <div className="settings-storage-detail-row">
+                              <span>{t("settings.storage.traceRecords")}</span>
+                              <strong>{storageUsage.trace.count}</strong>
+                            </div>
+                            <div className="settings-storage-detail-row">
+                              <span>{t("settings.storage.traceRetention")}</span>
+                              <strong>{t("settings.storage.traceRetentionValue", { days: storageUsage.trace.retentionDays })}</strong>
+                            </div>
+                            <div className="settings-storage-detail-row">
+                              <span>{t("settings.storage.artifactFiles")}</span>
+                              <strong>{t("settings.storage.artifactFilesValue", {
+                                count: storageUsage.toolArtifacts.fileCount,
+                                size: formatStorageBytes(storageUsage.toolArtifacts.bytes),
+                              })}</strong>
+                            </div>
+                            <div className="settings-storage-detail-row">
+                              <span>{t("settings.storage.maintenanceStatus")}</span>
+                              <strong>{storageUsage.maintenance.status}</strong>
                             </div>
                           </div>
                         </section>

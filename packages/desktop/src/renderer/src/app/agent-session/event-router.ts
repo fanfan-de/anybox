@@ -42,6 +42,10 @@ export class AgentSessionEventRouter {
     return false
   }
 
+  clearSeenCursors(sessionID: string) {
+    delete this.seenCursorsBySession[sessionID]
+  }
+
   getTurnTarget(backendSessionID: string, turnID: string) {
     return this.turnTargets[this.turnTargetKey(backendSessionID, turnID)] ?? null
   }

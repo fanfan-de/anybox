@@ -38,7 +38,8 @@ import { arePluginCatalogsEqual, mergePluginCatalogWithInstalled } from "./plugi
 import { useToast } from "./toast"
 import { useI18n } from "./i18n/I18nProvider"
 import type { DesktopProviderAuthPrompt, DesktopStorageUsageSnapshot } from "../../../shared/desktop-ipc-contract"
-import { getStorageUsage } from "./settings/client"
+import { getStorageUsage, optimizeStorage as optimizeStorageApi } from "./settings/client"
+import { formatStorageBytes } from "./settings/storage-usage"
 import {
   connectorIDForDefinition,
   isAccountConnectorDefinition,
@@ -627,11 +628,13 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
   const [isLoadingPromptPreset, setIsLoadingPromptPreset] = useState(false)
   const [isLoadingArchivedSessions, setIsLoadingArchivedSessions] = useState(false)
   const [isLoadingStorageUsage, setIsLoadingStorageUsage] = useState(false)
+  const [isOptimizingStorage, setIsOptimizingStorage] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [builtinToolsError, setBuiltinToolsError] = useState<string | null>(null)
   const [promptLoadError, setPromptLoadError] = useState<string | null>(null)
   const [archivedSessionsError, setArchivedSessionsError] = useState<string | null>(null)
   const [storageUsageError, setStorageUsageError] = useState<string | null>(null)
+  const [storageOptimizeMessage, setStorageOptimizeMessage] = useState<SettingsMessage | null>(null)
   const [savingProviderID, setSavingProviderID] = useState<string | null>(null)
   const [savingCinemaVideoProviderID, setSavingCinemaVideoProviderID] = useState<string | null>(null)
   const [deletingProviderID, setDeletingProviderID] = useState<string | null>(null)
@@ -677,6 +680,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
   const builtinToolsRequestIDRef = useRef(0)
   const archivedSessionsRequestIDRef = useRef(0)
   const storageUsageRequestIDRef = useRef(0)
+  const storageOptimizeInFlightRef = useRef(false)
   const mcpServersRequestIDRef = useRef(0)
   const mcpDiagnosticRequestIDRef = useRef<Record<string, number>>({})
   const connectorsRequestIDRef = useRef(0)
@@ -969,6 +973,37 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       }
     }
   }, [])
+
+  const optimizeStorage = useCallback(async () => {
+    if (storageOptimizeInFlightRef.current) return false
+    if (!window.confirm(t("settings.storage.optimizeConfirm"))) return false
+    storageOptimizeInFlightRef.current = true
+    setIsOptimizingStorage(true)
+    setStorageOptimizeMessage(null)
+    try {
+      const result = await optimizeStorageApi()
+      if (!result) throw new Error(t("settings.storage.optimizeUnavailable"))
+      setStorageOptimizeMessage({
+        tone: "success",
+        text: t("settings.storage.optimizeSuccess", {
+          reclaimed: formatStorageBytes(result.reclaimedBytes),
+          cleaned: result.cleanedCount,
+          migrated: result.migratedCount,
+        }),
+      })
+      await loadStorageUsage({ silent: true })
+      return true
+    } catch (error) {
+      setStorageOptimizeMessage({
+        tone: "error",
+        text: getErrorMessage(error),
+      })
+      return false
+    } finally {
+      storageOptimizeInFlightRef.current = false
+      setIsOptimizingStorage(false)
+    }
+  }, [loadStorageUsage, t])
 
   async function loadSettingsData(optionsArg?: LoadSettingsOptions) {
     const loadProviderCatalog = window.desktop?.getGlobalProviderCatalog
@@ -4086,5 +4121,8 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     updatingPluginID,
     loadStorageUsage,
     isLoadingStorageUsage,
+    isOptimizingStorage,
+    storageOptimizeMessage,
+    optimizeStorage,
   }
 }

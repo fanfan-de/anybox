@@ -5,14 +5,24 @@ import faqEn from "./content/faq.en.md?raw"
 import faqZh from "./content/faq.md?raw"
 import gettingStartedEn from "./content/getting-started.en.md?raw"
 import gettingStartedZh from "./content/下载安装.md?raw"
+import overviewEn from "./content/overview.en.md?raw"
+import overviewZh from "./content/概述.md?raw"
+import permissionsEn from "./content/permissions.en.md?raw"
+import permissionsZh from "./content/permissions.md?raw"
 import pluginDevelopmentEn from "./content/plugin-development.en.md?raw"
 import pluginDevelopmentZh from "./content/plugin-development.md?raw"
+import projectsAndSessionsEn from "./content/projects-and-sessions.en.md?raw"
+import projectsAndSessionsZh from "./content/projects-and-sessions.md?raw"
 import providersEn from "./content/providers.en.md?raw"
 import providersZh from "./content/providers.md?raw"
 import skillsEn from "./content/skills.en.md?raw"
 import skillsZh from "./content/skills.md?raw"
 import toolsEn from "./content/tools.en.md?raw"
 import toolsZh from "./content/tools.md?raw"
+import troubleshootingEn from "./content/troubleshooting.en.md?raw"
+import troubleshootingZh from "./content/troubleshooting.md?raw"
+import useCasesEn from "./content/use-cases.en.md?raw"
+import useCasesZh from "./content/探索用例.md?raw"
 
 export type DocsArticle = {
   content: string
@@ -29,28 +39,62 @@ export type DocsSection = {
 export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
   zh: [
     {
-      title: "开始",
+      title: "了解 Anybox",
       items: [
         {
-          content: gettingStartedZh,
-          description: "下载、安装并完成第一次项目会话。",
-          slug: "getting-started",
-          title: "快速开始",
+          content: overviewZh,
+          description: "理解 Anybox 的定位、工作方式、能力边界与推荐阅读路径。",
+          slug: "overview",
+          title: "产品概览",
         },
         {
-          content: coreConceptZh,
-          description: "理解 Agent 会话、上下文窗口和自动压缩机制。",
-          slug: "core-concept",
-          title: "核心概念",
+          content: useCasesZh,
+          description: "从开发、研究办公和内容创作场景中选择合适的第一个任务。",
+          slug: "use-cases",
+          title: "使用场景",
         },
       ],
     },
     {
-      title: "配置",
+      title: "开始使用",
+      items: [
+        {
+          content: gettingStartedZh,
+          description: "安装桌面端、连接模型，并完成第一次可检查的项目会话。",
+          slug: "getting-started",
+          title: "快速开始",
+        },
+        {
+          content: projectsAndSessionsZh,
+          description: "理解项目、工作区和会话的关系，并建立清晰的任务组织方式。",
+          slug: "projects-and-sessions",
+          title: "项目、工作区与会话",
+        },
+      ],
+    },
+    {
+      title: "工作方式",
+      items: [
+        {
+          content: permissionsZh,
+          description: "看懂风险等级、审批卡片和授权范围，保留必要的执行控制。",
+          slug: "permissions",
+          title: "权限与审批",
+        },
+        {
+          content: coreConceptZh,
+          description: "理解上下文预算、自动压缩、手动压缩和长会话恢复机制。",
+          slug: "core-concept",
+          title: "长会话与上下文",
+        },
+      ],
+    },
+    {
+      title: "配置与能力",
       items: [
         {
           content: providersZh,
-          description: "连接模型供应商，选择会话模型。",
+          description: "连接模型供应商，测试凭据，并为不同任务选择合适模型。",
           slug: "providers",
           title: "模型供应商",
         },
@@ -62,7 +106,7 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
         },
         {
           content: skillsZh,
-          description: "创建、选择和管理可复用 Skills。",
+          description: "创建本地 Skill，安全启用受管来源，并管理更新、回滚与项目选择。",
           slug: "skills",
           title: "Skills",
         },
@@ -83,8 +127,14 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
       title: "支持",
       items: [
         {
+          content: troubleshootingZh,
+          description: "按项目、模型、工具、MCP、权限和长会话逐层定位常见问题。",
+          slug: "troubleshooting",
+          title: "排障",
+        },
+        {
           content: faqZh,
-          description: "安装、平台、隐私和排障问题。",
+          description: "平台、数据、模型、权限、移动端和反馈方式的常见问题。",
           slug: "faq",
           title: "FAQ",
         },
@@ -93,28 +143,62 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
   ],
   en: [
     {
-      title: "Start",
+      title: "Understand Anybox",
       items: [
         {
-          content: gettingStartedEn,
-          description: "Download, install, and start your first project session.",
-          slug: "getting-started",
-          title: "Quick Start",
+          content: overviewEn,
+          description: "Understand what Anybox is, how it works, its boundaries, and where to begin.",
+          slug: "overview",
+          title: "Overview",
         },
         {
-          content: coreConceptEn,
-          description: "Understand sessions, context windows, and compaction.",
-          slug: "core-concept",
-          title: "Core Concepts",
+          content: useCasesEn,
+          description: "Choose a practical first task across development, research, operations, and creation.",
+          slug: "use-cases",
+          title: "Use Cases",
         },
       ],
     },
     {
-      title: "Configure",
+      title: "Get Started",
+      items: [
+        {
+          content: gettingStartedEn,
+          description: "Install the desktop app, connect a model, and complete an inspectable first session.",
+          slug: "getting-started",
+          title: "Quick Start",
+        },
+        {
+          content: projectsAndSessionsEn,
+          description: "Understand projects, workspaces, and sessions, then organize tasks clearly.",
+          slug: "projects-and-sessions",
+          title: "Projects, Workspaces & Sessions",
+        },
+      ],
+    },
+    {
+      title: "How Work Runs",
+      items: [
+        {
+          content: permissionsEn,
+          description: "Read risk levels, approval cards, and authorization scope while retaining control.",
+          slug: "permissions",
+          title: "Permissions & Approvals",
+        },
+        {
+          content: coreConceptEn,
+          description: "Understand context budgets, automatic and manual compaction, and long-session recovery.",
+          slug: "core-concept",
+          title: "Long Sessions & Context",
+        },
+      ],
+    },
+    {
+      title: "Configure & Extend",
       items: [
         {
           content: providersEn,
-          description: "Connect a model provider and select a session model.",
+          description: "Connect a provider, test credentials, and choose a suitable model for each task.",
           slug: "providers",
           title: "Model Providers",
         },
@@ -126,7 +210,7 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
         },
         {
           content: skillsEn,
-          description: "Create, select, and manage reusable Skills.",
+          description: "Create local Skills and safely manage downloads, updates, rollbacks, and project selection.",
           slug: "skills",
           title: "Skills",
         },
@@ -147,8 +231,14 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
       title: "Support",
       items: [
         {
+          content: troubleshootingEn,
+          description: "Diagnose project, provider, tool, MCP, permission, and long-session issues.",
+          slug: "troubleshooting",
+          title: "Troubleshooting",
+        },
+        {
           content: faqEn,
-          description: "Installation, platforms, privacy, and troubleshooting.",
+          description: "Common questions about platforms, data, models, permissions, mobile, and support.",
           slug: "faq",
           title: "FAQ",
         },

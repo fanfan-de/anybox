@@ -11,16 +11,18 @@ const ModelRef = z.object({
 })
 
 export const RuntimeEventBase = z.object({
+  schemaVersion: z.literal(2).default(2),
+  scope: z.enum(["turn", "session"]).default("turn"),
   eventID: Identifier.schema("event"),
   sessionID: Identifier.schema("session"),
-  turnID: Identifier.schema("turn"),
+  turnID: Identifier.schema("turn").nullable(),
   seq: z.number().int().positive(),
   timestamp: z.number().int().nonnegative(),
 })
 
 export const RuntimeEventCursor = z.object({
   timestamp: z.number().int().nonnegative(),
-  turnID: Identifier.schema("turn"),
+  turnID: Identifier.schema("turn").nullable(),
   seq: z.number().int().positive(),
 })
 
@@ -33,6 +35,10 @@ const TurnStartedPayload = z.object({
 
 const MessageRecordedPayload = z.object({
   message: Message.MessageInfo,
+})
+
+const MessageRemovedPayload = z.object({
+  messageID: z.string(),
 })
 
 const PartRecordedPayload = z.object({
@@ -253,6 +259,11 @@ export const MessageRecordedEvent = RuntimeEventBase.extend({
   payload: MessageRecordedPayload,
 })
 
+export const MessageRemovedEvent = RuntimeEventBase.extend({
+  type: z.literal("message.removed"),
+  payload: MessageRemovedPayload,
+})
+
 export const PartRecordedEvent = RuntimeEventBase.extend({
   type: z.literal("part.recorded"),
   payload: PartRecordedPayload,
@@ -427,6 +438,7 @@ export const RuntimeEvent = z.discriminatedUnion("type", [
   TurnStartedEvent,
   TurnStateChangedEvent,
   MessageRecordedEvent,
+  MessageRemovedEvent,
   PartRecordedEvent,
   PartRemovedEvent,
   PermissionRequestedEvent,
@@ -479,6 +491,7 @@ export type RuntimeEventPayloadByType = {
   "turn.started": z.infer<typeof TurnStartedPayload>
   "turn.state.changed": z.infer<typeof TurnStateChangedPayload>
   "message.recorded": z.infer<typeof MessageRecordedPayload>
+  "message.removed": z.infer<typeof MessageRemovedPayload>
   "part.recorded": z.infer<typeof PartRecordedPayload>
   "part.removed": z.infer<typeof PartRemovedPayload>
   "permission.requested": z.infer<typeof PermissionRequestedPayload>
@@ -514,18 +527,24 @@ export type RuntimeEventPayloadByType = {
   "subagent.created": z.infer<typeof SubagentCreatedPayload>
 }
 
-export function createRuntimeEventFactory(input: {
+export function createRuntimeEventFactory<TTurnID extends string | null>(input: {
   sessionID: string
-  turnID: string
+  turnID: TTurnID
   timestamp?: () => number
+  initialSeq?: number
 }) {
-  let seq = 0
+  let seq = input.initialSeq ?? 0
   const now = input.timestamp ?? (() => Date.now())
 
   return {
-    next<TType extends RuntimeEventType>(type: TType, payload: RuntimeEventPayloadByType[TType]) {
+    next<TType extends RuntimeEventType>(
+      type: TType,
+      payload: RuntimeEventPayloadByType[TType],
+    ): Extract<RuntimeEvent, { type: TType }> & { turnID: TTurnID } {
       seq += 1
       return RuntimeEvent.parse({
+        schemaVersion: 2,
+        scope: input.turnID ? "turn" : "session",
         eventID: Identifier.ascending("event"),
         sessionID: input.sessionID,
         turnID: input.turnID,
@@ -533,7 +552,7 @@ export function createRuntimeEventFactory(input: {
         timestamp: now(),
         type,
         payload,
-      })
+      }) as Extract<RuntimeEvent, { type: TType }> & { turnID: TTurnID }
     },
     currentSeq() {
       return seq
@@ -546,7 +565,7 @@ export function cursorOf(
     | RuntimeEvent
     | {
         timestamp: number
-        turnID: string
+        turnID: string | null
         seq: number
       },
 ) {

@@ -1,6 +1,10 @@
-import { statSync } from "node:fs"
+import { readdirSync, statSync } from "node:fs"
+import path from "node:path"
 import type { DesktopStorageUsageSnapshot } from "@anybox/shared"
 import * as Sqlite from "#database/Sqlite.ts"
+import * as Global from "#global/global.ts"
+import * as EventStore from "#session/runtime/event-store.ts"
+import * as StorageMaintenance from "#session/runtime/storage-maintenance.ts"
 
 type StorageUsageTableCategory = DesktopStorageUsageSnapshot["tables"][number]["category"]
 type StorageUsageCategoryID = DesktopStorageUsageSnapshot["categories"][number]["id"]
@@ -39,6 +43,74 @@ function statSize(filePath: string) {
   } catch {
     return 0
   }
+}
+
+function measureToolArtifacts() {
+  const sessionsRoot = path.join(Global.Path.state, "sessions")
+  let fileCount = 0
+  let bytes = 0
+  const visit = (directory: string) => {
+    let entries
+    try {
+      entries = readdirSync(directory, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      const candidate = path.join(directory, entry.name)
+      if (entry.isDirectory()) visit(candidate)
+      else if (entry.isFile()) {
+        fileCount += 1
+        bytes += statSize(candidate)
+      }
+    }
+  }
+  let sessionEntries
+  try {
+    sessionEntries = readdirSync(sessionsRoot, { withFileTypes: true })
+  } catch {
+    return { fileCount, bytes }
+  }
+  for (const entry of sessionEntries) {
+    if (entry.isDirectory()) visit(path.join(sessionsRoot, entry.name, "tool-results"))
+  }
+  return { fileCount, bytes }
+}
+
+function readTraceUsage() {
+  EventStore.ensureEventStoreTables()
+  const row = Sqlite.db.prepare(`
+    SELECT
+      COUNT(*) AS count,
+      COALESCE(SUM(length(CAST("payload" AS BLOB))), 0) AS estimatedBytes,
+      MIN("timestamp") AS earliestTimestamp
+    FROM "session_events"
+  `).get() as { count?: unknown; estimatedBytes?: unknown; earliestTimestamp?: unknown } | null
+  return {
+    count: asNumber(row?.count),
+    estimatedBytes: asNumber(row?.estimatedBytes),
+    earliestTimestamp: row?.earliestTimestamp === null || row?.earliestTimestamp === undefined
+      ? null
+      : asNumber(row.earliestTimestamp),
+    retentionDays: 30 as const,
+  }
+}
+
+function estimateExpiredTraceBytes() {
+  if (!Sqlite.tableExists("session_events")) return 0
+  const cutoff = Date.now() - StorageMaintenance.TRACE_RETENTION_DAYS * 24 * 60 * 60 * 1_000
+  const row = Sqlite.db.prepare(Sqlite.tableExists("turns") ? `
+      SELECT COALESCE(SUM(length(CAST(event."payload" AS BLOB))), 0) AS bytes
+      FROM "session_events" AS event
+      LEFT JOIN "turns" AS turn_record ON turn_record."id" = event."turnID"
+      WHERE event."timestamp" < ?
+        AND COALESCE(turn_record."status", '') NOT IN ('running', 'cancelling')
+    ` : `
+      SELECT COALESCE(SUM(length(CAST("payload" AS BLOB))), 0) AS bytes
+      FROM "session_events"
+      WHERE "timestamp" < ?
+    `).get(cutoff) as { bytes?: unknown } | null
+  return asNumber(row?.bytes)
 }
 
 function readPragmaNumber(name: "page_size" | "page_count" | "freelist_count") {
@@ -226,6 +298,9 @@ export function getStorageUsage(): DesktopStorageUsageSnapshot {
   const sessionsTable = tables.find((table) => table.name === "sessions")
   const estimatedContentBytes = tables.reduce((total, table) => total + table.estimatedBytes, 0)
   const sqliteOverheadBytes = Math.max(0, totalBytes - estimatedContentBytes)
+  const trace = readTraceUsage()
+  const toolArtifacts = measureToolArtifacts()
+  const maintenance = StorageMaintenance.getMaintenanceState()
 
   return {
     generatedAt: Date.now(),
@@ -270,5 +345,15 @@ export function getStorageUsage(): DesktopStorageUsageSnapshot {
     ],
     archivedSessions: listArchivedSessionUsage(),
     tables: tables.sort((a, b) => b.estimatedBytes - a.estimatedBytes || a.name.localeCompare(b.name)),
+    trace,
+    toolArtifacts,
+    maintenance: {
+      ...maintenance,
+      reclaimableBytes: Math.max(0, (freelistBytes ?? 0) + estimateExpiredTraceBytes()),
+    },
   }
+}
+
+export async function optimizeStorage() {
+  return StorageMaintenance.optimizeStorage()
 }

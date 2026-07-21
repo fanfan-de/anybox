@@ -5313,7 +5313,7 @@ describe("server api", () => {
     })
 
     const raw = await response.text()
-    const completedCursor = RuntimeEvent.serializeCursor(RuntimeEvent.cursorOf(completedEvent))
+    const completedCursor = LiveStreamHub.serializeCursor(LiveStreamHub.cursorForEvent(completedEvent))
 
     expect(raw).toContain("event: runtime")
     expect(raw).toContain(`"type":"turn.started"`)
@@ -5566,13 +5566,13 @@ describe("server api", () => {
       parts: [waitingToolPart],
     })
 
-    EventStore.append(turn1Started)
-    EventStore.append(turn1Completed)
-    EventStore.append(turn2Started)
-    EventStore.append(turn2WaitingApproval)
-    EventStore.append(turn2Completed)
+    LiveStreamHub.publish(turn1Started)
+    LiveStreamHub.publish(turn1Completed)
+    LiveStreamHub.publish(turn2Started)
+    LiveStreamHub.publish(turn2WaitingApproval)
+    LiveStreamHub.publish(turn2Completed)
 
-    const since = RuntimeEvent.serializeCursor(RuntimeEvent.cursorOf(turn1Completed))
+    const since = LiveStreamHub.serializeCursor(LiveStreamHub.cursorForEvent(turn1Completed))
     const response = await app.request(
       `http://localhost/api/sessions/${session.id}/events/stream?since=${encodeURIComponent(since)}`,
     )
@@ -5587,10 +5587,11 @@ describe("server api", () => {
     expect(raw).toContain(`"type":"turn.started"`)
     expect(raw).toContain(`"type":"tool.call.waiting_approval"`)
     expect(raw).toContain(`"type":"turn.completed"`)
-    expect(raw).toContain(`id: ${RuntimeEvent.serializeCursor(RuntimeEvent.cursorOf(turn2Started))}`)
+    expect(raw).toContain(`id: ${LiveStreamHub.serializeCursor(LiveStreamHub.cursorForEvent(turn2Started))}`)
     expect(raw).toContain(`"tool":"read_file"`)
     expect(raw).toContain(`"turnID":"${turn2ID}"`)
     expect(raw).not.toContain(`"turnID":"${turn1ID}"`)
+    LiveStreamHub.clearSession(session.id)
   })
 
   test("GET /api/sessions/:id/events/stream seeds active turn transient deltas for late subscribers", async () => {
@@ -5642,6 +5643,29 @@ describe("server api", () => {
         Orchestrator.finishTurn(turn)
       }
     }
+  })
+
+  test("GET /api/sessions/:id/events/stream asks legacy or malformed cursors to resync", async () => {
+    const app = createServerApp()
+    const session = await Session.createSession({
+      directory: process.cwd(),
+      projectID: "project_stream_invalid_cursor",
+      title: "Invalid cursor stream",
+    })
+
+    const response = await app.request(
+      `http://localhost/api/sessions/${session.id}/events/stream`,
+      { headers: { "last-event-id": "123:legacy-turn:4" } },
+    )
+    const raw = await readStreamUntil(response, [
+      "event: resync-required",
+      `"sessionID":"${session.id}"`,
+      `"reason":"cursor-invalid"`,
+    ])
+
+    expect(response.status).toBe(200)
+    expect(raw).toContain("event: resync-required")
+    expect(raw).toContain(`"reason":"cursor-invalid"`)
   })
 
   test("GET /api/projects/:id/sessions should return 404 for missing project", async () => {

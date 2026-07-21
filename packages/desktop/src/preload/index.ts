@@ -166,6 +166,8 @@ try {
       invokeDesktop("desktop:get-storage-paths") as Promise<DesktopIpcOutput<"desktop:get-storage-paths">>,
     getStorageUsage: () =>
       invokeDesktop("desktop:get-storage-usage") as Promise<DesktopIpcOutput<"desktop:get-storage-usage">>,
+    optimizeStorage: () =>
+      invokeDesktop("desktop:optimize-storage") as Promise<DesktopIpcOutput<"desktop:optimize-storage">>,
     getWindowState: () =>
       invokeDesktop("desktop:get-window-state") as Promise<{
         isMaximized: boolean
@@ -429,6 +431,8 @@ try {
       invokeDesktop("desktop:save-session-trace-export", input) as Promise<DesktopSaveSessionTraceExportResult>,
     saveSessionTraceExportDirectory: (input: { sessionID: string }) =>
       invokeDesktop("desktop:save-session-trace-export-directory", input) as Promise<DesktopSaveSessionTraceExportDirectoryResult>,
+    saveSessionTraceExportRawDirectory: (input: { sessionID: string }) =>
+      invokeDesktop("desktop:save-session-trace-export-raw-directory", input) as Promise<DesktopSaveSessionTraceExportDirectoryResult>,
     saveSessionTraceExportToProject: (input: { sessionID: string; directory: string; projectID?: string | null }) =>
       invokeDesktop("desktop:save-session-trace-export-to-project", input) as Promise<DesktopSaveSessionTraceExportDirectoryResult>,
     prepareSessionBagSubmission: (input: DesktopIpcInput<"desktop:prepare-session-bag-submission">) =>

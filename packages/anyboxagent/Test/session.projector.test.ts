@@ -10,6 +10,7 @@ import * as Message from "#session/core/message.ts"
 import * as Orchestrator from "#session/runtime/orchestrator.ts"
 import * as RuntimeEvent from "#session/runtime/runtime-event.ts"
 import * as Session from "#session/core/session.ts"
+import * as ToolResultPersistence from "#session/support/tool-result-persistence.ts"
 
 test("runtime events project messages and parts into the session read model", async () => {
   await Instance.provide({
@@ -205,9 +206,12 @@ test("runtime events project messages and parts into the session read model", as
         turn.emit("file.generated", {
           part: generatedFilePart,
         })
-        expect(db.findById("parts", Message.Part, streamedText.id)).toBeNull()
-        expect(db.findById("parts", Message.Part, sourcePart.id)).toBeNull()
-        expect(db.findById("parts", Message.Part, generatedFilePart.id)).toBeNull()
+        expect(db.findById("parts", Message.Part, streamedText.id)).toMatchObject({
+          id: streamedText.id,
+          text: "world",
+        })
+        expect(db.findById("parts", Message.Part, sourcePart.id)).toMatchObject({ id: sourcePart.id })
+        expect(db.findById("parts", Message.Part, generatedFilePart.id)).toMatchObject({ id: generatedFilePart.id })
 
         turn.emit("message.recorded", {
           message: completedAssistant,
@@ -290,6 +294,10 @@ test("runtime events project messages and parts into the session read model", as
 
       const removedPatch = db.findById("parts", Message.Part, patchPart.id)
       expect(removedPatch).toBeNull()
+
+      EventStore.appendSessionEvent(session.id, "message.removed", { messageID: userMessage.id })
+      expect(db.findById("messages", Message.MessageInfo, userMessage.id)).toBeNull()
+      expect(db.findById("parts", Message.Part, userPart.id)).toBeNull()
     },
   })
 })
@@ -391,6 +399,54 @@ test("stream delta runtime events publish immediately without event-store persis
   })
 })
 
+test("session-scoped runtime events use a nullable turn and monotonic session sequence", async () => {
+  await Instance.provide({
+    directory: process.cwd(),
+    async fn() {
+      const session = await Session.createSession({
+        directory: Instance.directory,
+        projectID: Instance.project.id,
+      })
+      const first = EventStore.appendSessionEvent(session.id, "retry.scheduled", { attempt: 1 })
+      const second = EventStore.appendSessionEvent(session.id, "retry.scheduled", { attempt: 2 })
+
+      expect(first).toMatchObject({ schemaVersion: 2, scope: "session", turnID: null, seq: 1 })
+      expect(second).toMatchObject({ schemaVersion: 2, scope: "session", turnID: null, seq: 2 })
+      expect(EventStore.listSessionEvents({ sessionID: session.id }).map((event) => ({
+        turnID: event.turnID,
+        seq: event.seq,
+      }))).toEqual([
+        { turnID: null, seq: 1 },
+        { turnID: null, seq: 2 },
+      ])
+    },
+  })
+})
+
+test("session-scoped sequence remains monotonic when trace insertion fails", async () => {
+  await Instance.provide({
+    directory: process.cwd(),
+    async fn() {
+      const session = await Session.createSession({
+        directory: Instance.directory,
+        projectID: Instance.project.id,
+      })
+
+      EventStore.setTraceInsertFailureForTest(true)
+      const first = EventStore.appendSessionEvent(session.id, "retry.scheduled", { attempt: 1 })
+      EventStore.setTraceInsertFailureForTest(false)
+      try {
+        const second = EventStore.appendSessionEvent(session.id, "retry.scheduled", { attempt: 2 })
+        expect(first.seq).toBe(1)
+        expect(second.seq).toBe(2)
+        expect(EventStore.listSessionEvents({ sessionID: session.id }).map((event) => event.seq)).toEqual([2])
+      } finally {
+        EventStore.setTraceInsertFailureForTest(false)
+      }
+    },
+  })
+})
+
 test("stream boundary runtime events persist for trace replay", async () => {
   await Instance.provide({
     directory: process.cwd(),
@@ -459,6 +515,159 @@ test("stream boundary runtime events persist for trace replay", async () => {
         "reasoning.part.started",
         "reasoning.part.completed",
       ])
+    },
+  })
+})
+
+test("trace insertion failures do not roll back canonical messages or live publication", async () => {
+  await Instance.provide({
+    directory: process.cwd(),
+    async fn() {
+      const session = await Session.createSession({
+        directory: Instance.directory,
+        projectID: Instance.project.id,
+      })
+      const turnID = Identifier.ascending("turn")
+      const factory = RuntimeEvent.createRuntimeEventFactory({ sessionID: session.id, turnID })
+      const message = Message.User.parse({
+        id: Identifier.ascending("message"),
+        sessionID: session.id,
+        role: "user",
+        created: Date.now(),
+        agent: "plan",
+        model: { providerID: "test-provider", modelID: "test-model" },
+      })
+      const event = factory.next("message.recorded", { message })
+      const subscription = LiveStreamHub.subscribe({
+        sessionID: session.id,
+        turnID,
+        closeOnTerminalTurn: false,
+      })
+
+      EventStore.setTraceInsertFailureForTest(true)
+      try {
+        expect(() => EventStore.appendAndProject(event)).not.toThrow()
+        expect(db.findById("messages", Message.MessageInfo, message.id)).toMatchObject({ id: message.id })
+        expect(EventStore.listTurnEvents({ sessionID: session.id, turnID })).toHaveLength(0)
+        expect((await subscription.next())?.eventID).toBe(event.eventID)
+        expect(EventStore.traceStoreHealth().insertFailures).toBeGreaterThan(0)
+      } finally {
+        EventStore.setTraceInsertFailureForTest(false)
+        subscription.close()
+      }
+    },
+  })
+})
+
+test("terminal events repair missing final messages and parts", async () => {
+  await Instance.provide({
+    directory: process.cwd(),
+    async fn() {
+      const session = await Session.createSession({
+        directory: Instance.directory,
+        projectID: Instance.project.id,
+      })
+      const turnID = Identifier.ascending("turn")
+      const factory = RuntimeEvent.createRuntimeEventFactory({ sessionID: session.id, turnID })
+      EventStore.appendAndProject(factory.next("turn.started", {}))
+      const message = Message.Assistant.parse({
+        id: Identifier.ascending("message"),
+        sessionID: session.id,
+        role: "assistant",
+        created: Date.now(),
+        parentID: "msg-user-terminal",
+        modelID: "test-model",
+        providerID: "test-provider",
+        agent: "plan",
+        path: { cwd: Instance.directory, root: Instance.worktree },
+        cost: 0,
+        tokens: { input: 1, output: 1, reasoning: 0, cache: { read: 0, write: 0 } },
+        finishReason: "stop",
+      })
+      const part = Message.TextPart.parse({
+        id: Identifier.ascending("part"),
+        sessionID: session.id,
+        messageID: message.id,
+        type: "text",
+        text: "repaired final answer",
+      })
+
+      EventStore.appendAndProject(factory.next("turn.completed", {
+        status: "completed",
+        finishReason: "stop",
+        message,
+        parts: [part],
+      }))
+
+      expect(db.findById("messages", Message.MessageInfo, message.id)).toMatchObject({
+        id: message.id,
+        finishReason: "stop",
+      })
+      expect(db.findById("parts", Message.Part, part.id)).toMatchObject({
+        id: part.id,
+        text: "repaired final answer",
+      })
+      expect(Session.DataBaseRead("turns", turnID)).toMatchObject({
+        id: turnID,
+        status: "completed",
+        lastMessageID: message.id,
+      })
+    },
+  })
+})
+
+test("persisted trace payloads stay below 32 KiB and do not duplicate large tool output", async () => {
+  await Instance.provide({
+    directory: process.cwd(),
+    async fn() {
+      const session = await Session.createSession({
+        directory: Instance.directory,
+        projectID: Instance.project.id,
+      })
+      try {
+        const fullOutput = `${"large-tool-output ".repeat(8_000)}unique-secret-tail`
+        const persisted = await ToolResultPersistence.maybePersistToolResult({
+          sessionID: session.id,
+          toolCallID: "call-large-trace",
+          toolName: "large-tool",
+          output: fullOutput,
+          metadata: {},
+          modelOutput: { type: "text", value: fullOutput },
+        })
+        const part = Message.ToolPart.parse({
+          id: Identifier.ascending("part"),
+          sessionID: session.id,
+          messageID: Identifier.ascending("message"),
+          type: "tool",
+          callID: "call-large-trace",
+          tool: "large-tool",
+          state: {
+            status: "completed",
+            input: {},
+            output: persisted.output,
+            modelOutput: persisted.modelOutput,
+            title: "Large tool",
+            metadata: persisted.metadata,
+            time: { start: 1, end: 2 },
+            attachments: persisted.attachments,
+          },
+        })
+        const turnID = Identifier.ascending("turn")
+        const event = RuntimeEvent.createRuntimeEventFactory({ sessionID: session.id, turnID })
+          .next("tool.call.completed", { part })
+        EventStore.appendAndProject(event)
+
+        const row = db.db.prepare(`SELECT "payload" FROM "session_events" WHERE "eventID" = ?`).get(event.eventID) as {
+          payload: string
+        }
+        expect(Buffer.byteLength(row.payload, "utf8")).toBeLessThanOrEqual(32 * 1024)
+        expect(row.payload).not.toContain("unique-secret-tail")
+        const canonical = db.findById("parts", Message.Part, part.id)
+        expect(JSON.stringify(canonical)).not.toContain("unique-secret-tail")
+        expect(JSON.stringify(canonical)).toContain("persisted-tool-output")
+      } finally {
+        ToolResultPersistence.removeSessionOutputDirectory(session.id)
+      }
     },
   })
 })

@@ -819,7 +819,7 @@ function SessionTraceExportMenuButton({
   const menuRef = useRef<HTMLDivElement | null>(null)
   const buttonRef = useRef<HTMLButtonElement | null>(null)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const [busyAction, setBusyAction] = useState<"copy" | "save" | "saveDirectory" | "saveProject" | null>(null)
+  const [busyAction, setBusyAction] = useState<"copy" | "save" | "saveDirectory" | "saveRawDirectory" | "saveProject" | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const trimmedProjectDirectory = projectDirectory?.trim() ?? ""
@@ -927,6 +927,27 @@ function SessionTraceExportMenuButton({
     }
   }
 
+  async function handleSaveRawDirectoryClick() {
+    resetStatus()
+    setBusyAction("saveRawDirectory")
+
+    try {
+      if (!window.desktop?.saveSessionTraceExportRawDirectory) {
+        throw new Error("Raw trace export save is unavailable.")
+      }
+
+      const result = await window.desktop.saveSessionTraceExportRawDirectory({ sessionID })
+      if (!result.canceled) {
+        await openSavedTraceFolder(result.path)
+        setStatusMessage("Raw split trace folder saved.")
+      }
+    } catch (error) {
+      setErrorMessage(readErrorMessage(error))
+    } finally {
+      setBusyAction(null)
+    }
+  }
+
   async function handleSaveProjectClick() {
     resetStatus()
     setBusyAction("saveProject")
@@ -1021,6 +1042,20 @@ function SessionTraceExportMenuButton({
               <strong>Save split trace folder</strong>
             </span>
             <span className="canvas-top-menu-context-option-status">{busyAction === "saveDirectory" ? "Saving" : "Folder"}</span>
+          </button>
+          <button
+            className="canvas-top-menu-context-option canvas-top-menu-trace-option"
+            disabled={busyAction !== null}
+            onClick={() => void handleSaveRawDirectoryClick()}
+            role="menuitem"
+            title="Includes unredacted tool artifact files after a separate warning"
+            type="button"
+          >
+            <span className="canvas-top-menu-context-option-label">
+              <DownloadIcon />
+              <strong>Save split trace with raw payloads…</strong>
+            </span>
+            <span className="canvas-top-menu-context-option-status">{busyAction === "saveRawDirectory" ? "Saving" : "Raw"}</span>
           </button>
           <button
             className="canvas-top-menu-context-option canvas-top-menu-trace-option"

@@ -6,7 +6,7 @@ import * as LiveStreamHub from "#session/runtime/live-stream-hub.ts"
 import * as RunningState from "#session/runtime/running-state.ts"
 import * as SessionRunner from "#session/runtime/session-runner.ts"
 import { getSessionRuntimeDebugSnapshot } from "#session/runtime/runtime-debug.ts"
-import { buildAgentSessionTraceExport } from "#session/runtime/trace-export.ts"
+import { buildAgentSessionTraceExport, buildSafeStoredTraceEventPage } from "#session/runtime/trace-export.ts"
 import * as Session from "#session/core/session.ts"
 import * as SessionUseCase from "#server/usecases/session.ts"
 import * as Log from "#util/log.ts"
@@ -70,6 +70,7 @@ function buildStatusPayload() {
       memory,
     },
     logging: Log.status(),
+    trace: EventStore.traceStoreHealth(),
     streams: LiveStreamHub.snapshot(),
     runnerLimits: SessionRunner.runtimeLimitsSnapshot(),
     runningSessions: {
@@ -98,6 +99,7 @@ function buildRuntimePayload(input?: {
       platform: process.platform,
     },
     logging: Log.status(),
+    trace: EventStore.traceStoreHealth(),
     runnerLimits: SessionRunner.runtimeLimitsSnapshot(),
     runningSessions: RunningState.snapshot().map((item) =>
       getSessionRuntimeDebugSnapshot({
@@ -325,7 +327,8 @@ export function DebugRoutes() {
       throw new ApiError(404, "SESSION_NOT_FOUND", `Session '${sessionID}' not found`)
     }
 
-    const events = EventStore.listSessionEvents({ sessionID })
+    const totalRetainedEventCount = EventStore.countSessionEvents(sessionID)
+    const events = EventStore.listRecentSessionEvents({ sessionID, limit: 5_000 })
     const runtime = getSessionRuntimeDebugSnapshot({
       sessionID,
       eventLimit: 100,
@@ -336,12 +339,14 @@ export function DebugRoutes() {
       events,
       messages,
       runtime,
+      totalRetainedEventCount,
     })
 
     log.info("session trace export requested", {
       requestId: c.get("requestId"),
       sessionID,
       eventCount: events.length,
+      totalRetainedEventCount,
       messageCount: messages.length,
       toolCallCount: trace.toolCalls.length,
     })
@@ -349,6 +354,42 @@ export function DebugRoutes() {
     return c.json({
       success: true,
       data: trace,
+      requestId: c.get("requestId"),
+    })
+  })
+
+  app.get("/sessions/:id/trace-events", (c) => {
+    const sessionID = c.req.param("id")
+    const session = Session.DataBaseRead("sessions", sessionID) as Session.SessionInfo | null
+    if (!session) {
+      throw new ApiError(404, "SESSION_NOT_FOUND", `Session '${sessionID}' not found`)
+    }
+
+    const afterPositionValue = Number(c.req.query("afterPosition") ?? 0)
+    const afterPosition = Number.isSafeInteger(afterPositionValue) && afterPositionValue >= 0
+      ? afterPositionValue
+      : 0
+    const limit = parseLimit(c.req.query("limit"), 1_000, 1_000)
+    const rows = EventStore.listSessionEvents({
+      sessionID,
+      after: { position: afterPosition },
+      limit: limit + 1,
+    })
+    const hasMore = rows.length > limit
+    const pageRows = hasMore ? rows.slice(0, limit) : rows
+    const safePage = buildSafeStoredTraceEventPage(pageRows)
+
+    return c.json({
+      success: true,
+      data: {
+        schemaVersion: 2,
+        mode: "safe",
+        events: safePage.events,
+        redaction: safePage.redaction,
+        hasMore,
+        nextPosition: pageRows.at(-1)?.position ?? afterPosition,
+        totalRetainedEventCount: EventStore.countSessionEvents(sessionID),
+      },
       requestId: c.get("requestId"),
     })
   })

@@ -940,7 +940,7 @@ export interface AgentSessionRuntimeDebugSnapshot {
 }
 
 export interface AgentSessionTraceExport {
-  schemaVersion: 1
+  schemaVersion: 2
   generatedAt: number
   mode: "safe"
   session: AgentSessionRuntimeDebugSnapshot["session"]
@@ -951,6 +951,8 @@ export interface AgentSessionTraceExport {
     toolCallCount: number
     redactedCount: number
     truncatedCount: number
+    totalRetainedEventCount: number
+    omittedEventCount: number
   }
   redaction: {
     enabled: true
@@ -959,15 +961,21 @@ export interface AgentSessionTraceExport {
   }
   messages: unknown[]
   events: Array<{
+    position: number
     eventID: string
     sessionID: string
-    turnID: string
+    turnID: string | null
     seq: number
     timestamp: number
     type: string
     payload: unknown
   }>
   runtime: AgentSessionRuntimeDebugSnapshot
+  truncation: {
+    eventsTruncated: boolean
+    maxEvents: number
+    omittedEvents: number
+  }
   toolCalls: Array<{
     callID: string
     tool: string

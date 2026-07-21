@@ -5616,6 +5616,17 @@ body.is-dragging-settings-page {
   grid-column: 1 / -1;
 }
 
+.settings-storage-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.settings-storage-optimize-button {
+  min-inline-size: 132px;
+}
+
 .settings-storage-content {
   gap: 18px;
 }
@@ -5777,6 +5788,11 @@ body.is-dragging-settings-page {
 
   .settings-storage-header .secondary-button {
     justify-self: start;
+  }
+
+  .settings-storage-header-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 
   .settings-storage-detail-row,

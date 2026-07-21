@@ -285,7 +285,7 @@ describe("SessionCanvasTopMenu trace export", () => {
   it("copies safe trace JSON for the active session", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     const getSessionTraceExport = vi.fn().mockResolvedValue({
-      schemaVersion: 1,
+      schemaVersion: 2,
       mode: "safe",
       session: {
         id: "session-1",
@@ -324,7 +324,7 @@ describe("SessionCanvasTopMenu trace export", () => {
 
     await waitFor(() => {
       expect(getSessionTraceExport).toHaveBeenCalledWith({ sessionID: "session-1" })
-      expect(writeText).toHaveBeenCalledWith(expect.stringContaining('"schemaVersion": 1'))
+      expect(writeText).toHaveBeenCalledWith(expect.stringContaining('"schemaVersion": 2'))
     })
   })
 
@@ -369,6 +369,28 @@ describe("SessionCanvasTopMenu trace export", () => {
       expect(saveSessionTraceExportDirectory).toHaveBeenCalledWith({ sessionID: "session-1" })
       expect(openPath).toHaveBeenCalledWith({ targetPath: exportedPath })
       expect(screen.getByText("Split trace folder saved.")).toBeInTheDocument()
+    })
+  })
+
+  it("uses the dedicated raw trace export action", async () => {
+    const exportedPath = "C:\\Temp\\raw-trace-folder"
+    const openPath = vi.fn().mockResolvedValue({ ok: true, targetPath: exportedPath })
+    const saveSessionTraceExportRawDirectory = vi.fn().mockResolvedValue({
+      canceled: false,
+      path: exportedPath,
+      fileCount: 4,
+      recordCount: 1,
+    })
+    setDesktopApi({ openPath, saveSessionTraceExportRawDirectory })
+
+    renderTopMenu()
+    fireEvent.click(screen.getByRole("button", { name: "Export session trace" }))
+    fireEvent.click(screen.getByRole("menuitem", { name: /Save split trace with raw payloads/ }))
+
+    await waitFor(() => {
+      expect(saveSessionTraceExportRawDirectory).toHaveBeenCalledWith({ sessionID: "session-1" })
+      expect(openPath).toHaveBeenCalledWith({ targetPath: exportedPath })
+      expect(screen.getByText("Raw split trace folder saved.")).toBeInTheDocument()
     })
   })
 

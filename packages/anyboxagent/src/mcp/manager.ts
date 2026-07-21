@@ -283,6 +283,7 @@ export class McpManager {
       ) {
         return
       }
+      if (!event.turnID) return
       const client = this.handles.get(NODE_REPL_SERVER_ID)?.client
       if (!client) return
       void client.notifyLifecycle({

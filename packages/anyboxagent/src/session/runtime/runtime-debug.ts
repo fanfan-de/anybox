@@ -3,6 +3,7 @@ import * as EventStore from "#session/runtime/event-store.ts"
 import * as RunningState from "#session/runtime/running-state.ts"
 import * as SessionRunner from "#session/runtime/session-runner.ts"
 import * as RuntimeEvent from "#session/runtime/runtime-event.ts"
+import type * as StoredTrace from "#session/runtime/stored-trace-event.ts"
 import * as Session from "#session/core/session.ts"
 import * as Task from "#session/tasks/task.ts"
 import * as Log from "#util/log.ts"
@@ -11,9 +12,9 @@ type RuntimeEventTone = "info" | "success" | "warning" | "error"
 
 export type RuntimeEventSummary = {
   eventID: string
-  type: RuntimeEvent.RuntimeEventType
+  type: string
   sessionID: string
-  turnID: string
+  turnID: string | null
   seq: number
   timestamp: number
   cursor: string
@@ -765,6 +766,87 @@ function summarizeRuntimeEvent(event: RuntimeEvent.RuntimeEvent): RuntimeEventSu
   }
 }
 
+function summarizeStoredTraceEvent(event: StoredTrace.StoredTraceEvent): RuntimeEventSummary {
+  const payload = event.payload
+  const failed = event.type.endsWith(".failed") || event.type === "turn.error.context"
+  const warning = event.type.includes("waiting_approval") || event.type.endsWith(".denied") || event.type.endsWith(".cancelled")
+  const success = event.type.endsWith(".completed")
+  const subject = payload.toolName
+    ? `${payload.toolName}${payload.status ? ` · ${payload.status}` : ""}`
+    : payload.phase ?? payload.status ?? payload.finishReason
+  return {
+    eventID: event.eventID,
+    type: event.type,
+    sessionID: event.sessionID,
+    turnID: event.turnID,
+    seq: event.seq,
+    timestamp: event.timestamp,
+    cursor: `trace.${event.position}`,
+    title: event.type,
+    detail: payload.error ? truncate(payload.error, 180) : subject,
+    tone: failed ? "error" : warning ? "warning" : success ? "success" : "info",
+    summary: payload,
+  }
+}
+
+function updateTurnFromStoredTrace(
+  turn: MutableTurnSummary,
+  event: StoredTrace.StoredTraceEvent,
+  eventLimit: number,
+) {
+  const payload = event.payload
+  turn.lastEventAt = event.timestamp
+  const summary = summarizeStoredTraceEvent(event)
+  turn.recentEvents.push(summary)
+  if (turn.recentEvents.length > eventLimit) {
+    turn.recentEvents.splice(0, turn.recentEvents.length - eventLimit)
+  }
+
+  if (event.type === "turn.started") {
+    turn.startedAt ??= event.timestamp
+    turn.status = "running"
+  }
+  if (event.type === "turn.state.changed" && payload.phase) {
+    turn.phase = RuntimeEvent.TurnRuntimePhase.safeParse(payload.phase).success
+      ? payload.phase as RuntimeEvent.TurnRuntimePhase
+      : turn.phase
+    turn.phaseUpdatedAt = event.timestamp
+  }
+  if (event.type.startsWith("tool.call.") && payload.callID) {
+    const previous = turn.tools.get(payload.callID)
+    const terminal = event.type.endsWith(".completed") || event.type.endsWith(".failed") || event.type.endsWith(".denied") || event.type.endsWith(".cancelled")
+    turn.tools.set(payload.callID, {
+      callID: payload.callID,
+      tool: payload.toolName ?? previous?.tool ?? "unknown",
+      status: payload.status ?? event.type.slice("tool.call.".length).replaceAll("_", "-"),
+      startedAt: previous?.startedAt ?? (event.type.endsWith(".started") ? event.timestamp : undefined),
+      endedAt: terminal ? event.timestamp : previous?.endedAt,
+      durationMs: payload.durationMs ?? previous?.durationMs,
+      error: payload.error,
+    })
+  }
+  if (event.type === "turn.completed") {
+    turn.endedAt = event.timestamp
+    turn.status = payload.status === "blocked"
+      ? "blocked"
+      : payload.status === "continued_by_user"
+        ? "continued_by_user"
+        : payload.status === "stopped"
+          ? "stopped"
+          : "completed"
+    turn.finishReason = payload.finishReason
+  } else if (event.type === "turn.failed") {
+    turn.endedAt = event.timestamp
+    turn.status = "failed"
+    turn.error = payload.error ? { message: payload.error, code: payload.errorCode, retryable: payload.retryable } : null
+  } else if (event.type === "turn.cancelled") {
+    turn.endedAt = event.timestamp
+    turn.status = "stopped"
+    turn.phase = "cancelled"
+    turn.phaseReason = payload.error
+  }
+}
+
 function createTurnSummary(turnID: string): MutableTurnSummary {
   return {
     id: turnID,
@@ -1015,14 +1097,38 @@ export function getSessionRuntimeDebugSnapshot(input: {
       })
     : EventStore.listSessionEvents({ sessionID: input.sessionID })
   const turns = new Map<string, MutableTurnSummary>()
+  for (const canonical of Session.listTurns(input.sessionID)) {
+    const turn = createTurnSummary(canonical.id)
+    turn.startedAt = canonical.createdAt
+    turn.endedAt = canonical.completedAt
+    turn.lastEventAt = canonical.updatedAt
+    turn.status = canonical.status === "cancelled" ? "stopped" : canonical.status
+    const parsedPhase = RuntimeEvent.TurnRuntimePhase.safeParse(canonical.phase)
+    turn.phase = parsedPhase.success ? parsedPhase.data : undefined
+    turn.userMessageID = canonical.userMessageID
+    turn.agent = canonical.agent
+    turn.model = summarizeModelRef(canonical.model)
+    turn.resume = canonical.resume ?? false
+    turn.finishReason = canonical.finishReason
+    turn.error = canonical.error ? {
+      message: canonical.error,
+      name: canonical.errorInfo?.name,
+      code: canonical.errorInfo?.code,
+      statusCode: canonical.errorInfo?.statusCode,
+      retryable: canonical.errorInfo?.retryable,
+    } : null
+    turns.set(canonical.id, turn)
+  }
   const recentEvents: RuntimeEventSummary[] = []
 
   for (const event of events) {
-    const turn = turns.get(event.turnID) ?? createTurnSummary(event.turnID)
-    turns.set(event.turnID, turn)
-    updateTurnFromEvent(turn, event, eventLimit)
+    if (event.turnID) {
+      const turn = turns.get(event.turnID) ?? createTurnSummary(event.turnID)
+      turns.set(event.turnID, turn)
+      updateTurnFromStoredTrace(turn, event, eventLimit)
+    }
 
-    const eventSummary = summarizeRuntimeEvent(event)
+    const eventSummary = summarizeStoredTraceEvent(event)
     recentEvents.push(eventSummary)
     if (recentEvents.length > eventLimit) {
       recentEvents.splice(0, recentEvents.length - eventLimit)

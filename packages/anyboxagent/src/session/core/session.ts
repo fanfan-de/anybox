@@ -8,6 +8,7 @@ import * as Installation from "#installation/installation.ts"
 import { fn } from "#util/fn.ts"
 import * as db from "#database/Sqlite.ts"
 import * as EventStore from "#session/runtime/event-store.ts"
+import * as LiveStreamHub from "#session/runtime/live-stream-hub.ts"
 import * as RuntimeEvent from "#session/runtime/runtime-event.ts"
 import * as TaskSchema from "#session/tasks/task-schema.ts"
 import * as ToolResultPersistence from "#session/support/tool-result-persistence.ts"
@@ -241,7 +242,7 @@ export const ArchivedSessionSnapshot = z
     turns: z.array(TurnInfo).optional(),
     messages: z.array(Message.MessageInfo),
     parts: z.array(Message.Part),
-    events: z.array(ArchivedRuntimeEvent),
+    events: z.array(ArchivedRuntimeEvent).optional(),
     tasks: z.array(TaskSchema.SessionTaskRecord).optional(),
   })
   .meta({
@@ -624,6 +625,17 @@ function deletePart(partID: string) {
   return db.deleteById("parts", partID)
 }
 
+function deleteMessage(sessionID: string, messageID: string) {
+  ensureSessionTables()
+  db.deleteMany("parts", [{ column: "messageID", value: messageID }])
+  const deleted = db.deleteById("messages", messageID)
+  if (getActiveMessageID(sessionID) === messageID) {
+    const nextActiveMessageID = loadSessionMessages(sessionID).at(-1)?.id ?? null
+    updateActiveMessageID(sessionID, nextActiveMessageID)
+  }
+  return deleted
+}
+
 function loadSessionMessages(sessionID: string) {
   ensureSessionTables()
   return db.findManyWithSchema("messages", Message.MessageInfo, {
@@ -734,7 +746,6 @@ function buildArchivedSessionRecord(session: SessionInfo): ArchivedSessionRecord
   const turns = loadSessionTurns(normalizedSession.id)
   const messages = loadSessionMessages(normalizedSession.id)
   const parts = loadSessionParts(session.id)
-  const events = EventStore.listSessionEvents({ sessionID: normalizedSession.id })
   const tasks = loadSessionTasks(normalizedSession.id)
   const archivedAt = Date.now()
 
@@ -748,13 +759,12 @@ function buildArchivedSessionRecord(session: SessionInfo): ArchivedSessionRecord
     archivedAt,
     schemaVersion: normalizedSession.version,
     messageCount: messages.length,
-    eventCount: events.length,
+    eventCount: 0,
     snapshot: {
       session: normalizedSession,
       turns: turns.length > 0 ? turns : undefined,
       messages,
       parts,
-      events,
       tasks: tasks.length > 0 ? tasks : undefined,
     },
   }
@@ -1220,6 +1230,7 @@ function removeSession(sessionID: string): SessionInfo | null {
   db.deleteMany("turns", [{ column: "sessionID", value: sessionID }])
   removeSessionTasks(sessionID)
   EventStore.deleteSessionEvents(sessionID)
+  LiveStreamHub.clearSession(sessionID)
   ToolResultPersistence.removeSessionOutputDirectory(sessionID)
   db.deleteById("sessions", sessionID)
   db.deleteById("side_chat_links", sessionID, "sessionID")
@@ -1247,12 +1258,14 @@ function archiveSessionCascade(sessionID: string): ArchivedSessionRecord[] {
       db.deleteMany("messages", [{ column: "sessionID", value: record.sessionID }])
       db.deleteMany("turns", [{ column: "sessionID", value: record.sessionID }])
       removeSessionTasks(record.sessionID)
-      EventStore.deleteSessionEvents(record.sessionID)
       db.deleteById("sessions", record.sessionID)
     }
   })
 
   commitArchive(archivedRecords)
+  for (const record of archivedRecords) {
+    LiveStreamHub.clearSession(record.sessionID)
+  }
   return archivedRecords
 }
 
@@ -1284,22 +1297,6 @@ function restoreArchivedSession(sessionID: string): SessionInfo | null {
       db.insertOneWithSchema("parts", part, Message.Part)
     }
 
-    let skippedEventCount = 0
-    for (const event of record.snapshot.events) {
-      const parsed = RuntimeEvent.RuntimeEvent.safeParse(event)
-      if (parsed.success) {
-        EventStore.append(parsed.data)
-      } else {
-        skippedEventCount += 1
-      }
-    }
-    if (skippedEventCount > 0) {
-      log.warn("skipped unsupported archived runtime events during restore", {
-        sessionID: record.sessionID,
-        skippedEventCount,
-      })
-    }
-
     const tasks = record.snapshot.tasks ?? []
     if (tasks.length > 0) {
       ensureSessionTaskTableForRestore()
@@ -1323,6 +1320,8 @@ function deleteArchivedSession(sessionID: string): ArchivedSessionRecord | null 
 
   db.deleteById("archived_sessions", sessionID, "sessionID")
   db.deleteById("side_chat_links", sessionID, "sessionID")
+  EventStore.deleteSessionEvents(sessionID)
+  LiveStreamHub.clearSession(sessionID)
   ToolResultPersistence.removeSessionOutputDirectory(sessionID)
   return archived
 }
@@ -1463,6 +1462,7 @@ export {
   deleteArchivedSession,
   DataBaseCreate,
   DataBaseRead,
+  deleteMessage,
   deletePart,
   listArchivedSessions,
   listArchivedSessionSummaries,

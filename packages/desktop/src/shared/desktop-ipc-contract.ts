@@ -101,6 +101,7 @@ import type {
   DownloadedRegistrySkill,
   DownloadedRegistrySkillSelectionResult,
   DesktopStorageUsageSnapshot,
+  DesktopStorageOptimizeResult,
   RegistryFile,
   RegistryFileContent,
   RegistryFileRef,
@@ -639,7 +640,7 @@ export interface DesktopRechargeOrderResponse {
   }
 }
 
-export type { DesktopStorageUsageSnapshot }
+export type { DesktopStorageUsageSnapshot, DesktopStorageOptimizeResult }
 
 export interface DesktopWindowState {
   isMaximized: boolean
@@ -1223,6 +1224,10 @@ export interface DesktopIpcContract {
     input: void
     output: DesktopStorageUsageSnapshot
   }
+  "desktop:optimize-storage": {
+    input: void
+    output: DesktopStorageOptimizeResult
+  }
   "desktop:get-window-state": {
     input: void
     output: DesktopWindowState
@@ -1651,6 +1656,10 @@ export interface DesktopIpcContract {
     output: DesktopSaveSessionTraceExportResult
   }
   "desktop:save-session-trace-export-directory": {
+    input: { sessionID: string }
+    output: DesktopSaveSessionTraceExportDirectoryResult
+  }
+  "desktop:save-session-trace-export-raw-directory": {
     input: { sessionID: string }
     output: DesktopSaveSessionTraceExportDirectoryResult
   }
@@ -2360,6 +2369,7 @@ export interface DesktopApiMethods {
   ): () => void
   getStoragePaths(): Promise<DesktopIpcOutput<"desktop:get-storage-paths">>
   getStorageUsage(): Promise<DesktopIpcOutput<"desktop:get-storage-usage">>
+  optimizeStorage(): Promise<DesktopIpcOutput<"desktop:optimize-storage">>
   getWindowState(): Promise<DesktopIpcOutput<"desktop:get-window-state">>
   reportRendererError(input: DesktopIpcInput<"desktop:report-renderer-error">): Promise<DesktopIpcOutput<"desktop:report-renderer-error">>
   reportRendererMemoryDiagnostics(input: DesktopIpcInput<"desktop:report-renderer-memory-diagnostics">): Promise<DesktopIpcOutput<"desktop:report-renderer-memory-diagnostics">>
@@ -2468,6 +2478,7 @@ export interface DesktopApiMethods {
   getSessionTraceExport(input: DesktopIpcInput<"desktop:get-session-trace-export">): Promise<DesktopIpcOutput<"desktop:get-session-trace-export">>
   saveSessionTraceExport(input: DesktopIpcInput<"desktop:save-session-trace-export">): Promise<DesktopIpcOutput<"desktop:save-session-trace-export">>
   saveSessionTraceExportDirectory(input: DesktopIpcInput<"desktop:save-session-trace-export-directory">): Promise<DesktopIpcOutput<"desktop:save-session-trace-export-directory">>
+  saveSessionTraceExportRawDirectory(input: DesktopIpcInput<"desktop:save-session-trace-export-raw-directory">): Promise<DesktopIpcOutput<"desktop:save-session-trace-export-raw-directory">>
   saveSessionTraceExportToProject(input: DesktopIpcInput<"desktop:save-session-trace-export-to-project">): Promise<DesktopIpcOutput<"desktop:save-session-trace-export-to-project">>
   prepareSessionBagSubmission(input: DesktopIpcInput<"desktop:prepare-session-bag-submission">): Promise<DesktopIpcOutput<"desktop:prepare-session-bag-submission">>
   uploadSessionBagSubmission(input: DesktopIpcInput<"desktop:upload-session-bag-submission">): Promise<DesktopIpcOutput<"desktop:upload-session-bag-submission">>

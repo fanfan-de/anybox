@@ -1,4 +1,3 @@
-import * as EventStore from "#session/runtime/event-store.ts"
 import * as Identifier from "#id/id.ts"
 import * as LiveStreamHub from "#session/runtime/live-stream-hub.ts"
 import * as Message from "#session/core/message.ts"
@@ -67,66 +66,21 @@ function replayRuntimeEvents(input: {
   sessionID: string
   turnID?: string
   sinceSeq?: number
-  since?: RuntimeEvent.RuntimeEventCursor
 }) {
-  const mergeReplayEvents = (
-    persisted: RuntimeEvent.RuntimeEvent[],
-    buffered: RuntimeEvent.RuntimeEvent[],
-  ) => {
-    const byEventID = new Map<string, RuntimeEvent.RuntimeEvent>()
-    for (const event of [...persisted, ...buffered]) {
-      byEventID.set(event.eventID, event)
-    }
-    return [...byEventID.values()].sort((left, right) => {
-      const leftCursor = RuntimeEvent.cursorOf(left)
-      const rightCursor = RuntimeEvent.cursorOf(right)
-      if (leftCursor.timestamp !== rightCursor.timestamp) return leftCursor.timestamp - rightCursor.timestamp
-      const turnDelta = leftCursor.turnID.localeCompare(rightCursor.turnID)
-      if (turnDelta !== 0) return turnDelta
-      return leftCursor.seq - rightCursor.seq
-    })
-  }
-
   if (input.turnID) {
-    return mergeReplayEvents(
-      EventStore.listTurnEvents({
-        sessionID: input.sessionID,
-        turnID: input.turnID,
-        sinceSeq: input.sinceSeq,
-      }),
-      LiveStreamHub.listRecentEvents({
-        sessionID: input.sessionID,
-        turnID: input.turnID,
-        sinceSeq: input.sinceSeq,
-      }),
-    )
-  }
-
-  if (input.since) {
-    return mergeReplayEvents(
-      EventStore.listSessionEvents({
-        sessionID: input.sessionID,
-        after: input.since,
-      }),
-      LiveStreamHub.listRecentEvents({
-        sessionID: input.sessionID,
-        since: input.since,
-      }),
-    )
+    return LiveStreamHub.listRecentEvents({
+      sessionID: input.sessionID,
+      turnID: input.turnID,
+      sinceSeq: input.sinceSeq,
+    })
   }
 
   const activeTurn = Orchestrator.activeTurn(input.sessionID)
   if (activeTurn) {
-    return mergeReplayEvents(
-      EventStore.listTurnEvents({
-        sessionID: input.sessionID,
-        turnID: activeTurn.turnID,
-      }),
-      LiveStreamHub.listRecentEvents({
-        sessionID: input.sessionID,
-        turnID: activeTurn.turnID,
-      }),
-    )
+    return LiveStreamHub.listRecentEvents({
+      sessionID: input.sessionID,
+      turnID: activeTurn.turnID,
+    })
   }
 
   return []
@@ -141,15 +95,15 @@ export function parseSinceSeq(value: string | undefined) {
 
 export function parseReplayCursor(value: string | undefined) {
   if (!value) return undefined
-  return RuntimeEvent.parseCursor(value.trim())
+  return LiveStreamHub.parseCursor(value.trim())
 }
 
-export function serializeReplayCursor(cursor: RuntimeEvent.RuntimeEventCursor) {
-  return RuntimeEvent.serializeCursor(cursor)
+export function serializeReplayCursor(cursor: LiveStreamHub.LiveStreamCursor) {
+  return LiveStreamHub.serializeCursor(cursor)
 }
 
 function runtimeEventSSEID(event: RuntimeEvent.RuntimeEvent) {
-  return RuntimeEvent.serializeCursor(RuntimeEvent.cursorOf(event))
+  return LiveStreamHub.serializeCursor(LiveStreamHub.cursorForEvent(event))
 }
 
 async function waitForControllerCapacity(
@@ -196,9 +150,11 @@ function createTransportTerminalEvent(input: {
     | RuntimeEvent.RuntimeEventPayloadByType["turn.cancelled"]
 }) {
   return RuntimeEvent.RuntimeEvent.parse({
+    schemaVersion: 2,
+    scope: input.turnID ? "turn" : "session",
     eventID: Identifier.ascending("event"),
     sessionID: input.sessionID,
-    turnID: input.turnID ?? Identifier.ascending("turn"),
+    turnID: input.turnID ?? null,
     seq: input.seq ?? 1,
     timestamp: Date.now(),
     type: input.type,
@@ -250,17 +206,6 @@ function isBlockingToolPart(part: Message.Part) {
     metadata.kind === "ask-user-question" &&
     metadata.answered !== true,
   )
-}
-
-function findPersistedTerminalEvent(input: {
-  sessionID: string
-  turnID?: string
-}) {
-  if (!input.turnID) return undefined
-  return EventStore.listTurnEvents({
-    sessionID: input.sessionID,
-    turnID: input.turnID,
-  }).find(RuntimeEvent.isTerminalRuntimeEvent)
 }
 
 function createResolvedFallbackTerminalEvent(input: {
@@ -356,18 +301,21 @@ export function createSessionEventStream(input: {
   sessionID: string
   requestId?: string
   heartbeatIntervalMs?: number
-  since?: RuntimeEvent.RuntimeEventCursor
+  since?: LiveStreamHub.LiveStreamCursor
+  invalidReplayCursor?: boolean
 }) {
   let cancelled = false
   const heartbeatIntervalMs = input.heartbeatIntervalMs ?? STREAM_HEARTBEAT_INTERVAL_MS
   const subscription = LiveStreamHub.subscribe({
     sessionID: input.sessionID,
     closeOnTerminalTurn: false,
-    seed: replayRuntimeEvents({
-      sessionID: input.sessionID,
-      since: input.since,
-    }),
   })
+  const replay: LiveStreamHub.ReplayResult = input.invalidReplayCursor
+    ? { status: "resync-required", reason: "cursor-invalid", events: [] }
+    : LiveStreamHub.replay({
+        sessionID: input.sessionID,
+        cursor: input.since,
+      })
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -416,6 +364,24 @@ export function createSessionEventStream(input: {
       }
 
       void (async () => {
+        if (replay.status === "resync-required") {
+          if (!await send("resync-required", {
+            schemaVersion: 2,
+            sessionID: input.sessionID,
+            reason: replay.reason,
+            processEpoch: LiveStreamHub.getProcessEpoch(),
+          })) {
+            subscription.close()
+            return
+          }
+        } else {
+          for (const event of replay.events) {
+            if (!await sendRuntimeEvent(send, event)) {
+              subscription.close()
+              return
+            }
+          }
+        }
         let nextEventPromise = subscription.next()
 
         while (!cancelled) {
@@ -599,7 +565,7 @@ export function createSessionExecutionStream(input: {
             break
           }
 
-          observedTurnID = next.event.turnID
+          observedTurnID = next.event.turnID ?? observedTurnID
           observedSeq = Math.max(observedSeq, next.event.seq)
           if (!await sendRuntimeEvent(send, next.event)) break
 
@@ -647,13 +613,9 @@ export function createSessionExecutionStream(input: {
               finishReason: resolved.info.role === "assistant" ? resolved.info.finishReason : undefined,
               partCount: resolved.parts.length,
             })
-            const persistedTerminalEvent = findPersistedTerminalEvent({
-              sessionID: input.sessionID,
-              turnID: observedTurnID,
-            })
             await sendRuntimeEvent(
               send,
-              persistedTerminalEvent ?? createResolvedFallbackTerminalEvent({
+              createResolvedFallbackTerminalEvent({
                 sessionID: input.sessionID,
                 turnID: observedTurnID,
                 seq: observedSeq + 1,

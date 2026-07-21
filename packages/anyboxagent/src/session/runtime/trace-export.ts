@@ -1,13 +1,15 @@
 import type * as Message from "#session/core/message.ts"
-import type * as RuntimeEvent from "#session/runtime/runtime-event.ts"
+import type * as StoredTrace from "#session/runtime/stored-trace-event.ts"
 import type { SessionRuntimeDebugSnapshot } from "#session/runtime/runtime-debug.ts"
 
 const MAX_SAFE_STRING_LENGTH = 20_000
+export const MAX_SINGLE_TRACE_EVENTS = 5_000
 const REDACTED_VALUE = "[REDACTED]"
-const SENSITIVE_KEY_PATTERN = /apiKey|token|secret|authorization|password|credential|cookie|privateKey/i
+const SENSITIVE_KEY_PATTERN = /^(?:.*(?:api[_-]?key|access[_-]?token|refresh[_-]?token|id[_-]?token|auth[_-]?token|client[_-]?secret|private[_-]?key)|token|secret|authorization|password|passwd|credential|cookie|set-cookie)$/i
+const SENSITIVE_INLINE_KEY_SOURCE = "api[_-]?key|access[_-]?token|refresh[_-]?token|id[_-]?token|auth[_-]?token|token|secret|authorization|password|passwd|credential|cookie|set-cookie|private[_-]?key"
 const STRUCTURED_RAW_STRING_KEY_PATTERN = /^raw(Input)?$/i
 const SENSITIVE_INLINE_VALUE_PATTERN = new RegExp(
-  `((?:"|')?(?:${SENSITIVE_KEY_PATTERN.source})(?:"|')?\\s*[:=]\\s*)(?:"[^"]*"|'[^']*'|[^\\s,;}\\]]+)`,
+  `((?:"|')?(?:${SENSITIVE_INLINE_KEY_SOURCE})(?:"|')?\\s*[:=]\\s*)("[^"]*"|'[^']*'|[^\\s,;}&]+)`,
   "gi",
 )
 
@@ -27,7 +29,7 @@ export interface TraceToolDiagnostic {
 export type TraceToolDiagnosticStatus = "ok" | TraceToolDiagnosticSeverity
 
 export interface AgentSessionTraceExport {
-  schemaVersion: 1
+  schemaVersion: 2
   generatedAt: number
   mode: "safe"
   session: SessionRuntimeDebugSnapshot["session"]
@@ -38,6 +40,8 @@ export interface AgentSessionTraceExport {
     toolCallCount: number
     redactedCount: number
     truncatedCount: number
+    totalRetainedEventCount: number
+    omittedEventCount: number
   }
   redaction: {
     enabled: true
@@ -46,15 +50,21 @@ export interface AgentSessionTraceExport {
   }
   messages: unknown[]
   events: Array<{
+    position: number
     eventID: string
     sessionID: string
-    turnID: string
+    turnID: string | null
     seq: number
     timestamp: number
     type: string
     payload: unknown
   }>
   runtime: SessionRuntimeDebugSnapshot
+  truncation: {
+    eventsTruncated: boolean
+    maxEvents: number
+    omittedEvents: number
+  }
   toolCalls: Array<{
     callID: string
     tool: string
@@ -84,6 +94,26 @@ function readRecord(value: unknown): Record<string, unknown> | null {
 
 function readString(value: unknown) {
   return typeof value === "string" ? value : ""
+}
+
+export function buildSafeStoredTraceEventPage(events: StoredTrace.StoredTraceEvent[]) {
+  const redactionStats: TraceExportRedactionStats = {
+    redactedCount: 0,
+    truncatedCount: 0,
+  }
+  return {
+    events: events.map((event) => ({
+      position: event.position,
+      eventID: event.eventID,
+      sessionID: event.sessionID,
+      turnID: event.turnID,
+      seq: event.seq,
+      timestamp: event.timestamp,
+      type: event.type,
+      payload: sanitizeTraceExportValue(event.payload, redactionStats),
+    })),
+    redaction: redactionStats,
+  }
 }
 
 function readOptionalString(value: unknown) {
@@ -218,15 +248,39 @@ function getTraceToolDiagnosticStatus(diagnostics: TraceToolDiagnostic[]): Trace
 }
 
 function sanitizeString(value: string, stats: TraceExportRedactionStats) {
-  const redactedValue = value.replace(SENSITIVE_INLINE_VALUE_PATTERN, (_match, prefix: string) => {
+  let redactedValue = value.replace(/data:(?:([a-z0-9.+/-]+))?(?:;[^,\s"']*)?,[^\s"']+/gi, (_match, mime?: string) => {
     stats.redactedCount += 1
-    return `${prefix}"${REDACTED_VALUE}"`
+    return `[DATA_URL:${mime || "application/octet-stream"};redacted]`
   })
-  const dataUrlMatch = /^data:([^;,]+)[;,]/i.exec(value)
-  if (dataUrlMatch) {
+  redactedValue = redactedValue.replace(/\bAuthorization\s*[:=]\s*(?:Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+/gi, (match) => {
     stats.redactedCount += 1
-    return `[DATA_URL:${dataUrlMatch[1]};length=${value.length}]`
-  }
+    const separator = match.includes("=") ? "=" : ":"
+    return `Authorization${separator} ${REDACTED_VALUE}`
+  })
+  redactedValue = redactedValue.replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, () => {
+    stats.redactedCount += 1
+    return REDACTED_VALUE
+  })
+  redactedValue = redactedValue.replace(/\b(?:Cookie|Set-Cookie)\s*:\s*[^\r\n]+/gi, (match) => {
+    stats.redactedCount += 1
+    return `${match.slice(0, match.indexOf(":"))}: ${REDACTED_VALUE}`
+  })
+  redactedValue = redactedValue.replace(
+    /([?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|passwd|credential)=)[^&#\s"']*/gi,
+    (_match, prefix: string) => {
+      stats.redactedCount += 1
+      return `${prefix}${encodeURIComponent(REDACTED_VALUE)}`
+    },
+  )
+  redactedValue = redactedValue.replace(SENSITIVE_INLINE_VALUE_PATTERN, (match, prefix: string, sensitiveValue: string) => {
+    const normalized = sensitiveValue.replace(/^['"]|['"]$/g, "")
+    if (normalized.startsWith(REDACTED_VALUE) || normalized.toUpperCase().startsWith("%5BREDACTED%5D")) {
+      return match
+    }
+    stats.redactedCount += 1
+    const quote = sensitiveValue.startsWith("\"") ? "\"" : sensitiveValue.startsWith("'") ? "'" : ""
+    return `${prefix}${quote}${REDACTED_VALUE}${quote}`
+  })
 
   if (redactedValue.length <= MAX_SAFE_STRING_LENGTH) return redactedValue
 
@@ -291,7 +345,7 @@ export function sanitizeTraceExportValue(
   }
 }
 
-function readToolEventCallID(event: RuntimeEvent.RuntimeEvent) {
+function readToolEventCallID(event: StoredTrace.StoredTraceEvent) {
   const payload = readRecord(event.payload)
   const part = readRecord(payload?.part)
   const request = readRecord(payload?.request)
@@ -300,11 +354,12 @@ function readToolEventCallID(event: RuntimeEvent.RuntimeEvent) {
     readString(part?.callID) ||
     readString(part?.toolCallID) ||
     readString(payload?.toolCallID) ||
-    readString(request?.toolCallID)
+    readString(request?.toolCallID) ||
+    readString(payload?.callID)
   )
 }
 
-function buildToolEventIDsByCallID(events: RuntimeEvent.RuntimeEvent[]) {
+function buildToolEventIDsByCallID(events: StoredTrace.StoredTraceEvent[]) {
   const eventIDsByCallID = new Map<string, string[]>()
 
   for (const event of events) {
@@ -332,7 +387,7 @@ function buildRuntimeToolSummaryByCallID(runtime: SessionRuntimeDebugSnapshot) {
 }
 
 function buildToolCalls(input: {
-  events: RuntimeEvent.RuntimeEvent[]
+  events: StoredTrace.StoredTraceEvent[]
   messages: Message.WithParts[]
   runtime: SessionRuntimeDebugSnapshot
 }) {
@@ -382,19 +437,24 @@ function buildToolCalls(input: {
 }
 
 export function buildAgentSessionTraceExport(input: {
-  events: RuntimeEvent.RuntimeEvent[]
+  events: StoredTrace.StoredTraceEvent[]
   generatedAt?: number
   messages: Message.WithParts[]
   runtime: SessionRuntimeDebugSnapshot
+  totalRetainedEventCount?: number
 }): AgentSessionTraceExport {
   const generatedAt = input.generatedAt ?? Date.now()
   const redactionStats: TraceExportRedactionStats = {
     redactedCount: 0,
     truncatedCount: 0,
   }
-  const rawToolCalls = buildToolCalls(input)
+  const retainedEvents = input.events.slice(-MAX_SINGLE_TRACE_EVENTS)
+  const totalRetainedEventCount = Math.max(input.totalRetainedEventCount ?? input.events.length, input.events.length)
+  const omittedEventCount = Math.max(0, totalRetainedEventCount - retainedEvents.length)
+  const rawToolCalls = buildToolCalls({ ...input, events: retainedEvents })
   const safeMessages = sanitizeTraceExportValue(input.messages, redactionStats) as unknown[]
-  const safeEvents = input.events.map((event) => ({
+  const safeEvents = retainedEvents.map((event) => ({
+    position: event.position,
     eventID: event.eventID,
     sessionID: event.sessionID,
     turnID: event.turnID,
@@ -410,17 +470,19 @@ export function buildAgentSessionTraceExport(input: {
   ) as AgentSessionTraceExport["toolCalls"]
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt,
     mode: "safe",
     session: safeRuntime.session,
     stats: {
       messageCount: input.messages.length,
-      eventCount: input.events.length,
+      eventCount: retainedEvents.length,
       turnCount: input.runtime.turns.length,
       toolCallCount: safeToolCalls.length,
       redactedCount: redactionStats.redactedCount,
       truncatedCount: redactionStats.truncatedCount,
+      totalRetainedEventCount,
+      omittedEventCount,
     },
     redaction: {
       enabled: true,
@@ -430,6 +492,11 @@ export function buildAgentSessionTraceExport(input: {
     messages: safeMessages,
     events: safeEvents,
     runtime: safeRuntime,
+    truncation: {
+      eventsTruncated: omittedEventCount > 0,
+      maxEvents: MAX_SINGLE_TRACE_EVENTS,
+      omittedEvents: omittedEventCount,
+    },
     toolCalls: safeToolCalls,
   }
 }

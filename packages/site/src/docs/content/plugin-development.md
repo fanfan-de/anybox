@@ -1,4 +1,4 @@
-# 制作 Anybox 插件
+# 制作插件
 
 Anybox 插件是一个可安装的能力包。它可以只包含一组指导 Agent 工作的 Skill，也可以加入 MCP 工具、插件自己的 Connector，以及对平台 Connector 的依赖声明。
 

@@ -1175,9 +1175,11 @@ export interface AgentStreamEvent {
 }
 
 export interface AgentRuntimeEvent {
+  schemaVersion?: 2
+  scope?: "turn" | "session"
   eventID: string
   sessionID: string
-  turnID: string
+  turnID: string | null
   seq: number
   timestamp: number
   type: string

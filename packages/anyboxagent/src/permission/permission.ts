@@ -12,6 +12,7 @@ import * as ToolRegistry from "#tool/registry.ts"
 import * as Agent from "#agent/agent.ts"
 import * as Message from "#session/core/message.ts"
 import * as Orchestrator from "#session/runtime/orchestrator.ts"
+import * as EventStore from "#session/runtime/event-store.ts"
 import * as Session from "#session/core/session.ts"
 import * as Schema from "#permission/schema.ts"
 
@@ -398,15 +399,6 @@ function safeDisplayText(value: string | undefined, fallback: string, max = 200)
   return (normalized || fallback).slice(0, max)
 }
 
-function upsertPermissionRequestDirect(request: Request) {
-  const existing = db.findById("permission_requests", Schema.Request, request.id)
-  if (existing) {
-    db.updateByIdWithSchema("permission_requests", request.id, request, Schema.Request)
-  } else {
-    db.insertOneWithSchema("permission_requests", request, Schema.Request)
-  }
-}
-
 async function auditInProcess(
   input: InProcessPermissionInput,
   action: Action,
@@ -453,8 +445,7 @@ function emitOrPersistPermissionEvent(
     active.emit(type, { request, part })
     return
   }
-  upsertPermissionRequestDirect(request)
-  Session.upsertPart(part)
+  EventStore.appendSessionEvent(request.sessionID, type, { request, part })
 }
 
 async function expireInProcessRequest(requestID: string) {

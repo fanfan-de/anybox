@@ -1,4 +1,4 @@
-# Core Concepts
+# Long Sessions & Context
 
 An Anybox agent session grows over time. To keep long sessions running, the agent can compact older turns into an internal summary before building the next model request. The summary is sent together with the most recent original messages.
 

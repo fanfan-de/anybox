@@ -115,6 +115,7 @@ function createSettingsPageProps(
     archivedSessionsError: null,
     storageUsage: null,
     storageUsageError: null,
+    storageOptimizeMessage: null,
     assistantTraceVisibility: DEFAULT_ASSISTANT_TRACE_VISIBILITY,
     catalog: [],
     cinemaVideoProviders: [],
@@ -133,6 +134,7 @@ function createSettingsPageProps(
     isLoading: false,
     isLoadingArchivedSessions: false,
     isLoadingStorageUsage: false,
+    isOptimizingStorage: false,
     isOpen: true,
     appUpdateState: createAppUpdateState(),
     appUpdateStatus: null,
@@ -180,6 +182,7 @@ function createSettingsPageProps(
     onMcpServerSelect: vi.fn(),
     onLoadArchivedSessions: vi.fn(),
     onLoadStorageUsage: vi.fn(),
+    onOptimizeStorage: vi.fn(),
     onOpenUpdateCenter: vi.fn(),
     onRefreshProviderCatalog: vi.fn(),
     onRefreshCinemaVideoProviderCatalog: vi.fn(),
@@ -519,6 +522,20 @@ function createStorageUsageSnapshot(overrides: Partial<DesktopStorageUsageSnapsh
         estimatedBytes: 8 * 1024 * 1024,
       },
     ],
+    trace: {
+      count: 40,
+      estimatedBytes: 128 * 1024,
+      earliestTimestamp: 1,
+      retentionDays: 30,
+    },
+    toolArtifacts: {
+      fileCount: 3,
+      bytes: 6 * 1024 * 1024,
+    },
+    maintenance: {
+      status: "idle",
+      reclaimableBytes: 8 * 1024 * 1024,
+    },
     ...overrides,
   }
 }
@@ -1802,8 +1819,9 @@ describe("SettingsPage built-in tools", () => {
 
   it("loads and renders the dedicated storage usage section", async () => {
     const onLoadStorageUsage = vi.fn()
+    const onOptimizeStorage = vi.fn()
 
-    const { unmount } = render(<SettingsPage {...createSettingsPageProps({ onLoadStorageUsage })} />)
+    const { unmount } = render(<SettingsPage {...createSettingsPageProps({ onLoadStorageUsage, onOptimizeStorage })} />)
 
     fireEvent.click(screen.getByRole("button", { name: "Storage" }))
 
@@ -1813,6 +1831,8 @@ describe("SettingsPage built-in tools", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }))
     expect(onLoadStorageUsage).toHaveBeenCalledTimes(2)
+    fireEvent.click(screen.getByRole("button", { name: "Optimize storage" }))
+    expect(onOptimizeStorage).toHaveBeenCalledTimes(1)
     expect(screen.getByText("No storage snapshot yet")).toBeInTheDocument()
     unmount()
 
@@ -1826,6 +1846,17 @@ describe("SettingsPage built-in tools", () => {
     expect(screen.getByText("Large archived image thread")).toBeInTheDocument()
     expect(screen.getByText("archived_sessions")).toBeInTheDocument()
     expect(screen.getByTitle(storageUsage.database.path)).toBeInTheDocument()
+  })
+
+  it("keeps the storage optimize action disabled and its error next to the action", () => {
+    render(<SettingsPage {...createSettingsPageProps({
+      isOptimizingStorage: true,
+      storageOptimizeMessage: { tone: "error", text: "Storage maintenance is busy." },
+    })} />)
+    fireEvent.click(screen.getByRole("button", { name: "Storage" }))
+
+    expect(screen.getByRole("button", { name: "Optimizing..." })).toBeDisabled()
+    expect(screen.getByRole("alert")).toHaveTextContent("Storage maintenance is busy.")
   })
 
   it("switches the display language from general settings", async () => {

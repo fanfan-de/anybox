@@ -401,10 +401,10 @@ function toAttachmentPart(
     }
 }
 
-function toGeneratedFilePart(
+async function toGeneratedFilePart(
     value: unknown,
     assistant: Message.Assistant,
-): Message.FilePart | Message.ImagePart | undefined {
+): Promise<Message.FilePart | Message.ImagePart | undefined> {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
         return undefined
     }
@@ -433,13 +433,31 @@ function toGeneratedFilePart(
         return undefined
     }
 
+    const id = Identifier.ascending("part")
+    const filename = typeof candidate.filename === "string" ? candidate.filename : undefined
+    const providerMetadata = candidate.providerMetadata && typeof candidate.providerMetadata === "object" && !Array.isArray(candidate.providerMetadata)
+        ? candidate.providerMetadata as Record<string, unknown>
+        : {}
+    const processed = await ToolResultPersistence.maybePersistToolResult({
+        sessionID: assistant.sessionID,
+        toolCallID: id,
+        toolName: "generated-file",
+        output: filename ? `Generated file: ${filename}` : "Generated file attachment",
+        metadata: providerMetadata,
+        modelOutput: undefined,
+        attachments: [{ url, mime, filename }],
+        rawResult: { attachments: [{ url, mime, filename }] },
+        maxResultSizeChars: Infinity,
+    })
+    const resolvedUrl = processed.attachments?.[0]?.url ?? url
     const base = {
-        id: Identifier.ascending("part"),
+        id,
         sessionID: assistant.sessionID,
         messageID: assistant.id,
         mime,
-        url,
-        filename: typeof candidate.filename === "string" ? candidate.filename : undefined,
+        url: resolvedUrl,
+        filename,
+        metadata: Object.keys(processed.metadata).length > 0 ? processed.metadata : undefined,
     }
 
     if (mime.startsWith("image/")) {
@@ -525,7 +543,7 @@ function toSourcePart(
     return undefined
 }
 
-function applyFinalStreamResultToDraft(
+async function applyFinalStreamResultToDraft(
     draft: ReturnType<typeof createAssistantOutputDraft>,
     event: unknown,
     assistant: Message.Assistant,
@@ -631,7 +649,7 @@ function applyFinalStreamResultToDraft(
 
     if (Array.isArray(event.files)) {
         for (const file of event.files) {
-            const filePart = toGeneratedFilePart(file, assistant)
+            const filePart = await toGeneratedFilePart(file, assistant)
             if (filePart && draft.hasFile(filePart.url)) {
                 continue
             }
@@ -1411,7 +1429,7 @@ export function create(input: {
                         }
 
                         outputDraftPersisted = true
-                        applyFinalStreamResultToDraft(draft, event, input.Assistant)
+                        await applyFinalStreamResultToDraft(draft, event, input.Assistant)
 
                         if (isRecord(event)) {
                             const finishReason =
@@ -1719,7 +1737,7 @@ export function create(input: {
                                 break
                             }
                             case "file": {
-                                const filePart = toGeneratedFilePart(value, input.Assistant)
+                                const filePart = await toGeneratedFilePart(value, input.Assistant)
                                 if (!filePart) {
                                     break
                                 }

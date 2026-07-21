@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { createHash } from "node:crypto"
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises"
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import type { NativeImage } from "electron"
@@ -666,7 +666,7 @@ describe("ipc side chat cleanup helpers", () => {
 
 describe("ipc session trace export helpers", () => {
   const traceExport = {
-    schemaVersion: 1 as const,
+    schemaVersion: 2 as const,
     generatedAt: 1,
     mode: "safe" as const,
     session: {
@@ -680,6 +680,8 @@ describe("ipc session trace export helpers", () => {
       toolCallCount: 1,
       redactedCount: 0,
       truncatedCount: 0,
+      totalRetainedEventCount: 0,
+      omittedEventCount: 0,
     },
     redaction: {
       enabled: true as const,
@@ -713,6 +715,11 @@ describe("ipc session trace export helpers", () => {
         failedToolCount: 0,
         llmFailureCount: 0,
       },
+    },
+    truncation: {
+      eventsTruncated: false,
+      maxEvents: 5_000,
+      omittedEvents: 0,
     },
     toolCalls: [],
   }
@@ -802,6 +809,7 @@ describe("ipc session trace export helpers", () => {
         ...traceExport.stats,
         messageCount: 1,
         eventCount: 2,
+        totalRetainedEventCount: 2,
         turnCount: 1,
         toolCallCount: 1,
       },
@@ -839,6 +847,7 @@ describe("ipc session trace export helpers", () => {
       ],
       events: [
         {
+          position: 1,
           eventID: "event-1",
           sessionID: "session-1",
           turnID: "turn-1",
@@ -852,6 +861,7 @@ describe("ipc session trace export helpers", () => {
           },
         },
         {
+          position: 2,
           eventID: "event-2",
           sessionID: "session-1",
           turnID: "turn-1",
@@ -940,7 +950,7 @@ describe("ipc session trace export helpers", () => {
     expect(result).toEqual({
       canceled: false,
       path: expect.any(String),
-      fileCount: 17,
+      fileCount: 19,
       recordCount: 2,
     })
     expect(toWindowsSeparators(result.path)).toBe("C:\\Exports\\anybox-trace-session-1-20260522-090807")
@@ -1080,6 +1090,122 @@ describe("ipc session trace export helpers", () => {
     expect(recordCall?.[1]).toContain('"tool-calls/000001-grep-toolcall-1.json"')
   })
 
+  it("requires main-process confirmation before loading a raw trace export", async () => {
+    const showRiskDialog = vi.fn().mockResolvedValue({ response: 0 })
+
+    await expect(internal.saveSessionTraceExportRawDirectory(
+      { sessionID: "session-1" },
+      { showRiskDialog },
+    )).resolves.toEqual({ canceled: true })
+
+    expect(showRiskDialog).toHaveBeenCalledWith(expect.objectContaining({
+      type: "warning",
+      buttons: ["Cancel", "Export raw data"],
+      defaultId: 0,
+      cancelId: 0,
+    }))
+    expect(requestAgentJSONMock).not.toHaveBeenCalled()
+  })
+
+  it("copies only current-session managed artifacts and records missing files in the raw manifest", async () => {
+    const tempRoot = await mkdtemp(path.join(os.tmpdir(), "anybox-raw-trace-"))
+    const agentDataDir = path.join(tempRoot, "agent")
+    const artifactDirectory = path.join(agentDataDir, "state", "sessions", "session-1", "tool-results", "call-hash")
+    const resultPath = path.join(artifactDirectory, "result.json")
+    const manifestPath = path.join(artifactDirectory, "manifest.json")
+    const missingRelativePath = path.join("call-hash", "missing.bin")
+    const outsidePath = path.join(tempRoot, "outside-secret.txt")
+    const resultContents = JSON.stringify({ password: "raw-secret" })
+    const resultSha256 = createHash("sha256").update(resultContents).digest("hex")
+
+    try {
+      await mkdir(artifactDirectory, { recursive: true })
+      await writeFile(resultPath, resultContents, "utf8")
+      await writeFile(outsidePath, "must-not-copy", "utf8")
+      await writeFile(manifestPath, JSON.stringify({
+        schemaVersion: 2,
+        files: [
+          {
+            path: path.join("call-hash", "result.json"),
+            mime: "application/json",
+            bytes: Buffer.byteLength(resultContents),
+            sha256: resultSha256,
+            kind: "result",
+          },
+          {
+            path: missingRelativePath,
+            mime: "application/octet-stream",
+            bytes: 4,
+            sha256: "0".repeat(64),
+            kind: "attachment",
+          },
+        ],
+      }), "utf8")
+
+      const traceWithArtifacts = {
+        ...traceExport,
+        messages: [{
+          info: { id: "message-1", role: "assistant" },
+          parts: [{
+            id: "part-1",
+            type: "tool",
+            state: {
+              status: "completed",
+              metadata: {
+                persistedOutput: {
+                  kind: "persisted-tool-output",
+                  version: 2,
+                  path: resultPath,
+                  relativePath: path.join("call-hash", "result.json"),
+                  manifestPath,
+                  manifestRelativePath: path.join("call-hash", "manifest.json"),
+                  envelopePath: outsidePath,
+                  artifacts: [{
+                    path: path.join("call-hash", "result.json"),
+                    mime: "application/json",
+                    bytes: Buffer.byteLength(resultContents),
+                    sha256: resultSha256,
+                    kind: "result",
+                  }],
+                },
+              },
+            },
+          }],
+        }],
+      }
+      requestAgentJSONMock.mockResolvedValueOnce({ data: traceWithArtifacts })
+
+      const result = await internal.saveSessionTraceExportRawDirectory(
+        { sessionID: "session-1" },
+        {
+          agentDataDir,
+          downloadsPath: tempRoot,
+          now: new Date(2026, 4, 22, 9, 8, 7),
+          showRiskDialog: async () => ({ response: 1 } as never),
+          showOpenDialog: async () => ({ canceled: false, filePaths: [tempRoot] }),
+        },
+      )
+
+      expect(result).toMatchObject({ canceled: false, recordCount: 0 })
+      const exportDirectory = result.path!
+      const copiedResult = path.join(exportDirectory, "raw-artifacts", "call-hash", "result.json")
+      expect(await readFile(copiedResult, "utf8")).toBe(resultContents)
+      const rawManifest = JSON.parse(await readFile(path.join(exportDirectory, "raw-artifacts-manifest.json"), "utf8"))
+      expect(rawManifest.containsSensitiveData).toBe(true)
+      expect(rawManifest.files).toContainEqual(expect.objectContaining({
+        path: "raw-artifacts/call-hash/result.json",
+        sha256: resultSha256,
+      }))
+      expect(rawManifest.missingFiles).toContainEqual(expect.objectContaining({
+        sourceRelativePath: "call-hash/missing.bin",
+      }))
+      expect(rawManifest.rejectedReferences).toContain(outsidePath)
+      expect(rawManifest.files.some((file: { path: string }) => file.path.includes("outside-secret"))).toBe(false)
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
   it("saves a split session trace directory under the project default location", async () => {
     const makeDirectory = vi.fn().mockResolvedValue(undefined)
     const writeTraceFile = vi.fn().mockResolvedValue(undefined)
@@ -1150,7 +1276,7 @@ describe("ipc session trace export helpers", () => {
       expect(result).toEqual(expect.objectContaining({
         baseURL: "https://api.anybox.test",
         filename: "anybox-bag-session-1-20260522-090807.zip",
-        fileCount: 11,
+        fileCount: 12,
         projectID: "project-1",
         recordCount: 0,
         sessionID: "session-1",
@@ -1356,8 +1482,14 @@ describe("ipc session trace export helpers", () => {
   it("saves a split session trace directory when runtime arrays are missing", async () => {
     const traceWithSparseRuntime = {
       ...traceExport,
+      stats: {
+        ...traceExport.stats,
+        eventCount: 1,
+        totalRetainedEventCount: 1,
+      },
       events: [
         {
+          position: 1,
           eventID: "event-1",
           sessionID: "session-1",
           turnID: "turn-1",

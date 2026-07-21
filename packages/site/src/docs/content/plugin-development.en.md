@@ -1,4 +1,4 @@
-# Build an Anybox Plugin
+# Build Plugins
 
 An Anybox plugin is an installable capability package. It can contain only a Skill that guides the agent, or it can add MCP tools, plugin-owned connectors, and requirements for platform connectors.
 

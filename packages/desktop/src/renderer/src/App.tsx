@@ -1646,6 +1646,9 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     restoringArchivedSessionID,
     storageUsage,
     storageUsageError,
+    storageOptimizeMessage,
+    isOptimizingStorage,
+    optimizeStorage,
     restoreArchivedSession,
     saveBuiltinTools,
     saveConnectorApiKey,
@@ -3343,6 +3346,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               isLoading={isLoading}
               isLoadingArchivedSessions={isLoadingArchivedSessions}
               isLoadingStorageUsage={isLoadingStorageUsage}
+              isOptimizingStorage={isOptimizingStorage}
               isOpen={isOpen}
               appUpdateState={appUpdateState}
               appUpdateStatus={appUpdateStatus}
@@ -3401,10 +3405,12 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               onRefreshCinemaVideoProviderCatalog={refreshCinemaVideoProviderCatalog}
               onLoadArchivedSessions={loadArchivedSessions}
               onLoadStorageUsage={loadStorageUsage}
+              onOptimizeStorage={optimizeStorage}
               onOpenUpdateCenter={() => void handleOpenUpdateCenter()}
               onRestoreArchivedSession={restoreArchivedSession}
               storageUsage={storageUsage}
               storageUsageError={storageUsageError}
+              storageOptimizeMessage={storageOptimizeMessage}
               onSaveMcpServer={saveMcpServer}
               onSaveProviderApiKey={saveProviderApiKey}
               onSaveCinemaVideoProviderApiKey={saveCinemaVideoProviderApiKey}

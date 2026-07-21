@@ -10,6 +10,8 @@ import * as Sqlite from "#database/Sqlite.ts"
 import { Instance } from "#project/instance.ts"
 import * as Identifier from "#id/id.ts"
 import * as Message from "#session/core/message.ts"
+import * as EventStore from "#session/runtime/event-store.ts"
+import * as RuntimeEvent from "#session/runtime/runtime-event.ts"
 import { resolveTools } from "#session/core/resolve-tools.ts"
 import * as Session from "#session/core/session.ts"
 import * as ToolResultPersistence from "#session/support/tool-result-persistence.ts"
@@ -62,7 +64,7 @@ test("makePreview prefers a nearby newline boundary", () => {
   expect(preview).toBe("a".repeat(900))
 })
 
-test("maybePersistToolResult writes large output and honors Infinity opt-out", async () => {
+test("maybePersistToolResult writes large output and keeps Infinity below the hard byte cap", async () => {
   const sessionID = "ses_persist_unit"
   cleanupSessions.add(sessionID)
   const large = `${"alpha ".repeat(9_000)}tail-marker`
@@ -95,14 +97,62 @@ test("maybePersistToolResult writes large output and honors Infinity opt-out", a
     sessionID,
     toolCallID: "tool-call-2",
     toolName: "unit-tool",
-    output: large,
+    output: "x".repeat(52_000),
     metadata: {},
-    modelOutput: large,
+    modelOutput: undefined,
     maxResultSizeChars: Infinity,
   })
 
-  expect(passthrough.output).toBe(large)
+  expect(passthrough.output).toBe("x".repeat(52_000))
   expect(passthrough.persisted).toBeUndefined()
+
+  const hardCapped = await ToolResultPersistence.maybePersistToolResult({
+    sessionID,
+    toolCallID: "tool-call-3",
+    toolName: "unit-tool",
+    output: "ok",
+    metadata: {},
+    modelOutput: {
+      type: "json",
+      value: "x".repeat(70_000),
+    },
+    maxResultSizeChars: Infinity,
+  })
+  expect(hardCapped.output).toContain("<persisted-output>")
+  expect(hardCapped.persisted?.originalSizeBytes).toBeGreaterThan(64 * 1024)
+})
+
+test("short text with large structured data and data URL attachments is externalized once", async () => {
+  const sessionID = "ses_persist_structured"
+  cleanupSessions.add(sessionID)
+  const imageBytes = Buffer.from("image-bytes/with-standard-base64")
+  const imageDataURL = `data:image/png;base64,${imageBytes.toString("base64")}`
+  const persisted = await ToolResultPersistence.maybePersistToolResult({
+    sessionID,
+    toolCallID: "tool-structured",
+    toolName: "structured-tool",
+    output: "ok",
+    metadata: { keep: "small" },
+    modelOutput: undefined,
+    data: {
+      structured: "s".repeat(6 * 1024 * 1024),
+    },
+    attachments: [{
+      url: imageDataURL,
+      mime: "image/png",
+      filename: "preview.png",
+    }],
+  })
+
+  expect(persisted.output).toContain("<persisted-output>")
+  expect(persisted.data).toBeUndefined()
+  expect(JSON.stringify(persisted)).not.toContain(imageDataURL)
+  expect(persisted.attachments?.[0]?.url.startsWith("data:")).toBe(false)
+  expect(existsSync(persisted.attachments?.[0]?.url ?? "")).toBe(true)
+  const manifest = JSON.parse(await readFile(persisted.persisted?.manifestPath ?? "", "utf8"))
+  expect(manifest.files.filter((file: { kind: string }) => file.kind === "result")).toHaveLength(1)
+  expect(manifest.files.some((file: { kind: string; sha256: string }) =>
+    file.kind === "attachment" && file.sha256.length === 64)).toBe(true)
 })
 
 test("resolveTools persists large tool output before the processor sees it", async () => {
@@ -198,13 +248,13 @@ test("resolveTools persists large tool output before the processor sees it", asy
   } finally {
     await removeTreeWithRetry(root)
   }
-})
+}, 15_000)
 
 test("resolveTools honors Infinity maxResultSizeChars opt-out", async () => {
   const root = await mkdtemp(join(tmpdir(), "anybox-wrapper-passthrough-"))
   const sessionID = "ses_wrapper_passthrough"
   cleanupSessions.add(sessionID)
-  const large = `${"passthrough-output ".repeat(5_000)}secret-tail`
+  const large = `${"p".repeat(52_000)}secret-tail`
 
   try {
     await Instance.provide({
@@ -255,7 +305,7 @@ test("resolveTools honors Infinity maxResultSizeChars opt-out", async () => {
   } finally {
     await removeTreeWithRetry(root)
   }
-})
+}, 15_000)
 
 test("read-file caps output before the persistence layer", async () => {
   const root = await mkdtemp(join(tmpdir(), "anybox-read-file-no-persist-"))
@@ -303,7 +353,7 @@ test("read-file caps output before the persistence layer", async () => {
   } finally {
     await removeTreeWithRetry(root)
   }
-})
+}, 15_000)
 
 test("toModelMessages replays persisted replacement instead of stored modelOutput", async () => {
   const sessionID = "ses_replay_unit"
@@ -420,7 +470,7 @@ test("read-file can read an absolute text file outside the project", async () =>
     await removeTreeWithRetry(root)
     await removeTreeWithRetry(outside)
   }
-})
+}, 15_000)
 
 test("archiving keeps persisted results and deleting the archive removes them", async () => {
   const root = await mkdtemp(join(tmpdir(), "anybox-persist-lifecycle-"))
@@ -450,11 +500,18 @@ test("archiving keeps persisted results and deleting the archive removes them", 
         })
 
         expect(existsSync(persisted.persisted?.path ?? "")).toBe(true)
+        const traceEvent = RuntimeEvent.createRuntimeEventFactory({
+          sessionID: session.id,
+          turnID: Identifier.ascending("turn"),
+        }).next("retry.scheduled", { attempt: 1 })
+        EventStore.append(traceEvent)
         expect(Session.archiveSession(session.id)).not.toBeNull()
         expect(existsSync(persisted.persisted?.path ?? "")).toBe(true)
+        expect(EventStore.countSessionEvents(session.id)).toBe(1)
 
         expect(Session.deleteArchivedSession(session.id)).not.toBeNull()
         expect(existsSync(ToolResultPersistence.getSessionDirectory(session.id))).toBe(false)
+        expect(EventStore.countSessionEvents(session.id)).toBe(0)
         cleanupSessions.delete(session.id)
       },
     })

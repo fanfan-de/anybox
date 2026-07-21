@@ -4,7 +4,12 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import "./sqlite.cleanup.ts"
 import * as Sqlite from "#database/Sqlite.ts"
+import * as Identifier from "#id/id.ts"
 import * as Session from "#session/core/session.ts"
+import * as EventStore from "#session/runtime/event-store.ts"
+import * as RuntimeEvent from "#session/runtime/runtime-event.ts"
+import * as SessionRunner from "#session/runtime/session-runner.ts"
+import * as StorageMaintenance from "#session/runtime/storage-maintenance.ts"
 import { getStorageUsage } from "#server/usecases/storage.ts"
 import { createServerApp } from "#server/server.ts"
 
@@ -112,6 +117,153 @@ test("storage usage groups archived sessions, active sessions, and other tables"
     const body = await response.json() as { success?: boolean; data?: ReturnType<typeof getStorageUsage> }
     expect(body.success).toBe(true)
     expect(body.data?.database.path).toBe(databaseFile)
+  } finally {
+    Sqlite.closeDatabase()
+    Sqlite.setDatabaseFile(undefined)
+    await removeWithRetry(root)
+  }
+})
+
+test("trace retention preserves the 30-day boundary and running turns", async () => {
+  const root = await mkdtemp(join(tmpdir(), "anybox-storage-retention-"))
+  const databaseFile = join(root, "retention.db")
+  try {
+    Sqlite.setDatabaseFile(databaseFile)
+    const session = await Session.createSession({ directory: root, projectID: "project_retention" })
+    const completedTurn = Session.createTurn({
+      id: Identifier.ascending("turn"),
+      sessionID: session.id,
+      projectID: session.projectID,
+    })
+    Session.updateTurn(completedTurn.id, { status: "completed", phase: "completed", completedAt: 1 })
+    const runningTurn = Session.createTurn({
+      id: Identifier.ascending("turn"),
+      sessionID: session.id,
+      projectID: session.projectID,
+    })
+    const now = Date.now()
+    const cutoff = now - StorageMaintenance.TRACE_RETENTION_DAYS * 24 * 60 * 60 * 1_000
+    const completedFactory = RuntimeEvent.createRuntimeEventFactory({
+      sessionID: session.id,
+      turnID: completedTurn.id,
+      timestamp: () => cutoff - 1,
+    })
+    const runningFactory = RuntimeEvent.createRuntimeEventFactory({
+      sessionID: session.id,
+      turnID: runningTurn.id,
+      timestamp: () => cutoff - 1,
+    })
+    const boundaryFactory = RuntimeEvent.createRuntimeEventFactory({
+      sessionID: session.id,
+      turnID: Identifier.ascending("turn"),
+      timestamp: () => cutoff,
+    })
+    const expired = completedFactory.next("retry.scheduled", { attempt: 1 })
+    const running = runningFactory.next("retry.scheduled", { attempt: 1 })
+    const boundary = boundaryFactory.next("retry.scheduled", { attempt: 1 })
+    EventStore.append(expired)
+    EventStore.append(running)
+    EventStore.append(boundary)
+
+    expect(StorageMaintenance.deleteExpiredTraceBatch(now)).toBe(1)
+    const remaining = EventStore.listSessionEvents({ sessionID: session.id })
+    expect(remaining.map((event) => event.eventID)).toEqual(expect.arrayContaining([
+      running.eventID,
+      boundary.eventID,
+    ]))
+    expect(remaining.map((event) => event.eventID)).not.toContain(expired.eventID)
+  } finally {
+    Sqlite.closeDatabase()
+    Sqlite.setDatabaseFile(undefined)
+    await removeWithRetry(root)
+  }
+})
+
+test("storage optimize returns 409 while a session operation is running", async () => {
+  const root = await mkdtemp(join(tmpdir(), "anybox-storage-busy-"))
+  const databaseFile = join(root, "busy.db")
+  let release!: () => void
+  const blocker = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  try {
+    Sqlite.setDatabaseFile(databaseFile)
+    const handle = SessionRunner.enqueuePrompt({
+      sessionID: "session-storage-busy",
+      directory: root,
+      type: "prompt",
+      execute: async () => blocker,
+    })
+    while (SessionRunner.snapshot().length === 0) await Bun.sleep(1)
+
+    await expect(StorageMaintenance.optimizeStorage({ automatic: true })).rejects.toMatchObject({
+      code: "STORAGE_MAINTENANCE_BUSY",
+    })
+    expect(StorageMaintenance.getMaintenanceState().status).toBe("pending")
+
+    const response = await createServerApp().request("http://localhost/api/storage/optimize", {
+      method: "POST",
+    })
+    expect(response.status).toBe(409)
+    const body = await response.json() as { error?: { code?: string } }
+    expect(body.error?.code).toBe("STORAGE_MAINTENANCE_BUSY")
+
+    release()
+    await handle.promise
+  } finally {
+    release?.()
+    await SessionRunner.waitForIdle("session-storage-busy")
+    Sqlite.closeDatabase()
+    Sqlite.setDatabaseFile(undefined)
+    await removeWithRetry(root)
+  }
+})
+
+test("the trace v2 migration drops legacy payloads and is idempotent", async () => {
+  const root = await mkdtemp(join(tmpdir(), "anybox-trace-v1-migration-"))
+  const databaseFile = join(root, "trace-v1.db")
+  try {
+    Sqlite.setDatabaseFile(databaseFile)
+    Sqlite.db.run(`
+      CREATE TABLE "session_events" (
+        "eventID" TEXT PRIMARY KEY,
+        "sessionID" TEXT NOT NULL,
+        "turnID" TEXT NOT NULL,
+        "seq" INTEGER NOT NULL,
+        "type" TEXT NOT NULL,
+        "payload" TEXT NOT NULL,
+        "timestamp" INTEGER NOT NULL
+      )
+    `)
+    Sqlite.db.prepare(`
+      INSERT INTO "session_events" ("eventID", "sessionID", "turnID", "seq", "type", "payload", "timestamp")
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run("legacy-event", "session-legacy", "turn-legacy", 1, "tool.call.completed", JSON.stringify({
+      output: "x".repeat(200_000),
+      image: `data:image/png;base64,${"a".repeat(100_000)}`,
+    }), 1)
+
+    EventStore.ensureEventStoreTables()
+    EventStore.ensureEventStoreTables()
+    const columns = Sqlite.db.prepare(`PRAGMA table_info("session_events")`).all() as Array<{ name: string }>
+    expect(columns.map((column) => column.name)).toEqual(expect.arrayContaining([
+      "position",
+      "schemaVersion",
+      "eventID",
+      "sessionID",
+      "turnID",
+      "seq",
+      "type",
+      "payload",
+      "timestamp",
+    ]))
+    expect(EventStore.countSessionEvents("session-legacy")).toBe(0)
+    const indexes = Sqlite.db.prepare(`PRAGMA index_list("session_events")`).all() as Array<{ name: string }>
+    expect(indexes.map((index) => index.name)).toEqual(expect.arrayContaining([
+      "idx_session_events_scope_seq_unique",
+      "idx_session_events_session_position",
+      "idx_session_events_session_timestamp",
+    ]))
   } finally {
     Sqlite.closeDatabase()
     Sqlite.setDatabaseFile(undefined)

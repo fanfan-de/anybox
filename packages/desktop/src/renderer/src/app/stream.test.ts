@@ -2800,6 +2800,7 @@ describe("stream trace reducer", () => {
   })
 
   it("derives source and attachment trace items from assistant parts", () => {
+    const managedImagePath = String.raw`C:\Users\19128\AppData\Roaming\Anybox\agent\state\sessions\session-1\tool-results\call-1\preview.png`
     const messages = buildThreadMessagesFromHistory([
       {
         info: {
@@ -2828,7 +2829,7 @@ describe("stream trace reducer", () => {
                 {
                   mime: "image/png",
                   filename: "preview.png",
-                  url: "https://example.com/preview.png",
+                  url: managedImagePath,
                   metadata: {
                     width: 512,
                     height: 384,
@@ -2852,7 +2853,7 @@ describe("stream trace reducer", () => {
     expect(assistantItems[2]).toMatchObject({
       kind: "image",
       title: "preview.png",
-      src: "https://example.com/preview.png",
+      src: `anybox-local-image://image?source=${encodeURIComponent(managedImagePath)}`,
       mimeType: "image/png",
       width: 512,
       height: 384,

@@ -26,6 +26,69 @@ function withEnv(name: string, value: string, fn: () => void) {
 }
 
 describe("live stream hub", () => {
+  it("uses opaque monotonic cursors even when wall clock time moves backwards", () => {
+    const timestamps = [2_000, 1_000]
+    const factory = RuntimeEvent.createRuntimeEventFactory({
+      sessionID: Identifier.ascending("session"),
+      turnID: Identifier.ascending("turn"),
+      timestamp: () => timestamps.shift() ?? 0,
+    })
+    const first = factory.next("turn.started", {})
+    const second = factory.next("turn.started", {})
+    LiveStreamHub.publish(first)
+    LiveStreamHub.publish(second)
+
+    const firstCursor = LiveStreamHub.cursorForEvent(first)
+    const secondCursor = LiveStreamHub.cursorForEvent(second)
+    const serialized = LiveStreamHub.serializeCursor(firstCursor)
+    expect(serialized.startsWith("v2.")).toBe(true)
+    expect(LiveStreamHub.parseCursor(serialized)).toEqual(firstCursor)
+    expect(first.timestamp).toBeGreaterThan(second.timestamp)
+    expect(secondCursor.sequence).toBeGreaterThan(firstCursor.sequence)
+    expect(LiveStreamHub.replay({ sessionID: first.sessionID, cursor: firstCursor })).toEqual({
+      status: "ok",
+      events: [second],
+    })
+    LiveStreamHub.clearSession(first.sessionID)
+  })
+
+  it("requires resync for a cursor from another process epoch", () => {
+    const factory = createFactory()
+    const event = factory.next("turn.started", {})
+    LiveStreamHub.publish(event)
+
+    expect(LiveStreamHub.replay({
+      sessionID: event.sessionID,
+      cursor: {
+        schemaVersion: 2,
+        processEpoch: "previous-process",
+        sequence: LiveStreamHub.cursorForEvent(event).sequence,
+      },
+    })).toEqual({
+      status: "resync-required",
+      reason: "epoch-changed",
+      events: [],
+    })
+    LiveStreamHub.clearSession(event.sessionID)
+  })
+
+  it("requires resync when a same-epoch cursor falls outside the retained buffer", () => {
+    const factory = createFactory()
+    const first = factory.next("turn.started", {})
+    LiveStreamHub.publish(first)
+    const cursor = LiveStreamHub.cursorForEvent(first)
+    for (let index = 0; index < LiveStreamHub.MAX_RECENT_EVENTS_PER_SESSION + 5; index += 1) {
+      LiveStreamHub.publish(factory.next("turn.started", {}))
+    }
+
+    expect(LiveStreamHub.replay({ sessionID: first.sessionID, cursor })).toEqual({
+      status: "resync-required",
+      reason: "cursor-expired",
+      events: [],
+    })
+    LiveStreamHub.clearSession(first.sessionID)
+  })
+
   it("coalesces queued text deltas for slow subscribers", async () => {
     const factory = createFactory()
     const first = factory.next("text.part.delta", {
@@ -134,6 +197,39 @@ describe("live stream hub", () => {
     }
   })
 
+  it("never lets a coalesced delta exceed the per-subscription byte budget", async () => {
+    const factory = createFactory()
+    const sessionID = factory.next("turn.started", {}).sessionID
+    const subscription = LiveStreamHub.subscribe({
+      sessionID,
+      closeOnTerminalTurn: false,
+    })
+    const largeDelta = "x".repeat(1_200_000)
+
+    try {
+      LiveStreamHub.publish(factory.next("text.part.delta", {
+        messageID: "assistant-large",
+        partID: "part-large",
+        kind: "text",
+        delta: largeDelta,
+      }))
+      LiveStreamHub.publish(factory.next("text.part.delta", {
+        messageID: "assistant-large",
+        partID: "part-large",
+        kind: "text",
+        delta: largeDelta,
+      }))
+
+      const session = LiveStreamHub.snapshot().sessions.find((item) => item.sessionID === sessionID)
+      expect(session?.queuedBytes).toBeLessThanOrEqual(LiveStreamHub.MAX_SUBSCRIPTION_QUEUE_BYTES)
+      const next = await subscription.next()
+      expect(next?.type).toBe("text.part.delta")
+    } finally {
+      subscription.close()
+      LiveStreamHub.clearSession(sessionID)
+    }
+  })
+
   it("bounds recent events per session", () => {
     const factory = createFactory()
     const first = factory.next("turn.started", {})
@@ -149,6 +245,7 @@ describe("live stream hub", () => {
     })
 
     expect(recent.length).toBeLessThanOrEqual(2000)
+    LiveStreamHub.clearSession(sessionID)
   })
 
   it("drops transient deltas before closing slow subscribers with non-transient queues", () => {

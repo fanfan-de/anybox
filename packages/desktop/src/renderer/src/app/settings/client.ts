@@ -46,3 +46,7 @@ export async function getStoragePaths(): Promise<DesktopIpcOutput<"desktop:get-s
 export async function getStorageUsage(): Promise<DesktopIpcOutput<"desktop:get-storage-usage"> | null> {
   return window.desktop?.getStorageUsage?.() ?? null
 }
+
+export async function optimizeStorage(): Promise<DesktopIpcOutput<"desktop:optimize-storage"> | null> {
+  return window.desktop?.optimizeStorage?.() ?? null
+}

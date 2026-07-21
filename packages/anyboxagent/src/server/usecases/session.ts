@@ -955,10 +955,12 @@ export function createEventStreamResponse(input: {
   const session = requireSession(input.sessionID)
 
   let since: ReturnType<typeof parseReplayCursor>
+  let invalidReplayCursor = false
   try {
     since = parseReplayCursor(input.replayCursor)
   } catch {
-    throw new ApiError(400, "INVALID_REPLAY_CURSOR", "Query 'since' or header 'Last-Event-ID' is invalid")
+    since = undefined
+    invalidReplayCursor = true
   }
 
   log.info("received session event stream request", {
@@ -972,6 +974,7 @@ export function createEventStreamResponse(input: {
     sessionID: input.sessionID,
     requestId: input.requestId,
     since,
+    invalidReplayCursor,
   })
 }
 

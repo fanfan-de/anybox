@@ -28,6 +28,7 @@ import * as Log from "#util/log.ts"
 import { getProcessEnvValue } from "#env/compat.ts"
 import { getServerBaseURL, setServerBaseURL } from "#server/base-url.ts"
 import { startAutomationScheduler } from "#automation/scheduler.ts"
+import { startStorageMaintenance } from "#session/runtime/storage-maintenance.ts"
 
 export interface ServerOptions {
   host?: string
@@ -198,6 +199,7 @@ export function startServer(options: ServerOptions = {}) {
   })
   setServerBaseURL(`http://${host}:${port}`)
   startAutomationScheduler()
+  startStorageMaintenance()
   log.info("server-started", {
     host,
     port,

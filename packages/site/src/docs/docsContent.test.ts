@@ -15,16 +15,50 @@ describe("docs content", () => {
   it("registers the tool system in the configuration section", () => {
     for (const language of ["zh", "en"] as const) {
       const toolsArticle = getDocsArticle("tools", language)
-      const configureSection = docsSectionsByLanguage[language][1]
+      const configureSection = docsSectionsByLanguage[language].find((section) =>
+        section.items.includes(toolsArticle!),
+      )
 
       expect(toolsArticle).toBeDefined()
-      expect(configureSection.items).toContain(toolsArticle)
+      expect(configureSection?.items).toContain(toolsArticle)
       expect(toolsArticle?.content).toContain("tool_search")
       expect(toolsArticle?.content).toContain("anybox_tool_search")
       expect(toolsArticle?.content).toContain("JavaScript Exec")
       expect(toolsArticle?.content).toContain("QuickJS")
       expect(toolsArticle?.content).toContain("tools.read_file")
     }
+  })
+
+  it("publishes a complete user journey in both languages", () => {
+    const expectedSlugs = [
+      "overview",
+      "use-cases",
+      "getting-started",
+      "projects-and-sessions",
+      "permissions",
+      "core-concept",
+      "providers",
+      "tools",
+      "skills",
+      "plugin-development",
+      "troubleshooting",
+      "faq",
+    ]
+
+    for (const language of ["zh", "en"] as const) {
+      const articles = getDocsArticles(language)
+
+      expect(articles.map((article) => article.slug)).toEqual(expectedSlugs)
+      expect(articles.every((article) => article.content.length > 500)).toBe(true)
+      expect(articles.every((article) => article.description.length > 20)).toBe(true)
+    }
+
+    expect(getDocsArticle("overview", "zh")?.content).toContain(
+      "第一句就是我的。",
+    )
+    expect(getDocsArticle("overview", "en")?.content).toContain(
+      "The first sentence is mine.",
+    )
   })
 
   it("registers a complete plugin development guide in both languages", () => {

@@ -177,16 +177,19 @@ test("archived sessions tolerate unsupported legacy runtime event types", async 
     expect(raw).not.toBeNull()
 
     const snapshot = JSON.parse(raw!.snapshot)
-    snapshot.events.push({
-      ...knownEvent,
-      eventID: Identifier.ascending("event"),
-      seq: knownEvent.seq + 1,
-      type: "tool.call.input.delta",
-      payload: {
-        callID: "call-legacy",
-        delta: "{\"command\":\"pwd\"}",
+    snapshot.events = [
+      knownEvent,
+      {
+        ...knownEvent,
+        eventID: Identifier.ascending("event"),
+        seq: knownEvent.seq + 1,
+        type: "tool.call.input.delta",
+        payload: {
+          callID: "call-legacy",
+          delta: "{\"command\":\"pwd\"}",
+        },
       },
-    })
+    ]
     const updateSnapshot = Sqlite.db.prepare(
       `UPDATE archived_sessions SET snapshot = ?, eventCount = ? WHERE sessionID = ?`,
     )

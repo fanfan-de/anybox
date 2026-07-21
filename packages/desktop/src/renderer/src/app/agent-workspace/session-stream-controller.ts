@@ -442,7 +442,8 @@ function readExecutionModeEvent(streamEvent: { event: string; data: unknown }): 
 function readRuntimeStreamEvent(value: unknown) {
   const event = readRecord(value)
   if (!event || !readString(event.type) || !readString(event.eventID)) return null
-  if (!readString(event.sessionID) || !readString(event.turnID)) return null
+  if (!readString(event.sessionID)) return null
+  if (event.turnID !== null && !readString(event.turnID)) return null
   if (!readRecord(event.payload)) return null
   return event
 }
@@ -1605,15 +1606,10 @@ export function readLatestSessionContextUsageFromHistory(messages: LoadedSession
 }
 
 export function resolveStreamCursor(event: { id?: string; data: unknown }) {
+  if (event.id) return event.id
   const runtimeEvent = readRuntimeStreamEvent(event.data)
   if (runtimeEvent) {
-    const timestamp = readStreamNumber(runtimeEvent.timestamp)
-    const seq = readStreamNumber(runtimeEvent.seq)
-    const turnID = readStreamString(runtimeEvent.turnID)
-    if (timestamp !== null && seq !== null && turnID) {
-      return `${timestamp}:${turnID}:${seq}`
-    }
-    return event.id || readStreamString(runtimeEvent.eventID)
+    return readStreamString(runtimeEvent.eventID)
   }
 
   const payload = readStreamRecord(event.data)
@@ -1772,6 +1768,7 @@ export function useSessionStreamController({
   const pendingDeltaFlushCancelRef = useRef<RendererFrameTaskCancel | null>(null)
   const lastDeltaBackpressureLogAtRef = useRef(0)
   const reconnectReplayWindowsRef = useRef<SessionStreamReconnectReplayWindows>({})
+  const resyncingSessionEventsRef = useRef<Record<string, AgentSessionStreamIPCEvent[]>>({})
   const externalTurnUserHistoryMergedRef = useRef<Set<string>>(new Set())
   const externalTurnHistoryRefreshInFlightRef = useRef<Set<string>>(new Set())
   const externalTurnHistoryLastAttemptAtRef = useRef<Record<string, number>>({})
@@ -3048,6 +3045,46 @@ export function useSessionStreamController({
     const uiSessionID = resolveUISessionID(streamEvent.sessionID)
     if (!uiSessionID) return
 
+    if (streamEvent.event === "resync-required") {
+      if (resyncingSessionEventsRef.current[streamEvent.sessionID]) return
+      resyncingSessionEventsRef.current[streamEvent.sessionID] = []
+      sessionEventRouterRef.current.clearSeenCursors(uiSessionID)
+      clearSessionStreamReconnectReplayWindow(reconnectReplayWindowsRef.current, streamEvent.sessionID)
+      void (async () => {
+        try {
+          await reloadSessionHistoryForSession(uiSessionID, streamEvent.sessionID, {
+            force: true,
+            mode: "silent",
+            reason: "stream",
+          })
+          refreshWorkspaceForSession(uiSessionID)
+          await Promise.allSettled([
+            loadSessionDiffForSession(uiSessionID, streamEvent.sessionID, {
+              force: true,
+              mode: "silent",
+              reason: "stream",
+            }),
+            loadPendingPermissionRequestsForSession(uiSessionID, streamEvent.sessionID),
+          ])
+        } catch (error) {
+          console.error("[desktop] session stream resync failed:", error)
+        } finally {
+          const queued = resyncingSessionEventsRef.current[streamEvent.sessionID] ?? []
+          delete resyncingSessionEventsRef.current[streamEvent.sessionID]
+          for (const queuedEvent of queued) handleSessionStreamEvent(queuedEvent)
+        }
+      })()
+      return
+    }
+
+    const resyncQueue = resyncingSessionEventsRef.current[streamEvent.sessionID]
+    if (resyncQueue) {
+      // The canonical reload is short-lived. Bound the queue to the same order of
+      // magnitude as the agent subscription buffer.
+      if (resyncQueue.length < 1_000) resyncQueue.push(streamEvent)
+      return
+    }
+
     const cursor = resolveStreamCursor(streamEvent)
     if (cursor && sessionEventRouterRef.current.rememberSeenCursor(uiSessionID, cursor)) {
       return
@@ -3056,7 +3093,29 @@ export function useSessionStreamController({
     onSessionCanvasActivity(uiSessionID)
 
     const backendTurnID = resolveStreamTurnID(streamEvent)
+    const runtimeType = readRuntimeStreamType(streamEvent)
     if (!backendTurnID) {
+      const canonicalSessionMutation = runtimeType === "message.recorded" ||
+        runtimeType === "message.removed" ||
+        runtimeType === "part.recorded" ||
+        runtimeType === "part.removed" ||
+        runtimeType === "permission.requested" ||
+        runtimeType === "permission.resolved"
+      if (canonicalSessionMutation) {
+        refreshWorkspaceForSession(uiSessionID)
+        void reloadSessionHistoryForSession(uiSessionID, streamEvent.sessionID, {
+          force: true,
+          mode: "silent",
+          reason: "stream",
+        }).catch((error) => {
+          console.error("[desktop] session-scoped history refresh failed:", error)
+        })
+        if (runtimeType === "permission.requested" || runtimeType === "permission.resolved") {
+          void loadPendingPermissionRequestsForSession(uiSessionID, streamEvent.sessionID).catch((error) => {
+            console.error("[desktop] session-scoped permission refresh failed:", error)
+          })
+        }
+      }
       if (isTerminalStreamEvent(streamEvent)) {
         clearSessionStreamReconnectReplayWindow(reconnectReplayWindowsRef.current, streamEvent.sessionID)
         clearCancellingSession(uiSessionID)
@@ -3089,7 +3148,6 @@ export function useSessionStreamController({
       isTerminal: isTerminalStreamEvent(streamEvent),
     })
 
-    const runtimeType = readRuntimeStreamType(streamEvent)
     const existingTurnTarget = sessionEventRouterRef.current.getTurnTarget(streamEvent.sessionID, backendTurnID)
     const pendingTurnTarget = findPendingStreamForBackendTurn(pendingStreamsRef.current, {
       sessionID: uiSessionID,

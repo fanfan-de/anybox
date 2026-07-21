@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, shell, type IpcMainInvokeEvent, type MenuItemConstructorOptions, type NativeImage, type OpenDialogOptions, type OpenDialogReturnValue, type SaveDialogOptions, type SaveDialogReturnValue, type WebContents } from "electron"
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, shell, type IpcMainInvokeEvent, type MenuItemConstructorOptions, type MessageBoxOptions, type MessageBoxReturnValue, type NativeImage, type OpenDialogOptions, type OpenDialogReturnValue, type SaveDialogOptions, type SaveDialogReturnValue, type WebContents } from "electron"
 import { createPlatformAdapter } from "@anybox/platform"
 import { DesktopIpcSchemas, createSshWorkspaceUri, isSshWorkspaceUri } from "@anybox/shared"
 import type {
@@ -12,7 +12,8 @@ import type {
   RegistryVersion,
 } from "@anybox/shared"
 import { createHash, randomUUID } from "node:crypto"
-import { appendFile, mkdir, open, readFile, readdir, rm, stat, writeFile } from "node:fs/promises"
+import { createReadStream } from "node:fs"
+import { appendFile, copyFile, mkdir, open, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises"
 import path from "node:path"
 import type { AppearanceConfigDocument, AppearanceRuntimeState } from "../shared/appearance"
 import type {
@@ -43,6 +44,7 @@ import type {
   DesktopSessionRollbackInput,
   DesktopSessionRollbackResult,
   DesktopStorageUsageSnapshot,
+  DesktopStorageOptimizeResult,
   DesktopSubscriptionOrderResponse,
   DesktopSubscriptionOverview,
   DesktopSubscriptionPlan,
@@ -796,6 +798,7 @@ async function updatePromptPresetSelection(input: AgentPromptPresetSelection) {
 type SessionTraceExportInput = DesktopIpcInput<"desktop:get-session-trace-export">
 type SaveSessionTraceExportInput = DesktopIpcInput<"desktop:save-session-trace-export">
 type SaveSessionTraceExportDirectoryInput = DesktopIpcInput<"desktop:save-session-trace-export-directory">
+type SaveSessionTraceExportRawDirectoryInput = DesktopIpcInput<"desktop:save-session-trace-export-raw-directory">
 type SaveSessionTraceExportToProjectInput = DesktopIpcInput<"desktop:save-session-trace-export-to-project">
 type PrepareSessionBagSubmissionInput = DesktopIpcInput<"desktop:prepare-session-bag-submission">
 type UploadSessionBagSubmissionInput = DesktopIpcInput<"desktop:upload-session-bag-submission">
@@ -815,6 +818,26 @@ interface SaveSessionTraceExportDirectoryOptions {
   showOpenDialog?: (options: OpenDialogOptions) => Promise<OpenDialogReturnValue>
   userDataPath?: string
   writeTraceFile?: (filePath: string, data: string, encoding: BufferEncoding) => Promise<unknown>
+  loadTraceEventPage?: (input: { sessionID: string; afterPosition: number; limit: number }) => Promise<AgentSessionTraceEventPage>
+}
+
+interface SaveSessionTraceExportRawDirectoryOptions extends SaveSessionTraceExportDirectoryOptions {
+  agentDataDir?: string
+  copyArtifactFile?: (source: string, destination: string) => Promise<unknown>
+  showRiskDialog?: (options: MessageBoxOptions) => Promise<MessageBoxReturnValue>
+}
+
+interface AgentSessionTraceEventPage {
+  schemaVersion: 2
+  mode: "safe"
+  events: AgentSessionTraceExport["events"]
+  redaction: {
+    redactedCount: number
+    truncatedCount: number
+  }
+  hasMore: boolean
+  nextPosition: number
+  totalRetainedEventCount: number
 }
 
 interface AnyboxProviderRelaySession {
@@ -2445,7 +2468,7 @@ function buildSessionTraceReadmeMarkdown(input: {
     "- All paths in indexes are relative to this directory.",
     "- JSON and Markdown files are UTF-8.",
     "- Sensitive keys matching the redaction pattern in `manifest.json` may be replaced with `[REDACTED]`.",
-    "- This export keeps `schemaVersion: 1`; optional files such as this README are discoverability aids, not required wire fields.",
+    "- This export uses `schemaVersion: 2`; optional files such as this README are discoverability aids, not required wire fields.",
     "",
   ]
 
@@ -2464,6 +2487,7 @@ async function writeSplitSessionTraceExportDirectory(
   const directories = [
     directory,
     traceExportDiskPath(directory, "records"),
+    traceExportDiskPath(directory, "records/pages"),
     traceExportDiskPath(directory, "messages"),
     traceExportDiskPath(directory, "tool-calls"),
     traceExportDiskPath(directory, "payloads"),
@@ -2496,6 +2520,8 @@ async function writeSplitSessionTraceExportDirectory(
   const toolCalls = readTraceExportArray(trace.toolCalls)
   const runtimeTurns = readTraceExportArray(trace.runtime?.turns)
   const runtimeRecentEvents = readTraceExportArray(trace.runtime?.recentEvents)
+  const session = readTraceExportRecord(trace.session)
+  const sessionID = readTraceExportString(session?.sessionID) ?? readTraceExportString(session?.id) ?? "-"
   const toolCallFilesByEventID = new Map<string, string[]>()
   const toolCallIndex = toolCalls.map((toolCall, index) => {
     const record = readTraceExportRecord(toolCall)
@@ -2591,8 +2617,6 @@ async function writeSplitSessionTraceExportDirectory(
   const latestTurnIndex = latestTurnID
     ? runtimeTurns.findIndex((turn) => readTraceExportString(readTraceExportRecord(turn)?.turnID) === latestTurnID)
     : -1
-  const session = readTraceExportRecord(trace.session)
-  const sessionID = readTraceExportString(session?.sessionID) ?? readTraceExportString(session?.id) ?? "-"
   const readmeMarkdown = buildSessionTraceReadmeMarkdown({
     eventCount: events.length,
     messageCount: messages.length,
@@ -2603,8 +2627,64 @@ async function writeSplitSessionTraceExportDirectory(
     turnCount: runtimeTurns.length,
   })
 
+  const tracePageIndex: Array<{
+    page: number
+    file: string
+    count: number
+    firstPosition?: number
+    lastPosition?: number
+  }> = []
+  let totalTraceRecordCount = events.length
+  const writeTracePage = async (pageNumber: number, pageEvents: AgentSessionTraceExport["events"]) => {
+    const file = traceExportRelativePath("records", "pages", `page-${String(pageNumber).padStart(6, "0")}.json`)
+    await writeJSON(file, {
+      schemaVersion: 2,
+      mode: "safe",
+      page: pageNumber,
+      pageSize: 1_000,
+      events: pageEvents,
+    })
+    tracePageIndex.push({
+      page: pageNumber,
+      file,
+      count: pageEvents.length,
+      firstPosition: pageEvents.at(0)?.position,
+      lastPosition: pageEvents.at(-1)?.position,
+    })
+  }
+
+  if (trace.truncation?.eventsTruncated) {
+    const loadPage = options.loadTraceEventPage ?? getSessionTraceEventPage
+    let afterPosition = 0
+    let pageNumber = 0
+    while (true) {
+      const page = await loadPage({ sessionID, afterPosition, limit: 1_000 })
+      totalTraceRecordCount = page.totalRetainedEventCount
+      if (page.events.length === 0) break
+      pageNumber += 1
+      await writeTracePage(pageNumber, page.events)
+      if (!page.hasMore) break
+      if (page.nextPosition <= afterPosition) {
+        throw new Error("Trace page cursor did not advance.")
+      }
+      afterPosition = page.nextPosition
+    }
+  } else {
+    totalTraceRecordCount = trace.stats.totalRetainedEventCount ?? events.length
+    for (let offset = 0; offset < events.length; offset += 1_000) {
+      await writeTracePage(Math.floor(offset / 1_000) + 1, events.slice(offset, offset + 1_000) as AgentSessionTraceExport["events"])
+    }
+  }
+  await writeJSON("records/pages/index.json", {
+    schemaVersion: 2,
+    mode: "safe",
+    pageSize: 1_000,
+    totalRetainedEventCount: totalTraceRecordCount,
+    pages: tracePageIndex,
+  })
+
   await writeJSON("manifest.json", {
-    schemaVersion: 1,
+    schemaVersion: 2,
     exportFormat: "anybox-session-trace-directory",
     generatedAt: trace.generatedAt,
     mode: trace.mode,
@@ -2616,6 +2696,7 @@ async function writeSplitSessionTraceExportDirectory(
       eventFlow: "event-flow.md",
       semanticFlow: "semantic-flow.md",
       records: "records/index.json",
+      tracePages: "records/pages/index.json",
       messages: "messages/index.json",
       toolCalls: "tool-calls/index.json",
       payloadIndex: "payload-index.json",
@@ -2636,7 +2717,7 @@ async function writeSplitSessionTraceExportDirectory(
   await writeJSON("records/index.json", recordIndex)
   for (const [index, event] of events.entries()) {
     await writeJSON(recordIndex[index].file, {
-      schemaVersion: 1,
+      schemaVersion: 2,
       recordType: "event",
       index: index + 1,
       event,
@@ -2647,7 +2728,7 @@ async function writeSplitSessionTraceExportDirectory(
   await writeJSON("messages/index.json", messageIndex)
   for (const [index, message] of messages.entries()) {
     await writeJSON(messageIndex[index].file, {
-      schemaVersion: 1,
+      schemaVersion: 2,
       recordType: "message",
       index: index + 1,
       message,
@@ -2657,7 +2738,7 @@ async function writeSplitSessionTraceExportDirectory(
   await writeJSON("tool-calls/index.json", toolCallIndex)
   for (const [index, toolCall] of toolCalls.entries()) {
     await writeJSON(toolCallIndex[index].file, {
-      schemaVersion: 1,
+      schemaVersion: 2,
       recordType: "tool-call",
       index: index + 1,
       toolCall,
@@ -2665,7 +2746,7 @@ async function writeSplitSessionTraceExportDirectory(
   }
 
   await writeJSON("runtime/status.json", {
-    schemaVersion: 1,
+    schemaVersion: 2,
     runtime: runtimeStatus,
     latestTurn: latestTurn && latestTurnIndex >= 0
       ? runtimeTurnIndex[latestTurnIndex]
@@ -2693,7 +2774,7 @@ async function writeSplitSessionTraceExportDirectory(
   await writeJSON("runtime/turns/index.json", runtimeTurnIndex)
   for (const [index, turn] of runtimeTurns.entries()) {
     await writeJSON(runtimeTurnIndex[index].file, {
-      schemaVersion: 1,
+      schemaVersion: 2,
       recordType: "runtime-turn",
       index: index + 1,
       turn,
@@ -2702,8 +2783,19 @@ async function writeSplitSessionTraceExportDirectory(
 
   return {
     fileCount,
-    recordCount: events.length,
+    recordCount: totalTraceRecordCount,
   }
+}
+
+async function getSessionTraceEventPage(input: { sessionID: string; afterPosition: number; limit: number }) {
+  const search = new URLSearchParams({
+    afterPosition: String(input.afterPosition),
+    limit: String(input.limit),
+  })
+  const result = await requestAgentJSON<AgentSessionTraceEventPage>(
+    `/api/debug/sessions/${encodeURIComponent(input.sessionID)}/trace-events?${search.toString()}`,
+  )
+  return result.data
 }
 
 async function getSessionTraceExport(input: SessionTraceExportInput) {
@@ -2783,6 +2875,253 @@ async function saveSessionTraceExportDirectory(
     path: targetDirectory,
     fileCount: result.fileCount,
     recordCount: result.recordCount,
+  }
+}
+
+type RawArtifactCandidate = {
+  sourcePath: string
+  sourceRelativePath: string
+  mime?: string
+  kind?: string
+  expectedBytes?: number
+  expectedSha256?: string
+}
+
+function managedArtifactSessionSegment(sessionID: string) {
+  return /^[A-Za-z0-9._-]+$/.test(sessionID)
+    ? sessionID
+    : `tool_${createHash("sha256").update(sessionID).digest("hex").slice(0, 16)}`
+}
+
+function isStrictChildPath(parent: string, candidate: string) {
+  const relative = path.relative(path.resolve(parent), path.resolve(candidate))
+  return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative)
+}
+
+function portableTracePath(...segments: string[]) {
+  return segments.join("/").replace(/\\/g, "/").replace(/\/+/g, "/")
+}
+
+async function sha256File(filePath: string) {
+  const hash = createHash("sha256")
+  for await (const chunk of createReadStream(filePath)) {
+    hash.update(chunk as Buffer)
+  }
+  return hash.digest("hex")
+}
+
+async function collectRawArtifactCandidates(input: {
+  trace: AgentSessionTraceExport
+  sessionID: string
+  agentDataDir: string
+}) {
+  const sessionRoot = path.join(
+    input.agentDataDir,
+    "state",
+    "sessions",
+    managedArtifactSessionSegment(input.sessionID),
+    "tool-results",
+  )
+  const candidates = new Map<string, RawArtifactCandidate>()
+  const rejectedReferences = new Set<string>()
+
+  const addCandidate = (candidatePath: string, metadata: Record<string, unknown> = {}, relative = false) => {
+    const resolved = path.resolve(relative ? path.join(sessionRoot, candidatePath) : candidatePath)
+    if (!isStrictChildPath(sessionRoot, resolved)) {
+      rejectedReferences.add(candidatePath)
+      return
+    }
+    const key = process.platform === "win32" ? resolved.toLowerCase() : resolved
+    const existing = candidates.get(key)
+    candidates.set(key, {
+      sourcePath: resolved,
+      sourceRelativePath: portableTracePath(path.relative(sessionRoot, resolved)),
+      mime: typeof metadata.mime === "string" ? metadata.mime : existing?.mime,
+      kind: typeof metadata.kind === "string" ? metadata.kind : existing?.kind,
+      expectedBytes: typeof metadata.bytes === "number" ? metadata.bytes : existing?.expectedBytes,
+      expectedSha256: typeof metadata.sha256 === "string" ? metadata.sha256 : existing?.expectedSha256,
+    })
+  }
+
+  const visited = new WeakSet<object>()
+  const visit = (value: unknown) => {
+    if (!value || typeof value !== "object") return
+    if (visited.has(value)) return
+    visited.add(value)
+    if (Array.isArray(value)) {
+      value.forEach(visit)
+      return
+    }
+
+    const record = value as Record<string, unknown>
+    const artifactLike =
+      (typeof record.sha256 === "string" && typeof record.bytes === "number") ||
+      record.kind === "persisted-tool-output"
+    for (const [key, child] of Object.entries(record)) {
+      if (typeof child === "string") {
+        if (path.isAbsolute(child) && (artifactLike || isStrictChildPath(sessionRoot, child))) {
+          addCandidate(child, record)
+        }
+        if (
+          artifactLike &&
+          ["path", "relativePath", "manifestRelativePath"].includes(key) &&
+          !path.isAbsolute(child)
+        ) {
+          addCandidate(child, record, true)
+        }
+      } else {
+        visit(child)
+      }
+    }
+  }
+  visit(input.trace.messages)
+  visit(input.trace.toolCalls)
+
+  for (const candidate of [...candidates.values()]) {
+    if (path.basename(candidate.sourcePath).toLowerCase() !== "manifest.json") continue
+    try {
+      const manifest = JSON.parse(await readFile(candidate.sourcePath, "utf8")) as { files?: unknown }
+      if (!Array.isArray(manifest.files)) continue
+      for (const file of manifest.files) {
+        if (!file || typeof file !== "object" || Array.isArray(file)) continue
+        const record = file as Record<string, unknown>
+        if (typeof record.path === "string") addCandidate(record.path, record, true)
+      }
+    } catch {
+      // Missing or malformed manifests are reported by the copy pass below.
+    }
+  }
+
+  return {
+    sessionRoot,
+    candidates: [...candidates.values()].sort((left, right) => left.sourceRelativePath.localeCompare(right.sourceRelativePath)),
+    rejectedReferences: [...rejectedReferences].sort(),
+  }
+}
+
+async function copyRawSessionArtifacts(input: {
+  trace: AgentSessionTraceExport
+  sessionID: string
+  targetDirectory: string
+  options: SaveSessionTraceExportRawDirectoryOptions
+}) {
+  const collected = await collectRawArtifactCandidates({
+    trace: input.trace,
+    sessionID: input.sessionID,
+    agentDataDir: input.options.agentDataDir ?? resolveManagedAgentDataDir(),
+  })
+  const rawRoot = path.join(input.targetDirectory, "raw-artifacts")
+  const makeDirectory = input.options.makeDirectory ?? ((directory: string, options: { recursive: true }) =>
+    mkdir(directory, options))
+  const copyArtifact = input.options.copyArtifactFile ?? ((source: string, destination: string) => copyFile(source, destination))
+  const writeTraceFile = input.options.writeTraceFile ?? ((filePath: string, data: string, encoding: BufferEncoding) =>
+    writeFile(filePath, data, encoding))
+  const files: Array<Record<string, unknown>> = []
+  const missingFiles: Array<{ sourceRelativePath: string; reason: string }> = []
+  const rejectedReferences = new Set(collected.rejectedReferences)
+  const realSessionRoot = await realpath(collected.sessionRoot).catch(() => collected.sessionRoot)
+
+  await makeDirectory(rawRoot, { recursive: true })
+  for (const candidate of collected.candidates) {
+    try {
+      const realSourcePath = await realpath(candidate.sourcePath)
+      if (!isStrictChildPath(realSessionRoot, realSourcePath)) {
+        rejectedReferences.add(candidate.sourcePath)
+        continue
+      }
+      const sourceStat = await stat(realSourcePath)
+      if (!sourceStat.isFile()) {
+        missingFiles.push({ sourceRelativePath: candidate.sourceRelativePath, reason: "not-a-file" })
+        continue
+      }
+      const destination = path.join(rawRoot, candidate.sourceRelativePath)
+      if (!isStrictChildPath(rawRoot, destination)) {
+        missingFiles.push({ sourceRelativePath: candidate.sourceRelativePath, reason: "invalid-destination" })
+        continue
+      }
+      await makeDirectory(path.dirname(destination), { recursive: true })
+      await copyArtifact(realSourcePath, destination)
+      files.push({
+        path: portableTracePath("raw-artifacts", candidate.sourceRelativePath),
+        sourceRelativePath: candidate.sourceRelativePath,
+        mime: candidate.mime,
+        kind: candidate.kind,
+        bytes: sourceStat.size,
+        sha256: await sha256File(realSourcePath),
+        expectedBytes: candidate.expectedBytes,
+        expectedSha256: candidate.expectedSha256,
+      })
+    } catch (error) {
+      missingFiles.push({
+        sourceRelativePath: candidate.sourceRelativePath,
+        reason: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  const manifestPath = path.join(input.targetDirectory, "raw-artifacts-manifest.json")
+  await writeTraceFile(manifestPath, `${JSON.stringify({
+    schemaVersion: 2,
+    exportFormat: "anybox-session-trace-raw-artifacts",
+    containsSensitiveData: true,
+    generatedAt: Date.now(),
+    sessionID: input.sessionID,
+    files,
+    missingFiles,
+    rejectedReferences: [...rejectedReferences].sort(),
+  }, null, 2)}\n`, "utf8")
+
+  return {
+    fileCount: files.length + 1,
+    copiedArtifactCount: files.length,
+    missingArtifactCount: missingFiles.length,
+  }
+}
+
+async function saveSessionTraceExportRawDirectory(
+  input: SaveSessionTraceExportRawDirectoryInput,
+  options: SaveSessionTraceExportRawDirectoryOptions = {},
+) {
+  const showRiskDialog = options.showRiskDialog ?? ((dialogOptions: MessageBoxOptions) =>
+    dialog.showMessageBox(dialogOptions))
+  const confirmation = await showRiskDialog({
+    type: "warning",
+    title: "Export raw session trace",
+    message: "Raw tool artifacts may contain secrets or private data.",
+    detail: "Only share this export with people you trust. Anybox will include original artifact files without redaction.",
+    buttons: ["Cancel", "Export raw data"],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true,
+  })
+  if (confirmation.response !== 1) return { canceled: true }
+
+  const trace = await getSessionTraceExport({ sessionID: input.sessionID })
+  const folderName = `${getSessionTraceExportFolderName(input.sessionID, options.now ?? new Date())}-raw`
+  const showOpenDialog = options.showOpenDialog ?? ((dialogOptions: OpenDialogOptions) =>
+    dialog.showOpenDialog(dialogOptions))
+  const selection = await showOpenDialog({
+    buttonLabel: "Export Raw Data Here",
+    defaultPath: options.downloadsPath ?? app.getPath("downloads"),
+    properties: ["openDirectory", "createDirectory"],
+    title: "Select folder for raw split session trace",
+  })
+  const selectedDirectory = selection.filePaths?.[0]
+  if (selection.canceled || !selectedDirectory) return { canceled: true }
+
+  const targetDirectory = path.join(selectedDirectory, folderName)
+  const traceResult = await writeSplitSessionTraceExportDirectory(trace, targetDirectory, options)
+  const artifactResult = await copyRawSessionArtifacts({
+    trace,
+    sessionID: input.sessionID.trim(),
+    targetDirectory,
+    options,
+  })
+  return {
+    canceled: false,
+    path: targetDirectory,
+    fileCount: traceResult.fileCount + artifactResult.fileCount,
+    recordCount: traceResult.recordCount,
   }
 }
 
@@ -3324,6 +3663,11 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
 
         await readAgentSSEStream(response, (item) => {
           if (disposed || target.isDestroyed()) return
+          if (item.event === "resync-required") {
+            // The agent epoch changed or the in-memory replay window expired.
+            // Reconnects after this point must start from canonical history.
+            lastEventID = undefined
+          }
           if (item.id) {
             lastEventID = item.id
           }
@@ -3634,6 +3978,13 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
       ok: true as const,
       url,
     }
+  })
+
+  handleDesktopIpc("desktop:optimize-storage", async () => {
+    const result = await requestAgentJSON<DesktopStorageOptimizeResult>("/api/storage/optimize", {
+      method: "POST",
+    })
+    return DesktopIpcSchemas.optimizeStorage.output.parse(result.data)
   })
 
   handleDesktopIpc("desktop:open-path", async (_event, input: { targetPath: string }) => {
@@ -4440,6 +4791,11 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
   handleDesktopIpc(
     "desktop:save-session-trace-export-directory",
     async (_event, input: SaveSessionTraceExportDirectoryInput) => saveSessionTraceExportDirectory(input),
+  )
+
+  handleDesktopIpc(
+    "desktop:save-session-trace-export-raw-directory",
+    async (_event, input: SaveSessionTraceExportRawDirectoryInput) => saveSessionTraceExportRawDirectory(input),
   )
 
   handleDesktopIpc(
@@ -6779,6 +7135,7 @@ export const internal = {
   saveImageDataUrlToFolder,
   saveSessionTraceExport,
   saveSessionTraceExportDirectory,
+  saveSessionTraceExportRawDirectory,
   saveSessionTraceExportToProject,
   setDownloadedRegistrySkillEnabled,
   translatePromptPreset,
