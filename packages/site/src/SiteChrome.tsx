@@ -22,14 +22,9 @@ type NavigationItem = {
 }
 
 function getNavigationItems(page: SitePage, isChinese: boolean): NavigationItem[] {
-  const homeItems: NavigationItem[] = [
-    { href: "#product", label: isChinese ? "产品" : "Product" },
-    { href: "#workflow", label: isChinese ? "工作方式" : "Workflow" },
-  ]
-
   return [
     ...(page === "home"
-      ? homeItems
+      ? []
       : [{ href: "/", label: isChinese ? "首页" : "Home", page: "home" as const }]),
     {
       destination: "docs",

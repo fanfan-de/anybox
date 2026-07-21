@@ -27,4 +27,17 @@ describe("SiteHeader", () => {
 
     expect(screen.getByRole("link", { name: /文档|Docs/ })).toHaveAttribute("aria-current", "page")
   })
+
+  it("omits navigation items that only scroll within the home page", () => {
+    render(
+      <LanguageProvider>
+        <SiteHeader currentPage="home" />
+      </LanguageProvider>,
+    )
+
+    const navigation = screen.getByRole("navigation", { name: /站点导航|Site navigation/ })
+    expect(navigation.querySelector('a[href^="#"]')).not.toBeInTheDocument()
+    expect(screen.queryByRole("link", { name: /产品|Product/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole("link", { name: /工作方式|Workflow/ })).not.toBeInTheDocument()
+  })
 })
