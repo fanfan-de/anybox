@@ -12,11 +12,11 @@ using System.Reflection;
 
 [assembly: System.Reflection.AssemblyCompanyAttribute("computer-use-helper")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
-[assembly: System.Reflection.AssemblyFileVersionAttribute("0.2.1.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("0.2.1+157635a426ba866a80297430ba65b84efac22a3f")]
+[assembly: System.Reflection.AssemblyFileVersionAttribute("0.2.3.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("0.2.3+83ef35bdf71a96a0470d395dcb97762bf3acac61")]
 [assembly: System.Reflection.AssemblyProductAttribute("computer-use-helper")]
 [assembly: System.Reflection.AssemblyTitleAttribute("computer-use-helper")]
-[assembly: System.Reflection.AssemblyVersionAttribute("0.2.1.0")]
+[assembly: System.Reflection.AssemblyVersionAttribute("0.2.3.0")]
 [assembly: System.Runtime.Versioning.TargetPlatformAttribute("Windows10.0.19041.0")]
 [assembly: System.Runtime.Versioning.SupportedOSPlatformAttribute("Windows10.0.19041.0")]
 

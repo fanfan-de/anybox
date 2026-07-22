@@ -126,7 +126,7 @@
     "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages": {}
   },
   "project": {
-    "version": "0.2.1",
+    "version": "0.2.3",
     "restore": {
       "projectUniqueName": "C:\\Projects\\Anybox\\plugins\\Anybox-Plugins\\computer-use-windows\\helper\\ComputerUse.Helper\\ComputerUse.Helper.csproj",
       "projectName": "computer-use-helper",
