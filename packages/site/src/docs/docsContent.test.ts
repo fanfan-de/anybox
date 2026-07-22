@@ -42,6 +42,8 @@ describe("docs content", () => {
       "skills",
       "chrome",
       "computer-use-windows",
+      "cinema",
+      "build-web-apps",
       "plugin-development",
       "troubleshooting",
       "faq",
@@ -67,6 +69,8 @@ describe("docs content", () => {
     for (const language of ["zh", "en"] as const) {
       const chromeArticle = getDocsArticle("chrome", language)
       const computerUseArticle = getDocsArticle("computer-use-windows", language)
+      const cinemaArticle = getDocsArticle("cinema", language)
+      const buildWebAppsArticle = getDocsArticle("build-web-apps", language)
       const pluginGuideSection = docsSectionsByLanguage[language].find((section) =>
         section.items.includes(chromeArticle!),
       )
@@ -75,11 +79,20 @@ describe("docs content", () => {
         language === "zh" ? "插件指南" : "Plugin Guides",
       )
       expect(pluginGuideSection?.items).toContain(computerUseArticle)
+      expect(pluginGuideSection?.items).toContain(cinemaArticle)
+      expect(pluginGuideSection?.items).toContain(buildWebAppsArticle)
       expect(chromeArticle?.content).toContain("Anybox Chrome")
       expect(chromeArticle?.content).toContain("Computer Use")
       expect(computerUseArticle?.content).toContain("Windows 11 x64")
       expect(computerUseArticle?.content).toContain("Esc")
       expect(computerUseArticle?.content).toContain("Chrome")
+      expect(cinemaArticle?.content).toContain(".anybox-cinema")
+      expect(cinemaArticle?.content).toContain("cinema_get_project_summary")
+      expect(cinemaArticle?.content).toContain("Text")
+      expect(buildWebAppsArticle?.content).toContain("frontend-app-builder")
+      expect(buildWebAppsArticle?.content).toContain("frontend-testing-debugging")
+      expect(buildWebAppsArticle?.content).toContain("Stripe")
+      expect(buildWebAppsArticle?.content).toContain("Supabase")
     }
   })
 

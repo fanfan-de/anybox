@@ -169,5 +169,32 @@ describe("DocsApp", () => {
       }),
     ).toHaveFocus()
     expect(window.location.search).toContain("doc=computer-use-windows")
+
+    fireEvent.click(
+      within(navigation).getByRole("link", { name: "anybox for cinema" }),
+    )
+
+    expect(
+      screen.getByRole("heading", {
+        level: 1,
+        name: "anybox for cinema",
+      }),
+    ).toHaveFocus()
+    expect(window.location.search).toContain("doc=cinema")
+
+    const buildWebAppsLink = within(navigation).getByRole("link", {
+      name: "Build Web Apps",
+    })
+    expect(buildWebAppsLink).toHaveAttribute(
+      "href",
+      expect.stringContaining("doc=build-web-apps"),
+    )
+
+    fireEvent.click(buildWebAppsLink)
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Build Web Apps" }),
+    ).toHaveFocus()
+    expect(window.location.search).toContain("doc=build-web-apps")
   })
 })

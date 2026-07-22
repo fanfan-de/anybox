@@ -1,4 +1,8 @@
 import type { SiteLanguage } from "../language"
+import buildWebAppsEn from "./content/build-web-apps.en.md?raw"
+import buildWebAppsZh from "./content/build-web-apps.md?raw"
+import cinemaEn from "./content/cinema.en.md?raw"
+import cinemaZh from "./content/cinema.md?raw"
 import chromeEn from "./content/chrome.en.md?raw"
 import chromeZh from "./content/chrome.md?raw"
 import computerUseWindowsEn from "./content/computer-use-windows.en.md?raw"
@@ -131,6 +135,18 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
           slug: "computer-use-windows",
           title: "Windows 电脑控制",
         },
+        {
+          content: cinemaZh,
+          description: "初始化并管理本地 AI 影视项目，以文本、图片、视频和音频四类节点组织创作流程。",
+          slug: "cinema",
+          title: "anybox for cinema",
+        },
+        {
+          content: buildWebAppsZh,
+          description: "用设计、实现、浏览器测试和专项最佳实践构建高质量 Web 应用。",
+          slug: "build-web-apps",
+          title: "构建 Web 应用",
+        },
       ],
     },
     {
@@ -251,6 +267,18 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
           description: "Observe and operate a selected Windows app window with clear safety and approval boundaries.",
           slug: "computer-use-windows",
           title: "Computer Use Windows",
+        },
+        {
+          content: cinemaEn,
+          description: "Initialize and manage local AI film projects with Text, Image, Video, and Audio nodes.",
+          slug: "cinema",
+          title: "anybox for cinema",
+        },
+        {
+          content: buildWebAppsEn,
+          description: "Build high-quality web apps with design, implementation, browser QA, and focused best practices.",
+          slug: "build-web-apps",
+          title: "Build Web Apps",
         },
       ],
     },
