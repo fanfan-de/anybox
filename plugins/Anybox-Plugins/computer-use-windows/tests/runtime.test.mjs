@@ -31,19 +31,20 @@ class MockHelper {
     this.launches = []
     this.failNextAction = false
     this.accessibility = options.accessibility ?? null
+    this.inputMode = options.inputMode
     this.stopped = false
     this.ended = false
   }
 
   async ensureInitialized() {
-    return { protocolVersion: 1, helperVersion: "0.2.2", capabilities: { overlay: true } }
+    return { protocolVersion: 1, helperVersion: "0.2.3", capabilities: { overlay: true } }
   }
 
   async call(method, params) {
     if (method === "health_check") {
       return {
         protocolVersion: 1,
-        helperVersion: "0.2.2",
+        helperVersion: "0.2.3",
         platform: "win32-x64",
         captureBackend: "test",
         accessibilityBackend: "test",
@@ -92,11 +93,27 @@ class MockHelper {
       }
       this.requests.push(params)
       this.actions.push(params.action)
-      return { ok: true, inputEpoch: 0 }
+      const semanticAction = [
+        "click_element",
+        "scroll_element",
+        "set_value",
+        "perform_secondary_action",
+      ].includes(params.action.type)
+      return {
+        ok: true,
+        inputEpoch: 0,
+        inputMode: this.inputMode ?? (semanticAction ? "uia" : "physical"),
+        ...(params.action.type === "type_text" ? { focusValidated: true } : {}),
+      }
     }
     if (method === "launch_app") {
       this.launches.push(params)
-      return { launched: true, appId: params.appId }
+      return {
+        launched: true,
+        appId: params.appId,
+        windowReady: true,
+        window,
+      }
     }
     if (method === "activate_window") return { window, inputEpoch: 0 }
     if (method === "end_turn") {
@@ -134,6 +151,7 @@ test("requires a fresh state for input and consumes it after one action", async 
     safety: "normal",
   })
   assert.equal(clicked.data.stateConsumed, true)
+  assert.equal(clicked.data.inputMode, "physical")
   assert.equal(helper.actions.length, 1)
 
   await assert.rejects(
@@ -237,6 +255,24 @@ test("element actions carry the native token and UIA revision from one fresh sta
   assert.equal(helper.requests.at(-1).accessibilityRevision, "uia_test_revision")
   assert.match(helper.requests.at(-1).nativeStateRef, /^native_/u)
 
+  const scrollState = await observe()
+  const scrolled = await runtime.callOperation("scroll", {
+    windowRef,
+    stateRef: scrollState.data.stateRef,
+    elementIndex: 8,
+    deltaX: 0,
+    deltaY: -100,
+    purpose: "Scroll the controlled fixture element",
+    safety: "normal",
+  })
+  assert.deepEqual(helper.actions.at(-1), {
+    type: "scroll_element",
+    elementIndex: 8,
+    deltaX: 0,
+    deltaY: -100,
+  })
+  assert.equal(scrolled.data.inputMode, "uia")
+
   const valueState = await observe()
   await runtime.callOperation("set_value", {
     windowRef,
@@ -287,7 +323,7 @@ test("launch_app accepts only a current app catalog selector and never forwards 
   assert.match(app.appRef, /^app_/u)
   assert.equal(JSON.stringify(app).includes("catalog_fixture"), false)
 
-  await runtime.callOperation("launch_app", {
+  const launched = await runtime.callOperation("launch_app", {
     appRef: app.appRef,
     purpose: "Open the controlled fixture",
     safety: "normal",
@@ -296,6 +332,8 @@ test("launch_app accepts only a current app catalog selector and never forwards 
     catalogRef: "catalog_fixture",
     appId: "win32:notepad.exe:0123456789abcdef",
   }])
+  assert.equal(launched.data.windowReady, true)
+  assert.equal(launched.data.window.processName, "notepad.exe")
 
   await assert.rejects(
     runtime.callOperation("launch_app", {

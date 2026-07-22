@@ -3,6 +3,7 @@ import { createRequire } from "node:module"
 
 const require = createRequire(import.meta.url)
 const { ComputerUseRuntime } = require("./runtime.cjs")
+const { cuError } = require("./lib/errors")
 
 const PLUGIN_ID = "computer-use-windows"
 const PLUGIN_DISPLAY_NAME = "Computer Use Windows"
@@ -300,11 +301,18 @@ class PluginComputerUseClient {
       )
     }
     const intent = actionIntent(input, `Launch ${app.displayName || appID}`)
-    await this.call("launch_app", {
+    const data = structured(await this.call("launch_app", {
       appId: app.appId,
       ...intent,
-    })
+    }))
     this.latestStateByWindowRef.clear()
+    const window = data.window ? this.rememberWindow(data.window) : undefined
+    return {
+      ok: data.ok === true,
+      app: appID,
+      window_ready: Boolean(data.windowReady && window),
+      ...(window ? { window } : {}),
+    }
   }
 
   async get_window_state(input) {
@@ -329,26 +337,37 @@ class PluginComputerUseClient {
     }
     const screenshots = array(data.screenshots).map((screenshot, index) => {
       const image = images[index]
-      return {
+      const publicScreenshot = {
         id: requiredString(screenshot?.id, "Computer Use returned an invalid screenshot id."),
         originX: finiteOrUndefined(screenshot.originX),
         originY: finiteOrUndefined(screenshot.originY),
         width: finiteOrUndefined(screenshot.width),
         height: finiteOrUndefined(screenshot.height),
         zIndex: Number.isFinite(screenshot.zIndex) ? screenshot.zIndex : index,
-        url: image
-          ? `data:${image.mimeType || "image/png"};base64,${image.data}`
-          : "",
+        image_emitted: Boolean(image),
+        ...(image ? { mime_type: image.mimeType || "image/png" } : {}),
       }
+      if (image) {
+        Object.defineProperty(publicScreenshot, "url", {
+          configurable: false,
+          enumerable: false,
+          writable: false,
+          value: `data:${image.mimeType || "image/png"};base64,${image.data}`,
+        })
+      }
+      return publicScreenshot
     })
     const window = this.rememberWindow(data.window)
     this.latestStateByWindowRef.set(binding.windowRef, {
       stateRef: requiredString(data.stateRef, "Computer Use returned an invalid state reference."),
       screenshotIDs: new Set(screenshots.map((screenshot) => screenshot.id)),
       defaultScreenshotID: screenshots[0]?.id,
+      includeScreenshot,
+      includeText,
     })
     return {
       window,
+      viewport: toViewport(data.window),
       screenshots,
       accessibility: toAccessibilityState(data.accessibility),
     }
@@ -371,13 +390,13 @@ class PluginComputerUseClient {
       args.x = finiteNumber(input?.x, "click requires x for coordinate mode.")
       args.y = finiteNumber(input?.y, "click requires y for coordinate mode.")
     }
-    await this.consumeState(binding.windowRef, () => this.call("click", args))
+    return this.completeAction(binding, state, input, () => this.call("click", args))
   }
 
   async press_key(input) {
     const { binding, state } = this.actionState(input)
     const key = requiredString(input?.key, "press_key requires a key or key chord.")
-    await this.consumeState(binding.windowRef, () => this.call("press_key", {
+    return this.completeAction(binding, state, input, () => this.call("press_key", {
       windowRef: binding.windowRef,
       stateRef: state.stateRef,
       keys: normalizeKeyChord(key),
@@ -388,7 +407,7 @@ class PluginComputerUseClient {
   async type_text(input) {
     const { binding, state } = this.actionState(input)
     if (typeof input?.text !== "string") throw new Error("type_text requires text.")
-    await this.consumeState(binding.windowRef, () => this.call("type_text", {
+    return this.completeAction(binding, state, input, () => this.call("type_text", {
       windowRef: binding.windowRef,
       stateRef: state.stateRef,
       text: input.text,
@@ -398,22 +417,28 @@ class PluginComputerUseClient {
 
   async scroll(input) {
     const { binding, state } = this.actionState(input)
-    await this.consumeState(binding.windowRef, () => this.call("scroll", {
+    const elementIndex = integerOrUndefined(input?.element_index)
+    const args = {
       windowRef: binding.windowRef,
       stateRef: state.stateRef,
-      screenshotId: this.resolveScreenshotID(input?.screenshotId, state),
-      x: finiteNumber(input?.x, "scroll requires x."),
-      y: finiteNumber(input?.y, "scroll requires y."),
       deltaX: finiteNumber(input?.scrollX, "scroll requires scrollX."),
       deltaY: finiteNumber(input?.scrollY, "scroll requires scrollY."),
       ...actionIntent(input, "Scroll the selected window"),
-    }))
+    }
+    if (elementIndex !== undefined) {
+      args.elementIndex = elementIndex
+    } else {
+      args.screenshotId = this.resolveScreenshotID(input?.screenshotId, state)
+      args.x = finiteNumber(input?.x, "scroll requires x for coordinate mode.")
+      args.y = finiteNumber(input?.y, "scroll requires y for coordinate mode.")
+    }
+    return this.completeAction(binding, state, input, () => this.call("scroll", args))
   }
 
   async set_value(input) {
     const { binding, state } = this.actionState(input)
     if (typeof input?.value !== "string") throw new Error("set_value requires value.")
-    await this.consumeState(binding.windowRef, () => this.call("set_value", {
+    return this.completeAction(binding, state, input, () => this.call("set_value", {
       windowRef: binding.windowRef,
       stateRef: state.stateRef,
       elementIndex: nonNegativeInteger(input?.element_index, "set_value requires element_index."),
@@ -424,7 +449,7 @@ class PluginComputerUseClient {
 
   async drag(input) {
     const { binding, state } = this.actionState(input)
-    await this.consumeState(binding.windowRef, () => this.call("drag", {
+    return this.completeAction(binding, state, input, () => this.call("drag", {
       windowRef: binding.windowRef,
       stateRef: state.stateRef,
       screenshotId: this.resolveScreenshotID(input?.screenshotId, state),
@@ -445,7 +470,7 @@ class PluginComputerUseClient {
     if (!["toggle", "select", "expand", "collapse"].includes(action)) {
       throw new Error("Secondary action must be toggle, select, expand, or collapse.")
     }
-    await this.consumeState(binding.windowRef, () => this.call("perform_secondary_action", {
+    return this.completeAction(binding, state, input, () => this.call("perform_secondary_action", {
       windowRef: binding.windowRef,
       stateRef: state.stateRef,
       elementIndex: nonNegativeInteger(
@@ -459,11 +484,15 @@ class PluginComputerUseClient {
 
   async activate_window(input) {
     const binding = this.resolveWindow(input?.window)
-    await this.call("activate_window", {
+    const data = structured(await this.call("activate_window", {
       windowRef: binding.windowRef,
       ...actionIntent(input, "Activate the selected window"),
-    })
+    }))
     this.latestStateByWindowRef.delete(binding.windowRef)
+    return {
+      ok: data.ok === true,
+      window: this.rememberWindow(data.window),
+    }
   }
 
   rememberWindow(rawWindow) {
@@ -511,7 +540,8 @@ class PluginComputerUseClient {
     const binding = this.resolveWindow(input?.window)
     const state = this.latestStateByWindowRef.get(binding.windowRef)
     if (!state) {
-      throw new Error(
+      throw computerUseError(
+        "CU_STATE_REQUIRED",
         "No fresh state exists for this Window. Call sky.get_window_state() immediately before acting.",
       )
     }
@@ -530,9 +560,34 @@ class PluginComputerUseClient {
 
   async consumeState(windowRef, operation) {
     try {
-      await operation()
+      return await operation()
     } finally {
       this.latestStateByWindowRef.delete(windowRef)
+    }
+  }
+
+  async completeAction(binding, state, input, operation) {
+    const result = await this.consumeState(binding.windowRef, operation)
+    const receipt = toActionReceipt(result)
+    if (input?.observe_after !== true) return receipt
+    try {
+      const postState = await this.get_window_state({
+        window: binding.window,
+        include_screenshot: state.includeScreenshot,
+        include_text: state.includeText,
+      })
+      return { ...receipt, post_state: postState }
+    } catch (error) {
+      return {
+        ...receipt,
+        post_state: null,
+        observation_error: {
+          code: optionalString(error?.code) || "CU_INTERNAL_ERROR",
+          message: error instanceof Error ? error.message : String(error),
+          retryable: Boolean(error?.retryable),
+          requires_fresh_state: Boolean(error?.requiresFreshState),
+        },
+      }
     }
   }
 }
@@ -744,7 +799,12 @@ function permissionActionDetails(operation, args) {
     case "press_key":
       return [`Keys: ${array(args?.keys).map((key) => safePermissionText(key, "?", 40)).join("+")}`]
     case "scroll":
-      return [`Scroll delta: ${Number(args?.deltaX)}, ${Number(args?.deltaY)}`]
+      return [
+        ...(args?.elementIndex !== undefined
+          ? [`Accessibility element: ${Number(args.elementIndex)}`]
+          : [`Screenshot coordinate: ${Number(args?.x)}, ${Number(args?.y)}`]),
+        `Scroll delta: ${Number(args?.deltaX)}, ${Number(args?.deltaY)}`,
+      ]
     case "set_value":
       return [`Value: <redacted; ${typeof args?.value === "string" ? args.value.length : 0} characters>`]
     case "type_text":
@@ -765,7 +825,41 @@ function safePermissionText(value, fallback, max) {
 }
 
 function computerUseError(code, message) {
-  return Object.assign(new Error(message), { code })
+  return cuError(code, message)
+}
+
+function toActionReceipt(result) {
+  const data = structured(result)
+  return {
+    ok: data.ok === true,
+    state_consumed: data.stateConsumed === true,
+    ...(data.inputMode === "uia" || data.inputMode === "physical"
+      ? { input_mode: data.inputMode }
+      : {}),
+    ...(typeof data.focusValidated === "boolean"
+      ? { focus_validated: data.focusValidated }
+      : {}),
+    ...(Number.isInteger(data.elementIndex) ? { element_index: data.elementIndex } : {}),
+    ...(Number.isInteger(data.characterCount)
+      ? { character_count: data.characterCount }
+      : {}),
+  }
+}
+
+function toViewport(window) {
+  const bounds = window?.bounds && typeof window.bounds === "object"
+    ? window.bounds
+    : {}
+  return {
+    x: finiteOrUndefined(bounds.x) ?? 0,
+    y: finiteOrUndefined(bounds.y) ?? 0,
+    width: finiteOrUndefined(bounds.width) ?? 0,
+    height: finiteOrUndefined(bounds.height) ?? 0,
+    is_foreground: Boolean(window?.isForeground),
+    minimized: Boolean(window?.minimized),
+    coordinate_space: "screen",
+    action_coordinate_space: "screenshot-local",
+  }
 }
 
 function toAccessibilityState(value) {

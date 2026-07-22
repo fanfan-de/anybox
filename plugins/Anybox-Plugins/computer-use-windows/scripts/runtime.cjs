@@ -42,6 +42,17 @@ function imageResult(summary, imageBase64, data = {}) {
   }
 }
 
+function actionResultData(helperResult, data = {}) {
+  const inputMode = helperResult?.inputMode
+  return {
+    ...data,
+    ...(inputMode === "uia" || inputMode === "physical" ? { inputMode } : {}),
+    ...(typeof helperResult?.focusValidated === "boolean"
+      ? { focusValidated: helperResult.focusValidated }
+      : {}),
+  }
+}
+
 function boolArg(args, name, defaultValue) {
   const value = args?.[name]
   return typeof value === "boolean" ? value : defaultValue
@@ -382,12 +393,20 @@ class ComputerUseRuntime {
         throw cuError("CU_INVALID_ARGUMENT", "The selected application cannot be launched.")
       }
       try {
-        await this.helper.call("launch_app", {
+        const launched = await this.helper.call("launch_app", {
           catalogRef: app.catalogRef,
           appId: app.appId,
         }, this.helperOptions(context))
+        const launchedWindow = launched?.window
+          ? this.windows.publicWindow(
+              this.windows.upsert(launched.window),
+              classifyWindow(launched.window),
+            )
+          : undefined
         return runtimeResult(`Launched ${app.displayName}.`, {
           app: this.apps.publicApp(app, []),
+          windowReady: Boolean(launched?.windowReady && launchedWindow),
+          ...(launchedWindow ? { window: launchedWindow } : {}),
         })
       } finally {
         this.states.invalidateAll()
@@ -461,7 +480,7 @@ class ComputerUseRuntime {
               deltaX: numberArg(args, "deltaX", 0),
               deltaY: numberArg(args, "deltaY"),
             }
-        await this.helper.call("perform_action", {
+        const performed = await this.helper.call("perform_action", {
           ...this.helperState(record, state),
           action,
         }, this.helperOptions(context))
@@ -469,7 +488,11 @@ class ComputerUseRuntime {
           type === "click"
             ? `Clicked UI Automation element ${elementIndex}.`
             : `Scrolled UI Automation element ${elementIndex}.`,
-          { windowRef: record.windowRef, stateConsumed: true, elementIndex },
+          actionResultData(performed, {
+            windowRef: record.windowRef,
+            stateConsumed: true,
+            elementIndex,
+          }),
         )
       }
 
@@ -493,13 +516,13 @@ class ComputerUseRuntime {
             deltaX: numberArg(args, "deltaX", 0),
             deltaY: numberArg(args, "deltaY"),
           }
-      await this.helper.call("perform_action", {
+      const performed = await this.helper.call("perform_action", {
         ...this.helperState(record, state),
         action,
       }, this.helperOptions(context))
       return runtimeResult(
         type === "click" ? `Clicked ${action.button} at ${x}, ${y}.` : `Scrolled at ${x}, ${y}.`,
-        { windowRef: record.windowRef, stateConsumed: true },
+        actionResultData(performed, { windowRef: record.windowRef, stateConsumed: true }),
       )
     })
   }
@@ -512,15 +535,17 @@ class ComputerUseRuntime {
       if (value === undefined || value.length > 32768) {
         throw cuError("CU_INVALID_ARGUMENT", "value must be a string no longer than 32768 characters.")
       }
-      await this.helper.call("perform_action", {
+      const performed = await this.helper.call("perform_action", {
         ...this.helperState(record, state),
         action: { type: "set_value", elementIndex, value },
       }, this.helperOptions(context))
       return runtimeResult(`Set UI Automation element ${elementIndex} to a ${value.length}-character value.`, {
-        windowRef: record.windowRef,
-        stateConsumed: true,
-        elementIndex,
-        characterCount: value.length,
+        ...actionResultData(performed, {
+          windowRef: record.windowRef,
+          stateConsumed: true,
+          elementIndex,
+          characterCount: value.length,
+        }),
       })
     })
   }
@@ -533,7 +558,7 @@ class ComputerUseRuntime {
         throw cuError("CU_INVALID_ARGUMENT", "action must be toggle, select, expand, or collapse.")
       }
       const { record, state } = await this.prepareStateAction(args, context, { elementIndex })
-      await this.helper.call("perform_action", {
+      const performed = await this.helper.call("perform_action", {
         ...this.helperState(record, state),
         action: {
           type: "perform_secondary_action",
@@ -542,10 +567,12 @@ class ComputerUseRuntime {
         },
       }, this.helperOptions(context))
       return runtimeResult(`Performed ${secondaryAction} on UI Automation element ${elementIndex}.`, {
-        windowRef: record.windowRef,
-        stateConsumed: true,
-        elementIndex,
-        action: secondaryAction,
+        ...actionResultData(performed, {
+          windowRef: record.windowRef,
+          stateConsumed: true,
+          elementIndex,
+          action: secondaryAction,
+        }),
       })
     })
   }
@@ -554,14 +581,16 @@ class ComputerUseRuntime {
     return this.actions.run(async () => {
       const { record, state } = await this.prepareStateAction(args, context)
       const keys = keysArg(args)
-      await this.helper.call("perform_action", {
+      const performed = await this.helper.call("perform_action", {
         ...this.helperState(record, state),
         action: { type: "press_key", keys },
       }, this.helperOptions(context))
       return runtimeResult(`Pressed ${keys.join("+")}.`, {
-        windowRef: record.windowRef,
-        stateConsumed: true,
-        keys,
+        ...actionResultData(performed, {
+          windowRef: record.windowRef,
+          stateConsumed: true,
+          keys,
+        }),
       })
     })
   }
@@ -573,14 +602,16 @@ class ComputerUseRuntime {
       if (text === undefined || text.length > 32768) {
         throw cuError("CU_INVALID_ARGUMENT", "text must be a string no longer than 32768 characters.")
       }
-      await this.helper.call("perform_action", {
+      const performed = await this.helper.call("perform_action", {
         ...this.helperState(record, state),
         action: { type: "type_text", text },
       }, this.helperOptions(context))
       return runtimeResult(`Typed ${text.length} character(s).`, {
-        windowRef: record.windowRef,
-        stateConsumed: true,
-        characterCount: text.length,
+        ...actionResultData(performed, {
+          windowRef: record.windowRef,
+          stateConsumed: true,
+          characterCount: text.length,
+        }),
       })
     })
   }
@@ -595,13 +626,15 @@ class ComputerUseRuntime {
       const toY = numberArg(args, "toY")
       validateCoordinate(state, fromX, fromY, "from coordinate")
       validateCoordinate(state, toX, toY, "to coordinate")
-      await this.helper.call("perform_action", {
+      const performed = await this.helper.call("perform_action", {
         ...this.helperState(record, state),
         action: { type: "drag", fromX, fromY, toX, toY },
       }, this.helperOptions(context))
       return runtimeResult(`Dragged from ${fromX}, ${fromY} to ${toX}, ${toY}.`, {
-        windowRef: record.windowRef,
-        stateConsumed: true,
+        ...actionResultData(performed, {
+          windowRef: record.windowRef,
+          stateConsumed: true,
+        }),
       })
     })
   }

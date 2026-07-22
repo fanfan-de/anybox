@@ -43,7 +43,7 @@ internal class ApplicationActivationManager;
 
 internal static class PackagedAppLauncher
 {
-    public static void Launch(string aumid)
+    public static int Launch(string aumid)
     {
         var manager = (IApplicationActivationManager)new ApplicationActivationManager();
         try
@@ -52,9 +52,10 @@ internal static class PackagedAppLauncher
                 aumid,
                 "",
                 ActivateOptions.None,
-                out _
+                out var processId
             );
             Marshal.ThrowExceptionForHR(result);
+            return checked((int)processId);
         }
         finally
         {

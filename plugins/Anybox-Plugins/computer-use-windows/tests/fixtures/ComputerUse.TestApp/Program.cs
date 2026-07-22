@@ -71,7 +71,7 @@ internal static class Program
 
     private static Form CreateTarget(Options options)
     {
-        var form = CreateBaseForm(TargetTitle, options);
+        var form = CreateBaseForm(options.Title ?? TargetTitle, options);
         form.BackColor = Color.FromArgb(10, 24, 48);
         form.AccessibleName = "Anybox Computer Use Test Window";
         form.AccessibleDescription = "Controlled fixture for screenshot, accessibility, and input tests.";
@@ -443,6 +443,7 @@ internal static class Program
     private sealed record Options(
         bool Occluder,
         bool Minimized,
+        string? Title,
         int Left,
         int Top,
         int Width,
@@ -458,6 +459,7 @@ internal static class Program
             return new Options(
                 Occluder: args.Contains("--occluder", StringComparer.OrdinalIgnoreCase),
                 Minimized: args.Contains("--minimized", StringComparer.OrdinalIgnoreCase),
+                Title: StringValue(args, "--title"),
                 Left: IntValue(args, "--left", 120),
                 Top: IntValue(args, "--top", 120),
                 Width: IntValue(args, "--width", 720),
@@ -474,6 +476,17 @@ internal static class Program
                     StringComparer.OrdinalIgnoreCase
                 )
             );
+        }
+
+        private static string? StringValue(string[] args, string key)
+        {
+            var index = Array.FindIndex(
+                args,
+                value => string.Equals(value, key, StringComparison.OrdinalIgnoreCase)
+            );
+            return index >= 0 && index + 1 < args.Length && !string.IsNullOrWhiteSpace(args[index + 1])
+                ? args[index + 1]
+                : null;
         }
 
         private static int IntValue(string[] args, string key, int fallback)

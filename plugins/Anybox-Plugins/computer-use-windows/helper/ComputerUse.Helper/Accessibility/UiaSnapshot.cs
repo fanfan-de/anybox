@@ -285,11 +285,59 @@ internal sealed class UiaSnapshot
         return element;
     }
 
-    public bool FocusedElementIsPassword()
+    public void AssertFocusedElementAcceptsTextInput(WindowInfo window)
     {
-        return FocusedElement is int index
-            && _elements.TryGetValue(index, out var element)
-            && element.IsPassword;
+        if (
+            FocusedElement is not int index
+            || !_elements.TryGetValue(index, out var element)
+        )
+        {
+            throw FocusError("The fresh UI Automation state has no focused element.");
+        }
+        if (element.IsPassword)
+        {
+            throw new ComputerUseException(
+                "CU_APP_BLOCKED",
+                "Computer Use does not type into password or protected input elements."
+            );
+        }
+        var acceptsText = element.IsEnabled
+            && !element.IsOffscreen
+            && (
+                element.ControlType is "edit" or "document"
+                || HasPattern(element, "Text")
+                || HasPattern(element, "Value")
+            );
+        if (!acceptsText)
+        {
+            throw FocusError(
+                "The focused UI Automation element is not an editable text control."
+            );
+        }
+        var current = FindCurrentElement(window, element);
+        try
+        {
+            if (current.CurrentHasKeyboardFocus == 0)
+            {
+                throw FocusError(
+                    "The observed editable element no longer has keyboard focus."
+                );
+            }
+        }
+        finally
+        {
+            Release(current);
+        }
+    }
+
+    private static ComputerUseException FocusError(string message)
+    {
+        return new ComputerUseException(
+            "CU_FOCUS_NOT_EDITABLE",
+            message,
+            retryable: true,
+            requiresFreshState: true
+        );
     }
 
     public void AssertCurrent(WindowInfo window)

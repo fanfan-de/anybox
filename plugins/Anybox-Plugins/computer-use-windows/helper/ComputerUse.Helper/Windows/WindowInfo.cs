@@ -63,7 +63,23 @@ internal sealed record WindowInfo(
             clientBounds = ClientBounds,
             dpiScale = DpiScale,
             minimized = Minimized,
+            isForeground = IsForegroundWindow(),
         };
+    }
+
+    private bool IsForegroundWindow()
+    {
+        var foreground = GetForegroundWindow();
+        if (foreground == IntPtr.Zero)
+        {
+            return false;
+        }
+        var foregroundRoot = GetAncestor(foreground, GA_ROOTOWNER);
+        if (foregroundRoot == IntPtr.Zero)
+        {
+            foregroundRoot = foreground;
+        }
+        return foregroundRoot.ToInt64().ToString() == Identity.RootOwnerHwnd;
     }
 
     public static WindowInfo FromExpected(JsonElement expectedIdentity)
@@ -154,7 +170,10 @@ internal sealed record WindowInfo(
                 identity,
                 GetWindowTitle(hwnd),
                 processName,
-                AppIdentity.ForWin32(processName, executableIdentity),
+                WindowAppIdentity.TryGetAumid(hwnd) is { Length: > 0 } aumid
+                    && aumid.Contains('!')
+                    ? AppIdentity.ForAumid(aumid)
+                    : AppIdentity.ForWin32(processName, executableIdentity),
                 bounds,
                 GetClientBounds(hwnd, bounds),
                 Math.Round(dpi / 96.0, 4),

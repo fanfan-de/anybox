@@ -7,10 +7,10 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>computer-use-helper</AssemblyName>
     <RootNamespace>ComputerUse.Helper</RootNamespace>
-    <Version>0.2.2</Version>
-    <AssemblyVersion>0.2.2.0</AssemblyVersion>
-    <FileVersion>0.2.2.0</FileVersion>
-    <InformationalVersion>0.2.2</InformationalVersion>
+    <Version>0.2.3</Version>
+    <AssemblyVersion>0.2.3.0</AssemblyVersion>
+    <FileVersion>0.2.3.0</FileVersion>
+    <InformationalVersion>0.2.3</InformationalVersion>
     <Deterministic>true</Deterministic>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>

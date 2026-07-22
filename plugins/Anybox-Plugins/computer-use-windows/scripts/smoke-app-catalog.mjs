@@ -138,10 +138,13 @@ async function main() {
       (error) => error?.code === "CU_APP_APPROVAL_REQUIRED",
     )
 
-    await helper.call("launch_app", {
+    const launchResult = await helper.call("launch_app", {
       catalogRef: fixtureEntry.catalogRef,
       appId: fixtureEntry.appId,
     })
+    assert.equal(launchResult.windowReady, true)
+    assert.equal(launchResult.window?.processName, testProcessName)
+    assert.notEqual(launchResult.window?.identity.pid, fixture.pid)
     const launched = await waitForLaunchedWindow(helper, fixture.pid)
     launchedPid = launched.identity.pid
     assert.notEqual(launchedPid, fixture.pid)
@@ -153,6 +156,7 @@ async function main() {
       stableAppId: true,
       arbitraryPathRejected: true,
       controlledLaunchVerified: true,
+      launchReturnedWindow: true,
       packagedAppCount: second.apps.filter((app) => app.kind === "packaged").length,
     }, null, 2)}\n`)
   } finally {

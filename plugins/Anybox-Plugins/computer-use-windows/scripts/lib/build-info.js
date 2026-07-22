@@ -1,7 +1,7 @@
 "use strict"
 
-const PLUGIN_VERSION = "0.3.4"
-const HELPER_VERSION = "0.2.2"
+const PLUGIN_VERSION = "0.3.5"
+const HELPER_VERSION = "0.2.3"
 const PROTOCOL_VERSION = 1
 const MAX_FRAME_BYTES = 8 * 1024 * 1024
 const DEFAULT_HELPER_TIMEOUT_MS = 10_000

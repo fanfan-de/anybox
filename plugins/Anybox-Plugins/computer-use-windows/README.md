@@ -5,8 +5,8 @@ discovers applications and windows, captures one selected window with Windows
 Graphics Capture, inspects a bounded UI Automation tree, and sends guarded
 mouse or keyboard input from a fresh one-action state.
 
-The current plugin version is `0.3.4`. The bundled native helper component is
-version `0.2.2`. The supported release target is Windows
+The current plugin version is `0.3.5`. The bundled native helper component is
+version `0.2.3`. The supported release target is Windows
 11 x64.
 
 ## Ownership boundary
@@ -73,9 +73,11 @@ session. There is no production disable switch.
 7. Send/submit, delete, upload, and install actions receive a separate,
    parameter-sensitive, one-time approval. Typed text and assigned values are
    redacted.
-8. The helper revalidates the window, state, DPI, foreground, point ownership,
-   integrity level, desktop state, and physical-input epoch immediately before
-   input.
+8. The helper revalidates the window, state, DPI, integrity level, desktop
+   state, and physical-input epoch immediately before every action. UIA
+   Invoke/Value/Scroll/secondary patterns run without requiring Helper
+   foreground activation; only physical mouse or keyboard paths explicitly
+   activate the target and validate point ownership.
 9. `end_turn` keeps the notice visible for at least 700 ms and hides it before
    the plugin stops the Helper. Physical Escape hides it immediately.
 
@@ -106,8 +108,8 @@ The normal operating loop is:
 list_apps/list_windows
 → choose one application and window
 → get_window_state
-→ perform exactly one approved action
-→ get_window_state again and verify
+→ perform exactly one approved action with observe_after when verification is needed
+→ inspect the action receipt and returned post_state
 ```
 
 Anybox Node REPL executes submitted code as an async function body. Agent code
@@ -119,6 +121,14 @@ Native `windowRef` and `stateRef` values never enter the public `sky` surface.
 A state expires after 30 seconds and can authorize at most one action,
 including a failed action. The plugin permits at most one state-changing
 operation per submitted JavaScript snippet.
+
+Action calls return a compact receipt that reports whether UIA or physical input
+was used. `observe_after: true` performs the post-action observation inside the
+same call and leaves that state fresh for the next action. `launch_app` waits up
+to five seconds for a matching window and returns it when available. Packaged
+ApplicationFrameHost windows are associated with their window AUMID instead of
+being cataloged as the generic host process. Screenshot bytes travel only on
+the Node REPL image channel and are not repeated in structured state results.
 
 ## User controls
 

@@ -9,9 +9,15 @@ using static Interop.UIAutomationClient.UIA_PatternIds;
 
 namespace ComputerUse.Helper.Accessibility;
 
+internal enum UiaActionMode
+{
+    Semantic,
+    RequiresPhysicalInput,
+}
+
 internal static class UiaActions
 {
-    public static void Perform(
+    public static UiaActionMode TryPerformSemantic(
         WindowInfo window,
         NativeObservationState state,
         JsonElement action
@@ -30,21 +36,23 @@ internal static class UiaActions
             switch (type)
             {
                 case "click_element":
-                    Click(window, current, expected, action);
-                    break;
+                    return TryClick(current, action)
+                        ? UiaActionMode.Semantic
+                        : UiaActionMode.RequiresPhysicalInput;
                 case "scroll_element":
-                    Scroll(window, current, expected, action);
-                    break;
+                    return TryScroll(current, action)
+                        ? UiaActionMode.Semantic
+                        : UiaActionMode.RequiresPhysicalInput;
                 case "set_value":
                     SetValue(current, expected, JsonArgs.String(action, "value"));
-                    break;
+                    return UiaActionMode.Semantic;
                 case "perform_secondary_action":
                     Secondary(
                         current,
                         expected,
                         JsonArgs.String(action, "secondaryAction", required: true)
                     );
-                    break;
+                    return UiaActionMode.Semantic;
                 default:
                     throw new ComputerUseException(
                         "CU_INVALID_ARGUMENT",
@@ -58,12 +66,49 @@ internal static class UiaActions
         }
     }
 
-    private static void Click(
+    public static void PerformPhysicalFallback(
         WindowInfo window,
-        IUIAutomationElement current,
-        UiaElementSnapshot expected,
+        NativeObservationState state,
         JsonElement action
     )
+    {
+        var type = JsonArgs.String(action, "type", required: true);
+        var elementIndex = JsonArgs.Int32(action, "elementIndex");
+        var expected = state.GetElement(elementIndex);
+        if (state.Accessibility is null)
+        {
+            throw Stale("The UI Automation revision is missing or stale.");
+        }
+        var current = UiaSnapshot.FindCurrentElement(window, expected);
+        UiaSnapshot.Release(current);
+        var point = Center(expected);
+        switch (type)
+        {
+            case "click_element":
+                var button = JsonArgs.String(action, "button") is { Length: > 0 } value
+                    ? value
+                    : "left";
+                var clickCount = Math.Clamp(JsonArgs.Int32(action, "clickCount", 1), 1, 2);
+                InputController.ClickOwnedPoint(window, point.X, point.Y, button, clickCount);
+                return;
+            case "scroll_element":
+                InputController.ScrollOwnedPoint(
+                    window,
+                    point.X,
+                    point.Y,
+                    JsonArgs.Int32(action, "deltaY", 0),
+                    JsonArgs.Int32(action, "deltaX", 0)
+                );
+                return;
+            default:
+                throw new ComputerUseException(
+                    "CU_INVALID_ARGUMENT",
+                    $"UI Automation action does not support physical fallback: {type}"
+                );
+        }
+    }
+
+    private static bool TryClick(IUIAutomationElement current, JsonElement action)
     {
         var button = JsonArgs.String(action, "button") is { Length: > 0 } value
             ? value
@@ -82,23 +127,17 @@ internal static class UiaActions
             try
             {
                 invoke.Invoke();
-                return;
+                return true;
             }
             finally
             {
                 UiaSnapshot.Release(invoke);
             }
         }
-        var point = Center(expected);
-        InputController.ClickOwnedPoint(window, point.X, point.Y, button, clickCount);
+        return false;
     }
 
-    private static void Scroll(
-        WindowInfo window,
-        IUIAutomationElement current,
-        UiaElementSnapshot expected,
-        JsonElement action
-    )
+    private static bool TryScroll(IUIAutomationElement current, JsonElement action)
     {
         var deltaX = JsonArgs.Int32(action, "deltaX", 0);
         var deltaY = JsonArgs.Int32(action, "deltaY", 0);
@@ -114,7 +153,7 @@ internal static class UiaActions
             try
             {
                 scroll.Scroll(Amount(deltaX), Amount(deltaY));
-                return;
+                return true;
             }
             finally
             {
@@ -132,15 +171,14 @@ internal static class UiaActions
             try
             {
                 scrollItem.ScrollIntoView();
-                return;
+                return true;
             }
             finally
             {
                 UiaSnapshot.Release(scrollItem);
             }
         }
-        var point = Center(expected);
-        InputController.ScrollOwnedPoint(window, point.X, point.Y, deltaY, deltaX);
+        return false;
     }
 
     private static void SetValue(

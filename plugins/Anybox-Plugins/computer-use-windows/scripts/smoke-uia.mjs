@@ -20,6 +20,7 @@ const testAppPath = path.join(
   "computer-use-test-app.exe",
 )
 const targetTitle = "Anybox Computer Use Test Fixture"
+const foregroundTitle = "Anybox Computer Use Foreground Fixture"
 
 function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds))
@@ -73,11 +74,11 @@ async function stopFixture(child) {
   await Promise.race([exited, delay(2000)])
 }
 
-async function waitForWindow(helper, timeoutMs = 5000) {
+async function waitForWindow(helper, title = targetTitle, timeoutMs = 5000) {
   const deadline = Date.now() + timeoutMs
   do {
     const result = await helper.call("list_windows")
-    const match = result.windows?.find((window) => window.title === targetTitle)
+    const match = result.windows?.find((window) => window.title === title)
     if (match) return match
     await delay(75)
   } while (Date.now() < deadline)
@@ -135,9 +136,23 @@ async function main() {
     },
   })
   let fixture
+  let foregroundFixture
   try {
     fixture = await startFixture()
     let window = await waitForWindow(helper)
+    foregroundFixture = await startFixture([
+      "--title",
+      foregroundTitle,
+      "--left",
+      "900",
+      "--top",
+      "140",
+    ])
+    const foregroundWindow = await waitForWindow(helper, foregroundTitle)
+    await helper.call("activate_window", {
+      expectedIdentity: foregroundWindow.identity,
+    })
+
     const initial = await observe(helper, window, true)
     const serialized = JSON.stringify(initial.accessibility)
     assert.ok(initial.accessibility.tree.length <= 256 * 1024)
@@ -146,6 +161,13 @@ async function main() {
     assert.equal(serialized.includes("fixture-ready"), true)
     assert.ok(initial.accessibility.documentText?.includes("fixture-ready"))
     assert.equal(initial.accessibility.documentText?.includes("do-not-export-this-secret"), false)
+    const windowsBeforeSemanticClick = await helper.call("list_windows")
+    assert.equal(
+      windowsBeforeSemanticClick.windows.find(
+        (candidate) => candidate.identity.hwnd === window.identity.hwnd,
+      )?.isForeground,
+      false,
+    )
 
     const button = findElement(initial.accessibility, "button", "Increment")
     const clickParameters = actionParameters(window, initial, {
@@ -154,7 +176,8 @@ async function main() {
       button: "left",
       clickCount: 1,
     })
-    await helper.call("perform_action", clickParameters)
+    const semanticClick = await helper.call("perform_action", clickParameters)
+    assert.equal(semanticClick.inputMode, "uia")
     await assert.rejects(
       helper.call("perform_action", clickParameters),
       (error) => error?.code === "CU_STATE_CONSUMED",
@@ -246,6 +269,7 @@ async function main() {
       passwordValueFiltered: true,
       boundedDocumentText: true,
       invokePattern: true,
+      backgroundInvokeSucceeded: true,
       valuePattern: true,
       togglePattern: true,
       toggleStateReported: true,
@@ -260,6 +284,7 @@ async function main() {
     }, null, 2)}\n`)
   } finally {
     helper.stop()
+    await stopFixture(foregroundFixture)
     await stopFixture(fixture)
   }
 }

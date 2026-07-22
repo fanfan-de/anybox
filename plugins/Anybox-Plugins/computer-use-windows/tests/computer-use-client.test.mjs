@@ -8,6 +8,9 @@ function fixtureWindow() {
     appId: "win32:notepad.exe:fixture",
     title: "Fixture Notepad",
     processName: "notepad.exe",
+    bounds: { x: 40, y: 50, width: 640, height: 480 },
+    minimized: false,
+    isForeground: true,
     blocked: false,
   }
 }
@@ -64,7 +67,22 @@ function createGlobals() {
           },
         }, [{ data: Buffer.from("png").toString("base64"), mimeType: "image/png" }])
       }
-      return result({ stateConsumed: operation !== "launch_app" })
+      if (operation === "launch_app") {
+        return result({
+          app: { appId: args.appId },
+          windowReady: true,
+          window: fixtureWindow(),
+        })
+      }
+      const elementIndex = Number.isInteger(args?.elementIndex) ? args.elementIndex : undefined
+      const semantic = elementIndex !== undefined
+        && ["click", "scroll", "set_value", "perform_secondary_action"].includes(operation)
+      return result({
+        stateConsumed: operation !== "launch_app",
+        inputMode: semantic ? "uia" : "physical",
+        ...(elementIndex !== undefined ? { elementIndex } : {}),
+        ...(operation === "type_text" ? { focusValidated: false } : {}),
+      })
     },
     async close(context) {
       await Promise.resolve()
@@ -147,12 +165,35 @@ test("installs a Codex-style sky API backed by the plugin-owned runtime", async 
   assert.equal(state.window.id, 1)
   assert.equal(state.accessibility.focused_element, "[7] button \"Open\"")
   assert.equal(state.accessibility.document_text, "Fixture")
+  assert.deepEqual(state.viewport, {
+    x: 40,
+    y: 50,
+    width: 640,
+    height: 480,
+    is_foreground: true,
+    minimized: false,
+    coordinate_space: "screen",
+    action_coordinate_space: "screenshot-local",
+  })
+  assert.equal(state.screenshots[0].image_emitted, true)
+  assert.equal(state.screenshots[0].mime_type, "image/png")
   assert.match(state.screenshots[0].url, /^data:image\/png;base64,/u)
+  assert.equal(Object.keys(state.screenshots[0]).includes("url"), false)
+  assert.equal(
+    JSON.stringify(state).includes(Buffer.from("png").toString("base64")),
+    false,
+  )
   assert.equal(fixture.images.length, 1)
   assert.equal("stateRef" in state, false)
   assert.equal("windowRef" in state.window, false)
 
-  await sky.click({ window: windows[0], element_index: 7 })
+  const receipt = await sky.click({ window: windows[0], element_index: 7 })
+  assert.deepEqual(receipt, {
+    ok: true,
+    state_consumed: true,
+    input_mode: "uia",
+    element_index: 7,
+  })
   const click = fixture.calls.at(-1)
   assert.deepEqual(click, {
     operation: "click",
@@ -173,7 +214,9 @@ test("installs a Codex-style sky API backed by the plugin-owned runtime", async 
   assert.equal(fixture.permissions.length, 0)
   await assert.rejects(
     sky.click({ window: windows[0], element_index: 7 }),
-    /No fresh state exists/u,
+    (error) => error?.code === "CU_STATE_REQUIRED"
+      && error?.retryable === true
+      && error?.requiresFreshState === true,
   )
   assert.equal(
     fixture.responseMeta.some((meta) => meta["anybox/toolSurface"]?.kind === "computerUse"),
@@ -217,7 +260,10 @@ test("maps app launch, key chords, coordinates, and lifecycle state inside the p
   assert.equal(apps[0].id, "win32:notepad.exe:fixture")
   assert.equal(apps[0].windows[0].id, 1)
 
-  await sky.launch_app({ app: apps[0].id })
+  const launched = await sky.launch_app({ app: apps[0].id })
+  assert.equal(launched.ok, true)
+  assert.equal(launched.window_ready, true)
+  assert.equal(launched.window.id, apps[0].windows[0].id)
   assert.equal(fixture.calls.at(-1).operation, "launch_app")
   assert.equal(fixture.calls.at(-1).args.appId, apps[0].id)
   await fixture.emitSubmitted()
@@ -243,6 +289,18 @@ test("maps app launch, key chords, coordinates, and lifecycle state inside the p
   assert.equal(fixture.calls.at(-1).args.screenshotId, "shot_2")
   await fixture.emitSubmitted()
 
+  await sky.get_window_state({ window: windows[0], include_text: true })
+  await sky.scroll({
+    window: windows[0],
+    element_index: 7,
+    scrollX: 0,
+    scrollY: -100,
+  })
+  assert.equal(fixture.calls.at(-1).args.elementIndex, 7)
+  assert.equal("screenshotId" in fixture.calls.at(-1).args, false)
+  assert.equal("x" in fixture.calls.at(-1).args, false)
+  await fixture.emitSubmitted()
+
   await sky.get_window_state({ window: windows[0] })
   await fixture.emitLifecycle("turn-end")
   assert.equal(fixture.closes.length, 1)
@@ -251,4 +309,35 @@ test("maps app launch, key chords, coordinates, and lifecycle state inside the p
     sky.type_text({ window: windows[0], text: "blocked after turn" }),
     /unknown or expired|Window returned/u,
   )
+})
+
+test("can capture a fresh post-action state in the same submission", async () => {
+  const fixture = createGlobals()
+  const sky = await setupComputerUseRuntime({
+    globals: fixture.globals,
+    runtime: fixture.runtime,
+  })
+  const [window] = await sky.list_windows()
+  await sky.get_window_state({
+    window,
+    include_screenshot: true,
+    include_text: true,
+  })
+
+  const receipt = await sky.click({
+    window,
+    element_index: 7,
+    observe_after: true,
+  })
+
+  assert.equal(receipt.ok, true)
+  assert.equal(receipt.input_mode, "uia")
+  assert.equal(receipt.post_state.window.id, window.id)
+  assert.equal(receipt.post_state.accessibility.document_text, "Fixture")
+  assert.equal(fixture.calls.at(-2).operation, "click")
+  assert.equal(fixture.calls.at(-1).operation, "get_window_state")
+  assert.equal(fixture.images.length, 2)
+
+  await fixture.emitSubmitted()
+  await sky.click({ window, element_index: 7 })
 })

@@ -37,8 +37,6 @@ internal static class InputController
         var imageHeight = JsonArgs.Int32(parameters, "imageHeight", 0);
         nativeState.AssertMatches(current, parameters);
         WindowGuard.AssertObservedState(current, observedBounds, observedDpiScale, observedInputEpoch);
-        current = WindowGuard.ActivateAndVerify(current);
-        WindowGuard.AssertObservedState(current, observedBounds, observedDpiScale, observedInputEpoch);
 
         var action = JsonArgs.Property(parameters, "action");
         var type = JsonArgs.String(action, "type", required: true);
@@ -50,9 +48,35 @@ internal static class InputController
                 "perform_secondary_action"
         )
         {
-            UiaActions.Perform(current, nativeState, action);
-            return new { ok = true, inputEpoch = PhysicalInputState.Epoch };
+            var mode = UiaActions.TryPerformSemantic(current, nativeState, action);
+            if (mode == UiaActionMode.Semantic)
+            {
+                return new
+                {
+                    ok = true,
+                    inputEpoch = PhysicalInputState.Epoch,
+                    inputMode = "uia",
+                };
+            }
+            current = WindowGuard.ActivateAndVerify(current);
+            WindowGuard.AssertObservedState(
+                current,
+                observedBounds,
+                observedDpiScale,
+                observedInputEpoch
+            );
+            UiaActions.PerformPhysicalFallback(current, nativeState, action);
+            return new
+            {
+                ok = true,
+                inputEpoch = PhysicalInputState.Epoch,
+                inputMode = "physical",
+            };
         }
+
+        current = WindowGuard.ActivateAndVerify(current);
+        WindowGuard.AssertObservedState(current, observedBounds, observedDpiScale, observedInputEpoch);
+        var focusValidated = false;
         switch (type)
         {
             case "click":
@@ -82,12 +106,10 @@ internal static class InputController
                 break;
             case "type_text":
                 var text = JsonArgs.String(action, "text");
-                if (nativeState.Accessibility?.FocusedElementIsPassword() == true)
+                if (nativeState.Accessibility is not null)
                 {
-                    throw new ComputerUseException(
-                        "CU_APP_BLOCKED",
-                        "Computer Use does not type into password or protected input elements."
-                    );
+                    nativeState.Accessibility.AssertFocusedElementAcceptsTextInput(current);
+                    focusValidated = true;
                 }
                 if (text.Length > 32768)
                 {
@@ -115,7 +137,22 @@ internal static class InputController
                     $"Unsupported input action: {type}"
                 );
         }
-        return new { ok = true, inputEpoch = PhysicalInputState.Epoch };
+        if (type == "type_text")
+        {
+            return new
+            {
+                ok = true,
+                inputEpoch = PhysicalInputState.Epoch,
+                inputMode = "physical",
+                focusValidated,
+            };
+        }
+        return new
+        {
+            ok = true,
+            inputEpoch = PhysicalInputState.Epoch,
+            inputMode = "physical",
+        };
     }
 
     private static (int X, int Y) ToScreen(

@@ -122,6 +122,7 @@ function findElement(accessibility, role, text) {
     const bounds = /bounds=\((-?\d+),(-?\d+),(\d+),(\d+)\)/u.exec(line)
     return {
       index: Number(index[1]),
+      line,
       bounds: bounds
         ? {
             x: Number(bounds[1]),
@@ -308,6 +309,33 @@ async function main() {
       (error) => error?.code === "CU_APP_BLOCKED",
     )
 
+    const nonEditableFocusState = await observe(helper, window)
+    const nonEditableButton = findElement(
+      nonEditableFocusState.accessibility,
+      "button",
+      "Increment",
+    )
+    await helper.call("perform_action", actionParameters(window, nonEditableFocusState, {
+      type: "click_element",
+      elementIndex: nonEditableButton.index,
+      button: "left",
+      clickCount: 2,
+    }))
+    const buttonTypingState = await observe(helper, window)
+    const focusedButton = findElement(
+      buttonTypingState.accessibility,
+      "button",
+      "Increment",
+    )
+    assert.ok(focusedButton.line.includes("focused"))
+    await assert.rejects(
+      helper.call("perform_action", actionParameters(window, buttonTypingState, {
+        type: "type_text",
+        text: "must-not-type-without-editable-focus",
+      })),
+      (error) => error?.code === "CU_FOCUS_NOT_EDITABLE",
+    )
+
     const focusState = await observe(helper, window)
     const editable = findElement(focusState.accessibility, "edit", "Editable value")
     await helper.call("perform_action", actionParameters(window, focusState, {
@@ -348,6 +376,7 @@ async function main() {
       coordinateFallbackVerified: true,
       syntheticInputIgnoredByEpoch: true,
       passwordTypingBlocked: true,
+      nonEditableFocusRejected: true,
       clipboardConcurrentValuePreserved: true,
       clipboardOriginalRestoredByFixture: true,
     }, null, 2)}\n`)

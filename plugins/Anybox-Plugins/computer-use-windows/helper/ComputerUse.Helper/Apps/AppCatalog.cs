@@ -102,13 +102,14 @@ internal static class AppCatalog
             );
         }
         DesktopGuard.AssertInteractive();
+        var processId = 0;
         if (entry.Kind == "win32")
         {
-            LaunchWin32(entry);
+            processId = LaunchWin32(entry);
         }
         else if (entry.Kind == "packaged" && entry.Aumid is { Length: > 0 } aumid)
         {
-            PackagedAppLauncher.Launch(aumid);
+            processId = PackagedAppLauncher.Launch(aumid);
         }
         else
         {
@@ -117,10 +118,13 @@ internal static class AppCatalog
                 "The selected application has no supported launch target."
             );
         }
+        var window = WaitForLaunchedWindow(entry.AppId, processId);
         return new
         {
             launched = true,
             appId = entry.AppId,
+            windowReady = window is not null,
+            window = window?.ToProtocolObject(),
         };
     }
 
@@ -163,10 +167,11 @@ internal static class AppCatalog
 
         foreach (var packaged in EnumeratePackagedApps())
         {
-            if (!apps.ContainsKey(packaged.AppId))
+            if (apps.TryGetValue(packaged.AppId, out var running))
             {
-                apps[packaged.AppId] = packaged;
+                packaged.Windows.AddRange(running.Windows);
             }
+            apps[packaged.AppId] = packaged;
         }
 
         return apps.Values
@@ -349,7 +354,7 @@ internal static class AppCatalog
         }
     }
 
-    private static void LaunchWin32(AppCatalogEntry entry)
+    private static int LaunchWin32(AppCatalogEntry entry)
     {
         var path = entry.ExecutablePath;
         if (
@@ -372,13 +377,44 @@ internal static class AppCatalog
                 "The registered executable changed after application discovery."
             );
         }
-        Process.Start(new ProcessStartInfo
+        using var process = Process.Start(new ProcessStartInfo
         {
             FileName = path,
             Arguments = "",
             WorkingDirectory = Path.GetDirectoryName(path) ?? Environment.CurrentDirectory,
             UseShellExecute = true,
         });
+        return process?.Id ?? 0;
+    }
+
+    private static WindowInfo? WaitForLaunchedWindow(string appId, int processId)
+    {
+        var deadline = Environment.TickCount64 + 5_000;
+        var appIdentityFallbackAt = Environment.TickCount64 + 750;
+        do
+        {
+            var candidates = WindowInfo.EnumerateCandidates();
+            if (processId > 0)
+            {
+                var match = candidates.FirstOrDefault(window => window.Identity.Pid == processId);
+                if (match is not null)
+                {
+                    return match;
+                }
+            }
+            if (Environment.TickCount64 >= appIdentityFallbackAt)
+            {
+                var match = candidates.FirstOrDefault(
+                    window => string.Equals(window.AppId, appId, StringComparison.Ordinal)
+                );
+                if (match is not null)
+                {
+                    return match;
+                }
+            }
+            Thread.Sleep(75);
+        } while (Environment.TickCount64 < deadline);
+        return null;
     }
 
     private static string? NormalizeRegisteredPath(string? raw)
