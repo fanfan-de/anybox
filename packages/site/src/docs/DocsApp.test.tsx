@@ -128,4 +128,46 @@ describe("DocsApp", () => {
       within(navigation).getByRole("link", { name: "Build Plugins" }),
     ).toHaveAttribute("aria-current", "page")
   })
+
+  it("navigates the featured plugin guides through the documentation sidebar", () => {
+    render(
+      <LanguageProvider>
+        <DocsApp />
+      </LanguageProvider>,
+    )
+
+    const navigation = screen.getByRole("navigation", {
+      name: "Documentation navigation",
+    })
+    const chromeLink = within(navigation).getByRole("link", { name: "Chrome" })
+
+    expect(chromeLink).toHaveAttribute(
+      "href",
+      expect.stringContaining("doc=chrome"),
+    )
+
+    fireEvent.click(chromeLink)
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Chrome" }),
+    ).toHaveFocus()
+    expect(
+      screen.getByText("Plugin Guides", { selector: ".docs-article-meta span" }),
+    ).toBeInTheDocument()
+    expect(
+      within(navigation).getByRole("link", { name: "Chrome" }),
+    ).toHaveAttribute("aria-current", "page")
+
+    fireEvent.click(
+      within(navigation).getByRole("link", { name: "Computer Use Windows" }),
+    )
+
+    expect(
+      screen.getByRole("heading", {
+        level: 1,
+        name: "Computer Use Windows",
+      }),
+    ).toHaveFocus()
+    expect(window.location.search).toContain("doc=computer-use-windows")
+  })
 })

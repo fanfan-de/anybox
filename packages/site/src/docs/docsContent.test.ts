@@ -40,6 +40,8 @@ describe("docs content", () => {
       "providers",
       "tools",
       "skills",
+      "chrome",
+      "computer-use-windows",
       "plugin-development",
       "troubleshooting",
       "faq",
@@ -59,6 +61,26 @@ describe("docs content", () => {
     expect(getDocsArticle("overview", "en")?.content).toContain(
       "The first sentence is mine.",
     )
+  })
+
+  it("registers the featured plugin guides in both languages", () => {
+    for (const language of ["zh", "en"] as const) {
+      const chromeArticle = getDocsArticle("chrome", language)
+      const computerUseArticle = getDocsArticle("computer-use-windows", language)
+      const pluginGuideSection = docsSectionsByLanguage[language].find((section) =>
+        section.items.includes(chromeArticle!),
+      )
+
+      expect(pluginGuideSection?.title).toBe(
+        language === "zh" ? "插件指南" : "Plugin Guides",
+      )
+      expect(pluginGuideSection?.items).toContain(computerUseArticle)
+      expect(chromeArticle?.content).toContain("Anybox Chrome")
+      expect(chromeArticle?.content).toContain("Computer Use")
+      expect(computerUseArticle?.content).toContain("Windows 11 x64")
+      expect(computerUseArticle?.content).toContain("Esc")
+      expect(computerUseArticle?.content).toContain("Chrome")
+    }
   })
 
   it("registers a complete plugin development guide in both languages", () => {

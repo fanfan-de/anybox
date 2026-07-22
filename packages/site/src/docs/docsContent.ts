@@ -1,4 +1,8 @@
 import type { SiteLanguage } from "../language"
+import chromeEn from "./content/chrome.en.md?raw"
+import chromeZh from "./content/chrome.md?raw"
+import computerUseWindowsEn from "./content/computer-use-windows.en.md?raw"
+import computerUseWindowsZh from "./content/computer-use-windows.md?raw"
 import coreConceptEn from "./content/core-concept.en.md?raw"
 import coreConceptZh from "./content/core  concept.md?raw"
 import faqEn from "./content/faq.en.md?raw"
@@ -113,6 +117,23 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
       ],
     },
     {
+      title: "插件指南",
+      items: [
+        {
+          content: chromeZh,
+          description: "让 Agent 安全使用你现有的 Chrome 标签页、登录状态和可见网页界面。",
+          slug: "chrome",
+          title: "Chrome 插件",
+        },
+        {
+          content: computerUseWindowsZh,
+          description: "在 Windows 11 中观察并操作指定应用窗口，理解安全提示、审批边界和适用场景。",
+          slug: "computer-use-windows",
+          title: "Windows 电脑控制",
+        },
+      ],
+    },
+    {
       title: "扩展",
       items: [
         {
@@ -213,6 +234,23 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
           description: "Create local Skills and safely manage downloads, updates, rollbacks, and project selection.",
           slug: "skills",
           title: "Skills",
+        },
+      ],
+    },
+    {
+      title: "Plugin Guides",
+      items: [
+        {
+          content: chromeEn,
+          description: "Let the agent safely use your existing Chrome tabs, signed-in state, and visible web UI.",
+          slug: "chrome",
+          title: "Chrome",
+        },
+        {
+          content: computerUseWindowsEn,
+          description: "Observe and operate a selected Windows app window with clear safety and approval boundaries.",
+          slug: "computer-use-windows",
+          title: "Computer Use Windows",
         },
       ],
     },
