@@ -39,10 +39,15 @@ function requiredString(value, label) {
   return value.trim()
 }
 
-function endpointIdentity(homeDir) {
-  return createHash("sha256")
+function endpointIdentity(homeDir, ipcStateDirectory) {
+  const hash = createHash("sha256")
     .update(path.resolve(homeDir).toLowerCase())
-    .digest("hex")
+  if (ipcStateDirectory) {
+    hash
+      .update("\0")
+      .update(path.resolve(ipcStateDirectory).toLowerCase())
+  }
+  return hash.digest("hex")
     .slice(0, 16)
 }
 
@@ -106,8 +111,14 @@ export function resolveBrowserIpcRuntimeConfig(input = {}) {
     throw new Error(`Unsupported Browser IPC platform: ${platform}`)
   }
   const homeDir = path.resolve(input.homeDir ?? os.homedir())
-  const identity = endpointIdentity(homeDir)
-  const ipcDirectory = defaultIpcStateDirectory(homeDir, env)
+  const persistentIpcDirectory = defaultIpcStateDirectory(homeDir, env)
+  const identity = endpointIdentity(
+    homeDir,
+    platform === "win32" ? undefined : persistentIpcDirectory,
+  )
+  const ipcDirectory = platform === "win32"
+    ? persistentIpcDirectory
+    : path.join("/tmp", `anybox-browser-${identity}`)
   const transport = platform === "win32"
     ? "windows-named-pipe"
     : "unix-domain-socket"

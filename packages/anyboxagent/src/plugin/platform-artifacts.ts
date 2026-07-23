@@ -234,10 +234,15 @@ function nativeMessagingPaths(input: {
   }
 }
 
-function endpointIdentity(homeDir: string) {
-  return createHash("sha256")
+function endpointIdentity(homeDir: string, ipcStateDirectory?: string) {
+  const hash = createHash("sha256")
     .update(path.resolve(homeDir).toLowerCase())
-    .digest("hex")
+  if (ipcStateDirectory) {
+    hash
+      .update("\0")
+      .update(path.resolve(ipcStateDirectory).toLowerCase())
+  }
+  return hash.digest("hex")
     .slice(0, 16)
 }
 
@@ -249,8 +254,14 @@ function browserRuntimeConfig(input: {
   ownershipID: string
   now: number
 }) {
-  const identity = endpointIdentity(input.homeDir)
-  const ipcDirectory = path.join(input.stateDir, "browser-ipc")
+  const persistentIpcDirectory = path.join(input.stateDir, "browser-ipc")
+  const identity = endpointIdentity(
+    input.homeDir,
+    input.platform === "win32" ? undefined : persistentIpcDirectory,
+  )
+  const ipcDirectory = input.platform === "win32"
+    ? persistentIpcDirectory
+    : path.join("/tmp", `anybox-browser-${identity}`)
   const endpoint = (role: "runtime" | "native-host") =>
     input.platform === "win32"
       ? `\\\\.\\pipe\\anybox-browser-${role}-v${BROWSER_IPC_PROTOCOL_VERSION}-${identity}`

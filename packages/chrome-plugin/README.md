@@ -109,8 +109,11 @@ Browser Host 在没有连接后保留一段空闲时间再退出。扩展具有�
 已打开页面。停止状态持久化在扩展本地存储中，后续命令会以 `CANCELLED` 拒绝，直到用户在 Popup
 中恢复控制。协议版本、重连次数和最近清理结果收纳在折叠的诊断区。
 
-Windows 使用 Named Pipe，macOS/Linux 使用 Unix Domain Socket。Runtime Client 与 Native Host 使用
-不同端点、不同角色和不同 bootstrap proof；生产链路没有 HTTP 或 WebSocket 回退。
+Windows 使用 Named Pipe，macOS/Linux 使用 Unix Domain Socket。Unix socket 与短期 bootstrap
+位于 `/tmp/anybox-browser-<installation-hash>` 的私有目录中，避免 macOS 约 103 字节的 socket
+路径上限；hash 同时绑定用户目录和持久状态目录，以隔离同一用户下的不同 Anybox 安装。Runtime
+Client 与 Native Host 使用不同端点、不同角色和不同 bootstrap proof；生产链路没有 HTTP 或
+WebSocket 回退。
 
 ## Browser Client API
 
