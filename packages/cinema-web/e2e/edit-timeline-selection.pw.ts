@@ -14,7 +14,7 @@ test.describe("Cinema Timeline selection", () => {
     await page.goto(envelope.data!.cinemaURL!)
     await page.getByRole("tab", { name: "Edit" }).click()
     await page.getByRole("button", { name: "New Timeline" }).first().click()
-    await page.getByRole("tab", { name: "Generated" }).click()
+    await page.getByRole("tab", { name: "Outputs" }).click()
     await page.getByRole("button", { name: "视频" }).click()
 
     for (let index = 1; index <= 3; index += 1) {

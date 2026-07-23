@@ -124,8 +124,8 @@ describe("AssetLibraryPanel accessibility", () => {
     const systemFolder = {
       ...folder,
       id: "folder-inbox",
-      name: "收件箱",
-      relativePath: "收件箱",
+      name: "素材",
+      relativePath: "素材",
       system: true,
     }
     const fetchMock = vi.fn<(input: RequestInfo | URL) => Promise<Response>>(async (input) => {

@@ -59,6 +59,8 @@ const WINDOWS_DEVICE_NAME_PATTERN = /^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.
 const ROOT_FOLDER_NAME = "素材库"
 const MAX_OPERATION_HISTORY = 500
 const DELETE_UNDO_WINDOW_MS = 10_000
+const DEPRECATED_ROOT_FOLDER_IDS = new Set(["exports"])
+const RENAMED_DEFAULT_FOLDER_IDS = new Set(["inbox", "generated"])
 
 let nowForTest: (() => number) | undefined
 const nowMilliseconds = () => nowForTest?.() ?? Date.now()
@@ -211,24 +213,20 @@ function resolveLibraryPaths(scope: CinemaAssetScope): CinemaAssetLibraryPaths {
 type DefaultFolderDefinition = Pick<CinemaAssetFolder, "id" | "parentID" | "name" | "relativePath" | "system">
 
 function defaultFolderDefinitions(scope: CinemaAssetScope): DefaultFolderDefinition[] {
-  const common: DefaultFolderDefinition[] = [
-    { id: "inbox", parentID: CINEMA_ASSET_LIBRARY_ROOT_FOLDER_ID, name: "收件箱", relativePath: "收件箱", system: true },
-    { id: "characters", parentID: CINEMA_ASSET_LIBRARY_ROOT_FOLDER_ID, name: "角色", relativePath: "角色", system: false },
-    { id: "scenes", parentID: CINEMA_ASSET_LIBRARY_ROOT_FOLDER_ID, name: "场景", relativePath: "场景", system: false },
-    { id: "props", parentID: CINEMA_ASSET_LIBRARY_ROOT_FOLDER_ID, name: "道具", relativePath: "道具", system: false },
-    { id: "styles", parentID: CINEMA_ASSET_LIBRARY_ROOT_FOLDER_ID, name: "风格", relativePath: "风格", system: false },
-    { id: "sound-effects", parentID: CINEMA_ASSET_LIBRARY_ROOT_FOLDER_ID, name: "音效", relativePath: "音效", system: false },
-    { id: "other", parentID: CINEMA_ASSET_LIBRARY_ROOT_FOLDER_ID, name: "其他", relativePath: "其他", system: false },
-  ]
-  if (scope.type === "personal") return common
+  const inbox: DefaultFolderDefinition = {
+    id: "inbox",
+    parentID: CINEMA_ASSET_LIBRARY_ROOT_FOLDER_ID,
+    name: "素材",
+    relativePath: "素材",
+    system: true,
+  }
+  if (scope.type === "personal") return [inbox]
   return [
-    common[0]!,
-    { id: "generated", parentID: CINEMA_ASSET_LIBRARY_ROOT_FOLDER_ID, name: "生成素材", relativePath: "生成素材", system: true },
-    { id: "generated-images", parentID: "generated", name: "图片", relativePath: "生成素材/图片", system: true },
-    { id: "generated-videos", parentID: "generated", name: "视频", relativePath: "生成素材/视频", system: true },
-    { id: "generated-audio", parentID: "generated", name: "音频", relativePath: "生成素材/音频", system: true },
-    { id: "exports", parentID: CINEMA_ASSET_LIBRARY_ROOT_FOLDER_ID, name: "导出", relativePath: "导出", system: true },
-    ...common.slice(1),
+    inbox,
+    { id: "generated", parentID: CINEMA_ASSET_LIBRARY_ROOT_FOLDER_ID, name: "产出", relativePath: "产出", system: true },
+    { id: "generated-images", parentID: "generated", name: "图片", relativePath: "产出/图片", system: true },
+    { id: "generated-videos", parentID: "generated", name: "视频", relativePath: "产出/视频", system: true },
+    { id: "generated-audio", parentID: "generated", name: "音频", relativePath: "产出/音频", system: true },
   ]
 }
 
@@ -236,20 +234,39 @@ async function ensureDefaultFolders(
   paths: CinemaAssetLibraryPaths,
   catalog: CinemaAssetCatalog,
 ) {
-  const existingIDs = new Set(catalog.folders.map((folder) => folder.id))
-  const missing = defaultFolderDefinitions(paths.scope).filter((folder) => !existingIDs.has(folder.id))
-  if (missing.length === 0) return catalog
+  const defaults = defaultFolderDefinitions(paths.scope)
+  const existingByID = new Map(catalog.folders.map((folder) => [folder.id, folder]))
   const timestamp = nowISO()
-  for (const folder of missing) {
-    catalog.folders.push({
+  let changed = false
+  for (const folder of defaults) {
+    const existing = existingByID.get(folder.id)
+    if (existing) {
+      if (RENAMED_DEFAULT_FOLDER_IDS.has(folder.id) && existing.name !== folder.name) {
+        // Keep existing physical paths so upgrades never collide with user-created directories.
+        existing.name = folder.name
+        existing.updatedAt = timestamp
+        changed = true
+      }
+      continue
+    }
+    const parent = folder.parentID ? existingByID.get(folder.parentID) : undefined
+    const relativePath = parent && parent.id !== CINEMA_ASSET_LIBRARY_ROOT_FOLDER_ID
+      ? toRelativePath(parent.relativePath, folder.name)
+      : folder.relativePath
+    const created: CinemaAssetFolder = {
       ...folder,
-      depth: folderDepth(folder.relativePath),
+      relativePath,
+      depth: folderDepth(relativePath),
       status: "active",
       createdAt: timestamp,
       updatedAt: timestamp,
-    })
-    await mkdir(physicalPath(paths, folder.relativePath), { recursive: true })
+    }
+    catalog.folders.push(created)
+    existingByID.set(created.id, created)
+    await mkdir(physicalPath(paths, created.relativePath), { recursive: true })
+    changed = true
   }
+  if (!changed) return catalog
   catalog.updatedAt = timestamp
   await atomicWriteJson(paths.catalogPath, catalog, false)
   return catalog
@@ -717,7 +734,11 @@ export async function listCinemaAssetLibraryEntries(
   let { folders, assets } = view === "trash"
     ? topLevelTrashedEntries(catalog)
     : {
-        folders: catalog.folders.filter((item) => item.status === "active" && (!query ? item.parentID === folderID : true)),
+        folders: catalog.folders.filter((item) => (
+          item.status === "active"
+          && !(item.parentID === CINEMA_ASSET_LIBRARY_ROOT_FOLDER_ID && DEPRECATED_ROOT_FOLDER_IDS.has(item.id))
+          && (!query ? item.parentID === folderID : true)
+        )),
         assets: catalog.assets.filter((item) => item.status !== "trashed" && (!query ? item.folderID === folderID : true)),
       }
   if (query) {

@@ -152,9 +152,9 @@ async function resetFixtureAssets() {
     updatedAt: string
     assets: Array<Record<string, unknown>>
   }
-  const folder = path.join(projectRoot, "assets", "library", "生成素材", "图片")
-  const videoFolder = path.join(projectRoot, "assets", "library", "生成素材", "视频")
-  const audioFolder = path.join(projectRoot, "assets", "library", "生成素材", "音频")
+  const folder = path.join(projectRoot, "assets", "library", "产出", "图片")
+  const videoFolder = path.join(projectRoot, "assets", "library", "产出", "视频")
+  const audioFolder = path.join(projectRoot, "assets", "library", "产出", "音频")
   await Promise.all([mkdir(folder, { recursive: true }), mkdir(videoFolder, { recursive: true }), mkdir(audioFolder, { recursive: true })])
   const timestamp = "2026-07-10T00:00:00.000Z"
   for (let index = 1; index <= 3; index += 1) {
@@ -163,7 +163,7 @@ async function resetFixtureAssets() {
     catalog.assets.push({
       id: `fixture-image-${index}`,
       folderID: "generated-images",
-      relativePath: `生成素材/图片/${filename}`,
+      relativePath: `产出/图片/${filename}`,
       displayName: `Fixture image ${index}`,
       kind: "image",
       source: "generation",
@@ -182,7 +182,7 @@ async function resetFixtureAssets() {
     catalog.assets.push({
       id: `fixture-video-${index}`,
       folderID: "generated-videos",
-      relativePath: `生成素材/视频/${videoFilename}`,
+      relativePath: `产出/视频/${videoFilename}`,
       displayName: `Fixture video ${index}`,
       kind: "video",
       source: "generation",
@@ -203,7 +203,7 @@ async function resetFixtureAssets() {
   catalog.assets.push({
     id: "fixture-audio-1",
     folderID: "generated-audio",
-    relativePath: `生成素材/音频/${audioFilename}`,
+    relativePath: `产出/音频/${audioFilename}`,
     displayName: "Fixture audio 1",
     kind: "audio",
     source: "generation",

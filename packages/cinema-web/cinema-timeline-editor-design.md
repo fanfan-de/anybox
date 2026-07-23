@@ -19,7 +19,7 @@
 - 支持播放、暂停、seek、裁剪头尾、分割、删除、拖动排序、吸附、缩放时间线。
 - 支持保存剪辑工程。
 - 支持 Agent 后端通过 FFmpeg 导出 MP4。
-- 导出结果写入项目 `exports/`，并在 Cinema 项目中作为资产可预览。
+- 渲染结果写入项目素材库的 `产出/视频/`，并在 Cinema 项目中作为资产可预览。
 
 第一版不做完整专业剪辑软件能力：
 
@@ -103,7 +103,7 @@ cinema-shell
 
 - 全局顶部：Create / Edit / Deliver 工作台切换。
 - Edit 内部顶部：timeline 名称、保存状态，以及进入 Deliver 的交付动作。
-- 左侧：项目素材、生成结果、导出结果、timeline 列表。
+- 左侧：素材、产出和 timeline 列表。
 - 中间上方：预览舞台。
 - 中间下方：时间轴轨道。
 - 右侧：属性检查器。
@@ -172,20 +172,18 @@ packages/shared/src/cinema-timeline.ts
     render_xxx.json
 
 assets/
-  imported/
-    video_xxx.mp4
-    image_xxx.png
-
-generated/
-  videos/
+  library/
+    素材/
+      video_xxx.mp4
+      image_xxx.png
+    产出/
+      视频/
+        timeline_xxx_2026-07-06_180000.mp4
 
 renders/
   previews/
     timeline_xxx_thumbnail.jpg
     timeline_xxx_proxy.mp4
-
-exports/
-  timeline_xxx_2026-07-06_180000.mp4
 ```
 
 原则：
@@ -193,7 +191,7 @@ exports/
 - `canvas.json` 只保存画布状态，不保存完整剪辑时间线。
 - `timeline_xxx.json` 保存剪辑工程。
 - `render-jobs` 保存导出任务状态。
-- `exports/` 保存最终导出结果。
+- `assets/library/产出/视频/` 保存成功登记的渲染结果。
 - `renders/previews/` 保存缩略图、代理文件、波形缓存。
 
 ## 核心数据结构
@@ -517,7 +515,7 @@ export type CinemaRenderJob = {
 2. 校验所有 assetPath 在项目目录内。
 3. 使用 ffprobe 获取源素材 metadata。
 4. 生成 FFmpeg input list 和 filter graph。
-5. 渲染到 `exports/` 临时文件。
+5. 渲染到 job sandbox 的 `output.tmp.mp4`。
 6. 成功后 rename 为最终 MP4。
 7. 写入 render job JSON。
 8. 将输出登记为 `source: "render"` 的项目资产，并把稳定 `CinemaAssetRef` 写入 job。
@@ -817,7 +815,7 @@ type CinemaTimelineCanvasNodeData = {
 - FFmpeg 渲染单轨/基础多轨。
 - 导出进度展示。
 - 导出资产登记到 Asset Library，并把 `CinemaAssetRef` 写入独立 render job。
-- 在素材库中展示导出结果。
+- 在素材库的“产出/视频”中展示渲染结果。
 
 ### Phase 5: 体验完善
 

@@ -56,7 +56,7 @@ Deliver 开发以当前 `@anybox/shared/cinema-timeline`、已落地 Edit 实现
 - Agent 重启后能恢复 job 历史，并明确处理中断状态。
 - 渲染过程中展示真实阶段和真实 FFmpeg 进度。
 - 成功后原子地产生 MP4，不暴露半成品。
-- 输出登记到项目 Asset Library 的“导出”系统目录。
+- 输出登记到项目 Asset Library 的“产出/视频”，不单独创建“导出”目录。
 - 输出可用现有 asset preview 播放，并可再次用于 Create 或 Edit。
 - Timeline 后续继续编辑不会改变已经创建的 job 输入。
 - 失败、取消或中断不会留下伪成功资产。
@@ -373,8 +373,9 @@ Progress event 必须节流，不能把每个 FFmpeg progress line 写入 JSONL�
   render-queue.json
 
 assets/library/
-  导出/
-    <outputName>.mp4
+  产出/
+    视频/
+      <outputName>.mp4
 ```
 
 规则：
@@ -385,7 +386,7 @@ assets/library/
 - 所有输入验证 realpath、symlink 和允许范围。
 - FFmpeg 只读取 job sandbox，不直接依赖渲染期间可能移动的素材路径。
 - 临时输出只存在 job sandbox；成功后才登记 Asset Library。
-- Asset Library 增加 `exports` 系统目录，登记时使用 `source: "render"`。
+- Asset Library 复用 `generated-videos` 系统目录，登记时使用 `source: "render"`。
 - 注册成功后 job 保存稳定 `CinemaAssetRef`，不保存最终物理路径作为身份。
 - canceled / failed job 不创建资产记录。
 - 成功 job 的输入 sandbox 只按调用方显式提供的保留期清理；`dryRun` 先返回候选与预计回收量，确认执行后也只删除可重建输入和临时文件，不删除 job、事件、Timeline 快照或输出资产。当前不提供默认保留期和自动调度。
@@ -704,7 +705,7 @@ packages/cinema-web/src/features/deliver/
 - 持久 render queue 和并发上限。
 - create/cancel/retry/list/get/events API。
 - operationID 幂等、revision 409 和 restart recovery。
-- Asset Library `exports` 系统目录。
+- Asset Library `generated-videos` 系统目录。
 - 成功输出以 `source: "render"` 注册并写回 job。
 - 评估并决定 O1 video / text 的 V1 支持或明确阻塞。
 

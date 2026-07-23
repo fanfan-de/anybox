@@ -58,7 +58,7 @@ Edit 首次公开启用必须满足完整粗剪闭环。只有静态界面、空
 
 | 竞品模式 | Cinema Edit 决策 | 原因 |
 | --- | --- | --- |
-| 左侧活动栏混合素材、生成历史、调色、文字 | 左侧只保留 Timelines、Project Assets、Generated、Imported | 生成与创作工具属于 Create，避免职责混杂 |
+| 左侧活动栏混合素材、生成历史、调色、文字 | 左侧只保留 Timelines、Project、Outputs、Assets | 生成与创作工具属于 Create，避免职责混杂 |
 | Inspector 永久占据大块宽度 | 无选中项时折叠；选中 Clip 后展开 300–340px | 提高预览和 Timeline 的有效面积 |
 | Timeline 预铺多条空轨 | 默认只创建 V1、A1；有叠加素材时再创建 O1 | 减少空白和轨道控制噪声 |
 | 大量 icon-only 工具 | MVP 只提供 Select、Split、Snap、Undo、Redo、Zoom | 保持核心路径可学习 |
@@ -105,7 +105,7 @@ Edit 首次公开启用必须满足完整粗剪闭环。只有静态界面、空
 
 ### 5.2 创建粗剪
 
-1. 用户在 Generated 或 Project Assets 中筛选视频。
+1. 用户在 Outputs 或 Project 中筛选视频。
 2. 拖动视频到 V1，或双击添加到播放头。
 3. 后续素材默认吸附到前一个 Clip 的结尾。
 4. 用户移动、裁剪、分割和删除 Clip。
@@ -166,9 +166,9 @@ CinemaWorkbenchHeader: Create | Edit | Deliver
 一级分区：
 
 - `Timelines`
-- `Project Assets`
-- `Generated`
-- `Imported`
+- `Project`
+- `Outputs`
+- `Assets`
 
 共同能力：
 
@@ -560,7 +560,7 @@ src/features/timeline/
 - EditTopbar、MediaBin、Preview、Timeline、Inspector shell。
 - 亮色/暗色和 splitter。
 - Timeline 列表、新建和空状态。
-- Project Assets / Generated / Imported 读取与筛选。
+- Project / Outputs / Assets 读取与筛选。
 - Inspector 默认折叠。
 - 760px 最小宽度保护。
 

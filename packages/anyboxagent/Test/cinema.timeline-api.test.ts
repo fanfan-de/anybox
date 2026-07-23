@@ -55,7 +55,7 @@ async function seedReadyVideoAsset(root: string, projectID: string) {
   catalog.assets.push({
     id: "asset-video-1",
     folderID: "generated-videos",
-    relativePath: "生成素材/视频/fixture.mp4",
+    relativePath: "产出/视频/fixture.mp4",
     displayName: "Fixture video",
     kind: "video",
     source: "generation",
@@ -71,7 +71,7 @@ async function seedReadyVideoAsset(root: string, projectID: string) {
   catalog.assets.push({
     id: "asset-video-trashed",
     folderID: "generated-videos",
-    relativePath: "生成素材/视频/trashed.mp4",
+    relativePath: "产出/视频/trashed.mp4",
     displayName: "Trashed video",
     kind: "video",
     source: "generation",

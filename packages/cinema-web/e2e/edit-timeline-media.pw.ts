@@ -16,7 +16,7 @@ test.describe("Cinema Timeline media readability", () => {
     await page.goto(envelope.data.cinemaURL)
     await page.getByRole("tab", { name: "Edit" }).click()
     await page.getByRole("button", { name: "New Timeline" }).first().click()
-    await page.getByRole("tab", { name: "Generated" }).click()
+    await page.getByRole("tab", { name: "Outputs" }).click()
     await page.getByRole("button", { name: "视频" }).click()
     for (let index = 1; index <= 2; index += 1) {
       await page.locator(".cinema-timeline-asset-row").filter({ hasText: `Fixture video ${index}` }).dblclick()

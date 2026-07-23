@@ -11,7 +11,7 @@ async function openTimelineWithClips(page: Page, request: APIRequestContext, cou
   await page.goto(envelope.data!.cinemaURL!)
   await page.getByRole("tab", { name: "Edit" }).click()
   await page.getByRole("button", { name: "New Timeline" }).first().click()
-  await page.getByRole("tab", { name: "Generated" }).click()
+  await page.getByRole("tab", { name: "Outputs" }).click()
   await page.getByRole("button", { name: "视频" }).click()
   for (let index = 1; index <= count; index += 1) {
     await page.locator(".cinema-timeline-asset-row").filter({ hasText: `Fixture video ${index}` }).dblclick()
@@ -56,7 +56,7 @@ test.describe("Cinema Timeline context menu and Ripple Delete", () => {
     expect(menuBox!.x + menuBox!.width).toBeLessThanOrEqual(1432)
     expect(menuBox!.y + menuBox!.height).toBeLessThanOrEqual(892)
     await clampedMenu.getByRole("menuitem", { name: "Show in Assets" }).click()
-    await expect(page.getByRole("tab", { name: "Generated" })).toHaveAttribute("aria-selected", "true")
+    await expect(page.getByRole("tab", { name: "Outputs" })).toHaveAttribute("aria-selected", "true")
     await expect(page.getByRole("textbox", { name: "Search assets" })).toHaveValue("Fixture video 2")
     const revealed = page.locator('.cinema-timeline-asset-row[data-asset-id="fixture-video-2"]')
     await expect(revealed).toHaveAttribute("aria-current", "true")

@@ -14,7 +14,7 @@ test.describe("Cinema Timeline pointer interaction", () => {
     await page.goto(envelope.data!.cinemaURL!)
     await page.getByRole("tab", { name: "Edit" }).click()
     await page.getByRole("button", { name: "New Timeline" }).first().click()
-    await page.getByRole("tab", { name: "Generated" }).click()
+    await page.getByRole("tab", { name: "Outputs" }).click()
     await page.getByRole("button", { name: "视频" }).click()
     await page.locator(".cinema-timeline-asset-row").filter({ hasText: "Fixture video 1" }).dblclick()
     await page.locator(".cinema-timeline-asset-row").filter({ hasText: "Fixture video 2" }).dblclick()

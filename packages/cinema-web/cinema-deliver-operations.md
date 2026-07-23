@@ -35,7 +35,7 @@ Deliver must never silently omit unsupported visible content. A preflight error 
 
 No Timeline document migration is required for Deliver V1. Existing `schemaVersion: 1` Timelines remain readable, and Deliver does not add render state to a Timeline.
 
-On first use, the Agent creates new render storage underneath `.anybox-cinema/`. Existing Canvas, Timeline, and Asset Library records are not rewritten merely by opening Deliver. A successful render adds a normal project Asset in the exports system folder; failed, canceled, or interrupted jobs do not add an output Asset.
+On first use, the Agent creates new render storage underneath `.anybox-cinema/`. Existing Canvas, Timeline, and Asset Library records are not rewritten merely by opening Deliver. A successful render adds a normal project Asset under `产出/视频`; failed, canceled, or interrupted jobs do not add an output Asset. The Asset Library does not expose a separate exports system folder.
 
 Migration rules:
 
@@ -43,7 +43,7 @@ Migration rules:
 2. Do not rename or manually merge `job_<jobID>` directories. Job IDs, operation IDs, and snapshots are audit identities.
 3. Unknown render schema versions must fail closed rather than be guessed.
 4. Rolling the application back means disabling Deliver and opening the project normally. Existing render directories and registered output Assets remain data; older builds may ignore the render-job directories.
-5. Never delete an exports Asset solely because its originating job is old. Asset lifecycle and job-sandbox cleanup are separate operations.
+5. Never delete a registered render Asset solely because its originating job is old. Asset lifecycle and job-sandbox cleanup are separate operations.
 
 ## 4. Retention and cleanup
 

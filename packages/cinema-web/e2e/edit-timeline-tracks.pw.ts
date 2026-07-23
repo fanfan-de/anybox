@@ -94,7 +94,7 @@ test.describe("Cinema Timeline tracks", () => {
     await page.keyboard.press("Escape")
     await videoTrack.getByRole("button", { name: "V1 lock" }).click()
 
-    await page.getByRole("tab", { name: "Generated" }).click()
+    await page.getByRole("tab", { name: "Outputs" }).click()
     await page.getByRole("button", { name: "视频" }).click()
     await page.locator(".cinema-timeline-asset-row").filter({ hasText: "Fixture video 1" }).dblclick()
     await expect(page.locator(".cinema-timeline-clip")).toHaveCount(1)

@@ -159,15 +159,27 @@ describe("cinema asset library api", () => {
   test("initializes defaults and applies revisioned idempotent folder mutations", async () => {
     const { app, root, projectID } = await createCinemaProject()
     const stateResponse = await app.request(projectLibraryURL(projectID, "/state"))
-    const state = await json<{ revision: number; status: string; counts: { folders: number } }>(stateResponse)
+    const state = await json<{
+      revision: number
+      status: string
+      counts: { folders: number }
+      defaultFolderIDs: Record<string, string>
+    }>(stateResponse)
     expect(stateResponse.status).toBe(200)
     expect(state.data).toMatchObject({ revision: 0, status: "ready" })
-    expect(state.data!.counts.folders).toBe(12)
+    expect(state.data!.counts.folders).toBe(5)
+    expect(Object.keys(state.data!.defaultFolderIDs).sort()).toEqual([
+      "generated",
+      "generated-audio",
+      "generated-images",
+      "generated-videos",
+      "inbox",
+    ])
 
     const entriesResponse = await app.request(projectLibraryURL(projectID, "/entries?folderID=root"))
     const entries = await json<{ entries: Array<{ entryType: string; folder?: { name: string } }> }>(entriesResponse)
     expect(entries.data!.entries.filter((entry) => entry.entryType === "folder").map((entry) => entry.folder?.name))
-      .toContain("生成素材")
+      .toEqual(["产出", "素材"])
 
     const request = {
       operationID: "create-reference-folder",
@@ -227,10 +239,10 @@ describe("cinema asset library api", () => {
     expect(registered.asset).toMatchObject({
       source: "generation",
       status: "ready",
-      relativePath: "生成素材/图片/generated-frame.png",
+      relativePath: "产出/图片/generated-frame.png",
     })
     expect(new Uint8Array(await readFile(
-      join(root, "assets", "library", "生成素材", "图片", "generated-frame.png"),
+      join(root, "assets", "library", "产出", "图片", "generated-frame.png"),
     ))).toEqual(pngBytes())
     const persistedCatalog = JSON.parse(await readFile(join(root, ".anybox-cinema", "asset-library.json"), "utf8"))
     expect(CinemaAssetCatalogSchema.parse(persistedCatalog).completedOperationIDs).toContain("create-reference-folder")
@@ -334,7 +346,7 @@ describe("cinema asset library api", () => {
       await app.request(projectLibraryURL(projectID, `/assets/${asset.id}`)),
     )
     expect(metadata.data!.asset).toMatchObject({ id: asset.id, displayName: "Fixture image 1", status: "ready" })
-    expect(await readFile(join(root, "assets", "library", "收件箱", "主画面.png"))).toBeTruthy()
+    expect(await readFile(join(root, "assets", "library", "素材", "主画面.png"))).toBeTruthy()
 
     const command = {
       id: "place-library-frame",
@@ -666,7 +678,7 @@ describe("cinema asset library api", () => {
     const restored = await json<{ asset: { status: string; relativePath: string; trash?: unknown } }>(
       await app.request(projectLibraryURL(projectID, `/assets/${uploaded.asset.id}`)),
     )
-    expect(restored.data?.asset).toMatchObject({ status: "ready", relativePath: "收件箱/pending-delete.png" })
+    expect(restored.data?.asset).toMatchObject({ status: "ready", relativePath: "素材/pending-delete.png" })
     expect(restored.data?.asset).not.toHaveProperty("trash")
   }, 30_000)
 
@@ -852,7 +864,7 @@ describe("cinema asset library api", () => {
     }
     delete catalog.assets.find((asset) => asset.id === uploaded.asset.id)!.trash!.expiresAt
     await writeFile(catalogPath, JSON.stringify(catalog, null, 2), "utf8")
-    await writeFile(join(root, "assets", "library", "收件箱", "legacy.png"), "collision", "utf8")
+    await writeFile(join(root, "assets", "library", "素材", "legacy.png"), "collision", "utf8")
 
     resetCinemaAssetLibraryInitializationForTest({ type: "project", projectID })
     const state = await json<{ revision: number; counts: { trashed: number } }>(
@@ -862,9 +874,9 @@ describe("cinema asset library api", () => {
     const restoredMetadata = await json<{ asset: { status: string; relativePath: string; trash?: unknown } }>(
       await app.request(projectLibraryURL(projectID, `/assets/${uploaded.asset.id}`)),
     )
-    expect(restoredMetadata.data?.asset).toMatchObject({ status: "ready", relativePath: "收件箱/legacy (2).png" })
+    expect(restoredMetadata.data?.asset).toMatchObject({ status: "ready", relativePath: "素材/legacy (2).png" })
     expect(restoredMetadata.data?.asset).not.toHaveProperty("trash")
-    expect(await readFile(join(root, "assets", "library", "收件箱", "legacy.png"), "utf8")).toBe("collision")
+    expect(await readFile(join(root, "assets", "library", "素材", "legacy.png"), "utf8")).toBe("collision")
   }, 30_000)
 
   test("restores failed and missing assets to their pre-trash status", async () => {
@@ -1083,9 +1095,17 @@ describe("cinema asset library api", () => {
     cleanup.push(personalRoot)
     restores.push(setCinemaAssetLibraryPersonalRootForTest(personalRoot))
     const response = await app.request("http://localhost/api/cinema/personal-library/state")
-    const state = await json<{ scope: { type: string }; counts: { folders: number } }>(response)
+    const state = await json<{
+      scope: { type: string }
+      counts: { folders: number }
+      defaultFolderIDs: Record<string, string>
+    }>(response)
     expect(response.status).toBe(200)
-    expect(state.data).toMatchObject({ scope: { type: "personal" }, counts: { folders: 7 } })
+    expect(state.data).toMatchObject({
+      scope: { type: "personal" },
+      counts: { folders: 1 },
+      defaultFolderIDs: { inbox: "inbox" },
+    })
     expect(await readFile(join(personalRoot, "catalog.json"), "utf8")).toContain('"type": "personal"')
   }, 20_000)
 

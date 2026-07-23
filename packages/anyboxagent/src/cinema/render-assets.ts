@@ -53,7 +53,7 @@ export async function registerCinemaRenderOutput(job: CinemaRenderJob, outputPat
         mimeType: "video/mp4",
         displayName: job.settings.outputName,
         source: "render",
-        destinationFolderID: "exports",
+        destinationFolderID: "generated-videos",
       })
       return cinemaRenderAssetRef(job.projectID, registered.asset)
     } catch (error) {

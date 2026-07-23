@@ -269,9 +269,9 @@ test.describe("Cinema Deliver workbench", () => {
     expect((await request.post(`${agentBaseURL}/e2e/seed-deliver-timeline`)).ok()).toBe(true)
     const stateURL = `${agentBaseURL}/api/cinema/projects/${encodeURIComponent(projectID!)}/library/state`
     const initialState = (await (await request.get(stateURL)).json() as {
-      data?: { counts?: { assets?: number }; defaultFolderIDs?: { exports?: string } }
+      data?: { counts?: { assets?: number }; defaultFolderIDs?: { "generated-videos"?: string } }
     }).data
-    expect(initialState?.defaultFolderIDs?.exports).toBeTruthy()
+    expect(initialState?.defaultFolderIDs?.["generated-videos"]).toBeTruthy()
     expect((await request.post(`${agentBaseURL}/e2e/faults/output-registration-failure`)).ok()).toBe(true)
 
     try {
@@ -297,13 +297,13 @@ test.describe("Cinema Deliver workbench", () => {
         data?: { counts?: { assets?: number } }
       }).data
       expect(finalState?.counts?.assets).toBe(initialState?.counts?.assets)
-      const exportEntriesResponse = await request.get(
-        `${agentBaseURL}/api/cinema/projects/${encodeURIComponent(projectID!)}/library/entries?folderID=${encodeURIComponent(initialState!.defaultFolderIDs!.exports!)}`,
+      const generatedVideoEntriesResponse = await request.get(
+        `${agentBaseURL}/api/cinema/projects/${encodeURIComponent(projectID!)}/library/entries?folderID=${encodeURIComponent(initialState!.defaultFolderIDs!["generated-videos"]!)}`,
       )
-      const exportEntries = (await exportEntriesResponse.json() as {
+      const generatedVideoEntries = (await generatedVideoEntriesResponse.json() as {
         data?: { entries?: Array<{ entryType?: string; asset?: { source?: string } }> }
       }).data?.entries ?? []
-      expect(exportEntries.filter((entry) => entry.entryType === "asset" && entry.asset?.source === "render")).toEqual([])
+      expect(generatedVideoEntries.filter((entry) => entry.entryType === "asset" && entry.asset?.source === "render")).toEqual([])
     } finally {
       expect((await request.post(`${agentBaseURL}/e2e/faults/restore`)).ok()).toBe(true)
     }

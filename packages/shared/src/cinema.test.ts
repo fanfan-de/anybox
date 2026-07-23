@@ -66,8 +66,8 @@ describe("cinema schemas", () => {
   const inboxAssetFolder = {
     id: "folder-inbox",
     parentID: "folder-root",
-    name: "收件箱",
-    relativePath: "收件箱",
+    name: "素材",
+    relativePath: "素材",
     depth: 1,
     system: true,
     status: "active" as const,
@@ -78,7 +78,7 @@ describe("cinema schemas", () => {
   const imageAsset = {
     id: "asset-image-1",
     folderID: "folder-inbox",
-    relativePath: "收件箱/reference.png",
+    relativePath: "素材/reference.png",
     displayName: "reference.png",
     kind: "image" as const,
     source: "upload" as const,

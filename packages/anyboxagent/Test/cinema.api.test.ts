@@ -1954,7 +1954,7 @@ describe("cinema api", () => {
       expect(refreshBody.data?.outputAssets[0]).toMatchObject({
         id: expect.stringMatching(/^asset_/),
         kind: "image",
-        path: expect.stringMatching(/^assets\/library\/生成素材\/图片\/out(?: \(\d+\))?\.png$/),
+        path: expect.stringMatching(/^assets\/library\/产出\/图片\/out(?: \(\d+\))?\.png$/),
         assetRef: {
           scope: { type: "project", projectID: project.id },
           assetID: expect.stringMatching(/^asset_/),
@@ -3676,7 +3676,7 @@ describe("cinema api", () => {
           snapshot: { kind: "video", mimeType: "video/mp4" },
         },
       })
-      expect(refreshBody.data?.outputAssets[0]?.path).toStartWith("assets/library/生成素材/视频/")
+      expect(refreshBody.data?.outputAssets[0]?.path).toStartWith("assets/library/产出/视频/")
       expect(Array.from(await readFile(join(root, refreshBody.data!.outputAssets[0]!.path)))).toEqual(Array.from(mp4Bytes))
 
       const persisted = JSON.parse(await readFile(join(root, ".anybox-cinema", "canvas.json"), "utf8")) as CinemaCanvasDocument

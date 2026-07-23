@@ -50,7 +50,7 @@ test.describe("Cinema asset library", () => {
     await createFolderDialog.getByRole("button", { name: "取消" }).click()
 
     if (!externalCinemaURL) {
-      await page.getByRole("button", { name: /生成素材/ }).click()
+      await page.getByRole("button", { name: /产出/ }).click()
       await page.getByRole("button", { name: /图片/ }).click()
       const asset = page.getByRole("gridcell", { name: /Fixture image 1/ })
       await expect(asset).toBeVisible()

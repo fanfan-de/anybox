@@ -11,7 +11,7 @@ async function openEditWithAssets(page: Page, request: APIRequestContext) {
   await page.goto(envelope.data.cinemaURL)
   await page.getByRole("tab", { name: "Edit" }).click()
   await page.getByRole("button", { name: "New Timeline" }).first().click()
-  await page.getByRole("tab", { name: "Generated" }).click()
+  await page.getByRole("tab", { name: "Outputs" }).click()
   await page.getByRole("button", { name: "图片" }).click()
   return envelope.data
 }
@@ -107,7 +107,7 @@ test.describe("Cinema Edit reliability", () => {
     const inspector = page.getByRole("complementary", { name: "Timeline inspector" })
     await expect(inspector.getByText("Asset: trashed")).toBeVisible()
     await inspector.getByRole("button", { name: "Replace asset" }).click()
-    await page.getByRole("button", { name: "生成素材" }).click()
+    await page.getByRole("button", { name: "产出" }).click()
     await page.getByRole("button", { name: "图片" }).click()
     await page.locator(".cinema-timeline-asset-row").filter({ hasText: "Fixture image 2" }).dblclick()
     await expect(page.getByText("Saved", { exact: true })).toBeVisible()

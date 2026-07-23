@@ -1,15 +1,18 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import "./sqlite.cleanup.ts"
-import { access, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises"
+import { access, mkdir, mkdtemp, readFile, realpath, rename, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 
 import type { CinemaRenderJob } from "@anybox/shared/cinema-render"
 import {
   getCinemaAsset,
+  getCinemaAssetLibraryState,
   initializeCinemaAssetLibrary,
+  listCinemaAssetLibraryEntries,
   setCinemaAssetLibraryCatalogWriteFailureForTest,
 } from "../src/cinema/asset-library"
+import type { CinemaAssetCatalog } from "../src/cinema/asset-library-types"
 import {
   findRegisteredCinemaRenderOutput,
   registerCinemaRenderOutput,
@@ -92,7 +95,7 @@ afterEach(async () => {
 })
 
 describe("Cinema render output assets", () => {
-  test("registers into the exports system folder and recovers the same operation after the source moved", async () => {
+  test("registers into output videos and recovers the same operation after the source moved", async () => {
     const { root, cinemaRoot, projectID } = await createProject()
     const currentJob = job(projectID)
     const outputPath = path.join(cinemaRoot, "render-jobs", "job_render-assets-job", "output.tmp.mp4")
@@ -105,11 +108,11 @@ describe("Cinema render output assets", () => {
     const stored = (await getCinemaAsset({ type: "project", projectID }, first.assetID)).asset
     expect(stored).toMatchObject({
       source: "render",
-      folderID: "exports",
-      relativePath: "导出/Final export.mp4",
+      folderID: "generated-videos",
+      relativePath: "产出/视频/Final export.mp4",
       status: "ready",
     })
-    expect(access(path.join(root, "assets", "library", "导出", "Final export.mp4"))).resolves.toBeNull()
+    expect(access(path.join(root, "assets", "library", "产出", "视频", "Final export.mp4"))).resolves.toBeNull()
     expect(access(outputPath)).rejects.toThrow()
 
     const replay = await registerCinemaRenderOutput(currentJob, outputPath)
@@ -127,25 +130,70 @@ describe("Cinema render output assets", () => {
       .toEqual(["render-succeeded"])
   })
 
-  test("adds the exports folder to an existing catalog without changing its mutation revision", async () => {
+  test("renames legacy system labels and hides a legacy exports folder without changing its mutation revision", async () => {
     const { root, cinemaRoot, projectID } = await createProject()
     const catalogPath = path.join(cinemaRoot, "asset-library.json")
-    const catalog = JSON.parse(await readFile(catalogPath, "utf8")) as {
-      revision: number
-      folders: Array<{ id: string }>
-    }
+    const catalog = JSON.parse(await readFile(catalogPath, "utf8")) as CinemaAssetCatalog
     const revision = catalog.revision
-    catalog.folders = catalog.folders.filter((folder) => folder.id !== "exports")
+    const inbox = catalog.folders.find((folder) => folder.id === "inbox")!
+    inbox.name = "收件箱"
+    inbox.relativePath = "收件箱"
+    const generated = catalog.folders.find((folder) => folder.id === "generated")!
+    generated.name = "生成素材"
+    for (const folder of catalog.folders.filter((folder) => (
+      folder.id === "generated" || folder.parentID === "generated"
+    ))) {
+      folder.relativePath = folder.relativePath.replace(/^产出(?=\/|$)/, "生成素材")
+    }
+    catalog.folders = catalog.folders.filter((folder) => folder.id !== "generated-audio")
+    catalog.folders.push({
+      id: "exports",
+      parentID: "root",
+      name: "导出",
+      relativePath: "导出",
+      depth: 1,
+      system: true,
+      status: "active",
+      createdAt: now,
+      updatedAt: now,
+    })
+    await rename(
+      path.join(root, "assets", "library", "素材"),
+      path.join(root, "assets", "library", "收件箱"),
+    )
+    await rename(
+      path.join(root, "assets", "library", "产出"),
+      path.join(root, "assets", "library", "生成素材"),
+    )
+    await rm(path.join(root, "assets", "library", "生成素材", "音频"), { recursive: true, force: true })
+    await mkdir(path.join(root, "assets", "library", "导出"), { recursive: true })
     await writeFile(catalogPath, `${JSON.stringify(catalog, null, 2)}\n`, "utf8")
-    await rm(path.join(root, "assets", "library", "导出"), { recursive: true, force: true })
 
     const initialized = await initializeCinemaAssetLibrary({ type: "project", projectID })
     expect(initialized.catalog.revision).toBe(revision)
-    expect(initialized.catalog.folders.find((folder) => folder.id === "exports")).toMatchObject({
-      relativePath: "导出",
-      system: true,
+    expect(initialized.catalog.folders.find((folder) => folder.id === "inbox")).toMatchObject({
+      name: "素材",
+      relativePath: "收件箱",
     })
-    expect(access(path.join(root, "assets", "library", "导出"))).resolves.toBeNull()
+    expect(initialized.catalog.folders.find((folder) => folder.id === "generated")).toMatchObject({
+      name: "产出",
+      relativePath: "生成素材",
+    })
+    expect(initialized.catalog.folders.find((folder) => folder.id === "generated-audio")).toMatchObject({
+      name: "音频",
+      relativePath: "生成素材/音频",
+    })
+    expect(access(path.join(root, "assets", "library", "生成素材", "音频"))).resolves.toBeNull()
+    expect((await getCinemaAssetLibraryState({ type: "project", projectID })).defaultFolderIDs)
+      .not.toHaveProperty("exports")
+    const rootEntries = await listCinemaAssetLibraryEntries(
+      { type: "project", projectID },
+      { folderID: "root" },
+    )
+    expect(rootEntries.entries
+      .filter((entry) => entry.entryType === "folder")
+      .map((entry) => entry.folder.name))
+      .toEqual(["产出", "素材"])
   })
 
   test("rolls the output file back and exposes no registered render asset when catalog commit fails", async () => {

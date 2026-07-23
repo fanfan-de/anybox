@@ -15,7 +15,7 @@ test.describe("Cinema Edit Post-MVP acceptance", () => {
     await page.goto(envelope.data!.cinemaURL!)
     await page.getByRole("tab", { name: "Edit" }).click()
     await page.getByRole("button", { name: "New Timeline" }).first().click()
-    await page.getByRole("tab", { name: "Generated" }).click()
+    await page.getByRole("tab", { name: "Outputs" }).click()
     await page.getByRole("button", { name: "视频" }).click()
 
     const sequence = [1, 2, 3, 1, 2, 3, 1, 2, 3, 1]

@@ -482,7 +482,7 @@ utils/cinemaCanvas.ts
 
 素材库不再把文件路径当作 Canvas 身份。项目库和个人库分别维护 JSON Catalog，Catalog 保存稳定 `assetID`、媒体 metadata、`contentRevision` 和当前物理相对路径；Canvas 只保存 canonical `assetRef`。因此文件改名、移动以及删除撤销时不需要批量改写节点；仍被 Canvas、Timeline 或任务引用的素材会在删除前被服务端阻止。
 
-项目素材位于 `assets/library/`，Catalog、备份和 operation journal 位于 `.anybox-cinema/`；个人素材位于 Agent data 下的 `cinema-library/`。所有 mutation 带 `operationID + baseRevision`，Catalog 写入使用作用域锁、临时文件、fsync、rename 和最近两份备份。删除先移动到不可见的 `.trash/<operationID>` 事务隔离目录并记录 `expiresAt`，前端只提供 10 秒撤销；到期清理或下次初始化懒清理前会再次核对引用，异常新增引用时整批恢复。没有 `expiresAt` 的旧回收站记录在升级时恢复到原目录或收件箱。Canvas 的 `create-node-from-asset` 也在项目写锁中校验 revision 与 Ready 状态，由服务端决定节点 kind，前端不能伪造物理路径。
+项目素材位于 `assets/library/`，Catalog、备份和 operation journal 位于 `.anybox-cinema/`；个人素材位于 Agent data 下的 `cinema-library/`。所有 mutation 带 `operationID + baseRevision`，Catalog 写入使用作用域锁、临时文件、fsync、rename 和最近两份备份。删除先移动到不可见的 `.trash/<operationID>` 事务隔离目录并记录 `expiresAt`，前端只提供 10 秒撤销；到期清理或下次初始化懒清理前会再次核对引用，异常新增引用时整批恢复。没有 `expiresAt` 的旧回收站记录在升级时恢复到原目录或“素材”系统目录。Canvas 的 `create-node-from-asset` 也在项目写锁中校验 revision 与 Ready 状态，由服务端决定节点 kind，前端不能伪造物理路径。
 
 上传按单文件 multipart 流入 `.staging`，同时计算大小和 SHA-256；媒体内容由签名与 ffprobe 校验。内容和 Range 响应使用带 backpressure 的文件流，避免大视频进入 JavaScript 内存。FFmpeg/ffprobe 作为固定 SHA 的 Windows x64 LGPL 运行时随桌面端打包，子进程只接收参数数组，限制输出、超时和全局并发，并为 Chromium 不兼容的媒体生成预览代理。
 
