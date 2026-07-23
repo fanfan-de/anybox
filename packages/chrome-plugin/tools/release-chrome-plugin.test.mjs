@@ -3,6 +3,7 @@ import test from "node:test"
 import {
   inspectPeArchitecture,
   parseReleaseArgs,
+  resolveMacosSigningOptions,
   validateCodesignDetails,
   validateNotaryResult,
   validatePeEmbeddedVersion,
@@ -32,16 +33,19 @@ test("accepts only a Windows handoff built from the current plugin version", () 
   )
 })
 
-test("requires Keychain-backed notarization instead of plaintext credentials", () => {
+test("parses explicit Developer ID signing without accepting plaintext credentials", () => {
   assert.deepEqual(parseReleaseArgs([
     "--windows-host",
     "/tmp/extension-host.exe",
+    "--macos-signing",
+    "developer-id",
     "--codesign-identity",
     "Developer ID Application: Example",
     "--notary-profile",
     "anybox-notary",
   ]), {
     windowsHost: "/tmp/extension-host.exe",
+    macosSigning: "developer-id",
     codesignIdentity: "Developer ID Application: Example",
     notaryProfile: "anybox-notary",
   })
@@ -55,24 +59,106 @@ test("requires Keychain-backed notarization instead of plaintext credentials", (
   )
 })
 
+test("requires an explicit, internally consistent macOS signing mode", () => {
+  assert.deepEqual(resolveMacosSigningOptions({
+    macosSigning: "ad-hoc",
+  }), {
+    identity: "-",
+    mode: "ad-hoc",
+    notaryProfile: undefined,
+  })
+  assert.deepEqual(resolveMacosSigningOptions({
+    macosSigning: "developer-id",
+    codesignIdentity: "Developer ID Application: Example",
+    notaryProfile: "anybox-notary",
+  }), {
+    identity: "Developer ID Application: Example",
+    mode: "developer-id",
+    notaryProfile: "anybox-notary",
+  })
+  assert.throws(
+    () => resolveMacosSigningOptions(),
+    /--macos-signing is required/,
+  )
+  assert.throws(
+    () => resolveMacosSigningOptions({ macosSigning: "unsigned" }),
+    /must be one of: ad-hoc, developer-id/,
+  )
+  assert.throws(
+    () => resolveMacosSigningOptions({
+      macosSigning: "ad-hoc",
+      codesignIdentity: "Developer ID Application: Example",
+    }),
+    /does not accept/,
+  )
+  assert.throws(
+    () => resolveMacosSigningOptions({
+      macosSigning: "developer-id",
+    }),
+    /--codesign-identity is required/,
+  )
+})
+
 test("requires Developer ID, hardened runtime, and secure timestamp details", () => {
   const valid = [
     "Authority=Developer ID Application: Example, Inc. (ABCDE12345)",
-    "flags=0x10000(runtime) hashes=13+2 location=embedded",
+    "CodeDirectory v=20500 size=3352 flags=0x10000(runtime) hashes=13+2 location=embedded",
     "Timestamp=Jul 23, 2026 at 12:00:00",
   ].join("\n")
-  assert.doesNotThrow(() => validateCodesignDetails(valid))
+  assert.doesNotThrow(() =>
+    validateCodesignDetails(valid, "developer-id")
+  )
   assert.throws(
-    () => validateCodesignDetails(valid.replace("Developer ID Application", "Apple Development")),
+    () => validateCodesignDetails(
+      valid.replace("Developer ID Application", "Apple Development"),
+      "developer-id",
+    ),
     /Developer ID Application/,
   )
   assert.throws(
-    () => validateCodesignDetails(valid.replace("(runtime)", "")),
+    () => validateCodesignDetails(
+      valid.replace("(runtime)", ""),
+      "developer-id",
+    ),
     /hardened runtime/,
   )
   assert.throws(
-    () => validateCodesignDetails(valid.replace(/^Timestamp=.*$/mu, "")),
+    () => validateCodesignDetails(
+      valid.replace(/^Timestamp=.*$/mu, ""),
+      "developer-id",
+    ),
     /secure timestamp/,
+  )
+  assert.throws(
+    () => validateCodesignDetails(
+      valid.replace(/^Timestamp=.*$/mu, "Timestamp=none"),
+      "developer-id",
+    ),
+    /secure timestamp/,
+  )
+})
+
+test("requires an ad-hoc signature with hardened runtime in ad-hoc mode", () => {
+  const valid = [
+    "Signature=adhoc",
+    "CodeDirectory v=20500 size=3352 flags=0x10002(adhoc,runtime) hashes=13+2 location=embedded",
+    "Timestamp=none",
+  ].join("\n")
+  assert.doesNotThrow(() => validateCodesignDetails(valid, "ad-hoc"))
+  assert.throws(
+    () => validateCodesignDetails(
+      valid.replace("adhoc,runtime", "runtime"),
+      "ad-hoc",
+    ),
+    /not ad-hoc signed/,
+  )
+  assert.throws(
+    () => validateCodesignDetails(valid.replace("runtime", ""), "ad-hoc"),
+    /hardened runtime/,
+  )
+  assert.throws(
+    () => validateCodesignDetails(valid, "unsigned"),
+    /Unsupported macOS signing mode/,
   )
 })
 

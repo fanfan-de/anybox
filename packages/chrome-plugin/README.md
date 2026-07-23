@@ -316,7 +316,7 @@ keep 清单只接受当前 BrowserContext、当前 Session 和当前 Turn 的 `B
 
 ## Native Host 安装与分发
 
-源 Manifest 的 `platformArtifacts` 声明 `com.anybox.browser` Native Messaging Host。正式交付目标
+源 Manifest 的 `platformArtifacts` 声明 `com.anybox.browser` Native Messaging Host。支持的交付目标
 只有 Windows x64、macOS x64 和 macOS arm64；Windows ARM 与 Linux 当前不在 Manifest 中声明。
 Anybox 插件安装器负责：
 
@@ -339,7 +339,8 @@ Manifest 中的固定 key 派生；改变该 key 会破坏既有安装。
 都会失败。`--check` 还会强制验证已提交目录包含全部声明目标，即使本次只构建当前平台。
 
 最终包只由自有机器生成：Windows x64 Host 在自有 Windows x64 机器构建，两个 macOS Host 在
-Apple Silicon Mac 交叉构建、签名和公证。GitHub 保存源码、Windows x64 交接文件
+Apple Silicon Mac 交叉构建并按显式选择的模式签名。当前公开包采用 ad-hoc 签名，不经过 Apple
+公证，也不具备 Developer ID 的 Gatekeeper 信任。GitHub 保存源码、Windows x64 交接文件
 `browser-native-host/dist/windows/x64/extension-host.exe`，以及人工提交的
 `plugins/Anybox-Plugins/chrome`。Registry URL 继续通过生成目录推导 GitHub Tree 安装；GitHub
 Actions 不构建正式发布包，也不提交仓库。
@@ -387,6 +388,8 @@ PID/SID/uid，因此不应把它描述为签名级进程来源证明。该字段
 - Screenshot 不做像素级隐私脱敏。
 - Contract 当前不声明主动 command cancellation；断连时扩展会通过 `AbortController` 终止本地
   pending command。
+- 当前 macOS Native Host 采用 ad-hoc 签名且未经 Apple 公证；被 Gatekeeper 隔离时，用户可能需要
+  在“系统设置 → 隐私与安全”中手动允许。安装器不会自动移除 quarantine 属性。
 - Windows Named Pipe 路径有仓库跨进程测试；Unix Domain Socket 共享相同协议实现，但不能用
   Windows 测试结果代替 macOS 实机验证。
 - Windows ARM 与 Linux 当前不受支持；安装器在这些平台上会返回明确的平台不支持错误。
@@ -407,33 +410,46 @@ node packages/chrome-plugin/browser-native-host/tools/build.mjs --target win32/x
 产物；正式 Windows 文件不得来自 GitHub Actions。发布门禁会验证其 PE x64 架构和内嵌插件版本，
 因此不能复用上一版本的 EXE。
 
-Apple Silicon Mac 需要 Xcode、Rust stable、两个 Darwin target、有效的 Developer ID Application
-证书，以及已保存在 Keychain 中的 `notarytool` profile：
+Apple Silicon Mac 需要 Xcode、Rust stable 和两个 Darwin target：
 
 ```bash
 rustup target add aarch64-apple-darwin x86_64-apple-darwin
-security find-identity -v -p codesigning
 ```
 
-发布时运行：
+当前不依赖 Apple Developer Program 的发布方式必须显式选择 `ad-hoc`：
 
 ```bash
 node packages/chrome-plugin/tools/release-chrome-plugin.mjs \
-  --windows-host /secure/handoff/extension-host.exe \
+  --windows-host packages/chrome-plugin/browser-native-host/dist/windows/x64/extension-host.exe \
+  --macos-signing ad-hoc
+```
+
+该模式用本机 ad-hoc identity `-` 对两个 Mach-O 签名，保留 hardened runtime，并验证签名、架构、
+`0755` 权限、版本、三目标包结构与签名后字节一致性。它不请求 secure timestamp、不提交 Apple
+notarization，也不运行成功型 Gatekeeper `spctl` 门禁；命令会在 stderr 和结构化结果中明确报告
+`notarized: false` 与 `gatekeeperVerified: false`，不能把产物描述成 Apple 已验证软件。
+
+如果未来取得 Developer ID Application 证书，可显式切换回严格模式：
+
+```bash
+security find-identity -v -p codesigning
+node packages/chrome-plugin/tools/release-chrome-plugin.mjs \
+  --windows-host packages/chrome-plugin/browser-native-host/dist/windows/x64/extension-host.exe \
+  --macos-signing developer-id \
   --codesign-identity "Developer ID Application: Example, Inc. (TEAMID)" \
   --notary-profile anybox-notary
 ```
 
-命令拒绝明文 Apple 密码、证书或 API key 参数，并依次执行 Windows PE x64 与内嵌版本检查、两个
-Darwin target 构建与 Mach-O 架构检查、Developer ID 签名、hardened runtime 与 secure timestamp
-验证、`notarytool --wait`、Gatekeeper `spctl`、公共组件构建、三目标汇总和最终包验证。签名后的
-Mach-O 以 SHA-256 复核，确保其字节原样进入生成目录。公证流程遵循
+`developer-id` 模式要求 Keychain 中已有证书和 `notarytool` profile；命令拒绝明文 Apple 密码、
+证书或 API key 参数，并额外执行 Developer ID、secure timestamp、`notarytool --wait` 与
+Gatekeeper `spctl` 门禁。签名后的 Mach-O 始终以 SHA-256 复核，确保其字节原样进入生成目录。
+Developer ID 模式的公证流程遵循
 [Apple 的软件公证要求](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)。
-命令成功后再人工检查、commit 和 push。
+任一模式成功后都必须人工检查、commit 和 push。
 
 GitHub 的 `Chrome plugin manual verification` 工作流只能通过 `workflow_dispatch` 触发。它对三个
 正式目标运行源码测试、原生构建和包验证，上传的文件均明确为 verification-only；macOS 文件未使用
-正式 Developer ID 签名，因此不能作为发布输入。
+本地选择的签名模式处理，因此不能作为发布输入。
 
 ### 日常构建与测试
 

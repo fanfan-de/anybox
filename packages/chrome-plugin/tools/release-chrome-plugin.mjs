@@ -29,6 +29,7 @@ const MAC_TARGETS = Object.freeze([
     rustArchitecture: "arm64",
   },
 ])
+const MACOS_SIGNING_MODES = new Set(["ad-hoc", "developer-id"])
 
 function requiredValue(value, label) {
   if (typeof value !== "string" || !value.trim()) {
@@ -101,21 +102,65 @@ export function validatePeEmbeddedVersion(bytes, expectedVersion) {
   return version
 }
 
-export function validateCodesignDetails(details) {
+export function validateCodesignDetails(details, signingMode) {
+  if (!MACOS_SIGNING_MODES.has(signingMode)) {
+    throw new Error(
+      `Unsupported macOS signing mode: ${signingMode ?? "missing"}.`,
+    )
+  }
+  if (!/^\s*[^\r\n]*\bflags=.*\bruntime\b[^\r\n]*$/mu.test(details)) {
+    throw new Error(
+      "macOS Native Messaging Host signature is missing the hardened runtime.",
+    )
+  }
+  if (signingMode === "ad-hoc") {
+    if (!/^\s*[^\r\n]*\bflags=.*\badhoc\b[^\r\n]*$/mu.test(details)) {
+      throw new Error(
+        "macOS Native Messaging Host is not ad-hoc signed.",
+      )
+    }
+    return
+  }
   if (!/^\s*Authority=Developer ID Application:/mu.test(details)) {
     throw new Error(
       "macOS Native Messaging Host is not signed with Developer ID Application.",
     )
   }
-  if (!/^\s*flags=.*\bruntime\b/mu.test(details)) {
-    throw new Error(
-      "macOS Native Messaging Host signature is missing the hardened runtime.",
-    )
-  }
-  if (!/^\s*Timestamp=.+$/mu.test(details)) {
+  const timestamp = details.match(/^\s*Timestamp=(.+)$/mu)?.[1]?.trim()
+  if (!timestamp || /^(?:none|n\/a)$/iu.test(timestamp)) {
     throw new Error(
       "macOS Native Messaging Host signature is missing a secure timestamp.",
     )
+  }
+}
+
+export function resolveMacosSigningOptions({
+  macosSigning,
+  codesignIdentity,
+  notaryProfile,
+} = {}) {
+  const mode = requiredValue(macosSigning, "--macos-signing")
+  if (!MACOS_SIGNING_MODES.has(mode)) {
+    throw new Error(
+      `--macos-signing must be one of: ${[...MACOS_SIGNING_MODES].join(", ")}.`,
+    )
+  }
+  if (mode === "ad-hoc") {
+    if (codesignIdentity !== undefined || notaryProfile !== undefined) {
+      throw new Error(
+        "ad-hoc macOS signing does not accept --codesign-identity or --notary-profile.",
+      )
+    }
+    return {
+      identity: "-",
+      mode,
+      notaryProfile: undefined,
+    }
+  }
+  return {
+    identity: requiredValue(codesignIdentity, "--codesign-identity"),
+    mode,
+    notaryProfile: requiredValue(notaryProfile, "--notary-profile"),
   }
 }
 
@@ -152,7 +197,7 @@ export function parseReleaseArgs(argv) {
     const [flag, inlineValue] = value.split("=", 2)
     if (forbidden.has(flag)) {
       throw new Error(
-        `${flag} is not accepted. Store notarization credentials in a notarytool Keychain profile.`,
+        `${flag} is not accepted. Developer ID notarization credentials must be stored in a notarytool Keychain profile.`,
       )
     }
     const consumeValue = () => {
@@ -166,6 +211,8 @@ export function parseReleaseArgs(argv) {
     }
     if (flag === "--windows-host") {
       options.windowsHost = consumeValue()
+    } else if (flag === "--macos-signing") {
+      options.macosSigning = consumeValue()
     } else if (flag === "--codesign-identity") {
       options.codesignIdentity = consumeValue()
     } else if (flag === "--notary-profile") {
@@ -189,23 +236,31 @@ async function verifyMachOArchitecture(filePath, expected, run = runCommand) {
   }
 }
 
-async function signAndVerifyMacHost(filePath, identity, run = runCommand) {
-  run("codesign", [
+async function signAndVerifyMacHost(
+  filePath,
+  signing,
+  run = runCommand,
+) {
+  const args = [
     "--force",
     "--options",
     "runtime",
-    "--timestamp",
-    "--sign",
-    identity,
-    filePath,
-  ])
+  ]
+  if (signing.mode === "developer-id") {
+    args.push("--timestamp")
+  }
+  args.push("--sign", signing.identity, filePath)
+  run("codesign", args)
   run("codesign", ["--verify", "--strict", "--verbose=2", filePath])
   const details = run(
     "codesign",
     ["--display", "--verbose=4", filePath],
     { capture: true },
   )
-  validateCodesignDetails(`${details.stdout}\n${details.stderr}`)
+  validateCodesignDetails(
+    `${details.stdout}\n${details.stderr}`,
+    signing.mode,
+  )
 }
 
 async function notarizeMacHosts(hosts, profile, run = runCommand) {
@@ -255,6 +310,7 @@ async function notarizeMacHosts(hosts, profile, run = runCommand) {
 
 export async function releaseChromePlugin({
   windowsHost,
+  macosSigning,
   codesignIdentity,
   notaryProfile,
   platform = process.platform,
@@ -271,8 +327,11 @@ export async function releaseChromePlugin({
   const windowsHostPath = path.resolve(
     requiredValue(windowsHost, "--windows-host"),
   )
-  const identity = requiredValue(codesignIdentity, "--codesign-identity")
-  const profile = requiredValue(notaryProfile, "--notary-profile")
+  const signing = resolveMacosSigningOptions({
+    macosSigning,
+    codesignIdentity,
+    notaryProfile,
+  })
   const windowsBytes = await fsp.readFile(windowsHostPath)
   inspectPeArchitecture(windowsBytes)
   const sourceManifest = JSON.parse(await fsp.readFile(
@@ -295,7 +354,9 @@ export async function releaseChromePlugin({
     "extension-host.exe",
   )
   await fsp.mkdir(path.dirname(windowsDestination), { recursive: true })
-  await fsp.copyFile(windowsHostPath, windowsDestination)
+  if (windowsHostPath !== path.resolve(windowsDestination)) {
+    await fsp.copyFile(windowsHostPath, windowsDestination)
+  }
 
   const macHosts = []
   for (const macTarget of MAC_TARGETS) {
@@ -310,22 +371,29 @@ export async function releaseChromePlugin({
       macTarget.rustArchitecture,
       run,
     )
-    await signAndVerifyMacHost(build.output, identity, run)
+    await signAndVerifyMacHost(build.output, signing, run)
     macHosts.push({
       architecture: macTarget.architecture,
       path: build.output,
     })
   }
 
-  const notary = await notarizeMacHosts(macHosts, profile, run)
-  for (const host of macHosts) {
-    run("spctl", [
-      "--assess",
-      "--type",
-      "execute",
-      "--verbose=4",
-      host.path,
-    ])
+  let notary
+  if (signing.mode === "developer-id") {
+    notary = await notarizeMacHosts(
+      macHosts,
+      signing.notaryProfile,
+      run,
+    )
+    for (const host of macHosts) {
+      run("spctl", [
+        "--assess",
+        "--type",
+        "execute",
+        "--verbose=4",
+        host.path,
+      ])
+    }
   }
   const signedHashes = new Map(
     await Promise.all(macHosts.map(async (host) => [
@@ -383,8 +451,11 @@ export async function releaseChromePlugin({
 
   return {
     files: validation.files.length,
+    gatekeeperVerified: signing.mode === "developer-id",
+    macosSigning: signing.mode,
     nativeHosts: packagedNativeHosts,
-    notarizationID: notary.id,
+    notarizationID: notary?.id ?? null,
+    notarized: signing.mode === "developer-id",
     pluginRoot,
     version: expectedVersion,
   }
@@ -392,16 +463,19 @@ export async function releaseChromePlugin({
 
 function printHelp() {
   process.stdout.write([
-    "Build, sign, notarize, assemble, and validate the Anybox Chrome plugin locally.",
+    "Build, sign, assemble, and validate the Anybox Chrome plugin locally.",
     "",
     "Usage:",
     "  node tools/release-chrome-plugin.mjs \\",
     "    --windows-host <path-to-extension-host.exe> \\",
-    "    --codesign-identity <Developer-ID-identity> \\",
-    "    --notary-profile <Keychain-profile>",
+    "    --macos-signing <ad-hoc|developer-id> \\",
+    "    [--codesign-identity <Developer-ID-identity>] \\",
+    "    [--notary-profile <Keychain-profile>]",
     "",
     "The Windows host must come from a self-owned Windows x64 build machine.",
-    "Notarization credentials must already be stored in the named Keychain profile.",
+    "ad-hoc does not notarize the macOS hosts or make them Gatekeeper-trusted.",
+    "developer-id requires both optional arguments and runs notarization and Gatekeeper verification.",
+    "Plaintext Apple credentials are never accepted.",
     "",
   ].join("\n"))
 }
@@ -413,6 +487,11 @@ async function main() {
     return
   }
   const result = await releaseChromePlugin(options)
+  if (result.macosSigning === "ad-hoc") {
+    process.stderr.write(
+      "WARNING: macOS Native Hosts are ad-hoc signed and not Apple-notarized; Gatekeeper trust is not guaranteed.\n",
+    )
+  }
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`)
 }
 

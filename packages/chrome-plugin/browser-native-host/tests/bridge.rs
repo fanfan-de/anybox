@@ -3,11 +3,15 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use hmac::{Hmac, Mac};
 #[cfg(unix)]
 use interprocess::local_socket::GenericFilePath;
-use interprocess::local_socket::{GenericNamespaced, ListenerOptions, prelude::*};
+#[cfg(windows)]
+use interprocess::local_socket::GenericNamespaced;
+use interprocess::local_socket::{ListenerOptions, prelude::*};
 use serde_json::{Value, json};
 use sha2::Sha256;
 use std::fs;
 use std::io::{self, Read, Write};
+#[cfg(unix)]
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -39,11 +43,15 @@ fn endpoint_and_name() -> (String, interprocess::local_socket::Name<'static>) {
 
 #[cfg(unix)]
 fn endpoint_and_name() -> (String, interprocess::local_socket::Name<'static>) {
-    let endpoint = std::env::temp_dir()
-        .join(format!(
-            "anybox-browser-native-host-test-{}.sock",
-            unique_suffix()
-        ))
+    // macOS limits sockaddr_un.sun_path to 104 bytes. Its per-user temporary
+    // directory is already long, so use the stable short /tmp alias there.
+    let socket_directory = if cfg!(target_os = "macos") {
+        PathBuf::from("/tmp")
+    } else {
+        std::env::temp_dir()
+    };
+    let endpoint = socket_directory
+        .join(format!("abx-nh-{}.sock", unique_suffix()))
         .to_string_lossy()
         .into_owned();
     let name = endpoint
@@ -53,6 +61,18 @@ fn endpoint_and_name() -> (String, interprocess::local_socket::Name<'static>) {
         .into_owned();
     (endpoint, name)
 }
+
+#[cfg(unix)]
+fn remove_endpoint(endpoint: &str) {
+    if let Err(error) = fs::remove_file(endpoint)
+        && error.kind() != io::ErrorKind::NotFound
+    {
+        panic!("failed to remove test Unix socket {endpoint}: {error}");
+    }
+}
+
+#[cfg(windows)]
+fn remove_endpoint(_endpoint: &str) {}
 
 fn native_frame(payload: &[u8]) -> Vec<u8> {
     let mut frame = Vec::with_capacity(payload.len() + 4);
@@ -240,6 +260,7 @@ fn forwards_messages_between_chrome_and_the_agent_ipc_gateway() {
     drop(child.stdin.take());
     server.join().unwrap();
     let status = child.wait().unwrap();
+    remove_endpoint(&endpoint);
     fs::remove_dir_all(temp_root).unwrap();
     if !status.success() {
         let mut stderr = String::new();
@@ -337,6 +358,7 @@ fn probe_authenticates_with_the_browser_host_and_exits() {
         .unwrap();
 
     server.join().unwrap();
+    remove_endpoint(&endpoint);
     fs::remove_dir_all(temp_root).unwrap();
     assert!(
         output.status.success(),
