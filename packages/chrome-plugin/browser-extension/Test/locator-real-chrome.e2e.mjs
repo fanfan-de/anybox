@@ -551,7 +551,7 @@ test("Browser Contract v4 groups and finalizes tabs in real Chrome", {
       JSON.stringify({
         manifest_version: 3,
         name: "Anybox Tab Group E2E",
-        version: "0.15.0",
+        version: "0.15.1",
         background: {
           service_worker: "background.js",
           type: "module",

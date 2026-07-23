@@ -29,7 +29,7 @@ const PLAYWRIGHT_LOCATOR_ENGINE = Object.freeze({
   bundleSha256:
     "3ce6afda466d2c04fc8fb5befc699d164322af080f3678e9d6d12425ba2ce7df",
   licenseSha256:
-    "45873d00a0dd243596deb4aa23b2493b3d1f0671921bf2538ea431d7380220eb",
+    "7fab1461b41970ff376f1c9303a637076bfaaeb71cd12dd3a1c44aaf59a1a2b9",
   noticeSha256:
     "6d602191187b35b9b01d2cffa01c8469c2c8d9de8a96f1bf868e0f264f51c81d",
   license: "Apache-2.0",
@@ -68,14 +68,6 @@ export function nativeHostBuildTarget(
 }
 
 const currentNativeHostTarget = nativeHostBuildTarget()
-const requiredNativeHostTargetIDs = new Set([
-  "win32/x64",
-  "win32/arm64",
-  "darwin/x64",
-  "darwin/arm64",
-  "linux/x64",
-  "linux/arm64",
-])
 
 const requiredPackageFiles = [
   path.join(".anybox-plugin", "plugin.json"),
@@ -108,15 +100,19 @@ const requiredPackageFiles = [
   path.join("skills", "chrome", "SKILL.md"),
 ]
 
-function nativeHostTargetsFromManifest(manifest) {
+export function nativeHostTargetsFromManifest(manifest) {
   const artifacts = Array.isArray(manifest?.platformArtifacts)
     ? manifest.platformArtifacts.filter(
       (artifact) => artifact?.type === "chrome-native-messaging-host",
     )
     : []
-  if (artifacts.length !== 1 || !Array.isArray(artifacts[0]?.executables)) {
+  if (
+    artifacts.length !== 1
+    || !Array.isArray(artifacts[0]?.executables)
+    || artifacts[0].executables.length === 0
+  ) {
     throw new Error(
-      "Chrome plugin manifest must declare exactly one Native Messaging Host artifact.",
+      "Chrome plugin manifest must declare exactly one Native Messaging Host artifact with at least one executable.",
     )
   }
 
@@ -140,12 +136,12 @@ function nativeHostTargetsFromManifest(manifest) {
       "Chrome plugin manifest must not declare duplicate Native Messaging Host targets.",
     )
   }
-  if (
-    targetIDs.length !== requiredNativeHostTargetIDs.size
-    || targetIDs.some((targetID) => !requiredNativeHostTargetIDs.has(targetID))
-  ) {
+  const manifestPaths = artifacts[0].executables.map(
+    (executable) => toPosixPath(executable?.path ?? ""),
+  )
+  if (new Set(manifestPaths).size !== manifestPaths.length) {
     throw new Error(
-      "Chrome plugin manifest must declare Native Messaging Hosts for Windows, macOS, and Linux on both x64 and arm64.",
+      "Chrome plugin manifest must not declare duplicate Native Messaging Host paths.",
     )
   }
   return targets
@@ -838,6 +834,9 @@ export async function packageChromePlugin({
           "Run `pnpm chrome-plugin:package` and commit the generated directory.",
         ].join("\n"))
       }
+      await validateChromePluginPackage(pluginRoot, {
+        nativeHostScope: "all",
+      })
     } else {
       await fsp.rm(pluginRoot, { recursive: true, force: true })
       await fsp.mkdir(path.dirname(pluginRoot), { recursive: true })

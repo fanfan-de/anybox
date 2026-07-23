@@ -1,5 +1,6 @@
 node_modules
 dist/
+!packages/chrome-plugin/browser-native-host/dist/
 out/
 build/
 .env

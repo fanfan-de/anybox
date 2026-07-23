@@ -7,7 +7,7 @@
   "upstreamEntrySha256": "a5eb8259c5010c66358d08ab4d3e5ad7c0134aaf7918538cbf888dff8ee10ec3",
   "esbuildVersion": "0.27.2",
   "bundleSha256": "3ce6afda466d2c04fc8fb5befc699d164322af080f3678e9d6d12425ba2ce7df",
-  "licenseSha256": "45873d00a0dd243596deb4aa23b2493b3d1f0671921bf2538ea431d7380220eb",
+  "licenseSha256": "7fab1461b41970ff376f1c9303a637076bfaaeb71cd12dd3a1c44aaf59a1a2b9",
   "noticeSha256": "6d602191187b35b9b01d2cffa01c8469c2c8d9de8a96f1bf868e0f264f51c81d",
   "license": "Apache-2.0"
 }

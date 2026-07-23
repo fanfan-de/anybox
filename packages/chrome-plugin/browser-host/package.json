@@ -1,6 +1,6 @@
 {
   "name": "anybox-chrome-browser-host",
-  "version": "0.15.0",
+  "version": "0.15.1",
   "private": true,
   "description": "Plugin-owned Browser Host, policy gateway, and Chrome bridge.",
   "type": "module",

@@ -5,6 +5,7 @@ import {
   mkdtemp,
   readFile,
   rm,
+  stat,
   writeFile,
 } from "node:fs/promises"
 import os from "node:os"
@@ -133,6 +134,92 @@ describe("declarative plugin platform artifacts", () => {
     })
     expect(second!.ownershipID).toBe(first!.ownershipID)
     expect(await readFile(second!.executablePath, "utf8")).toBe("native-host-v2")
+
+    await expect(removePlatformArtifacts({
+      pluginID: "chrome",
+      receipts: [second!],
+      dataDir: input.dataDir,
+    })).resolves.toEqual({
+      removed: ["chrome-native-host"],
+      skipped: [],
+      pending: [],
+    })
+    await expect(access(second!.managedRoot)).rejects.toBeDefined()
+    await expect(access(second!.manifestPaths[0]!)).rejects.toBeDefined()
+    await expect(access(second!.runtimeConfigPath!)).rejects.toBeDefined()
+  })
+
+  test("installs, reinstalls, and uninstalls the macOS Native Messaging Host", async () => {
+    const input = await fixture()
+    const macArtifact = PluginPlatformArtifact.parse({
+      ...artifact(),
+      executables: [{
+        platform: "darwin",
+        architecture: "arm64",
+        path: "bin/extension-host",
+      }],
+    })
+    const installInput = {
+      pluginID: "chrome",
+      pluginVersion: "0.15.1",
+      packageRoot: input.packageRoot,
+      artifacts: [macArtifact],
+      platform: "darwin" as const,
+      architecture: "arm64" as const,
+      homeDir: input.homeDir,
+      dataDir: input.dataDir,
+      stateDir: input.stateDir,
+      env: {},
+      now: () => 1_700_000_000_000,
+    }
+
+    const [first] = await installPlatformArtifacts(installInput)
+    expect(first).toBeDefined()
+    expect(first!.manifestPaths).toEqual([path.join(
+      input.homeDir,
+      "Library",
+      "Application Support",
+      "Google",
+      "Chrome",
+      "NativeMessagingHosts",
+      "com.anybox.browser.json",
+    )])
+    expect(JSON.parse(await readFile(first!.manifestPaths[0]!, "utf8")))
+      .toMatchObject({
+        allowed_origins: [
+          "chrome-extension://hjbejdmgpifdjjlpgmdfmbmbhkedgnjc/",
+        ],
+        name: "com.anybox.browser",
+        path: first!.executablePath,
+        type: "stdio",
+      })
+    const runtimeConfig = JSON.parse(
+      await readFile(first!.runtimeConfigPath!, "utf8"),
+    )
+    expect(runtimeConfig).toMatchObject({
+      transport: "unix-domain-socket",
+      protocolVersion: 1,
+      bootstrapPath: path.join(
+        input.stateDir,
+        "browser-ipc",
+        "com.anybox.browser.bootstrap.json",
+      ),
+    })
+    expect(runtimeConfig.runtimeEndpoint).toMatch(
+      /[/\\]browser-ipc[/\\]runtime-v1-[a-f0-9]{16}\.sock$/,
+    )
+    expect(runtimeConfig.nativeHostEndpoint).toMatch(
+      /[/\\]browser-ipc[/\\]native-host-v1-[a-f0-9]{16}\.sock$/,
+    )
+    expect((await stat(first!.executablePath)).mode & 0o777).toBe(0o755)
+
+    const [second] = await installPlatformArtifacts({
+      ...installInput,
+      existingReceipts: [first!],
+    })
+    expect(second!.ownershipID).toBe(first!.ownershipID)
+    expect(second!.executablePath).toBe(first!.executablePath)
+    expect((await stat(second!.executablePath)).mode & 0o777).toBe(0o755)
 
     await expect(removePlatformArtifacts({
       pluginID: "chrome",

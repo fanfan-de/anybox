@@ -1,6 +1,6 @@
 {
   "name": "chrome",
-  "version": "0.15.0",
+  "version": "0.15.1",
   "description": "Control Chrome by importing the plugin Browser Client into Anybox's general-purpose Node REPL.",
   "author": {
     "name": "Anybox"
@@ -57,11 +57,6 @@
           "path": "extension-host/windows/x64/extension-host.exe"
         },
         {
-          "platform": "win32",
-          "architecture": "arm64",
-          "path": "extension-host/windows/arm64/extension-host.exe"
-        },
-        {
           "platform": "darwin",
           "architecture": "x64",
           "path": "extension-host/macos/x64/extension-host"
@@ -70,16 +65,6 @@
           "platform": "darwin",
           "architecture": "arm64",
           "path": "extension-host/macos/arm64/extension-host"
-        },
-        {
-          "platform": "linux",
-          "architecture": "x64",
-          "path": "extension-host/linux/x64/extension-host"
-        },
-        {
-          "platform": "linux",
-          "architecture": "arm64",
-          "path": "extension-host/linux/arm64/extension-host"
         }
       ],
       "runtimeConfig": {

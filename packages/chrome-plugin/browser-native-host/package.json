@@ -1,6 +1,6 @@
 {
   "name": "anybox-chrome-native-host",
-  "version": "0.15.0",
+  "version": "0.15.1",
   "private": true,
   "description": "Rust Native Messaging host for the Anybox Chrome plugin.",
   "type": "module",

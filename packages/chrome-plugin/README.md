@@ -1,6 +1,6 @@
 # Anybox Chrome 插件
 
-本文是 Chrome 插件工程唯一需要长期维护的实现文档。当前代码基线为 `0.15.0`；版本与安装元数据以
+本文是 Chrome 插件工程唯一需要长期维护的实现文档。当前代码基线为 `0.15.1`；版本与安装元数据以
 [`runtime/.anybox-plugin/plugin.json`](./runtime/.anybox-plugin/plugin.json)
 为准。
 
@@ -316,8 +316,9 @@ keep 清单只接受当前 BrowserContext、当前 Session 和当前 Turn 的 `B
 
 ## Native Host 安装与分发
 
-源 Manifest 的 `platformArtifacts` 声明 `com.anybox.browser` Native Messaging Host，以及 Windows、
-macOS、Linux 的 x64/arm64 目标。Anybox 插件安装器负责：
+源 Manifest 的 `platformArtifacts` 声明 `com.anybox.browser` Native Messaging Host。正式交付目标
+只有 Windows x64、macOS x64 和 macOS arm64；Windows ARM 与 Linux 当前不在 Manifest 中声明。
+Anybox 插件安装器负责：
 
 1. 按当前平台和架构选择二进制。
 2. 复制到 Anybox 管理的数据目录。
@@ -332,13 +333,18 @@ Chrome Native Host manifest 指向 Anybox 管理的 `current` 二进制，不直
 Native Host manifest 只允许固定扩展 ID `hjbejdmgpifdjjlpgmdfmbmbhkedgnjc`。扩展 ID 由提交在
 Manifest 中的固定 key 派生；改变该 key 会破坏既有安装。
 
-本地打包默认只重建当前平台的 Native Host，并保留生成目录中已经汇总的其他平台制品。CI 会在
-Windows、macOS、Linux 的 x64/arm64 原生 Runner 上分别构建六个 Host，再以
-`--all-native-hosts` 汇总为同一个插件目录。严格校验会逐项对照源 Manifest，任一声明文件缺失、
-路径不匹配或出现未声明 Host 都会失败。主分支通过验证后，流水线会把完整生成目录同步回
-`plugins/Anybox-Plugins/chrome`，因此 Registry 的 GitHub Tree 安装始终获得一个六平台包。
+本地普通打包默认只重建当前平台的 Native Host，并保留生成目录中同版本的其他已声明目标。
+`--all-native-hosts` 表示 Manifest 实际声明的全部目标，不再代表固定平台集合。严格校验会逐项对照
+声明目标、规范路径和包内文件；声明文件缺失、目标或路径重复、路径不匹配，以及出现未声明 Host
+都会失败。`--check` 还会强制验证已提交目录包含全部声明目标，即使本次只构建当前平台。
 
-本地验证已经下载到 `browser-native-host/dist` 的完整制品时，可运行：
+最终包只由自有机器生成：Windows x64 Host 在自有 Windows x64 机器构建，两个 macOS Host 在
+Apple Silicon Mac 交叉构建、签名和公证。GitHub 保存源码、Windows x64 交接文件
+`browser-native-host/dist/windows/x64/extension-host.exe`，以及人工提交的
+`plugins/Anybox-Plugins/chrome`。Registry URL 继续通过生成目录推导 GitHub Tree 安装；GitHub
+Actions 不构建正式发布包，也不提交仓库。
+
+已经在 `browser-native-host/dist` 准备好全部声明制品时，可单独汇总验证：
 
 ```bash
 node packages/chrome-plugin/tools/package-chrome-plugin.mjs --skip-build --all-native-hosts
@@ -382,10 +388,54 @@ PID/SID/uid，因此不应把它描述为签名级进程来源证明。该字段
 - Contract 当前不声明主动 command cancellation；断连时扩展会通过 `AbortController` 终止本地
   pending command。
 - Windows Named Pipe 路径有仓库跨进程测试；Unix Domain Socket 共享相同协议实现，但不能用
-  Windows 测试结果代替 macOS/Linux 实机验证。
-- 当前提交的安装制品只包含 Windows x64 Native Host。
+  Windows 测试结果代替 macOS 实机验证。
+- Windows ARM 与 Linux 当前不受支持；安装器在这些平台上会返回明确的平台不支持错误。
 
 ## 构建、同步与验证
+
+### 正式本地交付
+
+Windows x64 构建机先运行 Rust 测试并生成原生交接文件：
+
+```powershell
+cargo test --locked --manifest-path packages/chrome-plugin/browser-native-host/Cargo.toml
+node packages/chrome-plugin/browser-native-host/tools/build.mjs --target win32/x64
+```
+
+`packages/chrome-plugin/browser-native-host/dist/windows/x64/extension-host.exe` 是 `dist` 中唯一
+允许 Git 跟踪的文件。在 Windows 构建机提交并推送该文件后，Mac 发布机拉取同一提交即可获得交接
+产物；正式 Windows 文件不得来自 GitHub Actions。发布门禁会验证其 PE x64 架构和内嵌插件版本，
+因此不能复用上一版本的 EXE。
+
+Apple Silicon Mac 需要 Xcode、Rust stable、两个 Darwin target、有效的 Developer ID Application
+证书，以及已保存在 Keychain 中的 `notarytool` profile：
+
+```bash
+rustup target add aarch64-apple-darwin x86_64-apple-darwin
+security find-identity -v -p codesigning
+```
+
+发布时运行：
+
+```bash
+node packages/chrome-plugin/tools/release-chrome-plugin.mjs \
+  --windows-host /secure/handoff/extension-host.exe \
+  --codesign-identity "Developer ID Application: Example, Inc. (TEAMID)" \
+  --notary-profile anybox-notary
+```
+
+命令拒绝明文 Apple 密码、证书或 API key 参数，并依次执行 Windows PE x64 与内嵌版本检查、两个
+Darwin target 构建与 Mach-O 架构检查、Developer ID 签名、hardened runtime 与 secure timestamp
+验证、`notarytool --wait`、Gatekeeper `spctl`、公共组件构建、三目标汇总和最终包验证。签名后的
+Mach-O 以 SHA-256 复核，确保其字节原样进入生成目录。公证流程遵循
+[Apple 的软件公证要求](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)。
+命令成功后再人工检查、commit 和 push。
+
+GitHub 的 `Chrome plugin manual verification` 工作流只能通过 `workflow_dispatch` 触发。它对三个
+正式目标运行源码测试、原生构建和包验证，上传的文件均明确为 verification-only；macOS 文件未使用
+正式 Developer ID 签名，因此不能作为发布输入。
+
+### 日常构建与测试
 
 在仓库根目录执行：
 

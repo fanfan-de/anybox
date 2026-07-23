@@ -21,7 +21,7 @@ import type {
   BrowserExtensionCommandContext,
 } from "@anybox/chrome-shared/browser-extension"
 
-const BROWSER_HOST_CLIENT_VERSION = "0.15.0"
+const BROWSER_HOST_CLIENT_VERSION = "0.15.1"
 const DEFAULT_CONNECT_TIMEOUT_MS = 5_000
 const HOST_START_TIMEOUT_MS = 8_000
 const HOST_REPLACE_TIMEOUT_MS = 5_000
