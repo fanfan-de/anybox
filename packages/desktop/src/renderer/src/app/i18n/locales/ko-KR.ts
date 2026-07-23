@@ -2,6 +2,7 @@ import type { TranslationKey } from "../translations"
 import { subscriptionTranslations } from "../subscription-translations"
 import { skillLibraryTranslations } from "../skill-library-translations"
 import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
+import { environmentEnUS } from "../environment-translations"
 
 export const koKR = {
   "app.loading": "로딩 중",
@@ -1413,4 +1414,5 @@ export const koKR = {
   "mcp.validation.requireConnectorId": "커넥터 MCP 서버에는 커넥터 ID가 필요합니다.",
   "mcp.validation.requireToolNames": "명명된 도구 필터에는 하나 이상의 도구 이름이 필요합니다.",
   ...pluginOwnershipTranslations.enUS,
+  ...environmentEnUS,
 } as const satisfies Record<TranslationKey, string>

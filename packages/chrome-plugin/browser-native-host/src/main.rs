@@ -21,7 +21,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 const BROWSER_IPC_PROTOCOL_VERSION: u32 = 1;
 const BROWSER_IPC_ROLE: &str = "native-host";
-const CHROME_EXTENSION_ID: &str = "hjbejdmgpifdjjlpgmdfmbmbhkedgnjc";
+const CHROME_EXTENSION_ID: &str = "mgpdddgemohfmonbnpehohhlbndakdpg";
 const NATIVE_HOST_NAME: &str = "com.anybox.browser";
 const RUNTIME_CONFIG_ENV: &str = "ANYBOX_BROWSER_NATIVE_CONFIG";
 const RUNTIME_CONFIG_FILENAME: &str = "com.anybox.browser.runtime.json";

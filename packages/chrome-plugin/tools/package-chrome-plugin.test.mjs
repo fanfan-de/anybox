@@ -211,7 +211,7 @@ test("derives the stable Anybox extension ID from its manifest key", async () =>
   ))
   assert.equal(
     chromeExtensionIDFromManifestKey(manifest.key),
-    "hjbejdmgpifdjjlpgmdfmbmbhkedgnjc",
+    "mgpdddgemohfmonbnpehohhlbndakdpg",
   )
 })
 

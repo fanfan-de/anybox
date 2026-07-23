@@ -412,6 +412,38 @@ describe("server pty api", () => {
     expect(runtime.handles).toHaveLength(1)
   })
 
+  test("keeps interactive and environment action PTYs isolated by terminal key", async () => {
+    const { baseURL, registry } = await startPtyTestServer()
+    const interactive = await createPty(baseURL)
+    const sessionID = interactive.session.id
+
+    const actionResponse = await fetch(`${baseURL}/api/pty`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        sessionID,
+        terminalKey: "environment-action:binding:dev",
+        purpose: "environment-action",
+        title: "Run dev",
+      }),
+    })
+    const actionBody = (await actionResponse.json()) as JsonEnvelope<PtySessionInfo>
+
+    expect(actionResponse.status).toBe(201)
+    expect(actionBody.data?.id).not.toBe(interactive.body.data?.id)
+    expect(actionBody.data?.terminalKey).toBe("environment-action:binding:dev")
+    expect(actionBody.data?.purpose).toBe("environment-action")
+    expect(registry.infoBySession(sessionID)?.id).toBe(interactive.body.data?.id)
+    expect(registry.infoBySession(sessionID, "environment-action:binding:dev")?.id).toBe(actionBody.data?.id)
+
+    registry.delete(actionBody.data!.id)
+
+    expect(registry.infoBySession(sessionID)?.status).toBe("running")
+    expect(registry.infoBySession(sessionID, "environment-action:binding:dev")).toBeNull()
+  })
+
   test("keeps PTYs isolated across sessions", async () => {
     const { baseURL, registry, runtime } = await startPtyTestServer()
     const first = await createPty(baseURL)

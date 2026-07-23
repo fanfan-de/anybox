@@ -4,6 +4,11 @@ import { containsWorkspaceLocation, isSshWorkspaceUri } from "@anybox/shared"
 import z from "zod"
 import * as db from "#database/Sqlite.ts"
 import * as Config from "#config/config.ts"
+import * as EnvironmentDiscovery from "#environment/discovery.ts"
+import * as EnvironmentActions from "#environment/actions.ts"
+import * as EnvironmentRunner from "#environment/runner.ts"
+import * as EnvironmentStore from "#environment/store.ts"
+import { resolveEnvironmentScript } from "#environment/types.ts"
 import * as GitCommitMessage from "#git/commit-message.ts"
 import * as Git from "#git/git.ts"
 import * as Mcp from "#mcp/manager.ts"
@@ -44,6 +49,15 @@ export const CreateProjectWorktreeBody = z.object({
   ownerRunID: z.string().trim().min(1).optional(),
   ownerSessionID: z.string().trim().min(1).optional(),
   ownerType: Worktree.WorktreeOwnerType.optional().default("manual"),
+  sourceDirectory: z.string().trim().min(1).optional(),
+  environment: z
+    .object({
+      key: z.string().trim().min(1),
+      expectedHash: z.string().trim().min(1),
+      runSetup: z.boolean().optional().default(true),
+    })
+    .strict()
+    .optional(),
 })
 
 export const DeleteProjectWorktreeBody = z.object({
@@ -300,8 +314,50 @@ export async function createProjectWorktree(
   projectID: string,
   input: z.infer<typeof CreateProjectWorktreeBody>,
 ) {
-  safeReadProject(projectID)
+  const project = safeReadProject(projectID)
   return runProjectWorktreeOperation(async () => {
+    const repositoryRoot = await canonicalizeProjectDirectory(Project.getRepositoryRoot(project))
+    const sourceDirectory = await canonicalizeProjectDirectory(
+      input.sourceDirectory?.trim() || repositoryRoot,
+    )
+    if (!isDirectoryInsideProjectRoot(sourceDirectory, repositoryRoot)) {
+      throw new ApiError(
+        400,
+        "WORKTREE_SOURCE_OUTSIDE_REPOSITORY",
+        "Worktree source directory must be inside the project repository.",
+      )
+    }
+    const environment = input.environment
+      ? await EnvironmentDiscovery.requireEnvironmentCandidate({
+          projectID,
+          directory: sourceDirectory,
+          key: input.environment.key,
+          expectedHash: input.environment.expectedHash,
+          requireTrusted: true,
+        })
+      : undefined
+    if (
+      environment
+      && !isDirectoryInsideProjectRoot(environment.rootDirectory, repositoryRoot)
+    ) {
+      throw new ApiError(
+        400,
+        "ENVIRONMENT_OUTSIDE_REPOSITORY",
+        "Managed worktree environments must be inside the project repository.",
+      )
+    }
+    if (
+      input.environment?.runSetup
+      && environment?.definition.setup
+      && !resolveEnvironmentScript(environment.definition.setup.scripts)
+    ) {
+      throw new ApiError(
+        409,
+        "ENVIRONMENT_SCRIPT_UNAVAILABLE",
+        "This environment has no setup script for the current platform.",
+      )
+    }
+
     const worktree = await Project.createManagedWorktree(projectID, {
       baseRef: input.baseRef,
       branch: input.branchName,
@@ -309,9 +365,64 @@ export async function createProjectWorktree(
       ownerRunID: input.ownerRunID,
       ownerSessionID: input.ownerSessionID,
       ownerType: input.ownerType,
+      sourceDirectory,
     })
     if (!worktree) throw new ApiError(404, "PROJECT_NOT_FOUND", `Project '${projectID}' not found`)
-    return worktree
+
+    if (!environment) {
+      return { worktree }
+    }
+
+    const relativeEnvironmentRoot = path.relative(repositoryRoot, environment.rootDirectory)
+    const targetRoot = path.join(worktree.path, relativeEnvironmentRoot)
+    let binding
+    try {
+      binding = EnvironmentStore.createBinding({
+        projectID,
+        worktreeID: worktree.id,
+        sourceDirectory,
+        targetDirectory: worktree.workingDirectory ?? worktree.path,
+        sourceConfigPath: environment.configPath,
+        sourceRoot: environment.rootDirectory,
+        targetRoot,
+        environmentKey: environment.key,
+        contentHash: environment.contentHash,
+        source: environment.source,
+        definition: environment.definition,
+      })
+    } catch (error) {
+      try {
+        await Project.removeManagedWorktree(projectID, worktree.id, { force: true })
+      } catch (cleanupError) {
+        Project.markWorktreeFailed(projectID, worktree.id)
+        throw new ApiError(
+          500,
+          "ENVIRONMENT_BINDING_CLEANUP_FAILED",
+          "The environment binding failed and the new worktree could not be cleaned up.",
+          {
+            worktreeID: worktree.id,
+            bindingError: error instanceof Error ? error.message : String(error),
+            cleanupError: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+          },
+        )
+      }
+      throw error
+    }
+
+    let setupRun
+    if (input.environment?.runSetup && environment.definition.setup) {
+      try {
+        setupRun = await EnvironmentRunner.startSetup(binding)
+      } catch (error) {
+        setupRun = EnvironmentRunner.recordRejectedSetup(binding, error)
+      }
+    }
+
+    return {
+      worktree,
+      binding,
+      setupRun,
+    }
   })
 }
 
@@ -330,13 +441,30 @@ export async function deleteProjectWorktree(
   projectID: string,
   worktreeID: string,
   input: z.infer<typeof DeleteProjectWorktreeBody>,
+  options?: { ptyRegistry?: PtyRegistry },
 ) {
   safeReadProject(projectID)
   return runProjectWorktreeOperation(async () => {
+    const refreshed = await Project.refreshWorktree(projectID, worktreeID)
+    if (!refreshed) {
+      throw new ApiError(404, "WORKTREE_NOT_FOUND", `Worktree '${worktreeID}' not found`)
+    }
+    if (refreshed.status === "dirty" && input.force !== true) {
+      throw new ApiError(
+        409,
+        "WORKTREE_DIRTY",
+        "Worktree has uncommitted changes. Confirm force deletion to continue.",
+      )
+    }
+    await EnvironmentRunner.cancelWorktreeRuns(worktreeID)
+    if (options?.ptyRegistry) {
+      await EnvironmentActions.cancelWorktreeActions(worktreeID, options.ptyRegistry)
+    }
     const worktree = await Project.removeManagedWorktree(projectID, worktreeID, input)
     if (!worktree) {
       throw new ApiError(404, "WORKTREE_NOT_FOUND", `Worktree '${worktreeID}' not found`)
     }
+    EnvironmentStore.removeWorktreeEnvironmentData(worktreeID)
     return worktree
   })
 }
@@ -761,9 +889,13 @@ export async function removeProjectMcpServer(projectID: string, serverID: string
   }
 }
 
-export function deleteProject(projectID: string, options?: { ptyRegistry?: PtyRegistry }) {
+export async function deleteProject(projectID: string, options?: { ptyRegistry?: PtyRegistry }) {
   safeReadProject(projectID)
 
+  await EnvironmentRunner.cancelProjectRuns(projectID)
+  if (options?.ptyRegistry) {
+    await EnvironmentActions.cancelProjectActions(projectID, options.ptyRegistry)
+  }
   const deletedSessions = Session.removeProjectSessions(projectID)
   for (const session of deletedSessions) {
     options?.ptyRegistry?.deleteBySession(session.id)
@@ -777,6 +909,7 @@ export function deleteProject(projectID: string, options?: { ptyRegistry?: PtyRe
     db.deleteMany("permission_audits", [{ column: "projectID", value: projectID }])
   }
   Project.removeWorktrees(projectID)
+  EnvironmentStore.removeProjectEnvironmentData(projectID)
 
   return {
     projectID,

@@ -2,6 +2,7 @@ import type { TranslationKey } from "../translations"
 import { subscriptionTranslations } from "../subscription-translations"
 import { skillLibraryTranslations } from "../skill-library-translations"
 import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
+import { environmentEnUS } from "../environment-translations"
 
 export const plPL = {
   "app.loading": "Ładowanie",
@@ -1413,4 +1414,5 @@ export const plPL = {
   "mcp.validation.requireConnectorId": "Serwery MCP łącznika wymagają identyfikatora łącznika.",
   "mcp.validation.requireToolNames": "Filtry narzędzi nazwanych wymagają co najmniej jednej nazwy narzędzia.",
   ...pluginOwnershipTranslations.enUS,
+  ...environmentEnUS,
 } as const satisfies Record<TranslationKey, string>

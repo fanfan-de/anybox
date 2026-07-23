@@ -247,6 +247,11 @@ export type WorkbenchTabReference =
 export interface ProjectWorktreeCreateRequest {
   name: string
   branchName?: string
+  environment?: {
+    key: string
+    expectedHash: string
+    runSetup: boolean
+  }
 }
 
 export interface WorkspaceGroup {

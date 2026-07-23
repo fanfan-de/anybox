@@ -2,6 +2,7 @@ import type { TranslationKey } from "../translations"
 import { subscriptionTranslations } from "../subscription-translations"
 import { skillLibraryTranslations } from "../skill-library-translations"
 import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
+import { environmentEnUS } from "../environment-translations"
 
 export const itIT = {
   "app.loading": "Caricamento",
@@ -1413,4 +1414,5 @@ export const itIT = {
   "mcp.validation.requireConnectorId": "I server MCP connettore richiedono un ID connettore.",
   "mcp.validation.requireToolNames": "I filtri per strumenti nominati richiedono almeno un nome di strumento.",
   ...pluginOwnershipTranslations.enUS,
+  ...environmentEnUS,
 } as const satisfies Record<TranslationKey, string>

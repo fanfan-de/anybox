@@ -2,7 +2,7 @@
 import { z } from "zod"
 
 export const BROWSER_EXTENSION_PROTOCOL_VERSION = 1 as const
-export const ANYBOX_CHROME_EXTENSION_ID = "hjbejdmgpifdjjlpgmdfmbmbhkedgnjc"
+export const ANYBOX_CHROME_EXTENSION_ID = "mgpdddgemohfmonbnpehohhlbndakdpg"
 export const ANYBOX_CHROME_NATIVE_HOST_NAME = "com.anybox.browser"
 
 export const BrowserExtensionCommandMethod = z.enum([

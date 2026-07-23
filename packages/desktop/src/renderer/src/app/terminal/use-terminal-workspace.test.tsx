@@ -125,6 +125,8 @@ describe("useTerminalWorkspace", () => {
         .mockResolvedValueOnce({
           id: "pty-1",
           sessionID: TEST_SESSION_ID,
+          terminalKey: "interactive",
+          purpose: "interactive",
           title: "Terminal 1",
           cwd: "C:\\Projects\\anybox",
           shell: "powershell.exe",
@@ -324,6 +326,8 @@ describe("useTerminalWorkspace", () => {
         session: {
           id: "pty-1",
           sessionID: TEST_SESSION_ID,
+          terminalKey: "interactive",
+          purpose: "interactive",
           title: "Terminal 1",
           cwd: "C:\\Projects\\anybox",
           shell: "powershell.exe",
@@ -401,6 +405,8 @@ describe("useTerminalWorkspace", () => {
         session: {
           id: "pty-1",
           sessionID: TEST_SESSION_ID,
+          terminalKey: "interactive",
+          purpose: "interactive",
           title: "Terminal 1",
           cwd: "C:\\Projects\\anybox",
           shell: "powershell.exe",
@@ -592,6 +598,8 @@ describe("useTerminalWorkspace", () => {
         session: {
           id: "pty-1",
           sessionID: TEST_SESSION_ID,
+          terminalKey: "interactive",
+          purpose: "interactive",
           title: "Terminal 1",
           cwd: "C:\\Projects\\anybox",
           shell: "powershell.exe",

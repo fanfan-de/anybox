@@ -6,6 +6,8 @@ import type { TerminalSessionRecord } from "./types"
 const baseSession: TerminalSessionRecord = {
   ptyID: "pty-1",
   sessionID: "session-1",
+  terminalKey: "interactive",
+  purpose: "interactive",
   title: "Terminal",
   cwd: "/tmp/project",
   shell: "/bin/zsh",

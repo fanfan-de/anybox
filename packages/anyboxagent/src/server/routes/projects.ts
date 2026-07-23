@@ -43,7 +43,12 @@ export function ProjectRoutes(options: { ptyRegistry: PtyRegistry }) {
       "Body must include optional boolean 'force' and owner fields",
       {},
     )
-    return ok(c, await ProjectUseCase.deleteProjectWorktree(c.req.param("id"), c.req.param("worktreeID"), payload))
+    return ok(c, await ProjectUseCase.deleteProjectWorktree(
+      c.req.param("id"),
+      c.req.param("worktreeID"),
+      payload,
+      options,
+    ))
   })
 
   app.post("/:id/sessions", async (c) => {
@@ -245,7 +250,7 @@ export function ProjectRoutes(options: { ptyRegistry: PtyRegistry }) {
     ok(c, await ProjectUseCase.removeProjectMcpServer(c.req.param("id"), c.req.param("serverID"))),
   )
 
-  app.delete("/:id", (c) => ok(c, ProjectUseCase.deleteProject(c.req.param("id"), options)))
+  app.delete("/:id", async (c) => ok(c, await ProjectUseCase.deleteProject(c.req.param("id"), options)))
 
   app.get("/:id", (c) => ok(c, ProjectUseCase.getProject(c.req.param("id"))))
 

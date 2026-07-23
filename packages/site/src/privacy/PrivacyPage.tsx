@@ -16,7 +16,7 @@ export function PrivacyPage() {
         kicker="隐私政策"
         title="Anybox 隐私政策"
         titleId="privacy-title"
-        updated="2026 年 7 月 12 日"
+        updated="2026 年 7 月 23 日"
       >
         <section>
           <h2>1. 适用范围</h2>
@@ -52,13 +52,21 @@ export function PrivacyPage() {
           <h2>4. 桌面应用与 Chrome 扩展</h2>
           <p>
             Chrome 扩展用于连接 Chrome 和本地安装的 Anybox Desktop。使用浏览器自动化时，
-            它可能访问标签页、页面内容、截图、DOM 或无障碍信息，以及用户发起的浏览器操作。
-            这些信息通过 Chrome Native Messaging 或 localhost 连接发送给本地 Anybox Agent。
+            它可能处理浏览活动（包括标签页来源和 URL）、网站内容（包括页面文字、DOM、
+            无障碍信息和截图）、用户发起的浏览器操作，以及你授权填写的表单数据。
+            这些信息通过 Chrome Native Messaging 发送给本地安装的 Anybox 组件，再由本地
+            Anybox Agent 仅为执行用户明确发起的任务而处理。
           </p>
           <p>
-            扩展只保存连接状态、扩展实例 ID 和传输偏好等有限本地状态。浏览器内容不会用于
-            广告或第三方画像。只有请求的功能需要远程服务时，例如上游模型或 Anybox Managed AI，
-            内容才会离开本地设备。
+            扩展只保存连接与控制状态、扩展实例 ID、任务标签页租约和分组元数据等有限本地状态。
+            它不读取 Cookie、Local Storage、浏览器保存的密码或其他凭据存储；敏感字段值不会被
+            页面快照采集或写入诊断日志。浏览器内容不会用于广告或第三方画像。只有请求的功能需要
+            远程服务时，例如上游模型或 Anybox Managed AI，内容才会离开本地设备。
+          </p>
+          <p>
+            对通过 Google API 和 Chrome 扩展权限获得的信息，Anybox 的使用将遵守
+            Chrome Web Store 用户数据政策，包括 Limited Use（有限使用）要求。此类信息不会被
+            出售，也不会用于广告、信用评估或与 Chrome 浏览器控制功能无关的用途。
           </p>
         </section>
         <section>
@@ -129,7 +137,7 @@ export function PrivacyPage() {
       kicker="Privacy Policy"
       title="Anybox Privacy Policy"
       titleId="privacy-title"
-      updated="July 12, 2026"
+      updated="July 23, 2026"
     >
       <section>
         <h2>1. Scope</h2>
@@ -195,17 +203,29 @@ export function PrivacyPage() {
         <p>
           The Chrome extension connects Chrome to the locally installed Anybox
           Desktop application. When you use browser automation, it may access
-          tabs, page content, screenshots, DOM or accessibility information, and
-          user-initiated browser actions. This information is sent to the local
-          Anybox agent through Chrome Native Messaging or a localhost
-          connection.
+          browsing activity (including tab origins and URLs), website content
+          (including page text, DOM, accessibility information, and screenshots),
+          user-initiated browser actions, and form data you authorize it to enter.
+          This information is sent through Chrome Native Messaging to a locally
+          installed Anybox component, and is processed by the local Anybox agent
+          only to perform tasks you explicitly initiate.
         </p>
         <p>
-          The extension stores limited local state such as connection status,
-          extension instance ID, and transport preferences. Browser content is
-          not used for advertising or third-party profiling. Content leaves the
-          local device only when a requested feature requires a remote service,
-          such as an upstream model or Anybox Managed AI.
+          The extension stores limited local state such as connection and control
+          status, an extension instance ID, task-tab leases, and tab-group
+          metadata. It does not read cookies, Local Storage, browser-saved
+          passwords, or other credential stores; sensitive field values are not
+          captured in page snapshots or written to diagnostic logs. Browser
+          content is not used for advertising or third-party profiling. Content
+          leaves the local device only when a requested feature requires a remote
+          service, such as an upstream model or Anybox Managed AI.
+        </p>
+        <p>
+          Anybox&apos;s use of information received from Google APIs and Chrome
+          extension permissions will adhere to the Chrome Web Store User Data
+          Policy, including the Limited Use requirements. This information is
+          not sold or used for advertising, creditworthiness, or purposes
+          unrelated to Chrome browser control.
         </p>
       </section>
 

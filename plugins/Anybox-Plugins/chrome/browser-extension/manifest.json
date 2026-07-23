@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "Anybox Chrome",
-  "description": "Connect Chrome to the Anybox Chrome plugin.",
+  "description": "Connect Chrome to Anybox Desktop for user-initiated browser automation.",
   "version": "0.15.1",
-  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA7bU1q4S75C3RZbvbSz0Pivt2yJ6u8zoNnaEjxtjrbl10PmrfT9hUTSOrGNVorEU5gyFBzFqFGMjil/22RaS19HlvuxmN8jZxX3I3JxBJWC+pz0iY4CiieUmioGpryCa1mdCkO/fqgesfwDmFVTCU6+fqlppENLSAuaTPLXH7CbRTkVEu4EAzCsvG2hamv956KRlk2BMDQns9He/EQ5Akwcd87U1hjRS8vwtNXWqVjmE0CIMVouUcOjwZ8YCxekhDGB8Sm99DwIWeZQH9gTDQp/etmyrhF9SGqj8tSJkuYFVgdVrvBWbT6uu9FQ0Wc4uKPBJR5PFzFQth6YTqJZMaGQIDAQAB",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAopacQnEnvdRWJB9T37+9mh5BD74ddiRKhm1zIJJaxn/UwR64YDOTk2OcLlSU1Um8l0PJ+S3p3aR20I14e2iwifJwYAR+fpEJqlWYbPFBq2X1Ssx5krmxdIZpfWfFqgmSnXf/krHX7nSG8lZ/aRjWNJICPxDjOKbu+Ol6NCBqpBfaFC8sysqKOkt/CW8m6DKcCugfjavnvwe5HLXBpDSRNHA/zqklHaYXIj3aZv2NWPdiqEynggsI5wLtDYIZO8DPDZS1XEaUgU8PFEpkuY6AvDMVQvNuBu6AZVd+aeP83LqlXr3bTRp9KYednuN69bFOtTouSgvfMC7/j7172YapFwIDAQAB",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",

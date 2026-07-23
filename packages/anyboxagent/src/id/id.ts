@@ -13,6 +13,8 @@ const prefixes = {
   compaction: "cmp",
   automation: "aut",
   automationRun: "arn",
+  environmentBinding: "envb",
+  environmentRun: "envr",
   user: "usr",
   worktree: "wtr",
   part: "prt",

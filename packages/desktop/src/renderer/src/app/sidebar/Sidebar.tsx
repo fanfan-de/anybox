@@ -37,6 +37,10 @@ import type {
   WorkspaceGroup
 } from "../types"
 import { isGitWorkspaceProject, isSideChatSession } from "../workspace"
+import type {
+  AgentEnvironmentCandidate,
+  AgentEnvironmentListResult,
+} from "../../../../shared/desktop-ipc-contract"
 
 const MINUTE_MS = 60 * 1000
 const HOUR_MS = 60 * MINUTE_MS
@@ -759,19 +763,123 @@ function ProjectWorktreeCreateDialog({
   onClose,
   onCreate,
 }: ProjectWorktreeCreateDialogProps) {
+  const { t } = useI18n()
   const [draftName, setDraftName] = useState(defaultName)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [environmentResult, setEnvironmentResult] = useState<AgentEnvironmentListResult | null>(null)
+  const [selectedEnvironmentKey, setSelectedEnvironmentKey] = useState("")
+  const [runSetup, setRunSetup] = useState(true)
+  const [isLoadingEnvironments, setIsLoadingEnvironments] = useState(true)
+  const [isTrustingEnvironment, setIsTrustingEnvironment] = useState(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const isSubmittingRef = useRef(false)
   const branchName = draftName.trim()
   const isBusy = isCreating || isSubmitting
-  const canSubmit = Boolean(branchName) && !isBusy
+  const selectedEnvironment =
+    environmentResult?.items.find((candidate) => candidate.key === selectedEnvironmentKey) ?? null
+  const canSubmit =
+    Boolean(branchName) &&
+    !isBusy &&
+    !isLoadingEnvironments &&
+    (!selectedEnvironment || (
+      selectedEnvironment.trusted &&
+      Boolean(selectedEnvironment.definition) &&
+      !selectedEnvironment.issues.some((issue) => issue.severity === "error")
+    ))
 
   useEffect(() => {
     inputRef.current?.focus()
     inputRef.current?.select()
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    const listEnvironments = window.desktop?.listProjectEnvironments
+    if (!listEnvironments) {
+      setIsLoadingEnvironments(false)
+      return
+    }
+
+    setIsLoadingEnvironments(true)
+    listEnvironments({
+      projectID: workspace.project.id,
+      directory: workspace.directory,
+    })
+      .then((result) => {
+        if (cancelled) return
+        setEnvironmentResult(result)
+        const candidate =
+          result.items.find((item) => item.key === result.selectedKey) ??
+          result.items[0] ??
+          null
+        setSelectedEnvironmentKey(candidate?.key ?? "")
+        setRunSetup(Boolean(candidate?.definition?.setup) && result.autoSetup)
+      })
+      .catch((error) => {
+        if (!cancelled) setErrorMessage(error instanceof Error ? error.message : String(error))
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingEnvironments(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [workspace.directory, workspace.project.id])
+
+  function getEnvironmentScripts(candidate: AgentEnvironmentCandidate) {
+    const scripts: string[] = []
+    const definition = candidate.definition
+    if (!definition) return scripts
+    for (const script of Object.values(definition.setup?.scripts ?? {})) {
+      if (script?.trim()) scripts.push(script.trim())
+    }
+    for (const action of definition.actions) {
+      for (const script of Object.values(action.scripts)) {
+        if (script?.trim()) scripts.push(script.trim())
+      }
+    }
+    return scripts
+  }
+
+  async function handleTrustEnvironment() {
+    if (!selectedEnvironment || selectedEnvironment.trusted || isTrustingEnvironment) return
+    const scripts = getEnvironmentScripts(selectedEnvironment)
+    const summary = [
+      t("environment.worktree.trustPrompt"),
+      "",
+      selectedEnvironment.configPath,
+      `SHA-256 ${selectedEnvironment.contentHash.slice(0, 16)}…`,
+      "",
+      ...scripts.map((script) => `• ${script}`),
+    ].join("\n")
+    if (typeof window.confirm === "function" && !window.confirm(summary)) return
+
+    setIsTrustingEnvironment(true)
+    setErrorMessage(null)
+    try {
+      const trusted = await window.desktop?.trustProjectEnvironment?.({
+        projectID: workspace.project.id,
+        directory: workspace.directory,
+        key: selectedEnvironment.key,
+        expectedHash: selectedEnvironment.contentHash,
+      })
+      if (!trusted) throw new Error(t("environment.worktree.trustUnavailable"))
+      setEnvironmentResult((current) =>
+        current
+          ? {
+              ...current,
+              items: current.items.map((item) => item.key === trusted.key ? trusted : item),
+            }
+          : current,
+      )
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : String(error))
+    } finally {
+      setIsTrustingEnvironment(false)
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -788,6 +896,13 @@ function ProjectWorktreeCreateDialog({
       const result = await onCreate(workspace, {
         name: branchName,
         branchName,
+        environment: selectedEnvironment
+          ? {
+              key: selectedEnvironment.key,
+              expectedHash: selectedEnvironment.contentHash,
+              runSetup: Boolean(selectedEnvironment.definition?.setup) && runSetup,
+            }
+          : undefined,
       })
       if (result !== false) {
         onClose()
@@ -843,6 +958,72 @@ function ProjectWorktreeCreateDialog({
             setErrorMessage(null)
           }}
         />
+
+        {environmentResult?.items.length ? (
+        <section className="project-worktree-environment">
+          <div className="project-worktree-environment-heading">
+            <div>
+              <strong>{t("environment.worktree.title")}</strong>
+              <span>{t("environment.worktree.description")}</span>
+            </div>
+            {selectedEnvironment ? (
+              <span className={selectedEnvironment.trusted ? "is-trusted" : "is-untrusted"}>
+                {selectedEnvironment.trusted
+                  ? t("environment.worktree.trusted")
+                  : t("environment.worktree.untrusted")}
+              </span>
+            ) : null}
+          </div>
+          <select
+            aria-label={t("environment.worktree.selectAria")}
+            value={selectedEnvironmentKey}
+            disabled={isBusy || isLoadingEnvironments}
+            onChange={(event) => {
+              const key = event.target.value
+              const candidate = environmentResult?.items.find((item) => item.key === key)
+              setSelectedEnvironmentKey(key)
+              setRunSetup(Boolean(candidate?.definition?.setup) && (environmentResult?.autoSetup ?? true))
+              setErrorMessage(null)
+            }}
+          >
+            <option value="">{t("environment.worktree.none")}</option>
+            {environmentResult?.items.map((candidate) => (
+              <option
+                key={candidate.key}
+                value={candidate.key}
+                disabled={!candidate.definition || candidate.issues.some((issue) => issue.severity === "error")}
+              >
+                {candidate.definition?.name || candidate.configPath} · {candidate.source === "codex-toml" ? "Codex" : "Anybox"}
+              </option>
+            ))}
+          </select>
+          {selectedEnvironment ? (
+            <div className="project-worktree-environment-options">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={runSetup}
+                  disabled={isBusy || !selectedEnvironment.definition?.setup}
+                  onChange={(event) => setRunSetup(event.target.checked)}
+                />
+                <span>{t("environment.worktree.initialize")}</span>
+              </label>
+              {!selectedEnvironment.trusted ? (
+                <button
+                  className="secondary-button"
+                  type="button"
+                  disabled={isBusy || isTrustingEnvironment || !selectedEnvironment.definition}
+                  onClick={() => void handleTrustEnvironment()}
+                >
+                  {isTrustingEnvironment
+                    ? t("environment.worktree.trusting")
+                    : t("environment.worktree.reviewTrust")}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
+        ) : null}
 
         {errorMessage ? (
           <p className="project-worktree-create-error" role="alert">

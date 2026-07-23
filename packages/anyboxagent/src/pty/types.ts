@@ -7,9 +7,14 @@ export type PtyCursor = z.output<typeof PtyCursor>
 export const PtyStatus = z.enum(["running", "exited", "deleted"])
 export type PtyStatus = z.output<typeof PtyStatus>
 
+export const PtyPurpose = z.enum(["interactive", "environment-action"])
+export type PtyPurpose = z.output<typeof PtyPurpose>
+
 export const PtySessionInfo = z.object({
   id: Identifier.schema("pty"),
   sessionID: Identifier.schema("session"),
+  terminalKey: z.string().min(1).max(240),
+  purpose: PtyPurpose,
   title: z.string(),
   cwd: z.string(),
   shell: z.string(),
@@ -25,6 +30,8 @@ export type PtySessionInfo = z.output<typeof PtySessionInfo>
 
 export const CreatePtySessionBody = z.object({
   sessionID: Identifier.schema("session"),
+  terminalKey: z.string().min(1).max(240).optional().default("interactive"),
+  purpose: PtyPurpose.optional().default("interactive"),
   title: z.string().min(1).max(160).optional(),
   shell: z.string().min(1).optional(),
   rows: z.number().int().min(4).max(400).optional(),

@@ -668,7 +668,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
 }
 
 .project-worktree-create-dialog {
-  width: min(420px, calc(100vw - 32px));
+  width: min(520px, calc(100vw - 32px));
   display: grid;
   gap: 12px;
   padding: 18px 20px 16px;
@@ -789,6 +789,91 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
+}
+
+.project-worktree-environment {
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--seg-border);
+  border-radius: var(--radius-panel);
+  background: var(--seg-panel-muted);
+}
+
+.project-worktree-environment-heading,
+.project-worktree-environment-options {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.project-worktree-environment-heading > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.project-worktree-environment-heading strong {
+  color: var(--seg-text-1);
+  font-size: 13px;
+}
+
+.project-worktree-environment-heading span,
+.project-worktree-environment-options label {
+  color: var(--seg-text-3);
+  font-size: 11px;
+}
+
+.project-worktree-environment-heading > span {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border-radius: var(--radius-chip);
+  font-weight: 700;
+}
+
+.project-worktree-environment-heading > span.is-trusted {
+  color: var(--semantic-success-text);
+  background: var(--semantic-success-surface);
+}
+
+.project-worktree-environment-heading > span.is-untrusted {
+  color: var(--semantic-warning-text);
+  background: var(--semantic-warning-surface);
+}
+
+.project-worktree-environment select {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 9px;
+  border: 1px solid var(--seg-border);
+  border-radius: var(--radius-control);
+  outline: 0;
+  background: var(--seg-panel);
+  color: var(--seg-text-1);
+  font: 12px var(--font-sans);
+}
+
+.project-worktree-environment select:focus-visible {
+  border-color: var(--mix-seg-accent-42-seg-border-58);
+}
+
+.project-worktree-environment-options label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--seg-text-2);
+}
+
+.project-worktree-environment-options input {
+  accent-color: var(--seg-accent);
+}
+
+.project-worktree-environment-options .secondary-button {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 11px;
 }
 
 .session-row.is-editing {

@@ -21,6 +21,8 @@ export type TerminalStreamEvent =
 export interface TerminalSessionRecord {
   ptyID: string
   sessionID: string
+  terminalKey: string
+  purpose: "interactive" | "environment-action"
   title: string
   cwd: string
   shell: string
@@ -50,6 +52,8 @@ export interface TerminalWorkspaceState {
 export interface TerminalStorageSessionSnapshot {
   ptyID: string
   sessionID: string
+  terminalKey: string
+  purpose: "interactive" | "environment-action"
   title: string
   cwd: string
   shell: string
@@ -78,6 +82,8 @@ export interface TerminalStoragePayload {
 export interface PtySessionInfo {
   id: string
   sessionID: string
+  terminalKey: string
+  purpose: "interactive" | "environment-action"
   title: string
   cwd: string
   shell: string

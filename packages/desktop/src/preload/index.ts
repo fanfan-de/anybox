@@ -5,6 +5,7 @@ import { fileURLToPath, pathToFileURL } from "node:url"
 import type {
   AgentArchivedSessionSummary,
   AgentAutomationIPCEvent,
+  AgentEnvironmentIPCEvent,
   AgentFolderWorkspace,
   AgentModelCatalogResult,
   AgentProjectModelSelection,
@@ -103,6 +104,7 @@ import {
   DESKTOP_AGENT_SESSION_EVENT_CHANNEL,
   DESKTOP_APPEARANCE_STATE_EVENT_CHANNEL,
   DESKTOP_AUTOMATION_EVENT_CHANNEL,
+  DESKTOP_ENVIRONMENT_EVENT_CHANNEL,
   DESKTOP_MOBILE_BRIDGE_EVENT_CHANNEL,
   DESKTOP_PTY_EVENT_CHANNEL,
   DESKTOP_WORKBENCH_STATE_EVENT_CHANNEL,
@@ -266,7 +268,7 @@ try {
       invokeDesktop("desktop:rotate-mobile-bridge-token") as Promise<DesktopIpcOutput<"desktop:rotate-mobile-bridge-token">>,
     revokeMobileDevice: (input: DesktopIpcInput<"desktop:revoke-mobile-device">) =>
       invokeDesktop("desktop:revoke-mobile-device", input) as Promise<DesktopIpcOutput<"desktop:revoke-mobile-device">>,
-    createPtySession: (input: { sessionID: string; title?: string; shell?: string; rows?: number; cols?: number }) =>
+    createPtySession: (input: DesktopIpcInput<"desktop:create-pty-session">) =>
       invokeDesktop("desktop:create-pty-session", input) as Promise<PtySessionInfo>,
     getPtySession: (input: { id: string }) =>
       invokeDesktop("desktop:get-pty-session", input) as Promise<PtySessionInfo>,
@@ -324,11 +326,35 @@ try {
     listProjectWorktrees: (input: { projectID: string }) =>
       invokeDesktop("desktop:list-project-worktrees", input) as Promise<AgentWorktreeRecord[]>,
     createProjectWorktree: (input: DesktopIpcInput<"desktop:create-project-worktree">) =>
-      invokeDesktop("desktop:create-project-worktree", input) as Promise<AgentWorktreeRecord>,
+      invokeDesktop("desktop:create-project-worktree", input) as Promise<DesktopIpcOutput<"desktop:create-project-worktree">>,
     refreshProjectWorktree: (input: DesktopIpcInput<"desktop:refresh-project-worktree">) =>
       invokeDesktop("desktop:refresh-project-worktree", input) as Promise<AgentWorktreeRecord>,
     deleteProjectWorktree: (input: DesktopIpcInput<"desktop:delete-project-worktree">) =>
       invokeDesktop("desktop:delete-project-worktree", input) as Promise<AgentWorktreeRecord>,
+    listProjectEnvironments: (input: DesktopIpcInput<"desktop:list-project-environments">) =>
+      invokeDesktop("desktop:list-project-environments", input) as Promise<DesktopIpcOutput<"desktop:list-project-environments">>,
+    saveProjectEnvironment: (input: DesktopIpcInput<"desktop:save-project-environment">) =>
+      invokeDesktop("desktop:save-project-environment", input) as Promise<DesktopIpcOutput<"desktop:save-project-environment">>,
+    importProjectEnvironment: (input: DesktopIpcInput<"desktop:import-project-environment">) =>
+      invokeDesktop("desktop:import-project-environment", input) as Promise<DesktopIpcOutput<"desktop:import-project-environment">>,
+    updateProjectEnvironmentPreference: (input: DesktopIpcInput<"desktop:update-project-environment-preference">) =>
+      invokeDesktop("desktop:update-project-environment-preference", input) as Promise<DesktopIpcOutput<"desktop:update-project-environment-preference">>,
+    trustProjectEnvironment: (input: DesktopIpcInput<"desktop:trust-project-environment">) =>
+      invokeDesktop("desktop:trust-project-environment", input) as Promise<DesktopIpcOutput<"desktop:trust-project-environment">>,
+    revokeProjectEnvironmentTrust: (input: DesktopIpcInput<"desktop:revoke-project-environment-trust">) =>
+      invokeDesktop("desktop:revoke-project-environment-trust", input) as Promise<DesktopIpcOutput<"desktop:revoke-project-environment-trust">>,
+    getEnvironmentRun: (input: DesktopIpcInput<"desktop:get-environment-run">) =>
+      invokeDesktop("desktop:get-environment-run", input) as Promise<DesktopIpcOutput<"desktop:get-environment-run">>,
+    cancelEnvironmentRun: (input: DesktopIpcInput<"desktop:cancel-environment-run">) =>
+      invokeDesktop("desktop:cancel-environment-run", input) as Promise<DesktopIpcOutput<"desktop:cancel-environment-run">>,
+    retryEnvironmentRun: (input: DesktopIpcInput<"desktop:retry-environment-run">) =>
+      invokeDesktop("desktop:retry-environment-run", input) as Promise<DesktopIpcOutput<"desktop:retry-environment-run">>,
+    startEnvironmentAction: (input: DesktopIpcInput<"desktop:start-environment-action">) =>
+      invokeDesktop("desktop:start-environment-action", input) as Promise<DesktopIpcOutput<"desktop:start-environment-action">>,
+    stopEnvironmentAction: (input: DesktopIpcInput<"desktop:stop-environment-action">) =>
+      invokeDesktop("desktop:stop-environment-action", input) as Promise<DesktopIpcOutput<"desktop:stop-environment-action">>,
+    restartEnvironmentSetup: (input: DesktopIpcInput<"desktop:restart-environment-setup">) =>
+      invokeDesktop("desktop:restart-environment-setup", input) as Promise<DesktopIpcOutput<"desktop:restart-environment-setup">>,
     openFolderWorkspace: (input: { directory: string }) =>
       invokeDesktop("desktop:open-folder-workspace", input) as Promise<AgentFolderWorkspace>,
     listSshProfiles: () =>
@@ -1063,6 +1089,17 @@ try {
 
       return () => {
         ipcRenderer.removeListener(DESKTOP_AUTOMATION_EVENT_CHANNEL, wrappedListener)
+      }
+    },
+    onEnvironmentEvent: (listener: (event: AgentEnvironmentIPCEvent) => void) => {
+      const wrappedListener = (_event: Electron.IpcRendererEvent, environmentEvent: AgentEnvironmentIPCEvent) => {
+        listener(environmentEvent)
+      }
+
+      ipcRenderer.on(DESKTOP_ENVIRONMENT_EVENT_CHANNEL, wrappedListener)
+
+      return () => {
+        ipcRenderer.removeListener(DESKTOP_ENVIRONMENT_EVENT_CHANNEL, wrappedListener)
       }
     },
     onMobileBridgeEvent: (listener: (event: MobileBridgeDesktopEvent) => void) => {

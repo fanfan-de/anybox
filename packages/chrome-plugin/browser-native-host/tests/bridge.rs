@@ -184,7 +184,7 @@ fn forwards_messages_between_chrome_and_the_agent_ipc_gateway() {
         assert_eq!(hello["type"], "hello");
         assert_eq!(hello["role"], "native-host");
         assert_eq!(hello["nativeHostName"], "com.anybox.browser");
-        assert_eq!(hello["extensionID"], "hjbejdmgpifdjjlpgmdfmbmbhkedgnjc");
+        assert_eq!(hello["extensionID"], "mgpdddgemohfmonbnpehohhlbndakdpg");
         assert_eq!(
             hello["proof"].as_str().unwrap(),
             proof_for(bootstrap_proof, &hello)

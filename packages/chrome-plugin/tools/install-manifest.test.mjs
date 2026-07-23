@@ -26,7 +26,7 @@ async function createPluginFixture(root) {
   await fsp.writeFile(
     path.join(root, "scripts", "extension-id.json"),
     `${JSON.stringify({
-      extensionId: "hjbejdmgpifdjjlpgmdfmbmbhkedgnjc",
+      extensionId: "mgpdddgemohfmonbnpehohhlbndakdpg",
       extensionHostName: "com.anybox.browser",
     }, null, 2)}\n`,
   )
@@ -49,10 +49,10 @@ test("builds a Chrome Native Messaging manifest", () => {
     nativeMessagingManifest({
       extensionHostName: "com.anybox.browser",
       extensionHostPath: "C:\\plugin\\extension-host.exe",
-      extensionId: "hjbejdmgpifdjjlpgmdfmbmbhkedgnjc",
+      extensionId: "mgpdddgemohfmonbnpehohhlbndakdpg",
     }),
     {
-      allowed_origins: ["chrome-extension://hjbejdmgpifdjjlpgmdfmbmbhkedgnjc/"],
+      allowed_origins: ["chrome-extension://mgpdddgemohfmonbnpehohhlbndakdpg/"],
       description: "Anybox Chrome Native Messaging Host",
       name: "com.anybox.browser",
       path: path.resolve("C:\\plugin\\extension-host.exe"),
@@ -223,7 +223,7 @@ test("installs a plugin-owned Windows host and replaces legacy token config", as
     const manifest = JSON.parse(await fsp.readFile(manifestPath, "utf8"))
     assert.equal(manifest.path, result.extensionHostPath)
     assert.deepEqual(manifest.allowed_origins, [
-      "chrome-extension://hjbejdmgpifdjjlpgmdfmbmbhkedgnjc/",
+      "chrome-extension://mgpdddgemohfmonbnpehohhlbndakdpg/",
     ])
 
     const runtimeConfig = JSON.parse(await fsp.readFile(result.runtimeConfigPath, "utf8"))

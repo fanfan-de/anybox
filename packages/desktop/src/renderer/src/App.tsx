@@ -63,6 +63,7 @@ import {
 } from "./app/agent-workspace/workspace-derived-state"
 import type {
   AgentAutomationIPCEvent,
+  AgentEnvironmentRunRecord,
   AgentProjectWorkspace,
   DesktopAppUpdateState,
   WorkbenchSharedState,
@@ -80,6 +81,10 @@ import { useI18n } from "./app/i18n/I18nProvider"
 import type { TranslationKey } from "./app/i18n/translations"
 import { PromptSkillsPage, type PromptSkillMode } from "./app/prompts/PromptSkillsPage"
 import { SkillsWorkspacePage, type SkillLibraryMode } from "./app/skills/SkillsWorkspacePage"
+import {
+  ENVIRONMENT_SETTINGS_SECTION_STORAGE_KEY,
+  OPEN_ENVIRONMENT_SETTINGS_EVENT,
+} from "./app/settings/events"
 
 const GlobalSkillsPage = lazy(() => import("./app/skills/GlobalSkillsPage").then((module) => ({ default: module.GlobalSkillsPage })))
 const ConnectorsPage = lazy(() => import("./app/connectors/ConnectorsPage").then((module) => ({ default: module.ConnectorsPage })))
@@ -207,6 +212,21 @@ function rightSidebarSideChatPanelStatesAreEqual(
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error)
+}
+
+function environmentRunIsComplete(run: AgentEnvironmentRunRecord) {
+  return !["queued", "running"].includes(run.status)
+}
+
+async function waitForEnvironmentRun(run: AgentEnvironmentRunRecord) {
+  let current = run
+  while (!environmentRunIsComplete(current)) {
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 500))
+    const getRun = window.desktop?.getEnvironmentRun
+    if (!getRun) throw new Error("环境运行状态服务不可用。")
+    current = await getRun({ runID: current.id })
+  }
+  return current
 }
 
 function readObject(value: unknown): Record<string, unknown> | null {
@@ -1773,6 +1793,15 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     })
   }, [])
 
+  useEffect(() => {
+    const openEnvironmentSettings = () => {
+      window.sessionStorage.setItem(ENVIRONMENT_SETTINGS_SECTION_STORAGE_KEY, "true")
+      handleOpenSettings()
+    }
+    window.addEventListener(OPEN_ENVIRONMENT_SETTINGS_EVENT, openEnvironmentSettings)
+    return () => window.removeEventListener(OPEN_ENVIRONMENT_SETTINGS_EVENT, openEnvironmentSettings)
+  })
+
   function handleOpenSettings() {
     if (isOpen || isPreparingSettingsPage) return
 
@@ -1807,11 +1836,42 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
       const created = await createProjectWorktree({
         projectID,
         branchName: input.branchName?.trim() || undefined,
+        sourceDirectory: workspace.directory,
+        environment: input.environment,
         cleanupPolicy: "manual",
         ownerType: "manual",
       })
-      const createdSession = await handleCreateSessionForDirectory(projectID, created.path)
-      const label = input.name.trim() || created.branch?.trim() || created.path
+      const targetDirectory = created.worktree.workingDirectory ?? created.worktree.path
+      if (created.setupRun) {
+        toast.info("创建工作树 ✓  →  正在初始化环境  →  打开会话")
+        let setupRun = await waitForEnvironmentRun(created.setupRun)
+        if (setupRun.status !== "succeeded") {
+          console.error("[desktop] environment setup failed:", setupRun)
+          const shouldRetry =
+            typeof window.confirm === "function" &&
+            window.confirm(
+              `环境初始化失败：${setupRun.error || `退出码 ${setupRun.exitCode ?? "未知"}`}\n\n选择“确定”重试初始化；选择“取消”跳过初始化并打开会话。`,
+            )
+          if (shouldRetry) {
+            const retried = await window.desktop?.retryEnvironmentRun?.({ runID: setupRun.id })
+            if (retried) setupRun = await waitForEnvironmentRun(retried)
+          }
+          if (setupRun.status !== "succeeded") {
+            const shouldSkip =
+              shouldRetry &&
+              typeof window.confirm === "function" &&
+              window.confirm(
+                `重试仍未成功。是否跳过初始化并打开会话？\n\n${setupRun.output.slice(-4_000)}`,
+              )
+            if (shouldRetry && !shouldSkip) {
+              toast.error("工作树已保留；环境初始化未完成，可稍后从环境菜单重新初始化。")
+              return true
+            }
+          }
+        }
+      }
+      const createdSession = await handleCreateSessionForDirectory(projectID, targetDirectory)
+      const label = input.name.trim() || created.worktree.branch?.trim() || targetDirectory
       if (createdSession) {
         toast.success(`已创建工作树：${label}`)
       } else {

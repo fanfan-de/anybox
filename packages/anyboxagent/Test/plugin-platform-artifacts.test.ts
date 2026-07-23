@@ -46,7 +46,7 @@ function artifact() {
     type: "chrome-native-messaging-host",
     hostName: "com.anybox.browser",
     description: "Anybox Chrome Native Messaging Host",
-    extensionIDs: ["hjbejdmgpifdjjlpgmdfmbmbhkedgnjc"],
+    extensionIDs: ["mgpdddgemohfmonbnpehohhlbndakdpg"],
     executables: [{
       platform: "linux",
       architecture: "x64",
@@ -187,7 +187,7 @@ describe("declarative plugin platform artifacts", () => {
     expect(JSON.parse(await readFile(first!.manifestPaths[0]!, "utf8")))
       .toMatchObject({
         allowed_origins: [
-          "chrome-extension://hjbejdmgpifdjjlpgmdfmbmbhkedgnjc/",
+          "chrome-extension://mgpdddgemohfmonbnpehohhlbndakdpg/",
         ],
         name: "com.anybox.browser",
         path: first!.executablePath,

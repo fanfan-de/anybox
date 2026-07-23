@@ -14,6 +14,7 @@ import { zhTW } from "./locales/zh-TW"
 import { literalPatternTemplates } from "./literal-pattern-locales"
 import { pluginOwnershipTranslations } from "./plugin-ownership-translations"
 import { subscriptionTranslations } from "./subscription-translations"
+import { environmentEnUS, environmentZhCN } from "./environment-translations"
 
 export const zhCN = {
   "app.loading": "加载中",
@@ -1581,6 +1582,7 @@ export const zhCN = {
   "settings.account.communityTitle": "\u4ea7\u54c1\u4ea4\u6d41\u7fa4",
   "settings.account.communityDescription": "\u5fae\u4fe1\u626b\u7801\u52a0\u5165 Anybox \u7528\u6237\u4ea4\u6d41\u7fa4",
   "settings.account.communityQrAlt": "Anybox \u7528\u6237\u4ea4\u6d41\u7fa4\u4e8c\u7ef4\u7801",
+  ...environmentZhCN,
 } as const
 
 export type TranslationKey = keyof typeof zhCN
@@ -3151,6 +3153,7 @@ export const enUS = {
   "mcp.validation.requireUrl": "Remote MCP servers require a server URL.",
   "mcp.validation.requireConnectorId": "Connector MCP servers require a connector id.",
   "mcp.validation.requireToolNames": "Named tool filters require at least one tool name.",
+  ...environmentEnUS,
 } as const satisfies Record<TranslationKey, string>
 
 const translations = {

@@ -76,6 +76,9 @@ interface WorktreeRecord {
 type ProjectsResponseEnvelope = JsonEnvelope<ProjectRecord[]>
 type WorktreesResponseEnvelope = JsonEnvelope<WorktreeRecord[]>
 type WorktreeResponseEnvelope = JsonEnvelope<WorktreeRecord>
+type PreparedWorktreeResponseEnvelope = JsonEnvelope<{
+  worktree: WorktreeRecord
+}>
 
 type ProjectSessionsResponseEnvelope = JsonEnvelope<
   Array<{
@@ -4246,8 +4249,8 @@ describe("server api", () => {
           cleanupPolicy: "manual",
         }),
       })
-      const createBody = (await createResponse.json()) as WorktreeResponseEnvelope
-      const created = createBody.data
+      const createBody = (await createResponse.json()) as PreparedWorktreeResponseEnvelope
+      const created = createBody.data?.worktree
 
       expect(createResponse.status).toBe(201)
       expect(created).toMatchObject({
@@ -4347,8 +4350,8 @@ describe("server api", () => {
           cleanupPolicy: "manual",
         }),
       })
-      const createBody = (await createResponse.json()) as WorktreeResponseEnvelope
-      const created = createBody.data
+      const createBody = (await createResponse.json()) as PreparedWorktreeResponseEnvelope
+      const created = createBody.data?.worktree
       createdPath = created?.path
 
       expect(createResponse.status).toBe(201)

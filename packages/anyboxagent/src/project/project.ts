@@ -726,6 +726,10 @@ export async function refreshWorktree(projectID: string, worktreeID: string) {
   return Worktree.refreshByID(projectID, worktreeID)
 }
 
+export function markWorktreeFailed(projectID: string, worktreeID: string) {
+  return Worktree.markFailed(projectID, worktreeID)
+}
+
 export async function createManagedWorktree(projectID: string, input: {
   baseRef?: string | null
   branch?: string | null
@@ -733,6 +737,7 @@ export async function createManagedWorktree(projectID: string, input: {
   ownerRunID?: string
   ownerSessionID?: string
   ownerType?: Worktree.WorktreeOwnerType
+  sourceDirectory?: string
 }) {
   const project = get(projectID)
   if (!project) return null

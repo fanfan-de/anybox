@@ -15,6 +15,7 @@ import { CinemaRoutes } from "#server/routes/cinema.ts"
 import { CinemaAssetLibraryRoutes } from "#server/routes/cinema-assets.ts"
 import { CinemaWebRoutes } from "#server/routes/cinema-web.ts"
 import { DebugRoutes } from "#server/routes/debug.ts"
+import { EnvironmentRoutes } from "#server/routes/environments.ts"
 import { SettingsRoutes } from "#server/routes/settings.ts"
 import { SessionRoutes } from "#server/routes/session.ts"
 import { StorageRoutes } from "#server/routes/storage.ts"
@@ -29,6 +30,8 @@ import { getProcessEnvValue } from "#env/compat.ts"
 import { getServerBaseURL, setServerBaseURL } from "#server/base-url.ts"
 import { startAutomationScheduler } from "#automation/scheduler.ts"
 import { startStorageMaintenance } from "#session/runtime/storage-maintenance.ts"
+import * as EnvironmentActions from "#environment/actions.ts"
+import * as EnvironmentRunner from "#environment/runner.ts"
 
 export interface ServerOptions {
   host?: string
@@ -40,6 +43,7 @@ export interface ServerOptions {
 
 const log = Log.create({ service: "server" })
 let activeServer: Bun.Server<unknown> | undefined
+let activePtyRegistry: PtyRegistry | undefined
 
 function getRequestId(c: Context<AppEnv>) {
   return c.get("requestId") ?? "unknown"
@@ -138,6 +142,7 @@ export function createServerRuntime(options: Pick<ServerOptions, "corsWhitelist"
   app.route("/api/remote", RemoteRoutes())
   app.route("/api/workspace-files", WorkspaceFilesRoutes())
   app.route("/api/pty", PtyRoutes({ registry: ptyRegistry, upgradeWebSocket }))
+  app.route("/api", EnvironmentRoutes({ ptyRegistry }))
   app.route("/api/automation-events", AutomationEventRoutes())
   app.route("/api/automations", AutomationRoutes())
   app.route("/api/automation-runs", AutomationRunRoutes())
@@ -184,9 +189,10 @@ export function startServer(options: ServerOptions = {}) {
   const host = options.host ?? getProcessEnvValue("ANYBOX_SERVER_HOST") ?? "127.0.0.1"
   const port = options.port ?? parsePort(getProcessEnvValue("ANYBOX_SERVER_PORT"), 4096)
   const idleTimeout = options.idleTimeout ?? parseIdleTimeout(getProcessEnvValue("ANYBOX_SERVER_IDLE_TIMEOUT"), 120)
+  const ptyRegistry = options.ptyRegistry ?? getPtyRegistry()
   const runtime = createServerRuntime({
     corsWhitelist: options.corsWhitelist,
-    ptyRegistry: options.ptyRegistry,
+    ptyRegistry,
   })
   activeServer = Bun.serve({
     hostname: host,
@@ -197,6 +203,7 @@ export function startServer(options: ServerOptions = {}) {
     },
     websocket: runtime.websocket,
   })
+  activePtyRegistry = ptyRegistry
   setServerBaseURL(`http://${host}:${port}`)
   startAutomationScheduler()
   startStorageMaintenance()
@@ -209,10 +216,13 @@ export function startServer(options: ServerOptions = {}) {
   return activeServer
 }
 
-export function stopServer() {
+export async function stopServer() {
   if (activeServer) {
+    await EnvironmentRunner.cancelAllRuns()
+    if (activePtyRegistry) await EnvironmentActions.cancelAllActions(activePtyRegistry)
     activeServer.stop(true)
     activeServer = undefined
+    activePtyRegistry = undefined
     log.info("server-stopped")
   }
 }

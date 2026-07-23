@@ -6,6 +6,8 @@
   "scripts": {
     "build": "node ./tools/package-chrome-plugin.mjs",
     "check": "node ./tools/package-chrome-plugin.mjs --check",
+    "package:web-store": "node ./tools/package-chrome-web-store.mjs",
+    "package:web-store:skip-build": "node ./tools/package-chrome-web-store.mjs --skip-build",
     "release:local": "node ./tools/release-chrome-plugin.mjs",
     "test": "corepack pnpm --filter @anybox/chrome-shared test && corepack pnpm --filter anybox-chrome-browser-host test && corepack pnpm --filter anybox-chrome-extension test && corepack pnpm --filter anybox-chrome-extension test:e2e && corepack pnpm --filter anybox-chrome-browser-runtime test && corepack pnpm --filter anybox-chrome-native-host test && node --test ./tools/*.test.mjs"
   }

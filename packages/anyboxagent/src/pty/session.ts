@@ -39,6 +39,8 @@ export interface ManagedPtySession {
 interface CreateManagedPtySessionOptions {
   id: string
   sessionID: string
+  terminalKey: string
+  purpose: PtySessionInfo["purpose"]
   title?: string
   cwd: string
   shell: string
@@ -63,6 +65,8 @@ export async function createManagedPtySession(options: CreateManagedPtySessionOp
   let info: PtySessionInfo = {
     id: options.id,
     sessionID: options.sessionID,
+    terminalKey: options.terminalKey,
+    purpose: options.purpose,
     title: options.title?.trim() || defaultTitle(options.cwd),
     cwd: options.cwd,
     shell: options.shell,

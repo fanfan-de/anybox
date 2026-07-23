@@ -17,6 +17,13 @@ import type {
   AgentConnectorDefinition,
   AgentConnectorStatus,
   AgentFolderWorkspace,
+  AgentEnvironmentActionStartResult,
+  AgentEnvironmentCandidate,
+  AgentEnvironmentDefinition,
+  AgentEnvironmentIPCEvent,
+  AgentEnvironmentListResult,
+  AgentEnvironmentPreference,
+  AgentEnvironmentRunRecord,
   AgentGlobalSkillFileDocument,
   AgentGlobalSkillFolderRenameResult,
   AgentGlobalSkillFolderResult,
@@ -51,6 +58,7 @@ import type {
   AgentPromptUrlInstallCandidate,
   AgentPromptUrlInstallPreview,
   AgentPromptUrlInstallResult,
+  AgentPreparedWorktreeResult,
   AgentProviderAuthFlow,
   AgentProviderAuthState,
   AgentProviderCatalogItem,
@@ -138,6 +146,7 @@ import type {
 
 export const DESKTOP_AGENT_SESSION_EVENT_CHANNEL = "desktop:agent-session-event"
 export const DESKTOP_AUTOMATION_EVENT_CHANNEL = "desktop:automation-event"
+export const DESKTOP_ENVIRONMENT_EVENT_CHANNEL = "desktop:environment-event"
 export const DESKTOP_MOBILE_BRIDGE_EVENT_CHANNEL = "desktop:mobile-bridge-event"
 export const DESKTOP_WORKSPACE_FILE_CHANGE_EVENT_CHANNEL = "desktop:workspace-file-change"
 export const DESKTOP_PTY_EVENT_CHANNEL = "desktop:pty-event"
@@ -182,6 +191,13 @@ export type {
   AgentConnectorDefinition,
   AgentConnectorStatus,
   AgentFolderWorkspace,
+  AgentEnvironmentActionStartResult,
+  AgentEnvironmentCandidate,
+  AgentEnvironmentDefinition,
+  AgentEnvironmentIPCEvent,
+  AgentEnvironmentListResult,
+  AgentEnvironmentPreference,
+  AgentEnvironmentRunRecord,
   AgentGlobalSkillFileDocument,
   AgentGlobalSkillFolderRenameResult,
   AgentGlobalSkillFolderResult,
@@ -215,6 +231,7 @@ export type {
   AgentPromptUrlInstallCandidate,
   AgentPromptUrlInstallPreview,
   AgentPromptUrlInstallResult,
+  AgentPreparedWorktreeResult,
   AgentProviderAuthFlow,
   AgentProviderAuthState,
   AgentProviderCatalogItem,
@@ -1416,12 +1433,18 @@ export interface DesktopIpcContract {
       projectID: string
       baseRef?: string
       branchName?: string
+      sourceDirectory?: string
+      environment?: {
+        key: string
+        expectedHash: string
+        runSetup: boolean
+      }
       cleanupPolicy?: AgentWorktreeRecord["cleanupPolicy"]
       ownerRunID?: string
       ownerSessionID?: string
       ownerType?: AgentWorktreeRecord["ownerType"]
     }
-    output: AgentWorktreeRecord
+    output: AgentPreparedWorktreeResult
   }
   "desktop:refresh-project-worktree": {
     input: { projectID: string; worktreeID: string }
@@ -1436,8 +1459,107 @@ export interface DesktopIpcContract {
     output: { directories: string[] }
   }
   "desktop:create-pty-session": {
-    input: { sessionID: string; title?: string; shell?: string; rows?: number; cols?: number }
+    input: {
+      sessionID: string
+      terminalKey?: string
+      purpose?: AgentPtySessionInfo["purpose"]
+      title?: string
+      shell?: string
+      rows?: number
+      cols?: number
+    }
     output: AgentPtySessionInfo
+  }
+  "desktop:list-project-environments": {
+    input: { projectID: string; directory: string }
+    output: AgentEnvironmentListResult
+  }
+  "desktop:save-project-environment": {
+    input: {
+      projectID: string
+      directory: string
+      definition: AgentEnvironmentDefinition
+      expectedHash: string | null
+      trust: boolean
+    }
+    output: AgentEnvironmentCandidate
+  }
+  "desktop:import-project-environment": {
+    input: {
+      projectID: string
+      directory: string
+      key: string
+      expectedHash: string
+      trust: boolean
+    }
+    output: AgentEnvironmentCandidate
+  }
+  "desktop:update-project-environment-preference": {
+    input: {
+      projectID: string
+      directory: string
+      selectedKey?: string | null
+      autoSetup?: boolean
+    }
+    output: AgentEnvironmentPreference
+  }
+  "desktop:trust-project-environment": {
+    input: {
+      projectID: string
+      directory: string
+      key: string
+      expectedHash: string
+    }
+    output: AgentEnvironmentCandidate
+  }
+  "desktop:revoke-project-environment-trust": {
+    input: {
+      projectID: string
+      directory: string
+      key: string
+      expectedHash?: string
+    }
+    output: AgentEnvironmentCandidate
+  }
+  "desktop:get-environment-run": {
+    input: { runID: string }
+    output: AgentEnvironmentRunRecord
+  }
+  "desktop:cancel-environment-run": {
+    input: { runID: string }
+    output: AgentEnvironmentRunRecord
+  }
+  "desktop:retry-environment-run": {
+    input: { runID: string }
+    output: AgentEnvironmentRunRecord
+  }
+  "desktop:start-environment-action": {
+    input: {
+      projectID: string
+      environmentKey: string
+      expectedHash: string
+      actionID: string
+      sessionID: string
+    }
+    output: AgentEnvironmentActionStartResult
+  }
+  "desktop:stop-environment-action": {
+    input: {
+      projectID: string
+      environmentKey: string
+      actionID: string
+      sessionID: string
+    }
+    output: AgentEnvironmentRunRecord
+  }
+  "desktop:restart-environment-setup": {
+    input: {
+      projectID: string
+      environmentKey: string
+      expectedHash: string
+      sessionID: string
+    }
+    output: AgentEnvironmentRunRecord | undefined
   }
   "desktop:get-pty-session": {
     input: { id: string }
@@ -2318,6 +2440,7 @@ export interface DesktopIpcEventPayloads {
   [DESKTOP_APP_UPDATE_STATE_EVENT_CHANNEL]: DesktopAppUpdateState
   [DESKTOP_AGENT_SESSION_EVENT_CHANNEL]: AgentSessionBridgeIPCEvent
   [DESKTOP_AUTOMATION_EVENT_CHANNEL]: AgentAutomationIPCEvent
+  [DESKTOP_ENVIRONMENT_EVENT_CHANNEL]: AgentEnvironmentIPCEvent
   [DESKTOP_MOBILE_BRIDGE_EVENT_CHANNEL]: MobileBridgeDesktopEvent
   [DESKTOP_WORKSPACE_FILE_CHANGE_EVENT_CHANNEL]: WorkspaceFileChangeIPCEvent
   [DESKTOP_PTY_EVENT_CHANNEL]: PtyTransportIPCEvent
@@ -2443,6 +2566,25 @@ export interface DesktopApiMethods {
   createProjectWorktree(input: DesktopIpcInput<"desktop:create-project-worktree">): Promise<DesktopIpcOutput<"desktop:create-project-worktree">>
   refreshProjectWorktree(input: DesktopIpcInput<"desktop:refresh-project-worktree">): Promise<DesktopIpcOutput<"desktop:refresh-project-worktree">>
   deleteProjectWorktree(input: DesktopIpcInput<"desktop:delete-project-worktree">): Promise<DesktopIpcOutput<"desktop:delete-project-worktree">>
+  listProjectEnvironments(input: DesktopIpcInput<"desktop:list-project-environments">): Promise<DesktopIpcOutput<"desktop:list-project-environments">>
+  saveProjectEnvironment(input: DesktopIpcInput<"desktop:save-project-environment">): Promise<DesktopIpcOutput<"desktop:save-project-environment">>
+  importProjectEnvironment(input: DesktopIpcInput<"desktop:import-project-environment">): Promise<DesktopIpcOutput<"desktop:import-project-environment">>
+  updateProjectEnvironmentPreference(
+    input: DesktopIpcInput<"desktop:update-project-environment-preference">,
+  ): Promise<DesktopIpcOutput<"desktop:update-project-environment-preference">>
+  trustProjectEnvironment(input: DesktopIpcInput<"desktop:trust-project-environment">): Promise<DesktopIpcOutput<"desktop:trust-project-environment">>
+  revokeProjectEnvironmentTrust(
+    input: DesktopIpcInput<"desktop:revoke-project-environment-trust">,
+  ): Promise<DesktopIpcOutput<"desktop:revoke-project-environment-trust">>
+  getEnvironmentRun(input: DesktopIpcInput<"desktop:get-environment-run">): Promise<DesktopIpcOutput<"desktop:get-environment-run">>
+  cancelEnvironmentRun(input: DesktopIpcInput<"desktop:cancel-environment-run">): Promise<DesktopIpcOutput<"desktop:cancel-environment-run">>
+  retryEnvironmentRun(input: DesktopIpcInput<"desktop:retry-environment-run">): Promise<DesktopIpcOutput<"desktop:retry-environment-run">>
+  startEnvironmentAction(input: DesktopIpcInput<"desktop:start-environment-action">): Promise<DesktopIpcOutput<"desktop:start-environment-action">>
+  stopEnvironmentAction(input: DesktopIpcInput<"desktop:stop-environment-action">): Promise<DesktopIpcOutput<"desktop:stop-environment-action">>
+  restartEnvironmentSetup(input: DesktopIpcInput<"desktop:restart-environment-setup">): Promise<DesktopIpcOutput<"desktop:restart-environment-setup">>
+  onEnvironmentEvent(
+    listener: (event: DesktopIpcEventPayload<typeof DESKTOP_ENVIRONMENT_EVENT_CHANNEL>) => void,
+  ): () => void
   openFolderWorkspace(input: DesktopIpcInput<"desktop:open-folder-workspace">): Promise<DesktopIpcOutput<"desktop:open-folder-workspace">>
   listSshProfiles(): Promise<DesktopIpcOutput<"desktop:list-ssh-profiles">>
   saveSshProfile(input: DesktopIpcInput<"desktop:save-ssh-profile">): Promise<DesktopIpcOutput<"desktop:save-ssh-profile">>

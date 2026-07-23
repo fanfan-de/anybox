@@ -2,7 +2,8 @@ import { startTransition, useEffect, useRef, useState } from "react"
 import { mapPtySessionInfoToRecord, terminalClient } from "./client"
 import { DEFAULT_TERMINAL_SHELL_PROFILE_ID, resolveShellFromProfile, resolveTerminalShellProfiles } from "./shell-profiles"
 import { loadTerminalWorkspaceState, saveTerminalWorkspaceState, serializeTerminalWorkspaceState } from "./storage"
-import type { PtyEvent, TerminalSessionRecord, TerminalShellProfile, TerminalStreamEvent, TerminalWorkspaceState } from "./types"
+import type { PtyEvent, PtySessionInfo, TerminalSessionRecord, TerminalShellProfile, TerminalStreamEvent, TerminalWorkspaceState } from "./types"
+import { OPEN_PTY_SESSION_EVENT } from "./events"
 
 const MIN_PANEL_HEIGHT = 220
 const MAX_PANEL_HEIGHT = 560
@@ -721,7 +722,11 @@ export function useTerminalWorkspace({ currentSessionID, storageKey }: UseTermin
     if (isCreatingTerminalRef.current) return
 
     const existing = Object.values(workspaceRef.current.sessions).find(
-      (session) => session.sessionID === ownerSessionID && session.status !== "deleted" && session.status !== "invalid",
+      (session) =>
+        session.sessionID === ownerSessionID &&
+        session.terminalKey === "interactive" &&
+        session.status !== "deleted" &&
+        session.status !== "invalid",
     )
     if (existing) {
       setCreationError(null)
@@ -729,10 +734,6 @@ export function useTerminalWorkspace({ currentSessionID, storageKey }: UseTermin
         ...current,
         isOpen: current.isOpen || openPanel,
         activePtyID: existing.ptyID,
-        order: [existing.ptyID],
-        sessions: {
-          [existing.ptyID]: existing,
-        },
       }))
       return
     }
@@ -800,18 +801,19 @@ export function useTerminalWorkspace({ currentSessionID, storageKey }: UseTermin
         scrollTop: workspaceRef.current.scrollTopBySessionID[pending.sessionID] ?? 0,
       })
 
-      updateWorkspace((current) => ({
-          ...current,
-          isOpen: current.isOpen || pending.openPanel,
-          activePtyID: session.id,
-          order: [session.id],
-          sessions: {
-            [session.id]: mapPtySessionInfoToRecord(session, {
-              scrollTop: workspaceRef.current.scrollTopBySessionID[pending.sessionID] ?? 0,
-              transportState: "idle",
-            }),
+      updateWorkspace((current) =>
+        upsertSession(
+          {
+            ...current,
+            isOpen: current.isOpen || pending.openPanel,
           },
-        }))
+          mapPtySessionInfoToRecord(session, {
+            scrollTop: workspaceRef.current.scrollTopBySessionID[pending.sessionID] ?? 0,
+            transportState: "idle",
+          }),
+          true,
+        ),
+      )
       setCreationError(null)
     } catch (error) {
       if (pendingCreateRef.current?.requestID !== requestID) return
@@ -852,7 +854,11 @@ export function useTerminalWorkspace({ currentSessionID, storageKey }: UseTermin
     if (!ownerSessionID) return
 
     const activeForCurrentSession = Object.values(workspaceRef.current.sessions).some(
-      (session) => session.sessionID === ownerSessionID,
+      (session) =>
+        session.sessionID === ownerSessionID &&
+        session.terminalKey === "interactive" &&
+        session.status !== "deleted" &&
+        session.status !== "invalid",
     )
     if (!activeForCurrentSession) {
       updateWorkspace((current) => ({
@@ -876,6 +882,38 @@ export function useTerminalWorkspace({ currentSessionID, storageKey }: UseTermin
       isOpen: true,
     }))
   }
+
+  function handleOpenPtySession(info: PtySessionInfo) {
+    if (info.sessionID !== currentSessionIDRef.current) return
+    writeLiveSessionSnapshot(info.id, {
+      buffer: "",
+      cursor: info.cursor,
+      scrollTop: workspaceRef.current.scrollTopBySessionID[info.sessionID] ?? 0,
+    })
+    updateWorkspace((current) =>
+      upsertSession(
+        {
+          ...current,
+          isOpen: true,
+        },
+        mapPtySessionInfoToRecord(info, {
+          scrollTop: workspaceRef.current.scrollTopBySessionID[info.sessionID] ?? 0,
+          transportState: "idle",
+        }),
+        true,
+      ),
+    )
+  }
+
+  useEffect(() => {
+    const handleOpenRequest = (event: Event) => {
+      const info = (event as CustomEvent<PtySessionInfo>).detail
+      if (!info) return
+      handleOpenPtySession(info)
+    }
+    window.addEventListener(OPEN_PTY_SESSION_EVENT, handleOpenRequest)
+    return () => window.removeEventListener(OPEN_PTY_SESSION_EVENT, handleOpenRequest)
+  }, [])
 
   async function handleCloseTerminal(ptyID: string) {
     cancelReconnect(ptyID)
@@ -1025,6 +1063,7 @@ export function useTerminalWorkspace({ currentSessionID, storageKey }: UseTermin
     handleCreateTerminal,
     handleShellProfileChange,
     handlePanelHeightChange,
+    handleOpenPtySession,
     handleSelectTerminal,
     handleTerminalInput,
     handleTerminalResize,

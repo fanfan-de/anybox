@@ -2,6 +2,7 @@ import type { TranslationKey } from "../translations"
 import { subscriptionTranslations } from "../subscription-translations"
 import { skillLibraryTranslations } from "../skill-library-translations"
 import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
+import { environmentEnUS } from "../environment-translations"
 
 export const trTR = {
   "app.loading": "Yükleniyor",
@@ -1413,4 +1414,5 @@ export const trTR = {
   "mcp.validation.requireConnectorId": "Bağlayıcı MCP sunucuları bir bağlayıcı kimliği gerektirir.",
   "mcp.validation.requireToolNames": "Adlandırılmış araç filtreleri en az bir araç adı gerektirir.",
   ...pluginOwnershipTranslations.enUS,
+  ...environmentEnUS,
 } as const satisfies Record<TranslationKey, string>

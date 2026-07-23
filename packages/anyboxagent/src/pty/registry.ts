@@ -48,7 +48,9 @@ export interface PtyRegistryOptions {
   deleteRetentionMs?: number
 }
 
-export type CreateOwnedPtySessionInput = CreatePtySessionBody & {
+export type CreateOwnedPtySessionInput = Omit<CreatePtySessionBody, "terminalKey" | "purpose"> & {
+  terminalKey?: CreatePtySessionBody["terminalKey"]
+  purpose?: CreatePtySessionBody["purpose"]
   cwd: string
 }
 
@@ -68,6 +70,10 @@ export class PtyRegistry {
     this.bufferChars = options.bufferChars ?? DEFAULT_BUFFER_CHARS
     this.exitRetentionMs = options.exitRetentionMs ?? DEFAULT_EXIT_RETENTION_MS
     this.deleteRetentionMs = options.deleteRetentionMs ?? DEFAULT_DELETE_RETENTION_MS
+  }
+
+  private sessionIndexKey(sessionID: string, terminalKey = "interactive") {
+    return `${sessionID}\0${terminalKey}`
   }
 
   private schedulePrune(id: string, delayMs: number) {
@@ -97,8 +103,9 @@ export class PtyRegistry {
 
   private unindexSession(session: ManagedPtySession) {
     const info = session.info()
-    if (this.sessionIndex.get(info.sessionID) === info.id) {
-      this.sessionIndex.delete(info.sessionID)
+    const key = this.sessionIndexKey(info.sessionID, info.terminalKey)
+    if (this.sessionIndex.get(key) === info.id) {
+      this.sessionIndex.delete(key)
     }
   }
 
@@ -128,7 +135,8 @@ export class PtyRegistry {
   }
 
   async create(input: CreateOwnedPtySessionInput) {
-    const existing = this.getBySession(input.sessionID)
+    const terminalKey = input.terminalKey ?? "interactive"
+    const existing = this.getBySession(input.sessionID, terminalKey)
     if (existing) return existing.info()
 
     const cwd = await this.resolveAllowedCwd(input.cwd)
@@ -150,6 +158,8 @@ export class PtyRegistry {
       session = await createManagedPtySession({
         id,
         sessionID: input.sessionID,
+        terminalKey,
+        purpose: input.purpose ?? "interactive",
         title: input.title,
         cwd,
         shell,
@@ -159,11 +169,11 @@ export class PtyRegistry {
         runtime,
         now: this.now,
         onExited: (info) => {
-          this.sessionIndex.delete(info.sessionID)
+          this.sessionIndex.delete(this.sessionIndexKey(info.sessionID, info.terminalKey))
           this.schedulePrune(info.id, this.exitRetentionMs)
         },
         onDeleted: (info) => {
-          this.sessionIndex.delete(info.sessionID)
+          this.sessionIndex.delete(this.sessionIndexKey(info.sessionID, info.terminalKey))
           this.schedulePrune(info.id, this.deleteRetentionMs)
         },
       })
@@ -172,7 +182,7 @@ export class PtyRegistry {
     }
 
     this.sessions.set(id, session)
-    this.sessionIndex.set(input.sessionID, id)
+    this.sessionIndex.set(this.sessionIndexKey(input.sessionID, terminalKey), id)
     const info = session.info()
     publishPtyEvent(PtyEvents.Created, { session: info })
     return info
@@ -182,13 +192,14 @@ export class PtyRegistry {
     return this.sessions.get(id) ?? null
   }
 
-  getBySession(sessionID: string) {
-    const ptyID = this.sessionIndex.get(sessionID)
+  getBySession(sessionID: string, terminalKey = "interactive") {
+    const indexKey = this.sessionIndexKey(sessionID, terminalKey)
+    const ptyID = this.sessionIndex.get(indexKey)
     if (!ptyID) return null
 
     const session = this.sessions.get(ptyID)
     if (!session) {
-      this.sessionIndex.delete(sessionID)
+      this.sessionIndex.delete(indexKey)
       return null
     }
 
@@ -200,8 +211,15 @@ export class PtyRegistry {
     return this.get(id)?.info() ?? null
   }
 
-  infoBySession(sessionID: string) {
-    return this.getBySession(sessionID)?.info() ?? null
+  infoBySession(sessionID: string, terminalKey = "interactive") {
+    return this.getBySession(sessionID, terminalKey)?.info() ?? null
+  }
+
+  listBySession(sessionID: string) {
+    return [...this.sessions.values()]
+      .map((session) => session.info())
+      .filter((session) => session.sessionID === sessionID && session.status !== "deleted")
+      .sort((left, right) => left.createdAt - right.createdAt)
   }
 
   update(id: string, input: UpdatePtySessionBody) {
@@ -219,12 +237,23 @@ export class PtyRegistry {
   }
 
   deleteBySession(sessionID: string) {
-    const ptyID = this.sessionIndex.get(sessionID)
-    if (!ptyID) return null
-    const session = this.sessions.get(ptyID)
-    this.sessionIndex.delete(sessionID)
+    const sessions = this.listBySession(sessionID)
+      .map((info) => this.sessions.get(info.id))
+      .filter((session): session is ManagedPtySession => Boolean(session))
+    const deleted = sessions.map((session) => {
+      const info = session.markDeleted()
+      this.unindexSession(session)
+      return info
+    })
+    return deleted.find((session) => session.terminalKey === "interactive") ?? deleted[0] ?? null
+  }
+
+  deleteBySessionAndKey(sessionID: string, terminalKey: string) {
+    const session = this.getBySession(sessionID, terminalKey)
     if (!session) return null
-    return session.markDeleted()
+    const info = session.markDeleted()
+    this.unindexSession(session)
+    return info
   }
 
   write(id: string, data: string) {
@@ -234,15 +263,15 @@ export class PtyRegistry {
     return session.info()
   }
 
-  writeBySession(sessionID: string, data: string) {
-    const session = this.getBySession(sessionID)
+  writeBySession(sessionID: string, data: string, terminalKey = "interactive") {
+    const session = this.getBySession(sessionID, terminalKey)
     if (!session) return null
     session.write(data)
     return session.info()
   }
 
-  replayBySession(sessionID: string, cursor?: number | null): PtyReplayPayload | null {
-    return this.getBySession(sessionID)?.replay(cursor) ?? null
+  replayBySession(sessionID: string, cursor?: number | null, terminalKey = "interactive"): PtyReplayPayload | null {
+    return this.getBySession(sessionID, terminalKey)?.replay(cursor) ?? null
   }
 }
 

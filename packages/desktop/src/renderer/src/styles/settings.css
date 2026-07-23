@@ -6386,6 +6386,678 @@ body.is-dragging-settings-page {
 
 /* Obsidian-style settings rows */
 
+/* Project environments */
+
+.settings-page-main:not(.is-services):not(.prompt-presets-page-main) > .environment-settings {
+  width: 100%;
+  max-width: 1080px;
+  justify-self: stretch;
+}
+
+.environment-settings {
+  min-height: 560px;
+  display: grid;
+  grid-template-columns: minmax(190px, 240px) minmax(0, 1fr);
+  border: 1px solid var(--seg-border);
+  border-radius: var(--seg-radius-sm);
+  overflow: hidden;
+  background: var(--seg-panel);
+  color: var(--seg-text-1);
+}
+
+.environment-settings-list {
+  min-width: 0;
+  padding: 12px 8px;
+  border-right: 1px solid var(--seg-border);
+  background: var(--seg-panel-muted);
+}
+
+.environment-settings-search {
+  height: 32px;
+  margin: 0 4px 10px;
+  padding: 0 9px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--seg-border);
+  border-radius: var(--seg-radius-xs);
+  background: var(--seg-panel);
+  color: var(--seg-text-3);
+}
+
+.environment-settings-search:focus-within {
+  border-color: var(--mix-seg-accent-42-seg-border-58);
+}
+
+.environment-settings-search svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+.environment-settings-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--seg-text-1);
+  font: inherit;
+  font-size: 12px;
+}
+
+.environment-location-list {
+  display: grid;
+  gap: 2px;
+}
+
+.environment-location-row {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 9px;
+  display: grid;
+  gap: 2px;
+  border: 1px solid transparent;
+  border-radius: var(--seg-radius-xs);
+  background: transparent;
+  color: var(--seg-text-2);
+  text-align: left;
+  cursor: pointer;
+}
+
+.environment-location-row:hover,
+.environment-location-row:focus-visible,
+.environment-location-row.is-active {
+  border-color: transparent;
+  outline: none;
+  background: var(--semantic-sidebar-tree-row-surface-active);
+  color: var(--semantic-sidebar-tree-row-text-active);
+}
+
+.environment-location-name {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.environment-location-project,
+.environment-path {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--seg-text-3);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.environment-settings-detail {
+  min-width: 0;
+  padding: 20px;
+  display: grid;
+  align-content: start;
+  gap: 18px;
+}
+
+.environment-detail-header,
+.environment-section-heading,
+.environment-footer,
+.environment-action-row > header,
+.environment-trust-dialog > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.environment-detail-header h2,
+.environment-section-heading h3,
+.environment-action-row h3,
+.environment-trust-dialog h3,
+.environment-trust-dialog h4 {
+  margin: 0;
+  color: var(--seg-text-1);
+}
+
+.environment-detail-header h2 {
+  margin-top: 2px;
+  font-size: 19px;
+}
+
+.environment-detail-eyebrow,
+.environment-section-heading p,
+.environment-empty-copy,
+.environment-trust-dialog p {
+  margin: 0;
+  color: var(--seg-text-3);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.environment-detail-eyebrow {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.environment-detail-header .secondary-button,
+.environment-section-heading .secondary-button {
+  flex: 0 0 auto;
+}
+
+.environment-detail-header .secondary-button svg,
+.environment-section-heading .secondary-button svg,
+.environment-action-controls svg {
+  width: 14px;
+  height: 14px;
+}
+
+.environment-candidate-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  overflow-x: auto;
+}
+
+.environment-candidate-tab {
+  min-width: 0;
+  padding: 7px 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid transparent;
+  border-radius: var(--seg-radius-xs);
+  background: transparent;
+  color: var(--seg-text-2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.environment-candidate-tab:hover,
+.environment-candidate-tab:focus-visible,
+.environment-candidate-tab.is-active {
+  outline: none;
+  background: var(--seg-panel-muted);
+  color: var(--seg-text-1);
+}
+
+.environment-candidate-tab.is-active {
+  border-color: var(--seg-border);
+}
+
+.environment-status {
+  padding: 1px 5px;
+  border-radius: var(--radius-chip);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.environment-status.is-trusted {
+  color: var(--semantic-success-text);
+  background: var(--semantic-success-surface);
+}
+
+.environment-status.is-untrusted {
+  color: var(--semantic-warning-text);
+  background: var(--semantic-warning-surface);
+}
+
+.environment-status.is-error {
+  color: var(--semantic-error-text);
+  background: var(--semantic-error-surface);
+}
+
+.environment-issues {
+  padding: 9px 11px;
+  display: grid;
+  gap: 5px;
+  border: 1px solid var(--semantic-warning-border);
+  border-radius: var(--seg-radius-xs);
+  background: var(--semantic-warning-surface);
+}
+
+.environment-issues p {
+  margin: 0;
+  color: var(--semantic-warning-text);
+  font-size: 12px;
+}
+
+.environment-issues p.is-error {
+  color: var(--semantic-error-text);
+}
+
+.environment-definition-meta {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(100px, 0.7fr) minmax(100px, 0.7fr);
+  border-top: 1px solid var(--seg-border);
+  border-bottom: 1px solid var(--seg-border);
+}
+
+.environment-definition-meta > div {
+  min-width: 0;
+  padding: 9px 10px;
+  display: grid;
+  gap: 3px;
+}
+
+.environment-definition-meta > div + div {
+  border-left: 1px solid var(--seg-border);
+}
+
+.environment-definition-meta span,
+.environment-field > span {
+  color: var(--seg-text-3);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.environment-definition-meta code,
+.environment-definition-meta strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--seg-text-2);
+  font-size: 11px;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.environment-setup-run {
+  display: grid;
+  gap: 8px;
+  padding: 11px 0;
+  border-top: 1px solid var(--seg-border);
+  border-bottom: 1px solid var(--seg-border);
+}
+
+.environment-setup-run > header,
+.environment-setup-run > header > div,
+.environment-setup-run-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.environment-setup-run > header {
+  justify-content: space-between;
+}
+
+.environment-setup-run > header strong {
+  color: var(--seg-text-1);
+  font-size: 12px;
+}
+
+.environment-setup-run-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.environment-setup-run-actions .secondary-button {
+  min-height: 28px;
+  padding: 0 9px;
+  font-size: 11px;
+}
+
+.environment-status.is-run-queued,
+.environment-status.is-run-running {
+  color: var(--semantic-info-text);
+  background: var(--semantic-info-surface);
+}
+
+.environment-status.is-run-succeeded {
+  color: var(--semantic-success-text);
+  background: var(--semantic-success-surface);
+}
+
+.environment-status.is-run-failed,
+.environment-status.is-run-timed-out {
+  color: var(--semantic-error-text);
+  background: var(--semantic-error-surface);
+}
+
+.environment-status.is-run-cancelled {
+  color: var(--semantic-warning-text);
+  background: var(--semantic-warning-surface);
+}
+
+.environment-setup-run-error,
+.environment-setup-run-note {
+  margin: 0;
+  color: var(--semantic-error-text);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.environment-setup-run-note {
+  color: var(--seg-text-3);
+}
+
+.environment-setup-run pre {
+  max-height: 170px;
+  margin: 0;
+  padding: 9px 10px;
+  overflow: auto;
+  border: 1px solid var(--seg-border);
+  border-radius: var(--seg-radius-xs);
+  background: var(--semantic-markdown-code-surface);
+  color: var(--semantic-markdown-code-text);
+  font: 11px/1.45 var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.environment-section-heading {
+  padding-top: 4px;
+  align-items: flex-end;
+}
+
+.environment-section-heading h3 {
+  font-size: 15px;
+}
+
+.environment-section-body,
+.environment-actions-list {
+  display: grid;
+  gap: 14px;
+}
+
+.environment-field {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.environment-field input,
+.environment-field textarea {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--seg-border);
+  border-radius: var(--seg-radius-xs);
+  outline: 0;
+  background: var(--seg-panel-muted);
+  color: var(--seg-text-1);
+  font: inherit;
+  font-size: 12px;
+}
+
+.environment-field input {
+  height: 34px;
+  padding: 0 10px;
+}
+
+.environment-field textarea {
+  min-height: 54px;
+  padding: 8px 10px;
+  resize: vertical;
+  font-family: var(--font-mono);
+  line-height: 1.45;
+}
+
+.environment-field input:focus-visible,
+.environment-field textarea:focus-visible {
+  border-color: var(--mix-seg-accent-42-seg-border-58);
+}
+
+.environment-field input:disabled,
+.environment-field textarea:disabled {
+  opacity: 0.72;
+  cursor: default;
+}
+
+.environment-script-grid,
+.environment-two-column,
+.environment-three-column {
+  display: grid;
+  gap: 10px;
+}
+
+.environment-script-grid,
+.environment-two-column {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.environment-three-column {
+  grid-template-columns: minmax(110px, 0.8fr) minmax(150px, 1.4fr) minmax(90px, 0.6fr);
+}
+
+.environment-inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--seg-text-2);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.environment-inline-check input {
+  accent-color: var(--seg-accent);
+}
+
+.environment-action-row {
+  padding: 14px 0 2px;
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid var(--seg-border);
+}
+
+.environment-action-row > header strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--seg-text-1);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.environment-action-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.environment-action-controls button {
+  width: 27px;
+  height: 27px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--seg-radius-xs);
+  background: transparent;
+  color: var(--semantic-icon-button-text);
+  cursor: pointer;
+}
+
+.environment-action-controls button:hover,
+.environment-action-controls button:focus-visible {
+  outline: none;
+  background: var(--semantic-icon-button-surface-hover);
+  color: var(--semantic-icon-button-text-hover);
+}
+
+.environment-action-controls button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.environment-footer {
+  position: sticky;
+  bottom: -24px;
+  z-index: 2;
+  margin: 4px -20px -24px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--seg-border);
+  background: var(--semantic-popup-panel-surface);
+}
+
+.environment-footer-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.environment-settings-state {
+  min-height: 220px;
+  display: grid;
+  place-content: center;
+  gap: 6px;
+  color: var(--seg-text-3);
+  text-align: center;
+}
+
+.environment-settings-state h3,
+.environment-settings-state p {
+  margin: 0;
+}
+
+.environment-trust-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  padding: 24px;
+  display: grid;
+  place-items: center;
+  background: var(--surface-overlay);
+}
+
+.environment-trust-dialog {
+  width: min(100%, 660px);
+  max-height: min(80dvh, 720px);
+  padding: 20px;
+  display: grid;
+  gap: 16px;
+  overflow: auto;
+  border: 1px solid var(--seg-border);
+  border-radius: var(--seg-radius-md);
+  background: var(--semantic-popup-panel-surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.environment-trust-dialog > header {
+  display: grid;
+  gap: 6px;
+}
+
+.environment-trust-dialog dl {
+  margin: 0;
+  display: grid;
+  border-top: 1px solid var(--seg-border);
+  border-bottom: 1px solid var(--seg-border);
+}
+
+.environment-trust-dialog dl > div {
+  min-width: 0;
+  padding: 8px 0;
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.environment-trust-dialog dl > div + div {
+  border-top: 1px solid var(--seg-border);
+}
+
+.environment-trust-dialog dt {
+  color: var(--seg-text-3);
+  font-size: 11px;
+}
+
+.environment-trust-dialog dd {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--seg-text-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.environment-trust-warning {
+  padding: 9px 11px;
+  border: 1px solid var(--semantic-warning-border);
+  border-radius: var(--seg-radius-xs);
+  background: var(--semantic-warning-surface);
+  color: var(--semantic-warning-text) !important;
+}
+
+.environment-trust-scripts {
+  display: grid;
+  gap: 9px;
+}
+
+.environment-trust-scripts h4 {
+  font-size: 13px;
+}
+
+.environment-trust-scripts > div {
+  display: grid;
+  gap: 4px;
+}
+
+.environment-trust-scripts span {
+  color: var(--seg-text-3);
+  font-size: 11px;
+}
+
+.environment-trust-scripts pre {
+  max-height: 130px;
+  margin: 0;
+  padding: 9px 10px;
+  overflow: auto;
+  border: 1px solid var(--seg-border);
+  border-radius: var(--seg-radius-xs);
+  background: var(--semantic-markdown-code-surface);
+  color: var(--semantic-markdown-code-text);
+  font: 11px/1.45 var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (max-width: 760px) {
+  .environment-settings {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .environment-settings-list {
+    max-height: 210px;
+    border-right: 0;
+    border-bottom: 1px solid var(--seg-border);
+    overflow: auto;
+  }
+
+  .environment-definition-meta,
+  .environment-script-grid,
+  .environment-two-column,
+  .environment-three-column {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .environment-definition-meta > div + div {
+    border-top: 1px solid var(--seg-border);
+    border-left: 0;
+  }
+
+  .environment-detail-header,
+  .environment-section-heading,
+  .environment-footer,
+  .environment-setup-run > header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .environment-footer-actions,
+  .environment-setup-run-actions {
+    justify-content: stretch;
+  }
+
+  .environment-footer-actions > button {
+    flex: 1 1 auto;
+  }
+}
+
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) {
   padding: 34px clamp(28px, 4vw, 56px) 42px;
   justify-items: start;

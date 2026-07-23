@@ -330,7 +330,7 @@ Anybox 插件安装器负责：
 Chrome Native Host manifest 指向 Anybox 管理的 `current` 二进制，不直接指向下载插件目录。
 `runtime/scripts/installManifest.mjs` 是 Browser Client 可调用的幂等检查/修复后备方案。
 
-Native Host manifest 只允许固定扩展 ID `hjbejdmgpifdjjlpgmdfmbmbhkedgnjc`。扩展 ID 由提交在
+Native Host manifest 只允许固定扩展 ID `mgpdddgemohfmonbnpehohhlbndakdpg`。扩展 ID 由提交在
 Manifest 中的固定 key 派生；改变该 key 会破坏既有安装。
 
 本地普通打包默认只重建当前平台的 Native Host，并保留生成目录中同版本的其他已声明目标。
@@ -450,6 +450,31 @@ Developer ID 模式的公证流程遵循
 GitHub 的 `Chrome plugin manual verification` 工作流只能通过 `workflow_dispatch` 触发。它对三个
 正式目标运行源码测试、原生构建和包验证，上传的文件均明确为 verification-only；macOS 文件未使用
 本地选择的签名模式处理，因此不能作为发布输入。
+
+### Chrome Web Store 上传包
+
+Anybox 内部 Chrome 插件与 Chrome Web Store 上传包使用不同品牌图标：
+
+- `browser-extension/public/icons/` 保留 Chrome 导向图标，用于 Anybox 内部插件展示。
+- `browser-extension/web-store/icons/` 使用 Anybox 盒子猫应用图标，仅用于商店上传包。
+
+在仓库根目录生成商店 ZIP：
+
+```powershell
+corepack pnpm chrome-plugin:package:web-store
+```
+
+该命令先构建扩展，再在临时目录中用盒子猫图标覆盖 Manifest 声明的 16、48、128px 图标，拒绝
+Source Map、尺寸错误、缺失图标以及商店图标与内部 Chrome 图标相同的情况。它不会修改
+`browser-extension/dist`、源码内置图标或 `plugins/Anybox-Plugins/chrome`。最终文件写入
+`packages/chrome-plugin/artifacts/anybox-chrome-<version>-web-store.zip`，ZIP 根目录直接包含
+`manifest.json`，并输出文件大小与 SHA-256。
+
+只有在已单独完成扩展构建并希望复用 `browser-extension/dist` 时，才使用：
+
+```powershell
+corepack pnpm chrome-plugin:package:web-store:skip-build
+```
 
 ### 日常构建与测试
 

@@ -57,6 +57,7 @@ import {
   DESKTOP_AGENT_SESSION_EVENT_CHANNEL,
   DESKTOP_APPEARANCE_STATE_EVENT_CHANNEL,
   DESKTOP_AUTOMATION_EVENT_CHANNEL,
+  DESKTOP_ENVIRONMENT_EVENT_CHANNEL,
 } from "../shared/desktop-ipc-contract"
 import { getAgentConfig, readAgentSSEStream, requestAgentJSON, resolveAgentURL } from "./agent-client"
 import { AgentCompletionNotificationManager } from "./agent-completion-notification"
@@ -122,6 +123,7 @@ import type {
   AgentConnectorDefinition,
   AgentConnectorStatus,
   AgentEnvelope,
+  AgentEnvironmentIPCEvent,
   AgentFolderWorkspace,
   AgentGlobalSkillFileDocument,
   AgentGlobalSkillFolderRenameResult,
@@ -206,9 +208,11 @@ import type { WorkbenchWindowManager } from "./workbench-window-manager"
 
 const AGENT_SESSION_EVENT_CHANNEL = DESKTOP_AGENT_SESSION_EVENT_CHANNEL
 const AUTOMATION_EVENT_CHANNEL = DESKTOP_AUTOMATION_EVENT_CHANNEL
+const ENVIRONMENT_EVENT_CHANNEL = DESKTOP_ENVIRONMENT_EVENT_CHANNEL
 const APPEARANCE_STATE_EVENT_CHANNEL = DESKTOP_APPEARANCE_STATE_EVENT_CHANNEL
 let appUpdateStateBridgeRegistered = false
 let automationEventBridgeRegistered = false
+let environmentEventBridgeRegistered = false
 
 const GIT_DIFF_SCOPES = new Set<AgentSessionDiffScope>([
   "git:unstaged",
@@ -464,11 +468,15 @@ async function cleanupSideChatLinksWithoutResponses(
 }
 
 async function loadProjectWorkspace(project: AgentProjectInfo): Promise<AgentProjectWorkspace> {
-  const sessionsResult = await requestAgentJSON<AgentSessionInfo[]>(`/api/projects/${encodeURIComponent(project.id)}/sessions`)
+  const [sessionsResult, worktreesResult] = await Promise.all([
+    requestAgentJSON<AgentSessionInfo[]>(`/api/projects/${encodeURIComponent(project.id)}/sessions`),
+    requestAgentJSON<AgentWorktreeRecord[]>(`/api/projects/${encodeURIComponent(project.id)}/worktrees`),
+  ])
 
   return {
     ...project,
     sessions: sessionsResult.data.map(mapSessionInfo).sort((left, right) => right.updated - left.updated),
+    worktrees: worktreesResult.data,
   }
 }
 
@@ -492,7 +500,7 @@ async function listProjectWorktrees(projectID: string) {
 
 async function createProjectWorktree(input: DesktopIpcInput<"desktop:create-project-worktree">) {
   const { projectID, ...body } = input
-  const result = await requestAgentJSON<AgentWorktreeRecord>(
+  const result = await requestAgentJSON<DesktopIpcOutput<"desktop:create-project-worktree">>(
     `/api/projects/${encodeURIComponent(projectID)}/worktrees`,
     {
       method: "POST",
@@ -2798,6 +2806,156 @@ async function getSessionTraceEventPage(input: { sessionID: string; afterPositio
   return result.data
 }
 
+async function listProjectEnvironments(
+  input: DesktopIpcInput<"desktop:list-project-environments">,
+) {
+  const result = await requestAgentJSON<DesktopIpcOutput<"desktop:list-project-environments">>(
+    `/api/projects/${encodeURIComponent(input.projectID)}/environments${queryString({
+      directory: input.directory,
+    })}`,
+  )
+  return result.data
+}
+
+async function saveProjectEnvironment(
+  input: DesktopIpcInput<"desktop:save-project-environment">,
+) {
+  const { projectID, ...body } = input
+  const result = await requestAgentJSON<DesktopIpcOutput<"desktop:save-project-environment">>(
+    `/api/projects/${encodeURIComponent(projectID)}/environments/native`,
+    {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  )
+  return result.data
+}
+
+async function importProjectEnvironment(
+  input: DesktopIpcInput<"desktop:import-project-environment">,
+) {
+  const { projectID, ...body } = input
+  const result = await requestAgentJSON<DesktopIpcOutput<"desktop:import-project-environment">>(
+    `/api/projects/${encodeURIComponent(projectID)}/environments/import-codex`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  )
+  return result.data
+}
+
+async function updateProjectEnvironmentPreference(
+  input: DesktopIpcInput<"desktop:update-project-environment-preference">,
+) {
+  const { projectID, ...body } = input
+  const result = await requestAgentJSON<DesktopIpcOutput<"desktop:update-project-environment-preference">>(
+    `/api/projects/${encodeURIComponent(projectID)}/environments/preference`,
+    {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  )
+  return result.data
+}
+
+async function trustProjectEnvironment(
+  input: DesktopIpcInput<"desktop:trust-project-environment">,
+) {
+  const { projectID, key, ...body } = input
+  const result = await requestAgentJSON<DesktopIpcOutput<"desktop:trust-project-environment">>(
+    `/api/projects/${encodeURIComponent(projectID)}/environments/${encodeURIComponent(key)}/trust`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  )
+  return result.data
+}
+
+async function revokeProjectEnvironmentTrust(
+  input: DesktopIpcInput<"desktop:revoke-project-environment-trust">,
+) {
+  const { projectID, key, ...body } = input
+  const result = await requestAgentJSON<DesktopIpcOutput<"desktop:revoke-project-environment-trust">>(
+    `/api/projects/${encodeURIComponent(projectID)}/environments/${encodeURIComponent(key)}/trust`,
+    {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  )
+  return result.data
+}
+
+async function requestEnvironmentRun<Channel extends
+  | "desktop:get-environment-run"
+  | "desktop:cancel-environment-run"
+  | "desktop:retry-environment-run">(
+  channel: Channel,
+  input: DesktopIpcInput<Channel>,
+) {
+  const suffix = channel === "desktop:get-environment-run"
+    ? ""
+    : channel === "desktop:cancel-environment-run"
+      ? "/cancel"
+      : "/retry"
+  const result = await requestAgentJSON<DesktopIpcOutput<Channel>>(
+    `/api/environment-runs/${encodeURIComponent(input.runID)}${suffix}`,
+    suffix ? { method: "POST" } : undefined,
+  )
+  return result.data
+}
+
+async function startEnvironmentAction(
+  input: DesktopIpcInput<"desktop:start-environment-action">,
+) {
+  const { projectID, environmentKey, actionID, ...body } = input
+  const result = await requestAgentJSON<DesktopIpcOutput<"desktop:start-environment-action">>(
+    `/api/projects/${encodeURIComponent(projectID)}/environments/${encodeURIComponent(environmentKey)}/actions/${encodeURIComponent(actionID)}/start`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  )
+  return result.data
+}
+
+async function stopEnvironmentAction(
+  input: DesktopIpcInput<"desktop:stop-environment-action">,
+) {
+  const { projectID, environmentKey, actionID, ...body } = input
+  const result = await requestAgentJSON<DesktopIpcOutput<"desktop:stop-environment-action">>(
+    `/api/projects/${encodeURIComponent(projectID)}/environments/${encodeURIComponent(environmentKey)}/actions/${encodeURIComponent(actionID)}/stop`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  )
+  return result.data
+}
+
+async function restartEnvironmentSetup(
+  input: DesktopIpcInput<"desktop:restart-environment-setup">,
+) {
+  const { projectID, environmentKey, ...body } = input
+  const result = await requestAgentJSON<DesktopIpcOutput<"desktop:restart-environment-setup">>(
+    `/api/projects/${encodeURIComponent(projectID)}/environments/${encodeURIComponent(environmentKey)}/setup`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  )
+  return result.data
+}
+
 async function getSessionTraceExport(input: SessionTraceExportInput) {
   const sessionID = input.sessionID.trim()
   const result = await requestAgentJSON<AgentSessionTraceExport>(
@@ -3396,6 +3554,85 @@ function createAutomationEventBridge(): AutomationEventBridge {
   }
 }
 
+function createEnvironmentEventBridge(): AutomationEventBridge {
+  let lastEventID: string | undefined
+  let disposed = false
+  let abortController: AbortController | null = null
+  let restartTimer: ReturnType<typeof setTimeout> | null = null
+
+  const sendToAllWindows = (event: AgentEnvironmentIPCEvent) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (window.isDestroyed()) continue
+      sendDesktopIpcEvent(window.webContents, ENVIRONMENT_EVENT_CHANNEL, event)
+    }
+  }
+
+  const scheduleRestart = () => {
+    if (disposed || restartTimer) return
+    restartTimer = setTimeout(() => {
+      restartTimer = null
+      void connect()
+    }, 500)
+  }
+
+  const connect = async () => {
+    if (disposed) return
+
+    abortController?.abort()
+    abortController = new AbortController()
+
+    try {
+      const response = await fetch(resolveAgentURL("/api/environment-events/stream"), {
+        headers: lastEventID ? { "Last-Event-ID": lastEventID } : undefined,
+        signal: abortController.signal,
+      })
+
+      if (!response.ok) {
+        const envelope = (await response.json().catch(() => null)) as AgentEnvelope<unknown> | null
+        throw new Error(envelope?.error?.message || `Environment event stream failed (${response.status})`)
+      }
+
+      await readAgentSSEStream(response, (item) => {
+        if (disposed) return
+        if (item.id) lastEventID = item.id
+        sendToAllWindows({
+          id: item.id,
+          event: item.event,
+          data: item.data,
+          receivedAt: Date.now(),
+        })
+      })
+
+      if (!disposed) scheduleRestart()
+    } catch (error) {
+      if (disposed || isAbortError(error)) return
+      safeWarn("[desktop] environment event stream failed:", error)
+      scheduleRestart()
+    }
+  }
+
+  return {
+    get lastEventID() {
+      return lastEventID
+    },
+    get disposed() {
+      return disposed
+    },
+    start() {
+      void connect()
+    },
+    dispose() {
+      disposed = true
+      if (restartTimer) {
+        clearTimeout(restartTimer)
+        restartTimer = null
+      }
+      abortController?.abort()
+      abortController = null
+    },
+  }
+}
+
 async function downloadSkillRegistrySkill(
   input: DesktopIpcInput<"desktop:download-skill-registry-skill">,
 ): Promise<DesktopIpcOutput<"desktop:download-skill-registry-skill">> {
@@ -3484,6 +3721,11 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
   if (!automationEventBridgeRegistered) {
     automationEventBridgeRegistered = true
     createAutomationEventBridge().start()
+  }
+
+  if (!environmentEventBridgeRegistered) {
+    environmentEventBridgeRegistered = true
+    createEnvironmentEventBridge().start()
   }
 
   function getCachedAvailableExternalEditors() {
@@ -4185,6 +4427,46 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
   handleDesktopIpc("desktop:delete-project-worktree", async (_event, input: DesktopIpcInput<"desktop:delete-project-worktree">) =>
     deleteProjectWorktree(input),
   )
+  handleDesktopIpc("desktop:list-project-environments", async (_event, input: DesktopIpcInput<"desktop:list-project-environments">) =>
+    listProjectEnvironments(input),
+  )
+  handleDesktopIpc("desktop:save-project-environment", async (_event, input: DesktopIpcInput<"desktop:save-project-environment">) =>
+    saveProjectEnvironment(input),
+  )
+  handleDesktopIpc("desktop:import-project-environment", async (_event, input: DesktopIpcInput<"desktop:import-project-environment">) =>
+    importProjectEnvironment(input),
+  )
+  handleDesktopIpc(
+    "desktop:update-project-environment-preference",
+    async (_event, input: DesktopIpcInput<"desktop:update-project-environment-preference">) =>
+      updateProjectEnvironmentPreference(input),
+  )
+  handleDesktopIpc("desktop:trust-project-environment", async (_event, input: DesktopIpcInput<"desktop:trust-project-environment">) =>
+    trustProjectEnvironment(input),
+  )
+  handleDesktopIpc(
+    "desktop:revoke-project-environment-trust",
+    async (_event, input: DesktopIpcInput<"desktop:revoke-project-environment-trust">) =>
+      revokeProjectEnvironmentTrust(input),
+  )
+  handleDesktopIpc("desktop:get-environment-run", async (_event, input: DesktopIpcInput<"desktop:get-environment-run">) =>
+    requestEnvironmentRun("desktop:get-environment-run", input),
+  )
+  handleDesktopIpc("desktop:cancel-environment-run", async (_event, input: DesktopIpcInput<"desktop:cancel-environment-run">) =>
+    requestEnvironmentRun("desktop:cancel-environment-run", input),
+  )
+  handleDesktopIpc("desktop:retry-environment-run", async (_event, input: DesktopIpcInput<"desktop:retry-environment-run">) =>
+    requestEnvironmentRun("desktop:retry-environment-run", input),
+  )
+  handleDesktopIpc("desktop:start-environment-action", async (_event, input: DesktopIpcInput<"desktop:start-environment-action">) =>
+    startEnvironmentAction(input),
+  )
+  handleDesktopIpc("desktop:stop-environment-action", async (_event, input: DesktopIpcInput<"desktop:stop-environment-action">) =>
+    stopEnvironmentAction(input),
+  )
+  handleDesktopIpc("desktop:restart-environment-setup", async (_event, input: DesktopIpcInput<"desktop:restart-environment-setup">) =>
+    restartEnvironmentSetup(input),
+  )
   handleDesktopIpc("desktop:update-workspace-watch-directories", async (event, input: { directories: string[] }) => ({
     directories: workspaceWatchManager.updateDirectories(
       event.sender,
@@ -4198,6 +4480,8 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
       _event,
       input?: {
         sessionID?: string
+        terminalKey?: string
+        purpose?: AgentPtySessionInfo["purpose"]
         title?: string
         shell?: string
         rows?: number
@@ -4214,6 +4498,8 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
         },
         body: JSON.stringify({
           sessionID: input.sessionID,
+          terminalKey: input.terminalKey,
+          purpose: input.purpose,
           title: input.title,
           shell: input.shell,
           rows: input.rows,

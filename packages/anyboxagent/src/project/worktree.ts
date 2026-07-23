@@ -22,6 +22,8 @@ export const WorktreeRecord = z.object({
   id: Identifier.schema("worktree"),
   projectID: z.string(),
   path: z.string(),
+  sourceDirectory: z.string().optional(),
+  workingDirectory: z.string().optional(),
   branch: z.string().nullable().optional(),
   baseRef: z.string().nullable().optional(),
   baseSha: z.string().nullable().optional(),
@@ -57,6 +59,7 @@ interface ManagedWorktreeInput {
   ownerType?: WorktreeOwnerType
   projectID: string
   repositoryRoot: string
+  sourceDirectory?: string
 }
 
 interface RemoveManagedWorktreeInput {
@@ -292,6 +295,13 @@ function buildManagedRecord(input: ManagedWorktreeInput & {
     id: input.id,
     projectID: input.projectID,
     path: input.path,
+    sourceDirectory: input.sourceDirectory,
+    workingDirectory: input.sourceDirectory
+      ? path.join(
+          input.path,
+          path.relative(normalizeLocalPath(input.repositoryRoot), normalizeLocalPath(input.sourceDirectory)),
+        )
+      : input.path,
     branch: input.branch,
     baseRef: input.baseRef ?? null,
     baseSha: input.baseSha ?? null,
@@ -481,6 +491,16 @@ export async function refreshByID(projectID: string, worktreeID: string) {
   return refresh(record)
 }
 
+export function markFailed(projectID: string, worktreeID: string) {
+  const record = getByID(worktreeID)
+  if (!record || record.projectID !== projectID) return null
+  return saveRecord(WorktreeRecord.parse({
+    ...record,
+    status: "failed",
+    updatedAt: Date.now(),
+  }))
+}
+
 export async function refreshProjectWorktrees(projectID: string) {
   const refreshed: WorktreeRecord[] = []
   for (const record of listByProject(projectID)) {
@@ -493,6 +513,12 @@ export async function refreshProjectWorktrees(projectID: string) {
 export async function createManaged(input: ManagedWorktreeInput) {
   ensureWorktreeTable()
   const repositoryRoot = requireLocalRepositoryRoot(input.repositoryRoot)
+  const sourceDirectory = input.sourceDirectory
+    ? normalizeLocalPath(input.sourceDirectory)
+    : repositoryRoot
+  if (!containsPath(repositoryRoot, sourceDirectory)) {
+    throw new Error("Worktree source directory must be inside the project repository.")
+  }
   const requestedBaseRef = input.baseRef?.trim()
   const resolvedBaseRef = requestedBaseRef || "HEAD"
   const id = createWorktreeID()
@@ -513,6 +539,7 @@ export async function createManaged(input: ManagedWorktreeInput) {
   const baseRef = createOrphanWorktree ? null : targetRef
   const record = buildManagedRecord({
     ...input,
+    sourceDirectory,
     id,
     repositoryRoot,
     path: worktreePath,

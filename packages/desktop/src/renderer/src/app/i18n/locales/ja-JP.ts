@@ -2,6 +2,7 @@ import type { TranslationKey } from "../translations"
 import { subscriptionTranslations } from "../subscription-translations"
 import { skillLibraryTranslations } from "../skill-library-translations"
 import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
+import { environmentEnUS } from "../environment-translations"
 
 export const jaJP = {
   "app.loading": "読み込み中",
@@ -1413,4 +1414,5 @@ export const jaJP = {
   "mcp.validation.requireConnectorId": "コネクタMCPサーバーにはコネクタIDが必要です。",
   "mcp.validation.requireToolNames": "名前付きツールフィルターには少なくとも1つのツール名が必要です。",
   ...pluginOwnershipTranslations.enUS,
+  ...environmentEnUS,
 } as const satisfies Record<TranslationKey, string>

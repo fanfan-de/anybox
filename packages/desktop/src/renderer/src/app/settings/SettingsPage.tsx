@@ -35,6 +35,7 @@ import {
   CodeModeIcon,
   ConnectedStatusIcon,
   StorageSettingsIcon,
+  TerminalIcon,
   DisconnectedStatusIcon,
   ChevronDownIcon,
   DeleteIcon,
@@ -111,6 +112,11 @@ import {
   type HtmlBackgroundConfig,
 } from "../html-background/html-background-config"
 import { SettingsSelect } from "./SettingsSelect"
+import { EnvironmentsSettingsPage } from "./EnvironmentsSettingsPage"
+import {
+  ENVIRONMENT_SETTINGS_SECTION_STORAGE_KEY,
+  OPEN_ENVIRONMENT_SETTINGS_EVENT,
+} from "./events"
 
 const assistantTraceVisibilityOptions: Array<{
   key: AssistantTraceVisibilityKey
@@ -2652,6 +2658,7 @@ type SettingsSectionKey =
   | "mcp"
   | "appearance"
   | "developer"
+  | "environments"
   | "storage"
   | "archive"
 type ProviderCapabilityFilterKey = "all" | "text" | "image" | "video" | "connected"
@@ -3108,7 +3115,14 @@ export function SettingsPage({
 }: SettingsPageProps) {
   {
     const { error: localeError, locale, setLocale, t } = useI18n()
-    const [activeSection, setActiveSection] = useState<SettingsSectionKey>("general")
+    const [activeSection, setActiveSection] = useState<SettingsSectionKey>(() => {
+      if (window.sessionStorage.getItem(ENVIRONMENT_SETTINGS_SECTION_STORAGE_KEY) === "true") {
+        window.sessionStorage.removeItem(ENVIRONMENT_SETTINGS_SECTION_STORAGE_KEY)
+        return "environments"
+      }
+      return "general"
+    })
+    const [environmentSettingsDirty, setEnvironmentSettingsDirty] = useState(false)
     const [storagePaths, setStoragePaths] = useState<DesktopStoragePaths | null>(null)
     const [storagePathStatus, setStoragePathStatus] = useState<AppUpdateStatus | null>(null)
     const [selectedProviderID, setSelectedProviderID] = useState<string | null>(null)
@@ -3428,6 +3442,15 @@ export function SettingsPage({
 
       void onDeleteAllArchivedSessions(targetSessionIDs)
     }
+
+    useEffect(() => {
+      const openEnvironmentSettings = () => {
+        window.sessionStorage.removeItem(ENVIRONMENT_SETTINGS_SECTION_STORAGE_KEY)
+        setActiveSection("environments")
+      }
+      window.addEventListener(OPEN_ENVIRONMENT_SETTINGS_EVENT, openEnvironmentSettings)
+      return () => window.removeEventListener(OPEN_ENVIRONMENT_SETTINGS_EVENT, openEnvironmentSettings)
+    }, [])
 
     useEffect(() => {
       if (!isOpen) {
@@ -3866,6 +3889,7 @@ export function SettingsPage({
           { key: "defaults" as const, label: t("settings.nav.models"), Icon: ModelSettingsIcon },
           { key: "appearance" as const, label: t("settings.nav.appearance"), Icon: PaletteIcon },
           { key: "developer" as const, label: t("settings.nav.developer"), Icon: CodeModeIcon },
+          { key: "environments" as const, label: t("settings.nav.environments"), Icon: TerminalIcon },
           { key: "storage" as const, label: t("settings.nav.storage"), Icon: StorageSettingsIcon },
           { key: "archive" as const, label: t("settings.nav.archive"), Icon: ArchiveRestoreIcon },
         ],
@@ -4084,7 +4108,22 @@ export function SettingsPage({
               aria-label={t("settings.title")}
             >
               <header className="settings-page-header" title={t("settings.dragSettings")} onPointerDown={handleSettingsHeaderPointerDown}>
-                <button className="settings-page-close-button" aria-label={t("settings.close")} title={t("settings.close")} onClick={onClose}>
+                <button
+                  className="settings-page-close-button"
+                  aria-label={t("settings.close")}
+                  title={t("settings.close")}
+                  onClick={() => {
+                    if (
+                      activeSection === "environments" &&
+                      environmentSettingsDirty &&
+                      typeof window.confirm === "function" &&
+                      !window.confirm(t("settings.environments.dirtyConfirm"))
+                    ) {
+                      return
+                    }
+                    onClose()
+                  }}
+                >
                   <CloseIcon />
                 </button>
               </header>
@@ -4111,6 +4150,14 @@ export function SettingsPage({
                               return
                             }
 
+                            if (
+                              activeSection === "environments" &&
+                              environmentSettingsDirty &&
+                              typeof window.confirm === "function" &&
+                              !window.confirm(t("settings.environments.dirtyConfirm"))
+                            ) {
+                              return
+                            }
                             setActiveSection(section.key)
                           }}
                         >
@@ -4211,6 +4258,8 @@ export function SettingsPage({
                   onHtmlBackgroundConfigChange={onHtmlBackgroundConfigChange}
                   onOpenAppearanceWindow={() => void openAppearanceWindow()}
                 />
+              ) : activeSection === "environments" ? (
+                <EnvironmentsSettingsPage onDirtyChange={setEnvironmentSettingsDirty} />
               ) : activeSection === "developer" ? (
                 <div className="settings-developer-layout">
                   <SettingsDisclosurePanel

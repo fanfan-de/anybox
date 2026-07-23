@@ -9,7 +9,15 @@ function requireDesktopApi<T>(value: T | undefined, message: string): T {
 }
 
 export const terminalClient = {
-  createSession(input: { sessionID: string; title?: string; shell?: string; rows?: number; cols?: number }) {
+  createSession(input: {
+    sessionID: string
+    terminalKey?: string
+    purpose?: "interactive" | "environment-action"
+    title?: string
+    shell?: string
+    rows?: number
+    cols?: number
+  }) {
     return requireDesktopApi(window.desktop?.createPtySession, "PTY create bridge is unavailable")(input)
   },
   getSession(input: { id: string }) {
@@ -47,6 +55,8 @@ export function mapPtySessionInfoToRecord(
   return {
     ptyID: session.id,
     sessionID: session.sessionID,
+    terminalKey: session.terminalKey,
+    purpose: session.purpose,
     title: session.title,
     cwd: session.cwd,
     shell: session.shell,

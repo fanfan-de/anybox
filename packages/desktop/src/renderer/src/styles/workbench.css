@@ -4698,6 +4698,123 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   contain: layout;
 }
 
+.session-canvas-top-menu .environment-actions-trigger {
+  position: relative;
+  width: 32px;
+  min-width: 32px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+}
+
+.environment-actions-trigger > svg {
+  width: var(--section-toolbar-aux-icon-size);
+  height: var(--section-toolbar-aux-icon-size);
+}
+
+.environment-actions-trust-dot {
+  position: absolute;
+  right: 5px;
+  bottom: 4px;
+  width: 5px;
+  height: 5px;
+  border: 1px solid var(--semantic-popup-panel-surface);
+  border-radius: 999px;
+  background: var(--semantic-warning);
+}
+
+.environment-actions-trust-dot.is-trusted {
+  background: var(--semantic-success);
+}
+
+.environment-actions-panel {
+  width: min(310px, calc(100vw - 64px));
+  max-width: min(310px, calc(100vw - 64px));
+}
+
+.environment-actions-panel-header {
+  padding: 5px 9px 7px;
+  display: grid;
+  gap: 2px;
+  border-bottom: 1px solid var(--context-menu-border);
+}
+
+.environment-actions-panel-header span {
+  overflow: hidden;
+  color: var(--context-menu-text);
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.environment-actions-panel-header small {
+  color: var(--context-menu-muted);
+  font-size: 10px;
+}
+
+.environment-actions-option-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.environment-actions-option .canvas-top-menu-context-option-label,
+.environment-actions-panel > .canvas-top-menu-context-option .canvas-top-menu-context-option-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.environment-actions-option svg,
+.environment-actions-panel > .canvas-top-menu-context-option svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+.environment-action-stop {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--semantic-error-text);
+  cursor: pointer;
+}
+
+.environment-action-stop:hover,
+.environment-action-stop:focus-visible {
+  outline: none;
+  background: var(--semantic-error-surface);
+}
+
+.environment-action-stop svg {
+  width: 10px;
+  height: 10px;
+}
+
+.environment-actions-divider {
+  height: 1px;
+  margin: 4px 7px;
+  background: var(--context-menu-border);
+}
+
+.environment-actions-message {
+  margin: 4px 8px 2px;
+  color: var(--context-menu-muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.environment-actions-message.is-error {
+  color: var(--semantic-error-text);
+}
+
 .create-session-layout .create-session-shell:has(.create-session-select-panel) {
   z-index: 7;
 }

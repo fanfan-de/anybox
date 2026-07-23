@@ -6,6 +6,8 @@ import type { TerminalSessionRecord, TerminalStreamEvent } from "./types"
 const baseSession: TerminalSessionRecord = {
   ptyID: "pty-1",
   sessionID: "session-1",
+  terminalKey: "interactive",
+  purpose: "interactive",
   title: "Terminal 1",
   cwd: "C:\\Projects\\anybox",
   shell: "powershell.exe",

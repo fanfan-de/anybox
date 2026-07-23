@@ -57,7 +57,7 @@ const shutdown = async (signal: "SIGINT" | "SIGTERM") => {
   if (shutdownStarted) return
   shutdownStarted = true
   log.info("server-shutdown", { signal })
-  stopServer()
+  await stopServer()
   await cinemaRenderQueue.shutdown()
   process.exit(0)
 }

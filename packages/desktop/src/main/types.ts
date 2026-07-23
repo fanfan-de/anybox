@@ -47,6 +47,8 @@ export interface AgentWorktreeRecord {
   id: string
   projectID: string
   path: string
+  sourceDirectory?: string
+  workingDirectory?: string
   branch?: string | null
   baseRef?: string | null
   baseSha?: string | null
@@ -60,6 +62,142 @@ export interface AgentWorktreeRecord {
   createdAt: number
   updatedAt: number
   lastSeenAt?: number
+}
+
+export interface AgentEnvironmentScripts {
+  default?: string
+  windows?: string
+  macos?: string
+  linux?: string
+}
+
+export interface AgentEnvironmentSetup {
+  scripts: AgentEnvironmentScripts
+  cwd: string
+  timeoutSeconds: number
+}
+
+export interface AgentEnvironmentAction {
+  id: string
+  name: string
+  icon: string
+  scripts: AgentEnvironmentScripts
+  cwd: string
+}
+
+export interface AgentEnvironmentDefinition {
+  version: 1
+  name: string
+  setup?: AgentEnvironmentSetup
+  actions: AgentEnvironmentAction[]
+}
+
+export interface AgentEnvironmentIssue {
+  code: string
+  message: string
+  path?: string
+  severity: "warning" | "error"
+}
+
+export interface AgentEnvironmentCandidate {
+  key: string
+  projectID: string
+  requestedDirectory: string
+  rootDirectory: string
+  configPath: string
+  source: "anybox-jsonc" | "codex-toml" | "legacy-start"
+  scope: "direct" | "ancestor" | "bound"
+  contentHash: string
+  readonly: boolean
+  trusted: boolean
+  definition: AgentEnvironmentDefinition | null
+  issues: AgentEnvironmentIssue[]
+  bindingID?: string
+  setupRunID?: string
+  setupRunStatus?: AgentEnvironmentRunStatus
+}
+
+export interface AgentEnvironmentListResult {
+  projectID: string
+  directory: string
+  boundaryRoot: string
+  items: AgentEnvironmentCandidate[]
+  selectedKey?: string
+  autoSetup: boolean
+}
+
+export interface AgentEnvironmentPreference {
+  id: string
+  projectID: string
+  directory: string
+  selectedKey?: string | null
+  autoSetup: boolean
+  createdAt: number
+  updatedAt: number
+}
+
+export interface AgentWorktreeEnvironmentBinding {
+  id: string
+  projectID: string
+  worktreeID: string
+  sourceDirectory: string
+  targetDirectory: string
+  sourceConfigPath: string
+  sourceRoot: string
+  targetRoot: string
+  environmentKey: string
+  contentHash: string
+  source: AgentEnvironmentCandidate["source"]
+  definition: AgentEnvironmentDefinition
+  createdAt: number
+  updatedAt: number
+}
+
+export type AgentEnvironmentRunStatus =
+  | "queued"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "cancelled"
+  | "timed-out"
+
+export interface AgentEnvironmentRunRecord {
+  id: string
+  projectID: string
+  environmentKey: string
+  contentHash: string
+  kind: "setup" | "action"
+  actionID?: string
+  worktreeID?: string
+  sessionID?: string
+  bindingID?: string
+  cwd: string
+  status: AgentEnvironmentRunStatus
+  exitCode?: number | null
+  output: string
+  outputTruncated: boolean
+  error?: string
+  ptyID?: string
+  createdAt: number
+  startedAt?: number
+  finishedAt?: number
+  updatedAt: number
+}
+
+export interface AgentPreparedWorktreeResult {
+  worktree: AgentWorktreeRecord
+  binding?: AgentWorktreeEnvironmentBinding
+  setupRun?: AgentEnvironmentRunRecord
+}
+
+export interface AgentEnvironmentActionStartResult {
+  run: AgentEnvironmentRunRecord
+  pty: AgentPtySessionInfo
+  reused: boolean
+}
+
+export interface AgentEnvironmentIPCEvent extends AgentSSEEvent {
+  receivedAt: number
 }
 
 export type AgentAutomationKind = "project" | "thread"
@@ -344,6 +482,7 @@ export interface AgentProjectWorkspace {
   created: number
   updated: number
   sessions: AgentWorkspaceSession[]
+  worktrees?: AgentWorktreeRecord[]
 }
 
 export interface AgentFolderProjectSummary {
@@ -1943,6 +2082,8 @@ export interface AgentPluginConnectorStatus {
 export interface AgentPtySessionInfo {
   id: string
   sessionID: string
+  terminalKey: string
+  purpose: "interactive" | "environment-action"
   title: string
   cwd: string
   shell: string

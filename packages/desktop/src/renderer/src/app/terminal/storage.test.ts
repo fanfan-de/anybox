@@ -25,6 +25,8 @@ describe("terminal storage", () => {
         "pty-1": {
           ptyID: "pty-1",
           sessionID: "session-1",
+          terminalKey: "interactive",
+          purpose: "interactive",
           title: "Workspace shell",
           cwd: "C:\\Projects\\anybox",
           shell: "powershell.exe",

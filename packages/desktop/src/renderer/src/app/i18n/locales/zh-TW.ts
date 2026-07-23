@@ -2,6 +2,7 @@ import type { TranslationKey } from "../translations"
 import { subscriptionTranslations } from "../subscription-translations"
 import { skillLibraryTranslations } from "../skill-library-translations"
 import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
+import { environmentZhCN } from "../environment-translations"
 
 export const zhTW = {
   "app.loading": "載入中",
@@ -1413,4 +1414,5 @@ export const zhTW = {
   "settings.account.communityDescription": "微信掃碼加入 Anybox 用戶交流群",
   "settings.account.communityQrAlt": "Anybox 用戶交流群 QR Code",
   ...pluginOwnershipTranslations.zhTW,
+  ...environmentZhCN,
 } as const satisfies Record<TranslationKey, string>

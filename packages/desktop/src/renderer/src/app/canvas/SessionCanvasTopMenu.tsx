@@ -15,6 +15,7 @@ import type {
   ToolPermissionMode,
 } from "../types"
 import { isSideChatSession } from "../workspace"
+import { EnvironmentActionsMenuButton } from "./EnvironmentActionsMenuButton"
 
 const TOOL_PERMISSION_MODE_OPTIONS: Array<{
   value: ToolPermissionMode
@@ -1137,6 +1138,13 @@ export function SessionCanvasTopMenu({
           ) : null}
           {!readOnlySideChat ? (
             <>
+              {activeSession ? (
+                <EnvironmentActionsMenuButton
+                  directory={gitDirectory}
+                  projectID={gitProjectID}
+                  sessionID={activeSession.id}
+                />
+              ) : null}
               <ToolPermissionModeMenuButton
                 error={toolPermissionModeError}
                 isSaving={isSavingToolPermissionMode}
