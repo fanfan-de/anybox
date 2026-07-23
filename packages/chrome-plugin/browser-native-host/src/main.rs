@@ -291,11 +291,7 @@ fn run() -> Result<(), String> {
                 ));
             }
             BridgeInput::BrowserHostMessage(message) => {
-                handle_browser_host_message(
-                    &mut stream,
-                    &mut output,
-                    message,
-                )?;
+                handle_browser_host_message(&mut stream, &mut output, message)?;
             }
             BridgeInput::BrowserHostEnd => return Ok(()),
             BridgeInput::BrowserHostError(error) => {
@@ -652,12 +648,7 @@ fn read_native_message<R: Read>(reader: &mut R) -> io::Result<Option<Vec<u8>>> {
 }
 
 fn write_native_message<W: Write>(writer: &mut W, payload: &[u8]) -> io::Result<()> {
-    write_length_prefixed(
-        writer,
-        payload,
-        true,
-        MAX_NATIVE_OUTPUT_MESSAGE_BYTES,
-    )
+    write_length_prefixed(writer, payload, true, MAX_NATIVE_OUTPUT_MESSAGE_BYTES)
 }
 
 fn read_length_prefixed<R: Read>(

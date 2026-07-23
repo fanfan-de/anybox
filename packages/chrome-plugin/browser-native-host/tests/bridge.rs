@@ -257,8 +257,10 @@ fn forwards_messages_between_chrome_and_the_agent_ipc_gateway() {
 fn probe_authenticates_with_the_browser_host_and_exits() {
     let (endpoint, name) = endpoint_and_name();
     let listener = ListenerOptions::new().name(name).create_sync().unwrap();
-    let temp_root =
-        std::env::temp_dir().join(format!("anybox-browser-native-host-probe-{}", unique_suffix()));
+    let temp_root = std::env::temp_dir().join(format!(
+        "anybox-browser-native-host-probe-{}",
+        unique_suffix()
+    ));
     fs::create_dir_all(&temp_root).unwrap();
     let runtime_config_path = temp_root.join("runtime.json");
     let bootstrap_path = temp_root.join("bootstrap.json");

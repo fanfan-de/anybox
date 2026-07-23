@@ -113,7 +113,9 @@ test("builds an explicit target from Cargo's target-specific output", async () =
       path.join(projectRoot, "dist", "macos", "x64", "extension-host"),
     )
     assert.equal(await fsp.readFile(result.output, "utf8"), "mach-o")
-    assert.equal((await fsp.stat(result.output)).mode & 0o777, 0o755)
+    if (process.platform !== "win32") {
+      assert.equal((await fsp.stat(result.output)).mode & 0o777, 0o755)
+    }
   } finally {
     await fsp.rm(projectRoot, { recursive: true, force: true })
   }
