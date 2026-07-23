@@ -943,4 +943,37 @@ describe("Browser IPC Gateway transport and authentication", () => {
       "Browser IPC is unsupported on platform 'aix'",
     )
   })
+
+  test("keeps macOS Unix Domain Socket paths below the platform limit", () => {
+    const paths = defaultBrowserIpcPaths(
+      "darwin",
+      "/Users/example",
+      "/Users/example/Library/Application Support/anybox-desktop-agent/agent/state",
+    )
+
+    expect(paths.ipcDirectory).toMatch(
+      /^\/tmp\/anybox-browser-[a-f0-9]{16}$/,
+    )
+    expect(paths.bootstrapPath).toBe(path.join(
+      paths.ipcDirectory,
+      `${ANYBOX_CHROME_NATIVE_HOST_NAME}.bootstrap.json`,
+    ))
+    expect(Buffer.byteLength(paths.runtimeEndpoint)).toBeLessThanOrEqual(103)
+    expect(Buffer.byteLength(paths.nativeHostEndpoint)).toBeLessThanOrEqual(103)
+  })
+
+  test("isolates Unix Domain Socket paths by persistent state directory", () => {
+    const first = defaultBrowserIpcPaths(
+      "linux",
+      "/home/test",
+      "/var/lib/anybox-a/state",
+    )
+    const second = defaultBrowserIpcPaths(
+      "linux",
+      "/home/test",
+      "/var/lib/anybox-b/state",
+    )
+
+    expect(first.ipcDirectory).not.toBe(second.ipcDirectory)
+  })
 })

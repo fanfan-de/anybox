@@ -90,27 +90,33 @@ test("derives secret-free Named Pipe and Unix Domain Socket locators", () => {
   })
   assert.equal(linux.transport, "unix-domain-socket")
   assert.equal(linux.protocolVersion, BROWSER_IPC_PROTOCOL_VERSION)
-  assert.match(linux.runtimeEndpoint, /runtime-v1-[a-f0-9]{16}\.sock$/)
-  assert.match(linux.nativeHostEndpoint, /native-host-v1-[a-f0-9]{16}\.sock$/)
+  assert.match(
+    linux.runtimeEndpoint,
+    /^\/tmp\/anybox-browser-[a-f0-9]{16}\/runtime-v1-[a-f0-9]{16}\.sock$/,
+  )
+  assert.match(
+    linux.nativeHostEndpoint,
+    /^\/tmp\/anybox-browser-[a-f0-9]{16}\/native-host-v1-[a-f0-9]{16}\.sock$/,
+  )
   assert.match(
     linux.bootstrapPath,
-    /com\.anybox\.browser\.bootstrap\.json$/,
+    /^\/tmp\/anybox-browser-[a-f0-9]{16}\/com\.anybox\.browser\.bootstrap\.json$/,
   )
 
   const managed = resolveBrowserIpcRuntimeConfig({
-    env: { ANYBOX_AGENT_DATA_DIR: "/tmp/managed-anybox" },
-    homeDir: "/home/test",
-    platform: "linux",
+    env: {
+      ANYBOX_AGENT_DATA_DIR:
+        "/Users/example/Library/Application Support/anybox-desktop-agent/agent",
+    },
+    homeDir: "/Users/example",
+    platform: "darwin",
   })
-  assert.equal(
+  assert.match(
     managed.bootstrapPath,
-    path.resolve(
-      "/tmp/managed-anybox",
-      "state",
-      "browser-ipc",
-      "com.anybox.browser.bootstrap.json",
-    ),
+    /^\/tmp\/anybox-browser-[a-f0-9]{16}\/com\.anybox\.browser\.bootstrap\.json$/,
   )
+  assert.ok(Buffer.byteLength(managed.runtimeEndpoint) <= 103)
+  assert.ok(Buffer.byteLength(managed.nativeHostEndpoint) <= 103)
 })
 
 test("validates explicitly injected IPC locators", () => {

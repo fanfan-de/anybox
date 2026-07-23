@@ -199,18 +199,18 @@ describe("declarative plugin platform artifacts", () => {
     expect(runtimeConfig).toMatchObject({
       transport: "unix-domain-socket",
       protocolVersion: 1,
-      bootstrapPath: path.join(
-        input.stateDir,
-        "browser-ipc",
-        "com.anybox.browser.bootstrap.json",
-      ),
     })
+    expect(runtimeConfig.bootstrapPath).toMatch(
+      /^\/tmp\/anybox-browser-[a-f0-9]{16}\/com\.anybox\.browser\.bootstrap\.json$/,
+    )
     expect(runtimeConfig.runtimeEndpoint).toMatch(
-      /[/\\]browser-ipc[/\\]runtime-v1-[a-f0-9]{16}\.sock$/,
+      /^\/tmp\/anybox-browser-[a-f0-9]{16}\/runtime-v1-[a-f0-9]{16}\.sock$/,
     )
     expect(runtimeConfig.nativeHostEndpoint).toMatch(
-      /[/\\]browser-ipc[/\\]native-host-v1-[a-f0-9]{16}\.sock$/,
+      /^\/tmp\/anybox-browser-[a-f0-9]{16}\/native-host-v1-[a-f0-9]{16}\.sock$/,
     )
+    expect(Buffer.byteLength(runtimeConfig.runtimeEndpoint)).toBeLessThanOrEqual(103)
+    expect(Buffer.byteLength(runtimeConfig.nativeHostEndpoint)).toBeLessThanOrEqual(103)
     expect((await stat(first!.executablePath)).mode & 0o777).toBe(0o755)
 
     const [second] = await installPlatformArtifacts({
