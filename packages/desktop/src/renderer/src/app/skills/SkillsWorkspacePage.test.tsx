@@ -381,8 +381,10 @@ describe("SkillsWorkspacePage", () => {
     expect(row).toHaveTextContent("Tencent SkillHub")
 
     fireEvent.error(icon)
+    await waitFor(() => {
+      expect(rowView.getByRole("img", { name: "Tencent Docs icon" }).tagName).toBe("SPAN")
+    })
     const fallback = rowView.getByRole("img", { name: "Tencent Docs icon" })
-    expect(fallback.tagName).toBe("SPAN")
     expect(fallback.querySelector(".skill-default-logo-mark")).not.toBeNull()
   })
 

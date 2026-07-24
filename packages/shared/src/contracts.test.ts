@@ -107,6 +107,20 @@ describe("shared contracts", () => {
             estimatedBytes: 128,
           },
         ],
+        trace: {
+          count: 0,
+          estimatedBytes: 0,
+          earliestTimestamp: null,
+          retentionDays: 30,
+        },
+        toolArtifacts: {
+          fileCount: 0,
+          bytes: 0,
+        },
+        maintenance: {
+          status: "idle",
+          reclaimableBytes: 0,
+        },
       }).database.pageSize,
     ).toBe(4096)
   })

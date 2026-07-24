@@ -1286,7 +1286,7 @@ describe("server api", () => {
       const detailEvents = detailBody.data?.recentEvents ?? []
       const latestEvent = detailEvents[detailEvents.length - 1]
       expect(latestEvent?.type).toBe("tool.call.waiting_approval")
-      expect(latestEvent?.summary?.["tool"]).toBe("read_file")
+      expect(latestEvent?.summary?.["toolName"]).toBe("read_file")
       expect(latestEvent?.summary?.["status"]).toBe("waiting-approval")
     } finally {
       Orchestrator.finishTurn(turn)
@@ -1385,7 +1385,7 @@ describe("server api", () => {
 
       const response = await app.request(`http://localhost/api/debug/sessions/${session.id}/trace-export`)
       const body = (await response.json()) as JsonEnvelope<{
-        schemaVersion: 1
+        schemaVersion: 2
         messages: unknown[]
         events: Array<{
           type: string
@@ -1415,7 +1415,7 @@ describe("server api", () => {
 
       expect(response.status).toBe(200)
       expect(body.success).toBe(true)
-      expect(body.data?.schemaVersion).toBe(1)
+      expect(body.data?.schemaVersion).toBe(2)
       expect(body.data?.messages).toHaveLength(1)
       expect(body.data?.events.some((event) => event.type === "turn.started")).toBe(true)
       expect(body.data?.events.some((event) => event.type === "tool.call.failed")).toBe(true)
@@ -1439,7 +1439,7 @@ describe("server api", () => {
 
       const serialized = JSON.stringify(body.data)
       expect(serialized).toContain("grep failed because the pattern was invalid")
-      expect(serialized).toContain("[DATA_URL:image/png;length=26]")
+      expect(serialized).toContain("[DATA_URL:image/png;redacted]")
       expect(serialized).toContain("[TRUNCATED originalLength=20050 maxLength=20000]")
       expect(serialized).not.toContain("direct-api-key-value")
       expect(serialized).not.toContain("raw-api-key-value")
