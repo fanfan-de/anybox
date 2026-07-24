@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "platform": "android",
+  "fingerprintProfile": "production-channel-normalized",
+  "runtimeVersion": "0.3.0",
+  "version": "0.3.0",
+  "versionCode": 7,
+  "nativeFingerprint": "ce20938a43f12512d5082d7dcae891fad14aeed1",
+  "otaKeyId": "anybox-mobile-2026"
+}

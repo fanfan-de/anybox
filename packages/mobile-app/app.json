@@ -3,14 +3,19 @@
     "name": "Anybox Mobile",
     "slug": "anybox-mobile",
     "scheme": "anybox-mobile",
-    "version": "0.2.4",
+    "version": "0.3.0",
     "icon": "./assets/icon.png",
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
+      "enabled": true,
+      "url": "https://updates.anybox.com.cn/v1/manifest",
       "checkAutomatically": "ON_ERROR_RECOVERY",
-      "fallbackToCacheTimeout": 0
+      "fallbackToCacheTimeout": 0,
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
     },
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
@@ -19,10 +24,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#0D1420"
     },
-    "newArchEnabled": false,
     "android": {
       "package": "com.anybox.mobile",
-      "versionCode": 6,
+      "versionCode": 7,
       "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -30,12 +34,13 @@
       },
       "permissions": [
         "INTERNET",
-        "CAMERA"
+        "CAMERA",
+        "REQUEST_INSTALL_PACKAGES"
       ]
     },
     "ios": {
       "bundleIdentifier": "com.anybox.mobile",
-      "buildNumber": "6",
+      "buildNumber": "7",
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "Allow Anybox Mobile to scan desktop pairing QR codes.",
@@ -48,6 +53,8 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
+      "./plugins/with-android-lan-cleartext",
+      "./plugins/with-android-release-signing",
       [
         "expo-camera",
         {
@@ -59,11 +66,16 @@
       "typedRoutes": true
     },
     "extra": {
-      "anyboxMobileReleaseUrl": "",
+      "anyboxMobileReleaseUrl": "https://download.anybox.com.cn/mobile/android/version.json",
+      "anyboxMobileReleaseSignatureUrl": "https://download.anybox.com.cn/mobile/android/version.sig",
+      "anyboxMobileUpdateChannel": "production",
+      "anyboxMobileOtaKeyId": "anybox-mobile-2026",
+      "anyboxMobileMinimumVersionCode": 7,
       "anyboxMobileGitHubRepository": "fanfan-de/anybox",
       "anyboxMobileGitHubReleaseTagPrefix": "mobile-v",
       "anyboxMobileGitHubApkAssetName": "anybox-mobile.apk",
       "anyboxMobileGitHubManifestAssetName": "anybox-mobile-release.json",
+      "anyboxMobileGitHubManifestSignatureAssetName": "anybox-mobile-release.json.sig",
       "anyboxRelayUrl": "https://anybox.com.cn"
     }
   }

@@ -1,0 +1,18 @@
+diff --git a/build/fork/extractPathFromURL.js b/build/fork/extractPathFromURL.js
+index 239277218585cdd44831d709b02ccadfa26b8d68..89bef689d87136190898f7bbe415040cc3792866 100644
+--- a/build/fork/extractPathFromURL.js
++++ b/build/fork/extractPathFromURL.js
+@@ -25,12 +25,7 @@ function extractExactPathFromURL(url) {
+     // If a universal link / app link / web URL is used, we should use the path
+     // from the URL, while stripping the origin.
+     url.match(/^https?:\/\//)) {
+-        const { origin, href, hostname } = new URL(url);
+-        if (hostname === 'exp.host' || hostname === 'u.expo.dev') {
+-            // These are QR code generate deep-link that always like to the '/' path
+-            // TODO: In the future, QR code may link to a specific path and this logic will need to be udpated
+-            return '';
+-        }
++        const { origin, href } = new URL(url);
+         return href.replace(origin, '');
+     }
+     const isExpoGo = typeof expo !== 'undefined' && globalThis.expo?.modules?.ExpoGo;

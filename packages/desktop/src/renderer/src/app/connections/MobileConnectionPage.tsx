@@ -126,7 +126,9 @@ function getCloudRelaySummary(status: DesktopMobileBridgeStatus | null, t: Mobil
   const cloudRelay = status?.cloudRelay
   if (!cloudRelay) return t("connections.mobile.checking")
   if (cloudRelay.enabled && cloudRelay.state === "connected") return t("connections.mobile.connected")
-  if (cloudRelay.enabled && cloudRelay.state === "registering") return t("connections.mobile.connecting")
+  if (cloudRelay.enabled && ["registering", "connecting"].includes(cloudRelay.state)) {
+    return t("connections.mobile.connecting")
+  }
   if (cloudRelay.enabled) return cloudRelay.state || t("connections.mobile.enabled")
   return t("connections.mobile.notConfigured")
 }
@@ -187,6 +189,24 @@ export function MobileConnectionPage({
 
   useEffect(() => {
     void refreshStatus()
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    let timeoutID: number | undefined
+
+    async function pollStatus() {
+      await refreshStatus()
+      if (!cancelled) {
+        timeoutID = window.setTimeout(() => void pollStatus(), 2_000)
+      }
+    }
+
+    timeoutID = window.setTimeout(() => void pollStatus(), 2_000)
+    return () => {
+      cancelled = true
+      if (timeoutID !== undefined) window.clearTimeout(timeoutID)
+    }
   }, [])
 
   useEffect(() => {

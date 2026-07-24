@@ -3,13 +3,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   CreateSessionPixelLogo,
   composeMasks,
+  maskToDotSvgPath,
   maskToSvgPath,
   shiftMask,
 } from "./CreateSessionPixelLogo"
 import {
   boxBodyMask,
   catClosedEyesMask,
+  catHeadTiltHalfMask,
+  catHeadTiltMask,
   catOpenEyesMask,
+  catTailWagLeftMask,
+  catTailWagRightMask,
   closedFlapsMask,
   halfOpenFlapsMask,
   openFlapsMask,
@@ -21,14 +26,18 @@ const originalVisibilityState = Object.getOwnPropertyDescriptor(document, "visib
 const completeRowMask = (1n << BigInt(PIXEL_LOGO_SIZE)) - 1n
 
 const paths = {
-  blink: maskToSvgPath(composeMasks(boxBodyMask, openFlapsMask, catClosedEyesMask)),
-  catDown4: maskToSvgPath(composeMasks(boxBodyMask, openFlapsMask, shiftMask(catOpenEyesMask, 4))),
-  catDown8: maskToSvgPath(composeMasks(boxBodyMask, openFlapsMask, shiftMask(catOpenEyesMask, 8))),
-  catOvershoot: maskToSvgPath(composeMasks(boxBodyMask, openFlapsMask, shiftMask(catOpenEyesMask, -1))),
-  closed: maskToSvgPath(composeMasks(boxBodyMask, closedFlapsMask)),
-  halfOpen: maskToSvgPath(composeMasks(boxBodyMask, halfOpenFlapsMask)),
-  idle: maskToSvgPath(composeMasks(boxBodyMask, openFlapsMask, catOpenEyesMask)),
-  open: maskToSvgPath(composeMasks(boxBodyMask, openFlapsMask)),
+  blink: maskToDotSvgPath(composeMasks(boxBodyMask, openFlapsMask, catClosedEyesMask)),
+  catDown4: maskToDotSvgPath(composeMasks(boxBodyMask, openFlapsMask, shiftMask(catOpenEyesMask, 4))),
+  catDown8: maskToDotSvgPath(composeMasks(boxBodyMask, openFlapsMask, shiftMask(catOpenEyesMask, 8))),
+  catOvershoot: maskToDotSvgPath(composeMasks(boxBodyMask, openFlapsMask, shiftMask(catOpenEyesMask, -1))),
+  closed: maskToDotSvgPath(composeMasks(boxBodyMask, closedFlapsMask)),
+  halfOpen: maskToDotSvgPath(composeMasks(boxBodyMask, halfOpenFlapsMask)),
+  headTilt: maskToDotSvgPath(composeMasks(boxBodyMask, openFlapsMask, catHeadTiltMask)),
+  headTiltHalf: maskToDotSvgPath(composeMasks(boxBodyMask, openFlapsMask, catHeadTiltHalfMask)),
+  idle: maskToDotSvgPath(composeMasks(boxBodyMask, openFlapsMask, catOpenEyesMask)),
+  open: maskToDotSvgPath(composeMasks(boxBodyMask, openFlapsMask)),
+  tailWagLeft: maskToDotSvgPath(composeMasks(boxBodyMask, openFlapsMask, catTailWagLeftMask)),
+  tailWagRight: maskToDotSvgPath(composeMasks(boxBodyMask, openFlapsMask, catTailWagRightMask)),
 }
 
 function setVisibilityState(state: DocumentVisibilityState) {
@@ -89,11 +98,15 @@ function countPixels(mask: PixelMask) {
 }
 
 describe("create session pixel logo masks", () => {
-  it("stores exactly 64 bounded rows for every layer", () => {
+  it("stores exactly 64 bounded rows for every source-derived layer", () => {
     const masks = {
       boxBodyMask,
       catClosedEyesMask,
+      catHeadTiltHalfMask,
+      catHeadTiltMask,
       catOpenEyesMask,
+      catTailWagLeftMask,
+      catTailWagRightMask,
       closedFlapsMask,
       halfOpenFlapsMask,
       openFlapsMask,
@@ -117,18 +130,26 @@ describe("create session pixel logo masks", () => {
     expect(maskToSvgPath(mask)).toBe("M2 1h3v1h-3ZM7 1h1v1h-1Z")
   })
 
+  it("maps every active source grid cell to one centered dot", () => {
+    const mask = createEmptyMask()
+    mask[0] = (1n << 0n) | (1n << 2n)
+    mask[1] = 1n << 1n
+
+    expect(maskToDotSvgPath(mask)).toBe("M0.5 0.5h.01M4.5 0.5h.01M2.5 2.5h.01")
+  })
+
   it("shifts rows by whole pixels and clips pixels outside the canvas", () => {
     const mask = createEmptyMask()
     mask[1] = 1n << 5n
-    mask[63] = 1n << 7n
+    mask[PIXEL_LOGO_SIZE - 1] = 1n << 7n
 
     const shiftedDown = shiftMask(mask, 2)
     expect(shiftedDown[3]).toBe(1n << 5n)
-    expect(shiftedDown[63]).toBe(0n)
+    expect(shiftedDown[PIXEL_LOGO_SIZE - 1]).toBe(0n)
 
     const shiftedUp = shiftMask(mask, -1)
     expect(shiftedUp[0]).toBe(1n << 5n)
-    expect(shiftedUp[62]).toBe(1n << 7n)
+    expect(shiftedUp[PIXEL_LOGO_SIZE - 2]).toBe(1n << 7n)
     expect(() => shiftMask(mask, 0.5)).toThrow(TypeError)
   })
 
@@ -147,6 +168,7 @@ describe("create session pixel logo masks", () => {
 describe("CreateSessionPixelLogo", () => {
   beforeEach(() => {
     vi.useFakeTimers()
+    vi.spyOn(Math, "random").mockReturnValue(0)
     setVisibilityState("visible")
     installMatchMedia(false)
   })
@@ -165,16 +187,20 @@ describe("CreateSessionPixelLogo", () => {
     }
   })
 
-  it("renders one crisp 64 by 64 path with the existing accessible name", () => {
+  it("renders one round-dot 128 by 128 path with the existing accessible name", () => {
     render(<CreateSessionPixelLogo />)
 
     const image = screen.getByRole("img", { name: "Anybox logo" })
     const svg = image.querySelector("svg")
 
-    expect(svg).toHaveAttribute("viewBox", "0 0 64 64")
-    expect(svg).toHaveAttribute("shape-rendering", "crispEdges")
+    expect(svg).toHaveAttribute("viewBox", "0 0 128 128")
+    expect(svg).toHaveAttribute("shape-rendering", "geometricPrecision")
     expect(svg).toHaveAttribute("aria-hidden", "true")
     expect(svg?.querySelectorAll("path")).toHaveLength(1)
+    expect(currentPath()).toHaveAttribute("fill", "none")
+    expect(currentPath()).toHaveAttribute("stroke", "currentColor")
+    expect(currentPath()).toHaveAttribute("stroke-width", "1.6")
+    expect(currentPath()).toHaveAttribute("stroke-linecap", "round")
     expectCurrentPath(paths.closed)
   })
 
@@ -205,6 +231,40 @@ describe("CreateSessionPixelLogo", () => {
     expectCurrentPath(paths.idle)
     advance(4_200)
     expectCurrentPath(paths.blink)
+  })
+
+  it("randomly plays a two-step head tilt and returns to idle", () => {
+    vi.mocked(Math.random).mockReturnValue(0.5)
+    render(<CreateSessionPixelLogo />)
+
+    advance(810)
+    expectCurrentPath(paths.idle)
+    advance(4_200)
+    expectCurrentPath(paths.headTiltHalf)
+    advance(90)
+    expectCurrentPath(paths.headTilt)
+    advance(240)
+    expectCurrentPath(paths.headTiltHalf)
+    advance(90)
+    expectCurrentPath(paths.idle)
+  })
+
+  it("randomly wags the tail twice and returns to idle", () => {
+    vi.mocked(Math.random).mockReturnValue(0.9)
+    render(<CreateSessionPixelLogo />)
+
+    advance(810)
+    expectCurrentPath(paths.idle)
+    advance(4_200)
+    expectCurrentPath(paths.tailWagLeft)
+    advance(100)
+    expectCurrentPath(paths.tailWagRight)
+    advance(100)
+    expectCurrentPath(paths.tailWagLeft)
+    advance(100)
+    expectCurrentPath(paths.tailWagRight)
+    advance(100)
+    expectCurrentPath(paths.idle)
   })
 
   it("stops while hidden and resumes from the idle blink loop", () => {

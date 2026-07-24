@@ -79,7 +79,7 @@ export function MobileI18nProvider({ children }: { children: React.ReactNode }) 
 
   const translate = useCallback(
     (key: MobileTranslationKey, params?: Record<string, string | number>) =>
-      interpolate(translations[locale][key], params),
+      interpolate(translations[locale][key] ?? enUSFallback(key), params),
     [locale],
   )
 
@@ -95,6 +95,10 @@ export function MobileI18nProvider({ children }: { children: React.ReactNode }) 
   )
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>
+}
+
+function enUSFallback(key: MobileTranslationKey) {
+  return translations["en-US"][key] ?? key
 }
 
 export function useI18n() {

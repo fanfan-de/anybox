@@ -10,10 +10,13 @@ Check the mobile development environment first:
 corepack pnpm --filter anybox-mobile-app run doctor
 ```
 
-Use strict mode when you want CI-style failure if Expo Go, local Android builds, or EAS native builds are not ready:
+Use strict mode when you want CI-style failure if Expo Go or local Android
+builds are not ready. Add `--release` to include local signing and GitHub CLI
+checks:
 
 ```powershell
 corepack pnpm --filter anybox-mobile-app run doctor -- --strict
+corepack pnpm --filter anybox-mobile-app run doctor -- --strict --release
 ```
 
 ```powershell
@@ -34,19 +37,12 @@ For a local iOS simulator native build:
 corepack pnpm mobile:ios:simulator
 ```
 
-For iOS builds through EAS:
-
-```powershell
-corepack pnpm --filter anybox-mobile-app build:ios:preview
-corepack pnpm --filter anybox-mobile-app build:ios:production
-```
-
 iOS uses the same `anybox-mobile://` deep link scheme and the same Provider/relay API path. Local HTTP bridge access is configured for local networking, but the public relay URL is still the preferred path for real-device testing because iOS has no `adb reverse` equivalent.
 
 On Windows, use a short pnpm virtual store path before local APK builds. Native CMake paths can otherwise exceed Windows path limits:
 
 ```powershell
-corepack pnpm install --frozen-lockfile --force --virtual-store-dir C:\p\anybox-pnpm
+corepack pnpm install --frozen-lockfile --force --virtual-store-dir C:\p\a
 ```
 
 Scan the QR code with Expo Go first. For a custom Android build:
@@ -76,7 +72,14 @@ corepack pnpm mobile:android:setup -- --install-sdk
 corepack pnpm mobile:android:build:debug
 ```
 
-The APK is copied to `packages/mobile-app/build/anybox-mobile-debug.apk`. With USB debugging enabled and a device connected:
+The APK is copied to `packages/mobile-app/build/anybox-mobile-debug.apk`.
+
+APK builds target real Android phones by default (`arm64-v8a,armeabi-v7a`). A
+developer who explicitly needs another ABI can set
+`ANYBOX_ANDROID_ARCHITECTURES` to a comma-separated subset of
+`arm64-v8a,armeabi-v7a,x86,x86_64`.
+
+With USB debugging enabled and a device connected:
 
 ```powershell
 corepack pnpm mobile:android:install:debug
@@ -166,96 +169,98 @@ corepack pnpm mobile:android:delivery-check -- --require-real-bridge --strict
 
 This requires the real bridge smoke screenshot in addition to the debug APK and mock smoke screenshots.
 
-This Windows path uses Expo prebuild plus Gradle `assembleDebug`. EAS local builds are not the default path here because Expo does not officially support local EAS builds on Windows.
-
-For an internal APK build through EAS:
-
-```powershell
-corepack pnpm --filter anybox-mobile-app build:android:apk
-```
-
-For a Play Store app bundle:
-
-```powershell
-corepack pnpm --filter anybox-mobile-app build:android:production
-```
-
-For a TestFlight or App Store iOS build:
-
-```powershell
-corepack pnpm --filter anybox-mobile-app build:ios:production
-```
+This Windows path uses Expo prebuild plus Gradle. Debug builds use
+`assembleDebug`; signed website releases use `assembleRelease`. Google Play and
+iOS publishing are intentionally outside this release track.
 
 ## Updates
 
-The app supports two update paths:
+The Android website build uses two self-hosted update paths:
 
-- EAS Update for JavaScript, asset, and UI-only changes.
-- GitHub Releases for native Android APK updates, using only tags that start with `mobile-v`.
-- A direct release manifest URL for custom native Android or iOS update hosting. On iOS, use a manifest with an App Store, TestFlight, or IPA URL; GitHub APK releases are ignored.
+- JavaScript, images, and fonts use the open-source `expo-updates` client with
+  the Anybox protocol service at `https://updates.anybox.com.cn`.
+- Native dependencies, permissions, and Expo SDK changes use a signed APK
+  described by the signed files at
+  `https://download.anybox.com.cn/mobile/android/version.json` and
+  `version.sig`. GitHub `mobile-v*` releases are the fallback.
 
-EAS Update needs an Expo project ID before it can serve OTA updates. Configure it once after logging in:
+No Expo/EAS account or hosted update service is used.
+
+### One-time key setup
+
+Choose two different absolute backup directories, then run:
 
 ```powershell
-corepack pnpm --filter anybox-mobile-app exec eas login
-corepack pnpm --filter anybox-mobile-app exec eas update:configure
+$env:ANYBOX_MOBILE_BACKUP_DIR_PRIMARY = "D:\EncryptedBackups\AnyboxMobileA"
+$env:ANYBOX_MOBILE_BACKUP_DIR_SECONDARY = "E:\EncryptedBackups\AnyboxMobileB"
+$env:ANYBOX_MOBILE_BACKUP_PASSPHRASE = "<a long backup passphrase>"
+corepack pnpm mobile:keys:init
 ```
 
-The dynamic Expo config enables the update URL when `EXPO_PUBLIC_EAS_PROJECT_ID`, `EAS_PROJECT_ID`, or `EXPO_UPDATES_URL` is present at build time. Without one of those values, OTA updates stay disabled and the app continues to run from the embedded bundle.
+The command refuses to overwrite existing material. Commit only the two public
+identity files, `credentials/ota-certificate.pem` and
+`credentials/android-release-certificate.sha256`; never commit
+`.env.mobile-signing.local`, `.anybox-mobile-keys`, a JKS, or a private PEM.
+Every release build must match the pinned Android certificate fingerprint, so
+pointing the release environment at a debug or replacement keystore is blocked.
 
-Publish OTA updates to the build channel:
+After the native configuration is final, record the `0.3.0` APK compatibility
+baseline:
+
+```powershell
+corepack pnpm mobile:fingerprint:record
+```
+
+### OTA release
+
+Every update is created in preview first:
 
 ```powershell
 corepack pnpm mobile:update:preview -- --message "Fix mobile workspace refresh"
-corepack pnpm mobile:update:production -- --message "Fix mobile workspace refresh"
 ```
 
-For full app updates, the default setup reads GitHub Releases from `fanfan-de/anybox`, filters tags that start with `mobile-v`, and ignores desktop releases. A mobile release should use a tag like `mobile-v0.2.0` and include these assets:
+After testing that exact `updateId`, promote only its channel pointer:
+
+```powershell
+corepack pnpm mobile:update:promote -- --update-id <update-id>
+```
+
+Emergency rollback to the APK-embedded bundle:
+
+```powershell
+corepack pnpm mobile:update:rollback -- --channel production --embedded
+```
+
+The tools refuse an OTA when its native fingerprint differs from the recorded
+APK baseline. The compatibility fingerprint normalizes only the preview versus
+production request header; native code, permissions, dependencies, certificate,
+and other Expo configuration still participate. Immutable assets are uploaded
+and verified before the channel pointer is changed.
+
+### Full APK release
+
+Connect a real USB-debuggable Android device, then run:
+
+```powershell
+corepack pnpm mobile:release:publish -- --notes "Fix pairing reliability"
+```
+
+The command builds `build/anybox-mobile-release.apk`, verifies package/version/
+certificate/zip alignment/signature, runs a physical-device smoke test, creates
+a `mobile-v<version>` GitHub release with `--latest=false`, uploads the same
+signed assets to COS, and updates the fixed CDN pointer last. It stops if there
+is no physical device.
+
+GitHub contains exactly:
 
 ```text
 anybox-mobile.apk
 anybox-mobile-release.json
+anybox-mobile-release.json.sig
 ```
 
-Prepare those assets after building the APK:
-
-```powershell
-corepack pnpm mobile:android:build:debug
-corepack pnpm mobile:release:github:prepare -- --notes "Fix pairing reliability"
-```
-
-The prepare command writes:
-
-```text
-packages/mobile-app/build/github-release/anybox-mobile.apk
-packages/mobile-app/build/github-release/anybox-mobile-release.json
-```
-
-It also prints a `gh release create ...` command. The app checks the GitHub Releases API directly, so do not use `releases/latest` for mobile updates.
-
-If you do not want to use GitHub Releases, set `EXPO_PUBLIC_ANYBOX_MOBILE_RELEASE_URL` to a JSON manifest URL before building. That manifest URL takes priority over GitHub Releases.
-
-Example manifest:
-
-```json
-{
-  "version": "0.2.0",
-  "versionCode": 2,
-  "minimumVersionCode": 1,
-  "apkUrl": "https://example.com/anybox-mobile-0.2.0.apk",
-  "sha256": "optional-sha256",
-  "notes": ["Fix pairing reliability", "Improve session refresh"],
-  "force": false,
-  "ios": {
-    "version": "0.2.0",
-    "buildNumber": "4",
-    "minimumBuildNumber": "4",
-    "testFlightUrl": "https://testflight.apple.com/join/example"
-  }
-}
-```
-
-The manifest can also contain platform-specific values under `android`, `ios`, `platforms.android`, or `platforms.ios`. Use `minimumVersionCode`, `minimumBuildNumber`, or `force: true` for a required update.
+See `../mobile-update-server/README.md` for the read-only protocol service and
+Tencent Docker/Caddy deployment.
 
 ## Bridge API Smoke Test
 
@@ -302,7 +307,8 @@ The advanced URL login path remains available for troubleshooting. Paste the pub
 - View read-only workspace git change summaries from the Workspace screen.
 - Check for OTA updates and native mobile release updates from the Updates screen.
 
-Release signing, store metadata, notifications, and account-linked desktop discovery are not implemented yet.
+Google Play/App Store publishing, store metadata, and push notifications are
+outside the current self-hosted Android release scope.
 
 ## iOS Smoke Test
 

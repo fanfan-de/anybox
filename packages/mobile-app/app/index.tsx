@@ -358,9 +358,8 @@ export default function HomeScreen() {
         if (
           connection &&
           nextOptions.length === 1 &&
-          !nextOptions[0]?.connection.pairingCode &&
           nextOptions[0]?.connection.baseUrl === connection.baseUrl &&
-          nextOptions[0]?.connection.token === connection.token
+          (!nextOptions[0]?.connection.token || nextOptions[0].connection.token === connection.token)
         ) {
           return
         }

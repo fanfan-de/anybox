@@ -1,6 +1,23 @@
 import { describe, expect, it } from "vitest"
 import { internal } from "./desktop-cloud-relay-client"
 
+describe("desktop cloud relay WebSocket authentication", () => {
+  it("keeps the desktop token out of the URL and sends it as a bearer header", () => {
+    const connection = internal.createRelaySocketConnection("https://anybox.com.cn", {
+      version: 1,
+      desktopID: "desktop_test_123456",
+      token: "relay_desktop_test_123456",
+    })
+
+    const url = new URL(connection.url)
+    expect(url.protocol).toBe("wss:")
+    expect(url.pathname).toBe("/api/relay/desktop/connect")
+    expect(url.searchParams.get("desktopID")).toBe("desktop_test_123456")
+    expect(url.searchParams.has("token")).toBe(false)
+    expect(connection.headers.authorization).toBe("Bearer relay_desktop_test_123456")
+  })
+})
+
 describe("desktop cloud relay entitlement errors", () => {
   it("maps relay entitlement failures to user-facing copy", () => {
     expect(internal.describeRelayRequestError("relay_disabled", "raw relay error", 403)).toContain("当前套餐不支持 Relay")

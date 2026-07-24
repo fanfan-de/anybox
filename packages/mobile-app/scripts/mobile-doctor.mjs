@@ -7,6 +7,7 @@ const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 const isWindows = process.platform === "win32"
 const isMac = process.platform === "darwin"
 const strict = process.argv.includes("--strict")
+const release = process.argv.includes("--release")
 
 function packageBin(name) {
   return path.join(packageRoot, "node_modules", ".bin", `${name}${isWindows ? ".CMD" : ""}`)
@@ -103,14 +104,29 @@ function checkEnv(name) {
 }
 
 const expo = checkPackageBin("Expo CLI", "expo", ["--version"])
-const eas = checkPackageBin("EAS CLI", "eas", ["--version"])
-const easLogin = existsSync(packageBin("eas"))
-  ? checkPackageBin("EAS login", "eas", ["whoami", "--non-interactive"])
-  : {
-      label: "EAS login",
-      ok: false,
-      detail: "EAS CLI is not installed",
-    }
+const keytool = checkCommand("keytool", "keytool", ["-help"])
+const githubCli = checkCommand("GitHub CLI", "gh", ["--version"])
+const publicCertificate = {
+  label: "OTA public certificate",
+  ok: existsSync(path.join(packageRoot, "credentials", "ota-certificate.pem")),
+  detail: existsSync(path.join(packageRoot, "credentials", "ota-certificate.pem"))
+    ? "credentials/ota-certificate.pem"
+    : "run pnpm mobile:keys:init",
+}
+const androidCertificateFingerprint = {
+  label: "Android release certificate fingerprint",
+  ok: existsSync(path.join(packageRoot, "credentials", "android-release-certificate.sha256")),
+  detail: existsSync(path.join(packageRoot, "credentials", "android-release-certificate.sha256"))
+    ? "credentials/android-release-certificate.sha256"
+    : "run pnpm mobile:keys:init",
+}
+const localSigningConfig = {
+  label: "Local mobile signing config",
+  ok: existsSync(path.resolve(packageRoot, "..", "..", ".env.mobile-signing.local")),
+  detail: existsSync(path.resolve(packageRoot, "..", "..", ".env.mobile-signing.local"))
+    ? "configured outside Git"
+    : "run pnpm mobile:keys:init",
+}
 const xcode = isMac
   ? checkCommand("Xcode", "xcodebuild", ["-version"])
   : {
@@ -131,8 +147,11 @@ const checks = [
   checkCommand("Node.js", process.execPath, ["--version"]),
   checkPackageBin("TypeScript", "tsc", ["--version"]),
   expo,
-  eas,
-  easLogin,
+  keytool,
+  githubCli,
+  publicCertificate,
+  androidCertificateFingerprint,
+  localSigningConfig,
   ...(isMac ? [xcode, iosSimulator, iosRuntime] : []),
   checkCommand("Java", "java", ["-version"]),
   checkCommand("adb", "adb", ["version"]),
@@ -147,8 +166,14 @@ const localAndroidReady =
   checks.find((item) => item.label === "adb")?.ok &&
   (checks.find((item) => item.label === "ANDROID_HOME")?.ok || checks.find((item) => item.label === "ANDROID_SDK_ROOT")?.ok)
 const localIosReady = isMac && xcode.ok && iosSimulator.ok && iosRuntime.ok
-const easReady = eas.ok && easLogin.ok
 const expoGoReady = expo.ok
+const releaseReady =
+  localAndroidReady &&
+  keytool.ok &&
+  githubCli.ok &&
+  publicCertificate.ok &&
+  androidCertificateFingerprint.ok &&
+  localSigningConfig.ok
 
 console.log("Anybox Mobile Doctor")
 console.log("")
@@ -160,7 +185,7 @@ console.log("")
 console.log(`${expoGoReady ? "[ok]" : "[missing]"} Expo Go smoke test readiness`)
 console.log(`${localAndroidReady ? "[ok]" : "[missing]"} Local Android build readiness`)
 console.log(`${localIosReady ? "[ok]" : isMac ? "[missing]" : "[skip]"} Local iOS simulator readiness${isMac ? "" : ": macOS with Xcode required"}`)
-console.log(`${easReady ? "[ok]" : "[missing]"} EAS native build readiness`)
+console.log(`${releaseReady ? "[ok]" : "[missing]"} Self-hosted Android release readiness`)
 
 if (!localAndroidReady) {
   console.log("")
@@ -171,10 +196,16 @@ if (isMac && !localIosReady) {
   console.log("Local iOS builds need Xcode and the iOS Simulator command-line tools.")
 }
 
-if (!easReady) {
-  console.log("EAS cloud builds need an Expo account login: corepack pnpm --filter anybox-mobile-app exec eas login")
+if (release && !releaseReady) {
+  console.log("Release mode needs the local signing keys, public certificate, GitHub CLI, and Java/Android tools.")
 }
 
-if (strict && (!expoGoReady || !localAndroidReady || (isMac && !localIosReady) || !easReady)) {
+if (
+  strict &&
+  (!expoGoReady ||
+    !localAndroidReady ||
+    (isMac && !localIosReady) ||
+    (release && !releaseReady))
+) {
   process.exit(1)
 }

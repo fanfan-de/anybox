@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import QRCode from "qrcode"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { DesktopMobileBridgeStatus } from "../../../../shared/desktop-ipc-contract"
@@ -270,6 +270,55 @@ describe("MobileConnectionPage", () => {
       )
     })
     expect(await screen.findByText(expected)).toBeInTheDocument()
+  })
+
+  it("updates a transitional cloud relay status after the socket connects", async () => {
+    vi.useFakeTimers()
+    try {
+      const connectingStatus = createMobileBridgeStatus({
+        cloudRelay: {
+          enabled: true,
+          state: "connecting",
+          baseUrl: "https://anybox.com.cn",
+          desktopID: "desktop-123",
+          pairingCode: "relay-pair",
+          pairingExpiresAt: Date.now() + 60_000,
+          pairingDeepLink: "anybox-mobile://pair?code=relay-pair&url=https%3A%2F%2Fanybox.com.cn",
+          connectedAt: null,
+          account: {
+            state: "connected",
+            email: "owner@example.com",
+          },
+        },
+      })
+      const connectedStatus = createMobileBridgeStatus({
+        cloudRelay: {
+          ...connectingStatus.cloudRelay,
+          state: "connected",
+          connectedAt: Date.now(),
+        },
+      })
+      const getMobileBridgeStatus = vi.fn()
+        .mockResolvedValueOnce(connectingStatus)
+        .mockResolvedValue(connectedStatus)
+      window.desktop!.getMobileBridgeStatus = getMobileBridgeStatus
+
+      render(<MobileConnectionPage />)
+
+      await act(async () => {
+        await Promise.resolve()
+      })
+      expect(screen.getByText("Connecting")).toBeInTheDocument()
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_000)
+      })
+
+      expect(getMobileBridgeStatus).toHaveBeenCalledTimes(2)
+      expect(screen.getByText("Connected")).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it("shows paired devices and revokes an active device", async () => {

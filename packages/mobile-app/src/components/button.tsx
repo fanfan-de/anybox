@@ -5,6 +5,7 @@ import { theme } from "@/theme"
 interface ButtonProps {
   label: string
   onPress: () => void
+  accessibilityLabel?: string
   disabled?: boolean
   loading?: boolean
   variant?: "primary" | "secondary" | "danger"
@@ -25,12 +26,20 @@ const buttonVariantStyles = {
   },
 } as const
 
-export function Button({ label, onPress, disabled, loading, variant = "primary" }: ButtonProps) {
+export function Button({
+  label,
+  onPress,
+  accessibilityLabel,
+  disabled,
+  loading,
+  variant = "primary",
+}: ButtonProps) {
   const isDisabled = disabled || loading
   const variantStyle = buttonVariantStyles[variant]
 
   return (
     <Pressable
+      accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
       disabled={isDisabled}
       onPress={onPress}

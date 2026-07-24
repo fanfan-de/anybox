@@ -405,3 +405,44 @@ export const catClosedEyesMask: PixelMask = [
   0x0000000000000000n,
   0x0000000000000000n,
 ]
+
+function transformMask(
+  mask: PixelMask,
+  transformPoint: (x: number, y: number) => readonly [x: number, y: number],
+): PixelMask {
+  const transformed = Array.from({ length: PIXEL_LOGO_SIZE }, () => 0n)
+
+  for (let y = 0; y < PIXEL_LOGO_SIZE; y += 1) {
+    const row = mask[y] ?? 0n
+    for (let x = 0; x < PIXEL_LOGO_SIZE; x += 1) {
+      if ((row & (1n << BigInt(x))) === 0n) continue
+
+      const [nextX, nextY] = transformPoint(x, y)
+      if (nextX < 0 || nextX >= PIXEL_LOGO_SIZE || nextY < 0 || nextY >= PIXEL_LOGO_SIZE) {
+        continue
+      }
+      transformed[nextY] = (transformed[nextY] ?? 0n) | (1n << BigInt(nextX))
+    }
+  }
+
+  return transformed
+}
+
+export const catHeadTiltHalfMask = transformMask(catOpenEyesMask, (x, y) => (
+  y <= 6 && x <= 41 ? [x - 1, y] : [x, y]
+))
+
+export const catHeadTiltMask = transformMask(catOpenEyesMask, (x, y) => {
+  if (x > 41 || y > 10) return [x, y]
+  return y <= 5 ? [x - 2, y] : [x - 1, y]
+})
+
+export const catTailWagLeftMask = transformMask(catOpenEyesMask, (x, y) => {
+  if (x < 42 || y < 13) return [x, y]
+  return [x - (x >= 46 ? 2 : 1), y]
+})
+
+export const catTailWagRightMask = transformMask(catOpenEyesMask, (x, y) => {
+  if (x < 42 || y < 13) return [x, y]
+  return [x + (x >= 46 ? 2 : 1), y]
+})

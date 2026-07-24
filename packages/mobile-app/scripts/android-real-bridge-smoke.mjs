@@ -150,10 +150,14 @@ function run(command, args, options = {}) {
   })
 
   if (!options.allowFailure && result.status !== 0) {
-    throw new Error(`${command} ${args.join(" ")} failed`)
+    throw new Error(`${command} failed with exit code ${result.status ?? "unknown"}`)
   }
 
   return result
+}
+
+function quoteRemoteShellArgument(value) {
+  return `'${value.replaceAll("'", "'\\''")}'`
 }
 
 function read(command, args, options = {}) {
@@ -309,7 +313,12 @@ function normalizeBridgeInput(input, token) {
 }
 
 function prepareAndroidBridgeInput(bridgeInput, args, device) {
-  if (bridgeInput.kind === "relay") return bridgeInput
+  if (bridgeInput.kind === "relay") {
+    return {
+      ...bridgeInput,
+      deepLink: `anybox-mobile://connect?url=${encodeURIComponent(bridgeInput.deepLink)}`,
+    }
+  }
 
   const parsed = new URL(bridgeInput.bridgeUrl)
   let androidBridgeUrl = bridgeInput.bridgeUrl
@@ -381,7 +390,10 @@ async function preflightRelayPairing(bridgeInput) {
   if (!preview?.pairing?.valid) {
     throw new Error("Relay preflight failed: pairing code is expired or invalid.")
   }
-  console.log(`Relay preflight: ${preview.online ? "online" : "registered"} (${preview.desktopName ?? "desktop"} ${preview.appVersion ?? ""})`)
+  if (!preview.online) {
+    throw new Error("Relay preflight failed: desktop is registered but offline.")
+  }
+  console.log(`Relay preflight: online (${preview.desktopName ?? "desktop"} ${preview.appVersion ?? ""})`)
 }
 
 function escapeRegExp(value) {
@@ -434,6 +446,7 @@ function visibleText(hierarchy, limit = 24) {
 async function waitForConnectedHomeUi(packageName, timeoutSeconds, replaceExisting) {
   const deadline = Date.now() + timeoutSeconds * 1000
   let lastHierarchy = ""
+  let confirmed = false
   let replaced = false
 
   while (Date.now() < deadline) {
@@ -460,11 +473,36 @@ async function waitForConnectedHomeUi(packageName, timeoutSeconds, replaceExisti
       continue
     }
 
-    const hasHome = lastHierarchy.includes('text="Desktop"') && lastHierarchy.includes('text="Workspaces"')
+    const confirmationAccessibilityLabel = [
+      "Connect: Local network",
+      "Connect: Cloud connection",
+      "Connect: Direct connection",
+    ].find((label) => lastHierarchy.includes(`content-desc="${label}"`))
+    const legacyConfirmationLabel = [
+      "Use local network",
+      "Use cloud relay",
+      "Confirm connection",
+    ].find((label) => lastHierarchy.includes(`text="${label}"`))
+    if ((confirmationAccessibilityLabel || legacyConfirmationLabel) && !confirmed) {
+      const attribute = confirmationAccessibilityLabel ? "content-desc" : "text"
+      const label = confirmationAccessibilityLabel ?? legacyConfirmationLabel
+      const bounds = findNodeBoundsByAttribute(lastHierarchy, attribute, label)
+      if (!bounds) {
+        throw new Error(`Unable to find Android confirmation button: ${label}`)
+      }
+      tapBounds(bounds)
+      confirmed = true
+      continue
+    }
+
+    const hasLegacyHome = lastHierarchy.includes('text="Desktop"') && lastHierarchy.includes('text="Workspaces"')
+    const hasComposerHome =
+      lastHierarchy.includes('content-desc="Select model"') &&
+      lastHierarchy.includes('class="android.widget.EditText"')
     const hasConnectedState =
       lastHierarchy.includes('text="Live"') ||
       lastHierarchy.includes('text="Online"')
-    if (hasHome && hasConnectedState) return
+    if ((hasLegacyHome && hasConnectedState) || hasComposerHome) return
   }
 
   const suffix = lastHierarchy ? ` Visible text: ${visibleText(lastHierarchy)}` : ""
@@ -506,7 +544,17 @@ async function main() {
   }
 
   run("adb", ["logcat", "-c"])
-  run("adb", ["shell", "am", "start", "-W", "-a", "android.intent.action.VIEW", "-d", androidBridgeInput.deepLink, args.packageName])
+  run("adb", [
+    "shell",
+    "am",
+    "start",
+    "-W",
+    "-a",
+    "android.intent.action.VIEW",
+    "-d",
+    quoteRemoteShellArgument(androidBridgeInput.deepLink),
+    args.packageName,
+  ])
   await waitForConnectedHomeUi(args.packageName, args.waitSeconds, args.replaceExisting)
 
   const pid = read("adb", ["shell", "pidof", args.packageName], { allowFailure: true }).stdout.trim()

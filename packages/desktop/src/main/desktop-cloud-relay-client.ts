@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { app } from "electron"
+import WebSocket, { type Data } from "ws"
 import { readTrimmedDesktopEnv } from "./env-compat"
 import { safeError, safeLog, safeWarn } from "./safe-console"
 
@@ -252,12 +253,10 @@ function openRelaySocket(currentOptions: DesktopCloudRelayClientOptions, identit
   const baseUrl = currentOptions.baseUrl
   if (!baseUrl) return
 
-  const url = new URL("/api/relay/desktop/connect", baseUrl)
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:"
-  url.searchParams.set("desktopID", identity.desktopID)
-  url.searchParams.set("token", identity.token)
-
-  const nextSocket = new WebSocket(url.toString())
+  const connection = createRelaySocketConnection(baseUrl, identity)
+  const nextSocket = new WebSocket(connection.url, {
+    headers: connection.headers,
+  })
   abortActiveMobileStreams()
   socket?.close(4000, "replaced by newer relay socket")
   socket = nextSocket
@@ -306,7 +305,19 @@ function openRelaySocket(currentOptions: DesktopCloudRelayClientOptions, identit
   })
 }
 
-async function handleRelayMessage(currentSocket: WebSocket, data: MessageEvent["data"]) {
+function createRelaySocketConnection(baseUrl: string, identity: RelayIdentityDocument) {
+  const url = new URL("/api/relay/desktop/connect", baseUrl)
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:"
+  url.searchParams.set("desktopID", identity.desktopID)
+  return {
+    url: url.toString(),
+    headers: {
+      authorization: `Bearer ${identity.token}`,
+    },
+  }
+}
+
+async function handleRelayMessage(currentSocket: WebSocket, data: Data) {
   const raw = await readMessageData(data)
   const command = parseRelayCommand(raw)
   if (!command?.id || command.type === "relay.ready") return
@@ -813,11 +824,11 @@ function normalizeRelayBaseUrl(value: string | null | undefined) {
   }
 }
 
-async function readMessageData(data: MessageEvent["data"]) {
+async function readMessageData(data: Data) {
+  if (Array.isArray(data)) return Buffer.concat(data).toString("utf8")
   if (typeof data === "string") return data
   if (data instanceof ArrayBuffer) return new TextDecoder().decode(data)
   if (ArrayBuffer.isView(data)) return new TextDecoder().decode(data)
-  if (data instanceof Blob) return data.text()
   return String(data)
 }
 
@@ -881,6 +892,7 @@ function describeRelayRequestError(code: string | undefined, message: string | u
 }
 
 export const internal = {
+  createRelaySocketConnection,
   describeRelayRequestError,
   parseMobileHttpPayload,
 }

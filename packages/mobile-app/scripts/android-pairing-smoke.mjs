@@ -679,7 +679,7 @@ async function waitForReplaceConnectionUi(packageName, timeoutSeconds) {
   return waitForUi(
     packageName,
     timeoutSeconds,
-    ["Confirm desktop connection", "Replacing current desktop", "Confirm connection"],
+    ["Connect to Smoke Desktop", "Switch desktop"],
     "Replace connection confirmation",
   )
 }
@@ -688,7 +688,7 @@ async function waitForConfirmConnectionUi(packageName, timeoutSeconds) {
   return waitForUiContaining(
     packageName,
     timeoutSeconds,
-    ["Confirm desktop connection", "Smoke Desktop 0.0.0", "Confirm connection"],
+    ["Connect to Smoke Desktop", "Direct connection", "Connect: Direct connection"],
     "Connection confirmation",
   )
 }
@@ -833,11 +833,14 @@ async function openApprovalsFromCurrentUi(packageName, timeoutSeconds, hierarchy
 
 async function confirmReplaceConnection(packageName, hierarchy) {
   await sleep(1200)
-  tapText(hierarchy, "Confirm connection")
+  tapAccessibilityLabel(hierarchy, "Connect: Direct connection")
   await sleep(1200)
   const afterTapHierarchy = dumpWindowHierarchy()
-  if (afterTapHierarchy.includes(`package="${packageName}"`) && afterTapHierarchy.includes('text="Confirm connection"')) {
-    tapText(afterTapHierarchy, "Confirm connection")
+  if (
+    afterTapHierarchy.includes(`package="${packageName}"`) &&
+    afterTapHierarchy.includes('content-desc="Connect: Direct connection"')
+  ) {
+    tapAccessibilityLabel(afterTapHierarchy, "Connect: Direct connection")
   }
 }
 

@@ -176,8 +176,10 @@ export default function SettingsScreen() {
                   source={{ uri: avatarUrl }}
                   style={{ borderRadius: 39, height: 78, width: 78 }}
                 />
-              ) : (
+              ) : account ? (
                 <Text style={{ color: "#ffffff", fontSize: 36, fontWeight: "800" }}>{avatarLabel}</Text>
+              ) : (
+                <Feather color="#ffffff" name="user" size={38} />
               )}
             </View>
             <View style={{ alignItems: "center", flexDirection: "row", gap: 4, maxWidth: "100%" }}>

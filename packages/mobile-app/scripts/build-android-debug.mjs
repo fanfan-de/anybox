@@ -9,6 +9,13 @@ const require = createRequire(import.meta.url)
 const isWindows = process.platform === "win32"
 const outputPath = path.join(packageRoot, "build", "anybox-mobile-debug.apk")
 const GRADLE_WRAPPER_TIMEOUT_MS = 600_000
+const DEFAULT_APK_ARCHITECTURES = "arm64-v8a,armeabi-v7a"
+const ALLOWED_ANDROID_ARCHITECTURES = new Set([
+  "arm64-v8a",
+  "armeabi-v7a",
+  "x86",
+  "x86_64",
+])
 
 function packageBin(name) {
   return path.join(packageRoot, "node_modules", ".bin", `${name}${isWindows ? ".CMD" : ""}`)
@@ -71,6 +78,8 @@ function requireAndroidEnvironment() {
 function readArgs(argv) {
   return {
     clean: argv.includes("--clean"),
+    minify: argv.includes("--minify"),
+    prepareOnly: argv.includes("--prepare-only"),
   }
 }
 
@@ -90,19 +99,33 @@ function main() {
 
   const androidDir = path.join(packageRoot, "android")
   extendGradleWrapperTimeout(androidDir)
-  setGradleProperty(androidDir, "newArchEnabled", "false")
   patchGradleRepositories(androidDir)
   patchReactNativeGradlePluginRepositories()
   patchExpoGradlePluginRepositories()
   patchExpoModulesCoreGradlePluginRepositories()
   patchExpoUpdatesGradlePluginRepositories()
-  embedDebugBundle(expo, androidDir)
+  embedDebugBundle(expo, androidDir, args.minify)
+  if (args.prepareOnly) {
+    console.log(`Prepared Android release sources: ${androidDir}`)
+    return
+  }
   const gradle = path.join(androidDir, isWindows ? "gradlew.bat" : "gradlew")
   if (!existsSync(gradle)) {
     throw new Error("Android Gradle wrapper was not generated.")
   }
 
-  run(gradle, ["assembleDebug"], { cwd: androidDir, shell: isWindows })
+  const architectures = resolveApkArchitectures()
+  run(
+    gradle,
+    [
+      "--no-daemon",
+      "--console=plain",
+      "--max-workers=2",
+      `-PreactNativeArchitectures=${architectures}`,
+      "assembleDebug",
+    ],
+    { cwd: androidDir, shell: isWindows },
+  )
 
   const apkPath = path.join(androidDir, "app", "build", "outputs", "apk", "debug", "app-debug.apk")
   if (!existsSync(apkPath)) {
@@ -112,9 +135,30 @@ function main() {
   mkdirSync(path.dirname(outputPath), { recursive: true })
   copyFileSync(apkPath, outputPath)
   console.log(`Debug APK: ${outputPath}`)
+  console.log(`Android architectures: ${architectures}`)
 }
 
-function embedDebugBundle(expo, androidDir) {
+function resolveApkArchitectures() {
+  const raw = process.env.ANYBOX_ANDROID_ARCHITECTURES?.trim() || DEFAULT_APK_ARCHITECTURES
+  const architectures = raw
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+  if (
+    architectures.length === 0 ||
+    new Set(architectures).size !== architectures.length ||
+    architectures.some((value) => !ALLOWED_ANDROID_ARCHITECTURES.has(value))
+  ) {
+    throw new Error(
+      "ANYBOX_ANDROID_ARCHITECTURES must be a unique comma-separated subset of " +
+        [...ALLOWED_ANDROID_ARCHITECTURES].join(", ") +
+        ".",
+    )
+  }
+  return architectures.join(",")
+}
+
+function embedDebugBundle(expo, androidDir, minify) {
   const entryFile = readCommand("node", [
     "-e",
     "require('expo/scripts/resolveAppEntry')",
@@ -137,7 +181,7 @@ function embedDebugBundle(expo, androidDir) {
     "--dev",
     "false",
     "--minify",
-    "false",
+    minify ? "true" : "false",
     "--bundle-output",
     path.join(assetsDir, "index.android.bundle"),
     "--assets-dest",
@@ -354,24 +398,6 @@ function extendGradleWrapperTimeout(androidDir) {
   if (next !== current) {
     writeFileSync(propertiesPath, next, "utf8")
   }
-}
-
-function setGradleProperty(androidDir, key, value) {
-  const propertiesPath = path.join(androidDir, "gradle.properties")
-  if (!existsSync(propertiesPath)) return
-
-  const current = readFileSync(propertiesPath, "utf8")
-  const next = current.match(new RegExp(`^${escapeRegExp(key)}=`, "m"))
-    ? current.replace(new RegExp(`^${escapeRegExp(key)}=.*$`, "m"), `${key}=${value}`)
-    : `${current.trimEnd()}\n${key}=${value}\n`
-
-  if (next !== current) {
-    writeFileSync(propertiesPath, next, "utf8")
-  }
-}
-
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
 
 function patchGradleRepositories(androidDir) {

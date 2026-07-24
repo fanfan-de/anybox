@@ -47,22 +47,27 @@
     "mobile:ios:simulator": "corepack pnpm --filter anybox-mobile-app ios:simulator",
     "mobile:android:setup": "corepack pnpm --filter anybox-mobile-app run android:setup",
     "mobile:android:build:debug": "corepack pnpm --filter anybox-mobile-app run android:build:debug",
+    "mobile:android:build:release": "corepack pnpm --filter anybox-mobile-app run android:build:release",
     "mobile:android:install:debug": "corepack pnpm --filter anybox-mobile-app run android:install:debug",
     "mobile:android:smoke:debug": "corepack pnpm --filter anybox-mobile-app run android:smoke:debug",
     "mobile:android:smoke:bridge": "corepack pnpm --filter anybox-mobile-app run android:smoke:bridge",
     "mobile:android:smoke:pairing": "corepack pnpm --filter anybox-mobile-app run android:smoke:pairing",
     "mobile:android:delivery-check": "corepack pnpm --filter anybox-mobile-app run android:delivery-check",
     "mobile:android:handoff-check": "corepack pnpm --filter anybox-mobile-app run android:handoff-check",
-    "mobile:build:android:apk": "corepack pnpm --filter anybox-mobile-app build:android:apk",
-    "mobile:build:android:production": "corepack pnpm --filter anybox-mobile-app build:android:production",
-    "mobile:build:ios:preview": "corepack pnpm --filter anybox-mobile-app build:ios:preview",
-    "mobile:build:ios:production": "corepack pnpm --filter anybox-mobile-app build:ios:production",
+    "mobile:keys:init": "corepack pnpm --filter anybox-mobile-app keys:init",
+    "mobile:fingerprint:record": "corepack pnpm --filter anybox-mobile-app fingerprint:record",
+    "mobile:fingerprint:check": "corepack pnpm --filter anybox-mobile-app fingerprint:check",
     "mobile:update:preview": "corepack pnpm --filter anybox-mobile-app update:preview",
-    "mobile:update:production": "corepack pnpm --filter anybox-mobile-app update:production",
+    "mobile:update:promote": "corepack pnpm --filter anybox-mobile-app update:promote",
+    "mobile:update:rollback": "corepack pnpm --filter anybox-mobile-app update:rollback",
+    "mobile:release:publish": "corepack pnpm --filter anybox-mobile-app release:publish",
     "mobile:release:github:prepare": "corepack pnpm --filter anybox-mobile-app release:github:prepare",
     "mobile:doctor": "corepack pnpm --filter anybox-mobile-app run doctor",
     "mobile:smoke": "corepack pnpm --filter anybox-mobile-app run smoke",
     "mobile:typecheck": "corepack pnpm --filter anybox-mobile-app typecheck",
+    "mobile:update-server:build": "corepack pnpm --filter @anybox/mobile-update-server build",
+    "mobile:update-server:test": "corepack pnpm --filter @anybox/mobile-update-server test",
+    "mobile:update-server:typecheck": "corepack pnpm --filter @anybox/mobile-update-server typecheck",
     "test": "corepack pnpm --filter anybox-desktop-agent test",
     "typecheck": "corepack pnpm --filter anybox-desktop-agent typecheck",
     "verify:versions": "node ./scripts/verify-product-version.mjs",
@@ -78,5 +83,12 @@
     "electron-vite": "^5.0.0",
     "typescript": "^5.9.3",
     "vite": "^7.3.1"
+  },
+  "pnpm": {
+    "patchedDependencies": {
+      "expo-asset@56.0.21": "patches/expo-asset@56.0.21.patch",
+      "expo-linking@56.0.16": "patches/expo-linking@56.0.16.patch",
+      "expo-router@56.2.16": "patches/expo-router@56.2.16.patch"
+    }
   }
 }

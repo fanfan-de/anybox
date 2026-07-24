@@ -1,0 +1,16 @@
+diff --git a/build/createURL.js b/build/createURL.js
+index c6a4f0f..e1c72a8 100644
+--- a/build/createURL.js
++++ b/build/createURL.js
+@@ -15,10 +15,7 @@ function getHostUri() {
+     }
+ }
+ function isExpoHosted() {
+-    const hostUri = getHostUri();
+-    return !!(hostUri &&
+-        (/^(.*\.)?(expo\.io|exp\.host|exp\.direct|expo\.test|expo\.dev)(:.*)?(\/.*)?$/.test(hostUri) ||
+-            Constants.expoGoConfig?.developer));
++    return Boolean(Constants.expoGoConfig?.developer);
+ }
+ function removeScheme(url) {
+     return url.replace(/^[a-zA-Z0-9+.-]+:\/\//, '');

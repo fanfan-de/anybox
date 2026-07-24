@@ -1,4 +1,10 @@
+const fs = require("node:fs")
+const path = require("node:path")
 const appJson = require("./app.json")
+
+const UPDATE_CHANNELS = new Set(["preview", "production"])
+const SELF_HOSTED_UPDATES_URL = "https://updates.anybox.com.cn/v1/manifest"
+const OTA_CERTIFICATE_RELATIVE_PATH = "./credentials/ota-certificate.pem"
 
 function firstNonEmpty(values) {
   for (const value of values) {
@@ -8,70 +14,91 @@ function firstNonEmpty(values) {
   return ""
 }
 
-const baseConfig = appJson.expo
-const appConfigProjectId = firstNonEmpty([baseConfig.extra?.eas?.projectId])
-const easProjectId = firstNonEmpty([
-  process.env.EXPO_PUBLIC_EAS_PROJECT_ID,
-  process.env.EAS_PROJECT_ID,
-  appConfigProjectId,
-])
-const updateUrl = firstNonEmpty([
-  process.env.EXPO_UPDATES_URL,
-  baseConfig.updates?.url,
-  easProjectId ? `https://u.expo.dev/${easProjectId}` : "",
-])
-const releaseManifestUrl = firstNonEmpty([
-  process.env.EXPO_PUBLIC_ANYBOX_MOBILE_RELEASE_URL,
-  baseConfig.extra?.anyboxMobileReleaseUrl,
-])
-const githubRepository = firstNonEmpty([
-  process.env.EXPO_PUBLIC_ANYBOX_MOBILE_GITHUB_REPOSITORY,
-  process.env.EXPO_PUBLIC_ANYBOX_MOBILE_GITHUB_REPO,
-  baseConfig.extra?.anyboxMobileGitHubRepository,
-])
-const githubReleaseTagPrefix = firstNonEmpty([
-  process.env.EXPO_PUBLIC_ANYBOX_MOBILE_GITHUB_TAG_PREFIX,
-  baseConfig.extra?.anyboxMobileGitHubReleaseTagPrefix,
-  "mobile-v",
-])
-const githubApkAssetName = firstNonEmpty([
-  process.env.EXPO_PUBLIC_ANYBOX_MOBILE_GITHUB_APK_ASSET_NAME,
-  baseConfig.extra?.anyboxMobileGitHubApkAssetName,
-  "anybox-mobile.apk",
-])
-const githubManifestAssetName = firstNonEmpty([
-  process.env.EXPO_PUBLIC_ANYBOX_MOBILE_GITHUB_MANIFEST_ASSET_NAME,
-  baseConfig.extra?.anyboxMobileGitHubManifestAssetName,
-  "anybox-mobile-release.json",
-])
-const anyboxRelayUrl = firstNonEmpty([
-  process.env.EXPO_PUBLIC_ANYBOX_RELAY_URL,
-  process.env.EXPO_PUBLIC_ANYBOX_PROVIDER_URL,
-  baseConfig.extra?.anyboxRelayUrl,
-  "https://anybox.com.cn",
-])
+function resolveUpdateChannel(baseConfig) {
+  const channel = firstNonEmpty([
+    process.env.ANYBOX_MOBILE_UPDATE_CHANNEL,
+    baseConfig.extra?.anyboxMobileUpdateChannel,
+    "production",
+  ])
+  if (!UPDATE_CHANNELS.has(channel)) {
+    throw new Error(`ANYBOX_MOBILE_UPDATE_CHANNEL must be preview or production; received ${channel}.`)
+  }
+  return channel
+}
 
-module.exports = () => ({
-  ...baseConfig,
-  updates: {
-    ...baseConfig.updates,
-    ...(updateUrl ? { url: updateUrl } : {}),
-  },
-  extra: {
-    ...baseConfig.extra,
-    anyboxMobileReleaseUrl: releaseManifestUrl,
-    anyboxMobileGitHubRepository: githubRepository,
-    anyboxMobileGitHubReleaseTagPrefix: githubReleaseTagPrefix,
-    anyboxMobileGitHubApkAssetName: githubApkAssetName,
-    anyboxMobileGitHubManifestAssetName: githubManifestAssetName,
-    anyboxRelayUrl,
-    ...(easProjectId
-      ? {
-          eas: {
-            ...(baseConfig.extra?.eas ?? {}),
-            projectId: easProjectId,
-          },
-        }
-      : {}),
-  },
-})
+function resolveUpdatesUrl(baseConfig) {
+  const updateUrl = firstNonEmpty([
+    process.env.ANYBOX_MOBILE_UPDATES_URL,
+    baseConfig.updates?.url,
+    SELF_HOSTED_UPDATES_URL,
+  ])
+  const parsed = new URL(updateUrl)
+  const allowLocalHttp = process.env.ANYBOX_ALLOW_HTTP_UPDATES === "1"
+  const localHost = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1"
+  if (allowLocalHttp && localHost && parsed.protocol === "http:") {
+    return parsed.toString()
+  }
+  if (parsed.toString() !== SELF_HOSTED_UPDATES_URL) {
+    throw new Error(
+      `Anybox mobile updates URL must be ${SELF_HOSTED_UPDATES_URL}. ` +
+        "Local HTTP testing requires localhost and ANYBOX_ALLOW_HTTP_UPDATES=1.",
+    )
+  }
+  return SELF_HOSTED_UPDATES_URL
+}
+
+module.exports = () => {
+  const baseConfig = appJson.expo
+  const channel = resolveUpdateChannel(baseConfig)
+  const updateUrl = resolveUpdatesUrl(baseConfig)
+  const certificatePath = path.resolve(__dirname, "credentials", "ota-certificate.pem")
+  const hasCertificate = fs.existsSync(certificatePath)
+  const releaseManifestUrl = firstNonEmpty([
+    process.env.EXPO_PUBLIC_ANYBOX_MOBILE_RELEASE_URL,
+    baseConfig.extra?.anyboxMobileReleaseUrl,
+  ])
+  const releaseSignatureUrl = firstNonEmpty([
+    process.env.EXPO_PUBLIC_ANYBOX_MOBILE_RELEASE_SIGNATURE_URL,
+    baseConfig.extra?.anyboxMobileReleaseSignatureUrl,
+  ])
+  const githubRepository = firstNonEmpty([
+    process.env.EXPO_PUBLIC_ANYBOX_MOBILE_GITHUB_REPOSITORY,
+    process.env.EXPO_PUBLIC_ANYBOX_MOBILE_GITHUB_REPO,
+    baseConfig.extra?.anyboxMobileGitHubRepository,
+  ])
+  const anyboxRelayUrl = firstNonEmpty([
+    process.env.EXPO_PUBLIC_ANYBOX_RELAY_URL,
+    process.env.EXPO_PUBLIC_ANYBOX_PROVIDER_URL,
+    baseConfig.extra?.anyboxRelayUrl,
+    "https://anybox.com.cn",
+  ])
+
+  return {
+    ...baseConfig,
+    updates: {
+      ...baseConfig.updates,
+      url: updateUrl,
+      requestHeaders: {
+        ...(baseConfig.updates?.requestHeaders ?? {}),
+        "expo-channel-name": channel,
+      },
+      ...(hasCertificate
+        ? {
+            codeSigningCertificate: OTA_CERTIFICATE_RELATIVE_PATH,
+            codeSigningMetadata: {
+              alg: "rsa-v1_5-sha256",
+              keyid: "anybox-mobile-2026",
+            },
+          }
+        : {}),
+    },
+    extra: {
+      ...baseConfig.extra,
+      anyboxMobileReleaseUrl: releaseManifestUrl,
+      anyboxMobileReleaseSignatureUrl: releaseSignatureUrl,
+      anyboxMobileUpdateChannel: channel,
+      anyboxMobileGitHubRepository: githubRepository,
+      anyboxRelayUrl,
+    },
+  }
+}

@@ -4,20 +4,23 @@ import React from "react"
 import { AccountProvider } from "@/state/account"
 import { ConnectionProvider } from "@/state/connection"
 import { FocusProvider } from "@/state/focus"
-import { UpdateGate } from "@/components/update-gate"
+import { UpdateOverlay } from "@/components/update-overlay"
 import { MobileI18nProvider, useI18n } from "@/i18n"
+import { UpdateCoordinatorProvider } from "@/state/update-coordinator"
 import { theme } from "@/theme"
 
 export default function RootLayout() {
   return (
     <MobileI18nProvider>
-      <AccountProvider>
-        <ConnectionProvider>
-          <FocusProvider>
-            <AppStack />
-          </FocusProvider>
-        </ConnectionProvider>
-      </AccountProvider>
+      <UpdateCoordinatorProvider>
+        <AccountProvider>
+          <ConnectionProvider>
+            <FocusProvider>
+              <AppStack />
+            </FocusProvider>
+          </ConnectionProvider>
+        </AccountProvider>
+      </UpdateCoordinatorProvider>
     </MobileI18nProvider>
   )
 }
@@ -27,7 +30,7 @@ function AppStack() {
 
   return (
     <>
-      <UpdateGate />
+      <UpdateOverlay />
       <StatusBar style="auto" />
       <Stack
         screenOptions={{

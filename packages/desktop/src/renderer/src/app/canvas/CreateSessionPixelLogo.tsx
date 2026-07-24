@@ -2,7 +2,11 @@ import { useEffect, useState } from "react"
 import {
   boxBodyMask,
   catClosedEyesMask,
+  catHeadTiltHalfMask,
+  catHeadTiltMask,
   catOpenEyesMask,
+  catTailWagLeftMask,
+  catTailWagRightMask,
   closedFlapsMask,
   halfOpenFlapsMask,
   openFlapsMask,
@@ -11,6 +15,10 @@ import {
 } from "./create-session-pixel-logo-masks"
 
 const PIXEL_ROW_MASK = (1n << BigInt(PIXEL_LOGO_SIZE)) - 1n
+const DOT_MATRIX_VIEWBOX_SIZE = 128
+const DOT_MATRIX_PITCH = DOT_MATRIX_VIEWBOX_SIZE / PIXEL_LOGO_SIZE
+const DOT_MATRIX_DOT_CENTER_OFFSET = 0.5
+const DOT_MATRIX_DOT_DIAMETER = 1.6
 const PIXEL_LOGO_IDLE_MS = 4_200
 const PIXEL_LOGO_BLINK_MS = 120
 
@@ -65,11 +73,29 @@ export function maskToSvgPath(mask: PixelMask): string {
   return path.join("")
 }
 
+export function maskToDotSvgPath(mask: PixelMask): string {
+  const path: string[] = []
+
+  for (let y = 0; y < PIXEL_LOGO_SIZE; y += 1) {
+    const row = (mask[y] ?? 0n) & PIXEL_ROW_MASK
+
+    for (let x = 0; x < PIXEL_LOGO_SIZE; x += 1) {
+      if ((row & (1n << BigInt(x))) === 0n) continue
+
+      const centerX = x * DOT_MATRIX_PITCH + DOT_MATRIX_DOT_CENTER_OFFSET
+      const centerY = y * DOT_MATRIX_PITCH + DOT_MATRIX_DOT_CENTER_OFFSET
+      path.push(`M${centerX} ${centerY}h.01`)
+    }
+  }
+
+  return path.join("")
+}
+
 function createFrame(name: string, durationMs: number, ...masks: PixelMask[]): PixelLogoFrame {
   return {
     name,
     durationMs,
-    path: maskToSvgPath(composeMasks(...masks)),
+    path: maskToDotSvgPath(composeMasks(...masks)),
   }
 }
 
@@ -85,6 +111,16 @@ const introFrames: readonly PixelLogoFrame[] = [
 
 const idleFrame = createFrame("idle", PIXEL_LOGO_IDLE_MS, boxBodyMask, openFlapsMask, catOpenEyesMask)
 const blinkFrame = createFrame("blink", PIXEL_LOGO_BLINK_MS, boxBodyMask, openFlapsMask, catClosedEyesMask)
+const headTiltHalfFrame = createFrame("head-tilt-half", 90, boxBodyMask, openFlapsMask, catHeadTiltHalfMask)
+const headTiltFrame = createFrame("head-tilt", 240, boxBodyMask, openFlapsMask, catHeadTiltMask)
+const tailWagLeftFrame = createFrame("tail-wag-left", 100, boxBodyMask, openFlapsMask, catTailWagLeftMask)
+const tailWagRightFrame = createFrame("tail-wag-right", 100, boxBodyMask, openFlapsMask, catTailWagRightMask)
+
+const idleAnimationSequences: readonly (readonly PixelLogoFrame[])[] = [
+  [blinkFrame],
+  [headTiltHalfFrame, headTiltFrame, headTiltHalfFrame],
+  [tailWagLeftFrame, tailWagRightFrame, tailWagLeftFrame, tailWagRightFrame],
+]
 
 function readPrefersReducedMotion() {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false
@@ -142,23 +178,28 @@ export function CreateSessionPixelLogo() {
       }, delayMs)
     }
 
-    const showIdle = () => {
-      setFrame(idleFrame)
-      schedule(() => {
-        setFrame(blinkFrame)
-        schedule(showIdle, blinkFrame.durationMs)
-      }, idleFrame.durationMs)
-    }
-
-    const showIntroFrame = (index: number) => {
-      const nextFrame = introFrames[index]
+    function playFrameSequence(
+      frames: readonly PixelLogoFrame[],
+      index: number,
+      onComplete: () => void,
+    ) {
+      const nextFrame = frames[index]
       if (!nextFrame) {
-        showIdle()
+        onComplete()
         return
       }
 
       setFrame(nextFrame)
-      schedule(() => showIntroFrame(index + 1), nextFrame.durationMs)
+      schedule(() => playFrameSequence(frames, index + 1, onComplete), nextFrame.durationMs)
+    }
+
+    function showIdle() {
+      setFrame(idleFrame)
+      schedule(() => {
+        const animationIndex = Math.floor(Math.random() * idleAnimationSequences.length)
+        const animationFrames = idleAnimationSequences[animationIndex] ?? idleAnimationSequences[0]
+        playFrameSequence(animationFrames, 0, showIdle)
+      }, idleFrame.durationMs)
     }
 
     const handleVisibilityChange = () => {
@@ -174,7 +215,7 @@ export function CreateSessionPixelLogo() {
     document.addEventListener("visibilitychange", handleVisibilityChange)
 
     if (document.visibilityState === "visible") {
-      showIntroFrame(0)
+      playFrameSequence(introFrames, 0, showIdle)
     } else {
       setFrame(idleFrame)
     }
@@ -190,11 +231,17 @@ export function CreateSessionPixelLogo() {
     <span className="create-session-logo" role="img" aria-label="Anybox logo">
       <svg
         className="create-session-logo-svg"
-        viewBox="0 0 64 64"
-        shapeRendering="crispEdges"
+        viewBox={`0 0 ${DOT_MATRIX_VIEWBOX_SIZE} ${DOT_MATRIX_VIEWBOX_SIZE}`}
+        shapeRendering="geometricPrecision"
         aria-hidden="true"
       >
-        <path d={frame.path} fill="currentColor" />
+        <path
+          d={frame.path}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={DOT_MATRIX_DOT_DIAMETER}
+          strokeLinecap="round"
+        />
       </svg>
     </span>
   )

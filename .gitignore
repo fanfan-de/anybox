@@ -6,6 +6,14 @@ build/
 .env
 .env.local
 .env.downloads
+.env.mobile-signing.local
+.anybox-mobile-keys/
+packages/mobile-app/credentials/*
+!packages/mobile-app/credentials/README.md
+!packages/mobile-app/credentials/ota-certificate.pem
+!packages/mobile-app/credentials/android-release-certificate.sha256
+packages/mobile-app/.mobile-keys/
+packages/mobile-app/credentials/*.pending
 .DS_Store
 Thumbs.db
 .idea/

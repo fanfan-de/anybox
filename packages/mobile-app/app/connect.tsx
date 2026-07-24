@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router"
-import React, { useEffect, useMemo, useState } from "react"
+import React, { useEffect, useMemo, useRef, useState } from "react"
 import { Text, View } from "react-native"
 import { Button } from "@/components/button"
 import { Screen } from "@/components/screen"
@@ -16,6 +16,7 @@ import {
 } from "@/api/mobile-api"
 import { useAccount } from "@/state/account"
 import { useConnection } from "@/state/connection"
+import { useI18n } from "@/i18n"
 import { theme } from "@/theme"
 import { getMobileDeviceName } from "@/utils/platform"
 
@@ -24,54 +25,11 @@ const CONNECTION_PREVIEW_TIMEOUT_MS = 4_500
 interface PreviewedConnectionOption {
   option: NormalizedConnectionOption
   preview: MobilePairPreview | null
-  error?: string
+  unavailable?: boolean
 }
 
 function firstParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value
-}
-
-function formatPairingExpiry(preview: MobilePairPreview | null) {
-  if (!preview?.pairing.expiresAt) return null
-  const remaining = Math.max(0, preview.pairing.expiresAt - preview.pairing.serverTime)
-  const minutes = Math.floor(remaining / 60_000)
-  const seconds = Math.floor((remaining % 60_000) / 1000)
-  return remaining > 0 ? `${minutes}:${String(seconds).padStart(2, "0")}` : "expired"
-}
-
-function formatPreviewDetail(option: NormalizedConnectionOption, preview: MobilePairPreview | null) {
-  const connection = option.connection
-  if (!preview) {
-    const access = connection.transport === "relay" ? "Cloud relay access" : option.kind === "lan" ? "Local network access" : "Legacy token access"
-    return `${access}\n${connection.baseUrl}`
-  }
-
-  const desktop = preview.desktopName?.trim() || "Anybox desktop"
-  const version = preview.appVersion ? ` ${preview.appVersion}` : ""
-  const capabilityCount = preview.capabilities?.length ?? 0
-  const expires = formatPairingExpiry(preview)
-  return [
-    `${desktop}${version}`,
-    connection.transport === "relay"
-      ? `Cloud relay: ${connection.baseUrl}`
-      : option.kind === "lan"
-        ? `Local network: ${connection.baseUrl}`
-        : connection.baseUrl,
-    capabilityCount === 1 ? "1 capability" : `${capabilityCount} capabilities`,
-    expires ? `QR expires in ${expires}` : null,
-  ]
-    .filter(Boolean)
-    .join("\n")
-}
-
-function pairingButtonLabel(option: NormalizedConnectionOption) {
-  if (option.kind === "relay") return "Use cloud relay"
-  if (option.kind === "lan") return "Use local network"
-  return "Confirm connection"
-}
-
-function describePreviewError(error: unknown) {
-  return error instanceof Error ? error.message : "Unable to preview this connection method."
 }
 
 async function previewConnectionOption(option: NormalizedConnectionOption): Promise<PreviewedConnectionOption> {
@@ -87,15 +45,16 @@ async function previewConnectionOption(option: NormalizedConnectionOption): Prom
       return {
         option,
         preview,
-        error: "This pairing QR code is expired or already used.",
+        unavailable: true,
       }
     }
     return { option, preview }
   } catch (error) {
+    console.warn(`[connect] Unable to preview ${option.kind} connection`, error)
     return {
       option,
       preview: null,
-      error: describePreviewError(error),
+      unavailable: true,
     }
   } finally {
     clearTimeout(timeout)
@@ -106,11 +65,22 @@ function ConnectionOptionCard({
   item,
   onPair,
   pairing,
+  primary,
+  showRecommended,
 }: {
   item: PreviewedConnectionOption
   onPair: (item: PreviewedConnectionOption) => void
   pairing: boolean
+  primary: boolean
+  showRecommended: boolean
 }) {
+  const { t } = useI18n()
+  const presentation = item.option.kind === "relay"
+    ? { title: t("connect.cloud"), detail: t("connect.cloudHint") }
+    : item.option.kind === "lan"
+      ? { title: t("connect.local"), detail: t("connect.localHint") }
+      : { title: t("connect.direct"), detail: t("connect.directHint") }
+
   return (
     <View
       style={{
@@ -123,31 +93,53 @@ function ConnectionOptionCard({
       }}
     >
       <View style={{ gap: theme.spacing.sm }}>
-        <Text
-          selectable
+        <View
           style={{
-            color: theme.colors.text,
-            fontSize: theme.typography.size.lg,
-            fontWeight: theme.typography.weight.heavy,
+            alignItems: "baseline",
+            flexDirection: "row",
+            gap: theme.spacing.lg,
+            justifyContent: "space-between",
           }}
         >
-          {item.option.label}
-        </Text>
+          <Text
+            style={{
+              color: theme.colors.text,
+              flexShrink: 1,
+              fontSize: theme.typography.size.lg,
+              fontWeight: theme.typography.weight.heavy,
+            }}
+          >
+            {presentation.title}
+          </Text>
+          {showRecommended ? (
+            <Text
+              style={{
+                color: theme.colors.status.success.text,
+                fontSize: theme.typography.size.sm,
+                fontWeight: theme.typography.weight.bold,
+              }}
+            >
+              {t("connect.recommended")}
+            </Text>
+          ) : null}
+        </View>
         <Text
-          selectable
           style={{
-            color: theme.colors.textMuted,
+            color: item.unavailable ? theme.colors.status.danger.text : theme.colors.textMuted,
             fontSize: theme.typography.size.sm,
             lineHeight: theme.typography.lineHeight.sm,
           }}
         >
-          {formatPreviewDetail(item.option, item.preview)}
+          {item.unavailable ? t("connect.unavailableHint") : presentation.detail}
         </Text>
       </View>
       <Button
-        label={pairingButtonLabel(item.option)}
+        accessibilityLabel={`${t("connect.action")}: ${presentation.title}`}
+        disabled={item.unavailable}
+        label={item.unavailable ? t("connect.unavailable") : t("connect.action")}
         loading={pairing}
         onPress={() => onPair(item)}
+        variant={primary ? "primary" : "secondary"}
       />
     </View>
   )
@@ -158,10 +150,12 @@ export default function ConnectScreen() {
   const params = useLocalSearchParams<{ token?: string; url?: string }>()
   const { account } = useAccount()
   const { connection, loading, saveConnection } = useConnection()
+  const { t } = useI18n()
   const [options, setOptions] = useState<PreviewedConnectionOption[]>([])
-  const [error, setError] = useState<string | null>(null)
+  const [hasError, setHasError] = useState(false)
   const [loadingPreview, setLoadingPreview] = useState(true)
   const [pairingOptionID, setPairingOptionID] = useState<string | null>(null)
+  const pairingCommittedRef = useRef(false)
 
   function cancelConnection() {
     if (router.canGoBack()) {
@@ -176,15 +170,15 @@ export default function ConnectScreen() {
   const isConnectionOptionsLink = useMemo(() => Boolean(readConnectionOptionsFromDeepLink(bridgeUrl)), [bridgeUrl])
 
   useEffect(() => {
-    if (loading) return undefined
+    if (loading || pairingCommittedRef.current) return undefined
     let cancelled = false
 
     async function loadPreview() {
       setLoadingPreview(true)
-      setError(null)
+      setHasError(false)
       setOptions([])
       try {
-        if (!bridgeUrl) throw new Error("Connection URL is missing.")
+        if (!bridgeUrl) throw new Error("Connection URL is missing")
         const nextOptions = normalizeConnectionOptionsInput(bridgeUrl, bridgeToken)
         if (
           connection &&
@@ -200,19 +194,17 @@ export default function ConnectScreen() {
         const previewed = await Promise.all(nextOptions.map((option) => previewConnectionOption(option)))
         if (cancelled) return
 
-        const available = previewed.filter((item) => !item.error)
-        setOptions(available)
+        const available = previewed.filter((item) => !item.unavailable)
+        setOptions(previewed)
         if (!available.length) {
-          const detail = previewed
-            .map((item) => `${item.option.label}: ${item.error ?? "Unavailable"}`)
-            .join("\n")
-          setError(detail || "No available connection method was found.")
+          setHasError(true)
           return
         }
       } catch (previewError) {
         if (!cancelled) {
+          console.warn("[connect] Unable to read pairing link", previewError)
           setOptions([])
-          setError(previewError instanceof Error ? previewError.message : "Unable to read this pairing link.")
+          setHasError(true)
         }
       } finally {
         if (!cancelled) setLoadingPreview(false)
@@ -228,10 +220,11 @@ export default function ConnectScreen() {
   async function runPairing(item: PreviewedConnectionOption) {
     const candidate = item.option.connection
     setPairingOptionID(item.option.id)
-    setError(null)
+    setHasError(false)
     try {
       const previousConnection = connection
       const result = await pairDevice(candidate, getMobileDeviceName(), { accountToken: account?.token })
+      pairingCommittedRef.current = true
       const saveEndpoint = candidate.transport === "relay" ? item.option.endpoint : candidate.baseUrl
       await saveConnection(saveEndpoint, result.token, result.device.id, {
         transport: candidate.transport,
@@ -242,7 +235,8 @@ export default function ConnectScreen() {
       }
       router.replace("/")
     } catch (connectError) {
-      setError(connectError instanceof Error ? connectError.message : "Unable to pair this mobile device.")
+      console.warn(`[connect] Unable to pair using ${item.option.kind} connection`, connectError)
+      setHasError(true)
     } finally {
       setPairingOptionID(null)
     }
@@ -251,56 +245,64 @@ export default function ConnectScreen() {
   if (loading || loadingPreview) {
     return (
       <Screen>
-        <StateCard title="Reviewing connection" detail={bridgeUrl} />
+        <StateCard title={t("connect.reviewing")} />
       </Screen>
     )
   }
 
-  const title = error && !options.length
-    ? "Connection failed"
+  const availableOptions = options.filter((item) => !item.unavailable)
+  const desktopName = options
+    .map((item) => item.preview?.desktopName?.trim())
+    .find((name): name is string => Boolean(name))
+  const title = desktopName
+    ? t("connect.connectTo", { name: desktopName })
     : isConnectionOptionsLink
-      ? "Choose connection method"
-      : options[0]?.preview
-        ? "Confirm desktop connection"
-        : "Confirm legacy connection"
+      ? t("connect.chooseMethod")
+      : t("connect.confirmTitle")
 
   return (
     <Screen>
-      {error && !options.length ? (
+      {hasError && !availableOptions.length ? (
         <StateCard
-          title={title}
-          detail={error}
+          title={t("connect.failed")}
+          detail={t("connect.failedHint")}
           tone="danger"
         />
       ) : (
-        <Section title={title} caption={options.length === 1 ? "1 available" : `${options.length} available`}>
+        <Section title={title}>
           {options.map((item) => (
             <ConnectionOptionCard
               item={item}
               key={item.option.id}
               onPair={(selected) => void runPairing(selected)}
               pairing={pairingOptionID === item.option.id}
+              primary={availableOptions[0]?.option.id === item.option.id}
+              showRecommended={
+                availableOptions.length > 1 &&
+                item.option.kind === "relay" &&
+                !item.unavailable
+              }
             />
           ))}
         </Section>
       )}
-      {error && options.length ? (
+      {hasError && availableOptions.length ? (
         <StateCard
-          title="Connection failed"
-          detail={error}
+          title={t("connect.failed")}
+          detail={t("connect.failedHint")}
           tone="danger"
         />
       ) : null}
-      {connection && options.length ? (
+      {connection && availableOptions.length ? (
         <StateCard
-          title="Replacing current desktop"
-          detail={`Current: ${connection.baseUrl}`}
+          title={t("connect.switchTitle")}
+          detail={t("connect.switchHint")}
           tone="neutral"
         />
       ) : null}
       <View style={{ flexDirection: "row", gap: 10 }}>
         <View style={{ flex: 1 }}>
-          <Button label="Cancel" onPress={cancelConnection} variant="secondary" />
+          <Button label={t("app.cancel")} onPress={cancelConnection} variant="secondary" />
         </View>
       </View>
     </Screen>

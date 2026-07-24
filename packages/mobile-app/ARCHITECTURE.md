@@ -27,7 +27,7 @@ Anybox Mobile 是 Anybox 桌面端的 Expo/React Native 手机客户端。它本
 | 网络 | `fetch` + Bearer token，实时事件使用 `react-native-sse` |
 | 原生能力 | `expo-camera` 扫码，`expo-updates` OTA，`expo-secure-store` 安全存储 |
 | 类型系统 | TypeScript strict mode，`@/*` 指向 `src/*` |
-| 构建发布 | Expo/EAS，Android 脚本，iOS native 工程已在 `ios/` |
+| 构建发布 | 本机 Gradle、Anybox 自托管更新服务，iOS native 工程已在 `ios/` |
 
 ## 3. 顶层架构
 
@@ -43,8 +43,8 @@ flowchart TD
   Api --> Bridge["Desktop Mobile Bridge"]
   Hooks["src/hooks SSE hooks"] --> Api
   Hooks --> App
-  Updates["src/services/app-updates"] --> EAS["EAS Update"]
-  Updates --> Releases["GitHub Releases / Manifest"]
+  Updates["UpdateCoordinator / app-updates"] --> UpdateServer["updates.anybox.com.cn"]
+  Updates --> CDN["download.anybox.com.cn / GitHub 备用"]
 ```
 
 核心设计是让页面和 UI 组件只依赖统一的 `MobileConnection`，由 `src/api/mobile-api.ts` 在内部判断当前连接是 local bridge 还是 relay。这样大部分业务页面不用关心底层通道差异。
@@ -60,20 +60,21 @@ packages/mobile-app/
   src/components/            通用基础 UI 组件
   src/home/                  首页工作台的专用 UI 与格式化逻辑
   src/services/              App 更新检查与版本信息
+  modules/                   Android APK 流式下载、校验和系统安装 Expo Module
+  credentials/               可提交的 OTA 公共证书和 APK 证书指纹（不含任何私钥）
   src/utils/                 消息、格式化、平台工具
   scripts/                   Android 构建、验收、smoke、release 辅助脚本
   ios/                       Expo prebuild 后的 iOS native 工程
   design/                    移动端设计 mockup
   app.config.js              动态 Expo 配置
   app.json                   Expo 静态配置
-  eas.json                   EAS build profile
 ```
 
 ## 5. 路由与页面职责
 
 | 路由文件 | 页面职责 |
 | --- | --- |
-| `app/_layout.tsx` | 根布局，挂载 `AccountProvider`、`ConnectionProvider`、`FocusProvider`、`UpdateGate` 和 Stack 路由 |
+| `app/_layout.tsx` | 根布局，挂载账户/连接/焦点状态、`UpdateCoordinatorProvider`、更新全屏层和 Stack 路由 |
 | `app/index.tsx` | 主工作台。处理账户桌面列表、自动连接、deep link、工作区/会话焦点、消息发送与流式展示 |
 | `app/account.tsx` | Provider 邮箱登录、注册、刷新、登出 |
 | `app/provider.tsx` | 当前 Provider/连接诊断页，展示连接、账户、桌面设备和上下文 |
@@ -324,12 +325,9 @@ POST /api/mobile/approvals/:approvalID/deny
 
 ### Expo 配置
 
-`app.config.js` 在 `app.json` 基础上动态注入：
-
-- EAS update URL
-- Provider/relay URL
-- 原生发布 manifest URL
-- GitHub mobile release 配置
+`app.config.js` 在 `app.json` 基础上校验并注入 Anybox 自托管更新 URL、
+preview/production channel、OTA 公共证书、Provider/relay URL 和完整 APK
+发布地址。配置中不包含 Expo 项目 ID 或 Expo 托管更新地址。
 
 `app.json` 配置了：
 
@@ -337,7 +335,7 @@ POST /api/mobile/approvals/:approvalID/deny
 - Android package：`com.anybox.mobile`
 - iOS bundle identifier：`com.anybox.mobile`
 - runtimeVersion policy：`appVersion`
-- Android 权限：`INTERNET`、`CAMERA`
+- Android 权限：`INTERNET`、`CAMERA`、`REQUEST_INSTALL_PACKAGES`
 - iOS 本地网络与相机说明
 - Expo plugins：`expo-router`、`expo-secure-store`、`expo-camera`
 
@@ -347,17 +345,23 @@ POST /api/mobile/approvals/:approvalID/deny
 
 支持两类更新：
 
-- OTA：通过 `expo-updates` 检查、下载并 reload。
-- 原生包：通过自定义 manifest 或 GitHub Releases 检查新 APK/IPA/TestFlight/App Store 链接。
+- OTA：开源 `expo-updates` 客户端访问 `updates.anybox.com.cn`，只接收
+  RSA 签名且 runtime/channel 匹配的清单。
+- 完整包：先验证 `version.json` 的 detached RSA 签名，再由 Android 本地
+  模块流式下载 APK，同时校验大小、SHA-256、包名、versionCode 和 APK
+  签名，最后交给 Android 系统安装器。
 
 Android 默认读取 GitHub 仓库 `fanfan-de/anybox`，只接受 `mobile-v*` tag，并寻找：
 
 ```text
 anybox-mobile.apk
 anybox-mobile-release.json
+anybox-mobile-release.json.sig
 ```
 
-`src/components/update-gate.tsx` 会在 app 启动约 2.5s 后检查 required binary update。如果 manifest 标记强制更新或最低版本高于当前版本，会弹出不可取消的更新提示。
+`src/state/update-coordinator.tsx` 统一处理启动后 2.5 秒检查、返回前台 6
+小时检查、OTA 后台下载、普通 APK 24 小时延后和持久化强制更新。强制更新
+由 `src/components/update-overlay.tsx` 使用不可返回的全屏页面展示。
 
 ## 14. 构建、检查与验收脚本
 
@@ -373,20 +377,19 @@ anybox-mobile-release.json
 | `smoke` | 移动端 smoke 检查 |
 | `android:setup` | Windows Android toolchain 检查/安装辅助 |
 | `android:build:debug` | 构建 debug APK |
+| `android:build:release` | 构建并验证正式签名 APK |
 | `android:install:debug` | 安装 debug APK |
 | `android:smoke:debug` | 安装、启动、截图和 fatal log 检查 |
 | `android:smoke:pairing` | mock bridge 深度配对 smoke |
 | `android:smoke:bridge` | 真实桌面 bridge smoke |
 | `android:delivery-check` | APK、截图、校验和交付检查 |
 | `android:handoff-check` | 综合交付门禁 |
-| `release:github:prepare` | 准备 GitHub mobile release 资产 |
-| `update:preview` / `update:production` | 发布 EAS OTA update |
-
-EAS profile 位于 `eas.json`：
-
-- `development`：development client，internal APK。
-- `preview`：internal APK。
-- `production`：Android app bundle，自动递增版本。
+| `keys:init` | 生成互相独立的 APK/OTA 密钥和双份加密备份 |
+| `fingerprint:record` / `fingerprint:check` | 记录或校验 APK 原生基线 |
+| `update:preview` | 构建、签名并发布 preview OTA |
+| `update:promote` | 将同一 preview updateId 指针提升到 production |
+| `update:rollback` | 发布签名的 embedded rollback 指令 |
+| `release:publish` | 真机门禁后发布 GitHub、COS 和固定 `version.json` |
 
 ## 15. 当前架构特征
 
@@ -396,7 +399,8 @@ EAS profile 位于 `eas.json`：
 - 持久化清晰：账户、连接、焦点分别写入 SecureStore，便于控制 token 和敏感信息。
 - 事件驱动刷新：SSE 只作为通知信号，收到事件后重新拉取服务端权威数据。
 - 连接可替换：新连接成功后会保存新 token，并尝试撤销旧 device token。
-- 更新双轨：JS/UI 走 EAS OTA，原生能力变更走 GitHub Releases 或 manifest 指向的二进制包。
+- 更新双轨：JS/UI 走 Anybox 自托管 OTA，原生能力变更走签名 APK；GitHub
+  只作为完整包备用下载源。
 
 ## 16. 扩展建议
 
@@ -407,4 +411,5 @@ EAS profile 位于 `eas.json`：
 3. 通用 UI 放 `src/components/*`，首页专用 UI 放 `src/home/*`。
 4. 需要实时更新时优先复用 `useMobileEvents` 或 `useSessionEvents` 的 “事件后重新拉取” 模式。
 5. 新路由放入 `app/`，并在 `app/_layout.tsx` 注册 Stack screen。
-6. 涉及原生权限、scheme、更新源或 build profile 时同步修改 `app.json`、`app.config.js` 或 `eas.json`。
+6. 涉及原生权限、scheme、更新源或签名时同步修改 `app.json`、
+   `app.config.js`、本地 Expo Module 和原生 fingerprint 基线。

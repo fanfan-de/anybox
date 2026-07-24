@@ -1,0 +1,13 @@
+**
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!patches/
+!patches/expo-asset@56.0.21.patch
+!patches/expo-linking@56.0.16.patch
+!patches/expo-router@56.2.16.patch
+!packages/mobile-update-server/
+!packages/mobile-update-server/**
+packages/mobile-update-server/build/
+packages/mobile-update-server/dist/
+packages/mobile-update-server/node_modules/
