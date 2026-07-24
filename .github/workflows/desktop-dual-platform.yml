@@ -18,12 +18,15 @@ jobs:
           - os: macos-14
             builder_flag: --mac
             expected_arch: arm64
+            plugin_test_pattern: installs immutable Release ZIPs|loads Chrome through
           - os: windows-2022
             builder_flag: --win
             expected_arch: x64
+            plugin_test_pattern: installs immutable Release ZIPs|loads Chrome through|installs and removes Computer Use
           - os: ubuntu-22.04
             builder_flag: --linux
             expected_arch: x64
+            plugin_test_pattern: installs immutable Release ZIPs
 
     steps:
       - name: Checkout
@@ -60,6 +63,10 @@ jobs:
       - name: Verify product version
         run: pnpm verify:versions
 
+      - name: Verify canonical plugin inventory and deterministic packaging
+        if: matrix.os == 'ubuntu-22.04'
+        run: pnpm plugins:index:check && pnpm plugins:release:test
+
       - name: Typecheck shared contracts
         run: pnpm --filter @anybox/shared typecheck
 
@@ -87,6 +94,10 @@ jobs:
       - name: Test agent server
         working-directory: packages/anyboxagent
         run: bun test Test/server.api.test.ts
+
+      - name: Test platform plugin installation
+        working-directory: packages/anyboxagent
+        run: bun test Test/plugin.test.ts --test-name-pattern "${{ matrix.plugin_test_pattern }}"
 
       - name: Package non-release Deliver technical preview directory
         run: pnpm --filter anybox-desktop-agent run dist:deliver-preview --dir ${{ matrix.builder_flag }}

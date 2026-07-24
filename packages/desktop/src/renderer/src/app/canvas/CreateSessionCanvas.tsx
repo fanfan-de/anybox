@@ -5,6 +5,7 @@ import { joinClassNames } from "../shared-ui"
 import { ThreadMarkdown } from "../thread-markdown"
 import type { GlobalSkillTreeNode, WorkspaceGroup } from "../types"
 import { CREATE_SESSION_USAGE_TIPS, pickCreateSessionUsageTipIndex } from "./create-session-tips"
+import { CreateSessionPixelLogo } from "./CreateSessionPixelLogo"
 
 interface SkillMetadataField {
   key: string
@@ -485,10 +486,6 @@ interface CreateSessionCanvasProps {
   onWorkspaceChange: (workspaceID: string) => void
 }
 
-function CreateSessionLogo() {
-  return <span className="create-session-logo" role="img" aria-label="Anybox logo" />
-}
-
 const CREATE_SESSION_TIP_ROTATION_MS = 8_000
 const CREATE_SESSION_TIP_EXIT_MS = 120
 const CREATE_SESSION_TIP_ENTER_MS = 180
@@ -853,7 +850,7 @@ export function CreateSessionCanvas({
   return (
     <section className="thread-shell create-session-shell">
       <article className="create-session-card">
-        <CreateSessionLogo />
+        <CreateSessionPixelLogo />
         <CreateSessionWorkspaceSelect
           disabled={isCreatingSession || projectWorkspaces.length === 0}
           selectedWorkspaceID={selectedWorkspaceID}

@@ -60,7 +60,7 @@ import {
   DESKTOP_AUTOMATION_EVENT_CHANNEL,
   DESKTOP_ENVIRONMENT_EVENT_CHANNEL,
 } from "../shared/desktop-ipc-contract"
-import { getAgentConfig, readAgentSSEStream, requestAgentJSON, resolveAgentURL } from "./agent-client"
+import { AgentAPIError, getAgentConfig, readAgentSSEStream, requestAgentJSON, resolveAgentURL } from "./agent-client"
 import { AgentCompletionNotificationManager } from "./agent-completion-notification"
 import { openAppearanceWindow } from "./appearance-window"
 import { readAppearanceConfigSnapshot, writeAppearanceConfigSnapshot } from "./appearance-config"
@@ -349,6 +349,17 @@ function handleDesktopIpc<Channel extends DesktopIpcChannel>(
   ipcMain.handle(channel, (event, input) =>
     (handler as (event: IpcMainInvokeEvent, input?: unknown) => Awaitable<DesktopIpcOutput<Channel>>)(event, input),
   )
+}
+
+async function preservePluginAgentErrorCode<T>(operation: () => Promise<T>) {
+  try {
+    return await operation()
+  } catch (error) {
+    if (error instanceof AgentAPIError && error.code) {
+      throw new Error(`[${error.code}] ${error.message}`)
+    }
+    throw error
+  }
 }
 
 function sendDesktopIpcEvent<Channel extends DesktopIpcEventChannel>(
@@ -5651,7 +5662,8 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
     const path = input?.freshness === "cached"
       ? "/api/plugins/catalog?freshness=cached"
       : "/api/plugins/catalog"
-    const result = await requestAgentJSON<AgentPluginCatalogItem[]>(path)
+    const result = await preservePluginAgentErrorCode(() =>
+      requestAgentJSON<AgentPluginCatalogItem[]>(path))
 
     return result.data
   })
@@ -5663,15 +5675,16 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
   })
 
   handleDesktopIpc("desktop:import-plugin-from-url", async (_event, input: { url: string }) => {
-    const result = await requestAgentJSON<AgentPluginCatalogItem>("/api/plugins/import-url", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        url: input.url,
-      }),
-    })
+    const result = await preservePluginAgentErrorCode(() =>
+      requestAgentJSON<AgentPluginCatalogItem>("/api/plugins/import-url", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          url: input.url,
+        }),
+      }))
 
     return result.data
   })
@@ -5680,19 +5693,20 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
     "desktop:install-plugin",
     async (_event, input: { pluginID: string; config?: Record<string, string>; enabled?: boolean }) => {
       const pluginID = input.pluginID.trim()
-      const result = await requestAgentJSON<AgentInstalledPlugin>(
-        `/api/plugins/installed/${encodeURIComponent(pluginID)}`,
-        {
-          method: "PUT",
-          headers: {
-            "content-type": "application/json",
+      const result = await preservePluginAgentErrorCode(() =>
+        requestAgentJSON<AgentInstalledPlugin>(
+          `/api/plugins/installed/${encodeURIComponent(pluginID)}`,
+          {
+            method: "PUT",
+            headers: {
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({
+              config: input.config,
+              enabled: input.enabled,
+            }),
           },
-          body: JSON.stringify({
-            config: input.config,
-            enabled: input.enabled,
-          }),
-        },
-      )
+        ))
 
       return result.data
     },
@@ -5702,19 +5716,20 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
     "desktop:update-installed-plugin",
     async (_event, input: { pluginID: string; config?: Record<string, string>; enabled?: boolean }) => {
       const pluginID = input.pluginID.trim()
-      const result = await requestAgentJSON<AgentInstalledPlugin>(
-        `/api/plugins/installed/${encodeURIComponent(pluginID)}`,
-        {
-          method: "PATCH",
-          headers: {
-            "content-type": "application/json",
+      const result = await preservePluginAgentErrorCode(() =>
+        requestAgentJSON<AgentInstalledPlugin>(
+          `/api/plugins/installed/${encodeURIComponent(pluginID)}`,
+          {
+            method: "PATCH",
+            headers: {
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({
+              config: input.config,
+              enabled: input.enabled,
+            }),
           },
-          body: JSON.stringify({
-            config: input.config,
-            enabled: input.enabled,
-          }),
-        },
-      )
+        ))
 
       return result.data
     },
@@ -7433,6 +7448,7 @@ export const internal = {
   getToolPermissionMode,
   interruptAgentSessionBackendFirst,
   isSessionStreamSubscriptionKeyForWebContents,
+  preservePluginAgentErrorCode,
   prepareSessionBagSubmission,
   previewDownloadedRegistrySkillUpdate,
   readPreviewText,

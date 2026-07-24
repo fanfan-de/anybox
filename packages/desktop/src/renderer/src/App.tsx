@@ -1629,6 +1629,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     isSavingBuiltinTools,
     loadError,
     loadArchivedSessions,
+    loadPlugins,
     loadStorageUsage,
     mcpDiagnostics,
     mcpServerDraft,
@@ -3072,6 +3073,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                     onPluginDraftConfigChange={setPluginDraftConfigValue}
                     onPluginDeselect={clearPluginSelection}
                     onPluginSelect={selectPlugin}
+                    onRetryLoad={() => loadPlugins()}
                     onSaveInstalledPluginConnectorApiKey={saveInstalledPluginConnectorApiKey}
                     onSaveInstalledPluginConfig={saveInstalledPluginConfig}
                     onSearchQueryChange={handleConnectionSearchQueryChange}

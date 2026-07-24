@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test"
 import "./sqlite.cleanup.ts"
 import { createHash } from "node:crypto"
 import { existsSync } from "node:fs"
@@ -14,6 +14,8 @@ import * as BuiltinMcp from "#mcp/builtin.ts"
 import * as Plugin from "#plugin/plugin.ts"
 import { createServerApp } from "#server/server.ts"
 import * as Skill from "#skill/skill.ts"
+
+setDefaultTimeout(15_000)
 
 interface JsonEnvelope<T> {
   success: boolean
@@ -335,9 +337,11 @@ type SingleConnectorStatusEnvelope = JsonEnvelope<{
 let activeRoot: string | null = null
 let previousPluginLocalDir: string | undefined
 let previousPluginInstallDir: string | undefined
+let previousPluginRegistryFiles: string | undefined
 let previousPluginRegistryIndexURL: string | undefined
 let previousPluginRegistryCacheDir: string | undefined
 let previousPluginImportedRegistryFile: string | undefined
+let previousPluginPackageDownloadTimeoutMS: string | undefined
 let previousConnectorRegistryFiles: string | undefined
 let previousConnectorBuildConfig: string | undefined
 let previousGmailOAuthClientID: string | undefined
@@ -366,9 +370,11 @@ async function useTempDatabase() {
   Sqlite.closeDatabase()
   previousPluginLocalDir = process.env.ANYBOX_PLUGIN_LOCAL_DIR
   previousPluginInstallDir = process.env.ANYBOX_PLUGIN_INSTALL_DIR
+  previousPluginRegistryFiles = process.env.ANYBOX_PLUGIN_REGISTRY_FILES
   previousPluginRegistryIndexURL = process.env.ANYBOX_PLUGIN_REGISTRY_INDEX_URL
   previousPluginRegistryCacheDir = process.env.ANYBOX_PLUGIN_REGISTRY_CACHE_DIR
   previousPluginImportedRegistryFile = process.env.ANYBOX_PLUGIN_IMPORTED_REGISTRY_FILE
+  previousPluginPackageDownloadTimeoutMS = process.env.ANYBOX_PLUGIN_PACKAGE_DOWNLOAD_TIMEOUT_MS
   previousConnectorRegistryFiles = process.env.ANYBOX_CONNECTOR_REGISTRY_FILES
   previousConnectorBuildConfig = process.env.ANYBOX_CONNECTOR_BUILD_CONFIG
   previousGmailOAuthClientID = process.env.ANYBOX_GMAIL_OAUTH_CLIENT_ID
@@ -382,7 +388,9 @@ async function useTempDatabase() {
   process.env.ANYBOX_PLUGIN_REGISTRY_INDEX_URL = "off"
   process.env.ANYBOX_PLUGIN_REGISTRY_CACHE_DIR = join(activeRoot, "registry-cache")
   process.env.ANYBOX_PLUGIN_IMPORTED_REGISTRY_FILE = join(activeRoot, "imported-plugin-registry.json")
+  process.env.ANYBOX_PLUGIN_PACKAGE_DOWNLOAD_TIMEOUT_MS = "100"
   process.env.ANYBOX_TEST_HOME = activeRoot
+  delete process.env.ANYBOX_PLUGIN_REGISTRY_FILES
   delete process.env.ANYBOX_CONNECTOR_REGISTRY_FILES
   delete process.env.ANYBOX_CONNECTOR_BUILD_CONFIG
   delete process.env.ANYBOX_GMAIL_OAUTH_CLIENT_ID
@@ -1317,6 +1325,11 @@ afterEach(async () => {
   } else {
     process.env.ANYBOX_PLUGIN_REGISTRY_INDEX_URL = previousPluginRegistryIndexURL
   }
+  if (previousPluginRegistryFiles === undefined) {
+    delete process.env.ANYBOX_PLUGIN_REGISTRY_FILES
+  } else {
+    process.env.ANYBOX_PLUGIN_REGISTRY_FILES = previousPluginRegistryFiles
+  }
   if (previousPluginRegistryCacheDir === undefined) {
     delete process.env.ANYBOX_PLUGIN_REGISTRY_CACHE_DIR
   } else {
@@ -1326,6 +1339,11 @@ afterEach(async () => {
     delete process.env.ANYBOX_PLUGIN_IMPORTED_REGISTRY_FILE
   } else {
     process.env.ANYBOX_PLUGIN_IMPORTED_REGISTRY_FILE = previousPluginImportedRegistryFile
+  }
+  if (previousPluginPackageDownloadTimeoutMS === undefined) {
+    delete process.env.ANYBOX_PLUGIN_PACKAGE_DOWNLOAD_TIMEOUT_MS
+  } else {
+    process.env.ANYBOX_PLUGIN_PACKAGE_DOWNLOAD_TIMEOUT_MS = previousPluginPackageDownloadTimeoutMS
   }
   if (previousConnectorRegistryFiles === undefined) {
     delete process.env.ANYBOX_CONNECTOR_REGISTRY_FILES
@@ -1367,6 +1385,7 @@ afterEach(async () => {
   }
   previousPluginLocalDir = undefined
   previousPluginInstallDir = undefined
+  previousPluginRegistryFiles = undefined
   previousPluginRegistryIndexURL = undefined
   previousPluginRegistryCacheDir = undefined
   previousPluginImportedRegistryFile = undefined
@@ -1758,7 +1777,286 @@ describe("plugin marketplace API", () => {
     expect(cachedRemotePlugin?.name).toBe("Remote Lab")
   })
 
-  test("loads multiple cached and imported registry plugins without treating indexes as manifest URLs", async () => {
+  test("rejects an entire remote index when any plugin metadata entry is invalid", async () => {
+    await useTempDatabase()
+    const app = createServerApp()
+    process.env.ANYBOX_PLUGIN_REGISTRY_INDEX_URL = "https://registry.example.test/index.json"
+
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL ? input.toString() : input.url
+      if (url === "https://registry.example.test/index.json") {
+        return new Response(JSON.stringify([
+          "https://plugins.example.test/valid/.anybox-plugin/plugin.json",
+          "https://plugins.example.test/invalid/.anybox-plugin/plugin.json",
+        ]), { status: 200 })
+      }
+      if (url.endsWith("/valid/.anybox-plugin/plugin.json")) {
+        return new Response(JSON.stringify({
+          name: "atomic-valid",
+          version: "1.0.0",
+          description: "Valid metadata that must not leak from a failed index.",
+          interface: {
+            displayName: "Atomic Valid",
+            shortDescription: "Atomic registry fixture.",
+            category: "Docs",
+          },
+          mcpServers: [],
+          skills: [],
+        }), { status: 200 })
+      }
+      if (url.endsWith("/invalid/.anybox-plugin/plugin.json")) {
+        return new Response(JSON.stringify({ name: "atomic-invalid" }), { status: 200 })
+      }
+      return new Response("not found", { status: 404 })
+    }) as typeof fetch
+
+    const response = await app.request("/api/plugins/catalog")
+    const body = (await response.json()) as PluginCatalogEnvelope
+    expect(response.status).toBe(502)
+    expect(body.error?.code).toBe("PLUGIN_REGISTRY_UNAVAILABLE")
+
+    const cachedResponse = await app.request("/api/plugins/catalog?freshness=cached")
+    const cachedBody = (await cachedResponse.json()) as PluginCatalogEnvelope
+    expect(cachedBody.data?.some((plugin) => plugin.id === "atomic-valid")).toBe(false)
+  })
+
+  test("loads a remote Release registry in one request and caches the validated whole document", async () => {
+    await useTempDatabase()
+    const app = createServerApp()
+    const registryURL = "https://registry.example.test/anybox-plugin-registry-v2.json"
+    process.env.ANYBOX_PLUGIN_REGISTRY_INDEX_URL = registryURL
+    const releaseAlphaManifest = {
+      name: "release-alpha",
+      version: "1.0.0",
+      description: "First remote Release plugin.",
+      interface: {
+        displayName: "Release Alpha",
+        shortDescription: "First remote Release plugin.",
+        category: "Docs",
+      },
+      mcpServers: [],
+      skills: [],
+    }
+    const releaseAlphaZip = createZipArchive([
+      {
+        name: "release-alpha/.anybox-plugin/plugin.json",
+        data: JSON.stringify(releaseAlphaManifest),
+      },
+    ])
+    const releaseAlphaURL =
+      "https://github.com/fanfan-de/anybox/releases/download/v1.2.3/anybox-plugin-release-alpha-1.0.0.zip"
+    const registry = {
+      schemaVersion: 2,
+      desktopVersion: "1.2.3",
+      releaseTag: "v1.2.3",
+      sourceCommit: "b".repeat(40),
+      pluginCount: 2,
+      plugins: [
+        {
+          id: "release-alpha",
+          ...releaseAlphaManifest,
+          package: {
+            type: "zip",
+            url: releaseAlphaURL,
+            sha256: createHash("sha256").update(releaseAlphaZip).digest("hex"),
+            size: releaseAlphaZip.byteLength,
+          },
+        },
+        {
+          id: "release-beta",
+          name: "release-beta",
+          version: "2.0.0",
+          description: "Second remote Release plugin.",
+          interface: {
+            displayName: "Release Beta",
+            shortDescription: "Second remote Release plugin.",
+            category: "Automation",
+          },
+          mcpServers: [],
+          skills: [],
+          package: {
+            type: "zip",
+            url: "https://github.com/fanfan-de/anybox/releases/download/v1.2.3/anybox-plugin-release-beta-2.0.0.zip",
+            sha256: "d".repeat(64),
+            size: 456,
+          },
+        },
+      ],
+    }
+    let registryFetchCount = 0
+    let zipFetchCount = 0
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL ? input.toString() : input.url
+      if (url === registryURL) {
+        registryFetchCount += 1
+        return new Response(JSON.stringify(registry), { status: 200 })
+      }
+      if (url === releaseAlphaURL) {
+        zipFetchCount += 1
+        return new Response(releaseAlphaZip, {
+          status: 200,
+          headers: {
+            "content-length": String(releaseAlphaZip.byteLength),
+          },
+        })
+      }
+      return new Response("not found", { status: 404 })
+    }) as typeof fetch
+
+    const response = await app.request("/api/plugins/catalog?freshness=fresh")
+    const body = (await response.json()) as PluginCatalogEnvelope
+
+    expect(response.status).toBe(200)
+    expect(registryFetchCount).toBe(1)
+    expect(body.data?.filter((plugin) => plugin.id.startsWith("release-")).map((plugin) => plugin.id).sort()).toEqual([
+      "release-alpha",
+      "release-beta",
+    ])
+    expect(body.data?.find((plugin) => plugin.id === "release-beta")?.download).toMatchObject({
+      type: "zip",
+      size: 456,
+    })
+
+    const cache = JSON.parse(
+      await readFile(join(process.env.ANYBOX_PLUGIN_REGISTRY_CACHE_DIR!, "plugin-registry-cache-v2.json"), "utf8"),
+    )
+    expect(cache).toMatchObject({
+      schemaVersion: 2,
+      protocol: "release-registry-v2",
+      registryURL,
+      registry: {
+        pluginCount: 2,
+      },
+    })
+
+    const installResponse = await app.request("/api/plugins/installed/release-alpha", {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ enabled: true }),
+    })
+    expect(installResponse.status).toBe(200)
+    expect(registryFetchCount).toBe(1)
+    expect(zipFetchCount).toBe(1)
+  })
+
+  test("rejects a whole remote Release registry when one entry is invalid", async () => {
+    await useTempDatabase()
+    const app = createServerApp()
+    const registryURL = "https://registry.example.test/anybox-plugin-registry-v2.json"
+    process.env.ANYBOX_PLUGIN_REGISTRY_INDEX_URL = registryURL
+    globalThis.fetch = (async (_input: string | URL | Request) => new Response(JSON.stringify({
+      schemaVersion: 2,
+      desktopVersion: "1.2.3",
+      releaseTag: "v1.2.3",
+      sourceCommit: "b".repeat(40),
+      pluginCount: 2,
+      plugins: [
+        {
+          id: "valid-release",
+          name: "valid-release",
+          version: "1.0.0",
+          description: "Valid entry that must not leak into a partial catalog.",
+          interface: {
+            displayName: "Valid Release",
+            shortDescription: "Valid entry.",
+            category: "Docs",
+          },
+          mcpServers: [],
+          skills: [],
+          package: {
+            type: "zip",
+            url: "https://github.com/fanfan-de/anybox/releases/download/v1.2.3/anybox-plugin-valid-release-1.0.0.zip",
+            sha256: "c".repeat(64),
+            size: 123,
+          },
+        },
+        {
+          id: "invalid-release",
+          name: "invalid-release",
+          version: "1.0.0",
+          description: "Invalid entry.",
+          interface: {
+            displayName: "Invalid Release",
+            shortDescription: "Invalid entry.",
+            category: "Docs",
+          },
+          mcpServers: [],
+          skills: [],
+          package: {
+            type: "zip",
+            url: "https://github.com/fanfan-de/anybox/releases/latest/download/mutable.zip",
+            sha256: "d".repeat(64),
+            size: 456,
+          },
+        },
+      ],
+    }), { status: 200 })) as typeof fetch
+
+    const response = await app.request("/api/plugins/catalog?freshness=fresh")
+    const body = (await response.json()) as PluginCatalogEnvelope
+    expect(response.status).toBe(502)
+    expect(body.error?.code).toBe("PLUGIN_REGISTRY_UNAVAILABLE")
+
+    const cachedResponse = await app.request("/api/plugins/catalog?freshness=cached")
+    const cachedBody = (await cachedResponse.json()) as PluginCatalogEnvelope
+    expect(cachedBody.data?.some((plugin) => plugin.id === "valid-release")).toBe(false)
+  })
+
+  test("loads a strict configured release registry and reports any whole-file corruption", async () => {
+    await useTempDatabase()
+    if (!activeRoot) throw new Error("Temp root has not been initialized.")
+    const app = createServerApp()
+    const registryPath = join(activeRoot, "plugin-release-registry.json")
+    process.env.ANYBOX_PLUGIN_REGISTRY_FILES = registryPath
+    const registry = {
+      schemaVersion: 2,
+      desktopVersion: "1.2.3",
+      releaseTag: "v1.2.3",
+      sourceCommit: "b".repeat(40),
+      pluginCount: 1,
+      plugins: [
+        {
+          id: "release-lab",
+          name: "release-lab",
+          version: "1.0.0",
+          description: "Configured release registry fixture.",
+          interface: {
+            displayName: "Release Lab",
+            shortDescription: "Configured release registry fixture.",
+            category: "Docs",
+          },
+          mcpServers: [],
+          skills: [],
+          package: {
+            type: "zip",
+            url: "https://github.com/fanfan-de/anybox/releases/download/v1.2.3/anybox-plugin-release-lab-1.0.0.zip",
+            sha256: "c".repeat(64),
+            size: 123,
+          },
+        },
+      ],
+    }
+    await writeFile(registryPath, JSON.stringify(registry))
+
+    const validResponse = await app.request("/api/plugins/catalog?freshness=cached")
+    const validBody = (await validResponse.json()) as PluginCatalogEnvelope
+    expect(validResponse.status).toBe(200)
+    expect(validBody.data?.find((plugin) => plugin.id === "release-lab")?.download?.type).toBe("zip")
+
+    await writeFile(registryPath, JSON.stringify({ ...registry, pluginCount: 2 }))
+    const invalidResponse = await app.request("/api/plugins/catalog?freshness=cached")
+    const invalidBody = (await invalidResponse.json()) as PluginCatalogEnvelope
+    expect(invalidResponse.status).toBe(502)
+    expect(invalidBody.error?.code).toBe("PLUGIN_REGISTRY_UNAVAILABLE")
+  })
+
+  test("ignores legacy remote cache files while retaining imported registry plugins", async () => {
     await useTempDatabase()
     if (!activeRoot) throw new Error("Temp root has not been initialized.")
     const app = createServerApp()
@@ -1800,18 +2098,22 @@ describe("plugin marketplace API", () => {
     const namesByID = new Map((body.data ?? []).map((plugin) => [plugin.id, plugin.name]))
 
     expect(response.status).toBe(200)
-    expect(namesByID.get("cached-one")).toBe("Cached One")
-    expect(namesByID.get("cached-two")).toBe("Cached Two")
+    expect(namesByID.get("cached-one")).toBeUndefined()
+    expect(namesByID.get("cached-two")).toBeUndefined()
     expect(namesByID.get("imported-one")).toBe("Imported One")
     expect(namesByID.get("imported-two")).toBe("Imported Two")
   })
 
   test("loads cached remote registry metadata with multiple entries", async () => {
     await useTempDatabase()
-    const cachePath = join(process.env.ANYBOX_PLUGIN_REGISTRY_CACHE_DIR!, "plugin-registry-cache.json")
+    const indexURL = "https://registry.example.test/index.json"
+    process.env.ANYBOX_PLUGIN_REGISTRY_INDEX_URL = indexURL
+    const cachePath = join(process.env.ANYBOX_PLUGIN_REGISTRY_CACHE_DIR!, "plugin-registry-cache-v2.json")
     await mkdir(process.env.ANYBOX_PLUGIN_REGISTRY_CACHE_DIR!, { recursive: true })
     await writeFile(cachePath, JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: 2,
+      protocol: "manifest-index-v1",
+      registryURL: indexURL,
       plugins: [
         {
           name: "cached-alpha",
@@ -1906,10 +2208,9 @@ describe("plugin marketplace API", () => {
 
     const response = await app.request("/api/plugins/catalog")
     const body = (await response.json()) as PluginCatalogEnvelope
-    const plugin = body.data?.find((item) => item.id === "root-manifest")
 
-    expect(response.status).toBe(200)
-    expect(plugin).toBeUndefined()
+    expect(response.status).toBe(502)
+    expect(body.error?.code).toBe("PLUGIN_REGISTRY_UNAVAILABLE")
     expect(manifestRequestCount).toBe(0)
   })
 
@@ -2253,10 +2554,14 @@ describe("plugin marketplace API", () => {
     process.env.ANYBOX_PLUGIN_REGISTRY_INDEX_URL = "https://registry.example.test/offline-index.json"
     const freshCatalogResponse = await app.request("/api/plugins/catalog?freshness=fresh")
     const freshCatalogBody = (await freshCatalogResponse.json()) as PluginCatalogEnvelope
-    const freshImportedPlugin = freshCatalogBody.data?.find((plugin) => plugin.id === "url-lab")
 
-    expect(freshCatalogResponse.status).toBe(200)
-    expect(freshImportedPlugin?.name).toBe("URL Lab")
+    expect(freshCatalogResponse.status).toBe(502)
+    expect(freshCatalogBody.error?.code).toBe("PLUGIN_REGISTRY_UNAVAILABLE")
+
+    process.env.ANYBOX_PLUGIN_REGISTRY_INDEX_URL = "off"
+    const retainedCatalogResponse = await app.request("/api/plugins/catalog?freshness=cached")
+    const retainedCatalogBody = (await retainedCatalogResponse.json()) as PluginCatalogEnvelope
+    expect(retainedCatalogBody.data?.find((plugin) => plugin.id === "url-lab")?.name).toBe("URL Lab")
 
     const installResponse = await app.request("/api/plugins/installed/url-lab", {
       method: "PUT",
@@ -2297,10 +2602,19 @@ describe("plugin marketplace API", () => {
       "",
     ].join("\n")
     const readmeText = "# Tree Lab\n"
-    const rawFileURLs = new Map([
-      [`https://raw.githubusercontent.com/example/anybox-plugins/${commitSha}/tree-lab/.anybox-plugin/plugin.json`, manifestText],
-      [`https://raw.githubusercontent.com/example/anybox-plugins/${commitSha}/tree-lab/skills/review/SKILL.md`, skillText],
-      [`https://raw.githubusercontent.com/example/anybox-plugins/${commitSha}/tree-lab/README.md`, readmeText],
+    const repositoryArchive = createZipArchive([
+      {
+        name: `anybox-plugins-${commitSha}/tree-lab/.anybox-plugin/plugin.json`,
+        data: manifestText,
+      },
+      {
+        name: `anybox-plugins-${commitSha}/tree-lab/skills/review/SKILL.md`,
+        data: skillText,
+      },
+      {
+        name: `anybox-plugins-${commitSha}/tree-lab/README.md`,
+        data: readmeText,
+      },
     ])
     const jsonResponse = (value: unknown) => new Response(JSON.stringify(value), {
       status: 200,
@@ -2308,19 +2622,15 @@ describe("plugin marketplace API", () => {
         "content-type": "application/json",
       },
     })
-    const textResponse = (value: string) => new Response(value, {
-      status: 200,
-      headers: {
-        "content-length": String(Buffer.byteLength(value)),
-      },
-    })
 
     let requestedRawGitHubURL = false
-    let fileDownloadCount = 0
+    let archiveDownloadCount = 0
+    let contentsAPIRequestCount = 0
     globalThis.fetch = (async (input: string | URL | Request) => {
       const url = typeof input === "string"
         ? input
         : input instanceof URL ? input.toString() : input.url
+      if (url.includes("/contents/")) contentsAPIRequestCount += 1
       if (url === "https://raw.githubusercontent.com/example/anybox-plugins/main/tree-lab/.anybox-plugin/plugin.json") {
         requestedRawGitHubURL = true
         return jsonResponse({
@@ -2344,48 +2654,14 @@ describe("plugin marketplace API", () => {
           sha: commitSha,
         })
       }
-      if (url === `https://api.github.com/repos/example/anybox-plugins/contents/tree-lab?ref=${commitSha}`) {
-        return jsonResponse([
-          { type: "dir", path: "tree-lab/.anybox-plugin" },
-          { type: "dir", path: "tree-lab/skills" },
-          {
-            type: "file",
-            path: "tree-lab/README.md",
-            size: Buffer.byteLength(readmeText),
-            download_url: `https://raw.githubusercontent.com/example/anybox-plugins/${commitSha}/tree-lab/README.md`,
+      if (url === `https://codeload.github.com/example/anybox-plugins/zip/${commitSha}`) {
+        archiveDownloadCount += 1
+        return new Response(repositoryArchive, {
+          status: 200,
+          headers: {
+            "content-length": String(repositoryArchive.byteLength),
           },
-        ])
-      }
-      if (url === `https://api.github.com/repos/example/anybox-plugins/contents/tree-lab/.anybox-plugin?ref=${commitSha}`) {
-        return jsonResponse([
-          {
-            type: "file",
-            path: "tree-lab/.anybox-plugin/plugin.json",
-            size: Buffer.byteLength(manifestText),
-            download_url: `https://raw.githubusercontent.com/example/anybox-plugins/${commitSha}/tree-lab/.anybox-plugin/plugin.json`,
-          },
-        ])
-      }
-      if (url === `https://api.github.com/repos/example/anybox-plugins/contents/tree-lab/skills?ref=${commitSha}`) {
-        return jsonResponse([
-          { type: "dir", path: "tree-lab/skills/review" },
-        ])
-      }
-      if (url === `https://api.github.com/repos/example/anybox-plugins/contents/tree-lab/skills/review?ref=${commitSha}`) {
-        return jsonResponse([
-          {
-            type: "file",
-            path: "tree-lab/skills/review/SKILL.md",
-            size: Buffer.byteLength(skillText),
-            download_url: `https://raw.githubusercontent.com/example/anybox-plugins/${commitSha}/tree-lab/skills/review/SKILL.md`,
-          },
-        ])
-      }
-
-      const rawFile = rawFileURLs.get(url)
-      if (rawFile !== undefined) {
-        fileDownloadCount += 1
-        return textResponse(rawFile)
+        })
       }
 
       return new Response("not found", { status: 404 })
@@ -2421,7 +2697,8 @@ describe("plugin marketplace API", () => {
     const installBody = (await installResponse.json()) as InstalledPluginEnvelope
 
     expect(installResponse.status).toBe(200)
-    expect(fileDownloadCount).toBe(3)
+    expect(archiveDownloadCount).toBe(1)
+    expect(contentsAPIRequestCount).toBe(0)
     expect(installBody.data?.skillIDs).toEqual(["plugin:tree-lab:review"])
     expect(existsSync(join(pluginInstallRoot(), "tree-lab", "0.3.0", ".anybox-plugin", "plugin.json"))).toBe(true)
     expect(existsSync(join(pluginInstallRoot(), "tree-lab", "0.3.0", "skills", "review", "SKILL.md"))).toBe(true)
@@ -2583,6 +2860,196 @@ describe("plugin marketplace API", () => {
     expect(installResponse.status).toBe(400)
     expect(installBody.error?.code).toBe("PLUGIN_PACKAGE_INVALID")
     expect(existsSync(join(activeRoot!, "escape.txt"))).toBe(false)
+  })
+
+  test("installs immutable Release ZIPs, maps failures, and removes every partial managed package", async () => {
+    await useTempDatabase()
+    if (!activeRoot) throw new Error("Temp root has not been initialized.")
+    const app = createServerApp()
+    const registryPath = join(activeRoot, "plugin-release-registry.json")
+    process.env.ANYBOX_PLUGIN_REGISTRY_FILES = registryPath
+
+    type DownloadMode = "bytes" | "not-found" | "timeout"
+    let downloadMode: DownloadMode = "bytes"
+    let expectedAssetURL = ""
+    let responseBytes: Buffer<ArrayBufferLike> = Buffer.alloc(0)
+    const requestedURLs: string[] = []
+
+    globalThis.fetch = (async (
+      input: string | URL | Request,
+      init?: RequestInit,
+    ) => {
+      const url = typeof input === "string"
+        ? input
+        : input instanceof URL ? input.toString() : input.url
+      requestedURLs.push(url)
+      if (url !== expectedAssetURL) return new Response("not found", { status: 404 })
+      if (downloadMode === "not-found") return new Response("missing", { status: 404 })
+      if (downloadMode === "timeout") {
+        return await new Promise<Response>((_resolve, reject) => {
+          const abort = () => reject(new DOMException("The operation was aborted.", "AbortError"))
+          if (init?.signal?.aborted) {
+            abort()
+            return
+          }
+          init?.signal?.addEventListener("abort", abort, { once: true })
+        })
+      }
+      return new Response(responseBytes, {
+        status: 200,
+        headers: {
+          "content-length": String(responseBytes.byteLength),
+        },
+      })
+    }) as typeof fetch
+
+    const installReleaseFixture = async (input: {
+      id: string
+      expectedCode?: string
+      mode?: DownloadMode
+      packageOverrides?: Record<string, unknown>
+      sizeDelta?: number
+      pluginOverrides?: Record<string, unknown>
+      corruptBytes?: Buffer
+    }) => {
+      const version = "1.0.0"
+      const pluginDocument = {
+        name: input.id,
+        version,
+        description: `${input.id} immutable Release fixture.`,
+        ...input.pluginOverrides,
+      }
+      const validZip = createZipArchive([
+        {
+          name: `${input.id}/.anybox-plugin/plugin.json`,
+          data: `${JSON.stringify(pluginDocument, null, 2)}\n`,
+        },
+      ])
+      responseBytes = input.corruptBytes ?? validZip
+      downloadMode = input.mode ?? "bytes"
+      expectedAssetURL = `https://github.com/fanfan-de/anybox/releases/download/v1.2.3/anybox-plugin-${input.id}-${version}.zip`
+      const packageMetadata = {
+        type: "zip",
+        url: expectedAssetURL,
+        sha256: createHash("sha256").update(responseBytes).digest("hex"),
+        size: responseBytes.byteLength + (input.sizeDelta ?? 0),
+        ...input.packageOverrides,
+      }
+      await writeFile(registryPath, JSON.stringify({
+        schemaVersion: 2,
+        desktopVersion: "1.2.3",
+        releaseTag: "v1.2.3",
+        sourceCommit: "d".repeat(40),
+        pluginCount: 1,
+        plugins: [
+          {
+            id: input.id,
+            ...pluginDocument,
+            interface: {
+              displayName: input.id,
+              shortDescription: `${input.id} fixture.`,
+              category: "Docs",
+            },
+            mcpServers: [],
+            skills: [],
+            package: packageMetadata,
+            ...input.pluginOverrides,
+          },
+        ],
+      }))
+
+      const response = await app.request(`/api/plugins/installed/${input.id}`, {
+        method: "PUT",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          enabled: true,
+        }),
+      })
+      const body = (await response.json()) as JsonEnvelope<unknown>
+      if (input.expectedCode) {
+        expect(body.error?.code).toBe(input.expectedCode)
+        expect(existsSync(join(pluginInstallRoot(), input.id))).toBe(false)
+      } else {
+        expect(response.status).toBe(200)
+        expect(body.success).toBe(true)
+        expect(existsSync(join(pluginInstallRoot(), input.id, version))).toBe(true)
+      }
+    }
+
+    await installReleaseFixture({
+      id: "release-success",
+    })
+    await installReleaseFixture({
+      id: "release-bad-sha",
+      expectedCode: "PLUGIN_PACKAGE_INVALID",
+      packageOverrides: {
+        sha256: "0".repeat(64),
+      },
+    })
+    await installReleaseFixture({
+      id: "release-bad-size",
+      expectedCode: "PLUGIN_PACKAGE_INVALID",
+      sizeDelta: 1,
+    })
+    await installReleaseFixture({
+      id: "release-corrupt-zip",
+      expectedCode: "PLUGIN_PACKAGE_INVALID",
+      corruptBytes: Buffer.from("not a ZIP archive", "utf8"),
+    })
+    await installReleaseFixture({
+      id: "release-missing",
+      expectedCode: "PLUGIN_PACKAGE_UNAVAILABLE",
+      mode: "not-found",
+    })
+    await installReleaseFixture({
+      id: "release-timeout",
+      expectedCode: "PLUGIN_PACKAGE_DOWNLOAD_FAILED",
+      mode: "timeout",
+    })
+    await installReleaseFixture({
+      id: "release-config-rollback",
+      expectedCode: "PLUGIN_CONFIG_INVALID",
+      pluginOverrides: {
+        mcpServers: [
+          {
+            id: "docs",
+            name: "Release Docs",
+            risk: "low",
+            configFields: [
+              {
+                key: "DOCS_TOKEN",
+                label: "Docs token",
+                type: "password",
+                required: true,
+                secret: true,
+              },
+            ],
+            tools: [
+              {
+                name: "search_docs",
+                description: "Search docs.",
+                readOnly: true,
+              },
+            ],
+            runtime: {
+              transport: "remote",
+              serverUrl: "https://docs.example.test/mcp",
+              headers: {
+                authorization: "Bearer ${DOCS_TOKEN}",
+              },
+              allowedTools: {
+                readOnly: true,
+              },
+              requireApproval: "never",
+            },
+          },
+        ],
+      },
+    })
+
+    expect(requestedURLs.some((url) => url.startsWith("https://api.github.com/"))).toBe(false)
   })
 
   test("installs, disables, diagnoses, and removes a plugin-backed MCP server", async () => {

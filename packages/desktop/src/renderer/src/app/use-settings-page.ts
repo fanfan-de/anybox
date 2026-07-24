@@ -35,7 +35,7 @@ import type {
 } from "./types"
 import { mergeMcpToolPolicyDefaults } from "./mcp/mcp-tool-policies"
 import { parseMcpConfigJson } from "./mcp/mcp-config-import"
-import { arePluginCatalogsEqual, mergePluginCatalogWithInstalled } from "./plugin-catalog"
+import { mergePluginCatalogWithInstalled } from "./plugin-catalog"
 import { useToast } from "./toast"
 import { useI18n } from "./i18n/I18nProvider"
 import type {
@@ -473,6 +473,32 @@ function buildConnectorConfigDrafts(
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error)
+}
+
+type PluginErrorTranslationKey =
+  | "plugins.error.registryUnavailable"
+  | "plugins.error.packageUnavailable"
+  | "plugins.error.downloadFailed"
+  | "plugins.error.packageInvalid"
+  | "plugins.error.platformArtifactFailed"
+
+const PLUGIN_ERROR_TRANSLATIONS: Record<string, PluginErrorTranslationKey> = {
+  PLUGIN_REGISTRY_UNAVAILABLE: "plugins.error.registryUnavailable",
+  PLUGIN_PACKAGE_UNAVAILABLE: "plugins.error.packageUnavailable",
+  PLUGIN_PACKAGE_DOWNLOAD_FAILED: "plugins.error.downloadFailed",
+  PLUGIN_PACKAGE_INVALID: "plugins.error.packageInvalid",
+  PLUGIN_PLATFORM_ARTIFACT_FAILED: "plugins.error.platformArtifactFailed",
+}
+
+function getPluginErrorMessage(
+  error: unknown,
+  translate: (key: PluginErrorTranslationKey) => string,
+) {
+  const message = getErrorMessage(error)
+  const code = /\[(PLUGIN_[A-Z_]+)\]/.exec(message)?.[1]
+  return code && PLUGIN_ERROR_TRANSLATIONS[code]
+    ? translate(PLUGIN_ERROR_TRANSLATIONS[code])
+    : message
 }
 
 function formatMcpDiagnosticMessage(diagnostic: McpServerDiagnostic, context: "save" | "diagnose" = "save"): SettingsMessage {
@@ -1629,12 +1655,6 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     const getPluginCatalog = window.desktop?.getPluginCatalog
     const getInstalledPlugins = window.desktop?.getInstalledPlugins
     if (!getPluginCatalog || !getInstalledPlugins) {
-      setPluginCatalog([])
-      setInstalledPlugins([])
-      setPluginDiagnostics({})
-      setPluginConnectorStatuses({})
-      setActivePluginSelection(null)
-      setPluginDraft(buildPluginDraft(undefined))
       setPluginsError("Desktop plugin APIs are unavailable.")
       return
     }
@@ -1645,36 +1665,39 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     }
     setPluginsError(null)
 
+    const installedPluginsRequest = getInstalledPlugins()
     try {
-      const [cachedCatalog, nextInstalled] = await Promise.all([
-        getPluginCatalog({ freshness: "cached" }),
-        getInstalledPlugins(),
+      const [nextCatalog, nextInstalled] = await Promise.all([
+        getPluginCatalog({ freshness: "fresh" }),
+        installedPluginsRequest,
       ])
       if (pluginsRequestIDRef.current !== requestID) return
       const nextConnectorStatuses = await loadPluginConnectorStatusesForInstalled(nextInstalled)
       if (pluginsRequestIDRef.current !== requestID) return
 
-      applyPluginSnapshot(cachedCatalog, nextInstalled, nextConnectorStatuses)
-
-      void getPluginCatalog({ freshness: "fresh" })
-        .then((freshCatalog) => {
-          if (pluginsRequestIDRef.current !== requestID) return
-          if (arePluginCatalogsEqual(cachedCatalog, freshCatalog)) return
-          applyPluginSnapshot(freshCatalog, nextInstalled, nextConnectorStatuses)
-        })
-        .catch((error) => {
-          if (pluginsRequestIDRef.current !== requestID) return
-          console.error("[desktop] background plugin catalog refresh failed:", error)
-        })
+      applyPluginSnapshot(nextCatalog, nextInstalled, nextConnectorStatuses)
     } catch (error) {
       if (pluginsRequestIDRef.current !== requestID) return
-      setPluginCatalog([])
-      setInstalledPlugins([])
-      setPluginDiagnostics({})
-      setPluginConnectorStatuses({})
-      setActivePluginSelection(null)
-      setPluginDraft(buildPluginDraft(undefined))
-      setPluginsError(getErrorMessage(error))
+      try {
+        const nextInstalled = await installedPluginsRequest
+        if (pluginsRequestIDRef.current !== requestID) return
+        const nextConnectorStatuses = await loadPluginConnectorStatusesForInstalled(nextInstalled)
+        if (pluginsRequestIDRef.current !== requestID) return
+
+        setPluginCatalog((current) =>
+          mergePluginCatalogWithInstalled(current, nextInstalled))
+        setInstalledPlugins(nextInstalled)
+        setPluginConnectorStatuses(nextConnectorStatuses)
+        setPluginDiagnostics((current) =>
+          Object.fromEntries(
+            Object.entries(current).filter(([pluginID]) =>
+              nextInstalled.some((plugin) => plugin.pluginID === pluginID),
+            ),
+          ))
+      } catch {
+        // Preserve the last complete installed state when both reads fail.
+      }
+      setPluginsError(getPluginErrorMessage(error, t))
     } finally {
       if (pluginsRequestIDRef.current === requestID) {
         setIsLoadingPlugins(false)
@@ -3562,7 +3585,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     } catch (error) {
       showMessage({
         tone: "error",
-        text: getErrorMessage(error),
+        text: getPluginErrorMessage(error, t),
       })
       return false
     } finally {
@@ -3593,7 +3616,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       })
       return true
     } catch (error) {
-      const message = getErrorMessage(error)
+      const message = getPluginErrorMessage(error, t)
       showMessage({
         tone: "error",
         text: message,
@@ -4076,6 +4099,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     installingPluginID,
     installedPlugins,
     loadArchivedSessions,
+    loadPlugins,
     isCreatingPromptPreset,
     isImportingMcpConfigJson,
     isLoading,

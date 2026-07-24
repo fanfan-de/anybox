@@ -5,7 +5,25 @@ import os from "node:os"
 import path from "node:path"
 import type { NativeImage } from "electron"
 
-const requestAgentJSONMock = vi.hoisted(() => vi.fn())
+const agentClientMocks = vi.hoisted(() => {
+  class AgentAPIError extends Error {
+    readonly status: number
+    readonly code?: string
+
+    constructor(input: { message: string; status: number; code?: string }) {
+      super(input.message)
+      this.name = "AgentAPIError"
+      this.status = input.status
+      this.code = input.code
+    }
+  }
+
+  return {
+    AgentAPIError,
+    requestAgentJSON: vi.fn(),
+  }
+})
+const requestAgentJSONMock = agentClientMocks.requestAgentJSON
 
 function toWindowsSeparators(value: unknown) {
   return String(value).replaceAll("/", "\\")
@@ -30,12 +48,13 @@ vi.mock("electron-updater", () => {
 })
 
 vi.mock("./agent-client", () => ({
+  AgentAPIError: agentClientMocks.AgentAPIError,
   getAgentConfig: vi.fn(() => ({
     baseURL: "http://localhost:4096",
     defaultDirectory: "C:\\Projects",
   })),
   readAgentSSEStream: vi.fn(),
-  requestAgentJSON: requestAgentJSONMock,
+  requestAgentJSON: agentClientMocks.requestAgentJSON,
   resolveAgentURL: vi.fn((path: string) => `http://localhost:4096${path}`),
 }))
 
@@ -135,6 +154,22 @@ describe("skill registry IPC helpers", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ version: "2.0.0" }),
     })
+  })
+})
+
+describe("plugin IPC error helpers", () => {
+  it("preserves actionable Agent plugin error codes for the renderer", async () => {
+    const error = new agentClientMocks.AgentAPIError({
+      message: "Plugin package returned HTTP 404.",
+      status: 400,
+      code: "PLUGIN_PACKAGE_UNAVAILABLE",
+    })
+
+    await expect(
+      internal.preservePluginAgentErrorCode(() => Promise.reject(error)),
+    ).rejects.toThrow(
+      "[PLUGIN_PACKAGE_UNAVAILABLE] Plugin package returned HTTP 404.",
+    )
   })
 })
 

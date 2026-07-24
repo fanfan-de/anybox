@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto"
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs"
-import { cp, mkdir, rm, writeFile } from "node:fs/promises"
+import { cp, mkdir, rename, rm, rmdir, writeFile } from "node:fs/promises"
 import { delimiter, dirname, extname, isAbsolute, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { inflateRawSync } from "node:zlib"
@@ -40,7 +40,7 @@ const PLUGIN_APP_COMPAT_PATH = ".app.json"
 const BUILTIN_PLUGIN_PACKAGE_PATH = join("plugins", "builtin")
 const WORKSPACE_PLUGIN_PACKAGE_PATH = join("plugins", "Anybox-Plugins")
 const PLUGIN_REGISTRY_PATH = join("plugins", "registry", "plugin-registry.json")
-const PLUGIN_REGISTRY_CACHE_PATH = join("plugins", "registry-cache", "plugin-registry-cache.json")
+const PLUGIN_REGISTRY_CACHE_PATH = join("plugins", "registry-cache", "plugin-registry-cache-v2.json")
 const PLUGIN_IMPORTED_REGISTRY_PATH = join("plugins", "registry", "imported-plugin-registry.json")
 const DEFAULT_SKILLS_DIRECTORY = "skills"
 const API_KEY_METHOD = "api-key"
@@ -51,7 +51,12 @@ const PLUGIN_INSTALL_DIR_ENV = "ANYBOX_PLUGIN_INSTALL_DIR"
 const PLUGIN_REGISTRY_FILES_ENV = "ANYBOX_PLUGIN_REGISTRY_FILES"
 const PLUGIN_REGISTRY_INDEX_URL_ENV = "ANYBOX_PLUGIN_REGISTRY_INDEX_URL"
 const PLUGIN_REGISTRY_CACHE_DIR_ENV = "ANYBOX_PLUGIN_REGISTRY_CACHE_DIR"
+const PLUGIN_REGISTRY_ALLOW_INSECURE_HTTP_ENV = "ANYBOX_PLUGIN_REGISTRY_ALLOW_INSECURE_HTTP"
+const PLUGIN_PACKAGE_DOWNLOAD_TIMEOUT_MS_ENV = "ANYBOX_PLUGIN_PACKAGE_DOWNLOAD_TIMEOUT_MS"
 const PLUGIN_IMPORTED_REGISTRY_FILE_ENV = "ANYBOX_PLUGIN_IMPORTED_REGISTRY_FILE"
+const PLUGIN_SOURCE_PACKAGES_ENV = "ANYBOX_PLUGIN_INCLUDE_SOURCE_PACKAGES"
+const DEFAULT_PLUGIN_REGISTRY_URL =
+  "https://github.com/fanfan-de/anybox/releases/latest/download/anybox-plugin-registry-v2.json"
 const LOCAL_PLUGIN_COPY_IGNORED_DIRECTORIES = new Set([
   ".cache",
   ".git",
@@ -59,20 +64,19 @@ const LOCAL_PLUGIN_COPY_IGNORED_DIRECTORIES = new Set([
   ".vite-temp",
   "node_modules",
 ])
-const DEFAULT_PLUGIN_REGISTRY_INDEX_URL = "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/index.json"
 const MAX_PLUGIN_PACKAGE_BYTES = 100 * 1024 * 1024
 const MAX_PLUGIN_DISPLAY_ASSET_BYTES = 2 * 1024 * 1024
 const MAX_PLUGIN_REGISTRY_INDEX_BYTES = 256 * 1024
+const MAX_PLUGIN_RELEASE_REGISTRY_BYTES = 2 * 1024 * 1024
 const MAX_PLUGIN_META_BYTES = 1024 * 1024
 const MAX_PLUGIN_COMPONENT_BYTES = 1024 * 1024
 const MAX_PLUGIN_SKILL_TEXT_BYTES = 1024 * 1024
 const MAX_PLUGIN_SKILL_IMAGE_BYTES = 2 * 1024 * 1024
 const MAX_PLUGIN_SKILL_DIRECTORY_ENTRIES = 1000
 const MAX_REMOTE_PLUGIN_META_COUNT = 200
-const PLUGIN_REGISTRY_FETCH_TIMEOUT_MS = 8000
-const MAX_PLUGIN_GITHUB_DIRECTORY_BYTES = 5 * 1024 * 1024
-const MAX_PLUGIN_GITHUB_TREE_FILES = 5000
-const MAX_PLUGIN_GITHUB_TREE_DEPTH = 32
+const MAX_PLUGIN_ARCHIVE_ENTRIES = 10_000
+const PLUGIN_REGISTRY_FETCH_TIMEOUT_MS = 20_000
+const PLUGIN_PACKAGE_DOWNLOAD_TIMEOUT_MS = 120_000
 const GITHUB_COMMIT_SHA_PATTERN = /^[a-f0-9]{40}$/i
 const PLUGIN_DISPLAY_ASSET_MIME_TYPES = new Map([
   [".avif", "image/avif"],
@@ -693,6 +697,106 @@ const PluginRegistry = z
   })
   .strict()
 
+const PluginReleaseZipPackageDownload = z
+  .object({
+    type: z.literal("zip"),
+    url: z.string().min(1),
+    sha256: z.string().regex(/^[a-f0-9]{64}$/i),
+    size: z.number().int().positive().max(MAX_PLUGIN_PACKAGE_BYTES),
+  })
+  .strict()
+
+const PluginReleaseRegistryItem = PluginRegistryItem.extend({
+  id: z.string().min(1),
+  package: PluginReleaseZipPackageDownload,
+}).strict()
+
+const PluginReleaseRegistry = z
+  .object({
+    schemaVersion: z.literal(2),
+    desktopVersion: z.string().regex(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/),
+    releaseTag: z.string().min(2),
+    sourceCommit: z.string().regex(GITHUB_COMMIT_SHA_PATTERN),
+    pluginCount: z.number().int().positive().max(MAX_REMOTE_PLUGIN_META_COUNT),
+    plugins: z.array(PluginReleaseRegistryItem).min(1).max(MAX_REMOTE_PLUGIN_META_COUNT),
+  })
+  .strict()
+  .superRefine((registry, ctx) => {
+    if (registry.releaseTag !== `v${registry.desktopVersion}`) {
+      ctx.addIssue({
+        code: "custom",
+        message: "releaseTag must match desktopVersion.",
+        path: ["releaseTag"],
+      })
+    }
+    if (registry.pluginCount !== registry.plugins.length) {
+      ctx.addIssue({
+        code: "custom",
+        message: "pluginCount must match the number of plugins.",
+        path: ["pluginCount"],
+      })
+    }
+
+    const seenIDs = new Set<string>()
+    registry.plugins.forEach((plugin, index) => {
+      const pluginID = normalizeManifestID(plugin.name)
+      if (plugin.id !== pluginID) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Plugin id must match the normalized manifest name.",
+          path: ["plugins", index, "id"],
+        })
+      }
+      if (seenIDs.has(pluginID)) {
+        ctx.addIssue({
+          code: "custom",
+          message: `Duplicate plugin id '${pluginID}'.`,
+          path: ["plugins", index, "id"],
+        })
+      }
+      seenIDs.add(pluginID)
+
+      const assetName = `anybox-plugin-${pluginID}-${plugin.version}.zip`
+      const expectedURL = `https://github.com/fanfan-de/anybox/releases/download/${registry.releaseTag}/${assetName}`
+      if (plugin.package.url !== expectedURL) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Plugin package URL must point to the immutable desktop Release asset.",
+          path: ["plugins", index, "package", "url"],
+        })
+      }
+    })
+  })
+
+export type PluginReleaseRegistry = z.infer<typeof PluginReleaseRegistry>
+
+export function parsePluginReleaseRegistry(input: unknown) {
+  return PluginReleaseRegistry.parse(input)
+}
+
+const RemotePluginReleaseRegistryCache = z
+  .object({
+    schemaVersion: z.literal(2),
+    protocol: z.literal("release-registry-v2"),
+    registryURL: z.string().url(),
+    registry: PluginReleaseRegistry,
+  })
+  .strict()
+
+const RemotePluginManifestIndexCache = z
+  .object({
+    schemaVersion: z.literal(2),
+    protocol: z.literal("manifest-index-v1"),
+    registryURL: z.string().url(),
+    plugins: z.array(PluginRegistryItem),
+  })
+  .strict()
+
+const RemotePluginRegistryCache = z.discriminatedUnion("protocol", [
+  RemotePluginReleaseRegistryCache,
+  RemotePluginManifestIndexCache,
+])
+
 const PluginRegistryIndex = z.array(z.string().min(1))
 
 const GitHubCommitResponse = z
@@ -700,17 +804,6 @@ const GitHubCommitResponse = z
     sha: z.string().regex(GITHUB_COMMIT_SHA_PATTERN),
   })
   .passthrough()
-
-const GitHubContentsEntry = z
-  .object({
-    type: z.string().min(1),
-    path: z.string().min(1),
-    size: z.number().int().nonnegative().optional(),
-    download_url: z.string().nullable().optional(),
-  })
-  .passthrough()
-
-const GitHubContentsResponse = z.union([GitHubContentsEntry, z.array(GitHubContentsEntry)])
 
 export const PluginCatalogItem = z
   .object({
@@ -886,7 +979,7 @@ function displayAssetURL(value: string | undefined, packageRoot?: string) {
 
 function pluginRegistryCachePath() {
   const configured = getProcessEnvValue(PLUGIN_REGISTRY_CACHE_DIR_ENV)?.trim()
-  return resolve(configured || join(Global.Path.data, dirname(PLUGIN_REGISTRY_CACHE_PATH)), "plugin-registry-cache.json")
+  return resolve(configured || join(Global.Path.data, dirname(PLUGIN_REGISTRY_CACHE_PATH)), "plugin-registry-cache-v2.json")
 }
 
 function importedPluginRegistryPath() {
@@ -897,7 +990,18 @@ function importedPluginRegistryPath() {
 function pluginRegistryIndexURL() {
   const configured = getProcessEnvValue(PLUGIN_REGISTRY_INDEX_URL_ENV)?.trim()
   if (configured && /^(off|none|disabled)$/i.test(configured)) return undefined
-  return configured || DEFAULT_PLUGIN_REGISTRY_INDEX_URL
+  return configured || DEFAULT_PLUGIN_REGISTRY_URL
+}
+
+function expectedRemoteRegistryProtocol(registryURL: string) {
+  try {
+    const pathname = new URL(registryURL).pathname.toLowerCase()
+    if (pathname.endsWith("/anybox-plugin-registry-v2.json")) return "release-registry-v2" as const
+    if (pathname.endsWith("/index.json")) return "manifest-index-v1" as const
+  } catch {
+    // URL validation produces the user-facing error at fetch time.
+  }
+  return undefined
 }
 
 function assertHTTPSURL(rawUrl: string, label: string) {
@@ -908,7 +1012,11 @@ function assertHTTPSURL(rawUrl: string, label: string) {
     throw new PluginError("PLUGIN_REGISTRY_UNAVAILABLE", `${label} is invalid.`)
   }
 
-  if (url.protocol !== "https:") {
+  const allowInsecureLoopback =
+    getProcessEnvValue(PLUGIN_REGISTRY_ALLOW_INSECURE_HTTP_ENV)?.trim() === "1"
+    && url.protocol === "http:"
+    && ["127.0.0.1", "localhost", "[::1]"].includes(url.hostname.toLowerCase())
+  if (url.protocol !== "https:" && !allowInsecureLoopback) {
     throw new PluginError("PLUGIN_REGISTRY_UNAVAILABLE", `${label} must use https.`)
   }
   if (url.username || url.password) {
@@ -916,6 +1024,13 @@ function assertHTTPSURL(rawUrl: string, label: string) {
   }
 
   return url
+}
+
+function pluginPackageDownloadTimeoutMS() {
+  const configured = Number(getProcessEnvValue(PLUGIN_PACKAGE_DOWNLOAD_TIMEOUT_MS_ENV)?.trim())
+  return Number.isSafeInteger(configured) && configured >= 100 && configured <= 10 * 60_000
+    ? configured
+    : PLUGIN_PACKAGE_DOWNLOAD_TIMEOUT_MS
 }
 
 function normalizeGitHubBlobURL(rawUrl: string) {
@@ -1604,17 +1719,28 @@ function localPluginPackagesRoot() {
   return resolve(configured || join(Global.Path.data, "plugins", "local"))
 }
 
+function includeSourcePluginPackages() {
+  const configured = getProcessEnvValue(PLUGIN_SOURCE_PACKAGES_ENV)?.trim()
+  if (configured) return /^(1|true|yes|on)$/i.test(configured)
+  return getProcessEnvValue("NODE_ENV") !== "production"
+}
+
 function packageSearchRoots() {
   const root = moduleRoot()
+  const sourceRoots: Array<{ root: string; managedInstall: boolean }> = includeSourcePluginPackages()
+    ? [
+        {
+          root: resolve(root, "..", "..", BUILTIN_PLUGIN_PACKAGE_PATH),
+          managedInstall: false,
+        },
+        {
+          root: resolve(root, "..", "..", "..", "..", WORKSPACE_PLUGIN_PACKAGE_PATH),
+          managedInstall: false,
+        },
+      ]
+    : []
   const roots: Array<{ root: string; managedInstall: boolean }> = [
-    {
-      root: resolve(root, "..", "..", BUILTIN_PLUGIN_PACKAGE_PATH),
-      managedInstall: false,
-    },
-    {
-      root: resolve(root, "..", "..", "..", "..", WORKSPACE_PLUGIN_PACKAGE_PATH),
-      managedInstall: false,
-    },
+    ...sourceRoots,
     {
       root: localPluginPackagesRoot(),
       managedInstall: false,
@@ -1675,12 +1801,29 @@ function registryFilePaths() {
   return uniqueStrings(files.map((filePath) => resolve(filePath))).filter((filePath) => existsSync(filePath))
 }
 
-function safeReadPluginRegistry(filePath: string) {
+function parsePluginRegistryDocument(input: unknown) {
+  if (
+    typeof input === "object"
+    && input !== null
+    && "schemaVersion" in input
+    && input.schemaVersion === 2
+  ) {
+    return parsePluginReleaseRegistry(input)
+  }
+  return PluginRegistry.parse(input)
+}
+
+function readPluginRegistry(filePath: string, label = "Plugin registry") {
   try {
     const raw = readFileSync(filePath, "utf8")
-    return PluginRegistry.parse(JSON.parse(raw))
-  } catch {
-    return undefined
+    return parsePluginRegistryDocument(JSON.parse(raw))
+  } catch (error) {
+    throw new PluginError(
+      "PLUGIN_REGISTRY_UNAVAILABLE",
+      error instanceof Error
+        ? `${label} '${filePath}' is invalid: ${error.message}`
+        : `${label} '${filePath}' is invalid.`,
+    )
   }
 }
 
@@ -1783,31 +1926,49 @@ async function fetchPackageJSONWithSchema<T>(
 }
 
 async function fetchPackageBytes(url: string, label: string, sizeLimit: number) {
-  const response = await fetch(url, {
-    headers: {
-      accept: "application/octet-stream,*/*",
-      "user-agent": "Anybox-Plugin-Installer",
-    },
-  }).catch((error) => {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), pluginPackageDownloadTimeoutMS())
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        accept: "application/octet-stream,*/*",
+        "user-agent": "Anybox-Plugin-Installer",
+      },
+      signal: controller.signal,
+    }).catch((error) => {
+      throw new PluginError(
+        "PLUGIN_PACKAGE_DOWNLOAD_FAILED",
+        error instanceof Error ? `${label} could not be downloaded: ${error.message}` : `${label} could not be downloaded.`,
+      )
+    })
+
+    if (!response.ok) {
+      throw new PluginError(
+        response.status === 404 ? "PLUGIN_PACKAGE_UNAVAILABLE" : "PLUGIN_PACKAGE_DOWNLOAD_FAILED",
+        `${label} returned HTTP ${response.status}.`,
+      )
+    }
+
+    const declaredLength = Number(response.headers.get("content-length") ?? "0")
+    if (declaredLength > sizeLimit) {
+      throw new PluginError("PLUGIN_PACKAGE_INVALID", `${label} is larger than the allowed download size.`)
+    }
+
+    const bytes = new Uint8Array(await response.arrayBuffer())
+    if (bytes.byteLength > sizeLimit) {
+      throw new PluginError("PLUGIN_PACKAGE_INVALID", `${label} is larger than the allowed download size.`)
+    }
+    return bytes
+  } catch (error) {
+    if (error instanceof PluginError) throw error
     throw new PluginError(
       "PLUGIN_PACKAGE_DOWNLOAD_FAILED",
-      error instanceof Error ? error.message : `${label} could not be downloaded.`,
+      error instanceof Error ? `${label} could not be downloaded: ${error.message}` : `${label} could not be downloaded.`,
     )
-  })
-
-  if (!response.ok) {
-    throw new PluginError(
-      "PLUGIN_PACKAGE_DOWNLOAD_FAILED",
-      `${label} returned HTTP ${response.status}.`,
-    )
+  } finally {
+    clearTimeout(timeout)
   }
-
-  const declaredLength = Number(response.headers.get("content-length") ?? "0")
-  if (declaredLength > sizeLimit) {
-    throw new PluginError("PLUGIN_PACKAGE_INVALID", `${label} is larger than the allowed download size.`)
-  }
-
-  return new Uint8Array(await response.arrayBuffer())
 }
 
 function normalizeRegistrySkillPreviews(pluginID: string, previews: z.infer<typeof PluginRegistrySkillPreview>[] | undefined) {
@@ -1841,12 +2002,8 @@ function sourceToRegistryItem(source: PluginManifestSource) {
   })
 }
 
-async function fetchRegistryIndex() {
-  const indexURL = pluginRegistryIndexURL()
-  if (!indexURL) return []
-
-  const url = assertHTTPSURL(indexURL, "Plugin registry index URL").toString()
-  const entries = await fetchJSONWithSchema(url, PluginRegistryIndex, MAX_PLUGIN_REGISTRY_INDEX_BYTES, "Plugin registry index")
+function parseRegistryIndex(input: unknown) {
+  const entries = PluginRegistryIndex.parse(input)
   if (entries.length > MAX_REMOTE_PLUGIN_META_COUNT) {
     throw new PluginError("PLUGIN_REGISTRY_UNAVAILABLE", "Plugin registry index contains too many plugin URLs.")
   }
@@ -1870,37 +2027,95 @@ async function fetchPluginMeta(manifestURL: string) {
   }
 }
 
-function listCachedRemoteRegistryManifestSources() {
-  const registry = safeReadPluginRegistry(pluginRegistryCachePath())
-  if (!registry) return []
-  return registry.plugins.map((item) => registryItemToManifestSource(item))
+function listCachedRemoteRegistryManifestSources(indexURL: string | undefined) {
+  if (!indexURL) return []
+
+  try {
+    const raw = readFileSync(pluginRegistryCachePath(), "utf8")
+    const cache = RemotePluginRegistryCache.parse(JSON.parse(raw))
+    if (cache.registryURL !== indexURL) return []
+    const expectedProtocol = expectedRemoteRegistryProtocol(indexURL)
+    if (expectedProtocol && cache.protocol !== expectedProtocol) return []
+    const plugins = cache.protocol === "release-registry-v2"
+      ? cache.registry.plugins
+      : cache.plugins
+    return plugins.map((item) => registryItemToManifestSource(item))
+  } catch {
+    return []
+  }
 }
 
-async function writeRemoteRegistryCache(sources: PluginManifestSource[]) {
-  const filePath = pluginRegistryCachePath()
-  const registry = PluginRegistry.parse({
-    schemaVersion: 1,
+async function writeRemoteReleaseRegistryCache(registryURL: string, registry: PluginReleaseRegistry) {
+  const cache = RemotePluginRegistryCache.parse({
+    schemaVersion: 2,
+    protocol: "release-registry-v2",
+    registryURL,
+    registry,
+  })
+  await writeRemoteRegistryCache(cache)
+}
+
+async function writeRemoteManifestIndexCache(registryURL: string, sources: PluginManifestSource[]) {
+  const cache = RemotePluginRegistryCache.parse({
+    schemaVersion: 2,
+    protocol: "manifest-index-v1",
+    registryURL,
     plugins: sources.map(sourceToRegistryItem),
   })
+  await writeRemoteRegistryCache(cache)
+}
+
+async function writeRemoteRegistryCache(cache: z.infer<typeof RemotePluginRegistryCache>) {
+  const filePath = pluginRegistryCachePath()
+  const temporaryPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`
   await mkdir(dirname(filePath), { recursive: true })
-  await writeFile(filePath, `${JSON.stringify(registry, null, 2)}\n`)
+  try {
+    await writeFile(temporaryPath, `${JSON.stringify(cache, null, 2)}\n`)
+    await rename(temporaryPath, filePath)
+  } finally {
+    await rm(temporaryPath, { force: true }).catch(() => {})
+  }
+}
+
+async function fetchRemoteRegistryManifestSources(registryURL: string) {
+  const url = assertHTTPSURL(registryURL, "Plugin registry URL").toString()
+  const expectedProtocol = expectedRemoteRegistryProtocol(url)
+  const document = await fetchJSONWithSchema(
+    url,
+    z.unknown(),
+    MAX_PLUGIN_RELEASE_REGISTRY_BYTES,
+    "Plugin registry",
+  )
+
+  if (isJsonRecord(document) && document.schemaVersion === 2) {
+    const registry = parsePluginReleaseRegistry(document)
+    await writeRemoteReleaseRegistryCache(registryURL, registry)
+    return registry.plugins.map((item) => registryItemToManifestSource(item))
+  }
+
+  if (expectedProtocol === "release-registry-v2") {
+    throw new PluginError(
+      "PLUGIN_REGISTRY_UNAVAILABLE",
+      "Plugin Release registry URL did not return a schemaVersion 2 registry.",
+    )
+  }
+  const baseURLs = parseRegistryIndex(document)
+  if (Buffer.byteLength(JSON.stringify(document), "utf8") > MAX_PLUGIN_REGISTRY_INDEX_BYTES) {
+    throw new PluginError("PLUGIN_REGISTRY_UNAVAILABLE", "Plugin registry index is larger than the allowed size.")
+  }
+  const sources = await Promise.all(baseURLs.map((baseURL) => fetchPluginMeta(baseURL)))
+  await writeRemoteManifestIndexCache(registryURL, sources)
+  return sources
 }
 
 async function listRemoteRegistryManifestSources() {
-  const indexURL = pluginRegistryIndexURL()
-  if (!indexURL) return listCachedRemoteRegistryManifestSources()
+  const registryURL = pluginRegistryIndexURL()
+  if (!registryURL) return []
 
   try {
-    const baseURLs = await fetchRegistryIndex()
-    const settled = await Promise.allSettled(baseURLs.map((baseURL) => fetchPluginMeta(baseURL)))
-    const sources = settled.flatMap((result) => result.status === "fulfilled" ? [result.value] : [])
-    if (baseURLs.length > 0 && sources.length === 0) {
-      throw new PluginError("PLUGIN_REGISTRY_UNAVAILABLE", "Plugin registry did not return any valid plugin metadata.")
-    }
-    await writeRemoteRegistryCache(sources)
-    return sources
+    return await fetchRemoteRegistryManifestSources(registryURL)
   } catch (error) {
-    const cached = listCachedRemoteRegistryManifestSources()
+    const cached = listCachedRemoteRegistryManifestSources(registryURL)
     if (cached.length > 0) return cached
     if (error instanceof PluginError) throw error
     throw new PluginError(
@@ -1914,8 +2129,7 @@ function listRegistryManifestSources() {
   const byID = new Map<string, PluginManifestSource>()
 
   for (const filePath of registryFilePaths()) {
-    const registry = safeReadPluginRegistry(filePath)
-    if (!registry) continue
+    const registry = readPluginRegistry(filePath)
 
     for (const item of registry.plugins) {
       const source = registryItemToManifestSource(item)
@@ -1927,8 +2141,10 @@ function listRegistryManifestSources() {
 }
 
 function listImportedRegistryManifestSources() {
-  const registry = safeReadPluginRegistry(importedPluginRegistryPath())
-  return registry ? registry.plugins.map((item) => registryItemToManifestSource(item)) : []
+  const filePath = importedPluginRegistryPath()
+  if (!existsSync(filePath)) return []
+  const registry = readPluginRegistry(filePath, "Imported plugin registry")
+  return registry.plugins.map((item) => registryItemToManifestSource(item))
 }
 
 async function writeImportedRegistryManifestSources(sources: PluginManifestSource[]) {
@@ -2022,7 +2238,7 @@ function mergeManifestSources(...groups: PluginManifestSource[][]) {
 function listManifestSources() {
   return mergeManifestSources(
     listRegistryManifestSources(),
-    listCachedRemoteRegistryManifestSources(),
+    listCachedRemoteRegistryManifestSources(pluginRegistryIndexURL()),
     listImportedRegistryManifestSources(),
     listPackageManifestSources(),
   )
@@ -2032,14 +2248,7 @@ async function listManifestSourcesFresh() {
   const localRegistrySources = listRegistryManifestSources()
   const importedRegistrySources = listImportedRegistryManifestSources()
   const packageSources = listPackageManifestSources()
-  let remoteRegistrySources: PluginManifestSource[] = []
-  try {
-    remoteRegistrySources = await listRemoteRegistryManifestSources()
-  } catch (error) {
-    if (localRegistrySources.length === 0 && importedRegistrySources.length === 0 && packageSources.length === 0) {
-      throw error
-    }
-  }
+  const remoteRegistrySources = await listRemoteRegistryManifestSources()
 
   return mergeManifestSources(
     localRegistrySources,
@@ -2082,12 +2291,18 @@ async function getRegistryManifestSource(pluginID: string) {
   const normalizedPluginID = normalizePluginID(pluginID)
   const localRegistrySources = listRegistryManifestSources()
   const importedRegistrySources = listImportedRegistryManifestSources()
-  let remoteRegistrySources: PluginManifestSource[] = []
-  try {
-    remoteRegistrySources = await listRemoteRegistryManifestSources()
-  } catch (error) {
-    if (localRegistrySources.length === 0 && importedRegistrySources.length === 0) throw error
-  }
+  const cachedRemoteRegistrySources = listCachedRemoteRegistryManifestSources(pluginRegistryIndexURL())
+  const cachedSources = mergeManifestSources(
+    localRegistrySources,
+    cachedRemoteRegistrySources,
+    importedRegistrySources,
+  )
+  const cachedSource = cachedSources.find(
+    (entry) => normalizeManifestID(entry.manifest.name) === normalizedPluginID,
+  )
+  if (cachedSource) return cachedSource
+
+  const remoteRegistrySources = await listRemoteRegistryManifestSources()
   const sources = mergeManifestSources(localRegistrySources, remoteRegistrySources, importedRegistrySources)
   return sources.find((entry) => normalizeManifestID(entry.manifest.name) === normalizedPluginID)
 }
@@ -3245,7 +3460,9 @@ function readZipEntryData(archive: Buffer, entry: ZipEntry) {
     data = Buffer.from(compressed)
   } else if (entry.method === 8) {
     try {
-      data = inflateRawSync(compressed)
+      data = inflateRawSync(compressed, {
+        maxOutputLength: Math.max(1, entry.uncompressedSize),
+      })
     } catch {
       throw zipPackageError("Plugin archive file data is invalid.")
     }
@@ -3264,12 +3481,26 @@ function readZipEntryData(archive: Buffer, entry: ZipEntry) {
 function extractZipArchive(zipPath: string, destination: string) {
   const archive = readFileSync(zipPath)
   const destinationRoot = resolve(destination)
+  const entries = readZipEntries(archive)
+  if (entries.length > MAX_PLUGIN_ARCHIVE_ENTRIES) {
+    throw zipPackageError("Plugin archive contains too many entries.")
+  }
 
-  for (const entry of readZipEntries(archive)) {
+  const totalUncompressedSize = entries.reduce((total, entry) => total + entry.uncompressedSize, 0)
+  if (totalUncompressedSize > MAX_PLUGIN_PACKAGE_BYTES) {
+    throw zipPackageError("Plugin archive is larger than the allowed uncompressed size.")
+  }
+
+  const seenPaths = new Set<string>()
+  for (const entry of entries) {
     if (!entry.normalizedName) continue
     if (isZipEntrySymlink(entry)) {
       throw zipPackageError("Plugin archives must not contain symbolic links.")
     }
+    if (seenPaths.has(entry.normalizedName)) {
+      throw zipPackageError(`Plugin archive contains duplicate path '${entry.normalizedName}'.`)
+    }
+    seenPaths.add(entry.normalizedName)
 
     const targetPath = resolve(destinationRoot, entry.normalizedName)
     assertPathInside(destinationRoot, targetPath)
@@ -3300,35 +3531,112 @@ function findPackageRootsWithManifest(root: string, depth = 0): string[] {
 }
 
 function matchingPackageRootForRegistry(stagingRoot: string, registrySource: PluginManifestSource) {
+  const topLevelEntries = readdirSync(stagingRoot, { withFileTypes: true })
+  if (topLevelEntries.length !== 1 || !topLevelEntries[0]?.isDirectory()) {
+    throw new PluginError(
+      "PLUGIN_PACKAGE_INVALID",
+      "Plugin package must contain exactly one top-level plugin directory.",
+    )
+  }
+
+  return assertPackageRootForRegistry(join(stagingRoot, topLevelEntries[0].name), registrySource)
+}
+
+function assertPackageRootForRegistry(packageRoot: string, registrySource: PluginManifestSource) {
   const expectedID = normalizeManifestID(registrySource.manifest.name)
   const expectedVersion = registrySource.manifest.version
-  const matches = findPackageRootsWithManifest(stagingRoot).filter((packageRoot) => {
-    const manifest = safeReadPluginManifest(packageRoot)
-    return Boolean(
-      manifest &&
-        normalizeManifestID(manifest.name) === expectedID &&
-        manifest.version === expectedVersion,
+  const manifest = safeReadPluginManifest(packageRoot)
+  if (
+    !manifest
+    || normalizeManifestID(manifest.name) !== expectedID
+    || manifest.version !== expectedVersion
+  ) {
+    throw new PluginError(
+      "PLUGIN_PACKAGE_INVALID",
+      `Plugin package manifest does not match ${expectedID}@${expectedVersion}.`,
     )
-  })
+  }
 
-  if (matches.length !== 1) {
+  const manifestRoots = findPackageRootsWithManifest(packageRoot)
+  if (
+    manifestRoots.length !== 1
+    || resolve(manifestRoots[0]!) !== resolve(packageRoot)
+  ) {
     throw new PluginError(
       "PLUGIN_PACKAGE_INVALID",
       `Plugin package must contain exactly one manifest matching ${expectedID}@${expectedVersion}.`,
     )
   }
 
-  return matches[0]!
+  return packageRoot
+}
+
+async function replaceManagedPluginPackage(
+  sourceRoot: string,
+  finalRoot: string,
+  registrySource: PluginManifestSource,
+  filter?: (sourcePath: string) => boolean,
+  allowNestedManifests = false,
+) {
+  const parentRoot = dirname(finalRoot)
+  const finalName = finalRoot.slice(parentRoot.length + 1)
+  const stagingRoot = join(parentRoot, `.${finalName}.install-${randomUUID()}`)
+  const backupRoot = join(parentRoot, `.${finalName}.backup-${randomUUID()}`)
+  let movedExisting = false
+  let promoted = false
+
+  await mkdir(parentRoot, { recursive: true })
+  await rm(stagingRoot, { recursive: true, force: true })
+  await cp(sourceRoot, stagingRoot, {
+    recursive: true,
+    filter: filter ? (sourcePath) => filter(sourcePath) : undefined,
+  })
+
+  try {
+    validateExtractedTree(stagingRoot)
+    if (allowNestedManifests) {
+      const installedManifest = safeReadPluginManifest(stagingRoot)
+      if (
+        !installedManifest
+        || normalizeManifestID(installedManifest.name) !== normalizeManifestID(registrySource.manifest.name)
+        || installedManifest.version !== registrySource.manifest.version
+      ) {
+        throw new PluginError("PLUGIN_PACKAGE_INVALID", "Installed plugin package manifest does not match its source.")
+      }
+    } else {
+      assertPackageRootForRegistry(stagingRoot, registrySource)
+    }
+
+    if (existsSync(finalRoot)) {
+      await rename(finalRoot, backupRoot)
+      movedExisting = true
+    }
+
+    try {
+      await rename(stagingRoot, finalRoot)
+      promoted = true
+    } catch (error) {
+      if (movedExisting && existsSync(backupRoot) && !existsSync(finalRoot)) {
+        await rename(backupRoot, finalRoot)
+        movedExisting = false
+      }
+      throw error
+    }
+
+    await rm(backupRoot, { recursive: true, force: true }).catch(() => {})
+    return finalRoot
+  } finally {
+    if (!promoted) {
+      await rm(stagingRoot, { recursive: true, force: true }).catch(() => {})
+      if (movedExisting && existsSync(backupRoot) && !existsSync(finalRoot)) {
+        await rename(backupRoot, finalRoot).catch(() => {})
+      }
+    }
+  }
 }
 
 function githubAPIURL(locator: GitHubPackageLocator, path: string) {
   return `https://api.github.com/repos/${encodeURIComponent(locator.owner)}/${encodeURIComponent(locator.repo)}/${path}`
-}
-
-function githubContentsAPIURL(locator: GitHubPackageLocator, path: string, ref: string) {
-  const url = new URL(githubAPIURL(locator, path ? `contents/${encodedPath(path)}` : "contents"))
-  url.searchParams.set("ref", ref)
-  return url.toString()
 }
 
 function githubRawFileURL(locator: GitHubPackageLocator, ref: string, path: string) {
@@ -3346,85 +3654,8 @@ async function resolveGitHubCommitRef(locator: GitHubPackageLocator) {
   return commit.sha
 }
 
-async function fetchGitHubContents(locator: GitHubPackageLocator, path: string, ref: string) {
-  const result = await fetchPackageJSONWithSchema(
-    githubContentsAPIURL(locator, path, ref),
-    GitHubContentsResponse,
-    MAX_PLUGIN_GITHUB_DIRECTORY_BYTES,
-    "GitHub plugin package directory",
-  )
-  return Array.isArray(result) ? result : [result]
-}
-
-function relativeGitHubContentPath(locator: GitHubPackageLocator, path: string) {
-  const packageRoot = locator.path
-  if (!packageRoot) return normalizeZipEntryPath(path)
-  if (path === packageRoot) return null
-  if (!path.startsWith(`${packageRoot}/`)) {
-    throw new PluginError("PLUGIN_PACKAGE_INVALID", "GitHub plugin package contains a path outside the plugin directory.")
-  }
-  return normalizeZipEntryPath(path.slice(packageRoot.length + 1))
-}
-
-async function listGitHubPackageFiles(locator: GitHubPackageLocator, ref: string) {
-  type GitHubPackageFile = {
-    relativePath: string
-    sourcePath: string
-    downloadURL?: string
-    size?: number
-  }
-
-  const files: GitHubPackageFile[] = []
-  let declaredBytes = 0
-
-  async function visit(path: string, depth: number): Promise<void> {
-    if (depth > MAX_PLUGIN_GITHUB_TREE_DEPTH) {
-      throw new PluginError("PLUGIN_PACKAGE_INVALID", "GitHub plugin package directory is nested too deeply.")
-    }
-
-    const entries = await fetchGitHubContents(locator, path, ref)
-    if (entries.length === 1 && entries[0]?.type === "file" && path === locator.path) {
-      throw new PluginError("PLUGIN_PACKAGE_INVALID", "GitHub plugin package URL must point to a directory.")
-    }
-
-    for (const entry of entries) {
-      if (entry.type === "dir") {
-        await visit(entry.path, depth + 1)
-        continue
-      }
-
-      if (entry.type === "symlink" || entry.type === "submodule") {
-        throw new PluginError("PLUGIN_PACKAGE_INVALID", "GitHub plugin packages must not contain symbolic links or submodules.")
-      }
-
-      if (entry.type !== "file") {
-        throw new PluginError("PLUGIN_PACKAGE_INVALID", `GitHub plugin package contains unsupported entry type '${entry.type}'.`)
-      }
-
-      const relativePath = relativeGitHubContentPath(locator, entry.path)
-      if (!relativePath) continue
-
-      declaredBytes += entry.size ?? 0
-      if (declaredBytes > MAX_PLUGIN_PACKAGE_BYTES) {
-        throw new PluginError("PLUGIN_PACKAGE_INVALID", "GitHub plugin package is larger than the allowed download size.")
-      }
-      files.push({
-        relativePath,
-        sourcePath: entry.path,
-        downloadURL: entry.download_url ?? undefined,
-        size: entry.size,
-      })
-      if (files.length > MAX_PLUGIN_GITHUB_TREE_FILES) {
-        throw new PluginError("PLUGIN_PACKAGE_INVALID", "GitHub plugin package contains too many files.")
-      }
-    }
-  }
-
-  await visit(locator.path, 0)
-  if (files.length === 0) {
-    throw new PluginError("PLUGIN_PACKAGE_INVALID", "GitHub plugin package directory is empty.")
-  }
-  return files
+function githubArchiveURL(locator: GitHubPackageLocator, ref: string) {
+  return `https://codeload.github.com/${encodeURIComponent(locator.owner)}/${encodeURIComponent(locator.repo)}/zip/${encodeURIComponent(ref)}`
 }
 
 async function downloadGitHubTreePluginPackage(registrySource: PluginManifestSource, download: Extract<PluginPackageDownload, { type: "github-tree" }>) {
@@ -3437,48 +3668,35 @@ async function downloadGitHubTreePluginPackage(registrySource: PluginManifestSou
   const safeID = assertPluginPathSegment(pluginID)
   const safeVersion = assertPluginPathSegment(registrySource.manifest.version)
   const tempRoot = join(Global.Path.cache, "plugin-installs", `${safeID}-${safeVersion}-${randomUUID()}`)
-  const stagingRoot = join(tempRoot, "github-tree")
+  const zipPath = join(tempRoot, "repository.zip")
+  const stagingRoot = join(tempRoot, "repository")
   const finalRoot = join(installedPluginPackagesRoot(), safeID, safeVersion)
   const ref = await resolveGitHubCommitRef(locator)
-  const files = await listGitHubPackageFiles(locator, ref)
-  let downloadedBytes = 0
-
+  const bytes = await fetchPackageBytes(
+    githubArchiveURL(locator, ref),
+    "GitHub plugin repository archive",
+    MAX_PLUGIN_PACKAGE_BYTES,
+  )
   await mkdir(stagingRoot, { recursive: true })
+  await writeFile(zipPath, bytes)
 
   try {
-    for (const file of files) {
-      const bytes = await fetchPackageBytes(
-        file.downloadURL ?? githubRawFileURL(locator, ref, file.sourcePath),
-        `GitHub plugin package file '${file.relativePath}'`,
-        Math.max(0, MAX_PLUGIN_PACKAGE_BYTES - downloadedBytes),
-      )
-      if (file.size !== undefined && bytes.byteLength !== file.size) {
-        throw new PluginError("PLUGIN_PACKAGE_INVALID", `GitHub plugin package file '${file.relativePath}' size does not match GitHub metadata.`)
-      }
-
-      downloadedBytes += bytes.byteLength
-      if (downloadedBytes > MAX_PLUGIN_PACKAGE_BYTES) {
-        throw new PluginError("PLUGIN_PACKAGE_INVALID", "GitHub plugin package is larger than the allowed download size.")
-      }
-
-      const targetPath = resolve(stagingRoot, file.relativePath)
-      assertPathInside(stagingRoot, targetPath)
-      await mkdir(dirname(targetPath), { recursive: true })
-      await writeFile(targetPath, bytes)
+    extractZipArchive(zipPath, stagingRoot)
+    const archiveRoots = readdirSync(stagingRoot, { withFileTypes: true })
+    if (archiveRoots.length !== 1 || !archiveRoots[0]?.isDirectory()) {
+      throw new PluginError("PLUGIN_PACKAGE_INVALID", "GitHub repository archive must contain one top-level directory.")
     }
 
-    validateExtractedTree(stagingRoot)
-    const packageRoot = matchingPackageRootForRegistry(stagingRoot, registrySource)
-    await rm(finalRoot, { recursive: true, force: true })
-    await mkdir(dirname(finalRoot), { recursive: true })
-    await cp(packageRoot, finalRoot, { recursive: true })
+    const repositoryRoot = join(stagingRoot, archiveRoots[0].name)
+    const packageRoot = resolve(repositoryRoot, ...locator.path.split("/").filter(Boolean))
+    assertPathInside(repositoryRoot, packageRoot)
+    if (!existsSync(packageRoot) || !lstatSync(packageRoot).isDirectory()) {
+      throw new PluginError("PLUGIN_PACKAGE_INVALID", "GitHub plugin package URL must point to a directory.")
+    }
+    assertPackageRootForRegistry(packageRoot, registrySource)
+    await replaceManagedPluginPackage(packageRoot, finalRoot, registrySource)
   } finally {
     await rm(tempRoot, { recursive: true, force: true }).catch(() => {})
-  }
-
-  const installedManifest = safeReadPluginManifest(finalRoot)
-  if (!installedManifest) {
-    throw new PluginError("PLUGIN_PACKAGE_INVALID", "Installed plugin package is missing its manifest.")
   }
 
   return finalRoot
@@ -3495,7 +3713,7 @@ async function downloadZipPluginPackage(registrySource: PluginManifestSource, do
 
   const url = assertSupportedPackageURL(download.url)
 
-  const sizeLimit = Math.min(download.size ? Math.max(download.size * 2, download.size + 1024 * 1024) : MAX_PLUGIN_PACKAGE_BYTES, MAX_PLUGIN_PACKAGE_BYTES)
+  const sizeLimit = Math.min(download.size ?? MAX_PLUGIN_PACKAGE_BYTES, MAX_PLUGIN_PACKAGE_BYTES)
   const bytes = await fetchPackageBytes(url.toString(), "Plugin package", sizeLimit)
   if (bytes.byteLength === 0 || bytes.byteLength > sizeLimit) {
     throw new PluginError("PLUGIN_PACKAGE_INVALID", "Plugin package is empty or too large.")
@@ -3522,16 +3740,9 @@ async function downloadZipPluginPackage(registrySource: PluginManifestSource, do
   try {
     extractZipArchive(zipPath, stagingRoot)
     const packageRoot = matchingPackageRootForRegistry(stagingRoot, registrySource)
-    await rm(finalRoot, { recursive: true, force: true })
-    await mkdir(dirname(finalRoot), { recursive: true })
-    await cp(packageRoot, finalRoot, { recursive: true })
+    await replaceManagedPluginPackage(packageRoot, finalRoot, registrySource)
   } finally {
     await rm(tempRoot, { recursive: true, force: true }).catch(() => {})
-  }
-
-  const installedManifest = safeReadPluginManifest(finalRoot)
-  if (!installedManifest) {
-    throw new PluginError("PLUGIN_PACKAGE_INVALID", "Installed plugin package is missing its manifest.")
   }
 
   return finalRoot
@@ -3567,18 +3778,19 @@ async function copyPluginPackageToInstalled(source: PluginManifestSource) {
 
   if (source.managedInstall && sourceRoot === finalRoot) return finalRoot
 
-  await rm(finalRoot, { recursive: true, force: true })
-  await mkdir(dirname(finalRoot), { recursive: true })
-  await cp(sourceRoot, finalRoot, {
-    recursive: true,
-    filter: (sourcePath) => {
+  await replaceManagedPluginPackage(
+    sourceRoot,
+    finalRoot,
+    source,
+    (sourcePath) => {
       const relativePath = relative(sourceRoot, sourcePath)
       if (!relativePath) return true
       return relativePath
         .split(/[\\/]/u)
         .every((segment) => !LOCAL_PLUGIN_COPY_IGNORED_DIRECTORIES.has(segment))
     },
-  })
+    true,
+  )
 
   const installedManifest = safeReadPluginManifest(finalRoot)
   if (!installedManifest) {
@@ -3646,6 +3858,26 @@ async function ensurePluginPackageAvailable(pluginID: string) {
   return installedSource
 }
 
+function managedPluginPackageRoots(pluginID: string) {
+  const normalizedPluginID = normalizePluginID(pluginID)
+  return new Set(
+    readPackageManifestsFromRoot(installedPluginPackagesRoot(), true)
+      .filter((source) => normalizeManifestID(source.manifest.name) === normalizedPluginID)
+      .flatMap((source) => source.packageRoot ? [resolve(source.packageRoot)] : []),
+  )
+}
+
+async function removeNewManagedPluginPackages(pluginID: string, previousRoots: Set<string>) {
+  for (const packageRoot of managedPluginPackageRoots(pluginID)) {
+    if (previousRoots.has(packageRoot)) continue
+    await rm(packageRoot, { recursive: true, force: true }).catch(() => {})
+    const pluginRoot = dirname(packageRoot)
+    if (dirname(pluginRoot) === resolve(installedPluginPackagesRoot())) {
+      await rmdir(pluginRoot).catch(() => {})
+    }
+  }
+}
+
 export function resolveEnabledInstalledPluginMcpRequirementServerIDs(pluginIDs: string[]) {
   const selectedPluginIDs = new Set(resolveEnabledInstalledPluginIDs(pluginIDs))
   if (selectedPluginIDs.size === 0) return []
@@ -3702,38 +3934,45 @@ async function syncPluginPlatformArtifacts(
 }
 
 export async function install(pluginID: string, input: InstallPluginInput) {
-  const source = await ensurePluginPackageAvailable(pluginID)
-  const plugin = assertPackagePlugin(pluginID)
-  const existingRecord = readInstalled(plugin.id)
-  const existing = existingRecord
-    ? await migrateInstalledMcpServerEnabled(plugin, existingRecord)
-    : null
-  const mcpServerIDs = generatedMcpServerIDs(plugin)
-  const platformArtifactReceipts = await syncPluginPlatformArtifacts(
-    source,
-    existing,
-  )
-  const timestamp = now()
-  const record: InstalledPlugin = {
-    pluginID: plugin.id,
-    version: plugin.version,
-    enabled: input.enabled ?? existing?.enabled ?? true,
-    mcpServerID: primaryMcpServerID(mcpServerIDs, existing?.mcpServerID),
-    mcpServerIDs,
-    mcpServerEnabled: normalizeMcpServerEnabled(mcpServerIDs, existing?.mcpServerEnabled),
-    skillIDs: generatedSkillIDs(plugin),
-    connectorIDs: generatedConnectorIDs(plugin),
-    mcpRequirementIDs: generatedMcpRequirementIDs(plugin),
-    connectorRequirementIDs: generatedConnectorRequirementIDs(plugin),
-    config: normalizeConfig(plugin, input.config ?? existing?.config),
-    installedAt: existing?.installedAt ?? timestamp,
-    updatedAt: timestamp,
-    lastDiagnostic: existing?.lastDiagnostic,
-    lastConnectorDiagnostics: existing?.lastConnectorDiagnostics,
-    platformArtifactReceipts,
-  }
+  const previousManagedPackageRoots = managedPluginPackageRoots(pluginID)
+  try {
+    const source = await ensurePluginPackageAvailable(pluginID)
+    const plugin = assertPackagePlugin(pluginID)
+    const existingRecord = readInstalled(plugin.id)
+    const existing = existingRecord
+      ? await migrateInstalledMcpServerEnabled(plugin, existingRecord)
+      : null
+    const config = normalizeConfig(plugin, input.config ?? existing?.config)
+    const mcpServerIDs = generatedMcpServerIDs(plugin)
+    const platformArtifactReceipts = await syncPluginPlatformArtifacts(
+      source,
+      existing,
+    )
+    const timestamp = now()
+    const record: InstalledPlugin = {
+      pluginID: plugin.id,
+      version: plugin.version,
+      enabled: input.enabled ?? existing?.enabled ?? true,
+      mcpServerID: primaryMcpServerID(mcpServerIDs, existing?.mcpServerID),
+      mcpServerIDs,
+      mcpServerEnabled: normalizeMcpServerEnabled(mcpServerIDs, existing?.mcpServerEnabled),
+      skillIDs: generatedSkillIDs(plugin),
+      connectorIDs: generatedConnectorIDs(plugin),
+      mcpRequirementIDs: generatedMcpRequirementIDs(plugin),
+      connectorRequirementIDs: generatedConnectorRequirementIDs(plugin),
+      config,
+      installedAt: existing?.installedAt ?? timestamp,
+      updatedAt: timestamp,
+      lastDiagnostic: existing?.lastDiagnostic,
+      lastConnectorDiagnostics: existing?.lastConnectorDiagnostics,
+      platformArtifactReceipts,
+    }
 
-  return writeInstalled(record)
+    return writeInstalled(record)
+  } catch (error) {
+    await removeNewManagedPluginPackages(pluginID, previousManagedPackageRoots)
+    throw error
+  }
 }
 
 export async function update(pluginID: string, input: UpdateInstalledPluginInput) {

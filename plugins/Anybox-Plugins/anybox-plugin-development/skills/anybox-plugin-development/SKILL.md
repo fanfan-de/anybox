@@ -20,7 +20,8 @@ description: 创建、审查或验证 Anybox 第三方插件包。Use when the u
 3. 编写 `.anybox-plugin/plugin.json`，必须是严格 JSON，只使用运行时支持的顶层字段。
 4. 在插件根目录添加运行文件，例如 `skills/`、`connectors/`、`scripts/`、`docs/` 和 `assets/`。
 5. 使用 `Plugin.listCatalog()` 验证 catalog 能发现插件。
-6. 如果修改了插件系统运行时代码，运行 `bun test Test/plugin.test.ts`。
+6. 更新内置仓库时运行 `pnpm plugins:index`，不要手改或把它当成正式生产目录。
+7. 如果修改了插件系统或分发代码，运行 `pnpm plugins:release:test` 和 `bun test Test/plugin.test.ts`。
 
 ## 插件包结构
 
@@ -45,7 +46,7 @@ description: 创建、审查或验证 Anybox 第三方插件包。Use when the u
 - `<install-root>` 是包含一个或多个插件包目录的父目录；开发新插件时优先把它作为 `ANYBOX_PLUGIN_LOCAL_DIR`。
 - 当前运行时用 `ANYBOX_PLUGIN_LOCAL_DIR` 发现固定本地插件仓库，未设置时默认是 Agent data 目录下的 `plugins/local`。这个目录逻辑上等价于 GitHub 插件仓库，只提供可安装候选项，不受卸载流程删除。
 - `ANYBOX_PLUGIN_INSTALL_DIR` 是受管理安装根目录，用于网络下载或从本地仓库安装时复制出来的插件包。这里的插件逻辑上属于已安装插件，运行时使用这里的副本，卸载时可能删除对应插件包。
-- 运行时只读取 `.anybox-plugin/plugin.json`；根目录 `plugin.json` 不再作为 manifest 入口。
+- 新包和正式 Release 只使用 `.anybox-plugin/plugin.json`；根目录 `plugin.json` 与 `.codex-plugin/plugin.json` 仅作为手动导入兼容入口。
 - `skills`、`connectors`、`scripts`、`docs` 和 `assets` 应放在插件根目录。
 - 插件 ID 使用稳定的小写名称。目录名和 manifest `name` 尽量保持一致。
 - 如果确实需要多个版本并存，也可以使用 `<plugin-id>/<version>/.anybox-plugin/plugin.json`，运行时会选择最高版本。
@@ -73,8 +74,8 @@ description: 创建、审查或验证 Anybox 第三方插件包。Use when the u
 - `connectors`
 - `apps`，仅用于旧兼容
 - `commands`、`agents`，当前是保留字段
-- `skillPreviews` is allowed in repository/registry `plugin.json` files for marketplace preview. `package` is optional and should only be present when a real downloadable artifact exists.
-- Built-in registry `index.json` entries must point directly to HTTPS `.anybox-plugin/plugin.json` manifest URLs. Directory URLs are not supported.
+- `skillPreviews` 可用于仓库 manifest 的市场预览；源 manifest 不提交 `package`，正式 ZIP 元数据由 Release 打包器生成。
+- 内置仓库的 `index.json` 是自动生成的开发清单，不是桌面生产目录。正式桌面从同版本 GitHub Release 动态拉取 v2 目录，且只允许该 Release 的 ZIP。
 
 未知顶层字段会被拒绝。
 
@@ -206,6 +207,10 @@ bun -e "import * as Plugin from './src/plugin/plugin.ts'; console.log(JSON.strin
 修改插件系统运行时代码后运行：
 
 ```powershell
+cd C:\Projects\anybox
+pnpm plugins:index:check
+pnpm plugins:release:test
+
 cd C:\Projects\anybox\packages\anyboxagent
 bun test Test/plugin.test.ts
 ```

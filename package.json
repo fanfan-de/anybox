@@ -1,6 +1,6 @@
 {
   "name": "anybox",
-  "version": "0.1.33",
+  "version": "0.1.34",
   "private": true,
   "description": "Anybox desktop AI agent workspace",
   "main": "index.js",
@@ -34,6 +34,9 @@
     "monitor:dev": "corepack pnpm --filter anybox-monitor dev",
     "monitor:preview": "corepack pnpm --filter anybox-monitor preview",
     "monitor:typecheck": "corepack pnpm --filter anybox-monitor typecheck",
+    "plugins:index": "node ./plugins/Anybox-Plugins/scripts/sync-plugin-index.mjs",
+    "plugins:index:check": "node ./plugins/Anybox-Plugins/scripts/sync-plugin-index.mjs --check",
+    "plugins:release:test": "node --test ./plugins/Anybox-Plugins/scripts/plugin-release-lib.test.mjs",
     "mobile:start": "corepack pnpm --filter anybox-mobile-app start",
     "mobile:android": "corepack pnpm --filter anybox-mobile-app android",
     "mobile:ios": "corepack pnpm --filter anybox-mobile-app ios",

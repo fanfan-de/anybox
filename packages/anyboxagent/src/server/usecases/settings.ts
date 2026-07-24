@@ -393,6 +393,7 @@ function toPluginApiError(error: unknown) {
       case "PLUGIN_CONNECTOR_NOT_CONNECTED":
       case "PLUGIN_PACKAGE_UNAVAILABLE":
       case "PLUGIN_PACKAGE_INVALID":
+      case "PLUGIN_PLATFORM_ARTIFACT_FAILED":
         return new ApiError(400, error.code, error.message)
     }
   }
@@ -1245,7 +1246,11 @@ export async function removeMcpServer(serverID: string) {
 }
 
 export async function listPluginCatalog(input: z.infer<typeof PluginCatalogQuery> = {}) {
-  return input.freshness === "cached" ? Plugin.listCachedCatalog() : await Plugin.listCatalog()
+  try {
+    return input.freshness === "cached" ? Plugin.listCachedCatalog() : await Plugin.listCatalog()
+  } catch (error) {
+    throw toPluginApiError(error)
+  }
 }
 
 export function listInstalledPlugins() {

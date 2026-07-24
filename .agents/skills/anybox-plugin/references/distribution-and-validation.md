@@ -3,7 +3,7 @@
 ## 目录
 
 1. 本地与受管理插件来源
-2. 内置 Registry 规范
+2. 生产目录与开发索引
 3. 远程 URL 兼容行为
 4. 远程安装模型
 5. 插件包安全
@@ -30,9 +30,24 @@
 .cache, .git, .turbo, .vite-temp, node_modules
 ```
 
-## 内置 Registry 规范
+## 生产目录与开发索引
 
-`plugins/Anybox-Plugins/index.json` 是 JSON 数组。生成直接指向规范 manifest 的 HTTPS URL：
+桌面正式版启动 Agent 时，会传入当前桌面版本对应的 GitHub Release 目录 URL：
+
+```text
+https://github.com/fanfan-de/anybox/releases/download/v<desktopVersion>/anybox-plugin-registry-v2.json
+```
+
+打开插件页时，Agent 先用一次请求拉取这份目录，从 `pluginCount` 和 `plugins` 得到插件总数、完整清单及每个插件的 ZIP 下载信息。每个条目都必须使用同一个 Release 标签下的 ZIP，并包含 `sha256` 和精确 `size`。Agent 会原子解析整份文件；任一条目无效都会返回 `PLUGIN_REGISTRY_UNAVAILABLE`，不会静默过滤成部分目录。成功目录会按 URL 和协议版本整体缓存；首次启动且 GitHub 不可达时没有目录可展示，至少成功拉取过一次后才可离线使用已验证缓存。
+
+`plugins/Anybox-Plugins/index.json` 只用于开发清单和兼容 URL 导入，不是正式桌面的生产目录来源。它由以下命令生成和校验：
+
+```powershell
+pnpm plugins:index
+pnpm plugins:index:check
+```
+
+开发索引中的 URL 直接指向规范 manifest：
 
 ```json
 [
@@ -40,19 +55,19 @@
 ]
 ```
 
-新增内置条目时：
+新增仓库插件时：
 
 - 让 URL 以 `/.anybox-plugin/plugin.json` 结尾。
 - 把展开式插件包保存在 `plugins/Anybox-Plugins/<plugin-id>/`。
 - 不要添加 `plugin.meta.json`。
 - 不要提交生成的 ZIP 文件。
-- 除非确实发布并验证了远程制品，否则不要添加顶层 `package` 字段。
+- 源 manifest 不添加顶层 `package` 字段；Release 打包器会把不可变的 ZIP 元数据写入生成目录。
 
 即使解析器接受更广泛的 GitHub URL 形式，也必须遵循这套仓库规范。
 
 ## 远程 URL 兼容行为
 
-远程 Registry 和导入 URL 必须使用 HTTPS。Registry 条目不允许包含查询参数或 fragment。
+远程生产目录、开发索引和手动导入 URL 必须使用 HTTPS。索引条目不允许包含查询参数或 fragment。桌面正式版会把 `ANYBOX_PLUGIN_REGISTRY_INDEX_URL` 设置为版本固定的 Release 目录 URL；独立 Agent 未配置时使用 GitHub `latest/download` 目录。开发或测试可以显式覆盖，也可以设为 `off`。缓存按 URL 和协议版本隔离。
 
 运行时接受：
 
@@ -83,9 +98,9 @@
 }
 ```
 
-安装 ZIP 时，元数据必须提供真实 HTTPS URL 和匹配的 SHA-256。`size` 可选；存在时必须与下载内容匹配。
+正式目录中的 ZIP 元数据必须提供固定 GitHub Release HTTPS URL、匹配的 SHA-256 和精确字节数。手动导入的旧兼容元数据仍可省略 `size`。
 
-### 显式 GitHub Tree
+### 手动 GitHub Tree
 
 ```json
 {
@@ -98,9 +113,9 @@
 
 解析器也接受能够解析出 Repository、Ref 和路径的 GitHub raw 插件包根 URL。
 
-### 推导 GitHub Tree
+### 手动导入时推导 GitHub Tree
 
-如果远程 manifest 托管在可识别的 GitHub 仓库中，而且没有显式 `package`，运行时会根据 manifest 所在的插件包根目录推导 `github-tree` 下载信息。因此，这类插件没有 ZIP 元数据也可以安装。
+如果手动导入的 manifest 托管在可识别的 GitHub 仓库中，而且没有显式 `package`，运行时会根据 manifest 所在的插件包根目录推导 `github-tree` 下载信息。这只是开发兼容能力；正式 v2 目录禁止 `github-tree`。
 
 如果非 GitHub 远程 manifest 没有可用 `package`，也没有匹配的本地展开式插件包，它只能用于目录展示，不能安装。
 
@@ -109,17 +124,17 @@
 安装 ZIP 时：
 
 - 要求 SHA-256 匹配。
-- 拒绝空包和超出限制的压缩包。
-- 拒绝路径穿越、解压目录外路径和符号链接。
-- 要求包中恰好存在一个与预期插件 ID 和版本匹配的 manifest。
+- 拒绝空包、超过 100 MiB 的包和超限解压内容。
+- 拒绝重复路径、路径穿越、解压目录外路径和符号链接。
+- 要求 ZIP 只有一个顶层插件目录，并且只有一个与预期插件 ID 和版本匹配的 manifest。
+- 先复制并校验临时目录，再原子切换安装目录；失败时恢复旧版本。
 
 安装 GitHub Tree 时：
 
-- 复制文件前，把请求的 Ref 解析并固定到 Commit SHA。
-- 拒绝符号链接、Submodule 和不受支持的条目类型。
-- 保证所有路径位于插件包内。
-- 使用 `plugin.ts` 中当前的字节数、文件数量和目录深度限制。
-- 复制后再次校验已安装 manifest。
+- 分支名最多通过一次 GitHub Commit API 解析到 Commit SHA；已经是 SHA 时不访问 API。
+- 从 `codeload.github.com` 一次下载固定 Commit 的仓库 ZIP，不再递归调用 Contents API。
+- 拒绝符号链接、不安全路径、超限归档和不匹配的 manifest。
+- 校验后原子切换安装目录。
 
 长期规范中不要复制固定的数值上限；使用前先检查实时常量。
 
@@ -179,9 +194,33 @@ bun -e "import * as Plugin from './src/plugin/plugin.ts'; console.log(JSON.strin
 修改插件系统代码后运行：
 
 ```powershell
+Set-Location C:\Projects\Anybox
+pnpm plugins:index:check
+pnpm plugins:release:test
+
 Set-Location C:\Projects\Anybox\packages\anyboxagent
 bun test Test/plugin.test.ts
 ```
+
+构建正式插件资产：
+
+```powershell
+node plugins/Anybox-Plugins/scripts/build-plugin-release.mjs `
+  --desktop-version 0.1.34 `
+  --commit <40-char-sha> `
+  --out <output-directory>
+```
+
+输出必须恰好包含 59 个 `anybox-plugin-<id>-<version>.zip`、`anybox-plugin-registry-v2.json` 和 `anybox-plugin-release-manifest.json`。这些生成物不提交到 Git，也不塞进桌面安装器；目录和 ZIP 都作为同一 GitHub Release 的资产发布。
+
+Internal RC 上传最终标签的 prerelease 后，发布工作流会从真实 Release URL 安装一个代表性 ZIP：
+
+```powershell
+bun run packages/anyboxagent/scripts/smoke-plugin-release-install.ts `
+  <anybox-plugin-registry-v2.json> context7
+```
+
+该 smoke 必须读取完整 59 项目录、只下载一次不可变 ZIP，并拒绝访问 `api.github.com`。公开发布会在提升 prerelease 前后逐字节复核全部资产。
 
 如果只修改插件包，优先执行有针对性的目录加载和安装验证。当插件包覆盖了新修改的解析器路径，或风险足以证明有必要时，再运行完整回归测试文件。
 
@@ -211,6 +250,6 @@ packages/anyboxagent/Test/plugin.test.ts
 6. 添加必填的 `credential` 和 `runtime`。
 7. 用受支持的 manifest 字段替换 `plugin.meta.json`。
 8. 把相对于仓库根目录的路径假设改成相对于插件包根目录的路径。
-9. 明确选择本地展开式、ZIP 或 GitHub Tree 安装方式。
+9. 正式目录条目使用桌面 Release ZIP；本地展开式和 GitHub Tree 只用于开发或手动导入。
 10. 验证目录、安装、生成 ID、密钥处理和卸载清理。
 11. 确认没有消费者后再删除旧兼容文件。

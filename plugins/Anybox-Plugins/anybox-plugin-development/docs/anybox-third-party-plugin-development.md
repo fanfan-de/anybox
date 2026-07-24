@@ -63,8 +63,7 @@ my-anybox-plugins/
 
 ### Manifest
 
-`plugin.json` 是插件清单。它是严格 JSON，未知顶层字段会被拒绝。
-Repository and registry `plugin.json` files may also include `skillPreviews` so `index.json` can point directly at each plugin manifest. Include `package` only when a real downloadable artifact exists.
+`plugin.json` 是插件清单。它是严格 JSON，未知顶层字段会被拒绝。仓库 manifest 可以包含 `skillPreviews`，但不应提交 `package`；Anybox 的 Release 打包器会在生成的正式目录中写入不可变下载元数据。
 
 最小清单：
 
@@ -779,8 +778,11 @@ anybox-plugin-examples/
 $env:ANYBOX_PLUGIN_LOCAL_DIR = "C:\Projects\anybox-plugin-examples"
 ```
 
-For the built-in registry, `index.json` is a JSON array of canonical HTTPS manifest URLs such as `https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/<plugin-id>/.anybox-plugin/plugin.json`. Root `plugin.json` and Codex-compatible `.codex-plugin/plugin.json` URLs are accepted only for compatibility. Directory URLs are not supported.
-Zip artifacts are optional remote install artifacts. Do not commit them to the built-in expanded plugin registry unless the matching `package` metadata points to a real downloadable file.
+Anybox 正式桌面版不读取可变的 `master/index.json`。打开插件页时，它先从当前 `v<desktopVersion>` GitHub Release 拉取一次 `anybox-plugin-registry-v2.json`，从中得到插件总数、完整清单以及每个插件的 ZIP URL、SHA-256 和精确大小；用户安装时再按该条目下载一次 ZIP。首次启动离线时无法获得目录；至少成功拉取过一次后，才可使用按 URL 和协议隔离的已验证缓存。
+
+仓库里的 `index.json` 只是自动生成的开发清单。运行 `pnpm plugins:index` 更新，运行 `pnpm plugins:index:check` 校验。它仍使用规范 HTTPS manifest URL，方便开发和手动导入；根 `plugin.json`、`.codex-plugin/plugin.json` 和 GitHub Tree 都只是兼容输入。
+
+ZIP、正式目录和 Release manifest 都是候选构建产物，不提交到 Git，也不会整包内置进桌面安装器。第三方仓库可以继续通过 `ANYBOX_PLUGIN_LOCAL_DIR` 本地开发，或使用手动 URL 导入；GitHub 目录安装会固定一次 Commit 后下载一次仓库归档，不再逐文件调用 Contents API。
 
 ## 常见问题
 
@@ -797,6 +799,16 @@ Zip artifacts are optional remote install artifacts. Do not commit them to the b
 ### 安装时报 `PLUGIN_CONFIG_INVALID`
 
 通常是 `configFields` 里有必填字段，但安装时没有提供。OAuth 插件最常见的是缺少 client ID 或 client secret。
+
+### 商店目录不完整或安装失败
+
+- `PLUGIN_REGISTRY_UNAVAILABLE`：无法从 GitHub 拉取目录、Release 缺少目录资产，或整份目录校验失败；检查 GitHub 网络后重试。
+- `PLUGIN_PACKAGE_UNAVAILABLE`：对应桌面 Release 缺少插件资产。
+- `PLUGIN_PACKAGE_DOWNLOAD_FAILED`：GitHub 不可达或下载超时。
+- `PLUGIN_PACKAGE_INVALID`：大小、SHA-256、ZIP 路径或清单 ID/版本校验失败。
+- `PLUGIN_PLATFORM_ARTIFACT_FAILED`：插件已下载，但当前平台的原生组件安装失败。
+
+安装采用临时目录校验和原子切换；失败不会留下半安装目录，也不会覆盖可用旧版本。
 
 ### 诊断失败，提示没有工具
 

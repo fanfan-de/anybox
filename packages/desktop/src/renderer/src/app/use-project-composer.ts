@@ -12,7 +12,6 @@ import {
   getComposerAttachmentError,
   isComposerAttachmentSupported,
 } from "./composer/attachment-utils"
-import { arePluginCatalogsEqual } from "./plugin-catalog"
 import type {
   ComposerMcpOption,
   ComposerModelOption,
@@ -536,9 +535,9 @@ export function useProjectComposer({
       getProjectPluginSelection({ projectID }),
       getPluginCatalog({ freshness: "cached" }),
     ])
-      .then(([nextPlugins, selection, cachedCatalog]) => {
+      .then(([nextPlugins, selection, catalog]) => {
         if (pluginsRequestRef.current !== requestID) return
-        const pluginOptions = buildComposerPluginOptions(nextPlugins, cachedCatalog)
+        const pluginOptions = buildComposerPluginOptions(nextPlugins, catalog)
         const nextPluginMcpServerIDs = [...new Set(nextPlugins.flatMap((plugin) => plugin.mcpServerIDs))]
         const availablePluginIDs = new Set(pluginOptions.map((plugin) => plugin.value))
         const nextSelectedPluginIDs = selection.pluginIDs.filter((pluginID) => availablePluginIDs.has(pluginID))
@@ -552,39 +551,10 @@ export function useProjectComposer({
         setPlugins(pluginOptions)
         setPluginMcpServerIDs(nextPluginMcpServerIDs)
         setSelectedPluginIDs(nextSelectedPluginIDs)
-
-        void getPluginCatalog({ freshness: "fresh" })
-          .then((freshCatalog) => {
-            if (pluginsRequestRef.current !== requestID) return
-            if (arePluginCatalogsEqual(cachedCatalog, freshCatalog)) return
-            const freshPluginOptions = buildComposerPluginOptions(nextPlugins, freshCatalog)
-            const freshAvailablePluginIDs = new Set(freshPluginOptions.map((plugin) => plugin.value))
-            setPlugins(freshPluginOptions)
-            setSelectedPluginIDs((currentSelectedPluginIDs) => {
-              const freshSelectedPluginIDs = currentSelectedPluginIDs.filter((pluginID) =>
-                freshAvailablePluginIDs.has(pluginID),
-              )
-              if (shouldUseComposerResourceCache) {
-                projectComposerPluginsPayloadCache.set(cacheKey, {
-                  pluginMcpServerIDs: nextPluginMcpServerIDs,
-                  plugins: freshPluginOptions,
-                  selectedPluginIDs: freshSelectedPluginIDs,
-                })
-              }
-              return freshSelectedPluginIDs
-            })
-          })
-          .catch((error) => {
-            if (pluginsRequestRef.current !== requestID) return
-            console.error("[desktop] background project plugin catalog refresh failed:", error)
-          })
       })
       .catch((error) => {
         if (pluginsRequestRef.current !== requestID) return
         console.error("[desktop] refreshProjectComposerPlugins failed:", error)
-        setPlugins([])
-        setPluginMcpServerIDs([])
-        setSelectedPluginIDs([])
       })
       .finally(() => {
         if (pluginsRequestRef.current === requestID) {

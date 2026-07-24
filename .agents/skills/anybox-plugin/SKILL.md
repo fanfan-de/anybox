@@ -52,7 +52,7 @@ description: 构建、说明、迁移、评审或验证 Anybox 插件包及其 .
 - 规范 Connector 条目必须同时包含 `credential` 和 `runtime`；`configFields` 只能作为额外配置。
 - 优先使用 `connectors`，不要为新插件使用旧的 `apps` 字段。
 - 把 `commands` 和 `agents` 视为保留兼容字段，不要声称当前运行时会执行它们。
-- 内置 Registry 使用精确的 manifest URL，即使运行时能够规范化受支持的 GitHub 目录 URL。
+- 开发 Registry 使用精确的 manifest URL；正式 Registry 从同版本 GitHub Release 动态拉取，条目只使用不可变 Release ZIP。
 - 除非确实希望阻止安装，否则不要把风险标记为 `critical`。
 - 迁移或验证期间保留用户文件和工作区中的无关改动。
 

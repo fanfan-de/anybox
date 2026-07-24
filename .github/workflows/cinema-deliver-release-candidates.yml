@@ -28,6 +28,8 @@ jobs:
         run: pnpm --filter anybox-cinema-web test:e2e:deliver
       - name: Desktop capability and release-gate regression
         run: pnpm --filter anybox-desktop-agent typecheck && pnpm --filter anybox-desktop-agent test:media-runtime-lock && pnpm --filter anybox-desktop-agent exec vitest run src/main/managed-agent.test.ts
+      - name: Plugin inventory and deterministic release regression
+        run: pnpm plugins:index:check && pnpm plugins:release:test
       - name: Agent Cinema regression
         working-directory: packages/anyboxagent
         run: >-
@@ -37,11 +39,50 @@ jobs:
           Test/cinema.render-retention.test.ts Test/cinema.render-runner.test.ts Test/cinema.render-runtime.test.ts
           Test/cinema.render-snapshot.test.ts Test/cinema.render-storage.test.ts
 
-  windows-x64:
+  build-plugin-release:
     if: github.ref == 'refs/heads/master'
     needs: verify-release-regressions
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: pnpm install --frozen-lockfile
+      - name: Build and validate deterministic plugin Release assets
+        run: |
+          version="$(node -p "require('./packages/desktop/package.json').version")"
+          node plugins/Anybox-Plugins/scripts/build-plugin-release.mjs \
+            --desktop-version "$version" \
+            --commit "$GITHUB_SHA" \
+            --out "$RUNNER_TEMP/anybox-plugin-release"
+          node packages/desktop/scripts/verify-plugin-release.mjs \
+            --dir "$RUNNER_TEMP/anybox-plugin-release" \
+            --desktop-version "$version" \
+            --commit "$GITHUB_SHA"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: anybox-plugin-release-assets
+          path: ${{ runner.temp }}/anybox-plugin-release
+          if-no-files-found: error
+          retention-days: 30
+
+  windows-x64:
+    if: github.ref == 'refs/heads/master'
+    needs:
+      - verify-release-regressions
+      - build-plugin-release
     runs-on: windows-2022
     environment: cinema-deliver-signing
+    env:
+      ANYBOX_PLUGIN_RELEASE_COMMIT: ${{ github.sha }}
+      ANYBOX_REQUIRE_PREBUILT_PLUGIN_RELEASE: "1"
     steps:
       - uses: actions/checkout@v4
 
@@ -56,6 +97,15 @@ jobs:
           bun-version: latest
 
       - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          name: anybox-plugin-release-assets
+          path: packages/desktop/build/plugin-release
+      - name: Verify Windows plugin Release installs
+        working-directory: packages/anyboxagent
+        run: >-
+          bun test Test/plugin.test.ts --test-name-pattern
+          "installs immutable Release ZIPs|loads Chrome through|installs and removes Computer Use"
 
       - name: Build release-strict signed Windows candidate
         env:
@@ -89,9 +139,14 @@ jobs:
 
   macos-arm64:
     if: github.ref == 'refs/heads/master'
-    needs: verify-release-regressions
+    needs:
+      - verify-release-regressions
+      - build-plugin-release
     runs-on: macos-14
     environment: cinema-deliver-signing
+    env:
+      ANYBOX_PLUGIN_RELEASE_COMMIT: ${{ github.sha }}
+      ANYBOX_REQUIRE_PREBUILT_PLUGIN_RELEASE: "1"
     steps:
       - uses: actions/checkout@v4
       - name: Require native Apple Silicon runner
@@ -108,6 +163,15 @@ jobs:
           bun-version: latest
 
       - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          name: anybox-plugin-release-assets
+          path: packages/desktop/build/plugin-release
+      - name: Verify macOS plugin Release installs
+        working-directory: packages/anyboxagent
+        run: >-
+          bun test Test/plugin.test.ts --test-name-pattern
+          "installs immutable Release ZIPs|loads Chrome through"
 
       - name: Prepare Apple notarization API key
         env:
@@ -163,9 +227,14 @@ jobs:
 
   linux-x64:
     if: github.ref == 'refs/heads/master'
-    needs: verify-release-regressions
+    needs:
+      - verify-release-regressions
+      - build-plugin-release
     runs-on: ubuntu-22.04
     environment: cinema-deliver-signing
+    env:
+      ANYBOX_PLUGIN_RELEASE_COMMIT: ${{ github.sha }}
+      ANYBOX_REQUIRE_PREBUILT_PLUGIN_RELEASE: "1"
     steps:
       - uses: actions/checkout@v4
       - name: Require native Linux x64 runner
@@ -187,6 +256,15 @@ jobs:
           sudo apt-get install --yes fakeroot librsvg2-bin
 
       - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          name: anybox-plugin-release-assets
+          path: packages/desktop/build/plugin-release
+      - name: Verify Linux plugin Release installs
+        working-directory: packages/anyboxagent
+        run: >-
+          bun test Test/plugin.test.ts --test-name-pattern
+          "installs immutable Release ZIPs"
 
       - name: Build release-strict Linux AppImage and deb candidate
         run: pnpm --filter anybox-desktop-agent run dist --linux --x64

@@ -195,10 +195,15 @@ if (fs.existsSync(builtinPluginsRoot)) {
   process.exit(1)
 }
 
-const pluginRegistryPath = path.join(runtimeDir, "plugins", "registry", "plugin-registry.json")
-if (fs.existsSync(pluginRegistryPath)) {
-  console.error("[desktop][build] agent runtime must not include a bundled plugin registry:")
-  console.error(`- ${pluginRegistryPath}`)
+const pluginsRuntimeRoot = path.join(runtimeDir, "plugins")
+const unexpectedPluginRuntimeFiles = fs.existsSync(pluginsRuntimeRoot)
+  ? listFilesRecursively(pluginsRuntimeRoot)
+  : []
+if (unexpectedPluginRuntimeFiles.length > 0) {
+  console.error("[desktop][build] agent runtime must not bundle plugin registries, packages, or ZIP assets:")
+  for (const filePath of unexpectedPluginRuntimeFiles) {
+    console.error(`- ${filePath}`)
+  }
   process.exit(1)
 }
 

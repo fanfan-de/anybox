@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const electronAppMock = vi.hoisted(() => ({
   name: "Anybox",
+  version: "0.1.34",
   isPackaged: false,
   appPath: "",
   paths: {
@@ -23,6 +24,7 @@ vi.mock("electron", () => ({
       return electronAppMock.isPackaged
     },
     getName: vi.fn(() => electronAppMock.name),
+    getVersion: vi.fn(() => electronAppMock.version),
     getAppPath: vi.fn(() => electronAppMock.appPath),
     getPath: vi.fn((name: string) => electronAppMock.paths[name] ?? ""),
   },
@@ -73,6 +75,7 @@ async function withProcessEnv<T>(
 
 beforeEach(() => {
   electronAppMock.name = "Anybox"
+  electronAppMock.version = "0.1.34"
   electronAppMock.isPackaged = false
   electronAppMock.appPath = ""
   electronAppMock.paths = {
@@ -162,10 +165,32 @@ describe("managed agent workspace dependencies", () => {
         expect(env[managedAgentInternals.env.agentDataDir]).toBe(agentDataDir)
         expect(env[managedAgentInternals.env.desktopProcessID]).toBe(String(process.pid))
         expect(String(env[managedAgentInternals.env.protectedProcessNames])).toContain("anybox.exe")
+        expect(env[managedAgentInternals.env.pluginSourcePackages]).toBe("0")
+        expect(env[managedAgentInternals.env.pluginRegistryURL]).toBe(
+          "https://github.com/fanfan-de/anybox/releases/download/v0.1.34/anybox-plugin-registry-v2.json",
+        )
         expect(env.ANYBOX_CONNECTOR_BUILD_CONFIG).toBe(connectorBuildConfigPath)
         expect(env.ANYBOX_SERVER_PORT).toBe("4567")
       },
     )
+  })
+
+  it("preserves an explicit plugin registry URL override", async () => {
+    const spec = {
+      label: "registry override",
+      command: "bun",
+      args: ["agent-server.js"],
+      sourceRuntime: false,
+    }
+
+    await withProcessEnv({
+      ANYBOX_PLUGIN_REGISTRY_INDEX_URL: "https://registry.example.test/custom.json",
+    }, () => {
+      const env = managedAgentInternals.buildManagedAgentStartEnv(spec, 4096)
+      expect(env[managedAgentInternals.env.pluginRegistryURL]).toBe(
+        "https://registry.example.test/custom.json",
+      )
+    })
   })
 
   it("points source runtimes at the build dependency directory without requiring it to exist", async () => {
@@ -196,6 +221,7 @@ describe("managed agent workspace dependencies", () => {
         const env = managedAgentInternals.buildManagedAgentStartEnv(spec!, 4096)
         expect(env[managedAgentInternals.env.workspaceDependenciesDir]).toBe(dependenciesDir)
         expect(env[managedAgentInternals.env.workspaceDependenciesVersion]).toBeUndefined()
+        expect(env[managedAgentInternals.env.pluginSourcePackages]).toBe("1")
       },
     )
   })

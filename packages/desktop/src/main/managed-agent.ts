@@ -27,6 +27,8 @@ const WORKSPACE_DEPENDENCIES_DIR_ENV = "ANYBOX_WORKSPACE_DEPENDENCIES_DIR"
 const WORKSPACE_DEPENDENCIES_VERSION_ENV = "ANYBOX_WORKSPACE_DEPENDENCIES_VERSION"
 const MANAGED_AGENT_DESKTOP_PROCESS_ID_ENV = "ANYBOX_DESKTOP_PROCESS_ID"
 const MANAGED_AGENT_PROTECTED_PROCESS_NAMES_ENV = "ANYBOX_PROTECTED_PROCESS_NAMES"
+const MANAGED_AGENT_PLUGIN_SOURCE_PACKAGES_ENV = "ANYBOX_PLUGIN_INCLUDE_SOURCE_PACKAGES"
+const MANAGED_AGENT_PLUGIN_REGISTRY_URL_ENV = "ANYBOX_PLUGIN_REGISTRY_INDEX_URL"
 const MANAGED_AGENT_PLUGIN_INSTALL_DIR_ENV_KEYS = [
   "ANYBOX_PLUGIN_INSTALL_DIR",
 ]
@@ -285,6 +287,14 @@ function resolveManagedAgentProtectedProcessNames() {
   return [...names].join(",")
 }
 
+function resolveDesktopPluginRegistryURL() {
+  const desktopVersion = app.getVersion().trim()
+  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(desktopVersion)) {
+    throw new Error(`Desktop version '${desktopVersion}' cannot be used for the plugin registry Release URL.`)
+  }
+  return `https://github.com/fanfan-de/anybox/releases/download/v${desktopVersion}/anybox-plugin-registry-v2.json`
+}
+
 async function resolveManagedAgentProxyEnv(targetURL = "https://anybox.com.cn"): Promise<ManagedAgentProxyEnv> {
   if (
     process.env.HTTPS_PROXY?.trim() ||
@@ -372,6 +382,10 @@ function buildManagedAgentStartEnv(
     ANYBOX_SERVER_PORT: String(port),
     [MANAGED_AGENT_DESKTOP_PROCESS_ID_ENV]: String(process.pid),
     [MANAGED_AGENT_PROTECTED_PROCESS_NAMES_ENV]: resolveManagedAgentProtectedProcessNames(),
+    [MANAGED_AGENT_PLUGIN_SOURCE_PACKAGES_ENV]: spec.sourceRuntime ? "1" : "0",
+  }
+  if (!startEnv[MANAGED_AGENT_PLUGIN_REGISTRY_URL_ENV]?.trim()) {
+    startEnv[MANAGED_AGENT_PLUGIN_REGISTRY_URL_ENV] = resolveDesktopPluginRegistryURL()
   }
   if (app.isPackaged) delete startEnv[MANAGED_AGENT_TIMELINE_DELIVERY_ENV]
   for (const key of MANAGED_AGENT_PLUGIN_INSTALL_DIR_ENV_KEYS) {
@@ -745,6 +759,8 @@ export const managedAgentInternals = {
     ffprobeBinary: MANAGED_AGENT_FFPROBE_BINARY_ENV,
     mediaRuntimeID: MANAGED_AGENT_MEDIA_RUNTIME_ID_ENV,
     mediaRuntimeStrict: MANAGED_AGENT_MEDIA_RUNTIME_STRICT_ENV,
+    pluginRegistryURL: MANAGED_AGENT_PLUGIN_REGISTRY_URL_ENV,
+    pluginSourcePackages: MANAGED_AGENT_PLUGIN_SOURCE_PACKAGES_ENV,
     timelineDelivery: MANAGED_AGENT_TIMELINE_DELIVERY_ENV,
   },
   resolveBundledRuntimeCandidates,
@@ -753,6 +769,7 @@ export const managedAgentInternals = {
   resolveManagedAgentLaunchSpecs,
   readWorkspaceDependenciesBundleVersion,
   resolveManagedAgentProtectedProcessNames,
+  resolveDesktopPluginRegistryURL,
   proxyURLFromElectronProxyRule,
   resolveManagedAgentProxyEnv,
   buildManagedAgentStartEnv,

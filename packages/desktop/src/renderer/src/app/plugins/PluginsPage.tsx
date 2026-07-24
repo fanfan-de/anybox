@@ -72,6 +72,7 @@ interface PluginsPageProps {
   onPluginDraftConfigChange: (key: string, value: string) => void
   onPluginDeselect: () => void
   onPluginSelect: (pluginID: string) => void
+  onRetryLoad?: () => void | Promise<void>
   onSaveInstalledPluginConnectorApiKey: (pluginID: string, appID: string) => boolean | Promise<boolean>
   onSaveInstalledPluginConfig: (pluginID: string) => boolean | Promise<boolean>
   onSearchQueryChange?: (value: string) => void
@@ -1132,6 +1133,7 @@ export function PluginsPage({
   onPluginDraftConfigChange,
   onPluginDeselect,
   onPluginSelect,
+  onRetryLoad,
   onSaveInstalledPluginConnectorApiKey,
   onSaveInstalledPluginConfig,
   onSetInstalledPluginEnabled,
@@ -1429,7 +1431,21 @@ export function PluginsPage({
       ) : null}
 
       <div className="plugins-page-main">
-        {loadError ? <div className="settings-banner is-error">{loadError}</div> : null}
+        {loadError ? (
+          <div className="settings-banner is-error" role="alert">
+            <span className="settings-banner-text">{loadError}</span>
+            {onRetryLoad ? (
+              <button
+                className="secondary-button"
+                type="button"
+                disabled={isLoading}
+                onClick={() => void onRetryLoad()}
+              >
+                {t("plugins.error.retry")}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
 
         {isLoading ? (
           <article className="settings-empty-state plugins-loading-state">

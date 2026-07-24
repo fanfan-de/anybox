@@ -4835,16 +4835,16 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 }
 
 .create-session-logo {
-  --create-session-logo-image: url("/anybox-logo-black.svg");
-
   display: block;
-  width: min(64px, 18vw);
-  aspect-ratio: 1888 / 1884;
-  background-image: var(--create-session-logo-image);
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: contain;
-  filter: none;
+  width: 128px;
+  height: 128px;
+  color: var(--text-primary);
+}
+
+.create-session-logo-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .create-session-tip {
@@ -4986,16 +4986,6 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
     filter: none;
     transform: none;
     animation: none;
-  }
-}
-
-:root[data-theme="dark"] .create-session-logo {
-  --create-session-logo-image: url("/anybox-logo-white.svg");
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .create-session-logo {
-    --create-session-logo-image: url("/anybox-logo-white.svg");
   }
 }
 

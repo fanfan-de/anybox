@@ -234,6 +234,73 @@ describe("useSettingsPage plugin state", () => {
     expect(getGlobalMcpServers).toHaveBeenCalledTimes(1)
   })
 
+  it("keeps the last complete plugin snapshot when the remote catalog cannot be reloaded", async () => {
+    const plugin = createPlugin("filesystem", "Filesystem")
+    const installed = createInstalledPlugin("filesystem")
+    const getPluginCatalog = vi.fn()
+      .mockResolvedValueOnce([plugin])
+      .mockRejectedValueOnce(new Error("[PLUGIN_REGISTRY_UNAVAILABLE] remote registry is invalid"))
+
+    window.desktop = {
+      getPluginCatalog,
+      getInstalledPlugins: vi.fn().mockResolvedValue([installed]),
+      getGlobalMcpServers: vi.fn().mockResolvedValue([]),
+    } as unknown as Window["desktop"]
+
+    const { result } = renderHook(
+      () => useSettingsPage({ isPluginsPageOpen: true }),
+      { wrapper },
+    )
+
+    await waitFor(() => expect(result.current.pluginCatalog).toEqual([plugin]))
+    act(() => {
+      result.current.selectPlugin("filesystem")
+    })
+
+    await act(async () => {
+      await result.current.loadPlugins()
+    })
+
+    expect(result.current.pluginCatalog).toEqual([plugin])
+    expect(result.current.installedPlugins).toEqual([installed])
+    expect(result.current.activePluginID).toBe("filesystem")
+    expect(result.current.pluginsError).toBe(
+      "The plugin catalog could not be loaded from GitHub, or this Release is missing it. Check GitHub access, then retry.",
+    )
+    expect(getPluginCatalog).toHaveBeenCalledTimes(2)
+    expect(getPluginCatalog).toHaveBeenNthCalledWith(1, { freshness: "fresh" })
+    expect(getPluginCatalog).toHaveBeenNthCalledWith(2, { freshness: "fresh" })
+  })
+
+  it("still exposes installed plugins when the remote catalog is invalid on first load", async () => {
+    const installed = createInstalledPlugin("filesystem")
+    window.desktop = {
+      getPluginCatalog: vi.fn()
+        .mockRejectedValue(new Error("[PLUGIN_REGISTRY_UNAVAILABLE] remote registry is invalid")),
+      getInstalledPlugins: vi.fn().mockResolvedValue([installed]),
+      getGlobalMcpServers: vi.fn().mockResolvedValue([]),
+    } as unknown as Window["desktop"]
+
+    const { result } = renderHook(
+      () => useSettingsPage({ isPluginsPageOpen: true }),
+      { wrapper },
+    )
+
+    await waitFor(() => {
+      expect(result.current.pluginsError).toBe(
+        "The plugin catalog could not be loaded from GitHub, or this Release is missing it. Check GitHub access, then retry.",
+      )
+    })
+    expect(result.current.installedPlugins).toEqual([installed])
+    expect(result.current.pluginCatalog).toEqual([
+      expect.objectContaining({
+        id: "filesystem",
+        installable: false,
+        source: "package",
+      }),
+    ])
+  })
+
   it("refreshes plugin data and MCP inventory after install, update, and uninstall", async () => {
     const plugin = createPlugin("filesystem", "Filesystem")
     const installed = {

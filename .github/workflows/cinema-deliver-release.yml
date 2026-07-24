@@ -36,11 +36,11 @@ on:
         default: packages/cinema-web/cinema-deliver-release-approval.json
         type: string
       release_tag:
-        description: Public base tag; must be v<desktopVersion>
+        description: Immutable release tag; must be v<desktopVersion>
         required: true
         type: string
       channel:
-        description: Internal RC uses an isolated prerelease tag; public updates both download channels
+        description: Internal RC creates the final tag as a prerelease; public promotes those exact bytes
         required: true
         default: internal-rc
         type: choice
@@ -244,7 +244,14 @@ jobs:
           run-id: ${{ inputs.candidate_run_id }}
           github-token: ${{ github.token }}
 
-      - name: Reverify exact artifact sets and synchronized release matrix
+      - uses: actions/download-artifact@v4
+        with:
+          name: anybox-plugin-release-assets
+          path: release/plugins
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Reverify exact desktop and plugin artifact sets
         id: identity
         run: |
           test -f "$WINDOWS_EVIDENCE_PATH" -a -f "$MACOS_EVIDENCE_PATH" -a -f "$LINUX_EVIDENCE_PATH" -a -f "$APPROVAL_PATH"
@@ -268,6 +275,10 @@ jobs:
           test "$commit_sha" = "$CANDIDATE_SHA"
           test "$(jq -r '.commitSHA' release/macos/candidate-manifest.json)" = "$CANDIDATE_SHA"
           test "$(jq -r '.commitSHA' release/linux/candidate-manifest.json)" = "$CANDIDATE_SHA"
+          node packages/desktop/scripts/verify-plugin-release.mjs \
+            --dir release/plugins \
+            --desktop-version "$version" \
+            --commit "$CANDIDATE_SHA"
           echo "desktop_version=$version" >> "$GITHUB_OUTPUT"
           echo "commit_sha=$commit_sha" >> "$GITHUB_OUTPUT"
 
@@ -280,9 +291,10 @@ jobs:
           windows_manifest_sha="$(sha256sum release/windows/candidate-manifest.json | awk '{print $1}')"
           macos_manifest_sha="$(sha256sum release/macos/candidate-manifest.json | awk '{print $1}')"
           linux_manifest_sha="$(sha256sum release/linux/candidate-manifest.json | awk '{print $1}')"
+          plugin_manifest_sha="$(sha256sum release/plugins/anybox-plugin-release-manifest.json | awk '{print $1}')"
           published_tag=""
           if [ "$PUBLISH_REQUESTED" = "true" ]; then
-            if [ "$CHANNEL" = "internal-rc" ]; then published_tag="${RELEASE_TAG}-rc.${GITHUB_RUN_NUMBER}"; else published_tag="$RELEASE_TAG"; fi
+            published_tag="$RELEASE_TAG"
           fi
           jq -n \
             --arg candidateRunID "$CANDIDATE_RUN_ID" \
@@ -293,8 +305,9 @@ jobs:
             --arg windowsManifestSHA256 "$windows_manifest_sha" \
             --arg macosManifestSHA256 "$macos_manifest_sha" \
             --arg linuxManifestSHA256 "$linux_manifest_sha" \
+            --arg pluginManifestSHA256 "$plugin_manifest_sha" \
             --argjson publishRequested "$PUBLISH_REQUESTED" \
-            '{schemaVersion:1,candidateRunID:$candidateRunID,candidateSHA:$candidateSHA,channel:$channel,baseReleaseTag:$baseReleaseTag,publishedTag:$publishedTag,publishRequested:$publishRequested,windowsManifestSHA256:$windowsManifestSHA256,macosManifestSHA256:$macosManifestSHA256,linuxManifestSHA256:$linuxManifestSHA256}' \
+            '{schemaVersion:1,candidateRunID:$candidateRunID,candidateSHA:$candidateSHA,channel:$channel,baseReleaseTag:$baseReleaseTag,publishedTag:$publishedTag,publishRequested:$publishRequested,windowsManifestSHA256:$windowsManifestSHA256,macosManifestSHA256:$macosManifestSHA256,linuxManifestSHA256:$linuxManifestSHA256,pluginManifestSHA256:$pluginManifestSHA256}' \
             > release/release-gate-record.json
 
       - uses: actions/upload-artifact@v4
@@ -373,9 +386,12 @@ jobs:
             test "$(jq -r '.windowsManifestSHA256' "$record")" = "$(jq -r '.windowsManifestSHA256' release/release-gate-record.json)"
             test "$(jq -r '.macosManifestSHA256' "$record")" = "$(jq -r '.macosManifestSHA256' release/release-gate-record.json)"
             test "$(jq -r '.linuxManifestSHA256' "$record")" = "$(jq -r '.linuxManifestSHA256' release/release-gate-record.json)"
+            test "$(jq -r '.pluginManifestSHA256' "$record")" = "$(jq -r '.pluginManifestSHA256' release/release-gate-record.json)"
             cmp "$1/windows/candidate-manifest.json" release/windows/candidate-manifest.json
             cmp "$1/macos/candidate-manifest.json" release/macos/candidate-manifest.json
             cmp "$1/linux/candidate-manifest.json" release/linux/candidate-manifest.json
+            cmp "$1/plugins/anybox-plugin-release-manifest.json" release/plugins/anybox-plugin-release-manifest.json
+            cmp "$1/plugins/anybox-plugin-registry-v2.json" release/plugins/anybox-plugin-registry-v2.json
           }
           verify_run "$REHEARSAL_RUN_ID"
           verify_identity prior/rehearsal
@@ -386,19 +402,24 @@ jobs:
             test "$(jq -r '.publishRequested' prior/internal-rc/release-gate-record.json)" = "true"
             test "$(jq -r '.channel' prior/internal-rc/release-gate-record.json)" = "internal-rc"
             rc_tag="$(jq -r '.publishedTag' prior/internal-rc/release-gate-record.json)"
+            test "$rc_tag" = "$(jq -r '.baseReleaseTag' release/release-gate-record.json)"
             test "$(gh release view "$rc_tag" --repo "$GH_REPO" --json isPrerelease --jq '.isPrerelease')" = "true"
           fi
 
-      - name: Stage the public GitHub release as a draft
+      - name: Verify the prerelease contains the exact candidate bytes
         if: inputs.channel == 'public'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ inputs.release_tag }}
-          TARGET_COMMIT: ${{ needs.aggregate-release-gate.outputs.commit_sha }}
         run: |
-          mapfile -t assets < <(find release/windows release/macos release/linux -type f ! -name 'candidate-manifest.json')
-          gh release create "$RELEASE_TAG" "${assets[@]}" --repo "$GH_REPO" --target "$TARGET_COMMIT" --generate-notes --draft
+          published="$(mktemp -d)"
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" --dir "$published"
+          mapfile -t expected < <(find release/windows release/macos release/linux release/plugins -type f ! -name 'candidate-manifest.json' | sort)
+          test "$(find "$published" -maxdepth 1 -type f | wc -l | tr -d ' ')" = "${#expected[@]}"
+          for asset in "${expected[@]}"; do
+            cmp "$asset" "$published/$(basename "$asset")"
+          done
 
       - name: Update desktop generic feeds and synchronized download manifest
         if: inputs.channel == 'public'
@@ -422,9 +443,43 @@ jobs:
           TARGET_COMMIT: ${{ needs.aggregate-release-gate.outputs.commit_sha }}
         run: |
           if [ "$RELEASE_CHANNEL" = "internal-rc" ]; then
-            mapfile -t assets < <(find release/windows release/macos release/linux -type f ! -name 'candidate-manifest.json')
-            tag="${BASE_TAG}-rc.${GITHUB_RUN_NUMBER}"
-            gh release create "$tag" "${assets[@]}" --repo "$GH_REPO" --target "$TARGET_COMMIT" --generate-notes --prerelease --latest=false
+            mapfile -t assets < <(find release/windows release/macos release/linux release/plugins -type f ! -name 'candidate-manifest.json' | sort)
+            gh release create "$BASE_TAG" "${assets[@]}" --repo "$GH_REPO" --target "$TARGET_COMMIT" --generate-notes --prerelease --latest=false
           else
-            gh release edit "$BASE_TAG" --repo "$GH_REPO" --draft=false --latest
+            gh release edit "$BASE_TAG" --repo "$GH_REPO" --draft=false --prerelease=false --latest
           fi
+
+      - name: Verify final Release asset bytes remain identical
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          published="$(mktemp -d)"
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" --dir "$published"
+          mapfile -t expected < <(find release/windows release/macos release/linux release/plugins -type f ! -name 'candidate-manifest.json' | sort)
+          test "$(find "$published" -maxdepth 1 -type f | wc -l | tr -d ' ')" = "${#expected[@]}"
+          for asset in "${expected[@]}"; do
+            cmp "$asset" "$published/$(basename "$asset")"
+          done
+
+      - uses: actions/setup-node@v4
+        if: inputs.channel == 'internal-rc'
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+        if: inputs.channel == 'internal-rc'
+        with:
+          version: 10.28.0
+      - uses: oven-sh/setup-bun@v2
+        if: inputs.channel == 'internal-rc'
+        with:
+          bun-version: latest
+      - name: Install prerelease smoke-test dependencies
+        if: inputs.channel == 'internal-rc'
+        run: pnpm install --frozen-lockfile
+      - name: Read the real prerelease catalog and install a representative ZIP
+        if: inputs.channel == 'internal-rc'
+        run: >-
+          bun run packages/anyboxagent/scripts/smoke-plugin-release-install.ts
+          release/plugins/anybox-plugin-registry-v2.json context7

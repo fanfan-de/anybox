@@ -618,6 +618,23 @@ describe("PluginsPage", () => {
     expect(screen.queryByText("Enabled - v2.1.0")).not.toBeInTheDocument()
   })
 
+  it("keeps the current catalog visible beside a retryable load error", () => {
+    const onRetryLoad = vi.fn()
+    render(
+      <PluginsPage
+        {...createProps({
+          loadError: "The remote plugin catalog could not be loaded.",
+          onRetryLoad,
+        })}
+      />,
+    )
+
+    expect(screen.getByRole("button", { name: "Filesystem not installed" })).toBeInTheDocument()
+    expect(screen.getByRole("alert")).toHaveTextContent("The remote plugin catalog could not be loaded.")
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }))
+    expect(onRetryLoad).toHaveBeenCalledTimes(1)
+  })
+
   it("opens selected plugin details as a second-level view and returns to the marketplace", () => {
     const onInstallPlugin = vi.fn()
     const onPluginDeselect = vi.fn()
