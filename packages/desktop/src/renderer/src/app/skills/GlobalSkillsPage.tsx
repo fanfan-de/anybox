@@ -456,22 +456,32 @@ function GlobalSkillListRow({
   deletingGlobalSkillDirectory,
   entry,
   renamingGlobalSkillDirectory,
+  renamingGlobalSkillDraftDirectory,
+  renamingGlobalSkillName,
   onDeleteGlobalSkill,
   onFileSelect,
   onLocalSkillSelect,
   onMoveGlobalSkillDirectoryStart,
   onOpenGlobalSkillsFolder,
+  onRenameGlobalSkill,
+  onRenameGlobalSkillDraftCancel,
+  onRenameGlobalSkillDraftChange,
   onRenameGlobalSkillDraftStart,
 }: {
   activeFilePath: string | null
   deletingGlobalSkillDirectory: string | null
   entry: GlobalSkillListEntry
   renamingGlobalSkillDirectory: string | null
+  renamingGlobalSkillDraftDirectory: string | null
+  renamingGlobalSkillName: string
   onDeleteGlobalSkill: (directoryPath?: string) => void | Promise<void>
   onFileSelect: (path: string) => void | Promise<void>
   onLocalSkillSelect?: () => void
   onMoveGlobalSkillDirectoryStart: (directoryPath: string) => void
   onOpenGlobalSkillsFolder: (targetPath?: string) => void | Promise<void>
+  onRenameGlobalSkill: () => void | Promise<void>
+  onRenameGlobalSkillDraftCancel: () => void
+  onRenameGlobalSkillDraftChange: (value: string) => void
   onRenameGlobalSkillDraftStart: (directoryPath: string) => void
 }) {
   const { t } = useI18n()
@@ -482,7 +492,11 @@ function GlobalSkillListRow({
   const isEnabled = node.enabled ?? true
   const isSelected = containsSkillTreePath(node, activeFilePath)
   const isManaged = !node.readOnly
-  const isPending = deletingGlobalSkillDirectory === node.path || renamingGlobalSkillDirectory === node.path
+  const isRenameDraftVisible = isManaged && renamingGlobalSkillDraftDirectory === node.path
+  const isPending =
+    deletingGlobalSkillDirectory === node.path ||
+    renamingGlobalSkillDirectory === node.path ||
+    isRenameDraftVisible
 
   useEffect(() => {
     if (!isRowMenuOpen) return
@@ -511,37 +525,75 @@ function GlobalSkillListRow({
     void onFileSelect(skillDocumentPath)
   }
 
+  function handleRenameSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    void onRenameGlobalSkill()
+  }
+
+  function handleRenameInputBlur(event: FocusEvent<HTMLInputElement>) {
+    if (event.currentTarget.form?.contains(event.relatedTarget as Node | null)) return
+    onRenameGlobalSkillDraftCancel()
+  }
+
+  function handleRenameInputKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter") {
+      event.preventDefault()
+      void onRenameGlobalSkill()
+      return
+    }
+
+    if (event.key !== "Escape") return
+    event.preventDefault()
+    onRenameGlobalSkillDraftCancel()
+  }
+
   return (
     <div className="skills-workspace-local-row-shell">
-      <button
-        className={joinClassNames("skill-library-result-row", "is-local", isSelected ? "is-selected" : null)}
-        type="button"
-        aria-label={node.name}
-        aria-pressed={isSelected}
-        disabled={!skillDocumentPath}
-        title={node.path}
-        onClick={handleSelect}
-      >
-        <span className="skill-library-product-icon is-local is-skill-default" aria-hidden="true">
-          <SkillDefaultLogo />
-        </span>
-        <span className="skill-library-result-main">
-          <span className="skill-library-result-title-line">
-            <span className="skill-library-result-name">{node.name}</span>
-            <span
-              className={joinClassNames("skills-workspace-status-dot", isEnabled ? "is-enabled" : "is-disabled")}
-              aria-hidden="true"
-            />
+      {isRenameDraftVisible ? (
+        <form className="skill-tree-rename-form" aria-label={`Rename skill ${node.name}`} onSubmit={handleRenameSubmit}>
+          <input
+            autoFocus
+            className="skill-tree-rename-input"
+            aria-label={`Rename global skill ${node.name}`}
+            disabled={renamingGlobalSkillDirectory === node.path}
+            type="text"
+            value={renamingGlobalSkillName}
+            onBlur={handleRenameInputBlur}
+            onChange={(event) => onRenameGlobalSkillDraftChange(event.target.value)}
+            onKeyDown={handleRenameInputKeyDown}
+          />
+        </form>
+      ) : (
+        <button
+          className={joinClassNames("skill-library-result-row", "is-local", isSelected ? "is-selected" : null)}
+          type="button"
+          aria-label={node.name}
+          aria-pressed={isSelected}
+          disabled={!skillDocumentPath}
+          title={node.path}
+          onClick={handleSelect}
+        >
+          <span className="skill-library-product-icon is-local is-skill-default" aria-hidden="true">
+            <SkillDefaultLogo />
           </span>
-          <span className="skill-library-result-summary">
-            {groupLabel || "Local skill"}
+          <span className="skill-library-result-main">
+            <span className="skill-library-result-title-line">
+              <span className="skill-library-result-name">{node.name}</span>
+              <span
+                className={joinClassNames("skills-workspace-status-dot", isEnabled ? "is-enabled" : "is-disabled")}
+                aria-hidden="true"
+              />
+            </span>
+            <span className="skill-library-result-summary">
+              {groupLabel || "Local skill"}
+            </span>
+            <span className="skill-library-result-meta">
+              <span>Local</span>
+              <span>{node.readOnly ? "Read-only" : "Editable"}</span>
+            </span>
           </span>
-          <span className="skill-library-result-meta">
-            <span>Local</span>
-            <span>{node.readOnly ? "Read-only" : "Editable"}</span>
-          </span>
-        </span>
-      </button>
+        </button>
+      )}
       {isManaged ? (
         <div className="skill-tree-menu-shell skills-workspace-local-row-menu" ref={rowMenuRef}>
           <button
@@ -1104,11 +1156,16 @@ export function GlobalSkillsNavigator({
                 deletingGlobalSkillDirectory={deletingGlobalSkillDirectory}
                 entry={entry}
                 renamingGlobalSkillDirectory={renamingGlobalSkillDirectory}
+                renamingGlobalSkillDraftDirectory={renamingGlobalSkillDraftDirectory}
+                renamingGlobalSkillName={renamingGlobalSkillName}
                 onDeleteGlobalSkill={onDeleteGlobalSkill}
                 onFileSelect={onGlobalSkillFileSelect}
                 onLocalSkillSelect={onLocalSkillSelect}
                 onMoveGlobalSkillDirectoryStart={onMoveGlobalSkillDirectoryStart}
                 onOpenGlobalSkillsFolder={onOpenGlobalSkillsFolder}
+                onRenameGlobalSkill={onRenameGlobalSkill}
+                onRenameGlobalSkillDraftCancel={onRenameGlobalSkillDraftCancel}
+                onRenameGlobalSkillDraftChange={onRenameGlobalSkillDraftChange}
                 onRenameGlobalSkillDraftStart={onRenameGlobalSkillDraftStart}
               />
             ))}

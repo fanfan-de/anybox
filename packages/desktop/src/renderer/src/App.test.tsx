@@ -111,6 +111,14 @@ function openActivityRailConfigurationView(label: string | RegExp) {
   fireEvent.click(screen.getByRole("button", { name: label }))
 }
 
+async function openLocalSkillEditor() {
+  const detailTabs = await screen.findByRole("tablist", { name: "Skill detail sections" })
+  fireEvent.click(within(detailTabs).getByRole("tab", { name: "Files" }))
+  const viewMode = screen.getByRole("group", { name: "Skill file view mode" })
+  fireEvent.click(within(viewMode).getByRole("button", { name: "Edit" }))
+  return screen.findByRole("textbox", { name: "Local skill editor" })
+}
+
 function expandSettingsDisclosure(label: string | RegExp) {
   const disclosureButton = screen.getByRole("button", { name: label })
   if (disclosureButton.getAttribute("aria-expanded") === "false") {
@@ -3624,9 +3632,9 @@ describe("App", () => {
       })
     })
 
-    await screen.findByRole("button", { name: "SKILL.md" })
+    await screen.findByRole("button", { name: "layout-review" })
     expect(screen.queryByRole("textbox", { name: "New global skill name" })).not.toBeInTheDocument()
-    expect(screen.getByRole("textbox", { name: "Global skill editor" })).toHaveValue(content)
+    expect(await openLocalSkillEditor()).toHaveValue(content)
   })
 
   it("confirms before switching from dirty prompts to skills", async () => {
@@ -3688,7 +3696,7 @@ describe("App", () => {
     render(<App />)
 
     openActivityRailConfigurationView("Open skills")
-    const skillEditor = await screen.findByRole("textbox", { name: "Global skill editor" })
+    const skillEditor = await openLocalSkillEditor()
     fireEvent.change(skillEditor, {
       target: {
         value: `${content}\n\nExtra guidance.`,
@@ -3704,7 +3712,7 @@ describe("App", () => {
     expect(confirmSpy).toHaveBeenCalledWith("The current skill has unsaved changes. Switch to Prompts anyway?")
     expect(skillsModeButton).toHaveAttribute("aria-selected", "true")
     expect(promptsModeButton).toHaveAttribute("aria-selected", "false")
-    expect(screen.getByRole("textbox", { name: "Global skill editor" })).toHaveValue(`${content}\n\nExtra guidance.`)
+    expect(screen.getByRole("textbox", { name: "Local skill editor" })).toHaveValue(`${content}\n\nExtra guidance.`)
 
     fireEvent.click(promptsModeButton)
     await screen.findByRole("list", { name: "Prompt presets" })
@@ -3712,12 +3720,9 @@ describe("App", () => {
     confirmSpy.mockRestore()
   })
 
-  it("creates a global skill folder and a nested skill from the tree menu", async () => {
+  it("creates a global skill folder while keeping the local library skill-focused", async () => {
     const root = "C:\\Users\\19128\\.anybox\\skills"
     const folderPath = `${root}\\frontend`
-    const directoryPath = `${folderPath}\\review`
-    const filePath = `${directoryPath}\\SKILL.md`
-    const content = ["---", "name: review", "description: Describe when this skill should be used.", "---", "", "# review"].join("\n")
 
     window.desktop!.getGlobalSkillsTree = vi
       .fn()
@@ -3737,46 +3742,8 @@ describe("App", () => {
           },
         ],
       })
-      .mockResolvedValueOnce({
-        root,
-        items: [
-          {
-            name: "frontend",
-            path: folderPath,
-            kind: "directory",
-            role: "folder",
-            children: [
-              {
-                name: "review",
-                path: directoryPath,
-                kind: "directory",
-                role: "skill",
-                children: [
-                  {
-                    name: "SKILL.md",
-                    path: filePath,
-                    kind: "file",
-                    role: "resource",
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      })
     window.desktop!.createGlobalSkillFolder = vi.fn().mockResolvedValue({
       directory: folderPath,
-    })
-    window.desktop!.createGlobalSkill = vi.fn().mockResolvedValue({
-      directory: directoryPath,
-      file: {
-        path: filePath,
-        content,
-      },
-    })
-    window.desktop!.readGlobalSkillFile = vi.fn().mockResolvedValue({
-      path: filePath,
-      content,
     })
 
     render(<App />)
@@ -3797,23 +3764,11 @@ describe("App", () => {
         parentDirectory: null,
       })
     })
-    await screen.findByRole("button", { name: "frontend" })
-
-    fireEvent.click(screen.getByRole("button", { name: "Actions for frontend" }))
-    fireEvent.click(await screen.findByRole("menuitem", { name: "New skill here" }))
-    fireEvent.change(screen.getByRole("textbox", { name: "New global skill name" }), {
-      target: { value: "review" },
-    })
-    fireEvent.click(screen.getByRole("button", { name: "Create" }))
-
     await waitFor(() => {
-      expect(window.desktop!.createGlobalSkill).toHaveBeenCalledWith({
-        name: "review",
-        parentDirectory: folderPath,
-      })
+      expect(screen.queryByRole("textbox", { name: "New global skill name" })).not.toBeInTheDocument()
     })
-    expect(await screen.findByRole("button", { name: "SKILL.md" })).toBeInTheDocument()
-    expect(screen.getByRole("textbox", { name: "Global skill editor" })).toHaveValue(content)
+    expect(screen.queryByRole("button", { name: "frontend" })).not.toBeInTheDocument()
+    expect(window.desktop!.createGlobalSkill).not.toHaveBeenCalled()
   })
 
   it("moves a global skill into a selected folder", async () => {
@@ -3893,7 +3848,7 @@ describe("App", () => {
     render(<App />)
 
     openActivityRailConfigurationView("Open skills")
-    expect(await screen.findByRole("textbox", { name: "Global skill editor" })).toHaveValue(content)
+    expect(await openLocalSkillEditor()).toHaveValue(content)
 
     fireEvent.click(screen.getByRole("button", { name: "Actions for review" }))
     expect(await screen.findByRole("menuitem", { name: "Rename" })).toBeInTheDocument()
@@ -3914,8 +3869,9 @@ describe("App", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog", { name: "Move skill or folder" })).not.toBeInTheDocument()
     })
-    expect(await screen.findByRole("button", { name: "SKILL.md" })).toBeInTheDocument()
+    expect(await screen.findByRole("button", { name: "review" })).toBeInTheDocument()
     expect(window.desktop!.readGlobalSkillFile).toHaveBeenLastCalledWith({ path: nextFilePath })
+    expect(await openLocalSkillEditor()).toHaveValue(content)
   })
 
   it("opens a local skill folder from its row menu", async () => {
@@ -4193,32 +4149,21 @@ describe("App", () => {
     expect(search.closest(".skills-workspace-search-field")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "algorithmic-art" })).toBeInTheDocument()
     const algorithmicSkillRow = screen.getByRole("button", { name: "algorithmic-art" })
-    const frontendFolderRow = screen.getByRole("button", { name: "frontend" })
-    const rootSkillLabels = Array.from(
-      document.querySelectorAll(".skills-tree-root > .skill-tree-item > .skill-tree-row-shell .skill-tree-row .skill-tree-label"),
+    const reviewSkillRow = screen.getByRole("button", { name: "review" })
+    const localSkillLabels = Array.from(
+      document.querySelectorAll(".skills-workspace-local-skill-list .skill-library-result-name"),
     ).map((element) => element.textContent)
-    expect(rootSkillLabels.slice(0, 2)).toEqual(["frontend", "algorithmic-art"])
-    expect(algorithmicSkillRow).toHaveClass("has-leading-disclosure")
-    expect(frontendFolderRow).not.toHaveClass("has-leading-disclosure")
-    expect(algorithmicSkillRow.firstElementChild).toHaveClass("skill-tree-leading")
-    expect(algorithmicSkillRow.querySelector(".skill-tree-role-icon")).not.toBeInTheDocument()
-    expect(algorithmicSkillRow.querySelector(".lucide-file-text")).not.toBeInTheDocument()
-    expect(frontendFolderRow.firstElementChild).toHaveClass("skill-tree-role-icon", "is-folder")
-    expect(frontendFolderRow.querySelector(".lucide-folder")).toBeInTheDocument()
-    expect(frontendFolderRow.querySelector(".lucide-folder-open")).not.toBeInTheDocument()
-    expect(Array.from(frontendFolderRow.children).some((child) => child.classList.contains("skill-tree-leading"))).toBe(false)
+    expect(localSkillLabels).toEqual(["review", "algorithmic-art"])
+    expect(algorithmicSkillRow).toHaveClass("skill-library-result-row", "is-local")
+    expect(reviewSkillRow).toHaveClass("skill-library-result-row", "is-local")
+    expect(screen.queryByRole("button", { name: "frontend" })).not.toBeInTheDocument()
+    expect(reviewSkillRow).toHaveTextContent("frontend")
 
     fireEvent.change(search, { target: { value: "review" } })
 
     expect(screen.queryByRole("button", { name: "algorithmic-art" })).not.toBeInTheDocument()
-    const expandedFrontendFolderRow = screen.getByRole("button", { name: "frontend" })
-    expect(expandedFrontendFolderRow).toBeInTheDocument()
-    expect(expandedFrontendFolderRow.querySelector(".lucide-folder-open")).toBeInTheDocument()
-    expect(expandedFrontendFolderRow.querySelector(".lucide-folder")).not.toBeInTheDocument()
-    const reviewSkillRow = screen.getByRole("button", { name: "review" })
-    expect(reviewSkillRow.querySelector(".skill-tree-role-icon")).not.toBeInTheDocument()
-    expect(reviewSkillRow.querySelector(".lucide-file-text")).not.toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "SKILL.md" }).querySelector(".lucide-file-text")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "review" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "frontend" })).not.toBeInTheDocument()
 
     fireEvent.change(search, { target: { value: "missing" } })
 
@@ -4263,22 +4208,30 @@ describe("App", () => {
 
     openActivityRailConfigurationView("Open skills")
 
-    const editor = await screen.findByRole("textbox", { name: "Global skill editor" })
+    expect(await screen.findByRole("button", { name: "Delete" })).toHaveClass("secondary-button", "is-danger")
+    const detailTabs = screen.getByRole("tablist", { name: "Skill detail sections" })
+    fireEvent.click(within(detailTabs).getByRole("tab", { name: "Files" }))
+
+    expect(screen.getByRole("heading", { name: "Preview Heading" })).toBeInTheDocument()
+    expect(screen.getByText("First task")).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }))
+
+    const editor = await screen.findByRole("textbox", { name: "Local skill editor" })
     expect(editor).toHaveValue(content)
-    expect(screen.getByRole("button", { name: "Delete" })).toHaveClass("secondary-button", "is-danger")
     await waitFor(() => {
       expect(editor).toHaveFocus()
     })
 
     fireEvent.click(screen.getByRole("button", { name: "Preview" }))
 
-    expect(screen.queryByRole("textbox", { name: "Global skill editor" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("textbox", { name: "Local skill editor" })).not.toBeInTheDocument()
     expect(screen.getByRole("heading", { name: "Preview Heading" })).toBeInTheDocument()
     expect(screen.getByText("First task")).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole("button", { name: "Edit" }))
 
-    const reopenedEditor = screen.getByRole("textbox", { name: "Global skill editor" })
+    const reopenedEditor = screen.getByRole("textbox", { name: "Local skill editor" })
     expect(reopenedEditor).toHaveValue(content)
     await waitFor(() => {
       expect(reopenedEditor).toHaveFocus()
@@ -4286,7 +4239,7 @@ describe("App", () => {
 
     fireEvent.change(reopenedEditor, { target: { value: `${content}\n\nEditable note` } })
 
-    expect(screen.getByRole("textbox", { name: "Global skill editor" })).toHaveValue(`${content}\n\nEditable note`)
+    expect(screen.getByRole("textbox", { name: "Local skill editor" })).toHaveValue(`${content}\n\nEditable note`)
     expect(screen.getByRole("button", { name: "Save" })).not.toBeDisabled()
   })
 
@@ -4333,20 +4286,11 @@ describe("App", () => {
 
     openActivityRailConfigurationView("Open skills")
 
-    expect(await screen.findByRole("textbox", { name: "Global skill editor" })).toHaveValue(content)
-    const agentBrowserRow = screen.getByRole("button", { name: "agent-browser" })
-    const skillFileRow = screen.getByRole("button", { name: "SKILL.md" })
-    expect(agentBrowserRow).not.toHaveClass("is-active")
-    expect(skillFileRow).toHaveClass("is-active")
-    expect(document.querySelectorAll(".skill-tree-row.is-active")).toHaveLength(1)
-
-    fireEvent.click(agentBrowserRow)
-
-    expect(agentBrowserRow).toHaveClass("is-active")
-    expect(screen.queryByRole("button", { name: "SKILL.md" })).not.toBeInTheDocument()
-    expect(document.querySelectorAll(".skill-tree-row.is-active")).toHaveLength(1)
-
-    fireEvent.click(screen.getByRole("button", { name: "Preview" }))
+    const agentBrowserRow = await screen.findByRole("button", { name: "agent-browser" })
+    expect(agentBrowserRow).toHaveClass("is-selected")
+    expect(document.querySelectorAll(".skill-library-result-row.is-selected")).toHaveLength(1)
+    fireEvent.click(screen.getByRole("tab", { name: "Files" }))
+    expect(screen.getByRole("button", { name: "SKILL.md" })).toBeInTheDocument()
 
     const metadata = screen.getByRole("region", { name: "Skill metadata" })
     expect(within(metadata).getByText("Skill Metadata")).toBeInTheDocument()
@@ -4354,16 +4298,16 @@ describe("App", () => {
     expect(within(metadata).getByText("Hidden")).toBeInTheDocument()
     expect(within(metadata).getByText("Bash(agent-browser:*)")).toBeInTheDocument()
     expect(within(metadata).getByText("Bash(npx agent-browser:*)")).toBeInTheDocument()
-    expect(screen.getByRole("heading", { name: "agent-browser" })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "agent-browser", level: 1 })).toBeInTheDocument()
     expect(screen.queryByText(/name: agent-browser/)).not.toBeInTheDocument()
     expect(screen.queryByText(/allowed-tools:/)).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole("button", { name: "Edit" }))
 
-    expect(screen.getByRole("textbox", { name: "Global skill editor" })).toHaveValue(content)
+    expect(screen.getByRole("textbox", { name: "Local skill editor" })).toHaveValue(content)
   })
 
-  it("renames a global skill from the tree actions menu", async () => {
+  it("renames a global skill from the local library row actions", async () => {
     const root = "C:\\Users\\19128\\.anybox\\skills"
     const oldDirectoryPath = `${root}\\layout-review`
     const oldFilePath = `${oldDirectoryPath}\\SKILL.md`
@@ -4431,7 +4375,7 @@ describe("App", () => {
     const oldDirectoryButton = await screen.findByRole("button", { name: "layout-review" })
     fireEvent.doubleClick(oldDirectoryButton)
     expect(screen.queryByRole("textbox", { name: "Rename global skill layout-review" })).not.toBeInTheDocument()
-    fireEvent.contextMenu(oldDirectoryButton)
+    fireEvent.click(screen.getByRole("button", { name: "Actions for layout-review" }))
     fireEvent.click(await screen.findByRole("menuitem", { name: "Rename" }))
 
     const renameInput = await screen.findByRole("textbox", { name: "Rename global skill layout-review" })
@@ -4447,7 +4391,7 @@ describe("App", () => {
 
     await screen.findByRole("button", { name: "layout-audit" })
     expect(screen.queryByRole("textbox", { name: "Rename global skill layout-review" })).not.toBeInTheDocument()
-    expect(screen.getByRole("textbox", { name: "Global skill editor" })).toHaveValue(nextContent)
+    expect(await openLocalSkillEditor()).toHaveValue(nextContent)
   })
 
   it("routes window control clicks through the desktop bridge", () => {
@@ -9465,6 +9409,7 @@ describe("App", () => {
       "Models",
       "Appearance",
       "Developer Mode",
+      "Environments",
       "Storage",
       "Archived Sessions",
     ])
