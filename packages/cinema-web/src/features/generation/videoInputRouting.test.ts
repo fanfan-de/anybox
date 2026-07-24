@@ -5,6 +5,7 @@ import {
   edgeTargetVideoInput,
   nextVideoImageInputIndex,
   normalizeVideoTargetEdgeHandle,
+  type VideoInputRoutingControl,
 } from "./videoInputRouting"
 
 const node = (id: string, cinemaType: CinemaNodeType) => ({ id, data: { cinemaType } })
@@ -15,6 +16,17 @@ const edge = (id: string, source: string, data?: Record<string, unknown>): Edge 
   sourceHandle: "output",
   targetHandle: "input",
   ...(data ? { data } : {}),
+})
+const input = (
+  inputKey: string,
+  role: string,
+  slot: VideoInputRoutingControl["slot"],
+  modality = "image",
+): VideoInputRoutingControl => ({
+  inputKey,
+  role,
+  slot,
+  modality,
 })
 
 describe("video input routing", () => {
@@ -37,6 +49,31 @@ describe("video input routing", () => {
 
     expect(edgeTargetVideoInput(firstImageEdge, nodes, edges)).toEqual({ slot: "startFrame" })
     expect(edgeTargetVideoInput(secondImageEdge, nodes, edges)).toEqual({ slot: "endFrame" })
+  })
+
+  it("binds a generic ComfyUI image edge to its only compatible sourceImage input", () => {
+    const imageEdge = edge("comfy-image-edge", "image-1")
+    const sourceImageInput = input(
+      "input:key-source_image:sourceImage",
+      "sourceImage",
+      "sourceImage",
+    )
+
+    expect(edgeTargetVideoInput(imageEdge, nodes, [imageEdge], [sourceImageInput])).toEqual({
+      inputKey: "input:key-source_image:sourceImage",
+      role: "sourceImage",
+      slot: "sourceImage",
+    })
+  })
+
+  it("does not guess between multiple compatible contract inputs", () => {
+    const imageEdge = edge("ambiguous-image-edge", "image-1")
+    const targetInputs = [
+      input("input:key-source:sourceImage", "sourceImage", "sourceImage"),
+      input("input:key-reference:referenceImage", "referenceImage", "referenceImage"),
+    ]
+
+    expect(edgeTargetVideoInput(imageEdge, nodes, [imageEdge], targetInputs)).toBeNull()
   })
 
   it("preserves explicit input metadata on existing edges", () => {

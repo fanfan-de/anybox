@@ -1275,6 +1275,10 @@ export interface AgentProviderConnectionTestResult {
     | "config_error"
     | "unsupported"
     | "unknown_error"
+    | "ready"
+    | "offline"
+    | "incompatible"
+    | "missing_models"
   checkedAt: number
   message: string
   errorCode?: string

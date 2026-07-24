@@ -3,6 +3,7 @@ import { subscriptionTranslations } from "../subscription-translations"
 import { skillLibraryTranslations } from "../skill-library-translations"
 import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
 import { environmentEnUS } from "../environment-translations"
+import { cinemaWorkflowTranslations } from "../cinema-workflow-translations"
 
 export const frFR = {
   "app.loading": "Chargement",
@@ -301,6 +302,16 @@ export const frFR = {
   "settings.videoProviders.emptyCopy": "Les fournisseurs de tâches image et vidéo disponibles apparaîtront ici.",
   "settings.videoProviders.credentialPlaceholder": "Saisir la clé API ou accessKey:secretKey",
   "settings.videoProviders.storedCredentialPlaceholder": "Identifiant stocké détecté. Laissez vide pour le conserver.",
+  "settings.videoProviders.noAuthentication": "Aucune authentification requise",
+  "settings.videoProviders.readinessLabel": "État de préparation",
+  "settings.videoProviders.readinessReady": "Prêt",
+  "settings.videoProviders.readinessNeedsAttention": "Intervention requise",
+  "settings.videoProviders.readinessDetail": "Résultat du contrôle",
+  "settings.videoProviders.missingNodes": "Nœuds manquants",
+  "settings.videoProviders.missingModels": "Fichiers de modèle manquants",
+  "settings.videoProviders.serviceStatus": "Service",
+  "settings.videoProviders.nodesStatus": "Nœuds",
+  "settings.videoProviders.modelsStatus": "Fichiers de modèle",
   "settings.videoProviders.endpointLabel": "Point d'accès",
   "settings.videoProviders.endpointCurrentLabel": "Point d'accès actuel",
   "settings.videoProviders.endpointSourceDefault": "Point d'accès par défaut",
@@ -1415,4 +1426,5 @@ export const frFR = {
   "mcp.validation.requireToolNames": "Les filtres d'outils nommés nécessitent au moins un nom d'outil.",
   ...pluginOwnershipTranslations.enUS,
   ...environmentEnUS,
+  ...cinemaWorkflowTranslations.enUS,
 } as const satisfies Record<TranslationKey, string>

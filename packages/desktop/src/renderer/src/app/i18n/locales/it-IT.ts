@@ -3,6 +3,7 @@ import { subscriptionTranslations } from "../subscription-translations"
 import { skillLibraryTranslations } from "../skill-library-translations"
 import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
 import { environmentEnUS } from "../environment-translations"
+import { cinemaWorkflowTranslations } from "../cinema-workflow-translations"
 
 export const itIT = {
   "app.loading": "Caricamento",
@@ -301,6 +302,16 @@ export const itIT = {
   "settings.videoProviders.emptyCopy": "I provider disponibili per attività di immagini e video appariranno qui.",
   "settings.videoProviders.credentialPlaceholder": "Inserisci chiave API o accessKey:secretKey",
   "settings.videoProviders.storedCredentialPlaceholder": "Credenziale rilevata. Lascia vuoto per mantenerla.",
+  "settings.videoProviders.noAuthentication": "Nessuna autenticazione richiesta",
+  "settings.videoProviders.readinessLabel": "Stato del runtime",
+  "settings.videoProviders.readinessReady": "Pronto",
+  "settings.videoProviders.readinessNeedsAttention": "Richiede attenzione",
+  "settings.videoProviders.readinessDetail": "Risultato del controllo",
+  "settings.videoProviders.missingNodes": "Nodi mancanti",
+  "settings.videoProviders.missingModels": "File modello mancanti",
+  "settings.videoProviders.serviceStatus": "Servizio",
+  "settings.videoProviders.nodesStatus": "Nodi",
+  "settings.videoProviders.modelsStatus": "File modello",
   "settings.videoProviders.endpointLabel": "Endpoint",
   "settings.videoProviders.endpointCurrentLabel": "Endpoint corrente",
   "settings.videoProviders.endpointSourceDefault": "Endpoint predefinito",
@@ -1415,4 +1426,5 @@ export const itIT = {
   "mcp.validation.requireToolNames": "I filtri per strumenti nominati richiedono almeno un nome di strumento.",
   ...pluginOwnershipTranslations.enUS,
   ...environmentEnUS,
+  ...cinemaWorkflowTranslations.enUS,
 } as const satisfies Record<TranslationKey, string>

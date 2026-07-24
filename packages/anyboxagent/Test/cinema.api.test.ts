@@ -4,6 +4,8 @@ import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promi
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { createServerApp } from "#server/server.ts"
+import * as Config from "#config/config.ts"
+import { clearComfyUIProfileCacheForTest } from "#cinema/comfyui-runtime.ts"
 import {
   setCinemaImageRuntimeDependenciesForTest,
   setCinemaTextRuntimeDependenciesForTest,
@@ -38,6 +40,9 @@ interface CinemaProjectSummary {
   root: string
   initialized: boolean
   project?: Record<string, unknown>
+  capabilities: {
+    timelineDelivery: boolean
+  }
 }
 
 interface CinemaCanvasDocument {
@@ -534,14 +539,23 @@ const TEST_DUPLICATE_ID_IMAGE_PROVIDER_CATALOG = {
 
 interface CinemaGenerationTask {
   id: string
+  operationID?: string
   projectID: string
   providerID: string
-  modelID: string
+  target: {
+    kind: "model"
+    modelID: string
+  } | {
+    kind: "workflow"
+    workflowID: string
+    revision: string
+  }
   mode: string
   title: string
   status: string
   taskNodeID: string
   providerTaskRef?: Record<string, unknown>
+  errorCode?: string
   progress?: {
     phase: string
     percent?: number
@@ -1599,7 +1613,10 @@ describe("cinema api", () => {
       const task = JSON.parse(await readFile(join(root, ".anybox-cinema", "tasks", `${generateBody.data!.taskID}.json`), "utf8")) as CinemaGenerationTask
       expect(task).toMatchObject({
         providerID: "mockimage",
-        modelID: "mock-image",
+        target: {
+          kind: "model",
+          modelID: "mock-image",
+        },
         mode: "text-to-image",
         taskNodeID: "image-gen",
         status: "queued",
@@ -1858,7 +1875,10 @@ describe("cinema api", () => {
       const task = JSON.parse(await readFile(join(root, ".anybox-cinema", "tasks", `${generateBody.data!.taskID}.json`), "utf8")) as CinemaGenerationTask
       expect(task).toMatchObject({
         providerID: "duplicate",
-        modelID: "shared-model",
+        target: {
+          kind: "model",
+          modelID: "shared-model",
+        },
         mode: "text-to-image",
         taskNodeID: "image-gen",
       })
@@ -2656,6 +2676,63 @@ describe("cinema api", () => {
     }
   })
 
+  test("imports workflow media using its detected MIME and rejects spoofed content", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+
+    try {
+      const project = await createProject(app, root)
+      await initializeCinemaProject(root)
+      const videoBytes = Buffer.concat([
+        Buffer.from([0x00, 0x00, 0x00, 0x18]),
+        Buffer.from("ftypisom", "ascii"),
+        Buffer.from([0x00, 0x00, 0x02, 0x00]),
+        Buffer.from("isomiso2", "ascii"),
+      ])
+      const importResponse = await app.request(
+        `http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/assets/media-imports`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            fileName: "reference.mp4",
+            mimeType: "video/mp4",
+            dataBase64: videoBytes.toString("base64"),
+          }),
+        },
+      )
+      const importBody = await readJson<{
+        asset: { kind: string; path: string; mimeType: string; sizeBytes: number }
+      }>(importResponse)
+
+      expect(importResponse.status).toBe(200)
+      expect(importBody.data?.asset).toMatchObject({
+        kind: "video",
+        mimeType: "video/mp4",
+        sizeBytes: videoBytes.byteLength,
+      })
+      expect(importBody.data?.asset.path).toMatch(/^assets\/imported\/reference-import-.+\.mp4$/)
+
+      const spoofedResponse = await app.request(
+        `http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/assets/media-imports`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            fileName: "spoofed.mp4",
+            mimeType: "video/mp4",
+            dataBase64: Buffer.from("not a video", "utf8").toString("base64"),
+          }),
+        },
+      )
+      const spoofedBody = await readJson(spoofedResponse)
+      expect(spoofedResponse.status).toBe(415)
+      expect(spoofedBody.error?.code).toBe("CINEMA_MEDIA_CONTENT_UNSUPPORTED")
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   test("returns a clear error when the text model runtime fails", async () => {
     const app = createServerApp()
     const root = await createTempProjectRoot()
@@ -3073,6 +3150,70 @@ describe("cinema api", () => {
     }
   })
 
+  test("discovers and refreshes Local ComfyUI workflows through the public API without creating prompts", async () => {
+    const previousSettings = await Config.getCinemaVideoProviderSettings("comfyui-local")
+    let promptCalls = 0
+    const seenUsers: Array<string | null> = []
+    const comfy = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch(request) {
+        const url = new URL(request.url)
+        if (url.pathname !== "/system_stats" && url.pathname !== "/users") {
+          seenUsers.push(request.headers.get("Comfy-User"))
+        }
+        if (url.pathname === "/system_stats") return Response.json({})
+        if (url.pathname === "/users") return Response.json({ storage: "server" })
+        if (url.pathname === "/object_info") return Response.json({})
+        if (url.pathname === "/userdata") return Response.json([])
+        if (url.pathname === "/prompt") {
+          promptCalls += 1
+          return Response.json({ prompt_id: "unexpected" })
+        }
+        return new Response("missing", { status: 404 })
+      },
+    })
+
+    try {
+      clearComfyUIProfileCacheForTest()
+      await Config.setCinemaVideoProviderSettings(Config.GLOBAL_CONFIG_ID, "comfyui-local", {
+        baseURL: comfy.url.toString().replace(/\/$/, ""),
+      })
+      const app = createServerApp()
+      const getResponse = await app.request("http://localhost/api/cinema/video-providers/comfyui-local/workflows")
+      const getBody = await readJson<{
+        providerID: string
+        status: string
+        userID: string | null
+        workflows: unknown[]
+      }>(getResponse)
+      expect(getResponse.status).toBe(200)
+      expect(getBody.data).toMatchObject({
+        providerID: "comfyui-local",
+        status: "ready",
+        userID: "default",
+        workflows: [],
+      })
+
+      const refreshResponse = await app.request(
+        "http://localhost/api/cinema/video-providers/comfyui-local/workflows/refresh",
+        { method: "POST" },
+      )
+      expect(refreshResponse.status).toBe(200)
+      expect(promptCalls).toBe(0)
+      expect(seenUsers.length).toBeGreaterThan(0)
+      expect(seenUsers.every((value) => value === "default")).toBe(true)
+    } finally {
+      comfy.stop(true)
+      await Config.setCinemaVideoProviderSettings(
+        Config.GLOBAL_CONFIG_ID,
+        "comfyui-local",
+        previousSettings,
+      )
+      clearComfyUIProfileCacheForTest()
+    }
+  })
+
   test("exposes split KlingAI catalog providers with runtime adapters", async () => {
     const app = createServerApp()
     const restoreVideoCatalog = setCinemaVideoProviderCatalogForTest({
@@ -3354,7 +3495,7 @@ describe("cinema api", () => {
 
       expect(response.status).toBe(200)
       expect(body.data?.taskNodeID).toBe("video-gen")
-      expect(body.data?.modelID).toBe("kling-v3")
+      expect(body.data?.target).toEqual({ kind: "model", modelID: "kling-v3" })
       expect(body.data?.input.parameters).toMatchObject({
         inputCombinationMode: "text-to-video.multi-shot",
         endpoint: {
@@ -3383,6 +3524,190 @@ describe("cinema api", () => {
     } finally {
       restoreVideoAdapter()
       restoreVideoCatalog()
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("persists prepared generation tasks before submit and deduplicates operation retries", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+    const restoreVideoCatalog = setCinemaVideoProviderCatalogForTest(TEST_VIDEO_PROVIDER_CATALOG)
+    let createTaskCalls = 0
+    let persistedBeforeSubmit: CinemaGenerationTask | undefined
+    const restoreVideoAdapter = setCinemaVideoProviderAdapterForTest("klingai", {
+      manifest: {} as never,
+      prepareTask: async ({ task }) => ({
+        ...task,
+        providerTaskRef: {
+          promptID: "client-prompt-id",
+          submissionState: "prepared",
+        },
+        input: {
+          ...task.input,
+          parameters: {
+            ...task.input.parameters,
+            seed: 12345,
+          },
+        },
+        progress: {
+          phase: "preparing",
+          message: "Prepared before submit.",
+        },
+      }),
+      createTask: async ({ cinemaRoot, task }) => {
+        createTaskCalls += 1
+        persistedBeforeSubmit = JSON.parse(
+          await readFile(join(cinemaRoot, "tasks", `${task.id}.json`), "utf8"),
+        ) as CinemaGenerationTask
+        return {
+          ...task,
+          status: "queued" as const,
+          providerTaskRef: {
+            ...task.providerTaskRef,
+            submissionState: "submitted",
+          },
+          progress: {
+            phase: "submitted" as const,
+            message: "Submitted.",
+          },
+        }
+      },
+      refreshTask: async ({ task }) => task,
+    })
+
+    try {
+      const project = await createProject(app, root)
+      await initializeCinemaProject(root, createCanvasWithVideoNode())
+      const requestBody = {
+        operationID: "cinema-generation-operation-1",
+        providerID: "klingai",
+        modelID: "klingai/kling-3.0",
+        mode: "text-to-video.multi-shot",
+        prompt: "A calm tracking shot.",
+        taskNodeID: "video-gen",
+        parameters: {
+          aspectRatio: "16:9",
+          duration: 5,
+          resolution: "720p",
+        },
+      }
+      const taskURL = `http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/generation-tasks`
+      const firstResponse = await app.request(taskURL, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(requestBody),
+      })
+      const firstBody = await readJson<CinemaGenerationTask>(firstResponse)
+      const retryResponse = await app.request(taskURL, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(requestBody),
+      })
+      const retryBody = await readJson<CinemaGenerationTask>(retryResponse)
+
+      expect(firstResponse.status).toBe(200)
+      expect(retryResponse.status).toBe(200)
+      expect(createTaskCalls).toBe(1)
+      expect(retryBody.data?.id).toBe(firstBody.data?.id)
+      expect(firstBody.data?.operationID).toBe(requestBody.operationID)
+      expect(persistedBeforeSubmit).toMatchObject({
+        id: firstBody.data?.id,
+        operationID: requestBody.operationID,
+        status: "queued",
+        providerTaskRef: {
+          promptID: "client-prompt-id",
+          submissionState: "prepared",
+        },
+        input: {
+          parameters: {
+            seed: 12345,
+          },
+        },
+        progress: {
+          phase: "preparing",
+        },
+      })
+    } finally {
+      restoreVideoAdapter()
+      restoreVideoCatalog()
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("marks active legacy Local ComfyUI tasks as removed when a project is reopened", async () => {
+    const app = createServerApp()
+    const root = await createTempProjectRoot()
+
+    try {
+      const project = await createProject(app, root)
+      await initializeCinemaProject(root, createCanvasWithVideoNode())
+      const taskDirectory = join(root, ".anybox-cinema", "tasks")
+      await mkdir(taskDirectory, { recursive: true })
+      const taskPaths = Array.from({ length: 9 }, (_, index) => (
+        join(taskDirectory, `task-comfyui-recovery-${index}.json`)
+      ))
+      await Promise.all(taskPaths.map(async (taskPath, index) => {
+        await writeFile(taskPath, `${JSON.stringify({
+          id: `task-comfyui-recovery-${index}`,
+          operationID: `operation-comfyui-recovery-${index}`,
+          projectID: project.id,
+          providerID: "comfyui-local",
+          modelID: "ltx-2.3-22b-dev-fp8",
+          mode: "text-to-video",
+          title: `Recovered local video ${index}`,
+          status: "queued",
+          createdAt: "2026-07-24T00:00:00.000Z",
+          updatedAt: "2026-07-24T00:00:00.000Z",
+          taskNodeID: "video-gen",
+          providerTaskRef: {
+            promptID: `prompt-comfyui-recovery-${index}`,
+            endpoint: "http://127.0.0.1:8188",
+            submissionState: "submitted",
+            missingPollCount: 0,
+          },
+          input: {
+            prompt: "A recovered local video.",
+            sourceNodeIDs: [],
+            parameters: {
+              aspectRatio: "16:9",
+              duration: 3,
+              resolution: "480p",
+              seed: 42,
+            },
+          },
+          outputAssets: [],
+          error: null,
+        }, null, 2)}\n`, "utf8")
+      }))
+
+      const response = await app.request(
+        `http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}`,
+      )
+      expect(response.status).toBe(200)
+
+      let recovered: CinemaGenerationTask[] = []
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        recovered = await Promise.all(taskPaths.map(async (taskPath) => (
+          JSON.parse(await readFile(taskPath, "utf8")) as CinemaGenerationTask
+        )))
+        if (recovered.every((task) => task.status === "failed")) break
+        await Bun.sleep(10)
+      }
+      expect(recovered).toHaveLength(9)
+      expect(recovered[8]).toMatchObject({
+        id: "task-comfyui-recovery-8",
+        status: "failed",
+        errorCode: "COMFYUI_LEGACY_WORKFLOW_REMOVED",
+        error: "The built-in ComfyUI workflow was removed; select a discovered APP mode workflow.",
+        providerTaskRef: {
+          promptID: "prompt-comfyui-recovery-8",
+          submissionState: "submitted",
+        },
+        progress: {
+          phase: "failed",
+        },
+      })
+    } finally {
       await rm(root, { recursive: true, force: true })
     }
   })
@@ -3833,7 +4158,7 @@ describe("cinema api", () => {
 
       expect(createResponse.status).toBe(200)
       expect(createBody.data?.status).toBe("queued")
-      expect(createBody.data?.modelID).toBe("kling-3.0-turbo")
+      expect(createBody.data?.target).toEqual({ kind: "model", modelID: "kling-3.0-turbo" })
       expect(createBody.data?.providerTaskRef).toMatchObject({
         providerID,
         taskID: "turbo-task-1",

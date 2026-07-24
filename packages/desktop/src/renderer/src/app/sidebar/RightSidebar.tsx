@@ -114,6 +114,7 @@ interface RightSidebarProps {
   onPreviewOpen: () => void
   onPreviewOpenExternal: () => void | Promise<void>
   onPreviewOpenUrl: (url: string) => void
+  onOpenCinemaProviderSettings?: (providerID: string) => void
   onPreviewReload: () => void
   onPermissionRequestResponse: (input: {
     sessionID: string
@@ -280,6 +281,7 @@ export function RightSidebar({
   onPreviewOpen,
   onPreviewOpenExternal,
   onPreviewOpenUrl,
+  onOpenCinemaProviderSettings,
   onPreviewReload,
   onPermissionRequestResponse,
   onSideChatCancelSend,
@@ -451,6 +453,7 @@ export function RightSidebar({
             onOpen={onPreviewOpen}
             onOpenExternal={onPreviewOpenExternal}
             onOpenUrl={onPreviewOpenUrl}
+            onOpenCinemaProviderSettings={onOpenCinemaProviderSettings}
             onReload={onPreviewReload}
             workspaceRoot={activeTab.workspaceRoot ?? activeWorkspaceFileScopeDirectory ?? activeSessionDirectory}
           />

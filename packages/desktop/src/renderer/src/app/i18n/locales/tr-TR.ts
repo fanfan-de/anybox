@@ -3,6 +3,7 @@ import { subscriptionTranslations } from "../subscription-translations"
 import { skillLibraryTranslations } from "../skill-library-translations"
 import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
 import { environmentEnUS } from "../environment-translations"
+import { cinemaWorkflowTranslations } from "../cinema-workflow-translations"
 
 export const trTR = {
   "app.loading": "Yükleniyor",
@@ -301,6 +302,16 @@ export const trTR = {
   "settings.videoProviders.emptyCopy": "Kullanılabilir görüntü ve video görev sağlayıcıları burada görünecek.",
   "settings.videoProviders.credentialPlaceholder": "API anahtarı veya accessKey:secretKey girin",
   "settings.videoProviders.storedCredentialPlaceholder": "Depolanmış kimlik bilgisi algılandı. Korumak için boş bırakın.",
+  "settings.videoProviders.noAuthentication": "Kimlik doğrulama gerektirmez",
+  "settings.videoProviders.readinessLabel": "Çalışma zamanı hazırlığı",
+  "settings.videoProviders.readinessReady": "Hazır",
+  "settings.videoProviders.readinessNeedsAttention": "İlgilenilmesi gerekiyor",
+  "settings.videoProviders.readinessDetail": "Kontrol sonucu",
+  "settings.videoProviders.missingNodes": "Eksik düğümler",
+  "settings.videoProviders.missingModels": "Eksik model dosyaları",
+  "settings.videoProviders.serviceStatus": "Hizmet",
+  "settings.videoProviders.nodesStatus": "Düğümler",
+  "settings.videoProviders.modelsStatus": "Model dosyaları",
   "settings.videoProviders.endpointLabel": "Uç Nokta",
   "settings.videoProviders.endpointCurrentLabel": "Mevcut uç nokta",
   "settings.videoProviders.endpointSourceDefault": "Varsayılan uç nokta",
@@ -1415,4 +1426,5 @@ export const trTR = {
   "mcp.validation.requireToolNames": "Adlandırılmış araç filtreleri en az bir araç adı gerektirir.",
   ...pluginOwnershipTranslations.enUS,
   ...environmentEnUS,
+  ...cinemaWorkflowTranslations.enUS,
 } as const satisfies Record<TranslationKey, string>

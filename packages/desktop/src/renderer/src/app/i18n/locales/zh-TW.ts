@@ -3,6 +3,7 @@ import { subscriptionTranslations } from "../subscription-translations"
 import { skillLibraryTranslations } from "../skill-library-translations"
 import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
 import { environmentZhCN } from "../environment-translations"
+import { cinemaWorkflowTranslations } from "../cinema-workflow-translations"
 
 export const zhTW = {
   "app.loading": "載入中",
@@ -298,6 +299,16 @@ export const zhTW = {
   "settings.videoProviders.emptyCopy": "可用的圖片和影片任務服務商會在這裡顯示。",
   "settings.videoProviders.credentialPlaceholder": "輸入 API key 或 accessKey:secretKey",
   "settings.videoProviders.storedCredentialPlaceholder": "已偵測到憑證，留空以保留。",
+  "settings.videoProviders.noAuthentication": "無需驗證",
+  "settings.videoProviders.readinessLabel": "執行環境就緒狀態",
+  "settings.videoProviders.readinessReady": "已就緒",
+  "settings.videoProviders.readinessNeedsAttention": "需要處理",
+  "settings.videoProviders.readinessDetail": "檢查結果",
+  "settings.videoProviders.missingNodes": "缺少節點",
+  "settings.videoProviders.missingModels": "缺少模型檔案",
+  "settings.videoProviders.serviceStatus": "服務",
+  "settings.videoProviders.nodesStatus": "節點",
+  "settings.videoProviders.modelsStatus": "模型檔案",
   "settings.videoProviders.endpointLabel": "呼叫網域",
   "settings.videoProviders.endpointCurrentLabel": "目前生效網域",
   "settings.videoProviders.endpointSourceDefault": "預設網域",
@@ -1415,4 +1426,5 @@ export const zhTW = {
   "settings.account.communityQrAlt": "Anybox 用戶交流群 QR Code",
   ...pluginOwnershipTranslations.zhTW,
   ...environmentZhCN,
+  ...cinemaWorkflowTranslations.zhTW,
 } as const satisfies Record<TranslationKey, string>

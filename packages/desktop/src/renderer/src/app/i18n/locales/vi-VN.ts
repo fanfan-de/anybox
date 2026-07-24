@@ -3,6 +3,7 @@ import { subscriptionTranslations } from "../subscription-translations"
 import { skillLibraryTranslations } from "../skill-library-translations"
 import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
 import { environmentEnUS } from "../environment-translations"
+import { cinemaWorkflowTranslations } from "../cinema-workflow-translations"
 
 export const viVN = {
   "app.loading": "Đang tải",
@@ -301,6 +302,16 @@ export const viVN = {
   "settings.videoProviders.emptyCopy": "Các nhà cung cấp tác vụ hình ảnh và video khả dụng sẽ xuất hiện tại đây.",
   "settings.videoProviders.credentialPlaceholder": "Nhập API key hoặc accessKey:secretKey",
   "settings.videoProviders.storedCredentialPlaceholder": "Đã phát hiện thông tin xác thực đã lưu. Để trống để giữ nguyên.",
+  "settings.videoProviders.noAuthentication": "Không yêu cầu xác thực",
+  "settings.videoProviders.readinessLabel": "Trạng thái sẵn sàng",
+  "settings.videoProviders.readinessReady": "Sẵn sàng",
+  "settings.videoProviders.readinessNeedsAttention": "Cần xử lý",
+  "settings.videoProviders.readinessDetail": "Kết quả kiểm tra",
+  "settings.videoProviders.missingNodes": "Thiếu node",
+  "settings.videoProviders.missingModels": "Thiếu tệp mô hình",
+  "settings.videoProviders.serviceStatus": "Dịch vụ",
+  "settings.videoProviders.nodesStatus": "Node",
+  "settings.videoProviders.modelsStatus": "Tệp mô hình",
   "settings.videoProviders.endpointLabel": "Điểm cuối",
   "settings.videoProviders.endpointCurrentLabel": "Điểm cuối hiện tại",
   "settings.videoProviders.endpointSourceDefault": "Điểm cuối mặc định",
@@ -1415,4 +1426,5 @@ export const viVN = {
   "mcp.validation.requireToolNames": "Bộ lọc công cụ được đặt tên yêu cầu ít nhất một tên công cụ.",
   ...pluginOwnershipTranslations.enUS,
   ...environmentEnUS,
+  ...cinemaWorkflowTranslations.enUS,
 } as const satisfies Record<TranslationKey, string>

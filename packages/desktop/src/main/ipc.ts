@@ -18,6 +18,7 @@ import path from "node:path"
 import type { AppearanceConfigDocument, AppearanceRuntimeState } from "../shared/appearance"
 import type {
   CinemaProviderAuthState,
+  CinemaProviderWorkflowCatalog,
   CinemaVideoProvider,
 } from "@anybox/shared/cinema"
 import {
@@ -5306,6 +5307,23 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
     return result.data
   })
 
+  handleDesktopIpc("desktop:get-cinema-provider-workflows", async (_event, input: { providerID: string }) => {
+    const providerID = input.providerID.trim()
+    const result = await requestAgentJSON<CinemaProviderWorkflowCatalog>(
+      `/api/cinema/video-providers/${encodeURIComponent(providerID)}/workflows`,
+    )
+    return result.data
+  })
+
+  handleDesktopIpc("desktop:refresh-cinema-provider-workflows", async (_event, input: { providerID: string }) => {
+    const providerID = input.providerID.trim()
+    const result = await requestAgentJSON<CinemaProviderWorkflowCatalog>(
+      `/api/cinema/video-providers/${encodeURIComponent(providerID)}/workflows/refresh`,
+      { method: "POST" },
+    )
+    return result.data
+  })
+
   handleDesktopIpc(
     "desktop:save-cinema-video-provider-api-key",
     async (_event, input: { providerID: string; apiKey?: string | null }) => {
@@ -5328,7 +5346,7 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
 
   handleDesktopIpc(
     "desktop:save-cinema-video-provider-settings",
-    async (_event, input: { providerID: string; baseURL?: string | null }) => {
+    async (_event, input: { providerID: string; baseURL?: string | null; userID?: string | null }) => {
       const providerID = input.providerID.trim()
       const result = await requestAgentJSON<CinemaVideoProvider>(
         `/api/cinema/video-providers/${encodeURIComponent(providerID)}/settings`,
@@ -5339,6 +5357,7 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
           },
           body: JSON.stringify({
             baseURL: input.baseURL ?? null,
+            userID: input.userID ?? null,
           }),
         },
       )
@@ -5348,7 +5367,7 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
 
   handleDesktopIpc(
     "desktop:test-cinema-video-provider-connection",
-    async (_event, input: { providerID: string; apiKey?: string | null; baseURL?: string | null }) => {
+    async (_event, input: { providerID: string; apiKey?: string | null; baseURL?: string | null; userID?: string | null }) => {
       const providerID = input.providerID.trim()
       const result = await requestAgentJSON<AgentProviderConnectionTestResult>(
         `/api/cinema/video-providers/${encodeURIComponent(providerID)}/test-connection`,
@@ -5360,6 +5379,7 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
           body: JSON.stringify({
             apiKey: input.apiKey ?? undefined,
             baseURL: input.baseURL ?? undefined,
+            userID: input.userID ?? undefined,
           }),
         },
       )

@@ -1446,6 +1446,46 @@ button {
   font-size: 13px;
 }
 
+.cinema-generation-target-picker {
+  display: flex;
+  align-items: center;
+  flex: 1 1 160px;
+  gap: 4px;
+  min-width: 0;
+}
+
+.cinema-generation-target-picker .cinema-generation-model-select {
+  flex: 1 1 auto;
+  max-width: none;
+}
+
+.cinema-generation-workflow-refresh {
+  display: inline-grid;
+  flex: 0 0 32px;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: var(--cinema-button-toolbar-text);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: var(--cinema-button-toolbar-surface);
+  cursor: pointer;
+}
+
+.cinema-generation-workflow-refresh:hover,
+.cinema-generation-workflow-refresh:focus-visible {
+  color: var(--cinema-button-toolbar-text-hover);
+  border-color: var(--cinema-border);
+  background: var(--cinema-button-toolbar-surface-hover);
+  outline: none;
+}
+
+.cinema-generation-workflow-refresh:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
 .cinema-composer-parameter-control {
   display: grid;
   gap: 3px;
@@ -3090,6 +3130,14 @@ button {
   white-space: nowrap;
 }
 
+.cinema-image-form-control > small {
+  color: var(--cinema-text-3);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
 .cinema-image-form-control.is-json {
   flex-basis: 100%;
 }
@@ -3150,6 +3198,75 @@ button {
   border-color: var(--cinema-border-strong);
   outline: none;
 }
+
+.cinema-generation-media-control {
+  flex-basis: 100%;
+}
+
+.cinema-generation-media-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.cinema-generation-media-import {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  gap: 6px;
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
+  color: var(--cinema-button-secondary-text);
+  font-size: 11px;
+  font-weight: 650;
+  border: 1px solid var(--cinema-button-secondary-border);
+  border-radius: 6px;
+  background: var(--cinema-button-secondary-surface);
+  cursor: pointer;
+}
+
+.cinema-generation-media-import > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cinema-generation-media-import:hover,
+.cinema-generation-media-import:focus-within {
+  color: var(--cinema-button-secondary-text-hover);
+  border-color: var(--cinema-button-secondary-border-hover);
+  background: var(--cinema-button-secondary-surface-hover);
+}
+
+.cinema-generation-media-import.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.cinema-generation-media-actions > button {
+  display: inline-grid;
+  flex: 0 0 32px;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: var(--cinema-text-2);
+  border: 1px solid var(--cinema-border);
+  border-radius: 6px;
+  background: var(--cinema-control-background);
+  cursor: pointer;
+}
+
+.cinema-generation-media-actions > button:hover,
+.cinema-generation-media-actions > button:focus-visible {
+  color: var(--cinema-text);
+  background: var(--cinema-control-hover);
+  outline: none;
+}
+
 
 .cinema-image-form-switch {
   display: inline-flex;
@@ -3828,6 +3945,24 @@ button {
   color: var(--cinema-text-3);
 }
 
+.react-flow__handle.cinema-video-input-slot-handle {
+  top: 24px;
+  left: -14px;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+}
+
+.react-flow__handle.cinema-video-input-slot-handle::before,
+.react-flow__handle.cinema-video-input-slot-handle::after {
+  inset: 6px;
+}
+
+.react-flow__handle.cinema-video-input-slot-handle::after {
+  font-size: 13px;
+}
+
 .cinema-video-input-slot-main {
   display: grid;
   gap: 5px;
@@ -4029,6 +4164,13 @@ button.cinema-video-input-slot-main {
   order: 5;
 }
 
+.cinema-video-gen-error-actions {
+  order: 5;
+  display: grid;
+  justify-items: start;
+  gap: 5px;
+}
+
 @container (min-width: 500px) {
   .cinema-video-gen-scroll {
     gap: 6px;
@@ -4120,6 +4262,11 @@ button.cinema-video-input-slot-main {
   max-width: 180px;
 }
 
+.cinema-video-composer-footer .cinema-generation-target-picker {
+  flex: 1 1 190px;
+  max-width: 220px;
+}
+
 .cinema-video-gen-error {
   display: block;
   min-width: 0;
@@ -4130,6 +4277,30 @@ button.cinema-video-input-slot-main {
   line-height: 1.25;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.cinema-video-gen-settings-link {
+  min-height: 28px;
+  padding: 4px 8px;
+  color: var(--cinema-button-secondary-text);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  border: 1px solid var(--cinema-button-secondary-border);
+  border-radius: 6px;
+  background: var(--cinema-button-secondary-surface);
+  cursor: pointer;
+}
+
+.cinema-video-gen-settings-link:hover {
+  color: var(--cinema-button-secondary-text-hover);
+  border-color: var(--cinema-button-secondary-border-hover);
+  background: var(--cinema-button-secondary-surface-hover);
+}
+
+.cinema-video-gen-settings-link:focus-visible {
+  outline: 2px solid var(--cinema-border-strong);
+  outline-offset: 2px;
 }
 
 .cinema-canvas-nav {
@@ -4805,6 +4976,11 @@ button.cinema-video-input-slot-main {
 
   .cinema-generation-model-select {
     max-width: 48%;
+  }
+
+  .cinema-generation-target-picker,
+  .cinema-video-composer-footer .cinema-generation-target-picker {
+    max-width: none;
   }
 }
 

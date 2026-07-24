@@ -3,6 +3,7 @@ import { subscriptionTranslations } from "../subscription-translations"
 import { skillLibraryTranslations } from "../skill-library-translations"
 import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
 import { environmentEnUS } from "../environment-translations"
+import { cinemaWorkflowTranslations } from "../cinema-workflow-translations"
 
 export const idID = {
   "app.loading": "Memuat",
@@ -301,6 +302,16 @@ export const idID = {
   "settings.videoProviders.emptyCopy": "Penyedia tugas gambar dan video yang tersedia akan muncul di sini.",
   "settings.videoProviders.credentialPlaceholder": "Masukkan API key atau accessKey:secretKey",
   "settings.videoProviders.storedCredentialPlaceholder": "Kredensial terdeteksi. Biarkan kosong untuk menyimpannya.",
+  "settings.videoProviders.noAuthentication": "Tidak memerlukan autentikasi",
+  "settings.videoProviders.readinessLabel": "Kesiapan runtime",
+  "settings.videoProviders.readinessReady": "Siap",
+  "settings.videoProviders.readinessNeedsAttention": "Perlu perhatian",
+  "settings.videoProviders.readinessDetail": "Hasil pemeriksaan",
+  "settings.videoProviders.missingNodes": "Node yang hilang",
+  "settings.videoProviders.missingModels": "File model yang hilang",
+  "settings.videoProviders.serviceStatus": "Layanan",
+  "settings.videoProviders.nodesStatus": "Node",
+  "settings.videoProviders.modelsStatus": "File model",
   "settings.videoProviders.endpointLabel": "Endpoint",
   "settings.videoProviders.endpointCurrentLabel": "Endpoint saat ini",
   "settings.videoProviders.endpointSourceDefault": "Endpoint default",
@@ -1415,4 +1426,5 @@ export const idID = {
   "mcp.validation.requireToolNames": "Filter alat bernama memerlukan setidaknya satu nama alat.",
   ...pluginOwnershipTranslations.enUS,
   ...environmentEnUS,
+  ...cinemaWorkflowTranslations.enUS,
 } as const satisfies Record<TranslationKey, string>

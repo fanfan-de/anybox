@@ -1139,6 +1139,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
   const [isInstallingAppUpdate, setIsInstallingAppUpdate] = useState(false)
   const [isSavingAutomaticUpdates, setIsSavingAutomaticUpdates] = useState(false)
   const [isPreparingSettingsPage, setIsPreparingSettingsPage] = useState(false)
+  const [initialCinemaVideoProviderID, setInitialCinemaVideoProviderID] = useState<string | null>(null)
   const [promptSkillMode, setPromptSkillMode] = useState<PromptSkillMode>("prompts")
   const [skillLibraryMode, setSkillLibraryMode] = useState<SkillLibraryMode>("all")
   const [isSkillMarketplaceOpen, setIsSkillMarketplaceOpen] = useState(false)
@@ -1651,6 +1652,9 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     promptUrlInstallSource,
     providerDrafts,
     cinemaVideoProviderDrafts,
+    cinemaVideoProviderConnectionResults,
+    cinemaProviderWorkflowCatalogs,
+    cinemaWorkflowCatalogError,
     customProviderDraft,
     createPromptPreset,
     deletePromptPreset,
@@ -1660,6 +1664,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     previewPromptUrlInstall,
     refreshProviderCatalog,
     refreshCinemaVideoProviderCatalog,
+    refreshCinemaProviderWorkflows,
     resetBuiltinTools,
     resetPromptPreset,
     resettingPromptPresetID,
@@ -1686,6 +1691,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     savingPromptPresetID,
     savingProviderID,
     savingCinemaVideoProviderID,
+    refreshingCinemaWorkflowProviderID,
     savingPluginConnectorID,
     testCinemaVideoProviderConnection,
     testProviderConnection,
@@ -1802,7 +1808,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     return () => window.removeEventListener(OPEN_ENVIRONMENT_SETTINGS_EVENT, openEnvironmentSettings)
   })
 
-  function handleOpenSettings() {
+  function ensureSettingsOpen() {
     if (isOpen || isPreparingSettingsPage) return
 
     setIsSkillMarketplaceOpen(false)
@@ -1818,6 +1824,22 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
       .finally(() => {
         setIsPreparingSettingsPage(false)
       })
+  }
+
+  function handleOpenSettings() {
+    setInitialCinemaVideoProviderID(null)
+    ensureSettingsOpen()
+  }
+
+  function handleOpenCinemaProviderSettings(providerID: string) {
+    if (providerID !== "comfyui-local") return
+    setInitialCinemaVideoProviderID(providerID)
+    ensureSettingsOpen()
+  }
+
+  function handleCloseSettings() {
+    setInitialCinemaVideoProviderID(null)
+    closeSettings()
   }
 
   async function handleProjectCreateWorktree(workspace: WorkspaceGroup, input: ProjectWorktreeCreateRequest) {
@@ -2550,7 +2572,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
 
   function handleOpenSkillMarketplace() {
     if (isPreparingSettingsPage) return
-    if (isOpen) closeSettings()
+    if (isOpen) handleCloseSettings()
     setIsSkillMarketplaceOpen(true)
   }
 
@@ -3280,6 +3302,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               onPreviewOpen={handlePreviewOpen}
               onPreviewOpenExternal={handlePreviewOpenExternal}
               onPreviewOpenUrl={handlePreviewOpenUrl}
+              onOpenCinemaProviderSettings={handleOpenCinemaProviderSettings}
               onPreviewReload={handlePreviewReload}
               onPermissionRequestResponse={handlePermissionRequestResponse}
               onWorkspaceFileCommentCancel={handleWorkspaceFileCommentCancel}
@@ -3423,11 +3446,16 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               pluginCatalog={pluginCatalog}
               providerDrafts={providerDrafts}
               cinemaVideoProviderDrafts={cinemaVideoProviderDrafts}
+              cinemaVideoProviderConnectionResults={cinemaVideoProviderConnectionResults}
+              cinemaProviderWorkflowCatalogs={cinemaProviderWorkflowCatalogs}
+              cinemaWorkflowCatalogError={cinemaWorkflowCatalogError}
+              initialCinemaVideoProviderID={initialCinemaVideoProviderID}
               customProviderDraft={customProviderDraft}
               restoringArchivedSessionID={restoringArchivedSessionID}
               savingMcpServerID={savingMcpServerID}
               savingProviderID={savingProviderID}
               savingCinemaVideoProviderID={savingCinemaVideoProviderID}
+              refreshingCinemaWorkflowProviderID={refreshingCinemaWorkflowProviderID}
               testingProviderID={testingProviderID}
               selectionDraft={selectionDraft}
               onColorModeChange={handleColorModeChange}
@@ -3449,7 +3477,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               onMobileConnectionAdvancedInfoChange={handleMobileConnectionAdvancedInfoChange}
               onAutomaticUpdatesToggle={() => void handleAutomaticUpdatesToggle()}
               onCheckForUpdates={() => void handleCheckForUpdates()}
-              onClose={closeSettings}
+              onClose={handleCloseSettings}
               onDeleteAllArchivedSessions={deleteAllArchivedSessions}
               onDeleteArchivedSession={deleteArchivedSession}
               onDeleteMcpServer={deleteMcpServer}
@@ -3463,6 +3491,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               onCinemaVideoProviderDraftChange={setCinemaVideoProviderDraftValue}
               onRefreshProviderCatalog={refreshProviderCatalog}
               onRefreshCinemaVideoProviderCatalog={refreshCinemaVideoProviderCatalog}
+              onRefreshCinemaProviderWorkflows={refreshCinemaProviderWorkflows}
               onLoadArchivedSessions={loadArchivedSessions}
               onLoadStorageUsage={loadStorageUsage}
               onOptimizeStorage={optimizeStorage}

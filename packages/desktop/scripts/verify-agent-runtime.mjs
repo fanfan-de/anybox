@@ -55,18 +55,19 @@ const bundledMediaTools = mediaTarget && mediaExecutableNames
     ]
   : []
 
-function listJsonFilesRecursively(directory) {
+function listFilesRecursively(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const entryPath = path.join(directory, entry.name)
-    if (entry.isDirectory()) return listJsonFilesRecursively(entryPath)
-    return entry.isFile() && path.extname(entry.name).toLowerCase() === ".json" ? [entryPath] : []
+    if (entry.isDirectory()) return listFilesRecursively(entryPath)
+    return entry.isFile() ? [entryPath] : []
   })
 }
 
 const cinemaProviderManifestsSourceDir = path.join(agentDir, "src", "cinema", "provider-manifests")
+const cinemaProviderManifestSourceFiles = listFilesRecursively(cinemaProviderManifestsSourceDir)
 const bundledCinemaProviderManifests = [
   path.join(runtimeDir, "provider-manifests.json"),
-  ...listJsonFilesRecursively(cinemaProviderManifestsSourceDir).map((sourcePath) =>
+  ...cinemaProviderManifestSourceFiles.map((sourcePath) =>
     path.join(runtimeDir, "provider-manifests", path.relative(cinemaProviderManifestsSourceDir, sourcePath)),
   ),
 ]
@@ -135,6 +136,42 @@ if (missing.length > 0) {
     console.error(`- ${filePath}`)
   }
   process.exit(1)
+}
+
+const cinemaCatalogSource = path.join(agentDir, "src", "cinema", "provider-manifests.json")
+const packagedCinemaFiles = [
+  [cinemaCatalogSource, path.join(runtimeDir, "provider-manifests.json")],
+  ...cinemaProviderManifestSourceFiles.map((sourcePath) => [
+    sourcePath,
+    path.join(runtimeDir, "provider-manifests", path.relative(cinemaProviderManifestsSourceDir, sourcePath)),
+  ]),
+]
+for (const [sourcePath, bundledPath] of packagedCinemaFiles) {
+  if (await sha256(sourcePath) !== await sha256(bundledPath)) {
+    throw new Error(`Bundled Cinema provider file differs from its source: ${path.relative(agentDir, sourcePath)}`)
+  }
+}
+
+const comfyUIProviderRoot = path.join(runtimeDir, "provider-manifests", "comfyui-local")
+const comfyUIProvider = JSON.parse(fs.readFileSync(path.join(comfyUIProviderRoot, "provider.json"), "utf8"))
+if (
+  comfyUIProvider.id !== "comfyui-local"
+  || comfyUIProvider.authType !== "none"
+  || comfyUIProvider.requiresCredential !== false
+  || comfyUIProvider.baseURL !== "http://127.0.0.1:8188"
+  || !Array.isArray(comfyUIProvider.models)
+  || comfyUIProvider.models.length !== 0
+  || comfyUIProvider.capabilities?.workflowDiscovery !== true
+  || comfyUIProvider.capabilities?.appMode !== true
+) {
+  throw new Error("Bundled Local ComfyUI provider manifest is invalid")
+}
+const staticComfyUIArtifacts = listFilesRecursively(comfyUIProviderRoot)
+  .filter((filePath) => !["provider.json", "SOURCE.md"].includes(path.basename(filePath)))
+if (staticComfyUIArtifacts.length > 0) {
+  throw new Error(
+    `Bundled Local ComfyUI must not contain static model or workflow artifacts: ${staticComfyUIArtifacts.join(", ")}`,
+  )
 }
 
 const pluginOwnedRuntimeFiles = [

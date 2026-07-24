@@ -5,6 +5,7 @@ import type {
   BuiltinToolSummary,
   ConnectorDefinition,
   ConnectorStatus,
+  CinemaProviderWorkflowCatalog,
   CinemaVideoProvider,
   CinemaVideoProviderDraftState,
   CustomProviderDraftState,
@@ -37,7 +38,11 @@ import { parseMcpConfigJson } from "./mcp/mcp-config-import"
 import { arePluginCatalogsEqual, mergePluginCatalogWithInstalled } from "./plugin-catalog"
 import { useToast } from "./toast"
 import { useI18n } from "./i18n/I18nProvider"
-import type { DesktopProviderAuthPrompt, DesktopStorageUsageSnapshot } from "../../../shared/desktop-ipc-contract"
+import type {
+  AgentProviderConnectionTestResult,
+  DesktopProviderAuthPrompt,
+  DesktopStorageUsageSnapshot,
+} from "../../../shared/desktop-ipc-contract"
 import { getStorageUsage, optimizeStorage as optimizeStorageApi } from "./settings/client"
 import { formatStorageBytes } from "./settings/storage-usage"
 import {
@@ -187,6 +192,7 @@ function buildCinemaVideoProviderDrafts(items: CinemaVideoProvider[]) {
     result[item.manifest.id] = {
       apiKey: "",
       baseURL: item.runtime?.configuredBaseURL ?? "",
+      userID: item.runtime?.userID ?? "",
     }
     return result
   }, {})
@@ -205,6 +211,7 @@ function mergeCinemaVideoProviderDrafts(
           ...draft,
           apiKey: currentDraft?.apiKey ?? draft.apiKey,
           baseURL: currentDraft?.baseURL ?? draft.baseURL,
+          userID: currentDraft?.userID ?? draft.userID,
         },
       ]
     }),
@@ -582,6 +589,12 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
   const [selectionDraft, setSelectionDraft] = useState<ProjectModelSelection>(EMPTY_PROJECT_MODEL_SELECTION)
   const [providerDrafts, setProviderDrafts] = useState<Record<string, ProviderDraftState>>({})
   const [cinemaVideoProviderDrafts, setCinemaVideoProviderDrafts] = useState<Record<string, CinemaVideoProviderDraftState>>({})
+  const [cinemaProviderWorkflowCatalogs, setCinemaProviderWorkflowCatalogs] =
+    useState<Record<string, CinemaProviderWorkflowCatalog>>({})
+  const [refreshingCinemaWorkflowProviderID, setRefreshingCinemaWorkflowProviderID] = useState<string | null>(null)
+  const [cinemaWorkflowCatalogError, setCinemaWorkflowCatalogError] = useState<string | null>(null)
+  const [cinemaVideoProviderConnectionResults, setCinemaVideoProviderConnectionResults] =
+    useState<Record<string, AgentProviderConnectionTestResult>>({})
   const [customProviderDraft, setCustomProviderDraft] =
     useState<CustomProviderDraftState>(defaultCustomProviderDraft)
   const [mcpServers, setMcpServers] = useState<McpServerSummary[]>([])
@@ -1015,6 +1028,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       setLoadError("Desktop provider settings APIs are unavailable.")
       setCatalog([])
       setCinemaVideoProviders([])
+      setCinemaProviderWorkflowCatalogs({})
       setModels([])
       setModelCatalog([])
       setProviderDrafts({})
@@ -1041,6 +1055,25 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
         cinemaVideoProvidersPromise,
         loadModelCatalog?.() ?? Promise.resolve({ items: [] }),
       ])
+      const workflowProviders = nextCinemaVideoProviders.filter((provider) =>
+        provider.manifest.capabilities?.workflowDiscovery
+      )
+      const workflowCatalogEntries = window.desktop?.getCinemaProviderWorkflows
+        ? await Promise.all(workflowProviders.map(async (provider) => {
+          try {
+            const workflowCatalog = await window.desktop!.getCinemaProviderWorkflows!({
+              providerID: provider.manifest.id,
+            })
+            return [provider.manifest.id, workflowCatalog] as const
+          } catch (error) {
+            console.error(`[desktop] loading Cinema workflows for ${provider.manifest.id} failed:`, error)
+            return null
+          }
+        }))
+        : []
+      const nextWorkflowCatalogs = Object.fromEntries(
+        workflowCatalogEntries.filter((entry): entry is readonly [string, CinemaProviderWorkflowCatalog] => entry !== null),
+      )
       const normalizedCatalog = nextCatalog.map((item) => normalizeProviderCatalogItem(item))
 
       if (requestIDRef.current !== requestID) return
@@ -1048,6 +1081,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       const nextSelection = normalizeSelection(modelPayload.selection)
       setCatalog(normalizedCatalog)
       setCinemaVideoProviders(nextCinemaVideoProviders)
+      setCinemaProviderWorkflowCatalogs(nextWorkflowCatalogs)
       setModels(modelPayload.items)
       setModelCatalog(nextModelCatalog.items)
       savedSelectionRef.current = nextSelection
@@ -1067,6 +1101,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       if (requestIDRef.current !== requestID) return
       setCatalog([])
       setCinemaVideoProviders([])
+      setCinemaProviderWorkflowCatalogs({})
       setModels([])
       setModelCatalog([])
       setProviderDrafts({})
@@ -1836,17 +1871,24 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     }))
   }
 
-  function setCinemaVideoProviderDraftValue(providerID: string, field: "apiKey" | "baseURL", value: string) {
+  function setCinemaVideoProviderDraftValue(providerID: string, field: "apiKey" | "baseURL" | "userID", value: string) {
     setCinemaVideoProviderDrafts((current) => {
       const nextDraft = {
         apiKey: current[providerID]?.apiKey ?? "",
         baseURL: current[providerID]?.baseURL ?? "",
+        userID: current[providerID]?.userID ?? "",
       }
       nextDraft[field] = value
       return {
         ...current,
         [providerID]: nextDraft,
       }
+    })
+    setCinemaVideoProviderConnectionResults((current) => {
+      if (!(providerID in current)) return current
+      const next = { ...current }
+      delete next[providerID]
+      return next
     })
   }
 
@@ -2835,9 +2877,12 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       (nextApiKey === undefined ? cinemaVideoProviderDrafts[providerID]?.apiKey ?? "" : nextApiKey ?? "").trim()
     const provider = cinemaVideoProviders.find((item) => item.manifest.id === providerID)
     const baseURL = (cinemaVideoProviderDrafts[providerID]?.baseURL ?? "").trim()
+    const userID = (cinemaVideoProviderDrafts[providerID]?.userID ?? "").trim()
     const previousBaseURL = provider?.runtime?.configuredBaseURL ?? ""
+    const previousUserID = provider?.runtime?.userID ?? ""
     const shouldSaveApiKey = nextApiKey !== undefined || apiKey.length > 0
-    const shouldSaveBaseURL = nextApiKey === undefined && baseURL !== previousBaseURL
+    const shouldSaveProviderSettings = nextApiKey === undefined
+      && (baseURL !== previousBaseURL || userID !== previousUserID)
 
     setSavingCinemaVideoProviderID(providerID)
 
@@ -2849,11 +2894,12 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
           apiKey: apiKey || null,
         })
       }
-      if (shouldSaveBaseURL) {
+      if (shouldSaveProviderSettings) {
         if (!window.desktop?.saveCinemaVideoProviderSettings) return false
         await window.desktop.saveCinemaVideoProviderSettings({
           providerID,
           baseURL: baseURL || null,
+          userID: userID || null,
         })
       }
       await loadSettingsData({ silent: true, preserveProviderDrafts: true })
@@ -2942,6 +2988,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     const draft = cinemaVideoProviderDrafts[providerID]
     const apiKey = draft?.apiKey.trim()
     const baseURL = draft?.baseURL.trim()
+    const userID = draft?.userID?.trim()
 
     setTestingProviderID(`${CINEMA_VIDEO_PROVIDER_TEST_PREFIX}${providerID}`)
 
@@ -2950,7 +2997,12 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
         providerID,
         ...(apiKey ? { apiKey } : {}),
         ...(baseURL ? { baseURL } : {}),
+        ...(userID ? { userID } : {}),
       })
+      setCinemaVideoProviderConnectionResults((current) => ({
+        ...current,
+        [providerID]: result,
+      }))
       await loadSettingsData({ silent: true, preserveProviderDrafts: true })
       showMessage({
         tone: result.ok ? "success" : "error",
@@ -3047,6 +3099,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       setCinemaVideoProviders(nextCinemaVideoProviders)
       const nextCinemaVideoProviderDrafts = buildCinemaVideoProviderDrafts(nextCinemaVideoProviders)
       setCinemaVideoProviderDrafts((current) => mergeCinemaVideoProviderDrafts(nextCinemaVideoProviderDrafts, current))
+      await loadSettingsData({ silent: true, preserveProviderDrafts: true })
       showMessage({
         tone: "success",
         text: "Video provider catalog refreshed.",
@@ -3060,6 +3113,38 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       return false
     } finally {
       setIsRefreshingCinemaVideoProviderCatalog(false)
+    }
+  }
+
+  async function refreshCinemaProviderWorkflows(providerID: string) {
+    const refreshWorkflows = window.desktop?.refreshCinemaProviderWorkflows
+    if (!refreshWorkflows) {
+      setCinemaWorkflowCatalogError("Desktop workflow refresh API is unavailable.")
+      return false
+    }
+    setRefreshingCinemaWorkflowProviderID(providerID)
+    setCinemaWorkflowCatalogError(null)
+    try {
+      const catalog = await refreshWorkflows({ providerID })
+      setCinemaProviderWorkflowCatalogs((current) => ({
+        ...current,
+        [providerID]: catalog,
+      }))
+      await loadSettingsData({ silent: true, preserveProviderDrafts: true })
+      showMessage({
+        tone: catalog.status === "ready" ? "success" : "error",
+        text: catalog.status === "ready"
+          ? `Discovered ${catalog.workflows.length} ComfyUI workflow${catalog.workflows.length === 1 ? "" : "s"}.`
+          : catalog.issues[0]?.message ?? "Workflow refresh did not complete.",
+      })
+      return catalog.status === "ready"
+    } catch (error) {
+      const message = getErrorMessage(error)
+      setCinemaWorkflowCatalogError(message)
+      showMessage({ tone: "error", text: message })
+      return false
+    } finally {
+      setRefreshingCinemaWorkflowProviderID(null)
     }
   }
 
@@ -4041,6 +4126,9 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     promptUrlInstallSource,
     providerDrafts,
     cinemaVideoProviderDrafts,
+    cinemaVideoProviderConnectionResults,
+    cinemaProviderWorkflowCatalogs,
+    cinemaWorkflowCatalogError,
     customProviderDraft,
     createPromptPreset,
     deletePromptPreset,
@@ -4050,6 +4138,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     previewPromptUrlInstall,
     refreshProviderCatalog,
     refreshCinemaVideoProviderCatalog,
+    refreshCinemaProviderWorkflows,
     resetPromptPreset,
     resetBuiltinTools,
     resettingPromptPresetID,
@@ -4075,6 +4164,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     savingPromptPresetID,
     savingProviderID,
     savingCinemaVideoProviderID,
+    refreshingCinemaWorkflowProviderID,
     testCinemaVideoProviderConnection,
     testProviderConnection,
     testCustomProviderConnection,

@@ -12,6 +12,7 @@ import type {
 import type { ReasoningEffort as SharedReasoningEffort } from "@anybox/shared"
 import type {
   CinemaProviderAuthState as SharedCinemaProviderAuthState,
+  CinemaProviderWorkflowCatalog as SharedCinemaProviderWorkflowCatalog,
   CinemaVideoProvider as SharedCinemaVideoProvider,
 } from "@anybox/shared/cinema"
 import type {
@@ -1242,12 +1243,14 @@ export interface ProviderCatalogItem {
 }
 
 export type CinemaProviderAuthState = SharedCinemaProviderAuthState
+export type CinemaProviderWorkflowCatalog = SharedCinemaProviderWorkflowCatalog
 export type CinemaVideoProvider = SharedCinemaVideoProvider
 export type CinemaVideoProviderModel = CinemaVideoProvider["manifest"]["models"][number]
 
 export interface CinemaVideoProviderDraftState {
   apiKey: string
   baseURL: string
+  userID?: string
 }
 
 export interface ProviderAuthCapability {

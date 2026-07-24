@@ -4973,6 +4973,7 @@ describe("server api", () => {
 
         expect(projectResponse.status).toBe(201)
         expect(projectID).toBeString()
+        if (!projectID) throw new Error("Expected a project ID")
         activeProjectID = projectID
 
         const stagedResponse = await app.request(`http://localhost/api/projects/${projectID}/git/commit-message`, {

@@ -3,6 +3,7 @@ import { subscriptionTranslations } from "../subscription-translations"
 import { skillLibraryTranslations } from "../skill-library-translations"
 import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
 import { environmentEnUS } from "../environment-translations"
+import { cinemaWorkflowTranslations } from "../cinema-workflow-translations"
 
 export const koKR = {
   "app.loading": "로딩 중",
@@ -301,6 +302,16 @@ export const koKR = {
   "settings.videoProviders.emptyCopy": "사용 가능한 이미지 및 비디오 작업 공급자가 여기에 표시됩니다.",
   "settings.videoProviders.credentialPlaceholder": "API 키 또는 accessKey:secretKey 입력",
   "settings.videoProviders.storedCredentialPlaceholder": "저장된 자격 증명이 감지되었습니다. 유지하려면 비워 두세요.",
+  "settings.videoProviders.noAuthentication": "인증이 필요하지 않음",
+  "settings.videoProviders.readinessLabel": "런타임 준비 상태",
+  "settings.videoProviders.readinessReady": "준비됨",
+  "settings.videoProviders.readinessNeedsAttention": "확인 필요",
+  "settings.videoProviders.readinessDetail": "검사 결과",
+  "settings.videoProviders.missingNodes": "누락된 노드",
+  "settings.videoProviders.missingModels": "누락된 모델 파일",
+  "settings.videoProviders.serviceStatus": "서비스",
+  "settings.videoProviders.nodesStatus": "노드",
+  "settings.videoProviders.modelsStatus": "모델 파일",
   "settings.videoProviders.endpointLabel": "엔드포인트",
   "settings.videoProviders.endpointCurrentLabel": "현재 엔드포인트",
   "settings.videoProviders.endpointSourceDefault": "기본 엔드포인트",
@@ -1415,4 +1426,5 @@ export const koKR = {
   "mcp.validation.requireToolNames": "명명된 도구 필터에는 하나 이상의 도구 이름이 필요합니다.",
   ...pluginOwnershipTranslations.enUS,
   ...environmentEnUS,
+  ...cinemaWorkflowTranslations.enUS,
 } as const satisfies Record<TranslationKey, string>

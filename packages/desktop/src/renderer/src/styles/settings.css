@@ -14247,12 +14247,58 @@ body.is-dragging-settings-page {
   display: block;
 }
 
-.provider-key-input-wrap input {
+.provider-key-input-wrap input,
+.provider-key-input-wrap select {
+  width: 100%;
   min-height: 36px;
+  padding: 0 10px;
   border-color: var(--seg-border);
+  border-style: solid;
+  border-width: 1px;
   border-radius: 6px;
   background: var(--seg-panel-muted);
   color: var(--seg-text-1);
+}
+
+.provider-key-input-wrap select:focus-visible {
+  border-color: var(--seg-accent);
+  outline: 2px solid color-mix(in srgb, var(--seg-accent) 24%, transparent);
+  outline-offset: 1px;
+}
+
+.cinema-workflow-row.is-disabled {
+  background: var(--seg-panel-muted);
+}
+
+.cinema-workflow-row h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cinema-workflow-row .provider-detail-status-dot {
+  display: inline-block;
+  flex: 0 0 auto;
+}
+
+.cinema-workflow-row .model-row-copy {
+  max-width: 680px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cinema-workflow-issues {
+  margin: 0;
+  color: var(--seg-danger-text);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.cinema-workflow-row .settings-badge.is-warning {
+  color: var(--seg-danger-text);
+  border-color: color-mix(in srgb, var(--seg-danger-text) 36%, var(--seg-border));
 }
 
 .provider-endpoint-control {

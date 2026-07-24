@@ -11,6 +11,7 @@ import {
   type CinemaProviderInputCombination,
   type CinemaProviderInputSpec,
   type CinemaProviderModelMode,
+  type CinemaProviderWorkflowCatalog,
   type GenerationControl,
   type GenerationFormSpec,
   type TestCinemaVideoProviderConnectionBody,
@@ -33,6 +34,10 @@ import {
   readImageDimensions,
 } from "#session/support/image-assets.ts"
 import * as Log from "#util/log.ts"
+import {
+  COMFYUI_PROVIDER_ID,
+  ComfyUIProviderAdapter,
+} from "./comfyui-runtime.ts"
 
 const REQUEST_TIMEOUT_MS = 10 * 1000
 const LOCAL_PROVIDER_MANIFEST_CATALOG_SOURCE = "local-provider-manifest"
@@ -86,11 +91,31 @@ export type ProviderAdapterCreateInput = {
   cinemaRoot: string
   task: CinemaGenerationTask
   canvas: CinemaCanvasDocument
+  persistTask?: (task: CinemaGenerationTask) => Promise<void>
 }
 
 export type ProviderAdapterRefreshInput = ProviderAdapterCreateInput
 export type ProviderAdapterCallbackInput = ProviderAdapterCreateInput & {
   payload: unknown
+}
+
+export type ProviderAdapterConnectionTestResult = {
+  ok: boolean
+  status:
+    | "working"
+    | "not_connected"
+    | "auth_error"
+    | "network_error"
+    | "config_error"
+    | "unsupported"
+    | "unknown_error"
+    | "ready"
+    | "offline"
+    | "incompatible"
+    | "missing_models"
+  message: string
+  errorCode?: string
+  diagnostics?: Record<string, unknown>
 }
 
 export type ProviderAdapter = {
@@ -102,6 +127,14 @@ export type ProviderAdapter = {
       combination: CinemaProviderInputCombination
     }
   ) => boolean
+  validateBaseURL?: (value: string | null | undefined) => string
+  testConnection?: (input: {
+    baseURL?: string | null
+    userID?: string | null
+  }) => Promise<ProviderAdapterConnectionTestResult>
+  listWorkflows?: () => Promise<CinemaProviderWorkflowCatalog>
+  refreshWorkflows?: () => Promise<CinemaProviderWorkflowCatalog>
+  prepareTask?: (input: ProviderAdapterCreateInput) => Promise<CinemaGenerationTask>
   createTask: (input: ProviderAdapterCreateInput) => Promise<CinemaGenerationTask>
   refreshTask: (input: ProviderAdapterRefreshInput) => Promise<CinemaGenerationTask>
   receiveCallback?: (input: ProviderAdapterCallbackInput) => Promise<CinemaGenerationTask>
@@ -240,21 +273,9 @@ const RawCatalogSchema = z.record(z.string(), RawCatalogProviderSchema)
 type RawCatalog = z.output<typeof RawCatalogSchema>
 type RawCatalogInput = z.input<typeof RawCatalogSchema>
 
-type CinemaVideoProviderConnectionTestResult = {
+type CinemaVideoProviderConnectionTestResult = ProviderAdapterConnectionTestResult & {
   providerID: string
-  ok: boolean
-  status:
-    | "working"
-    | "not_connected"
-    | "auth_error"
-    | "network_error"
-    | "config_error"
-    | "unsupported"
-    | "unknown_error"
   checkedAt: number
-  message: string
-  errorCode?: string
-  diagnostics?: Record<string, unknown>
 }
 
 const LocalProviderManifestInlineCatalogSchema = z.union([
@@ -480,6 +501,9 @@ export async function refreshCinemaVideoProviderCatalog(): Promise<CinemaVideoPr
   cachedCatalogManifests = undefined
   loadedManifestSignature = undefined
   loadedManifestFilepaths = []
+  await Promise.all(
+    Object.values(providerAdapters).map((adapter) => adapter.refreshWorkflows?.().catch(() => undefined)),
+  )
   return await listCinemaVideoProviders()
 }
 
@@ -1082,7 +1106,10 @@ export function normalizeGenerationFormSpec(
 
   return {
     providerID: provider.id,
-    modelID: cinemaVideoProviderModelSelectionID(model),
+    target: {
+      kind: "model",
+      modelID: cinemaVideoProviderModelSelectionID(model),
+    },
     mode: combination.mode,
     output: generationFormOutput(model),
     controls,
@@ -2516,8 +2543,11 @@ async function klingAITaskPayload(input: ProviderAdapterCreateInput, kind: Kling
   const isImageKind = kind === "image-generation" || kind === "omni-image"
   const isVideoKind = kind === "text2video" || kind === "image2video"
   const omniResultType = kind === "omni-image" ? parameterString(parameters, "resultType", "result_type") : undefined
+  if (input.task.target.kind !== "model") {
+    throw new ApiError(400, "CINEMA_GENERATION_TARGET_INVALID", "Kling AI requires a model generation target.")
+  }
   const payload: Record<string, unknown> = {
-    model_name: input.task.modelID,
+    model_name: input.task.target.modelID,
     prompt: isImageKind ? promptWithStyle(input.task.input.prompt, parameters) : input.task.input.prompt,
     external_task_id: klingAIExternalTaskID(input.task.id),
   }
@@ -2638,18 +2668,31 @@ for (const providerID of KLINGAI_PROVIDER_IDS) {
   registerCinemaVideoProviderAdapter(providerID, KlingAIProviderAdapter)
 }
 
+registerCinemaVideoProviderAdapter(
+  COMFYUI_PROVIDER_ID,
+  ComfyUIProviderAdapter as ProviderAdapter,
+)
+
 export function assertCinemaVideoProviderModelSupports(
   input: CreateCinemaGenerationTaskBody,
   manifest: CinemaVideoProviderManifest,
 ) {
-  const model = findCinemaVideoProviderModelForMode(manifest, input.modelID, input.mode)
+  if (input.target.kind !== "model") {
+    throw new ApiError(
+      400,
+      "CINEMA_GENERATION_TARGET_INVALID",
+      `Cinema provider '${manifest.id}' requires a model target.`,
+    )
+  }
+  const modelID = input.target.modelID
+  const model = findCinemaVideoProviderModelForMode(manifest, modelID, input.mode)
   if (!model) {
-    throw new ApiError(400, "CINEMA_PROVIDER_MODEL_NOT_FOUND", `Cinema provider '${manifest.id}' does not expose model '${input.modelID}'.`)
+    throw new ApiError(400, "CINEMA_PROVIDER_MODEL_NOT_FOUND", `Cinema provider '${manifest.id}' does not expose model '${modelID}'.`)
   }
   if (!model.modes.includes(input.mode)) {
     const hasCombinationMode = modelInputCombinationModes(model).includes(input.mode)
     if (!hasCombinationMode) {
-      throw new ApiError(400, "CINEMA_PROVIDER_MODE_UNSUPPORTED", `Model '${input.modelID}' does not support mode '${input.mode}'.`)
+      throw new ApiError(400, "CINEMA_PROVIDER_MODE_UNSUPPORTED", `Model '${modelID}' does not support mode '${input.mode}'.`)
     }
   }
   const combination = findCinemaVideoProviderInputCombinationForMode(
@@ -2658,7 +2701,7 @@ export function assertCinemaVideoProviderModelSupports(
     typeof input.parameters.inputCombinationMode === "string" ? input.parameters.inputCombinationMode : undefined,
   )
   if ((model.inputCombinations ?? []).length > 0 && !combination) {
-    throw new ApiError(400, "CINEMA_PROVIDER_MODE_UNSUPPORTED", `Model '${input.modelID}' does not expose input combination '${input.mode}'.`)
+    throw new ApiError(400, "CINEMA_PROVIDER_MODE_UNSUPPORTED", `Model '${modelID}' does not expose input combination '${input.mode}'.`)
   }
   if (
     providerAdapters[manifest.id] &&
@@ -2727,6 +2770,7 @@ async function providerAuthStateFor(manifest: CinemaVideoProviderManifest): Prom
 async function providerRuntimeFor(manifest: CinemaVideoProviderManifest): Promise<CinemaVideoProvider["runtime"]> {
   const settings = await Config.getCinemaVideoProviderSettings(manifest.id)
   const adapterAvailable = hasCinemaVideoProviderAdapter(manifest.id)
+  const adapter = providerAdapters[manifest.id]
   const adapterRuntime = adapterAvailable
     ? {
         adapterAvailable,
@@ -2734,22 +2778,32 @@ async function providerRuntimeFor(manifest: CinemaVideoProviderManifest): Promis
         supportedModes: cinemaVideoProviderAdapterSupportedModes(manifest),
       }
     : { adapterAvailable, supportedModes: [] }
-  const configuredBaseURL = normalizeBaseURL(settings.baseURL)
+  const configuredBaseURL = settings.baseURL
+    ? adapter?.validateBaseURL?.(settings.baseURL) ?? normalizeBaseURL(settings.baseURL)
+    : undefined
   if (configuredBaseURL) {
     return {
       ...adapterRuntime,
       baseURL: configuredBaseURL,
       configuredBaseURL,
       baseURLSource: "settings",
+      ...(settings.userID ? { userID: settings.userID } : {}),
     }
   }
 
-  const defaultBaseURL = defaultBaseURLForProvider(manifest)
-  if (!defaultBaseURL) return adapterRuntime
+  const rawDefaultBaseURL = defaultBaseURLForProvider(manifest)
+  const defaultBaseURL = rawDefaultBaseURL
+    ? adapter?.validateBaseURL?.(rawDefaultBaseURL) ?? rawDefaultBaseURL
+    : undefined
+  if (!defaultBaseURL) return {
+    ...adapterRuntime,
+    ...(settings.userID ? { userID: settings.userID } : {}),
+  }
   return {
     ...adapterRuntime,
     baseURL: defaultBaseURL,
     baseURLSource: "default",
+    ...(settings.userID ? { userID: settings.userID } : {}),
   }
 }
 
@@ -2775,6 +2829,32 @@ export async function getCinemaVideoProvider(providerID: string): Promise<Cinema
   return await videoProviderFor(manifest)
 }
 
+export async function getCinemaProviderWorkflows(providerID: string): Promise<CinemaProviderWorkflowCatalog> {
+  await getCinemaVideoProvider(providerID)
+  const adapter = providerAdapters[providerID]
+  if (!adapter?.listWorkflows) {
+    throw new ApiError(
+      404,
+      "CINEMA_PROVIDER_WORKFLOWS_UNSUPPORTED",
+      `Cinema provider '${providerID}' does not expose discoverable workflows.`,
+    )
+  }
+  return await adapter.listWorkflows()
+}
+
+export async function refreshCinemaProviderWorkflows(providerID: string): Promise<CinemaProviderWorkflowCatalog> {
+  await getCinemaVideoProvider(providerID)
+  const adapter = providerAdapters[providerID]
+  if (!adapter?.refreshWorkflows) {
+    throw new ApiError(
+      404,
+      "CINEMA_PROVIDER_WORKFLOWS_UNSUPPORTED",
+      `Cinema provider '${providerID}' does not expose discoverable workflows.`,
+    )
+  }
+  return await adapter.refreshWorkflows()
+}
+
 export async function getCinemaVideoProviderAuth(providerID: string): Promise<CinemaProviderAuthState> {
   return (await getCinemaVideoProvider(providerID)).auth
 }
@@ -2790,13 +2870,21 @@ export async function saveCinemaVideoProviderApiKey(providerID: string, apiKey: 
 
 export async function saveCinemaVideoProviderSettings(
   providerID: string,
-  input: { baseURL?: string | null },
+  input: { baseURL?: string | null; userID?: string | null },
 ): Promise<CinemaVideoProvider> {
   const provider = await getCinemaVideoProvider(providerID)
-  const baseURL = normalizeBaseURL(input.baseURL)
+  const adapter = providerAdapters[provider.manifest.id]
+  const baseURL = input.baseURL?.trim()
+    ? adapter?.validateBaseURL?.(input.baseURL) ?? normalizeBaseURL(input.baseURL)
+    : undefined
+  const previous = await Config.getCinemaVideoProviderSettings(provider.manifest.id)
+  const userID = input.userID === undefined ? previous.userID : input.userID?.trim() || undefined
   await Config.setCinemaVideoProviderSettings(Config.GLOBAL_CONFIG_ID, provider.manifest.id, {
-    ...(baseURL ? { baseURL } : {}),
+    ...(input.baseURL === undefined && previous.baseURL ? { baseURL: previous.baseURL } : {}),
+    ...(input.baseURL !== undefined && baseURL ? { baseURL } : {}),
+    ...(userID ? { userID } : {}),
   })
+  await adapter?.refreshWorkflows?.().catch(() => undefined)
   return await videoProviderFor(provider.manifest)
 }
 
@@ -2940,6 +3028,18 @@ export async function testCinemaVideoProviderConnection(
   }
 
   try {
+    const adapter = providerAdapters[providerID]
+    if (adapter?.testConnection) {
+      const requestedBaseURL = input.baseURL?.trim()
+        ? input.baseURL
+        : runtime?.baseURL ?? manifest.baseURL
+      const result = await adapter.testConnection({
+        baseURL: requestedBaseURL,
+        userID: input.userID,
+      })
+      return createConnectionTestResult(providerID, result)
+    }
+
     const apiKey = await apiKeyForConnectionTest(manifest, input)
     if (manifest.requiresCredential && !apiKey) {
       return createConnectionTestResult(providerID, {

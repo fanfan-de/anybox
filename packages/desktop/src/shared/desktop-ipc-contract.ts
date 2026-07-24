@@ -127,6 +127,7 @@ import type {
 
 import type {
   CinemaProviderAuthState,
+  CinemaProviderWorkflowCatalog,
   CinemaVideoProvider,
 } from "@anybox/shared/cinema"
 import type { AppearanceConfigDocument, AppearanceConfigSnapshot, AppearanceRuntimeState } from "./appearance"
@@ -1104,6 +1105,7 @@ export interface DesktopCinemaVideoProviderConnectionTestInput {
   providerID: string
   apiKey?: string | null
   baseURL?: string | null
+  userID?: string | null
 }
 
 export interface DesktopCustomProviderInput {
@@ -1882,12 +1884,20 @@ export interface DesktopIpcContract {
     input: void
     output: CinemaVideoProvider[]
   }
+  "desktop:get-cinema-provider-workflows": {
+    input: { providerID: string }
+    output: CinemaProviderWorkflowCatalog
+  }
+  "desktop:refresh-cinema-provider-workflows": {
+    input: { providerID: string }
+    output: CinemaProviderWorkflowCatalog
+  }
   "desktop:save-cinema-video-provider-api-key": {
     input: { providerID: string; apiKey?: string | null }
     output: CinemaProviderAuthState
   }
   "desktop:save-cinema-video-provider-settings": {
-    input: { providerID: string; baseURL?: string | null }
+    input: { providerID: string; baseURL?: string | null; userID?: string | null }
     output: CinemaVideoProvider
   }
   "desktop:test-cinema-video-provider-connection": {
@@ -2644,6 +2654,8 @@ export interface DesktopApiMethods {
   saveGlobalProviderApiKey(input: DesktopIpcInput<"desktop:save-global-provider-api-key">): Promise<DesktopIpcOutput<"desktop:save-global-provider-api-key">>
   getCinemaVideoProviders(): Promise<DesktopIpcOutput<"desktop:get-cinema-video-providers">>
   refreshCinemaVideoProviderCatalog(): Promise<DesktopIpcOutput<"desktop:refresh-cinema-video-provider-catalog">>
+  getCinemaProviderWorkflows(input: DesktopIpcInput<"desktop:get-cinema-provider-workflows">): Promise<DesktopIpcOutput<"desktop:get-cinema-provider-workflows">>
+  refreshCinemaProviderWorkflows(input: DesktopIpcInput<"desktop:refresh-cinema-provider-workflows">): Promise<DesktopIpcOutput<"desktop:refresh-cinema-provider-workflows">>
   saveCinemaVideoProviderApiKey(input: DesktopIpcInput<"desktop:save-cinema-video-provider-api-key">): Promise<DesktopIpcOutput<"desktop:save-cinema-video-provider-api-key">>
   saveCinemaVideoProviderSettings(input: DesktopIpcInput<"desktop:save-cinema-video-provider-settings">): Promise<DesktopIpcOutput<"desktop:save-cinema-video-provider-settings">>
   testCinemaVideoProviderConnection(input: DesktopIpcInput<"desktop:test-cinema-video-provider-connection">): Promise<DesktopIpcOutput<"desktop:test-cinema-video-provider-connection">>

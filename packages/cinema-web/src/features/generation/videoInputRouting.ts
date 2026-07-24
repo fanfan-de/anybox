@@ -2,7 +2,9 @@ import type { CinemaNodeType } from "@anybox/shared/cinema"
 import type { Edge } from "@xyflow/react"
 import {
   GENERATION_INPUT_SLOTS,
+  isGenerationImageInputSlot,
   slotForInputRole,
+  type GenerationInputControl,
   type GenerationInputSlot,
 } from "./generationContract"
 
@@ -11,6 +13,11 @@ export type VideoEdgeTargetInput = {
   role?: string
   slot: GenerationInputSlot | null
 }
+
+export type VideoInputRoutingControl = Pick<
+  GenerationInputControl,
+  "inputKey" | "role" | "slot" | "modality"
+>
 
 type VideoInputRoutingNode = {
   id: string
@@ -85,10 +92,54 @@ function videoImageInputAssignments(
   return assignments
 }
 
+function targetInputMetadata(input: VideoInputRoutingControl): VideoEdgeTargetInput {
+  return {
+    inputKey: input.inputKey,
+    role: input.role,
+    slot: input.slot,
+  }
+}
+
+function targetInputAcceptsSource(
+  input: VideoInputRoutingControl,
+  sourceType: CinemaNodeType | undefined,
+) {
+  if (sourceType === "text") return input.slot === "textParameter"
+  if (sourceType === "video") return input.slot === "sourceVideo"
+  if (sourceType === "image") {
+    return Boolean(input.slot && isGenerationImageInputSlot(input.slot))
+  }
+  return false
+}
+
+function contractTargetVideoInput(
+  edge: Edge,
+  sourceType: CinemaNodeType | undefined,
+  nodes: readonly VideoInputRoutingNode[],
+  edges: readonly Edge[],
+  targetInputs: readonly VideoInputRoutingControl[],
+): VideoEdgeTargetInput | null {
+  const compatibleInputs = targetInputs.filter((input) =>
+    targetInputAcceptsSource(input, sourceType)
+  )
+  if (compatibleInputs.length === 1) {
+    return targetInputMetadata(compatibleInputs[0]!)
+  }
+
+  if (sourceType !== "image" || compatibleInputs.length !== 2) return null
+  const startFrameInput = compatibleInputs.find((input) => input.slot === "startFrame")
+  const endFrameInput = compatibleInputs.find((input) => input.slot === "endFrame")
+  if (!startFrameInput || !endFrameInput) return null
+
+  const imageIndex = videoImageInputAssignments(edge.target, nodes, edges).get(edge.id)
+  if (imageIndex === undefined) return null
+  return targetInputMetadata(imageIndex === 0 ? startFrameInput : endFrameInput)
+}
+
 export function videoInputHandleMetadata(handle: string | null | undefined): VideoEdgeTargetInput | null {
   if (!handle) return null
   if (isVideoInputSlot(handle)) return { slot: handle }
-  const match = /^input:(\d+):(.+)$/.exec(handle)
+  const match = /^input:([^:]+):(.+)$/.exec(handle)
   if (!match) return null
   const role = match[2] ?? ""
   return {
@@ -102,12 +153,17 @@ export function edgeTargetVideoInput(
   edge: Edge,
   nodes: readonly VideoInputRoutingNode[],
   edges: readonly Edge[],
+  targetInputs?: readonly VideoInputRoutingControl[],
 ): VideoEdgeTargetInput | null {
   const explicitInput = explicitEdgeTargetVideoInput(edge)
   if (explicitInput) return explicitInput
 
   const sourceNode = nodes.find((node) => node.id === edge.source)
   const sourceType = sourceNode?.data.cinemaType
+  if (targetInputs !== undefined) {
+    return contractTargetVideoInput(edge, sourceType, nodes, edges, targetInputs)
+  }
+
   if (sourceType === "text") return { slot: "textParameter" }
   if (sourceType === "video") return { slot: "sourceVideo" }
   if (!isImageSourceNode(sourceNode)) return null

@@ -203,6 +203,7 @@ describe("environment setup runner", () => {
       }
       const cancelled = await EnvironmentRunner.cancelRun(queued!.id)
 
+      if (!cancelled) throw new Error("Expected the active environment run to be canceled")
       expect(cancelled.status).toBe("cancelled")
       expect(EnvironmentRunner.getRun(queued!.id).status).toBe("cancelled")
     } finally {

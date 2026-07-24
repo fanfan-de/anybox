@@ -3,6 +3,7 @@ import { subscriptionTranslations } from "../subscription-translations"
 import { skillLibraryTranslations } from "../skill-library-translations"
 import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
 import { environmentEnUS } from "../environment-translations"
+import { cinemaWorkflowTranslations } from "../cinema-workflow-translations"
 
 export const plPL = {
   "app.loading": "Ładowanie",
@@ -301,6 +302,16 @@ export const plPL = {
   "settings.videoProviders.emptyCopy": "Dostępni dostawcy zadań obrazu i wideo pojawią się tutaj.",
   "settings.videoProviders.credentialPlaceholder": "Wprowadź klucz API lub accessKey:secretKey",
   "settings.videoProviders.storedCredentialPlaceholder": "Wykryto zapisane poświadczenie. Pozostaw puste, aby zachować.",
+  "settings.videoProviders.noAuthentication": "Uwierzytelnianie nie jest wymagane",
+  "settings.videoProviders.readinessLabel": "Gotowość środowiska",
+  "settings.videoProviders.readinessReady": "Gotowe",
+  "settings.videoProviders.readinessNeedsAttention": "Wymaga uwagi",
+  "settings.videoProviders.readinessDetail": "Wynik sprawdzenia",
+  "settings.videoProviders.missingNodes": "Brakujące węzły",
+  "settings.videoProviders.missingModels": "Brakujące pliki modeli",
+  "settings.videoProviders.serviceStatus": "Usługa",
+  "settings.videoProviders.nodesStatus": "Węzły",
+  "settings.videoProviders.modelsStatus": "Pliki modeli",
   "settings.videoProviders.endpointLabel": "Endpoint",
   "settings.videoProviders.endpointCurrentLabel": "Bieżący endpoint",
   "settings.videoProviders.endpointSourceDefault": "Domyślny endpoint",
@@ -1415,4 +1426,5 @@ export const plPL = {
   "mcp.validation.requireToolNames": "Filtry narzędzi nazwanych wymagają co najmniej jednej nazwy narzędzia.",
   ...pluginOwnershipTranslations.enUS,
   ...environmentEnUS,
+  ...cinemaWorkflowTranslations.enUS,
 } as const satisfies Record<TranslationKey, string>

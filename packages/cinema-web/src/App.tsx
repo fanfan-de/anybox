@@ -68,6 +68,7 @@ import {
   type CinemaGeneratedAsset,
   type CinemaImageGenerationResult,
   type CinemaImportedImageAssetResult,
+  type CinemaImportedMediaAssetResult,
   type CinemaImageModel,
   type CinemaImageModelsResult,
   type GenerationControl,
@@ -77,6 +78,7 @@ import {
   type CinemaTextModelsResult,
   type CinemaNodeType,
   type CinemaProviderEndpoint,
+  type CinemaProviderWorkflowCatalog,
   type CinemaProjectDirectoryEntry,
   type CinemaProjectDirectoryListing,
   type CinemaProjectSummary,
@@ -103,10 +105,13 @@ import {
   generationLegacyAssetsBySlot,
 } from "./features/generation/generationPayload"
 import {
+  providersWithDiscoveredWorkflows,
+  reconcileGenerationParameters,
+  workflowIssueSummary,
+} from "./features/generation/workflowCatalog"
+import {
   edgeTargetVideoInput,
-  nextVideoImageInputIndex,
   normalizeVideoTargetEdgeHandle,
-  videoInputHandleMetadata,
 } from "./features/generation/videoInputRouting"
 import {
   canonicalizeCinemaImageNodeData,
@@ -190,6 +195,7 @@ type ImageGenerationRequest = {
   prompt: string
   userPrompt?: string
   model: string | null
+  target?: CinemaImageModel["target"]
   size?: string
   count?: number
   style?: string
@@ -297,6 +303,11 @@ type CinemaFlowNodeData = {
   onDisconnectEdge?: (edgeID: string) => void
   onGenerateImage?: (nodeID: string, request: ImageGenerationRequest) => void
   videoProviders?: CinemaVideoProvider[]
+  workflowCatalogs?: CinemaProviderWorkflowCatalog[]
+  isLoadingWorkflows?: boolean
+  isRefreshingWorkflows?: boolean
+  workflowRefreshError?: string | null
+  onRefreshProviderWorkflows?: (providerID: string) => void
   generationTasks?: CinemaGenerationTask[]
   sourceImageAsset?: VideoSourceImageAsset | null
   videoInputImageAssets?: VideoImageInputAssets
@@ -400,10 +411,14 @@ const VIDEO_INPUT_SLOT_LABELS: Record<VideoInputSlot, string> = {
   sourceVideo: "源视频",
   mask: "蒙版",
 }
-const VIDEO_LOCAL_IMAGE_INPUT_SLOTS = [
+const VIDEO_LOCAL_MEDIA_INPUT_SLOTS = [
+  "sourceImage",
   "startFrame",
   "endFrame",
-] as const satisfies readonly VideoImageInputSlot[]
+  "referenceImage",
+  "sourceVideo",
+  "mask",
+] as const satisfies readonly VideoMediaInputSlot[]
 
 const DEFAULT_NODE_SIZE: Record<CinemaNodeType, { width: number; height: number }> = {
   text: { width: 360, height: 188 },
@@ -573,6 +588,23 @@ function makeAssetLibraryOperationID(type: string) {
   return `${type}-${suffix}`
 }
 
+function makeGenerationOperationID() {
+  const browserCrypto = globalThis.crypto as Crypto | undefined
+  if (typeof browserCrypto?.randomUUID === "function") return browserCrypto.randomUUID()
+  const bytes = new Uint8Array(16)
+  if (browserCrypto) {
+    browserCrypto.getRandomValues(bytes)
+  } else {
+    for (let index = 0; index < bytes.length; index += 1) {
+      bytes[index] = Math.floor(Math.random() * 256)
+    }
+  }
+  bytes[6] = (bytes[6] & 0x0f) | 0x40
+  bytes[8] = (bytes[8] & 0x3f) | 0x80
+  const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("")
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
@@ -664,8 +696,13 @@ function generationControlReady(control: GenerationControl, parameters: Record<s
   if (!control.required) return true
   const value = parameters[control.key]
   switch (control.type) {
+    case "text":
     case "prompt":
       return typeof value === "string" && value.trim().length > 0
+    case "media": {
+      const values = Array.isArray(value) ? value : value ? [value] : []
+      return values.length >= (control.minCount ?? 1)
+    }
     case "image-list":
       return Array.isArray(value) && value.length >= (control.minCount ?? 1)
     case "select":
@@ -1202,14 +1239,57 @@ function GenerationParameterControlField({
   control,
   parameters,
   disabled,
+  agentBaseURL,
+  projectID,
   onChange,
 }: {
   control: GenerationControl
   parameters: Record<string, unknown>
   disabled: boolean
+  agentBaseURL?: string
+  projectID?: string
   onChange: (patch: Record<string, unknown>) => void
 }) {
   const { locale, t } = useI18n()
+  const mediaInputID = useId().replace(/:/g, "")
+  const [mediaImportError, setMediaImportError] = useState<string | null>(null)
+  const importMediaMutation = useMutation({
+    mutationFn: async (files: File[]) => {
+      if (control.type !== "media" || !agentBaseURL || !projectID) {
+        throw new Error("Project media import is unavailable.")
+      }
+      const assets: CinemaImportedMediaAssetResult["asset"][] = []
+      for (const file of files) {
+        const dataBase64 = await fileToDataBase64(file)
+        const result = await requestJson<CinemaImportedMediaAssetResult>(
+          agentBaseURL,
+          `/api/cinema/projects/${encodeURIComponent(projectID)}/assets/media-imports`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              fileName: file.name,
+              mimeType: file.type || undefined,
+              dataBase64,
+            }),
+          },
+        )
+        assets.push(result.asset)
+      }
+      return assets
+    },
+    onMutate: () => setMediaImportError(null),
+    onSuccess: (assets) => {
+      if (control.type !== "media") return
+      const values = assets.map((asset) => ({ path: asset.path, assetID: asset.id }))
+      onChange({
+        [control.key]: control.multiple ? values : values[0],
+      })
+    },
+    onError: (error) => {
+      setMediaImportError(error instanceof Error ? error.message : "Media import failed.")
+    },
+  })
   if (control.type === "image-list") return null
   const controlLabel = translateGenerationParameterLabel(locale, control.key, control.label)
 
@@ -1235,6 +1315,7 @@ function GenerationParameterControlField({
             onChange({ [control.key]: option })
           }}
         />
+        {control.description ? <small>{control.description}</small> : null}
       </div>
     )
   }
@@ -1249,6 +1330,7 @@ function GenerationParameterControlField({
           type="number"
           min={control.min}
           max={control.max}
+          step={control.step}
           value={typeof value === "number" && Number.isFinite(value) ? String(value) : ""}
           disabled={disabled}
           onKeyDown={(event) => event.stopPropagation()}
@@ -1260,6 +1342,7 @@ function GenerationParameterControlField({
             })
           }}
         />
+        {control.description ? <small>{control.description}</small> : null}
       </label>
     )
   }
@@ -1280,12 +1363,31 @@ function GenerationParameterControlField({
           <span aria-hidden="true" />
           <strong>{t(checked ? "common.on" : "common.off")}</strong>
         </button>
+        {control.description ? <small>{control.description}</small> : null}
       </div>
     )
   }
 
-  if (control.type === "prompt") {
+  if (control.type === "text" || control.type === "prompt") {
     const value = parameters[control.key]
+    if (control.type === "text" && !control.multiline) {
+      return (
+        <label key={control.key} className="cinema-image-form-control">
+          <span>{controlLabel}</span>
+          <input
+            aria-label={controlLabel}
+            type="text"
+            defaultValue={typeof value === "string" ? value : ""}
+            disabled={disabled}
+            maxLength={control.maxLength}
+            placeholder={control.placeholder}
+            onKeyDown={(event) => event.stopPropagation()}
+            onBlur={(event) => onChange({ [control.key]: event.currentTarget.value })}
+          />
+          {control.description ? <small>{control.description}</small> : null}
+        </label>
+      )
+    }
     return (
       <label key={control.key} className="cinema-image-form-control is-json">
         <span>{controlLabel}</span>
@@ -1294,11 +1396,68 @@ function GenerationParameterControlField({
           defaultValue={typeof value === "string" ? value : ""}
           disabled={disabled}
           maxLength={control.maxLength}
+          placeholder={control.placeholder}
           spellCheck={false}
           onKeyDown={(event) => event.stopPropagation()}
-          onBlur={(event) => onChange({ [control.key]: event.currentTarget.value.trim() || undefined })}
+          onBlur={(event) => onChange({
+            [control.key]: event.currentTarget.value.length > 0 ? event.currentTarget.value : undefined,
+          })}
         />
+        {control.description ? <small>{control.description}</small> : null}
       </label>
+    )
+  }
+
+  if (control.type === "media") {
+    const rawValue = parameters[control.key]
+    const values = (Array.isArray(rawValue) ? rawValue : rawValue ? [rawValue] : []).flatMap((value) => {
+      if (typeof value === "string") return [value]
+      if (!value || typeof value !== "object" || Array.isArray(value)) return []
+      const path = (value as Record<string, unknown>).path
+      return typeof path === "string" ? [path] : []
+    })
+    const accept = control.supportedMimeTypes?.join(",")
+      ?? `${control.mediaKind}/*`
+    return (
+      <div key={control.key} className="cinema-image-form-control cinema-generation-media-control">
+        <span>{controlLabel}</span>
+        <input
+          id={mediaInputID}
+          className="cinema-file-input"
+          type="file"
+          accept={accept}
+          multiple={control.multiple}
+          disabled={disabled || importMediaMutation.isPending || !agentBaseURL || !projectID}
+          tabIndex={-1}
+          onChange={(event) => {
+            const files = [...(event.currentTarget.files ?? [])]
+            event.currentTarget.value = ""
+            if (files.length > 0) importMediaMutation.mutate(files)
+          }}
+        />
+        <div className="cinema-generation-media-actions">
+          <label
+            htmlFor={mediaInputID}
+            className={`cinema-generation-media-import ${disabled || importMediaMutation.isPending ? "is-disabled" : ""}`}
+            aria-disabled={disabled || importMediaMutation.isPending}
+          >
+            {importMediaMutation.isPending ? <Loader2 size={13} className="is-spinning" aria-hidden="true" /> : <Upload size={13} aria-hidden="true" />}
+            <span>{values.length > 0 ? values.map((value) => value.split("/").pop()).join(", ") : "Choose media"}</span>
+          </label>
+          {values.length > 0 ? (
+            <button
+              type="button"
+              disabled={disabled || importMediaMutation.isPending}
+              aria-label={`Clear ${controlLabel}`}
+              onClick={() => onChange({ [control.key]: undefined })}
+            >
+              <X size={12} aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
+        {control.description ? <small>{control.description}</small> : null}
+        {mediaImportError ? <small className="cinema-image-error" role="alert">{mediaImportError}</small> : null}
+      </div>
     )
   }
 
@@ -1312,15 +1471,19 @@ function GenerationParameterControlField({
         spellCheck={false}
         onKeyDown={(event) => event.stopPropagation()}
         onBlur={(event) => {
-          const parsed = parseJsonDraft(event.currentTarget.value, {})
+          const parsed = control.serializedObjectOnly !== false
+            ? parseJsonObjectDraft(event.currentTarget.value, {})
+            : parseJsonDraft(event.currentTarget.value, {})
           onChange({ [control.key]: parsed })
         }}
       />
+      {control.description ? <small>{control.description}</small> : null}
     </label>
   )
 }
 
 const GENERATION_PROGRESS_PHASES = [
+  "preparing",
   "queued",
   "submitted",
   "processing",
@@ -1385,6 +1548,8 @@ function effectiveGenerationProgress(input: {
 function progressLabel(progress: CinemaGenerationProgress, status: string) {
   if (progress.message && (progress.phase === "failed" || progress.phase === "canceled")) return progress.message
   switch (progress.phase) {
+    case "preparing":
+      return "Preparing"
     case "queued":
       return "Queued"
     case "submitted":
@@ -1407,7 +1572,8 @@ function progressLabel(progress: CinemaGenerationProgress, status: string) {
 }
 
 function isActiveProgress(progress: CinemaGenerationProgress) {
-  return progress.phase === "queued"
+  return progress.phase === "preparing"
+    || progress.phase === "queued"
     || progress.phase === "submitted"
     || progress.phase === "processing"
     || progress.phase === "downloading"
@@ -1430,7 +1596,9 @@ function GenerationProgress({
     : null
   const isActive = isActiveProgress(progress)
   const isIndeterminate = isActive && percent === null
-  const label = translateGenerationProgress(locale, progress.phase, progressLabel(progress, status))
+  const label = progress.message?.startsWith("Waiting for Local ComfyUI")
+    ? t("generation.progress.waitingForComfyUI")
+    : translateGenerationProgress(locale, progress.phase, progressLabel(progress, status))
   return (
     <div className={`cinema-generation-progress is-${progress.phase} ${isIndeterminate ? "is-indeterminate" : ""} ${className}`}>
       <div className="cinema-generation-progress-meta">
@@ -1625,8 +1793,12 @@ function availableVideoProviders(providers: CinemaVideoProvider[]) {
 }
 
 function providerForSelection(providers: CinemaVideoProvider[], providerID: string) {
+  const explicitlySelected = providerID
+    ? providers.find((provider) => provider.manifest.id === providerID)
+    : null
+  if (explicitlySelected) return explicitlySelected
   const availableProviders = availableVideoProviders(providers)
-  return availableProviders.find((provider) => provider.manifest.id === providerID) ?? availableProviders[0] ?? null
+  return availableProviders[0] ?? null
 }
 
 function availableModelsForProvider(provider: CinemaVideoProvider | null) {
@@ -1635,7 +1807,8 @@ function availableModelsForProvider(provider: CinemaVideoProvider | null) {
 
 function modelForSelection(provider: CinemaVideoProvider | null, modelID: string) {
   const availableModels = availableModelsForProvider(provider)
-  return availableModels.find((model) => providerModelMatchesID(model, modelID)) ?? availableModels[0] ?? null
+  if (modelID) return availableModels.find((model) => providerModelMatchesID(model, modelID)) ?? null
+  return availableModels[0] ?? null
 }
 
 function inputCombinationsForModel(provider: CinemaVideoProvider | null, model: VideoProviderModel | null) {
@@ -1667,12 +1840,35 @@ function isVideoMediaInputSlot(slot: VideoInputSlot): slot is VideoMediaInputSlo
   return isGenerationMediaInputSlot(slot)
 }
 
-function canImportVideoInputLocalImage(slot: VideoInputSlot | null): slot is VideoImageInputSlot {
-  return Boolean(slot && (VIDEO_LOCAL_IMAGE_INPUT_SLOTS as readonly VideoInputSlot[]).includes(slot))
+function canImportVideoInputLocalMedia(slot: VideoInputSlot | null): slot is VideoMediaInputSlot {
+  return Boolean(slot && (VIDEO_LOCAL_MEDIA_INPUT_SLOTS as readonly VideoInputSlot[]).includes(slot))
 }
 
 function isVideoMediaInputControl(input: VideoInputControl): input is VideoInputControl & { slot: VideoMediaInputSlot } {
   return isGenerationMediaInputControl(input)
+}
+
+function videoInputControlsForNode(
+  node: CinemaFlowNode,
+  providers: CinemaVideoProvider[],
+): VideoInputControl[] | undefined {
+  if (node.data.cinemaType !== "video") return undefined
+  const provider = providerForSelection(
+    providers,
+    readRawString(node.data.rawData, "providerID"),
+  )
+  const model = modelForSelection(
+    provider,
+    readRawString(node.data.rawData, "modelID"),
+  )
+  const combination = inputCombinationForSelection(
+    provider,
+    model,
+    readVideoMode(node.data.rawData),
+  )
+  return combination
+    ? videoModeInputContractForCombination(combination).inputs
+    : undefined
 }
 
 function videoInputAssetList(value: VideoInputAssetValue | undefined) {
@@ -1822,6 +2018,70 @@ function generationTaskUserPrompt(task: CinemaGenerationTask | null) {
   return typeof value === "string" ? value : null
 }
 
+const GENERATION_ERROR_TRANSLATION_KEYS: Partial<Record<string, TranslationKey>> = {
+  COMFYUI_OFFLINE: "video.error.comfyuiOffline",
+  COMFYUI_BASE_URL_INVALID: "video.error.comfyuiEndpointInvalid",
+  COMFYUI_BASE_URL_NOT_LOCAL: "video.error.comfyuiEndpointNotLocal",
+  COMFYUI_NODES_MISSING: "video.error.comfyuiNodesMissing",
+  COMFYUI_MODELS_MISSING: "video.error.comfyuiModelsMissing",
+  COMFYUI_WORKFLOW_INCOMPATIBLE: "video.error.comfyuiWorkflowInvalid",
+  COMFYUI_PROFILE_INVALID: "video.error.comfyuiWorkflowInvalid",
+  COMFYUI_PROFILE_DIGEST_MISMATCH: "video.error.comfyuiWorkflowInvalid",
+  COMFYUI_EXECUTION_FAILED: "video.error.comfyuiExecutionFailed",
+  COMFYUI_EXECUTION_INTERRUPTED: "video.error.comfyuiExecutionFailed",
+  COMFYUI_TASK_LOST: "video.error.comfyuiTaskLost",
+  COMFYUI_IMAGE_REQUIRED: "video.error.comfyuiInputInvalid",
+  COMFYUI_IMAGE_INVALID: "video.error.comfyuiInputInvalid",
+  COMFYUI_IMAGE_UNSUPPORTED: "video.error.comfyuiInputInvalid",
+  COMFYUI_IMAGE_COUNT_INVALID: "video.error.comfyuiInputInvalid",
+  COMFYUI_IMAGE_TOO_LARGE: "video.error.comfyuiInputTooLarge",
+  COMFYUI_OUTPUT_INVALID: "video.error.comfyuiOutputInvalid",
+  COMFYUI_OUTPUT_EMPTY: "video.error.comfyuiOutputInvalid",
+  COMFYUI_OUTPUT_DOWNLOAD_FAILED: "video.error.comfyuiOutputInvalid",
+  COMFYUI_OUTPUT_PATH_INVALID: "video.error.comfyuiOutputInvalid",
+  COMFYUI_OUTPUT_TOO_LARGE: "video.error.comfyuiOutputTooLarge",
+  COMFYUI_CANCEL_CONFLICT: "video.error.comfyuiCancelConflict",
+}
+
+function localizedGenerationError(
+  errorCode: string | undefined,
+  fallback: string | null,
+  t: (key: TranslationKey) => string,
+) {
+  if (!errorCode) return fallback
+  const key = GENERATION_ERROR_TRANSLATION_KEYS[errorCode]
+  if (!key) return fallback
+  const localized = t(key)
+  return errorCode === "COMFYUI_WORKFLOW_INCOMPATIBLE" && fallback
+    ? `${localized} ${fallback}`
+    : localized
+}
+
+function localizedGenerationTaskError(
+  task: CinemaGenerationTask | null,
+  t: (key: TranslationKey) => string,
+) {
+  return localizedGenerationError(task?.errorCode, task?.error ?? null, t)
+}
+
+const COMFYUI_SETTINGS_ERROR_CODES = new Set([
+  "COMFYUI_OFFLINE",
+  "COMFYUI_BASE_URL_INVALID",
+  "COMFYUI_BASE_URL_NOT_LOCAL",
+  "COMFYUI_NODES_MISSING",
+  "COMFYUI_MODELS_MISSING",
+  "COMFYUI_WORKFLOW_INCOMPATIBLE",
+])
+
+function requestDesktopCinemaProviderSettings(providerID: string) {
+  const message = {
+    type: "anybox:open-cinema-provider-settings",
+    providerID,
+  }
+  window.postMessage(message, window.location.origin)
+  if (window.parent !== window) window.parent.postMessage(message, "*")
+}
+
 function readDisplayAssets(rawData: Record<string, unknown>): DisplayAsset[] {
   const value = rawData.outputAssets
   if (!Array.isArray(value)) return []
@@ -1902,8 +2162,24 @@ function readVideoLocalInputAssets(rawData: Record<string, unknown>, nodeID: str
   if (!value || typeof value !== "object" || Array.isArray(value)) return {}
   const record = value as Record<string, unknown>
   const assets: VideoInputAssets = {}
-  for (const slot of VIDEO_LOCAL_IMAGE_INPUT_SLOTS) {
-    const asset = readImageAsset(record[slot])
+  for (const slot of VIDEO_LOCAL_MEDIA_INPUT_SLOTS) {
+    const rawAsset = record[slot]
+    if (!rawAsset || typeof rawAsset !== "object" || Array.isArray(rawAsset)) continue
+    const value = rawAsset as Record<string, unknown>
+    const kind = value.kind === "image" || value.kind === "video" || value.kind === "audio" || value.kind === "file"
+      ? value.kind
+      : null
+    const asset: CinemaGeneratedAsset | null = typeof value.id === "string" && typeof value.path === "string" && kind
+      ? {
+        id: value.id,
+        path: value.path,
+        kind,
+        ...(typeof value.mimeType === "string" ? { mimeType: value.mimeType } : {}),
+        ...(typeof value.sizeBytes === "number" ? { sizeBytes: value.sizeBytes } : {}),
+        ...(typeof value.width === "number" ? { width: value.width } : {}),
+        ...(typeof value.height === "number" ? { height: value.height } : {}),
+      }
+      : null
     if (!asset) continue
     assets[slot] = {
       ...asset,
@@ -1961,9 +2237,11 @@ function edgeMatchesVideoSlot(
   nodes: CinemaFlowNode[],
   edges: Edge[],
   legacySlot: VideoInputSlot | null = null,
+  targetInputs?: readonly VideoInputControl[],
 ) {
-  const edgeSlot = edgeTargetVideoInput(edge, nodes, edges)?.slot ?? null
+  const edgeSlot = edgeTargetVideoInput(edge, nodes, edges, targetInputs)?.slot ?? null
   if (edgeSlot) return edgeSlot === slot
+  if (targetInputs !== undefined) return false
   return legacySlot === slot
 }
 
@@ -1972,12 +2250,16 @@ function sourceAssetsForVideoSlot(
   nodes: CinemaFlowNode[],
   edges: Edge[],
   slot: VideoMediaInputSlot,
+  targetInputs?: readonly VideoInputControl[],
 ) {
   const assets: VideoSourceImageAsset[] = []
   const seen = new Set<string>()
   const legacySlot = slot === "sourceImage" ? "sourceImage" : null
   for (const edge of edges) {
-    if (edge.target !== nodeID || !edgeMatchesVideoSlot(edge, slot, nodes, edges, legacySlot)) continue
+    if (
+      edge.target !== nodeID
+      || !edgeMatchesVideoSlot(edge, slot, nodes, edges, legacySlot, targetInputs)
+    ) continue
     const sourceNode = nodes.find((node) => node.id === edge.source)
     if (!sourceNode) continue
     const asset = selectedSourceAssetForVideoSlot(sourceNode, slot)
@@ -2001,8 +2283,9 @@ function sourceImageAssetsForVideoSlot(
   nodes: CinemaFlowNode[],
   edges: Edge[],
   slot: VideoImageInputSlot,
+  targetInputs?: readonly VideoInputControl[],
 ) {
-  return sourceAssetsForVideoSlot(nodeID, nodes, edges, slot)
+  return sourceAssetsForVideoSlot(nodeID, nodes, edges, slot, targetInputs)
 }
 
 function sourceImageAssetForVideoSlot(
@@ -2010,30 +2293,46 @@ function sourceImageAssetForVideoSlot(
   nodes: CinemaFlowNode[],
   edges: Edge[],
   slot: VideoImageInputSlot,
+  targetInputs?: readonly VideoInputControl[],
 ) {
-  return sourceImageAssetsForVideoSlot(nodeID, nodes, edges, slot)[0] ?? null
+  return sourceImageAssetsForVideoSlot(nodeID, nodes, edges, slot, targetInputs)[0] ?? null
 }
 
-function sourceImageAssetsForVideoNode(nodeID: string, nodes: CinemaFlowNode[], edges: Edge[]) {
+function sourceImageAssetsForVideoNode(
+  nodeID: string,
+  nodes: CinemaFlowNode[],
+  edges: Edge[],
+  targetInputs?: readonly VideoInputControl[],
+) {
   const assets: VideoImageInputAssets = {}
   for (const slot of VIDEO_IMAGE_INPUT_SLOTS) {
-    const slotAssets = sourceImageAssetsForVideoSlot(nodeID, nodes, edges, slot)
+    const slotAssets = sourceImageAssetsForVideoSlot(nodeID, nodes, edges, slot, targetInputs)
     assets[slot] = slot === "referenceImage" ? slotAssets : slotAssets[0] ?? null
   }
   return assets
 }
 
-function sourceInputAssetsForVideoNode(nodeID: string, nodes: CinemaFlowNode[], edges: Edge[]) {
+function sourceInputAssetsForVideoNode(
+  nodeID: string,
+  nodes: CinemaFlowNode[],
+  edges: Edge[],
+  targetInputs?: readonly VideoInputControl[],
+) {
   const assets: VideoInputAssets = {}
   for (const slot of VIDEO_INPUT_SLOTS) {
     if (!isVideoMediaInputSlot(slot)) continue
-    const slotAssets = sourceAssetsForVideoSlot(nodeID, nodes, edges, slot)
+    const slotAssets = sourceAssetsForVideoSlot(nodeID, nodes, edges, slot, targetInputs)
     assets[slot] = slot === "referenceImage" ? slotAssets : slotAssets[0] ?? null
   }
   return assets
 }
 
-function sourceInputAssetMapsForVideoNode(nodeID: string, nodes: CinemaFlowNode[], edges: Edge[]) {
+function sourceInputAssetMapsForVideoNode(
+  nodeID: string,
+  nodes: CinemaFlowNode[],
+  edges: Edge[],
+  targetInputs?: readonly VideoInputControl[],
+) {
   const byInputKey: VideoInputAssetMap = {}
   const byRole: VideoInputAssetMap = {}
   const appendAsset = (map: VideoInputAssetMap, key: string, asset: VideoSourceImageAsset, allowMultiple: boolean) => {
@@ -2044,7 +2343,7 @@ function sourceInputAssetMapsForVideoNode(nodeID: string, nodes: CinemaFlowNode[
 
   for (const edge of edges) {
     if (edge.target !== nodeID) continue
-    const targetInput = edgeTargetVideoInput(edge, nodes, edges)
+    const targetInput = edgeTargetVideoInput(edge, nodes, edges, targetInputs)
     if (!targetInput?.slot || !isVideoMediaInputSlot(targetInput.slot)) continue
     const sourceNode = nodes.find((node) => node.id === edge.source)
     if (!sourceNode) continue
@@ -2063,8 +2362,13 @@ function sourceInputAssetMapsForVideoNode(nodeID: string, nodes: CinemaFlowNode[
   return { byInputKey, byRole }
 }
 
-function sourceImageAssetForVideoNode(nodeID: string, nodes: CinemaFlowNode[], edges: Edge[]) {
-  return sourceImageAssetForVideoSlot(nodeID, nodes, edges, "sourceImage")
+function sourceImageAssetForVideoNode(
+  nodeID: string,
+  nodes: CinemaFlowNode[],
+  edges: Edge[],
+  targetInputs?: readonly VideoInputControl[],
+) {
+  return sourceImageAssetForVideoSlot(nodeID, nodes, edges, "sourceImage", targetInputs)
 }
 
 function sourceImageAssetsForNode(nodeID: string, nodes: CinemaFlowNode[], edges: Edge[]) {
@@ -2102,12 +2406,17 @@ function sourceImageSelectionPatch(assets: VideoSourceImageAsset[]) {
   }
 }
 
-function sourceTextParametersForNode(nodeID: string, nodes: CinemaFlowNode[], edges: Edge[]) {
+function sourceTextParametersForNode(
+  nodeID: string,
+  nodes: CinemaFlowNode[],
+  edges: Edge[],
+  targetInputs?: readonly VideoInputControl[],
+) {
   const parameters: SourceTextParameter[] = []
   const seenNodeIDs = new Set<string>()
   for (const edge of edges) {
     if (edge.target !== nodeID) continue
-    const targetInput = edgeTargetVideoInput(edge, nodes, edges)
+    const targetInput = edgeTargetVideoInput(edge, nodes, edges, targetInputs)
     if (targetInput && targetInput.slot !== "textParameter") continue
     if (seenNodeIDs.has(edge.source)) continue
     const sourceNode = nodes.find((node) => node.id === edge.source)
@@ -3635,18 +3944,56 @@ function ImageCreationState({
   const taskID = readRawString(data.rawData, "taskID")
   const task = tasks.find((item) => item.id === taskID) ?? null
   const selectedImageModelValue = readRawString(data.rawData, "model")
+  const storedImageWorkflowID = readRawString(data.rawData, "workflowID")
   const selectedImageModel =
-    imageModels.find((model) => model.value === selectedImageModelValue) ??
-    data.effectiveImageModel ??
-    imageModels[0] ??
+    (selectedImageModelValue
+      ? imageModels.find((model) => model.value === selectedImageModelValue)
+      : data.effectiveImageModel ?? imageModels.find((model) => model.available) ?? imageModels[0]) ??
     null
+  const selectedImageWorkflowTarget = selectedImageModel?.target?.kind === "workflow"
+    ? selectedImageModel.target
+    : null
+  const comfyWorkflowCatalog = data.workflowCatalogs?.find((catalog) => catalog.providerID === "comfyui-local") ?? null
+  const selectedImageWorkflowID = selectedImageWorkflowTarget?.workflowID || storedImageWorkflowID
+  const selectedImageWorkflow = selectedImageWorkflowID
+    ? comfyWorkflowCatalog?.workflows.find((workflow) => workflow.workflowID === selectedImageWorkflowID) ?? null
+    : null
+  const readyImageModelValues = new Set(imageModels.map((model) => model.value))
+  const disabledImageWorkflowChoices = (data.workflowCatalogs ?? []).flatMap((catalog) => {
+    const provider = data.videoProviders?.find((item) => item.manifest.id === catalog.providerID)
+    if (!provider) return []
+    return catalog.workflows.flatMap((workflow) => {
+      if (workflow.output?.kind && workflow.output.kind !== "image") return []
+      const value = `${catalog.providerID}/${workflow.workflowID}`
+      if (readyImageModelValues.has(value)) return []
+      const reason = catalog.status !== "ready"
+        ? catalog.issues[0]?.message ?? t("generation.workflowCatalogStale")
+        : workflowIssueSummary(workflow)
+      return [{
+        value,
+        label: `${provider.manifest.name} · ${workflow.name} · ${reason}`,
+        triggerLabel: workflow.name,
+        disabled: true,
+      }]
+    })
+  })
   const imageFormSpec = selectedImageModel?.formSpec ?? null
   const imageFormParameters = readGenerationFormParameters(data.rawData, imageFormSpec)
   const imageFormParametersRef = useRef(imageFormParameters)
   const visibleImageFormControls = imageFormSpec?.controls.filter((control) => generationControlVisible(control, imageFormParameters)) ?? []
-  const promptControl = visibleImageFormControls.find((control): control is Extract<GenerationControl, { type: "prompt" }> => control.type === "prompt") ?? null
-  const sourceImageControl = visibleImageFormControls.find((control): control is Extract<GenerationControl, { type: "image-list" }> => control.type === "image-list") ?? null
-  const parameterControls = visibleImageFormControls.filter((control) => control.type !== "prompt" && control.type !== "image-list")
+  const promptControl = visibleImageFormControls.find((
+    control,
+  ): control is Extract<GenerationControl, { type: "prompt" | "text" }> =>
+    control.type === "prompt" || control.type === "text"
+  ) ?? null
+  const sourceImageControl = visibleImageFormControls.find((
+    control,
+  ): control is Extract<GenerationControl, { type: "image-list" | "media" }> =>
+    control.type === "image-list" || (control.type === "media" && control.mediaKind === "image")
+  ) ?? null
+  const parameterControls = visibleImageFormControls.filter((control) =>
+    control.key !== promptControl?.key && control.key !== sourceImageControl?.key
+  )
   const primaryImageParameterControls = parameterControls
     .filter(isPrimaryImageGenerationControl)
     .sort((left, right) => primaryImageGenerationControlRank(left) - primaryImageGenerationControlRank(right))
@@ -3700,7 +4047,21 @@ function ImageCreationState({
     ?? data.imageGenerationError
     ?? data.imageFinalizeError
     ?? task?.error
-    ?? readRawString(data.rawData, "error")
+    ?? readOptionalRawString(data.rawData, "error")
+    ?? (selectedImageWorkflow?.status === "disabled" ? workflowIssueSummary(selectedImageWorkflow) : null)
+    ?? (selectedImageWorkflow?.output?.kind && selectedImageWorkflow.output.kind !== "image"
+      ? t("generation.workflowOutputChanged")
+      : null)
+    ?? (storedImageWorkflowID && comfyWorkflowCatalog?.status === "ready" && !selectedImageWorkflow
+      ? t("generation.workflowSelectionInvalid")
+      : null)
+    ?? (selectedImageModel?.target?.kind === "workflow" && comfyWorkflowCatalog?.status !== "ready"
+      ? comfyWorkflowCatalog?.issues[0]?.message ?? "ComfyUI workflows must be refreshed before generation."
+      : null)
+    ?? (selectedImageModelValue.startsWith("comfyui-local/") && !selectedImageModel
+      ? t(storedImageWorkflowID ? "generation.workflowSelectionInvalid" : "generation.legacyWorkflowRemoved")
+      : null)
+    ?? data.workflowRefreshError
   const progress = effectiveGenerationProgress({
     task,
     rawData: data.rawData,
@@ -3716,7 +4077,9 @@ function ImageCreationState({
     ? { "--cinema-image-preview-aspect-ratio": previewAspectRatio } as CSSProperties
     : undefined
   const effectivePromptDraft = imagePromptWithSourceText(promptDraft, sourceTextParameters)
-  const promptReady = effectivePromptDraft.trim().length > 0
+  const promptReady = imageFormSpec
+    ? !promptControl?.required || effectivePromptDraft.trim().length > 0
+    : effectivePromptDraft.trim().length > 0
   const isImageTaskActive = status === "queued" || status === "running"
   const isImageFillBusy = Boolean(data.isGeneratingImage)
     || Boolean(data.isImportingImage)
@@ -3803,6 +4166,21 @@ function ImageCreationState({
     commitRawDataPatch({ parameters: nextParameters })
   }, [commitRawDataPatch])
 
+  useEffect(() => {
+    if (selectedImageModel?.target?.kind !== "workflow" || !imageFormSpec) return
+    const currentParameters = readRawRecord(rawDataRef.current, "parameters")
+    const nextParameters = reconcileGenerationParameters(currentParameters, imageFormSpec)
+    const revisionChanged = readRawString(rawDataRef.current, "workflowRevision") !== selectedImageModel.target.revision
+    if (!revisionChanged && JSON.stringify(currentParameters) === JSON.stringify(nextParameters)) return
+    imageFormParametersRef.current = nextParameters
+    commitRawDataPatch({
+      workflowID: selectedImageModel.target.workflowID,
+      workflowRevision: selectedImageModel.target.revision,
+      parameters: nextParameters,
+      ...(revisionChanged ? { error: null, errorCode: null } : {}),
+    })
+  }, [commitRawDataPatch, imageFormSpec, selectedImageModel?.target])
+
   const importImageSourceImageMutation = useMutation({
     mutationFn: async (files: File[]) => {
       if (!data.agentBaseURL || !data.projectID) throw new Error("Project context is not ready")
@@ -3857,7 +4235,7 @@ function ImageCreationState({
     && promptReady
     && formParametersReady
     && sourceImagesReady
-    && Boolean(selectedImageModel)
+    && selectedImageModel?.available === true
     && !isImageBusy
 
   const schedulePromptCommit = useCallback((value: string) => {
@@ -3982,11 +4360,11 @@ function ImageCreationState({
     const nextPrompt = promptDraftRef.current.trim()
     const nextSourceTextPrompts = sourceTextParameters.map((parameter) => parameter.text.trim()).filter(Boolean)
     const nextEffectivePrompt = imagePromptWithSourceText(nextPrompt, sourceTextParameters)
-    if (!nextEffectivePrompt) {
+    if (!promptReady) {
       promptRef.current?.focus()
       return
     }
-    if (!selectedImageModel || isImageBusy) return
+    if (!selectedImageModel || !selectedImageModel.available || isImageBusy) return
     setSourceImageImportError(null)
     clearPromptCommitTimer()
     const nextSize = sizeDraftRef.current.trim() || DEFAULT_IMAGE_GENERATION_SIZE
@@ -4001,10 +4379,14 @@ function ImageCreationState({
     if (promptControl) nextParameters[promptControl.key] = nextEffectivePrompt
     if (sourceImageControl) {
       if (submitSourceImageAssets.length > 0) {
-        nextParameters[sourceImageControl.key] = submitSourceImageAssets.map((asset) => ({
+        const mediaValues = submitSourceImageAssets.map((asset) => ({
           image: asset.path,
+          path: asset.path,
           assetID: asset.id,
         }))
+        nextParameters[sourceImageControl.key] = sourceImageControl.type === "media" && !sourceImageControl.multiple
+          ? mediaValues[0]
+          : mediaValues
       } else {
         delete nextParameters[sourceImageControl.key]
       }
@@ -4027,6 +4409,7 @@ function ImageCreationState({
       prompt: nextEffectivePrompt,
       userPrompt: nextPrompt,
       model: selectedImageModel.value,
+      target: selectedImageModel.target,
       parameters: nextParameters,
       ...(!imageFormSpec
         ? {
@@ -4055,10 +4438,12 @@ function ImageCreationState({
     if (control.type === "prompt" || control.type === "image-list") return null
     return (
       <GenerationParameterControlField
-        key={`${selectedImageModel?.value ?? "none"}-${control.key}`}
+        key={`${selectedImageModel?.value ?? "none"}-${selectedImageWorkflowTarget?.revision ?? "model"}-${control.key}`}
         control={control}
         parameters={imageFormParameters}
         disabled={isImageBusy}
+        agentBaseURL={data.agentBaseURL}
+        projectID={data.projectID}
         onChange={commitFormParameterPatch}
       />
     )
@@ -4110,11 +4495,16 @@ function ImageCreationState({
       )
     }
     return (
-      <section key={`${selectedImageModel?.value ?? "none"}-${control.key}`} className="cinema-generation-spec-section">
+      <section
+        key={`${selectedImageModel?.value ?? "none"}-${selectedImageWorkflowTarget?.revision ?? "model"}-${control.key}`}
+        className="cinema-generation-spec-section"
+      >
         <GenerationParameterControlField
           control={control}
           parameters={imageFormParameters}
           disabled={isImageBusy}
+          agentBaseURL={data.agentBaseURL}
+          projectID={data.projectID}
           onChange={commitFormParameterPatch}
         />
       </section>
@@ -4479,11 +4869,11 @@ function ImageCreationState({
               />
             </section>
           ) : null}
-          <textarea
+          {!imageFormSpec || promptControl ? <textarea
             ref={promptRef}
-            aria-label={t("image.prompt")}
+            aria-label={promptControl?.label ?? t("image.prompt")}
             value={promptDraft}
-            placeholder={t("image.promptPlaceholder")}
+            placeholder={promptControl?.placeholder ?? promptControl?.description ?? t("image.promptPlaceholder")}
             maxLength={promptControl?.maxLength}
             spellCheck={false}
             onFocus={() => {
@@ -4524,7 +4914,7 @@ function ImageCreationState({
               commitRawDataPatch({ prompt: value })
               setPromptInputEditing(false)
             }}
-          />
+          /> : null}
           {hasImageAdvancedInputs && isImageAdvancedOpen ? (
             <section id={`${id}-image-advanced`} className="cinema-image-advanced-panel" aria-label={t("image.advancedInputs")}>
               {!imageFormSpec ? (
@@ -4552,28 +4942,50 @@ function ImageCreationState({
             </p>
           ) : null}
           <footer className="cinema-generation-footer cinema-image-composer-footer">
-            <CinemaComposerSelect
-              id={`${id}-image-model`}
-              ariaLabel="Image model"
-              className="cinema-generation-model-select"
-              menuMinWidth={236}
-              value={selectedImageModel?.value ?? ""}
-              disabled={imageModels.length === 0 || isImageBusy}
-              placeholder={t("generation.noModel")}
-              options={imageModels.map((model) => ({
-                value: model.value,
-                label: `${model.providerLabel} · ${model.label}`,
-                triggerLabel: model.label,
-              }))}
-              onChange={(nextValue) => {
-                if (nextValue === selectedImageModel?.value) return
-                const nextModel = imageModels.find((model) => model.value === nextValue) ?? null
-                commitRawDataPatch({
-                  model: nextValue || undefined,
-                  parameters: generationFormDefaultParameters(nextModel?.formSpec ?? null),
-                })
-              }}
-            />
+            <div className="cinema-generation-target-picker">
+              <CinemaComposerSelect
+                id={`${id}-image-model`}
+                ariaLabel={t("generation.target")}
+                className="cinema-generation-model-select"
+                menuMinWidth={236}
+                value={selectedImageModel?.value ?? selectedImageModelValue}
+                disabled={(imageModels.length === 0 && disabledImageWorkflowChoices.length === 0) || isImageBusy}
+                placeholder={t("generation.noWorkflowOrModel")}
+                options={[
+                  ...imageModels.map((model) => ({
+                    value: model.value,
+                    label: `${model.providerLabel} · ${model.label}${model.available ? "" : ` · ${t("generation.unavailable")}`}`,
+                    triggerLabel: model.label,
+                    disabled: !model.available,
+                  })),
+                  ...disabledImageWorkflowChoices,
+                ]}
+                onChange={(nextValue) => {
+                  if (nextValue === selectedImageModel?.value) return
+                  const nextModel = imageModels.find((model) => model.value === nextValue) ?? null
+                  commitRawDataPatch({
+                    model: nextValue || undefined,
+                    workflowID: nextModel?.target?.kind === "workflow" ? nextModel.target.workflowID : undefined,
+                    workflowRevision: nextModel?.target?.kind === "workflow" ? nextModel.target.revision : undefined,
+                    parameters: generationFormDefaultParameters(nextModel?.formSpec ?? null),
+                    error: null,
+                    errorCode: null,
+                  })
+                }}
+              />
+              {comfyWorkflowCatalog ? (
+                <button
+                  type="button"
+                  className="cinema-generation-workflow-refresh"
+                  title={t("generation.refreshWorkflows")}
+                  aria-label={t("generation.refreshWorkflows")}
+                  disabled={isImageBusy || data.isRefreshingWorkflows}
+                  onClick={() => data.onRefreshProviderWorkflows?.("comfyui-local")}
+                >
+                  <RefreshCw size={14} aria-hidden="true" className={data.isRefreshingWorkflows ? "is-spinning" : ""} />
+                </button>
+              ) : null}
+            </div>
             <div className={`cinema-image-quick-controls cinema-image-parameter-rail ${imageFormSpec ? "is-form-spec" : ""}`}>
               {hasImageCanvasSpec ? (
                 <GenerationSpecPopover
@@ -4681,7 +5093,7 @@ function VideoGenerationCanvasNode({
   const promptRef = useRef<HTMLTextAreaElement>(null)
   const videoPreviewRef = useRef<HTMLVideoElement>(null)
   const videoInputImageInputRef = useRef<HTMLInputElement>(null)
-  const pendingVideoInputImageSlotRef = useRef<VideoImageInputSlot | null>(null)
+  const pendingVideoInputImageSlotRef = useRef<VideoMediaInputSlot | null>(null)
   const rawDataRef = useRef(data.rawData)
   const onChangeRawDataRef = useRef(data.onChangeRawData)
   const onNodeInputEditingChangeRef = useRef(data.onNodeInputEditingChange)
@@ -4697,6 +5109,7 @@ function VideoGenerationCanvasNode({
   const [mode, setModeState] = useState<CinemaGenerationMode>(initialMode)
   const [providerID, setProviderIDState] = useState(() => readRawString(data.rawData, "providerID"))
   const [modelID, setModelIDState] = useState(() => readRawString(data.rawData, "modelID"))
+  const storedVideoWorkflowID = readRawString(data.rawData, "workflowID")
   const [promptDraft, setPromptDraftState] = useState(() => {
     const rawPrompt = readOptionalRawString(data.rawData, "text")
     return rawPrompt ?? taskUserPrompt ?? task?.input.prompt ?? ""
@@ -4707,7 +5120,7 @@ function VideoGenerationCanvasNode({
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false)
   const [isVideoPreviewPlaying, setIsVideoPreviewPlaying] = useState(false)
   const [videoInputImageImportError, setVideoInputImageImportError] = useState<string | null>(null)
-  const [importingVideoInputImageSlot, setImportingVideoInputImageSlot] = useState<VideoImageInputSlot | null>(null)
+  const [importingVideoInputImageSlot, setImportingVideoInputImageSlot] = useState<VideoMediaInputSlot | null>(null)
   const promptDraftRef = useRef(promptDraft)
   const modeRef = useRef(mode)
   const providerIDRef = useRef(providerID)
@@ -4724,6 +5137,24 @@ function VideoGenerationCanvasNode({
   const selectedProvider = providerForSelection(providers, providerID)
   const selectedModel = modelForSelection(selectedProvider, modelID)
   const selectedModelSelectionID = selectedModel ? providerModelSelectionID(selectedModel) : ""
+  const selectedWorkflowForm = selectedModel?.formSpecs.find((formSpec) =>
+    formSpec.target.kind === "workflow" && formSpec.output === "video"
+  ) ?? null
+  const selectedWorkflowTarget = selectedWorkflowForm?.target.kind === "workflow"
+    ? selectedWorkflowForm.target
+    : null
+  const taskMatchesSelectedWorkflow = !selectedWorkflowTarget || (
+    task?.target.kind === "workflow"
+    && task.target.workflowID === selectedWorkflowTarget.workflowID
+    && task.target.revision === selectedWorkflowTarget.revision
+  )
+  const activeTask = taskMatchesSelectedWorkflow ? task : null
+  const selectedWorkflowCatalog = data.workflowCatalogs?.find((catalog) =>
+    catalog.providerID === (selectedProvider?.manifest.id ?? providerID)
+  ) ?? null
+  const selectedCatalogWorkflow = selectedWorkflowCatalog?.workflows.find((workflow) =>
+    workflow.workflowID === (selectedWorkflowTarget?.workflowID ?? modelID)
+  ) ?? null
   const selectedInputCombination = inputCombinationForSelection(selectedProvider, selectedModel, mode)
   const selectedEndpoint: CinemaProviderEndpoint | undefined = selectedInputCombination?.endpoint
   const aspectRatioOptions = modelAspectRatioOptions(selectedModel, selectedInputCombination)
@@ -4757,17 +5188,53 @@ function VideoGenerationCanvasNode({
       value: JSON.stringify([provider.manifest.id, providerModelSelectionID(model)]),
       label: `${provider.manifest.name} · ${model.label}`,
     })))
+  const readyVideoModelChoiceValues = new Set(videoModelChoices.map((choice) => choice.value))
+  const disabledWorkflowChoices = (data.workflowCatalogs ?? []).flatMap((catalog) => {
+    const provider = providers.find((item) => item.manifest.id === catalog.providerID)
+    if (!provider) return []
+    return catalog.workflows.flatMap((workflow) => {
+      if (workflow.output?.kind && workflow.output.kind !== "video") return []
+      const value = JSON.stringify([provider.manifest.id, workflow.workflowID])
+      if (readyVideoModelChoiceValues.has(value)) return []
+      const reason = catalog.status !== "ready"
+        ? catalog.issues[0]?.message ?? t("generation.workflowCatalogStale")
+        : workflowIssueSummary(workflow)
+      return [{
+        value,
+        label: `${provider.manifest.name} · ${workflow.name} · ${reason}`,
+        triggerLabel: workflow.name,
+        disabled: true,
+      }]
+    })
+  })
   const selectedVideoModelChoiceValue = selectedProvider && selectedModel
     ? JSON.stringify([selectedProvider.manifest.id, providerModelSelectionID(selectedModel)])
-    : ""
+    : providerID && modelID
+      ? JSON.stringify([providerID, modelID])
+      : ""
   const availableInputCombinations = inputCombinationsForModel(selectedProvider, selectedModel)
   const visibleModeContracts = availableInputCombinations.map(videoModeInputContractForCombination)
   const modeContract = videoModeInputContractForCombination(selectedInputCombination)
+  const workflowPrimaryTextControl = selectedWorkflowForm?.controls.find((control) =>
+    control.type === "prompt" || control.type === "text"
+  ) ?? null
+  const workflowSlottedControlKeys = new Set(modeContract.inputs.flatMap((input) =>
+    input.slot && input.slot !== "textParameter" ? [input.parameterKey] : []
+  ))
+  const formParameterControls = selectedWorkflowForm
+    ? selectedWorkflowForm.controls.filter((control) =>
+      control.key !== workflowPrimaryTextControl?.key
+      && !(
+        (control.type === "media" || control.type === "image-list")
+        && workflowSlottedControlKeys.has(control.key)
+      )
+    )
+    : modeContract.parameterControls
   const videoFormParameters = {
-    ...generationControlDefaultParameters(modeContract.parameterControls),
+    ...generationControlDefaultParameters(selectedWorkflowForm?.controls ?? modeContract.parameterControls),
     ...readRawRecord(data.rawData, "parameters"),
   }
-  const visibleVideoParameterControls = modeContract.parameterControls.filter((control) =>
+  const visibleVideoParameterControls = formParameterControls.filter((control) =>
     generationControlVisible(control, videoFormParameters)
   )
   const hasVideoAdvancedInputs = visibleVideoParameterControls.length > 0
@@ -4784,7 +5251,9 @@ function VideoGenerationCanvasNode({
   const previewClassName = `cinema-video-gen-preview ${previewSrc ? "has-video" : "is-empty"} is-${previewAspectRatio.shape}`
   const currentStatus = data.isCreatingVideoTask
     ? "queued"
-    : task?.status ?? readRawString(data.rawData, "status", "draft")
+    : activeTask?.status ?? (taskMatchesSelectedWorkflow
+      ? readRawString(data.rawData, "status", "draft")
+      : "draft")
   const isWaiting = currentStatus === "queued" || currentStatus === "running"
   const isBusy = data.isCreatingVideoTask || isWaiting
   const providerNeedsCredential = Boolean(selectedProvider?.auth.requiresCredential)
@@ -4801,7 +5270,7 @@ function VideoGenerationCanvasNode({
   const videoLocalInputAssets = readVideoLocalInputAssets(data.rawData, id)
   const sourceImageAsset = videoInputAssetList(inputAssets.sourceImage)[0] ?? data.sourceImageAsset ?? null
   const inputAssetsForControl = (input: VideoInputControl & { slot: VideoMediaInputSlot }) => {
-    const localAssets = canImportVideoInputLocalImage(input.slot)
+    const localAssets = canImportVideoInputLocalMedia(input.slot)
       ? videoInputAssetList(videoLocalInputAssets[input.slot])
       : []
     const keyedAssets = videoInputAssetList(data.videoInputAssetsByInputKey?.[input.inputKey])
@@ -4822,7 +5291,9 @@ function VideoGenerationCanvasNode({
   const missingRequiredInputLabel = missingRequiredInput ? localizedVideoInputLabel(missingRequiredInput) : ""
   const sourceTextParameters = data.sourceTextParameters ?? []
   const effectivePromptDraft = imagePromptWithSourceText(promptDraft, sourceTextParameters)
-  const promptRequired = modeContract.inputs.some((input) => input.slot === "textParameter" && input.required)
+  const promptRequired = selectedWorkflowForm
+    ? workflowPrimaryTextControl?.required === true
+    : modeContract.inputs.some((input) => input.slot === "textParameter" && input.required)
   const missingRequiredParameterControl = visibleVideoParameterControls.find((control) =>
     !generationControlReady(control, videoFormParameters)
   ) ?? null
@@ -4835,9 +5306,40 @@ function VideoGenerationCanvasNode({
   const requiredInputMissing = Boolean(missingRequiredInput)
   const hasSourceImageInput = videoMediaInputs.some((input) => input.slot === "sourceImage")
   const missingRequiredInputSlotLabel = missingRequiredInputLabel
-  const nodeError = data.videoGenerationError ?? task?.error ?? readRawString(data.rawData, "error")
+  const nodeError = data.videoGenerationError
+    ?? localizedGenerationTaskError(activeTask, t)
+    ?? (taskMatchesSelectedWorkflow ? readOptionalRawString(data.rawData, "error") : null)
+    ?? (selectedCatalogWorkflow?.status === "disabled" ? workflowIssueSummary(selectedCatalogWorkflow) : null)
+    ?? (selectedCatalogWorkflow?.output?.kind && selectedCatalogWorkflow.output.kind !== "video"
+      ? t("generation.workflowOutputChanged")
+      : null)
+    ?? (providerID === "comfyui-local" && storedVideoWorkflowID && selectedWorkflowCatalog?.status === "ready" && !selectedCatalogWorkflow
+      ? t("generation.workflowSelectionInvalid")
+      : null)
+    ?? (selectedWorkflowCatalog && selectedWorkflowCatalog.status !== "ready"
+      ? selectedWorkflowCatalog.issues[0]?.message ?? t("generation.workflowCatalogStale")
+      : null)
+    ?? (data.isLoadingWorkflows ? t("generation.loadingWorkflows") : null)
+    ?? (providerID === "comfyui-local" && modelID && !selectedModel
+      ? t("generation.legacyWorkflowRemoved")
+      : null)
+    ?? data.workflowRefreshError
+  const nodeErrorCode = taskMatchesSelectedWorkflow
+    ? activeTask?.errorCode ?? readRawString(data.rawData, "errorCode")
+    : undefined
+  const comfyUIWaitingForService = (
+    activeTask?.providerID === "comfyui-local"
+    && activeTask.progress?.message?.startsWith("Waiting for Local ComfyUI")
+  )
+  const showComfyUISettingsAction = (
+    (activeTask?.providerID === "comfyui-local" || selectedProvider?.manifest.id === "comfyui-local")
+    && (
+      Boolean(nodeErrorCode && COMFYUI_SETTINGS_ERROR_CODES.has(nodeErrorCode))
+      || comfyUIWaitingForService
+    )
+  )
   const progress = effectiveGenerationProgress({
-    task,
+    task: activeTask,
     rawData: data.rawData,
     status: currentStatus,
     message: nodeError,
@@ -4858,7 +5360,7 @@ function VideoGenerationCanvasNode({
     ? t("video.error.parameterRequired", { parameter: missingRequiredParameterLabel })
     : null
   const requiredInputReason = requiredInputMissing
-    ? canImportVideoInputLocalImage(missingRequiredInput?.slot ?? null)
+    ? canImportVideoInputLocalMedia(missingRequiredInput?.slot ?? null)
       ? t("video.error.importOrConnectImage", { input: missingRequiredInputLabel })
       : t("video.error.connectInput", { input: missingRequiredInputLabel })
     : null
@@ -4964,7 +5466,22 @@ function VideoGenerationCanvasNode({
     commitRawDataPatch({ parameters: nextParameters })
   }, [commitRawDataPatch])
 
-  const writeVideoLocalInputAsset = useCallback((slot: VideoImageInputSlot, asset: CinemaGeneratedAsset | null) => {
+  useEffect(() => {
+    if (!selectedWorkflowForm || !selectedWorkflowTarget) return
+    const currentParameters = readRawRecord(rawDataRef.current, "parameters")
+    const nextParameters = reconcileGenerationParameters(currentParameters, selectedWorkflowForm)
+    const revisionChanged = readRawString(rawDataRef.current, "workflowRevision") !== selectedWorkflowTarget.revision
+    if (!revisionChanged && JSON.stringify(currentParameters) === JSON.stringify(nextParameters)) return
+    videoFormParametersRef.current = nextParameters
+    commitRawDataPatch({
+      workflowID: selectedWorkflowTarget.workflowID,
+      workflowRevision: selectedWorkflowTarget.revision,
+      parameters: nextParameters,
+      ...(revisionChanged ? { error: null, errorCode: null } : {}),
+    })
+  }, [commitRawDataPatch, selectedWorkflowForm, selectedWorkflowTarget])
+
+  const writeVideoLocalInputAsset = useCallback((slot: VideoMediaInputSlot, asset: CinemaGeneratedAsset | null) => {
     const previousValue = rawDataRef.current.videoLocalInputAssets
     const nextLocalInputAssets = previousValue && typeof previousValue === "object" && !Array.isArray(previousValue)
       ? { ...(previousValue as Record<string, unknown>) }
@@ -4980,12 +5497,12 @@ function VideoGenerationCanvasNode({
   }, [commitRawDataPatch])
 
   const importVideoInputImageMutation = useMutation({
-    mutationFn: async ({ slot, file }: { slot: VideoImageInputSlot; file: File }) => {
+    mutationFn: async ({ slot, file }: { slot: VideoMediaInputSlot; file: File }) => {
       if (!data.agentBaseURL || !data.projectID) throw new Error(t("video.error.projectUnavailable"))
       const dataBase64 = await fileToDataBase64(file)
-      const result = await requestJson<CinemaImportedImageAssetResult>(
+      const result = await requestJson<CinemaImportedMediaAssetResult>(
         data.agentBaseURL,
-        `/api/cinema/projects/${encodeURIComponent(data.projectID)}/assets/imports`,
+        `/api/cinema/projects/${encodeURIComponent(data.projectID)}/assets/media-imports`,
         {
           method: "POST",
           headers: {
@@ -5025,25 +5542,40 @@ function VideoGenerationCanvasNode({
 
   useEffect(() => {
     const storedMode = readVideoMode(data.rawData)
-    const nextProvider = providerForSelection(providers, readRawString(data.rawData, "providerID"))
-    const nextModel = modelForSelection(nextProvider, readRawString(data.rawData, "modelID"))
+    const storedProviderID = readRawString(data.rawData, "providerID")
+    const storedModelID = readRawString(data.rawData, "modelID")
+    const hasStoredModelSelection = Boolean(storedProviderID && storedModelID)
+    const nextProvider = providerForSelection(providers, storedProviderID)
+    const nextModel = modelForSelection(nextProvider, storedModelID)
+    if (hasStoredModelSelection && nextProvider?.manifest.id === storedProviderID && !nextModel) {
+      setMode(storedMode)
+      setProviderID(storedProviderID)
+      setModelID(storedModelID)
+      return
+    }
     const nextCombination = inputCombinationForSelection(nextProvider, nextModel, storedMode)
     const nextMode = nextCombination?.mode ?? FALLBACK_VIDEO_INPUT_COMBINATION_MODE
     setMode(nextMode)
     setProviderID(nextProvider?.manifest.id ?? "")
     setModelID(nextModel ? providerModelSelectionID(nextModel) : "")
     const nextAspectRatio = validAspectRatioForSelection(
-      readRawString(data.rawData, "aspectRatio", defaultModelAspectRatio(nextModel, nextCombination)),
+      hasStoredModelSelection
+        ? readRawString(data.rawData, "aspectRatio", defaultModelAspectRatio(nextModel, nextCombination))
+        : defaultModelAspectRatio(nextModel, nextCombination),
       nextModel,
       nextCombination,
     )
     const nextDuration = validDurationForSelection(
-      String(readRawNumber(data.rawData, "duration", defaultModelDuration(nextModel, nextCombination))),
+      String(hasStoredModelSelection
+        ? readRawNumber(data.rawData, "duration", defaultModelDuration(nextModel, nextCombination))
+        : defaultModelDuration(nextModel, nextCombination)),
       nextModel,
       nextCombination,
     )
     const nextResolution = validResolutionForSelection(
-      readRawString(data.rawData, "resolution", defaultModelResolution(nextModel, nextCombination)),
+      hasStoredModelSelection
+        ? readRawString(data.rawData, "resolution", defaultModelResolution(nextModel, nextCombination))
+        : defaultModelResolution(nextModel, nextCombination),
       nextModel,
       nextCombination,
     )
@@ -5097,10 +5629,15 @@ function VideoGenerationCanvasNode({
     video.pause()
   }
 
-  const openVideoInputImagePicker = (slot: VideoImageInputSlot) => {
-    if (!canImportVideoInputLocalImage(slot) || isBusy || importVideoInputImageMutation.isPending) return
+  const openVideoInputImagePicker = (slot: VideoMediaInputSlot) => {
+    if (!canImportVideoInputLocalMedia(slot) || isBusy || importVideoInputImageMutation.isPending) return
     pendingVideoInputImageSlotRef.current = slot
     setVideoInputImageImportError(null)
+    if (videoInputImageInputRef.current) {
+      videoInputImageInputRef.current.accept = slot === "sourceVideo"
+        ? "video/mp4,video/webm,video/quicktime"
+        : IMAGE_FILE_ACCEPT
+    }
     videoInputImageInputRef.current?.click()
   }
 
@@ -5113,8 +5650,8 @@ function VideoGenerationCanvasNode({
     importVideoInputImageMutation.mutate({ slot, file })
   }
 
-  const clearVideoInputLocalImage = (slot: VideoImageInputSlot) => {
-    if (!canImportVideoInputLocalImage(slot) || isBusy || importVideoInputImageMutation.isPending) return
+  const clearVideoInputLocalImage = (slot: VideoMediaInputSlot) => {
+    if (!canImportVideoInputLocalMedia(slot) || isBusy || importVideoInputImageMutation.isPending) return
     setVideoInputImageImportError(null)
     writeVideoLocalInputAsset(slot, null)
   }
@@ -5153,8 +5690,9 @@ function VideoGenerationCanvasNode({
     const nextAspectRatio = defaultModelAspectRatio(nextModel, nextCombination)
     const nextDuration = defaultModelDuration(nextModel, nextCombination)
     const nextResolution = defaultModelResolution(nextModel, nextCombination)
+    const nextWorkflowForm = nextModel.formSpecs.find((formSpec) => formSpec.target.kind === "workflow") ?? null
     const nextParameters = generationControlDefaultParameters(
-      videoModeInputContractForCombination(nextCombination).parameterControls,
+      nextWorkflowForm?.controls ?? videoModeInputContractForCombination(nextCombination).parameterControls,
     )
     videoFormParametersRef.current = nextParameters
     setMode(nextMode)
@@ -5167,6 +5705,8 @@ function VideoGenerationCanvasNode({
       mode: nextMode,
       providerID: nextProvider.manifest.id,
       modelID: providerModelSelectionID(nextModel),
+      workflowID: nextWorkflowForm?.target.kind === "workflow" ? nextWorkflowForm.target.workflowID : undefined,
+      workflowRevision: nextWorkflowForm?.target.kind === "workflow" ? nextWorkflowForm.target.revision : undefined,
       aspectRatio: nextAspectRatio,
       duration: nextDuration,
       resolution: nextResolution,
@@ -5215,36 +5755,63 @@ function VideoGenerationCanvasNode({
       activeInputAssets.filter(({ asset }) => asset.nodeID !== id).map(({ asset }) => asset.nodeID),
     )
     const inputCombinationMode = selectedInputCombination.mode
-    const hiddenDefaultParameters = hiddenDefaultParametersForCombination(selectedInputCombination)
-    const parameters = buildGenerationTaskParameters({
-      baseParameters: videoFormParametersRef.current,
-      hiddenDefaultParameters,
-      fixedParameters: {
-        aspectRatio,
-        duration,
-        resolution,
-        qualityMode: resolution,
-        quality_mode: resolution,
-        inputCombinationMode,
-        selectedInputCombination: selectedInputCombination.mode,
-        modelSelectionID: selectedModelSelectionID,
-        ...(selectedEndpoint ? { endpoint: selectedEndpoint } : {}),
-        ...(selectedModel.offeringID ? { offeringID: selectedModel.offeringID } : {}),
-        ...(selectedModel.providerModelID ? { providerModelID: selectedModel.providerModelID } : {}),
-        userPrompt,
-        sourceTextPrompts,
-      },
-      sourceTextParameters,
-      activeInputAssets,
-      legacyAssetsBySlot: generationLegacyAssetsBySlot(activeInputAssets),
-      includeSourceImageFields: hasSourceImageInput,
-    })
+    let parameters: Record<string, unknown>
+    if (selectedWorkflowForm && selectedWorkflowTarget) {
+      parameters = reconcileGenerationParameters(videoFormParametersRef.current, selectedWorkflowForm)
+      if (workflowPrimaryTextControl) parameters[workflowPrimaryTextControl.key] = prompt
+      for (const control of selectedWorkflowForm.controls) {
+        if (control.type !== "media" && control.type !== "image-list") continue
+        const mediaInput = videoMediaInputs.find((input) => input.parameterKey === control.key)
+        if (!mediaInput) continue
+        const paths = inputAssetsForControl(mediaInput).map((asset) => ({
+          path: asset.path,
+          assetID: asset.id,
+        }))
+        if (paths.length === 0) {
+          delete parameters[control.key]
+        } else if (control.type === "media" && !control.multiple) {
+          parameters[control.key] = paths[0]
+        } else {
+          parameters[control.key] = paths
+        }
+      }
+      for (const [key, value] of Object.entries(parameters)) {
+        if (value === undefined) delete parameters[key]
+      }
+    } else {
+      const hiddenDefaultParameters = hiddenDefaultParametersForCombination(selectedInputCombination)
+      parameters = buildGenerationTaskParameters({
+        baseParameters: videoFormParametersRef.current,
+        hiddenDefaultParameters,
+        fixedParameters: {
+          aspectRatio,
+          duration,
+          resolution,
+          qualityMode: resolution,
+          quality_mode: resolution,
+          inputCombinationMode,
+          selectedInputCombination: selectedInputCombination.mode,
+          modelSelectionID: selectedModelSelectionID,
+          ...(selectedEndpoint ? { endpoint: selectedEndpoint } : {}),
+          ...(selectedModel.offeringID ? { offeringID: selectedModel.offeringID } : {}),
+          ...(selectedModel.providerModelID ? { providerModelID: selectedModel.providerModelID } : {}),
+          userPrompt,
+          sourceTextPrompts,
+        },
+        sourceTextParameters,
+        activeInputAssets,
+        legacyAssetsBySlot: generationLegacyAssetsBySlot(activeInputAssets),
+        includeSourceImageFields: hasSourceImageInput,
+      })
+    }
 
     commitRawDataPatch({
       text: userPrompt,
       mode: inputCombinationMode,
       providerID: selectedProvider.manifest.id,
       modelID: selectedModelSelectionID,
+      workflowID: selectedWorkflowTarget?.workflowID,
+      workflowRevision: selectedWorkflowTarget?.revision,
       inputCombinationMode,
       endpoint: selectedEndpoint ?? null,
       aspectRatio,
@@ -5255,11 +5822,13 @@ function VideoGenerationCanvasNode({
       sourceTextPrompts,
       status: "queued",
       error: null,
+      errorCode: null,
     })
     data.onCreateVideoGenerationTask?.(id, {
+      operationID: makeGenerationOperationID(),
       taskNodeID: id,
       providerID: selectedProvider.manifest.id,
-      modelID: selectedModelSelectionID,
+      target: selectedWorkflowTarget ?? { kind: "model", modelID: selectedModelSelectionID },
       mode: inputCombinationMode,
       title: data.title,
       prompt,
@@ -5437,7 +6006,7 @@ function VideoGenerationCanvasNode({
                   const isVideoAsset = asset?.kind === "video" || input.slot === "sourceVideo"
                   const edgeID = asset?.edgeID ?? ""
                   const isRequired = input.required
-                  const importSlot = canImportVideoInputLocalImage(input.slot) ? input.slot : null
+                  const importSlot = canImportVideoInputLocalMedia(input.slot) ? input.slot : null
                   const canImportLocalImage = importSlot !== null
                   const canOpenLocalImagePicker = canImportLocalImage && !asset
                   const isImportingThisSlot = importSlot !== null && importingVideoInputImageSlot === importSlot
@@ -5495,6 +6064,16 @@ function VideoGenerationCanvasNode({
                     data-slot-kind={input.slot}
                     title={slotValueTitle}
                   >
+                    {assetIndex === 0 ? (
+                      <Handle
+                        id={input.inputKey}
+                        type="target"
+                        position={Position.Left}
+                        className={`cinema-node-handle cinema-node-handle-input cinema-video-input-slot-handle ${asset ? "is-connected" : ""} ${isBusy ? "is-locked" : ""}`}
+                        style={accentStyle}
+                        isConnectable={!isBusy}
+                      />
+                    ) : null}
                     {canOpenLocalImagePicker ? (
                       <button
                         type="button"
@@ -5549,12 +6128,14 @@ function VideoGenerationCanvasNode({
               })}
             </section>
           ) : null}
-          <textarea
+          {!selectedWorkflowForm || workflowPrimaryTextControl ? <textarea
             ref={promptRef}
             className="cinema-video-prompt-input"
-            aria-label={t("video.prompt")}
+            aria-label={workflowPrimaryTextControl?.label ?? t("video.prompt")}
             value={promptDraft}
-            placeholder={translateVideoPromptPlaceholder(locale, modeContract.promptPlaceholder)}
+            placeholder={workflowPrimaryTextControl?.placeholder
+              ?? workflowPrimaryTextControl?.description
+              ?? translateVideoPromptPlaceholder(locale, modeContract.promptPlaceholder)}
             spellCheck={false}
             disabled={isBusy}
             onFocus={() => {
@@ -5593,17 +6174,19 @@ function VideoGenerationCanvasNode({
               commitRawDataPatch({ text: value })
               setPromptInputEditing(false)
             }}
-          />
+          /> : null}
           {hasVideoAdvancedInputs && isAdvancedOpen ? (
             <section id={`${id}-video-advanced`} className="cinema-video-advanced-panel" aria-label={t("video.advancedInputs")}>
               {visibleVideoParameterControls.length > 0 ? (
                 <section className="cinema-video-form-controls" aria-label={t("video.parameters")}>
                   {visibleVideoParameterControls.map((control) => (
                     <GenerationParameterControlField
-                      key={`${selectedVideoModelChoiceValue}-${mode}-${control.key}`}
+                      key={`${selectedVideoModelChoiceValue}-${selectedWorkflowTarget?.revision ?? mode}-${control.key}`}
                       control={control}
                       parameters={videoFormParameters}
                       disabled={isBusy}
+                      agentBaseURL={data.agentBaseURL}
+                      projectID={data.projectID}
                       onChange={commitVideoFormParameterPatch}
                     />
                   ))}
@@ -5611,10 +6194,23 @@ function VideoGenerationCanvasNode({
               ) : null}
             </section>
           ) : null}
-          {videoInputImageImportError || nodeError ? (
-            <p className="cinema-video-gen-error" role="alert" title={videoInputImageImportError ?? nodeError ?? undefined}>
-              {videoInputImageImportError ?? nodeError}
-            </p>
+          {videoInputImageImportError || nodeError || showComfyUISettingsAction ? (
+            <div className="cinema-video-gen-error-actions">
+              {videoInputImageImportError || nodeError ? (
+                <p className="cinema-video-gen-error" role="alert" title={videoInputImageImportError ?? nodeError ?? undefined}>
+                  {videoInputImageImportError ?? nodeError}
+                </p>
+              ) : null}
+              {showComfyUISettingsAction ? (
+                <button
+                  type="button"
+                  className="cinema-video-gen-settings-link"
+                  onClick={() => requestDesktopCinemaProviderSettings("comfyui-local")}
+                >
+                  {t("video.comfyui.openSettings")}
+                </button>
+              ) : null}
+            </div>
           ) : unsupportedRequiredInput || requiredInputMissing || providerNeedsCredential && !providerConnected || providerAdapterUnavailable ? (
             <p className="cinema-video-gen-error" role="status">
               {unsupportedInputReason ?? requiredInputReason ?? providerAdapterReason ?? providerConnectionReason}
@@ -5627,23 +6223,40 @@ function VideoGenerationCanvasNode({
             </span>
           ) : null}
           <footer className="cinema-generation-footer cinema-video-composer-footer">
-            <CinemaComposerSelect
-              id={`${id}-video-model`}
-              ariaLabel={t("video.model")}
-              className="cinema-generation-model-select"
-              menuMinWidth={236}
-              value={selectedVideoModelChoiceValue}
-              disabled={isBusy || videoModelChoices.length === 0}
-              placeholder={t("generation.noModel")}
-              options={videoModelChoices.map((choice) => ({
-                value: choice.value,
-                label: choice.label,
-                triggerLabel: choice.model.label,
-              }))}
-              onChange={chooseVideoModel}
-            />
+            <div className="cinema-generation-target-picker">
+              <CinemaComposerSelect
+                id={`${id}-video-model`}
+                ariaLabel={t("generation.target")}
+                className="cinema-generation-model-select"
+                menuMinWidth={236}
+                value={selectedVideoModelChoiceValue}
+                disabled={isBusy || videoModelChoices.length + disabledWorkflowChoices.length === 0}
+                placeholder={t("generation.noWorkflowOrModel")}
+                options={[
+                  ...videoModelChoices.map((choice) => ({
+                    value: choice.value,
+                    label: choice.label,
+                    triggerLabel: choice.model.label,
+                  })),
+                  ...disabledWorkflowChoices,
+                ]}
+                onChange={chooseVideoModel}
+              />
+              {selectedWorkflowCatalog ? (
+                <button
+                  type="button"
+                  className="cinema-generation-workflow-refresh"
+                  title={t("generation.refreshWorkflows")}
+                  aria-label={t("generation.refreshWorkflows")}
+                  disabled={isBusy || data.isRefreshingWorkflows}
+                  onClick={() => data.onRefreshProviderWorkflows?.(selectedWorkflowCatalog.providerID)}
+                >
+                  <RefreshCw size={14} aria-hidden="true" className={data.isRefreshingWorkflows ? "is-spinning" : ""} />
+                </button>
+              ) : null}
+            </div>
             <div className="cinema-video-quick-controls cinema-video-parameter-rail">
-              <GenerationSpecPopover
+              {!selectedWorkflowForm ? <GenerationSpecPopover
                 id={`${id}-video-spec`}
                 ariaLabel={t("video.canvasSpec")}
                 summary={videoSpecSummary}
@@ -5670,8 +6283,8 @@ function VideoGenerationCanvasNode({
                     commitRawDataPatch({ resolution: nextValue })
                   }}
                 />
-              </GenerationSpecPopover>
-              <CinemaComposerSelect
+              </GenerationSpecPopover> : null}
+              {!selectedWorkflowForm ? <CinemaComposerSelect
                 id={`${id}-video-duration`}
                 ariaLabel={t("video.duration")}
                 className="cinema-video-duration-select"
@@ -5687,7 +6300,7 @@ function VideoGenerationCanvasNode({
                   setDurationDraft(nextValue)
                   commitRawDataPatch({ duration: Number.parseFloat(nextValue) || DEFAULT_VIDEO_DURATION_SECONDS })
                 }}
-              />
+              /> : null}
               {hasVideoAdvancedInputs ? (
                 <button
                   type="button"
@@ -7183,6 +7796,44 @@ export function App() {
     queryFn: () => requestJson<CinemaImageModelsResult>(agentBaseURL, `/api/cinema/projects/${encodeURIComponent(projectID)}/image-models`),
   })
   const refetchImageModels = imageModelsQuery.refetch
+  const workflowProviderIDs = (providersQuery.data ?? [])
+    .filter((provider) => provider.manifest.capabilities?.workflowDiscovery)
+    .map((provider) => provider.manifest.id)
+  const workflowCatalogsQuery = useQuery({
+    queryKey: ["cinema-provider-workflows", agentBaseURL, workflowProviderIDs],
+    enabled: Boolean(projectID)
+      && projectQuery.data?.initialized === true
+      && workflowProviderIDs.length > 0,
+    staleTime: Number.POSITIVE_INFINITY,
+    refetchOnWindowFocus: false,
+    queryFn: () => Promise.all(workflowProviderIDs.map((providerID) =>
+      requestJson<CinemaProviderWorkflowCatalog>(
+        agentBaseURL,
+        `/api/cinema/video-providers/${encodeURIComponent(providerID)}/workflows`,
+      )
+    )),
+  })
+  const refetchWorkflowCatalogs = workflowCatalogsQuery.refetch
+  const refreshWorkflowsMutation = useMutation({
+    mutationFn: (providerID: string) =>
+      requestJson<CinemaProviderWorkflowCatalog>(
+        agentBaseURL,
+        `/api/cinema/video-providers/${encodeURIComponent(providerID)}/workflows/refresh`,
+        { method: "POST" },
+      ),
+    onSuccess: async () => {
+      await Promise.all([
+        refetchWorkflowCatalogs(),
+        refetchImageModels(),
+        refetchProviders(),
+      ])
+    },
+  })
+  const workflowCatalogs = workflowCatalogsQuery.data ?? []
+  const videoProviders = useMemo(
+    () => providersWithDiscoveredWorkflows(providersQuery.data ?? [], workflowCatalogs),
+    [providersQuery.data, workflowCatalogs],
+  )
 
   const tasksQuery = useQuery({
     queryKey: ["cinema-generation-tasks", agentBaseURL, projectID],
@@ -7289,6 +7940,12 @@ export function App() {
         body: JSON.stringify(body),
       })
     },
+    // TanStack retries the same variables object, so the operationID created by
+    // the user's click remains stable across a transient network retry.
+    retry: (failureCount, error) => (
+      failureCount < 1
+      && (!(error instanceof CinemaRequestError) || error.status >= 500)
+    ),
     onMutate: ({ draftNodeID }) => {
       dispatchVideoGenerationOperation({ type: "begin", nodeID: draftNodeID })
       saveStateRef.current = "saving"
@@ -7310,13 +7967,16 @@ export function App() {
       setSaveState("saved")
     },
     onError: (error, variables) => {
-      const message = error instanceof Error ? error.message : "Task creation failed"
+      const errorCode = error instanceof CinemaRequestError ? error.code : undefined
+      const fallbackMessage = error instanceof Error ? error.message : "Task creation failed"
+      const message = localizedGenerationError(errorCode, fallbackMessage, t) ?? fallbackMessage
       const failedNode = nodes.find((node) => node.id === variables.draftNodeID)
       if (failedNode) {
         const failedRawData = {
           ...failedNode.data.rawData,
           status: "failed",
           error: message,
+          errorCode: errorCode ?? null,
         }
         setNodes((current) =>
           current.map((node) =>
@@ -7329,6 +7989,7 @@ export function App() {
                     ...node.data.rawData,
                     status: "failed",
                     error: message,
+                    errorCode: errorCode ?? null,
                   },
                 },
               }
@@ -7387,9 +8048,11 @@ export function App() {
       setSaveState("saved")
     },
     onError: (error) => {
+      const errorCode = error instanceof CinemaRequestError ? error.code : undefined
+      const fallbackMessage = error instanceof Error ? error.message : "Task cancel failed"
       saveStateRef.current = "error"
       setSaveState("error")
-      setSaveError(error instanceof Error ? error.message : "Task cancel failed")
+      setSaveError(localizedGenerationError(errorCode, fallbackMessage, t) ?? fallbackMessage)
     },
   })
 
@@ -8178,11 +8841,35 @@ export function App() {
       return
     }
     if (!connection.source || !connection.target) return
-    const targetInput = videoInputHandleMetadata(connection.targetHandle)
     const sourceType = nodes.find((node) => node.id === connection.source)?.data.cinemaType
-    const targetType = nodes.find((node) => node.id === connection.target)?.data.cinemaType
-    const targetImageIndex = targetType === "video" && sourceType === "image"
-      ? nextVideoImageInputIndex(connection.target, nodes, edges)
+    const targetNode = nodes.find((node) => node.id === connection.target)
+    const targetType = targetNode?.data.cinemaType
+    const edgeID = `edge-${connection.source}-${connection.target}-${Date.now().toString(36)}`
+    const pendingEdge = {
+      id: edgeID,
+      source: connection.source,
+      target: connection.target,
+      ...(connection.sourceHandle ? { sourceHandle: connection.sourceHandle } : {}),
+      ...(connection.targetHandle ? { targetHandle: connection.targetHandle } : {}),
+    }
+    const targetInput = targetType === "video"
+      ? edgeTargetVideoInput(
+        pendingEdge,
+        nodes,
+        [...edges, pendingEdge],
+        targetNode ? videoInputControlsForNode(targetNode, videoProviders) : undefined,
+      )
+      : null
+    if (targetType === "video" && !targetInput) {
+      setConnectionErrorKey("connection.invalid")
+      return
+    }
+    const targetImageIndex = sourceType === "image"
+      ? targetInput?.slot === "startFrame"
+        ? 0
+        : targetInput?.slot === "endFrame"
+          ? 1
+          : null
       : null
     const edgeData = {
       ...(targetInput?.slot ? { targetSlot: targetInput.slot } : {}),
@@ -8191,11 +8878,7 @@ export function App() {
       ...(targetImageIndex !== null ? { targetImageIndex } : {}),
     }
     const edge = {
-      id: `edge-${connection.source}-${connection.target}-${Date.now().toString(36)}`,
-      source: connection.source,
-      target: connection.target,
-      ...(connection.sourceHandle ? { sourceHandle: connection.sourceHandle } : {}),
-      ...(connection.targetHandle ? { targetHandle: connection.targetHandle } : {}),
+      ...pendingEdge,
       ...(Object.keys(edgeData).length > 0 ? { data: edgeData } : {}),
     }
     commandMutation.mutate({
@@ -8204,7 +8887,7 @@ export function App() {
       actor: "cinema-web",
       edge,
     })
-  }, [commandMutation, edges, nodes])
+  }, [commandMutation, edges, nodes, videoProviders])
 
   const isValidConnection = useCallback((connection: Connection | Edge) => (
     validateCinemaConnection(connection, nodes, edges).valid
@@ -8663,6 +9346,10 @@ export function App() {
     () => nodes.map((node) => {
       const hasIncomingConnection = edges.some((edge) => edge.target === node.id)
       const hasOutgoingConnection = edges.some((edge) => edge.source === node.id)
+      const videoInputControls = videoInputControlsForNode(node, videoProviders)
+      const videoInputAssetMaps = node.data.cinemaType === "video"
+        ? sourceInputAssetMapsForVideoNode(node.id, nodes, edges, videoInputControls)
+        : { byInputKey: {}, byRole: {} }
       const assetRef = cinemaAssetRefFromNodeData(node.data.rawData)
       const liveAssetState = assetRef
         ? canvasAssetStateByKey.get(cinemaAssetLocatorStatusKey(assetRef))
@@ -8722,20 +9409,37 @@ export function App() {
         isFinalizingImageCandidate: imageFinalizeNodeIDs.has(node.id),
         imageFinalizeError: imageFinalizeError?.nodeID === node.id ? imageFinalizeError.message : null,
         sourceTextParameters: node.data.cinemaType === "image" || node.data.cinemaType === "video"
-          ? sourceTextParametersForNode(node.id, nodes, edges)
+          ? sourceTextParametersForNode(node.id, nodes, edges, videoInputControls)
           : [],
         agentBaseURL,
         projectID,
         onDisconnectEdge: disconnectEdge,
         onGenerateImage: (nodeID: string, request: ImageGenerationRequest) =>
           createImageGenerationMutation.mutate({ nodeID, request }),
-        videoProviders: providersQuery.data ?? [],
+        videoProviders,
+        workflowCatalogs,
+        isLoadingWorkflows: workflowCatalogsQuery.isLoading,
+        isRefreshingWorkflows: refreshWorkflowsMutation.isPending,
+        workflowRefreshError: refreshWorkflowsMutation.error instanceof Error
+          ? refreshWorkflowsMutation.error.message
+          : workflowCatalogsQuery.error instanceof Error
+            ? workflowCatalogsQuery.error.message
+            : null,
+        onRefreshProviderWorkflows: (providerID: string) => {
+          if (!refreshWorkflowsMutation.isPending) refreshWorkflowsMutation.mutate(providerID)
+        },
         generationTasks: tasksQuery.data ?? [],
-        sourceImageAsset: node.data.cinemaType === "video" ? sourceImageAssetForVideoNode(node.id, nodes, edges) : null,
-        videoInputImageAssets: node.data.cinemaType === "video" ? sourceImageAssetsForVideoNode(node.id, nodes, edges) : {},
-        videoInputAssets: node.data.cinemaType === "video" ? sourceInputAssetsForVideoNode(node.id, nodes, edges) : {},
-        videoInputAssetsByInputKey: node.data.cinemaType === "video" ? sourceInputAssetMapsForVideoNode(node.id, nodes, edges).byInputKey : {},
-        videoInputAssetsByRole: node.data.cinemaType === "video" ? sourceInputAssetMapsForVideoNode(node.id, nodes, edges).byRole : {},
+        sourceImageAsset: node.data.cinemaType === "video"
+          ? sourceImageAssetForVideoNode(node.id, nodes, edges, videoInputControls)
+          : null,
+        videoInputImageAssets: node.data.cinemaType === "video"
+          ? sourceImageAssetsForVideoNode(node.id, nodes, edges, videoInputControls)
+          : {},
+        videoInputAssets: node.data.cinemaType === "video"
+          ? sourceInputAssetsForVideoNode(node.id, nodes, edges, videoInputControls)
+          : {},
+        videoInputAssetsByInputKey: videoInputAssetMaps.byInputKey,
+        videoInputAssetsByRole: videoInputAssetMaps.byRole,
         isCreatingVideoTask: isNodeOperationPending(videoGenerationOperations, node.id),
         videoGenerationError: nodeOperationError(videoGenerationOperations, node.id),
         onCreateVideoGenerationTask: (nodeID: string, body: CreateCinemaGenerationTaskBody) =>
@@ -8783,7 +9487,7 @@ export function App() {
       nodes,
       nodeInputOverlayRoot,
       projectID,
-      providersQuery.data,
+      refreshWorkflowsMutation,
       setNodeInputEditing,
       selectNodeOnly,
       tasksQuery.data,
@@ -8793,6 +9497,10 @@ export function App() {
       beginRelinkAsset,
       clearCanvasSelection,
       videoGenerationOperations,
+      videoProviders,
+      workflowCatalogs,
+      workflowCatalogsQuery.error,
+      workflowCatalogsQuery.isLoading,
     ],
   )
   const inspectorNode = useMemo(

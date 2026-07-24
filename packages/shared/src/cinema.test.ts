@@ -27,6 +27,8 @@ import {
   CinemaTextGenerationResultSchema,
   CinemaTextModelsResultSchema,
   CinemaGenerationTaskSchema,
+  CinemaGenerationTargetSchema,
+  CinemaProviderWorkflowCatalogSchema,
   CinemaNodeTypeSchema,
   CinemaVideoProviderSchema,
   CinemaVideoProviderManifestSchema,
@@ -622,9 +624,13 @@ describe("cinema schemas", () => {
     expect(task.input.sourceNodeIDs).toEqual([])
     expect(task.outputAssets).toEqual([])
     expect(task.progress).toBeUndefined()
+    expect(task.operationID).toBeUndefined()
+    expect(task.errorCode).toBeUndefined()
 
     const taskWithProgress = CinemaGenerationTaskSchema.parse({
       ...task,
+      operationID: "generation-operation-1",
+      errorCode: "COMFYUI_OFFLINE",
       progress: {
         phase: "processing",
         message: "Provider is rendering.",
@@ -632,6 +638,8 @@ describe("cinema schemas", () => {
       },
     })
     expect(taskWithProgress.progress?.phase).toBe("processing")
+    expect(taskWithProgress.operationID).toBe("generation-operation-1")
+    expect(taskWithProgress.errorCode).toBe("COMFYUI_OFFLINE")
 
     const completedTask = CinemaGenerationTaskSchema.parse({
       ...task,
@@ -684,6 +692,7 @@ describe("cinema schemas", () => {
 
   it("parses provider task modes including catalog-defined combination modes", () => {
     const body = CreateCinemaGenerationTaskBodySchema.parse({
+      operationID: "generation-operation-1",
       providerID: "kling",
       modelID: "kling-3.0-turbo",
       mode: "text-to-video",
@@ -691,6 +700,8 @@ describe("cinema schemas", () => {
     })
 
     expect(body.taskNodeID).toBe("video-node-1")
+    expect(body.operationID).toBe("generation-operation-1")
+    expect(body.target).toEqual({ kind: "model", modelID: "kling-3.0-turbo" })
 
     const customModeBody = CreateCinemaGenerationTaskBodySchema.parse({
       providerID: "kling",
@@ -700,6 +711,7 @@ describe("cinema schemas", () => {
     })
 
     expect(customModeBody.mode).toBe("text-to-video.multi-shot")
+    expect(customModeBody.operationID).toBeUndefined()
 
     const imageBody = CreateCinemaGenerationTaskBodySchema.parse({
       providerID: "kling",
@@ -743,6 +755,110 @@ describe("cinema schemas", () => {
         taskNodeID: "",
       })
     ).toThrow()
+  })
+
+  it("normalizes legacy model targets and rejects conflicting target fields", () => {
+    expect(CinemaGenerationTargetSchema.parse({
+      kind: "workflow",
+      workflowID: "workflow-1",
+      revision: "sha256:revision-1",
+    })).toEqual({
+      kind: "workflow",
+      workflowID: "workflow-1",
+      revision: "sha256:revision-1",
+    })
+
+    const workflowRequest = CreateCinemaGenerationTaskBodySchema.parse({
+      providerID: "comfyui-local",
+      target: {
+        kind: "workflow",
+        workflowID: "workflow-1",
+        revision: "sha256:revision-1",
+      },
+      mode: "text-to-image",
+      taskNodeID: "image-node-1",
+    })
+    expect(workflowRequest.target.kind).toBe("workflow")
+    expect("modelID" in workflowRequest).toBe(false)
+
+    expect(() => CreateCinemaGenerationTaskBodySchema.parse({
+      providerID: "kling",
+      target: { kind: "model", modelID: "kling-v3" },
+      modelID: "legacy-kling-v3",
+      mode: "text-to-video",
+      taskNodeID: "video-node-1",
+    })).toThrow(/either 'target' or legacy 'modelID'/i)
+  })
+
+  it("parses discovered workflow catalogs and extended APP controls", () => {
+    const catalog = CinemaProviderWorkflowCatalogSchema.parse({
+      providerID: "comfyui-local",
+      status: "ready",
+      userID: "default",
+      users: [{ id: "default", name: "default" }],
+      refreshedAt: "2026-07-24T00:00:00.000Z",
+      lastSuccessfulRefreshAt: "2026-07-24T00:00:00.000Z",
+      limits: {
+        maxWorkflows: 500,
+        maxFileBytes: 8 * 1024 * 1024,
+        maxTotalBytes: 64 * 1024 * 1024,
+        readConcurrency: 4,
+      },
+      workflows: [{
+        workflowID: "workflow-1",
+        revision: "sha256:revision-1",
+        name: "Portrait",
+        status: "ready",
+        output: { kind: "image", nodeIDs: ["9"] },
+        formSpec: {
+          providerID: "comfyui-local",
+          target: {
+            kind: "workflow",
+            workflowID: "workflow-1",
+            revision: "sha256:revision-1",
+          },
+          mode: "text-to-image",
+          output: "image",
+          controls: [
+            {
+              type: "text",
+              key: "caption",
+              label: "Caption",
+              required: false,
+              multiline: true,
+            },
+            {
+              type: "number",
+              key: "seed",
+              label: "Seed",
+              required: true,
+              integer: true,
+              step: 1,
+            },
+            {
+              type: "media",
+              key: "source",
+              label: "Source image",
+              required: false,
+              mediaKind: "image",
+              maxCount: 1,
+              supportedMimeTypes: ["image/png"],
+            },
+          ],
+        },
+        source: {
+          userID: "default",
+          path: "nested/portrait.json",
+          sizeBytes: 1024,
+          workflowFormat: "1.0",
+          converter: "builtin",
+        },
+        discoveredAt: "2026-07-24T00:00:00.000Z",
+      }],
+    })
+
+    expect(catalog.workflows[0]?.formSpec?.controls.map((control) => control.type))
+      .toEqual(["text", "number", "media"])
   })
 
   it("parses generation form specs for Kling Omni image controls", () => {
@@ -1030,6 +1146,15 @@ describe("cinema schemas", () => {
         prompt: "   ",
       })
     ).toThrow()
+
+    expect(CreateCinemaImageGenerationBodySchema.parse({
+      nodeID: "image-1",
+      target: {
+        kind: "workflow",
+        workflowID: "workflow-1",
+        revision: "sha256:revision-1",
+      },
+    }).prompt).toBe("")
 
     expect(() =>
       CreateCinemaImageGenerationBodySchema.parse({

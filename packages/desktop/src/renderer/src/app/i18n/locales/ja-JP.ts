@@ -3,6 +3,7 @@ import { subscriptionTranslations } from "../subscription-translations"
 import { skillLibraryTranslations } from "../skill-library-translations"
 import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
 import { environmentEnUS } from "../environment-translations"
+import { cinemaWorkflowTranslations } from "../cinema-workflow-translations"
 
 export const jaJP = {
   "app.loading": "読み込み中",
@@ -301,6 +302,16 @@ export const jaJP = {
   "settings.videoProviders.emptyCopy": "利用可能な画像・動画タスクプロバイダがここに表示されます。",
   "settings.videoProviders.credentialPlaceholder": "APIキーまたはaccessKey:secretKeyを入力",
   "settings.videoProviders.storedCredentialPlaceholder": "保存された認証情報を検出しました。空欄のままにすると保持されます。",
+  "settings.videoProviders.noAuthentication": "認証は不要です",
+  "settings.videoProviders.readinessLabel": "ランタイムの準備状態",
+  "settings.videoProviders.readinessReady": "準備完了",
+  "settings.videoProviders.readinessNeedsAttention": "対応が必要",
+  "settings.videoProviders.readinessDetail": "確認結果",
+  "settings.videoProviders.missingNodes": "不足しているノード",
+  "settings.videoProviders.missingModels": "不足しているモデルファイル",
+  "settings.videoProviders.serviceStatus": "サービス",
+  "settings.videoProviders.nodesStatus": "ノード",
+  "settings.videoProviders.modelsStatus": "モデルファイル",
   "settings.videoProviders.endpointLabel": "エンドポイント",
   "settings.videoProviders.endpointCurrentLabel": "現在のエンドポイント",
   "settings.videoProviders.endpointSourceDefault": "デフォルトエンドポイント",
@@ -1415,4 +1426,5 @@ export const jaJP = {
   "mcp.validation.requireToolNames": "名前付きツールフィルターには少なくとも1つのツール名が必要です。",
   ...pluginOwnershipTranslations.enUS,
   ...environmentEnUS,
+  ...cinemaWorkflowTranslations.enUS,
 } as const satisfies Record<TranslationKey, string>

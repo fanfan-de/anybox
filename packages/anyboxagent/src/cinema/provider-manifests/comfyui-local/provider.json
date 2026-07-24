@@ -1,0 +1,25 @@
+{
+  "id": "comfyui-local",
+  "name": "Local ComfyUI",
+  "description": "Run saved ComfyUI APP mode workflows from this computer.",
+  "kind": "local-runtime",
+  "baseURL": "http://127.0.0.1:8188",
+  "website": "https://www.comfy.org/",
+  "doc": "https://docs.comfy.org/interface/app-mode",
+  "regions": ["local"],
+  "authType": "none",
+  "catalogSource": "local-provider-manifest",
+  "requiresCredential": false,
+  "capabilities": {
+    "workflowDiscovery": true,
+    "appMode": true
+  },
+  "connectionTest": {
+    "method": "GET",
+    "path": "/system_stats",
+    "auth": "none",
+    "expectedStatus": [200],
+    "timeoutMs": 10000
+  },
+  "models": []
+}

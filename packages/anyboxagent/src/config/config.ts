@@ -108,6 +108,7 @@ export type ImageGenerationSettings = z.infer<typeof ImageGenerationSettings>
 export const CinemaVideoProviderSettings = z
   .object({
     baseURL: z.string().optional(),
+    userID: z.string().optional(),
   })
   .strict()
   .meta({

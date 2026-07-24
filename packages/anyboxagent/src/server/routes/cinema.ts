@@ -12,6 +12,7 @@ import {
   CinemaCommandSchema,
   CreateCinemaImageGenerationBodySchema,
   CreateCinemaImportedImageAssetBodySchema,
+  CreateCinemaImportedMediaAssetBodySchema,
   CreateCinemaTextGenerationBodySchema,
   CreateCinemaGenerationTaskBodySchema,
   TestCinemaVideoProviderConnectionBodySchema,
@@ -201,6 +202,14 @@ export function CinemaRoutes() {
 
   app.post("/video-providers/catalog/refresh", async (c) =>
     ok(c, await CinemaUseCase.refreshCinemaVideoProviderCatalog())
+  )
+
+  app.get("/video-providers/:providerID/workflows", async (c) =>
+    ok(c, await CinemaUseCase.getCinemaProviderWorkflows(c.req.param("providerID")))
+  )
+
+  app.post("/video-providers/:providerID/workflows/refresh", async (c) =>
+    ok(c, await CinemaUseCase.refreshCinemaProviderWorkflows(c.req.param("providerID")))
   )
 
   app.get("/video-providers/:providerID/auth/api-key", async (c) =>
@@ -438,6 +447,15 @@ export function CinemaRoutes() {
       "Body must be a valid Cinema image import request",
     )
     return ok(c, await CinemaUseCase.importCinemaProjectImageAsset(c.req.param("projectID"), payload))
+  })
+
+  app.post("/projects/:projectID/assets/media-imports", async (c) => {
+    const payload = await parseJsonBody(
+      c,
+      CreateCinemaImportedMediaAssetBodySchema,
+      "Body must be a valid Cinema media import request",
+    )
+    return ok(c, await CinemaUseCase.importCinemaProjectMediaAsset(c.req.param("projectID"), payload))
   })
 
   app.get("/projects/:projectID/assets/*", async (c) => {

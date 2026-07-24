@@ -642,11 +642,13 @@ export const GenerationControlVisibilitySchema = z.record(z.string(), z.unknown(
 export type GenerationControlVisibility = z.infer<typeof GenerationControlVisibilitySchema>
 
 export const ProviderInputUIControlSchema = z.enum([
+  "text",
   "textarea",
   "select",
   "segmented",
   "number",
   "switch",
+  "media",
   "image-list",
   "json",
 ])
@@ -656,15 +658,35 @@ const GenerationControlBaseSchema = z.object({
   key: z.string().min(1),
   label: z.string().min(1),
   required: z.boolean(),
+  description: z.string().optional(),
   visibleWhen: GenerationControlVisibilitySchema.optional(),
   disabledWhen: GenerationControlVisibilitySchema.optional(),
 })
 
 export const GenerationControlSchema = z.discriminatedUnion("type", [
   GenerationControlBaseSchema.extend({
-    type: z.literal("prompt"),
+    type: z.literal("text"),
+    multiline: z.boolean().optional(),
     maxLength: z.number().int().positive().optional(),
+    placeholder: z.string().optional(),
     defaultValue: z.string().optional(),
+  }),
+  GenerationControlBaseSchema.extend({
+    type: z.literal("prompt"),
+    multiline: z.boolean().optional(),
+    maxLength: z.number().int().positive().optional(),
+    placeholder: z.string().optional(),
+    defaultValue: z.string().optional(),
+  }),
+  GenerationControlBaseSchema.extend({
+    type: z.literal("media"),
+    mediaKind: z.enum(["image", "video", "audio"]),
+    multiple: z.boolean().optional(),
+    minCount: z.number().int().nonnegative().optional(),
+    maxCount: z.number().int().nonnegative().optional(),
+    supportedMimeTypes: z.array(z.string().min(1)).optional(),
+    maxFileSizeMB: z.number().positive().optional(),
+    acceptsConnection: z.boolean().optional(),
   }),
   GenerationControlBaseSchema.extend({
     type: z.literal("image-list"),
@@ -683,6 +705,8 @@ export const GenerationControlSchema = z.discriminatedUnion("type", [
     type: z.literal("number"),
     min: z.number().optional(),
     max: z.number().optional(),
+    step: z.number().positive().optional(),
+    integer: z.boolean().optional(),
     defaultValue: z.number().optional(),
   }),
   GenerationControlBaseSchema.extend({
@@ -691,19 +715,138 @@ export const GenerationControlSchema = z.discriminatedUnion("type", [
   }),
   GenerationControlBaseSchema.extend({
     type: z.literal("json"),
+    serializedObjectOnly: z.boolean().optional(),
     defaultValue: z.unknown().optional(),
   }),
 ])
 export type GenerationControl = z.infer<typeof GenerationControlSchema>
 
-export const GenerationFormSpecSchema = z.object({
+export const CinemaGenerationTargetSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("model"),
+    modelID: z.string().min(1),
+  }).strict(),
+  z.object({
+    kind: z.literal("workflow"),
+    workflowID: z.string().min(1),
+    revision: z.string().min(1),
+  }).strict(),
+])
+export type CinemaGenerationTarget = z.infer<typeof CinemaGenerationTargetSchema>
+
+function validateLegacyGenerationTarget(
+  value: { target?: CinemaGenerationTarget; modelID?: string },
+  ctx: z.RefinementCtx,
+) {
+  if (value.target && value.modelID) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Use either 'target' or legacy 'modelID', not both.",
+      path: ["target"],
+    })
+  }
+  if (!value.target && !value.modelID) {
+    ctx.addIssue({
+      code: "custom",
+      message: "A generation target is required.",
+      path: ["target"],
+    })
+  }
+}
+
+const GenerationFormSpecInputSchema = z.object({
   providerID: z.string().min(1),
-  modelID: z.string().min(1),
+  target: CinemaGenerationTargetSchema.optional(),
+  modelID: z.string().min(1).optional(),
   mode: z.string().min(1),
   output: z.enum(["image", "video"]),
   controls: z.array(GenerationControlSchema),
 })
+export const GenerationFormSpecSchema = GenerationFormSpecInputSchema
+  .superRefine(validateLegacyGenerationTarget)
+  .transform(({ modelID, ...value }) => ({
+    ...value,
+    target: value.target ?? { kind: "model" as const, modelID: modelID! },
+  }))
 export type GenerationFormSpec = z.infer<typeof GenerationFormSpecSchema>
+
+export const CinemaProviderWorkflowStatusSchema = z.enum(["ready", "disabled"])
+export type CinemaProviderWorkflowStatus = z.infer<typeof CinemaProviderWorkflowStatusSchema>
+
+export const CinemaProviderWorkflowIssueSchema = z.object({
+  code: z.string().min(1),
+  message: z.string().min(1),
+  severity: z.enum(["error", "warning"]).default("error"),
+  nodeID: z.string().min(1).optional(),
+  nodeType: z.string().min(1).optional(),
+  controlKey: z.string().min(1).optional(),
+  dependency: z.string().min(1).optional(),
+})
+export type CinemaProviderWorkflowIssue = z.infer<typeof CinemaProviderWorkflowIssueSchema>
+
+export const CinemaProviderWorkflowDependencySchema = z.object({
+  kind: z.enum(["node", "model"]),
+  name: z.string().min(1),
+  available: z.boolean(),
+  folder: z.string().min(1).optional(),
+  nodeID: z.string().min(1).optional(),
+})
+export type CinemaProviderWorkflowDependency = z.infer<typeof CinemaProviderWorkflowDependencySchema>
+
+export const CinemaProviderWorkflowOutputSchema = z.object({
+  kind: z.enum(["image", "video", "audio", "3d", "file", "unknown"]),
+  nodeIDs: z.array(z.string().min(1)).min(1),
+})
+export type CinemaProviderWorkflowOutput = z.infer<typeof CinemaProviderWorkflowOutputSchema>
+
+export const CinemaProviderWorkflowSourceSchema = z.object({
+  userID: z.string().min(1),
+  path: z.string().min(1),
+  sizeBytes: z.number().int().nonnegative(),
+  modifiedAt: z.string().min(1).optional(),
+  workflowFormat: z.enum(["0.4", "1.0", "unknown"]),
+  converter: z.enum(["server", "builtin"]),
+})
+export type CinemaProviderWorkflowSource = z.infer<typeof CinemaProviderWorkflowSourceSchema>
+
+export const CinemaProviderWorkflowSchema = z.object({
+  workflowID: z.string().min(1),
+  revision: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().optional(),
+  status: CinemaProviderWorkflowStatusSchema,
+  issues: z.array(CinemaProviderWorkflowIssueSchema).default([]),
+  dependencies: z.array(CinemaProviderWorkflowDependencySchema).default([]),
+  output: CinemaProviderWorkflowOutputSchema.optional(),
+  formSpec: GenerationFormSpecSchema.optional(),
+  source: CinemaProviderWorkflowSourceSchema,
+  discoveredAt: z.string().min(1),
+})
+export type CinemaProviderWorkflow = z.infer<typeof CinemaProviderWorkflowSchema>
+
+export const CinemaProviderWorkflowUserSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+})
+export type CinemaProviderWorkflowUser = z.infer<typeof CinemaProviderWorkflowUserSchema>
+
+export const CinemaProviderWorkflowCatalogSchema = z.object({
+  providerID: z.string().min(1),
+  status: z.enum(["ready", "stale", "offline"]),
+  userID: z.string().min(1).nullable(),
+  users: z.array(CinemaProviderWorkflowUserSchema).default([]),
+  workflows: z.array(CinemaProviderWorkflowSchema).default([]),
+  issues: z.array(CinemaProviderWorkflowIssueSchema).default([]),
+  refreshedAt: z.string().min(1),
+  lastSuccessfulRefreshAt: z.string().min(1).optional(),
+  limits: z.object({
+    maxWorkflows: z.number().int().positive(),
+    maxFileBytes: z.number().int().positive(),
+    maxTotalBytes: z.number().int().positive(),
+    readConcurrency: z.number().int().positive(),
+  }),
+})
+export type CinemaProviderWorkflowCatalog = z.infer<typeof CinemaProviderWorkflowCatalogSchema>
 
 export const CinemaProviderInputSpecSchema = z.object({
   role: z.string().min(1),
@@ -712,6 +855,7 @@ export const CinemaProviderInputSpecSchema = z.object({
   minCount: z.number().int().nonnegative().default(0),
   maxCount: z.number().int().nonnegative().optional(),
   apiField: z.string().min(1).optional(),
+  connectionKey: z.string().min(1).optional(),
   providerField: z.string().min(1).optional(),
   label: z.string().min(1).optional(),
   maxLength: z.number().int().positive().optional(),
@@ -720,6 +864,10 @@ export const CinemaProviderInputSpecSchema = z.object({
   labels: z.record(z.string(), z.string()).optional(),
   min: z.number().optional(),
   max: z.number().optional(),
+  step: z.number().positive().optional(),
+  integer: z.boolean().optional(),
+  multiline: z.boolean().optional(),
+  placeholder: z.string().optional(),
   supportedFormats: z.array(z.string().min(1)).optional(),
   maxFileSizeMB: z.number().positive().optional(),
   uiControl: ProviderInputUIControlSchema.optional(),
@@ -760,6 +908,7 @@ export const CinemaGenerationTaskStatusSchema = z.enum([
 export type CinemaGenerationTaskStatus = z.infer<typeof CinemaGenerationTaskStatusSchema>
 
 export const CinemaGenerationProgressPhaseSchema = z.enum([
+  "preparing",
   "queued",
   "submitted",
   "processing",
@@ -833,6 +982,10 @@ export const CinemaVideoProviderManifestSchema = z.object({
   catalogSource: z.string().optional(),
   credentialProviderID: z.string().min(1).optional(),
   requiresCredential: z.boolean().default(false),
+  capabilities: z.object({
+    workflowDiscovery: z.boolean().default(false),
+    appMode: z.boolean().default(false),
+  }).optional(),
   connectionTest: z.object({
     method: z.enum(["GET", "POST", "HEAD"]).default("GET"),
     url: z.string().min(1).optional(),
@@ -898,6 +1051,7 @@ export type CinemaProviderAuthState = z.infer<typeof CinemaProviderAuthStateSche
 export const CinemaVideoProviderRuntimeSchema = z.object({
   baseURL: z.string().min(1).optional(),
   configuredBaseURL: z.string().min(1).optional(),
+  userID: z.string().min(1).optional(),
   baseURLSource: z.enum(["settings", "environment", "default"]).optional(),
   adapterAvailable: z.boolean().default(false),
   adapterID: z.string().min(1).optional(),
@@ -914,20 +1068,24 @@ export type CinemaVideoProvider = z.infer<typeof CinemaVideoProviderSchema>
 
 export const UpdateCinemaVideoProviderSettingsBodySchema = z.object({
   baseURL: z.string().nullable().optional(),
+  userID: z.string().nullable().optional(),
 })
 export type UpdateCinemaVideoProviderSettingsBody = z.infer<typeof UpdateCinemaVideoProviderSettingsBodySchema>
 
 export const TestCinemaVideoProviderConnectionBodySchema = z.object({
   apiKey: z.string().nullable().optional(),
   baseURL: z.string().nullable().optional(),
+  userID: z.string().nullable().optional(),
 })
 export type TestCinemaVideoProviderConnectionBody = z.infer<typeof TestCinemaVideoProviderConnectionBodySchema>
 
-export const CinemaGenerationTaskSchema = z.object({
+const CinemaGenerationTaskInputSchema = z.object({
   id: z.string().min(1),
+  operationID: z.string().min(1).max(128).optional(),
   projectID: z.string().min(1),
   providerID: z.string().min(1),
-  modelID: z.string().min(1),
+  target: CinemaGenerationTargetSchema.optional(),
+  modelID: z.string().min(1).optional(),
   mode: CinemaTaskModeSchema,
   title: z.string().min(1),
   status: CinemaGenerationTaskStatusSchema,
@@ -942,13 +1100,22 @@ export const CinemaGenerationTaskSchema = z.object({
     parameters: z.record(z.string(), z.unknown()).default({}),
   }),
   outputAssets: z.array(CinemaGeneratedAssetSchema).default([]),
+  errorCode: z.string().min(1).optional(),
   error: z.string().nullable().optional(),
 })
+export const CinemaGenerationTaskSchema = CinemaGenerationTaskInputSchema
+  .superRefine(validateLegacyGenerationTarget)
+  .transform(({ modelID, ...value }) => ({
+    ...value,
+    target: value.target ?? { kind: "model" as const, modelID: modelID! },
+  }))
 export type CinemaGenerationTask = z.infer<typeof CinemaGenerationTaskSchema>
 
-export const CreateCinemaGenerationTaskBodySchema = z.object({
+const CreateCinemaGenerationTaskBodyInputSchema = z.object({
+  operationID: z.string().min(1).max(128).optional(),
   providerID: z.string().min(1),
-  modelID: z.string().min(1),
+  target: CinemaGenerationTargetSchema.optional(),
+  modelID: z.string().min(1).optional(),
   mode: CinemaTaskModeSchema,
   title: z.string().min(1).optional(),
   prompt: z.string().default(""),
@@ -956,6 +1123,12 @@ export const CreateCinemaGenerationTaskBodySchema = z.object({
   parameters: z.record(z.string(), z.unknown()).default({}),
   taskNodeID: z.string().min(1),
 })
+export const CreateCinemaGenerationTaskBodySchema = CreateCinemaGenerationTaskBodyInputSchema
+  .superRefine(validateLegacyGenerationTarget)
+  .transform(({ modelID, ...value }) => ({
+    ...value,
+    target: value.target ?? { kind: "model" as const, modelID: modelID! },
+  }))
 export type CreateCinemaGenerationTaskBody = z.infer<typeof CreateCinemaGenerationTaskBodySchema>
 
 export const CinemaTextModelSchema = z.object({
@@ -1002,6 +1175,7 @@ export const CinemaTextGenerationResultSchema = z.object({
 export type CinemaTextGenerationResult = z.infer<typeof CinemaTextGenerationResultSchema>
 
 export const CinemaImageModelSchema = CinemaTextModelSchema.extend({
+  target: CinemaGenerationTargetSchema.optional(),
   formSpec: GenerationFormSpecSchema.optional(),
 })
 export type CinemaImageModel = z.infer<typeof CinemaImageModelSchema>
@@ -1017,9 +1191,10 @@ export type CinemaImageModelsResult = z.infer<typeof CinemaImageModelsResultSche
 
 export const CreateCinemaImageGenerationBodySchema = z.object({
   nodeID: z.string().min(1),
-  prompt: z.string().trim().min(1),
+  prompt: z.string().default(""),
   userPrompt: z.string().optional(),
   model: z.string().nullable().optional(),
+  target: CinemaGenerationTargetSchema.optional(),
   size: z.string().regex(/^\d+x\d+$/).optional(),
   count: z.number().int().min(1).optional(),
   style: z.string().trim().min(1).max(400).optional(),
@@ -1030,6 +1205,14 @@ export const CreateCinemaImageGenerationBodySchema = z.object({
   sourceImageAssetIDs: z.array(z.string().min(1)).optional(),
   sourceImagePath: z.string().min(1).optional(),
   sourceImagePaths: z.array(z.string().min(1)).optional(),
+}).superRefine((value, context) => {
+  if (value.target?.kind !== "workflow" && value.prompt.trim().length === 0) {
+    context.addIssue({
+      code: "custom",
+      path: ["prompt"],
+      message: "Prompt is required for model-based image generation",
+    })
+  }
 })
 export type CreateCinemaImageGenerationBody = z.infer<typeof CreateCinemaImageGenerationBodySchema>
 
@@ -1058,6 +1241,14 @@ export const CinemaImportedImageAssetResultSchema = z.object({
   }),
 })
 export type CinemaImportedImageAssetResult = z.infer<typeof CinemaImportedImageAssetResultSchema>
+
+export const CreateCinemaImportedMediaAssetBodySchema = CreateCinemaImportedImageAssetBodySchema
+export type CreateCinemaImportedMediaAssetBody = z.infer<typeof CreateCinemaImportedMediaAssetBodySchema>
+
+export const CinemaImportedMediaAssetResultSchema = z.object({
+  asset: CinemaGeneratedAssetSchema,
+})
+export type CinemaImportedMediaAssetResult = z.infer<typeof CinemaImportedMediaAssetResultSchema>
 
 export const CinemaProjectSummarySchema = z.object({
   projectID: z.string().min(1),

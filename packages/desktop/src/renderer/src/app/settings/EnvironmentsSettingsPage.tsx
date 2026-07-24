@@ -281,12 +281,13 @@ export function EnvironmentsSettingsPage({ onDirtyChange }: EnvironmentsSettings
       if (event.event === "environment.run.output") {
         const data = event.data as { runID?: string; chunk?: string } | null
         if (!data?.runID || !data.chunk) return
-        setSetupRun((current) => current?.id === data.runID
-          ? {
-              ...current,
-              output: `${current.output}${data.chunk}`.slice(-200_000),
-            }
-          : current)
+        setSetupRun((current) => {
+          if (!current || current.id !== data.runID) return current
+          return {
+            ...current,
+            output: `${current.output}${data.chunk}`.slice(-200_000),
+          }
+        })
         return
       }
       const run = environmentRunFromEvent(event)

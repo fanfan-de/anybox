@@ -1,6 +1,7 @@
 import type { Connection, Edge } from "@xyflow/react"
 import type { CinemaNodeType } from "@anybox/shared/cinema"
 import type { TranslationKey } from "../../i18n"
+import { videoInputHandleMetadata } from "../generation/videoInputRouting"
 
 type ConnectionNode = {
   id: string
@@ -38,13 +39,39 @@ export function validateCinemaConnection(
   if (sourceType === "text" && targetType !== "image" && targetType !== "video") {
     return { valid: false, reason: "connection.textOutput" }
   }
+  const targetVideoInput = targetType === "video"
+    ? videoInputHandleMetadata(connection.targetHandle)
+    : null
+  const targetsSpecificVideoInput = Boolean(
+    targetVideoInput
+    && connection.targetHandle
+    && connection.targetHandle !== "input",
+  )
+  if (targetsSpecificVideoInput) {
+    const slot = targetVideoInput?.slot
+    if (
+      (slot === "textParameter" && sourceType !== "text")
+      || (slot !== "textParameter" && sourceType === "text")
+      || (slot === "sourceVideo" && sourceType !== "video")
+      || (slot !== "sourceVideo" && slot !== "textParameter" && sourceType !== "image")
+    ) {
+      return { valid: false, reason: "connection.invalid" }
+    }
+    if (slot !== "referenceImage") {
+      const occupied = edges.some((edge) => (
+        edge.target === connection.target
+        && (edge.targetHandle ?? null) === (connection.targetHandle ?? null)
+      ))
+      if (occupied) return { valid: false, reason: "connection.videoImageLimit" }
+    }
+  }
   const allowed = (
     (sourceType === "text" && (targetType === "image" || targetType === "video"))
     || (sourceType === "image" && (targetType === "text" || targetType === "video"))
     || (sourceType === "video" && targetType === "video")
   )
   if (!allowed) return { valid: false, reason: "connection.invalid" }
-  if (targetType === "video" && sourceType === "image") {
+  if (targetType === "video" && sourceType === "image" && !targetsSpecificVideoInput) {
     const incomingImageCount = edges.filter((edge) => {
       if (edge.target !== connection.target) return false
       const edgeSourceType = nodes.find((node) => node.id === edge.source)?.data.cinemaType

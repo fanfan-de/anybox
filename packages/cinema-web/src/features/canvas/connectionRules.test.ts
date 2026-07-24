@@ -49,4 +49,36 @@ describe("cinema connection rules", () => {
       reason: "connection.videoImageLimit",
     })
   })
+
+  it("routes discovered workflow media through independent typed handles", () => {
+    const videoNodes = [
+      ...nodes,
+      node("image-2", "image"),
+      node("image-3", "image"),
+      node("video-2", "video"),
+    ]
+    const referenceHandle = "input:3:referenceImage"
+    const sourceVideoHandle = "input:4:sourceVideo"
+    const referenceEdges = [
+      { id: "reference-1", ...connection("image", "video"), targetHandle: referenceHandle },
+      { id: "reference-2", ...connection("image-2", "video"), targetHandle: referenceHandle },
+    ]
+
+    expect(validateCinemaConnection({
+      ...connection("image-3", "video"),
+      targetHandle: referenceHandle,
+    }, videoNodes, referenceEdges)).toEqual({ valid: true })
+    expect(validateCinemaConnection({
+      ...connection("video-2", "video"),
+      targetHandle: sourceVideoHandle,
+    }, videoNodes, [])).toEqual({ valid: true })
+    expect(validateCinemaConnection({
+      ...connection("image", "video"),
+      targetHandle: sourceVideoHandle,
+    }, videoNodes, [])).toEqual({ valid: false, reason: "connection.invalid" })
+    expect(validateCinemaConnection({
+      ...connection("text", "video"),
+      targetHandle: referenceHandle,
+    }, videoNodes, [])).toEqual({ valid: false, reason: "connection.invalid" })
+  })
 })

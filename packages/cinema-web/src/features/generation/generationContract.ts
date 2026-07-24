@@ -281,9 +281,10 @@ export function hiddenDefaultParametersForCombination(combination: GenerationPro
   return parameters
 }
 
-export function videoInputKey(role: string, index: number) {
+export function videoInputKey(role: string, index: number, connectionKey?: string) {
   const safeRole = role.trim().replace(/[^a-z0-9_-]+/gi, "-") || "input"
-  return `input:${index}:${safeRole}`
+  const safeConnectionKey = connectionKey?.trim().replace(/[^a-z0-9_-]+/gi, "-")
+  return `input:${safeConnectionKey ? `key-${safeConnectionKey}` : index}:${safeRole}`
 }
 
 export function formatInputCombinationLabel(mode: string) {
@@ -345,7 +346,7 @@ export function generationInputControlForSpec(input: CinemaProviderInputSpec, in
   const parameterControl = parameterControlForInputRole(role)
   const formControl = generationFormControlForProviderInput(input, slot, parameterControl)
   return {
-    inputKey: videoInputKey(role, index),
+    inputKey: videoInputKey(role, index, input.connectionKey),
     role,
     modality,
     required: input.required,
@@ -405,11 +406,13 @@ function generationFormControlForProviderInput(
   const modality = input.modality.trim().toLowerCase()
   const options = input.options?.filter(isGenerationControlOption)
 
-  if (uiControl === "textarea" || modality === "text") {
+  if (uiControl === "text" || uiControl === "textarea" || modality === "text") {
     return {
       ...base,
-      type: "prompt",
+      type: uiControl === "text" && input.multiline !== true ? "text" : "prompt",
+      ...(input.multiline !== undefined ? { multiline: input.multiline } : {}),
       ...(input.maxLength ? { maxLength: input.maxLength } : {}),
+      ...(input.placeholder ? { placeholder: input.placeholder } : {}),
       ...(typeof input.default === "string" ? { defaultValue: input.default } : {}),
     }
   }
@@ -430,6 +433,8 @@ function generationFormControlForProviderInput(
       type: "number",
       ...(input.min !== undefined ? { min: input.min } : {}),
       ...(input.max !== undefined ? { max: input.max } : {}),
+      ...(input.step !== undefined ? { step: input.step } : {}),
+      ...(input.integer !== undefined ? { integer: input.integer } : {}),
       ...(typeof input.default === "number" ? { defaultValue: input.default } : {}),
     }
   }
@@ -439,6 +444,20 @@ function generationFormControlForProviderInput(
       ...base,
       type: "boolean",
       ...(typeof input.default === "boolean" ? { defaultValue: input.default } : {}),
+    }
+  }
+
+  if (uiControl === "media" && (modality === "image" || modality === "video" || modality === "audio")) {
+    return {
+      ...base,
+      type: "media",
+      mediaKind: modality,
+      multiple: (input.maxCount ?? 1) > 1,
+      minCount: input.minCount,
+      ...(input.maxCount !== undefined ? { maxCount: input.maxCount } : {}),
+      ...(input.supportedFormats ? { supportedMimeTypes: input.supportedFormats } : {}),
+      ...(input.maxFileSizeMB ? { maxFileSizeMB: input.maxFileSizeMB } : {}),
+      acceptsConnection: true,
     }
   }
 
@@ -458,6 +477,7 @@ function generationControlBase(input: CinemaProviderInputSpec) {
     key: providerInputParameterKey(input),
     label: input.label?.trim() || labelForInputRole(input.role, input.modality),
     required: input.required,
+    ...(input.note ? { description: input.note } : {}),
     ...(input.visibleWhen ? { visibleWhen: input.visibleWhen } : {}),
     ...(input.disabledWhen ? { disabledWhen: input.disabledWhen } : {}),
   }

@@ -12,6 +12,7 @@ import {
   type CinemaAssetRef,
   type CinemaImageGenerationResult,
   type CinemaImportedImageAssetResult,
+  type CinemaImportedMediaAssetResult,
   type CinemaImageModel,
   type CinemaImageModelsResult,
   type CinemaProjectDirectoryEntry,
@@ -36,6 +37,7 @@ import {
   type CreateCinemaGenerationTaskBody,
   type CreateCinemaImageGenerationBody,
   type CreateCinemaImportedImageAssetBody,
+  type CreateCinemaImportedMediaAssetBody,
   type CreateCinemaTextGenerationBody,
 } from "@anybox/shared/cinema"
 import { isSshWorkspaceUri } from "@anybox/shared"
@@ -182,6 +184,7 @@ const CINEMA_PROJECT_VIDEO_ASSET_MAX_BYTES = 256 * 1024 * 1024
 const CINEMA_CUSTOM_API_DEFAULT_TIMEOUT_MS = 30 * 1000
 const CINEMA_CUSTOM_API_MAX_TIMEOUT_MS = 60 * 1000
 const CINEMA_CUSTOM_API_MAX_RESPONSE_BYTES = 5 * 1024 * 1024
+const COMFYUI_LOCAL_PROVIDER_ID = "comfyui-local"
 const IMAGE_EXTENSION_BY_MIME: Record<string, string> = {
   "image/apng": ".png",
   "image/avif": ".avif",
@@ -209,6 +212,50 @@ const VIDEO_MIME_BY_EXTENSION: Record<string, string> = {
   ".m4v": "video/mp4",
   ".webm": "video/webm",
 }
+const AUDIO_MIME_BY_EXTENSION: Record<string, string> = {
+  ".flac": "audio/flac",
+  ".mp3": "audio/mpeg",
+  ".ogg": "audio/ogg",
+  ".wav": "audio/wav",
+}
+const MEDIA_EXTENSION_BY_MIME: Record<string, string> = {
+  ...IMAGE_EXTENSION_BY_MIME,
+  "video/quicktime": ".mov",
+  "video/mp4": ".mp4",
+  "video/webm": ".webm",
+  "audio/flac": ".flac",
+  "audio/mpeg": ".mp3",
+  "audio/ogg": ".ogg",
+  "audio/wav": ".wav",
+}
+
+function sniffImportedMediaMime(bytes: Uint8Array) {
+  const header = bytes.subarray(0, 32)
+  const ascii = Buffer.from(header).toString("ascii")
+  if (header[0] === 0x89 && ascii.slice(1, 4) === "PNG") return "image/png"
+  if (header[0] === 0xff && header[1] === 0xd8 && header[2] === 0xff) return "image/jpeg"
+  if (ascii.slice(0, 4) === "RIFF" && ascii.slice(8, 12) === "WEBP") return "image/webp"
+  if (ascii.slice(0, 6) === "GIF87a" || ascii.slice(0, 6) === "GIF89a") return "image/gif"
+  if (header[0] === 0x42 && header[1] === 0x4d) return "image/bmp"
+  if (ascii.slice(4, 8) === "ftyp") {
+    const brand = ascii.slice(8, 12)
+    if (brand === "avif" || brand === "avis") return "image/avif"
+    return brand === "qt  " ? "video/quicktime" : "video/mp4"
+  }
+  if (header[0] === 0x1a && header[1] === 0x45 && header[2] === 0xdf && header[3] === 0xa3) {
+    return "video/webm"
+  }
+  if (ascii.slice(0, 4) === "fLaC") return "audio/flac"
+  if (ascii.slice(0, 4) === "OggS") return "audio/ogg"
+  if (ascii.slice(0, 4) === "RIFF" && ascii.slice(8, 12) === "WAVE") return "audio/wav"
+  if (ascii.slice(0, 3) === "ID3" || (header[0] === 0xff && (header[1] ?? 0) >= 0xe0)) return "audio/mpeg"
+  return undefined
+}
+
+function equivalentImportedMediaMime(declared: string, detected: string) {
+  return declared === detected || (declared === "image/apng" && detected === "image/png")
+}
+
 const CINEMA_IMAGE_GENERATION_MODES = ["text-to-image", "omni-image"] as const
 type CinemaImageGenerationMode = typeof CINEMA_IMAGE_GENERATION_MODES[number]
 
@@ -831,7 +878,10 @@ function imageMimeForPath(filePath: string) {
 
 function projectAssetMimeForPath(filePath: string) {
   const extension = path.extname(filePath).toLowerCase()
-  return IMAGE_MIME_BY_EXTENSION[extension] ?? VIDEO_MIME_BY_EXTENSION[extension] ?? null
+  return IMAGE_MIME_BY_EXTENSION[extension]
+    ?? VIDEO_MIME_BY_EXTENSION[extension]
+    ?? AUDIO_MIME_BY_EXTENSION[extension]
+    ?? null
 }
 
 function isSupportedPreviewAssetMime(mimeType: string) {
@@ -1307,17 +1357,20 @@ function findProjectGaps(canvas: CinemaCanvasDocument, providerConfigured: boole
 
 function taskNodeDataFor(task: CinemaGenerationTask) {
   const progress = task.progress ?? progressForTaskStatus(task.status, task.updatedAt, task.error)
+  const selectionID = task.target.kind === "model" ? task.target.modelID : task.target.workflowID
   return {
     text: task.input.prompt,
     taskID: task.id,
     providerID: task.providerID,
-    modelID: task.modelID,
+    target: task.target,
+    modelID: selectionID,
     mode: task.mode,
     status: task.status,
     progress,
     sourceNodeIDs: task.input.sourceNodeIDs,
     parameters: task.input.parameters,
     outputAssets: task.outputAssets,
+    errorCode: task.errorCode,
     error: task.error ?? null,
   }
 }
@@ -1327,16 +1380,19 @@ function imageTaskNodeDataFor(task: CinemaGenerationTask, currentData: Record<st
   const parameters = task.input.parameters
   const progress = task.progress ?? progressForTaskStatus(task.status, task.updatedAt, task.error)
   const nodePrompt = typeof parameters.userPrompt === "string" ? parameters.userPrompt : task.input.prompt
+  const selectionID = task.target.kind === "model" ? task.target.modelID : task.target.workflowID
   const nextData: Record<string, unknown> = {
     ...currentData,
     prompt: nodePrompt,
     taskID: task.id,
     providerID: task.providerID,
-    modelID: task.modelID,
-    model: textModelValue({ providerID: task.providerID, id: task.modelID }),
+    target: task.target,
+    modelID: selectionID,
+    model: textModelValue({ providerID: task.providerID, id: selectionID }),
     mode: task.mode,
     status: task.status,
     progress,
+    errorCode: task.errorCode,
     error: task.error ?? null,
   }
 
@@ -1511,6 +1567,32 @@ async function syncTaskToCanvas(
   return canvas
 }
 
+const generationRecoveryByCinemaRoot = new Map<string, Promise<void>>()
+
+function recoverActiveComfyUIGenerationTasksOnce(
+  projectID: string,
+  cinemaRoot: string,
+) {
+  const existing = generationRecoveryByCinemaRoot.get(cinemaRoot)
+  if (existing) return existing
+  const recovery = (async () => {
+    const activeTasks = (await readGenerationTasksFromRoot(cinemaRoot))
+      .filter((task) => task.providerID === COMFYUI_LOCAL_PROVIDER_ID && !isFinalTaskStatus(task.status))
+    for (let index = 0; index < activeTasks.length; index += 8) {
+      await Promise.allSettled(
+        activeTasks
+          .slice(index, index + 8)
+          .map((task) => refreshCinemaGenerationTask(projectID, task.id)),
+      )
+    }
+  })().catch((error) => {
+    generationRecoveryByCinemaRoot.delete(cinemaRoot)
+    throw error
+  })
+  generationRecoveryByCinemaRoot.set(cinemaRoot, recovery)
+  return recovery
+}
+
 export async function getCinemaProject(projectID: string): Promise<CinemaProjectSummary> {
   const { project, root, cinemaRoot } = resolveCinemaRoot(projectID)
   const projectPath = path.join(cinemaRoot, PROJECT_FILE)
@@ -1520,6 +1602,12 @@ export async function getCinemaProject(projectID: string): Promise<CinemaProject
   if (initialized) {
     const recovery = await recoverCinemaRenderJobsOnce(cinemaRoot)
     await cinemaRenderQueue.resume(cinemaRoot, projectID, recovery.queuedJobIDs)
+    void recoverActiveComfyUIGenerationTasksOnce(projectID, cinemaRoot).catch((error) => {
+      log.warn("Failed to recover active Local ComfyUI generation tasks", {
+        projectID,
+        errorCode: error instanceof ApiError ? error.code : "COMFYUI_RECOVERY_FAILED",
+      })
+    })
     try {
       metadata = await readOptionalJson(projectPath)
     } catch (error) {
@@ -2265,9 +2353,85 @@ export async function importCinemaProjectImageAsset(
   }
 }
 
+export async function importCinemaProjectMediaAsset(
+  projectID: string,
+  input: CreateCinemaImportedMediaAssetBody,
+): Promise<CinemaImportedMediaAssetResult> {
+  const { root, cinemaRoot } = resolveCinemaRoot(projectID)
+  await assertCinemaProjectInitialized(cinemaRoot)
+
+  const suppliedMimeType = input.mimeType?.split(";")[0]?.trim().toLowerCase()
+  const pathMimeType = projectAssetMimeForPath(input.fileName) ?? undefined
+  const declaredMimeType = suppliedMimeType && MEDIA_EXTENSION_BY_MIME[suppliedMimeType]
+    ? suppliedMimeType
+    : pathMimeType
+  if (!declaredMimeType || !MEDIA_EXTENSION_BY_MIME[declaredMimeType]) {
+    throw new ApiError(
+      415,
+      "CINEMA_MEDIA_MIME_UNSUPPORTED",
+      "Only supported image, video, or audio files can be imported for a workflow.",
+    )
+  }
+
+  const dataBase64 = input.dataBase64.trim().startsWith("data:")
+    ? input.dataBase64.trim().slice(input.dataBase64.trim().indexOf(",") + 1)
+    : input.dataBase64.trim()
+  const bytes = Buffer.from(dataBase64, "base64")
+  if (bytes.byteLength === 0) {
+    throw new ApiError(400, "CINEMA_MEDIA_IMPORT_EMPTY", "Imported media was empty.")
+  }
+  const mimeType = sniffImportedMediaMime(bytes)
+  if (!mimeType || !MEDIA_EXTENSION_BY_MIME[mimeType]) {
+    throw new ApiError(
+      415,
+      "CINEMA_MEDIA_CONTENT_UNSUPPORTED",
+      "The imported file content is not a supported image, video, or audio format.",
+    )
+  }
+  if (!equivalentImportedMediaMime(declaredMimeType, mimeType)) {
+    throw new ApiError(
+      415,
+      "CINEMA_MEDIA_MIME_MISMATCH",
+      `The imported file content is '${mimeType}', not '${declaredMimeType}'.`,
+    )
+  }
+  const extension = MEDIA_EXTENSION_BY_MIME[mimeType]!
+  const kind = mimeType.startsWith("image/")
+    ? "image" as const
+    : mimeType.startsWith("video/")
+      ? "video" as const
+      : "audio" as const
+  const maxBytes = kind === "image"
+    ? CINEMA_PROJECT_IMAGE_ASSET_MAX_BYTES
+    : CINEMA_PROJECT_VIDEO_ASSET_MAX_BYTES
+  if (bytes.byteLength > maxBytes) {
+    throw new ApiError(413, "CINEMA_MEDIA_ASSET_TOO_LARGE", "Imported media is too large.")
+  }
+
+  const importDirectory = path.join(root, "assets", "imported")
+  await mkdir(importDirectory, { recursive: true })
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
+  const id = `import-${timestamp}-${randomUUID().slice(0, 8)}`
+  const filePath = path.join(importDirectory, `${safeImportedImageBaseName(input.fileName)}-${id}${extension}`)
+  await writeFile(filePath, bytes)
+
+  return {
+    asset: {
+      id,
+      kind,
+      path: projectRelativePath(root, filePath),
+      mimeType,
+      sizeBytes: bytes.byteLength,
+      ...(kind === "image" ? readImageDimensions(bytes, mimeType) : {}),
+    },
+  }
+}
+
 export const listCinemaVideoProviders = CinemaProviderRuntime.listCinemaVideoProviders
 export const refreshCinemaVideoProviderCatalog = CinemaProviderRuntime.refreshCinemaVideoProviderCatalog
 export const getCinemaVideoProvider = CinemaProviderRuntime.getCinemaVideoProvider
+export const getCinemaProviderWorkflows = CinemaProviderRuntime.getCinemaProviderWorkflows
+export const refreshCinemaProviderWorkflows = CinemaProviderRuntime.refreshCinemaProviderWorkflows
 export const getCinemaVideoProviderAuth = CinemaProviderRuntime.getCinemaVideoProviderAuth
 export const saveCinemaVideoProviderApiKey = CinemaProviderRuntime.saveCinemaVideoProviderApiKey
 export const saveCinemaVideoProviderSettings = CinemaProviderRuntime.saveCinemaVideoProviderSettings
@@ -2494,7 +2658,32 @@ export async function listCinemaImageModels(projectID: string): Promise<CinemaIm
       .filter((model) => isAvailableCinemaProviderImageModel(provider, model))
       .map((model) => toCinemaProviderImageModel(provider, model))
   )
-  const effectiveModel = items[0] ?? null
+  const comfyProvider = providers.find((provider) => provider.manifest.id === "comfyui-local")
+  if (comfyProvider) {
+    const catalog = await CinemaProviderRuntime.getCinemaProviderWorkflows(comfyProvider.manifest.id)
+      .catch(() => undefined)
+    for (const workflow of catalog?.workflows ?? []) {
+      if (workflow.output?.kind !== "image") continue
+      items.push({
+        value: textModelValue({ providerID: comfyProvider.manifest.id, id: workflow.workflowID }),
+        providerID: comfyProvider.manifest.id,
+        modelID: workflow.workflowID,
+        target: {
+          kind: "workflow",
+          workflowID: workflow.workflowID,
+          revision: workflow.revision,
+        },
+        label: workflow.name,
+        providerLabel: comfyProvider.manifest.name,
+        available: workflow.status === "ready" && catalog?.status === "ready" && Boolean(workflow.formSpec),
+        supportsImageInput: workflow.formSpec?.controls.some((control) =>
+          control.type === "image-list" || (control.type === "media" && control.mediaKind === "image")
+        ) ?? false,
+        ...(workflow.formSpec ? { formSpec: workflow.formSpec } : {}),
+      })
+    }
+  }
+  const effectiveModel = items.find((item) => item.available) ?? null
 
   return {
     items,
@@ -2505,20 +2694,61 @@ export async function listCinemaImageModels(projectID: string): Promise<CinemaIm
   }
 }
 
-async function resolveCinemaImageGenerationModel(projectID: string, requestedModel: string | null | undefined) {
+async function resolveCinemaImageGenerationModel(
+  projectID: string,
+  requestedModel: string | null | undefined,
+  requestedTarget?: CreateCinemaImageGenerationBody["target"],
+) {
   const imageModels = await listCinemaImageModels(projectID)
-  const requested = findCinemaImageModel(imageModels.items, requestedModel)
-  const selected = requested ?? imageModels.effectiveModel ?? null
+  const requested = requestedTarget
+    ? imageModels.items.find((item) => (
+      item.target?.kind === requestedTarget.kind
+      && (
+        item.target.kind === "model" && requestedTarget.kind === "model"
+          ? item.target.modelID === requestedTarget.modelID
+          : item.target.kind === "workflow" && requestedTarget.kind === "workflow"
+            ? item.target.workflowID === requestedTarget.workflowID
+            : false
+      )
+    )) ?? null
+    : findCinemaImageModel(imageModels.items, requestedModel)
+  const selected = requestedTarget
+    ? requested
+    : requested ?? imageModels.effectiveModel ?? null
 
   if (!selected) {
     throw new ApiError(
       400,
       "CINEMA_IMAGE_MODEL_NOT_AVAILABLE",
-      "No image generation model is available for this project.",
+      requestedTarget
+        ? "The requested image generation target is not available."
+        : "No image generation model is available for this project.",
     )
   }
 
   const provider = await CinemaProviderRuntime.getCinemaVideoProvider(selected.providerID)
+  if (requestedTarget?.kind === "workflow" || selected.target?.kind === "workflow") {
+    const target = requestedTarget?.kind === "workflow"
+      ? requestedTarget
+      : selected.target as Extract<NonNullable<CinemaImageModel["target"]>, { kind: "workflow" }>
+    const catalog = await CinemaProviderRuntime.getCinemaProviderWorkflows(selected.providerID)
+    const workflow = catalog.workflows.find((item) => item.workflowID === target.workflowID)
+    if (!workflow || !workflow.formSpec || workflow.output?.kind !== "image") {
+      throw new ApiError(
+        400,
+        "CINEMA_IMAGE_MODEL_NOT_CAPABLE",
+        `Workflow '${selected.value}' does not expose runnable image generation.`,
+      )
+    }
+    return {
+      kind: "workflow" as const,
+      provider,
+      workflow,
+      imageModel: selected,
+      mode: workflow.formSpec.mode,
+      target,
+    }
+  }
   const model = CINEMA_IMAGE_GENERATION_MODES
     .map((mode) => CinemaProviderRuntime.findCinemaVideoProviderModelForMode(provider.manifest, selected.modelID, mode))
     .find((item): item is CinemaGenerationProviderModel => Boolean(item && isAvailableCinemaProviderImageModel(provider, item)))
@@ -2531,7 +2761,7 @@ async function resolveCinemaImageGenerationModel(projectID: string, requestedMod
     )
   }
 
-  return { provider, model, imageModel: selected, mode }
+  return { kind: "model" as const, provider, model, imageModel: selected, mode }
 }
 
 async function saveCinemaGeneratedImageAssets(input: {
@@ -2621,9 +2851,6 @@ export async function createCinemaImageGeneration(
   await assertCinemaProjectInitialized(cinemaRoot)
 
   const prompt = input.prompt.trim()
-  if (!prompt) {
-    throw new ApiError(400, "CINEMA_IMAGE_PROMPT_EMPTY", "Image generation prompt cannot be empty.")
-  }
 
   const current = await readCinemaCanvasFromRoot(cinemaRoot)
   const node = current.nodes.find((item) => item.id === input.nodeID)
@@ -2636,12 +2863,41 @@ export async function createCinemaImageGeneration(
   assertImageNodeAcceptsGeneration(node)
 
   try {
-    const { provider, model, imageModel, mode } = await resolveCinemaImageGenerationModel(projectID, input.model)
+    const resolved = await resolveCinemaImageGenerationModel(projectID, input.model, input.target)
+    const { provider, imageModel, mode } = resolved
     const formSpec = imageModel.formSpec
     const defaults = await cinemaImageRuntimeDependencies.getImageGenerationSettings(projectID)
     const baseParameters: Record<string, unknown> = {
       ...generationFormDefaultParameters(formSpec),
       ...input.parameters,
+    }
+    if (resolved.kind === "workflow") {
+      const sourceNodeIDs = uniqueNonEmptyStrings(input.sourceNodeIDs ?? [])
+      const created = await createCinemaGenerationTask(projectID, {
+        providerID: provider.manifest.id,
+        target: resolved.target,
+        mode,
+        title: node.title,
+        prompt,
+        sourceNodeIDs,
+        parameters: baseParameters,
+        taskNodeID: node.id,
+      })
+      const canvas = await readCinemaCanvasFromRoot(cinemaRoot)
+      return {
+        canvas,
+        nodeID: node.id,
+        model: imageModel.value,
+        taskID: created.id,
+        status: created.status,
+        assets: created.outputAssets.flatMap((asset) =>
+          asset.kind === "image" ? [{ ...asset, kind: "image" as const }] : []
+        ),
+      }
+    }
+    const { model } = resolved
+    if (!prompt) {
+      throw new ApiError(400, "CINEMA_IMAGE_PROMPT_EMPTY", "Image generation prompt cannot be empty.")
     }
     const shouldApplyLegacyDefaults = !formSpec
     const count = input.count ?? numberValue(baseParameters.count) ?? (shouldApplyLegacyDefaults ? defaults.default_count ?? 1 : undefined)
@@ -2697,7 +2953,7 @@ export async function createCinemaImageGeneration(
     const createdAt = nowISO()
     const taskInput: CreateCinemaGenerationTaskBody = {
       providerID: imageModel.providerID,
-      modelID: imageModel.modelID,
+      target: imageModel.target ?? { kind: "model", modelID: imageModel.modelID },
       mode,
       title: node.title,
       prompt,
@@ -2719,7 +2975,7 @@ export async function createCinemaImageGeneration(
       id: taskID,
       projectID,
       providerID: imageModel.providerID,
-      modelID: taskModelID,
+      target: { kind: "model", modelID: taskModelID },
       mode,
       title: node.title,
       status: "queued",
@@ -2906,44 +3162,139 @@ function assertGenerationTaskNodeModelOutput(input: {
   }
 }
 
+function cinemaGenerationTaskLockKey(cinemaRoot: string, taskID: string) {
+  return `cinema-generation-task:${cinemaRoot}:${taskID}`
+}
+
+function cinemaGenerationCreateLockKey(cinemaRoot: string) {
+  return `cinema-generation-create:${cinemaRoot}`
+}
+
+function failedGenerationTaskFromError(task: CinemaGenerationTask, error: unknown) {
+  const updatedAt = nowISO()
+  const message = errorMessage(error) || "Generation task creation failed."
+  return {
+    ...task,
+    status: "failed" as const,
+    updatedAt,
+    errorCode: error instanceof ApiError ? error.code : "CINEMA_GENERATION_TASK_CREATE_FAILED",
+    error: message,
+    progress: progressForTaskStatus("failed", updatedAt, message),
+  }
+}
+
 export async function createCinemaGenerationTask(
   projectID: string,
   input: CreateCinemaGenerationTaskBody,
 ): Promise<CinemaGenerationTask> {
   const { root, cinemaRoot } = resolveCinemaRoot(projectID)
   await assertCinemaProjectInitialized(cinemaRoot)
-  const provider = await CinemaProviderRuntime.getCinemaVideoProvider(input.providerID)
-  const providerModel = CinemaProviderRuntime.assertCinemaVideoProviderModelSupports(input, provider.manifest)
-  const taskModelID = CinemaProviderRuntime.cinemaVideoProviderTaskModelID(providerModel)
-  const combinationParameters = cinemaProviderInputCombinationParameters(providerModel, input.mode, input.parameters)
-  const taskParameters = {
-    ...input.parameters,
-    ...combinationParameters,
-    modelSelectionID: input.modelID,
-    providerModelID: taskModelID,
-    ...(providerModel.offeringID ? { offeringID: providerModel.offeringID } : {}),
+  using _createLock = await Lock.write(cinemaGenerationCreateLockKey(cinemaRoot))
+
+  if (input.operationID) {
+    const existing = (await readGenerationTasksFromRoot(cinemaRoot))
+      .find((task) => task.operationID === input.operationID)
+    if (existing) return existing
   }
+
+  const provider = await CinemaProviderRuntime.getCinemaVideoProvider(input.providerID)
+  const providerModel = input.target.kind === "model"
+    ? CinemaProviderRuntime.assertCinemaVideoProviderModelSupports(input, provider.manifest)
+    : undefined
+  const taskModelID = providerModel
+    ? CinemaProviderRuntime.cinemaVideoProviderTaskModelID(providerModel)
+    : undefined
+  const workflowTarget = input.target.kind === "workflow" ? input.target : undefined
+  const workflowCatalog = workflowTarget
+    ? await CinemaProviderRuntime.getCinemaProviderWorkflows(input.providerID)
+    : undefined
+  if (workflowCatalog && workflowCatalog.status !== "ready") {
+    throw new ApiError(
+      409,
+      "COMFYUI_WORKFLOW_CATALOG_STALE",
+      workflowCatalog.issues[0]?.message ?? "The ComfyUI workflow catalog must be refreshed before submitting.",
+    )
+  }
+  const workflow = workflowTarget
+    ? workflowCatalog?.workflows.find((item) => item.workflowID === workflowTarget.workflowID)
+    : undefined
+  if (workflowTarget && !workflow) {
+    throw new ApiError(404, "COMFYUI_WORKFLOW_NOT_FOUND", "The selected ComfyUI workflow was not found.")
+  }
+  if (workflow && workflowTarget && workflow.revision !== workflowTarget.revision) {
+    throw new ApiError(
+      409,
+      "COMFYUI_WORKFLOW_REVISION_CHANGED",
+      "The ComfyUI workflow changed; refresh and review its inputs before submitting.",
+      {
+        workflowID: workflow.workflowID,
+        requestedRevision: workflowTarget.revision,
+        currentRevision: workflow.revision,
+      },
+    )
+  }
+  if (workflow && (workflow.status !== "ready" || !workflow.formSpec || !workflow.output)) {
+    throw new ApiError(
+      409,
+      "COMFYUI_WORKFLOW_NOT_READY",
+      workflow.issues[0]?.message ?? "The selected ComfyUI workflow is not runnable.",
+      { issues: workflow.issues },
+    )
+  }
+  if (workflow?.formSpec && workflow.formSpec.mode !== input.mode) {
+    throw new ApiError(
+      400,
+      "CINEMA_PROVIDER_MODE_UNSUPPORTED",
+      `Workflow '${workflow.name}' does not expose mode '${input.mode}'.`,
+    )
+  }
+  const combinationParameters = providerModel
+    ? cinemaProviderInputCombinationParameters(providerModel, input.mode, input.parameters)
+    : {}
+  const taskParameters = providerModel
+    ? {
+      ...input.parameters,
+      ...combinationParameters,
+      modelSelectionID: input.target.kind === "model" ? input.target.modelID : undefined,
+      providerModelID: taskModelID,
+      ...(providerModel.offeringID ? { offeringID: providerModel.offeringID } : {}),
+    }
+    : { ...input.parameters }
 
   const canvas = await readCinemaCanvasFromRoot(cinemaRoot)
   const createdAt = nowISO()
   const taskID = makeTaskID()
   const taskNodeID = resolveGenerationTaskNodeID(input, canvas)
   const taskNode = canvas.nodes.find((node) => node.id === taskNodeID)
-  assertGenerationTaskNodeModelOutput({
-    node: taskNode,
-    model: providerModel,
-    mode: input.mode,
-    modelID: input.modelID,
-  })
+  if (providerModel) {
+    assertGenerationTaskNodeModelOutput({
+      node: taskNode,
+      model: providerModel,
+      mode: input.mode,
+      modelID: input.target.kind === "model" ? input.target.modelID : "",
+    })
+  } else if (
+    (taskNode?.type === "video" && workflow?.output?.kind !== "video")
+    || (taskNode?.type === "image" && workflow?.output?.kind !== "image")
+  ) {
+    throw new ApiError(
+      409,
+      "CINEMA_TASK_NODE_MODEL_INVALID",
+      `The selected workflow does not produce output compatible with the '${taskNode?.type}' node.`,
+    )
+  }
   if (taskNode?.type === "image" && isCinemaImageGenerationMode(input.mode)) {
     assertImageNodeAcceptsGeneration(taskNode)
   }
   const adapter = CinemaProviderRuntime.getCinemaVideoProviderAdapter(input.providerID)
-  const task: CinemaGenerationTask = {
+  const initialTask: CinemaGenerationTask = {
     id: taskID,
+    ...(input.operationID ? { operationID: input.operationID } : {}),
     projectID,
     providerID: input.providerID,
-    modelID: taskModelID,
+    target: taskModelID
+      ? { kind: "model", modelID: taskModelID }
+      : input.target,
     mode: input.mode,
     title: titleForGenerationTask(input),
     status: "queued",
@@ -2960,10 +3311,63 @@ export async function createCinemaGenerationTask(
     progress: progressForTaskStatus("queued", createdAt),
   }
 
-  const createdResult = taskWithProgress(bindGenerationTaskToNode(
-    await adapter.createTask({ root, cinemaRoot, task, canvas }),
-    taskNodeID,
-  ))
+  const adapterInput = { root, cinemaRoot, task: initialTask, canvas }
+  const preparedTask = adapter.prepareTask
+    ? await adapter.prepareTask(adapterInput)
+    : initialTask
+  const prepared = taskWithProgress(bindGenerationTaskToNode(preparedTask, taskNodeID))
+  using _taskLock = await Lock.write(cinemaGenerationTaskLockKey(cinemaRoot, prepared.id))
+  await writeGenerationTask(cinemaRoot, prepared)
+  await syncTaskToCanvas(
+    cinemaRoot,
+    prepared,
+    `Prepared generation task '${prepared.title}'.`,
+    { claimImageTask: true },
+  )
+
+  const persistTask = async (nextTask: CinemaGenerationTask) => {
+    const intermediate = taskWithProgress(bindGenerationTaskToNode(nextTask, taskNodeID))
+    await writeGenerationTask(cinemaRoot, intermediate)
+    await syncTaskToCanvas(
+      cinemaRoot,
+      intermediate,
+      `Updated generation task '${intermediate.title}' (${intermediate.progress?.phase ?? intermediate.status}).`,
+      { claimImageTask: true },
+    )
+  }
+
+  let createdResult: CinemaGenerationTask
+  try {
+    createdResult = taskWithProgress(bindGenerationTaskToNode(
+      await adapter.createTask({
+        root,
+        cinemaRoot,
+        task: prepared,
+        canvas,
+        persistTask,
+      }),
+      taskNodeID,
+    ))
+  } catch (error) {
+    const failed = failedGenerationTaskFromError(prepared, error)
+    await writeGenerationTask(cinemaRoot, failed)
+    await syncTaskToCanvas(
+      cinemaRoot,
+      failed,
+      `Generation task '${failed.title}' failed during submission.`,
+      { claimImageTask: true },
+    )
+    await appendTaskAuditEvent(cinemaRoot, {
+      time: nowISO(),
+      type: "generation-task.failed",
+      actor: "cinema-runtime",
+      taskID: failed.id,
+      message: `Generation task '${failed.title}' failed during submission.`,
+      data: { task: failed },
+    })
+    throw error
+  }
+
   const created = await registerCompletedGenerationAssets(projectID, root, createdResult)
   await writeGenerationTask(cinemaRoot, created)
   await syncTaskToCanvas(
@@ -2998,11 +3402,21 @@ export async function getCinemaGenerationTask(projectID: string, taskID: string)
 export async function refreshCinemaGenerationTask(projectID: string, taskID: string): Promise<CinemaGenerationTask> {
   const { root, cinemaRoot } = resolveCinemaRoot(projectID)
   await assertCinemaProjectInitialized(cinemaRoot)
+  using _taskLock = await Lock.write(cinemaGenerationTaskLockKey(cinemaRoot, taskID))
   const task = await readGenerationTaskFromRoot(cinemaRoot, taskID)
   const adapter = CinemaProviderRuntime.getCinemaVideoProviderAdapter(task.providerID)
   const canvas = await readCinemaCanvasFromRoot(cinemaRoot)
+  const persistTask = async (nextTask: CinemaGenerationTask) => {
+    const intermediate = taskWithProgress(bindGenerationTaskToNode(nextTask, task.taskNodeID))
+    await writeGenerationTask(cinemaRoot, intermediate)
+    await syncTaskToCanvas(
+      cinemaRoot,
+      intermediate,
+      `Updated generation task '${intermediate.title}' (${intermediate.progress?.phase ?? intermediate.status}).`,
+    )
+  }
   const refreshedResult = taskWithProgress(bindGenerationTaskToNode(
-    await adapter.refreshTask({ root, cinemaRoot, task, canvas }),
+    await adapter.refreshTask({ root, cinemaRoot, task, canvas, persistTask }),
     task.taskNodeID,
   ))
   const refreshed = await registerCompletedGenerationAssets(projectID, root, refreshedResult)
@@ -3022,23 +3436,37 @@ export async function refreshCinemaGenerationTask(projectID: string, taskID: str
 export async function cancelCinemaGenerationTask(projectID: string, taskID: string): Promise<CinemaGenerationTask> {
   const { root, cinemaRoot } = resolveCinemaRoot(projectID)
   await assertCinemaProjectInitialized(cinemaRoot)
+  using _taskLock = await Lock.write(cinemaGenerationTaskLockKey(cinemaRoot, taskID))
   const task = await readGenerationTaskFromRoot(cinemaRoot, taskID)
   const adapter = CinemaProviderRuntime.getCinemaVideoProviderAdapter(task.providerID)
   const canvas = await readCinemaCanvasFromRoot(cinemaRoot)
+  const persistTask = async (nextTask: CinemaGenerationTask) => {
+    const intermediate = taskWithProgress(bindGenerationTaskToNode(nextTask, task.taskNodeID))
+    await writeGenerationTask(cinemaRoot, intermediate)
+    await syncTaskToCanvas(
+      cinemaRoot,
+      intermediate,
+      `Updated generation task '${intermediate.title}' (${intermediate.progress?.phase ?? intermediate.status}).`,
+    )
+  }
   const canceled = taskWithProgress(bindGenerationTaskToNode(await (adapter.cancelTask ?? (async ({ task: current }) => ({
     ...current,
     status: "canceled" as const,
     updatedAt: nowISO(),
     progress: progressForTaskStatus("canceled", nowISO()),
-  })))({ root, cinemaRoot, task, canvas }), task.taskNodeID))
+  })))({ root, cinemaRoot, task, canvas, persistTask }), task.taskNodeID))
   await writeGenerationTask(cinemaRoot, canceled)
-  await syncTaskToCanvas(cinemaRoot, canceled, `Canceled generation task '${canceled.title}'.`)
+  const cancelConfirmed = canceled.status === "canceled"
+  const message = cancelConfirmed
+    ? `Canceled generation task '${canceled.title}'.`
+    : `Reconciled generation task '${canceled.title}' while canceling (${canceled.status}).`
+  await syncTaskToCanvas(cinemaRoot, canceled, message)
   await appendTaskAuditEvent(cinemaRoot, {
     time: nowISO(),
-    type: "generation-task.canceled",
+    type: cancelConfirmed ? "generation-task.canceled" : "generation-task.cancel-reconciled",
     actor: "cinema-runtime",
     taskID: canceled.id,
-    message: `Canceled generation task '${canceled.title}'.`,
+    message,
     data: { task: canceled },
   })
   return canceled
