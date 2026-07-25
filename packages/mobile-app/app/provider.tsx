@@ -1,4 +1,5 @@
 import Feather from "@expo/vector-icons/Feather"
+import FontAwesome from "@expo/vector-icons/FontAwesome"
 import { useRouter } from "expo-router"
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ActivityIndicator, Alert, Pressable, Text, View } from "react-native"
@@ -15,6 +16,7 @@ import {
   getStatus,
   isRelayConnection,
   revokeCurrentDevice,
+  type MobileDesktopPlatform,
   type MobileStatus,
 } from "@/api/mobile-api"
 import { useI18n } from "@/i18n"
@@ -29,6 +31,7 @@ import { formatRelativeTime, trimMiddle } from "@/utils/format"
 import { getMobileDeviceName } from "@/utils/platform"
 
 type FeatherName = React.ComponentProps<typeof Feather>["name"]
+type FontAwesomeName = React.ComponentProps<typeof FontAwesome>["name"]
 
 export default function ProviderScreen() {
   const router = useRouter()
@@ -184,8 +187,14 @@ export default function ProviderScreen() {
   const transportLabel = connection?.transport === "relay" ? "Relay" : connection ? "Local" : t("app.unknown")
   const capabilityCount = status?.capabilities?.length ?? 0
   const capabilityLabel = formatCapabilityCount(capabilityCount, t)
+  const desktopPlatform = status?.platform ?? currentDesktop?.platform
+  const desktopPlatformVersion = status?.platformVersion ?? currentDesktop?.platformVersion
+  const desktopArch = status?.arch ?? currentDesktop?.arch
+  const desktopPlatformLabel = formatDesktopPlatform(desktopPlatform)
+  const desktopSystemLabel = formatDesktopSystem(desktopPlatform, desktopPlatformVersion)
   const connectionDetail = connection
     ? [
+        desktopPlatformLabel,
         t("provider.connectedVia", { transport: transportLabel }),
         status?.appVersion ? t("provider.versionInline", { version: status.appVersion }) : null,
         capabilityCount ? capabilityLabel : null,
@@ -217,6 +226,7 @@ export default function ProviderScreen() {
         <ConnectionSummary
           detail={connectionDetail}
           desktopName={desktopName}
+          platform={desktopPlatform}
           state={connectionState}
           tone={connectionTone}
           connected={Boolean(connection)}
@@ -331,6 +341,8 @@ export default function ProviderScreen() {
       >
         <DetailCard>
           <DetailRow title={t("provider.transport")} value={transportLabel} />
+          <DetailRow divided title={t("provider.system")} value={desktopSystemLabel ?? t("app.unknown")} />
+          <DetailRow divided title={t("provider.architecture")} value={desktopArch ?? t("app.unknown")} />
           <DetailRow divided title={t("provider.version")} value={status?.appVersion ?? t("app.unknown")} />
           <DetailRow divided title={t("provider.capabilities")} value={capabilityCount ? `${capabilityCount}` : t("app.unknown")} />
         </DetailCard>
@@ -356,12 +368,14 @@ function ConnectionSummary({
   connected,
   detail,
   desktopName,
+  platform,
   state,
   tone,
 }: {
   connected: boolean
   detail: string
   desktopName: string
+  platform?: MobileDesktopPlatform
   state: string
   tone: ThemeTone
 }) {
@@ -379,6 +393,7 @@ function ConnectionSummary({
       }}
     >
       <View style={{ alignItems: "flex-start", flexDirection: "row", gap: theme.spacing.xl }}>
+        <DesktopPlatformIcon platform={platform} />
         <View style={{ flex: 1, gap: theme.spacing.sm, minWidth: 0 }}>
           <Text
             numberOfLines={1}
@@ -405,6 +420,25 @@ function ConnectionSummary({
         </View>
         <StatusBadge label={state} tone={tone} />
       </View>
+    </View>
+  )
+}
+
+function DesktopPlatformIcon({ platform }: { platform?: MobileDesktopPlatform }) {
+  const iconName = desktopPlatformIconName(platform)
+  return (
+    <View
+      accessible={false}
+      style={{
+        alignItems: "center",
+        backgroundColor: theme.colors.surfaceSubtle,
+        borderRadius: theme.radius.sm,
+        height: 40,
+        justifyContent: "center",
+        width: 40,
+      }}
+    >
+      <FontAwesome color={theme.colors.textSubtle} name={iconName} size={23} />
     </View>
   )
 }
@@ -842,6 +876,26 @@ function formatCapabilityCount(count: number, t: ReturnType<typeof useI18n>["t"]
   return t("provider.capabilityCount", { count })
 }
 
+function formatDesktopPlatform(platform: MobileDesktopPlatform | undefined) {
+  if (platform === "windows") return "Windows"
+  if (platform === "macos") return "macOS"
+  if (platform === "linux") return "Linux"
+  return null
+}
+
+function formatDesktopSystem(platform: MobileDesktopPlatform | undefined, platformVersion: string | undefined) {
+  const platformLabel = formatDesktopPlatform(platform)
+  if (!platformLabel) return platformVersion?.trim() || null
+  return platformVersion?.trim() ? `${platformLabel} · ${platformVersion.trim()}` : platformLabel
+}
+
+function desktopPlatformIconName(platform: MobileDesktopPlatform | undefined): FontAwesomeName {
+  if (platform === "windows") return "windows"
+  if (platform === "macos") return "apple"
+  if (platform === "linux") return "linux"
+  return "desktop"
+}
+
 const capabilityLabels: Partial<Record<string, MobileTranslationKey>> = {
   "approval:read": "provider.capability.approvalRead",
   "approval:respond": "provider.capability.approvalRespond",
@@ -886,6 +940,9 @@ function buildDiagnostics({
     `transport=${connection?.transport === "relay" ? "relay" : connection ? "local" : "none"}`,
     `relay=${isRelayConnection(connection) ? "yes" : "no"}`,
     `desktop=${status?.desktopName ?? "unknown"}`,
+    `platform=${status?.platform ?? "unknown"}`,
+    `platform_version=${status?.platformVersion ?? "unknown"}`,
+    `arch=${status?.arch ?? "unknown"}`,
     `version=${status?.appVersion ?? "unknown"}`,
     `endpoint=${connection ? trimMiddle(connection.baseUrl, 96) : "none"}`,
     `desktop_id=${connection?.desktopID ? trimMiddle(connection.desktopID, 96) : "none"}`,

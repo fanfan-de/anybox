@@ -6,11 +6,16 @@ export interface MobileConnection {
   deviceID?: string
 }
 
+export type MobileDesktopPlatform = "windows" | "macos" | "linux" | "unknown"
+
 export interface MobileStatus {
   service: string
   running: boolean
   desktopName?: string
   appVersion?: string
+  platform?: MobileDesktopPlatform
+  platformVersion?: string
+  arch?: string
   online?: boolean
   capabilities?: string[]
 }
@@ -304,6 +309,9 @@ export interface MobilePairResult {
     id: string
     name: string
     appVersion?: string
+    platform?: MobileDesktopPlatform
+    platformVersion?: string
+    arch?: string
     online: boolean
     capabilities: string[]
     pairingExpiresAt: number | null
@@ -526,6 +534,9 @@ export async function getStatus(connection: MobileConnection) {
       running: status.online,
       desktopName: status.name,
       appVersion: status.appVersion,
+      platform: status.platform,
+      platformVersion: status.platformVersion,
+      arch: status.arch,
       online: status.online,
       capabilities: status.capabilities,
     } satisfies MobileStatus

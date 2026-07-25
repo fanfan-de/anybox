@@ -58,10 +58,15 @@ export interface DesktopCloudRelayAccountSession {
   expiresAt?: number
 }
 
+export type DesktopPlatform = "windows" | "macos" | "linux" | "unknown"
+
 export interface DesktopCloudRelayClientOptions {
   baseUrl: string | null
   desktopName: string
   appVersion?: string
+  platform?: DesktopPlatform
+  platformVersion?: string
+  arch?: string
   capabilities: string[]
   getBridgeToken: () => string | null
   getLocalBridgeBaseUrl: () => string | null
@@ -648,6 +653,9 @@ async function registerDesktop(
       token: identity.token,
       name: currentOptions.desktopName,
       appVersion: currentOptions.appVersion,
+      platform: currentOptions.platform,
+      platformVersion: currentOptions.platformVersion,
+      arch: currentOptions.arch,
       capabilities: currentOptions.capabilities,
       refreshPairing,
     }),

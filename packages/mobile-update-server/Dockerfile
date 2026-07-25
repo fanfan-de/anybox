@@ -10,7 +10,8 @@ RUN pnpm install --frozen-lockfile --filter @anybox/mobile-update-server...
 
 COPY packages/mobile-update-server packages/mobile-update-server
 RUN pnpm --filter @anybox/mobile-update-server build \
-  && pnpm --filter @anybox/mobile-update-server deploy --prod --legacy /opt/mobile-update-server
+  && pnpm --config.allow-unused-patches=true \
+    --filter @anybox/mobile-update-server deploy --prod --legacy /opt/mobile-update-server
 
 FROM node:22.22.0-alpine AS runner
 

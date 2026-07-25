@@ -1,5 +1,5 @@
 import Constants from "expo-constants"
-import type { MobilePairResult } from "@/api/mobile-api"
+import type { MobileDesktopPlatform, MobilePairResult } from "@/api/mobile-api"
 
 export const DEFAULT_ACCOUNT_RELAY_BASE_URL = "https://anybox.com.cn"
 
@@ -65,6 +65,9 @@ export interface MobileAccountRelayDesktop {
   id: string
   name: string
   appVersion?: string
+  platform?: MobileDesktopPlatform
+  platformVersion?: string
+  arch?: string
   online: boolean
   capabilities: string[]
   pairingExpiresAt: number | null
@@ -383,6 +386,9 @@ function normalizeAccountRelayDesktop(value: unknown): MobileAccountRelayDesktop
   const name = readString(record?.name)
   if (!id || !name) return null
   const appVersion = readString(record?.appVersion)
+  const platform = normalizeDesktopPlatform(record?.platform)
+  const platformVersion = readString(record?.platformVersion)
+  const arch = readString(record?.arch)
   const capabilities = Array.isArray(record?.capabilities)
     ? record.capabilities.filter((capability): capability is string => typeof capability === "string" && capability.trim().length > 0)
     : []
@@ -390,6 +396,9 @@ function normalizeAccountRelayDesktop(value: unknown): MobileAccountRelayDesktop
     id,
     name,
     ...(appVersion ? { appVersion } : {}),
+    ...(platform ? { platform } : {}),
+    ...(platformVersion ? { platformVersion } : {}),
+    ...(arch ? { arch } : {}),
     online: record?.online === true,
     capabilities,
     pairingExpiresAt: typeof record?.pairingExpiresAt === "number" ? record.pairingExpiresAt : null,
@@ -501,6 +510,12 @@ function readNestedValue(record: Record<string, unknown> | null, account: Record
 
 function readString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined
+}
+
+function normalizeDesktopPlatform(value: unknown): MobileDesktopPlatform | undefined {
+  return value === "windows" || value === "macos" || value === "linux" || value === "unknown"
+    ? value
+    : undefined
 }
 
 function readBoolean(value: unknown) {

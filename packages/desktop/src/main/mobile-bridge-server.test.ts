@@ -142,6 +142,13 @@ function createConnectOptionsDeepLink(input: { relay?: string; lan?: string; bri
   return `anybox-mobile://connect-options?${params.toString()}`
 }
 
+function expectedDesktopPlatform() {
+  if (process.platform === "win32") return "windows"
+  if (process.platform === "darwin") return "macos"
+  if (process.platform === "linux") return "linux"
+  return "unknown"
+}
+
 function createMockProject(workspaceDir: string, now = Date.now()) {
   return {
     id: "project-smoke",
@@ -493,17 +500,23 @@ describe("mobile bridge server", () => {
     expect(preview.response.status).toBe(200)
     const previewData = successData<{
       appVersion: string
+      arch: string
       capabilities: string[]
       desktopName: string
       online: boolean
+      platform: "windows" | "macos" | "linux" | "unknown"
+      platformVersion: string
       pairing: { expiresAt: number | null; serverTime: number; valid: boolean }
       running: boolean
       service: string
     }>(preview.body)
     expect(previewData).toMatchObject({
       appVersion: "0.1.13",
+      arch: process.arch,
       desktopName: "Codex Workstation",
       online: true,
+      platform: expectedDesktopPlatform(),
+      platformVersion: expect.any(String),
       pairing: {
         expiresAt: status.pairingExpiresAt,
         valid: true,

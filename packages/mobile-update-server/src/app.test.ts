@@ -165,15 +165,18 @@ test("returns 204 when the current update id is already newest", async () => {
 })
 
 test("returns 204 when the CDN has no pointer for the requested runtime", async () => {
-  const keys = signingKeys()
-  const app = createUpdateApp({
-    cdnBaseUrl,
-    publicKeyPem: keys.publicKey,
-    fetcher: async () => new Response("missing", { status: 404 }),
-    logger: () => undefined,
-  })
-  const response = await app.request("/v1/manifest", { headers: requestHeaders() })
-  assert.equal(response.status, 204)
+  for (const status of [403, 404]) {
+    const keys = signingKeys()
+    const app = createUpdateApp({
+      cdnBaseUrl,
+      publicKeyPem: keys.publicKey,
+      fetcher: async () => new Response("missing", { status }),
+      logger: () => undefined,
+    })
+    const response = await app.request("/v1/manifest", { headers: requestHeaders() })
+    assert.equal(response.status, 204)
+    assert.equal(await response.text(), "")
+  }
 })
 
 test("returns a signed multipart rollback directive", async () => {

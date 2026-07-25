@@ -36,7 +36,11 @@ async function fetchText(config: UpstreamConfig, url: URL, allowMissing = false)
       redirect: "follow",
       signal: controller.signal,
     })
-    if (allowMissing && response.status === 404) return null
+    // Tencent COS returns 403 for a missing object when bucket listing is
+    // private, even when existing public objects are readable through CDN.
+    // Only channel pointers opt into this missing-object behavior; immutable
+    // manifests and assets still fail closed on every non-2xx response.
+    if (allowMissing && (response.status === 403 || response.status === 404)) return null
     if (!response.ok) {
       throw new UpstreamUnavailableError(`Update CDN returned HTTP ${response.status}.`)
     }

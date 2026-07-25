@@ -14,6 +14,7 @@ import {
   refreshDesktopCloudRelayPairing,
   stopDesktopCloudRelayClient,
   type DesktopCloudRelayStatus,
+  type DesktopPlatform,
 } from "./desktop-cloud-relay-client"
 import { safeError, safeLog, safeWarn } from "./safe-console"
 import { getWebContentsForWindowSafely, sendWebContentsSafely } from "./safe-web-contents-send"
@@ -191,6 +192,21 @@ function getDesktopDeviceName() {
     sanitizeDesktopDeviceName(app.getName()) ??
     "Desktop"
   )
+}
+
+function getDesktopPlatform(): DesktopPlatform {
+  if (process.platform === "win32") return "windows"
+  if (process.platform === "darwin") return "macos"
+  if (process.platform === "linux") return "linux"
+  return "unknown"
+}
+
+function getDesktopSystemInfo() {
+  return {
+    platform: getDesktopPlatform(),
+    platformVersion: os.release() || undefined,
+    arch: process.arch,
+  }
 }
 
 function shouldStartBridgeTunnel() {
@@ -847,6 +863,7 @@ function publicStatus() {
     running: Boolean(server),
     desktopName: getDesktopDeviceName(),
     appVersion: app.getVersion(),
+    ...getDesktopSystemInfo(),
     online: Boolean(server),
     capabilities: DEFAULT_MOBILE_DEVICE_CAPABILITIES,
   }
@@ -1425,6 +1442,7 @@ export async function getMobileBridgeStatus(): Promise<MobileBridgeStatus> {
     baseUrl: port ? readBridgePublicBaseUrl() : null,
     desktopName: getDesktopDeviceName(),
     appVersion: app.getVersion(),
+    ...getDesktopSystemInfo(),
     capabilities: DEFAULT_MOBILE_DEVICE_CAPABILITIES,
     getBridgeToken: () => bridgeToken,
     getLocalBridgeBaseUrl: () => (bridgePort ? `http://127.0.0.1:${bridgePort}` : null),
