@@ -216,7 +216,7 @@ export const koKR = {
   "thread.loadingSession": "세션 로딩 중",
   "thread.noMessages": "메시지 없음",
   "thread.readyInWorkspace": "{workspace}에서 준비 완료. 작업을 보내 집중 세션을 시작하세요.",
-  "thread.startConversation": "채팅 시작",
+  "thread.startConversation": "{workspace}에서 대화 시작",
   "thread.reasoning": "추론",
   "thread.reasoningActive": "추론",
   "thread.reasoningComplete": "추론 완료",

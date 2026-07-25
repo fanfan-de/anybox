@@ -1,4 +1,4 @@
 interface:
-  display_name: "Anybox Mobile Delivery"
-  short_description: "Develop, test, preview, and release Anybox Mobile"
-  default_prompt: "Use $anybox-mobile-release to develop, validate, and safely publish an Anybox Mobile update."
+  display_name: "Anybox 移动端开发与发布"
+  short_description: "开发、真机验证、预览并安全发布 Anybox 移动端"
+  default_prompt: "使用 $anybox-mobile-release 开发、验证并安全发布一次 Anybox 移动端更新。"

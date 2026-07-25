@@ -97,7 +97,7 @@ const zhCNTokenGroupCopy = {
   },
   "component-sidebar-tree-rows": {
     label: "侧边栏树行",
-    description: "左侧工作区树和 Skills 树的专用行状态 token。",
+    description: "左侧边栏中对话、工作区、Prompts、Skills、MCP 和工具行的专用状态 token。",
   },
   "component-settings-list-detail-rows": {
     label: "设置列表明细行",
@@ -111,7 +111,7 @@ const zhCNTokenGroupCopy = {
     label: "全局交互",
     description: "跨多个组件复用的焦点、选择和半透明面板 token。",
   },
-} satisfies Record<AppearanceTokenGroupID, AppearanceTokenCopy>
+} satisfies Partial<Record<AppearanceTokenGroupID, AppearanceTokenCopy>>
 
 const zhCNTokenRowCopy = {
   "surface-app": {
@@ -684,7 +684,7 @@ const zhCNTokenRowCopy = {
   },
   "semantic-sidebar-tree-row-leading-active": {
     label: "前置图标激活色",
-    description: "侧边栏项目行选中时的前置图标颜色。",
+    description: "左侧边栏树行选中时的前置图标颜色。",
   },
   "semantic-settings-list-detail-row-surface-hover": {
     label: "行悬停背景",
@@ -746,9 +746,12 @@ const zhCNTokenRowCopy = {
     label: "弱化半透明面板",
     description: "低强调半透明面板填充色。",
   },
-} satisfies Record<AppearanceTokenRowID, AppearanceTokenCopy>
+} satisfies Partial<Record<AppearanceTokenRowID, AppearanceTokenCopy>>
 
-const localizedAppearanceTokenCopy = {
+const localizedAppearanceTokenCopy: Record<Exclude<AppLocale, "en-US">, {
+  groups: Partial<Record<AppearanceTokenGroupID, AppearanceTokenCopy>>
+  rows: Partial<Record<AppearanceTokenRowID, AppearanceTokenCopy>>
+}> = {
   "zh-CN": { groups: zhCNTokenGroupCopy, rows: zhCNTokenRowCopy },
   "zh-TW": zhTWAppearanceTokenCopy,
   "ja-JP": jaJPAppearanceTokenCopy,
@@ -762,10 +765,7 @@ const localizedAppearanceTokenCopy = {
   "pl-PL": plPLAppearanceTokenCopy,
   "tr-TR": trTRAppearanceTokenCopy,
   "vi-VN": viVNAppearanceTokenCopy,
-} satisfies Record<Exclude<AppLocale, "en-US">, {
-  groups: Record<AppearanceTokenGroupID, AppearanceTokenCopy>
-  rows: Record<AppearanceTokenRowID, AppearanceTokenCopy>
-}>
+}
 
 function mergeAppearanceTokenCopy(fallback: AppearanceTokenCopy, copy?: AppearanceTokenCopy): AppearanceTokenCopy {
   return {

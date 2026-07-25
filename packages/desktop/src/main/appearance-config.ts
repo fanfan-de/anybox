@@ -4,23 +4,21 @@ import path from "node:path"
 import {
   createDefaultAppearanceConfigDocument,
   normalizeAppearanceConfigDocument,
+  validateAppearanceConfigDocumentStructure,
   type AppearanceConfigDocument,
   type AppearanceConfigSnapshot,
 } from "../shared/appearance"
+import { preserveVersionedJsonBackup, writeJsonFileAtomic } from "./atomic-json-file"
 
 const APPEARANCE_CONFIG_FILE_NAME = "appearance-theme.json"
-const APPEARANCE_CONFIG_MIGRATION_FILE_NAME = "appearance-theme.migration.json"
-const APPEARANCE_CONFIG_FORCED_DEFAULTS_REVISION = 1
 
 export function getAppearanceConfigPath() {
   return path.join(app.getPath("userData"), APPEARANCE_CONFIG_FILE_NAME)
 }
 
-function getAppearanceConfigMigrationPath() {
-  return path.join(app.getPath("userData"), APPEARANCE_CONFIG_MIGRATION_FILE_NAME)
-}
-
-function createTimestampedAppearanceDocument(input: AppearanceConfigDocument): AppearanceConfigDocument {
+function createTimestampedAppearanceDocument(
+  input: AppearanceConfigDocument,
+): AppearanceConfigDocument {
   return {
     ...input,
     updatedAt: Date.now(),
@@ -31,63 +29,47 @@ async function writeAppearanceConfigDocumentToPath(
   configPath: string,
   input: AppearanceConfigDocument,
 ): Promise<AppearanceConfigDocument> {
+  const errors = validateAppearanceConfigDocumentStructure(input, {
+    requireComplete: true,
+  })
+  if (errors.length > 0) {
+    throw new Error(`Invalid appearance config:\n${errors.join("\n")}`)
+  }
+
   const normalized = normalizeAppearanceConfigDocument(input)
   const document = createTimestampedAppearanceDocument(normalized)
-  await fs.mkdir(path.dirname(configPath), { recursive: true })
-  await fs.writeFile(configPath, `${JSON.stringify(document, null, 2)}\n`, "utf8")
+  await writeJsonFileAtomic(configPath, document)
   return document
 }
 
-async function readAppearanceMigrationRevision(migrationPath: string) {
-  try {
-    const raw = await fs.readFile(migrationPath, "utf8")
-    const parsed = JSON.parse(raw) as unknown
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return 0
-
-    const revision = (parsed as { revision?: unknown }).revision
-    if (typeof revision !== "number" || !Number.isFinite(revision)) return 0
-    return revision
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return 0
-    throw error
-  }
-}
-
-async function writeAppearanceMigrationRevision(migrationPath: string, revision: number) {
-  await fs.mkdir(path.dirname(migrationPath), { recursive: true })
-  await fs.writeFile(
-    migrationPath,
-    `${JSON.stringify({ revision, updatedAt: Date.now() }, null, 2)}\n`,
-    "utf8",
-  )
+function isLegacyAppearanceConfig(input: unknown) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return false
+  return (input as { version?: unknown }).version !== 2
 }
 
 export async function readAppearanceConfigSnapshot(): Promise<AppearanceConfigSnapshot> {
   const configPath = getAppearanceConfigPath()
-  const migrationPath = getAppearanceConfigMigrationPath()
-  const revision = await readAppearanceMigrationRevision(migrationPath)
-
-  if (revision < APPEARANCE_CONFIG_FORCED_DEFAULTS_REVISION) {
-    const forcedDocument = await writeAppearanceConfigDocumentToPath(
-      configPath,
-      createDefaultAppearanceConfigDocument(),
-    )
-    await writeAppearanceMigrationRevision(migrationPath, APPEARANCE_CONFIG_FORCED_DEFAULTS_REVISION)
-
-    return {
-      path: configPath,
-      exists: true,
-      document: forcedDocument,
-    }
-  }
 
   try {
     const raw = await fs.readFile(configPath, "utf8")
     const parsed = JSON.parse(raw) as unknown
+    const errors = validateAppearanceConfigDocumentStructure(parsed, {
+      requireComplete: !isLegacyAppearanceConfig(parsed),
+    })
+    if (errors.length > 0) {
+      throw new Error(`Invalid appearance config:\n${errors.join("\n")}`)
+    }
+
+    const document = normalizeAppearanceConfigDocument(parsed)
+    if (isLegacyAppearanceConfig(parsed)) {
+      await preserveVersionedJsonBackup(configPath, raw, 1)
+      await writeJsonFileAtomic(configPath, document)
+    }
+
     return {
       path: configPath,
       exists: true,
-      document: normalizeAppearanceConfigDocument(parsed),
+      document,
     }
   } catch (error) {
     if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
@@ -106,9 +88,7 @@ export async function writeAppearanceConfigSnapshot(
   input: AppearanceConfigDocument,
 ): Promise<AppearanceConfigSnapshot> {
   const configPath = getAppearanceConfigPath()
-  const migrationPath = getAppearanceConfigMigrationPath()
   const document = await writeAppearanceConfigDocumentToPath(configPath, input)
-  await writeAppearanceMigrationRevision(migrationPath, APPEARANCE_CONFIG_FORCED_DEFAULTS_REVISION)
 
   return {
     path: configPath,

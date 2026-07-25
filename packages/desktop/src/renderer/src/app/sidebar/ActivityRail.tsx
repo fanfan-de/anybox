@@ -1,7 +1,4 @@
-import { useEffect, useId, useState } from "react"
 import {
-  ChevronDownIcon,
-  ChevronRightIcon,
   AutomationIcon,
   CalendarNavigationIcon,
   ConnectionsIcon,
@@ -41,10 +38,6 @@ const configurationLeftRailViews = [
   { view: "tools" as const, labelKey: "shell.openTools", Icon: ToolsIcon },
 ]
 
-function isConfigurationLeftRailView(view: LeftSidebarView) {
-  return configurationLeftRailViews.some((item) => item.view === view)
-}
-
 interface ActivityRailViewButtonProps {
   className?: string
   Icon: typeof LayoutSidebarLeftIcon
@@ -79,25 +72,7 @@ export function ActivityRail({
   side,
 }: ActivityRailProps) {
   const railClassName = side === "right" ? "activity-rail is-right" : "activity-rail"
-  const configurationMenuID = useId()
   const { t } = useI18n()
-  const isConfigurationViewActive = isConfigurationLeftRailView(activeView)
-  const [isConfigurationMenuOpen, setIsConfigurationMenuOpen] = useState(isConfigurationViewActive)
-  const ConfigurationToggleIcon = isConfigurationMenuOpen ? ChevronDownIcon : ChevronRightIcon
-  const configurationToggleLabel = isConfigurationMenuOpen
-    ? t("shell.hideConfigurationShortcuts")
-    : t("shell.showConfigurationShortcuts")
-
-  useEffect(() => {
-    if (isConfigurationViewActive) {
-      setIsConfigurationMenuOpen(true)
-    }
-  }, [isConfigurationViewActive])
-
-  function handleConfigurationViewChange(view: LeftSidebarView) {
-    setIsConfigurationMenuOpen(true)
-    onViewChange(view)
-  }
 
   return (
     <aside className={railClassName} aria-label={side === "left" ? t("shell.primaryNavigationRail") : t("shell.inspectorRail")}>
@@ -132,7 +107,7 @@ export function ActivityRail({
       {side === "left" ? (
         <div className="activity-rail-footer">
           <div className="activity-rail-config" aria-label={t("shell.configurationViews")}>
-            <div id={configurationMenuID} className="activity-rail-config-stack" hidden={!isConfigurationMenuOpen}>
+            <div className="activity-rail-config-stack">
               {configurationLeftRailViews.map(({ view, labelKey, Icon }) => {
                 const isActive = activeView === view
                 const label = t(labelKey as TranslationKey)
@@ -144,29 +119,11 @@ export function ActivityRail({
                     Icon={Icon}
                     isActive={isActive}
                     label={label}
-                    onClick={() => handleConfigurationViewChange(view)}
+                    onClick={() => onViewChange(view)}
                   />
                 )
               })}
             </div>
-            <button
-              className={[
-                "activity-rail-view-button",
-                "activity-rail-config-toggle",
-                isConfigurationMenuOpen ? "is-expanded" : "is-collapsed",
-                isConfigurationViewActive ? "is-active" : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
-              aria-controls={configurationMenuID}
-              aria-expanded={isConfigurationMenuOpen}
-              aria-label={configurationToggleLabel}
-              title={configurationToggleLabel}
-              type="button"
-              onClick={() => setIsConfigurationMenuOpen((nextValue) => !nextValue)}
-            >
-              <ConfigurationToggleIcon />
-            </button>
           </div>
           {bottomSlotRef ? <div ref={bottomSlotRef} className="activity-rail-bottom" /> : null}
           {onOpenSettings ? (

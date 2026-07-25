@@ -1,13 +1,26 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
 import path from "node:path"
 import { spawnSync } from "node:child_process"
 import { fileURLToPath } from "node:url"
 import { createRequire } from "node:module"
+import {
+  buildIdentityForProfile,
+  choosePrebuildMode,
+  createProfileStamp,
+  readProfileStamp,
+  resolveBuildProfile,
+} from "./lib/android-development.mjs"
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const require = createRequire(import.meta.url)
 const isWindows = process.platform === "win32"
-const outputPath = path.join(packageRoot, "build", "anybox-mobile-debug.apk")
 const GRADLE_WRAPPER_TIMEOUT_MS = 600_000
 const DEFAULT_APK_ARCHITECTURES = "arm64-v8a,armeabi-v7a"
 const ALLOWED_ANDROID_ARCHITECTURES = new Set([
@@ -76,15 +89,24 @@ function requireAndroidEnvironment() {
 }
 
 function readArgs(argv) {
+  const profileIndex = argv.indexOf("--profile")
+  const profileValue = profileIndex >= 0 ? argv[profileIndex + 1] : "production"
+  if (profileIndex >= 0 && !profileValue) {
+    throw new Error("--profile requires production or development.")
+  }
   return {
     clean: argv.includes("--clean"),
+    embedBundle: !argv.includes("--no-embed"),
     minify: argv.includes("--minify"),
     prepareOnly: argv.includes("--prepare-only"),
+    profile: resolveBuildProfile(profileValue),
   }
 }
 
 function main() {
   const args = readArgs(process.argv.slice(2))
+  const identity = buildIdentityForProfile(args.profile)
+  process.env.ANYBOX_MOBILE_BUILD_PROFILE = args.profile
   requireAndroidEnvironment()
 
   const expo = packageBin("expo")
@@ -92,21 +114,42 @@ function main() {
     throw new Error("Expo CLI is not installed in packages/mobile-app.")
   }
 
+  const androidDir = path.join(packageRoot, "android")
+  const profileStampPath = path.join(androidDir, ".anybox-build-profile.json")
+  const previousProfile = existsSync(profileStampPath)
+    ? readProfileStamp(readFileSync(profileStampPath, "utf8"))
+    : null
+  const prebuildMode = choosePrebuildMode({
+    androidDirectoryExists: existsSync(androidDir),
+    cleanRequested: args.clean,
+    previousProfile,
+    requestedProfile: args.profile,
+  })
   const prebuildArgs = ["prebuild", "--platform", "android", "--no-install"]
-  if (args.clean) prebuildArgs.push("--clean")
+  if (prebuildMode.clean) prebuildArgs.push("--clean")
+  console.log(
+    `Android prebuild: ${prebuildMode.clean ? "clean" : "incremental"} (${prebuildMode.reason}).`,
+  )
   run(expo, prebuildArgs)
   restorePackageScripts()
+  writeFileSync(profileStampPath, createProfileStamp(args.profile), "utf8")
 
-  const androidDir = path.join(packageRoot, "android")
   extendGradleWrapperTimeout(androidDir)
   patchGradleRepositories(androidDir)
   patchReactNativeGradlePluginRepositories()
   patchExpoGradlePluginRepositories()
   patchExpoModulesCoreGradlePluginRepositories()
   patchExpoUpdatesGradlePluginRepositories()
-  embedDebugBundle(expo, androidDir, args.minify)
+  if (args.embedBundle) {
+    embedDebugBundle(expo, androidDir, args.minify)
+  } else {
+    rmSync(
+      path.join(androidDir, "app", "src", "main", "assets", "index.android.bundle"),
+      { force: true },
+    )
+  }
   if (args.prepareOnly) {
-    console.log(`Prepared Android release sources: ${androidDir}`)
+    console.log(`Prepared ${args.profile} Android sources: ${androidDir}`)
     return
   }
   const gradle = path.join(androidDir, isWindows ? "gradlew.bat" : "gradlew")
@@ -132,9 +175,12 @@ function main() {
     throw new Error(`Debug APK was not found at ${apkPath}`)
   }
 
+  const outputPath = path.join(packageRoot, "build", identity.outputFileName)
   mkdirSync(path.dirname(outputPath), { recursive: true })
   copyFileSync(apkPath, outputPath)
-  console.log(`Debug APK: ${outputPath}`)
+  console.log(`${identity.appName} APK: ${outputPath}`)
+  console.log(`Android build profile: ${args.profile}`)
+  console.log(`Android package: ${identity.packageName}`)
   console.log(`Android architectures: ${architectures}`)
 }
 

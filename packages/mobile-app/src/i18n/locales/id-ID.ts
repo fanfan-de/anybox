@@ -216,7 +216,7 @@ export const idID = {
   "thread.loadingSession": "Memuat sesi",
   "thread.noMessages": "Tidak ada pesan",
   "thread.readyInWorkspace": "Siap di {workspace}. Kirim tugas untuk membuat sesi fokus.",
-  "thread.startConversation": "Mulai mengobrol",
+  "thread.startConversation": "Mulai percakapan di {workspace}",
   "thread.reasoning": "Penalaran",
   "thread.reasoningActive": "Penalaran",
   "thread.reasoningComplete": "Beralasan",

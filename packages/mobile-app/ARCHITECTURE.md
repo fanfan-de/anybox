@@ -7,7 +7,7 @@
 Anybox Mobile 是 Anybox 桌面端的 Expo/React Native 手机客户端。它本身不承载核心业务后端，而是通过以下两类通道连接桌面端能力：
 
 - 账户中继通道：手机端登录 Anybox Provider 后，访问云端中继服务，选择在线桌面设备并建立 relay 连接。
-- 本地/深链配对通道：手机扫描二维码或打开 `anybox-mobile://` deep link，经过配对后直接连接桌面端 mobile bridge，或通过 relay pairing 连接桌面。
+- 本地/深链配对通道：手机扫描二维码或打开 `anybox-mobile://` / `anybox-mobile-dev://` deep link，经过配对后直接连接桌面端 mobile bridge，或通过 relay pairing 连接桌面。
 
 手机端的主要职责是：
 
@@ -29,6 +29,39 @@ Anybox Mobile 是 Anybox 桌面端的 Expo/React Native 手机客户端。它本
 | 类型系统 | TypeScript strict mode，`@/*` 指向 `src/*` |
 | 构建发布 | 本机 Gradle、Anybox 自托管更新服务，iOS native 工程已在 `ios/` |
 
+### 2.1 Android 构建身份
+
+`app.json` 始终只描述正式版，是版本、`versionCode`、正式包名和更新端点
+的唯一来源。`app.config.js` 读取受校验的
+`ANYBOX_MOBILE_BUILD_PROFILE=production|development`；未设置时始终为
+`production`。
+
+| Profile | applicationId | 应用名 | Scheme | 更新行为 |
+| --- | --- | --- | --- | --- |
+| `production` | `com.anybox.mobile` | `Anybox Mobile` | `anybox-mobile` | 正式 OTA 与签名 APK |
+| `development` | `com.anybox.mobile.dev` | `Anybox Mobile Dev` | `anybox-mobile-dev` | OTA/APK 更新完全禁用 |
+
+两种 applicationId 对应两个 Android sandbox，因此 SecureStore、账户登录、
+桌面配对和缓存互不共享。Provider/Relay 地址不随 profile 分叉，并继续接受
+构建环境变量覆盖；所以本地数据隔离不等于服务端数据隔离。
+
+```mermaid
+flowchart LR
+  Source["同一份 React Native 源码"] --> Profile{"Build profile"}
+  Profile -->|production| Public["com.anybox.mobile"]
+  Profile -->|development| Dev["com.anybox.mobile.dev"]
+  Public --> Updates["正式 OTA / APK 更新"]
+  Dev --> Embedded["内嵌 JS，更新检查禁用"]
+  Public --> Provider["Provider / Relay"]
+  Dev --> Provider
+```
+
+被忽略的 `android/` 工程通过 `.anybox-build-profile.json` 记录最后一次
+prebuild 身份。首次构建、显式 `--clean` 或 profile 切换执行 clean
+prebuild；连续同 profile 构建保留 Gradle 增量缓存。release、OTA 导出和
+native fingerprint 计算都显式强制 `production`，不继承调用终端中的开发
+profile。
+
 ## 3. 顶层架构
 
 ```mermaid
@@ -43,7 +76,7 @@ flowchart TD
   Api --> Bridge["Desktop Mobile Bridge"]
   Hooks["src/hooks SSE hooks"] --> Api
   Hooks --> App
-  Updates["UpdateCoordinator / app-updates"] --> UpdateServer["updates.anybox.com.cn"]
+  Updates["production: UpdateCoordinator / app-updates"] --> UpdateServer["updates.anybox.com.cn"]
   Updates --> CDN["download.anybox.com.cn / GitHub 备用"]
 ```
 

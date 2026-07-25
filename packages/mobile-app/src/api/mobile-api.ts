@@ -385,11 +385,15 @@ function readAnyboxDeepLinkRoute(value: URL) {
   return value.hostname || value.pathname.replace(/^\/+/, "")
 }
 
+function isAnyboxMobileProtocol(protocol: string) {
+  return protocol === "anybox-mobile:" || protocol === "anybox-mobile-dev:"
+}
+
 export function readBridgeUrlFromConnectDeepLink(value: string) {
   try {
     const parsed = new URL(value.trim())
     const route = readAnyboxDeepLinkRoute(parsed)
-    if (parsed.protocol !== "anybox-mobile:" || route !== "connect") return null
+    if (!isAnyboxMobileProtocol(parsed.protocol) || route !== "connect") return null
     return parsed.searchParams.get("url")?.trim() || null
   } catch {
     return null
@@ -400,7 +404,7 @@ export function readRelayPairingFromDeepLink(value: string) {
   try {
     const parsed = new URL(value.trim())
     const route = readAnyboxDeepLinkRoute(parsed)
-    if (parsed.protocol !== "anybox-mobile:" || route !== "pair") return null
+    if (!isAnyboxMobileProtocol(parsed.protocol) || route !== "pair") return null
     const code = parsed.searchParams.get("code")?.trim() ?? ""
     const baseUrl = parsed.searchParams.get("url")?.trim() || "https://anybox.com.cn"
     return code ? { baseUrl, code } : null
@@ -413,7 +417,7 @@ export function readConnectionOptionsFromDeepLink(value: string) {
   try {
     const parsed = new URL(value.trim())
     const route = readAnyboxDeepLinkRoute(parsed)
-    if (parsed.protocol !== "anybox-mobile:" || route !== "connect-options") return null
+    if (!isAnyboxMobileProtocol(parsed.protocol) || route !== "connect-options") return null
 
     const options: Array<{ kind: MobileConnectionOptionKind; endpoint: string }> = []
     const relay = parsed.searchParams.get("relay")?.trim()

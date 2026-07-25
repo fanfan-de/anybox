@@ -216,7 +216,7 @@ export const jaJP = {
   "thread.loadingSession": "セッションを読み込み中",
   "thread.noMessages": "メッセージなし",
   "thread.readyInWorkspace": "{workspace}で準備完了。タスクを送信してフォーカスセッションを作成してください。",
-  "thread.startConversation": "チャットを開始",
+  "thread.startConversation": "{workspace} で会話を開始",
   "thread.reasoning": "推論",
   "thread.reasoningActive": "推論",
   "thread.reasoningComplete": "推論済み",

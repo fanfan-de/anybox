@@ -76,12 +76,12 @@
 .window-shell.is-windows[data-background-mode="default"] .dockview-theme-anybox .dv-view,
 .window-shell.is-windows[data-background-mode="default"] .dockview-theme-anybox .dv-groupview,
 .window-shell.is-windows[data-background-mode="default"] .dockview-theme-anybox .dv-content-container {
-  background: var(--surface-profile-shell);
+  background: transparent;
 }
 
 .window-shell.is-windows[data-background-mode="default"] .dockview-theme-anybox {
-  --dv-background-color: var(--surface-profile-shell);
-  --dv-group-view-background-color: var(--surface-profile-shell);
+  --dv-background-color: transparent;
+  --dv-group-view-background-color: transparent;
   --dv-tabs-and-actions-container-background-color: var(--surface-profile-tab);
   --dv-activegroup-visiblepanel-tab-background-color: var(--surface-profile-shell);
   --dv-inactivegroup-visiblepanel-tab-background-color: var(--surface-profile-tab);

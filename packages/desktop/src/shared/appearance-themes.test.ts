@@ -7,6 +7,13 @@ import {
   normalizeAppearanceThemeDocument,
   normalizeAppearanceThemeSaveInput,
 } from "./appearance-themes"
+import { parseAppearanceColorLiteral } from "./appearance-color"
+
+function colorLiteral(value: string) {
+  const literal = parseAppearanceColorLiteral(value)
+  if (!literal) throw new Error(`Invalid test color: ${value}`)
+  return literal
+}
 
 describe("appearance theme library", () => {
   it("keeps built-in theme ids stable and readonly", () => {
@@ -57,7 +64,7 @@ describe("appearance theme library", () => {
         },
       ],
     })).toEqual({
-      version: 1,
+      version: 2,
       activeThemeID: "user:one",
       userThemes: [
         {
@@ -82,8 +89,9 @@ describe("appearance theme library", () => {
             surfaceOpacity: 0.36,
           },
           overrides: {
-            "surface-app-light": "#123456",
+            "surface-app-light": colorLiteral("#123456"),
           },
+          foreignDtcg: {},
         },
       ],
     })
@@ -136,7 +144,7 @@ describe("appearance theme library", () => {
         html: "<style>body{background:red}</style>",
       },
       overrides: {
-        "surface-panel-dark": "#111111",
+        "surface-panel-dark": colorLiteral("#111111"),
       },
     }, {
       fallbackID: "user:new",
@@ -157,14 +165,15 @@ describe("appearance theme library", () => {
         html: "<style>body{background:red}</style>",
       },
       overrides: {
-        "surface-panel-dark": "#111111",
+        "surface-panel-dark": colorLiteral("#111111"),
       },
+      foreignDtcg: {},
     })
   })
 
   it("creates an empty document by default", () => {
     expect(createDefaultAppearanceThemeDocument()).toEqual({
-      version: 1,
+      version: 2,
       activeThemeID: DEFAULT_APPEARANCE_THEME_ID,
       userThemes: [],
     })

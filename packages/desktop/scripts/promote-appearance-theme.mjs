@@ -2,11 +2,28 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import Color from "colorjs.io"
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url))
 const packageDirectory = path.resolve(scriptDirectory, "..")
-const appearanceSourcePath = path.join(packageDirectory, "src", "shared", "appearance.ts")
+const manifestPath = path.join(packageDirectory, "src", "shared", "appearance-token-manifest.json")
 const configFileName = "appearance-theme.json"
+const DTCG_TO_COLOR_JS_SPACE = {
+  "srgb": "srgb",
+  "srgb-linear": "srgb-linear",
+  "hsl": "hsl",
+  "hwb": "hwb",
+  "lab": "lab",
+  "lch": "lch",
+  "oklab": "oklab",
+  "oklch": "oklch",
+  "display-p3": "p3",
+  "a98-rgb": "a98rgb",
+  "prophoto-rgb": "prophoto",
+  "rec2020": "rec2020",
+  "xyz-d65": "xyz-d65",
+  "xyz-d50": "xyz-d50",
+}
 
 function getDefaultConfigCandidates() {
   const candidates = []
@@ -58,13 +75,94 @@ async function findConfigPath() {
   )
 }
 
-function parseTokenNames(source) {
-  const match = source.match(/export const APPEARANCE_TOKEN_NAMES = \[([\s\S]*?)\] as const/)
-  if (!match) {
-    throw new Error("Could not find APPEARANCE_TOKEN_NAMES in src/shared/appearance.ts.")
+function clamp(value, minimum, maximum) {
+  return Math.min(maximum, Math.max(minimum, value))
+}
+
+function round(value, precision = 6) {
+  return Number(value.toFixed(precision))
+}
+
+function toHexChannel(value) {
+  return clamp(Math.round(value), 0, 255).toString(16).padStart(2, "0")
+}
+
+function colorToLiteral(color) {
+  const srgb = color.to("srgb").toGamut({ space: "srgb", method: "clip" })
+  const components = srgb.coords.map((component) =>
+    round(clamp(typeof component === "number" ? component : 0, 0, 1)),
+  )
+  const channels = components.map((component) => Math.round(component * 255))
+
+  return {
+    type: "literal",
+    value: {
+      colorSpace: "srgb",
+      components,
+      alpha: round(clamp(typeof srgb.alpha === "number" ? srgb.alpha : 1, 0, 1)),
+      hex: `#${channels.map(toHexChannel).join("")}`,
+    },
+  }
+}
+
+function normalizeTokenValue(input, tokenNameSet) {
+  if (typeof input === "string") {
+    const trimmed = input.trim()
+    const alias = trimmed.match(/^var\(\s*--([a-zA-Z0-9_-]+)\s*\)$/)
+    if (alias) {
+      return tokenNameSet.has(alias[1])
+        ? { type: "alias", token: alias[1] }
+        : null
+    }
+    if (!trimmed) return null
+
+    try {
+      return colorToLiteral(new Color(trimmed))
+    } catch {
+      return null
+    }
+  }
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null
+
+  if (
+    input.type === "alias" &&
+    typeof input.token === "string" &&
+    tokenNameSet.has(input.token)
+  ) {
+    return { type: "alias", token: input.token }
+  }
+  if (
+    input.type !== "literal" ||
+    !input.value ||
+    typeof input.value !== "object" ||
+    Array.isArray(input.value)
+  ) {
+    return null
   }
 
-  return [...match[1].matchAll(/"([^"]+)"/g)].map((item) => item[1])
+  const { colorSpace, components, alpha } = input.value
+  if (
+    typeof colorSpace !== "string" ||
+    !Object.hasOwn(DTCG_TO_COLOR_JS_SPACE, colorSpace) ||
+    !Array.isArray(components) ||
+    components.length !== 3 ||
+    components.some((component) => typeof component !== "number" || !Number.isFinite(component)) ||
+    (alpha !== undefined && (typeof alpha !== "number" || !Number.isFinite(alpha)))
+  ) {
+    return null
+  }
+
+  try {
+    return colorToLiteral(
+      new Color(
+        DTCG_TO_COLOR_JS_SPACE[colorSpace],
+        components,
+        typeof alpha === "number" ? alpha : 1,
+      ),
+    )
+  } catch {
+    return null
+  }
 }
 
 function normalizeTokenMap(input, tokenNames) {
@@ -72,72 +170,71 @@ function normalizeTokenMap(input, tokenNames) {
     return {}
   }
 
+  const tokenNameSet = new Set(tokenNames)
   const normalized = {}
   for (const tokenName of tokenNames) {
-    const value = input[tokenName]
-    if (typeof value !== "string") continue
-
-    const trimmed = value.trim()
-    if (trimmed) {
-      normalized[tokenName] = trimmed
-    }
+    const value = normalizeTokenValue(input[tokenName], tokenNameSet)
+    if (value) normalized[tokenName] = value
   }
 
   return normalized
 }
 
-function formatTokenMapConst(name, tokenMap, eol) {
-  const lines = Object.entries(tokenMap).map(
-    ([tokenName, value]) => `  ${JSON.stringify(tokenName)}: ${JSON.stringify(value)},`,
-  )
-  return `const ${name} = {${eol}${lines.join(eol)}${eol}} satisfies AppearanceTokenMap`
-}
-
-function replaceTokenMapConst(source, name, tokenMap, eol) {
-  const pattern = new RegExp(`const ${name} = \\{[\\s\\S]*?\\n\\} satisfies AppearanceTokenMap`)
-  const nextBlock = formatTokenMapConst(name, tokenMap, eol)
-  if (!pattern.test(source)) {
-    throw new Error(`Could not find ${name} in src/shared/appearance.ts.`)
+async function writeJsonAtomic(filePath, value) {
+  const temporaryPath = `${filePath}.${process.pid}.${Date.now()}.tmp`
+  const rollbackPath = `${filePath}.${process.pid}.${Date.now()}.rollback`
+  await fs.writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, "utf8")
+  try {
+    await fs.rename(temporaryPath, filePath)
+    return
+  } catch (error) {
+    if (error?.code !== "EEXIST" && error?.code !== "EPERM") {
+      await fs.rm(temporaryPath, { force: true })
+      throw error
+    }
   }
 
-  return source.replace(pattern, nextBlock)
-}
-
-function replaceDefaultScalar(source, key, value, allowedValues) {
-  if (!allowedValues.includes(value)) return source
-
-  const pattern = new RegExp(`${key}: "(${allowedValues.join("|")})",`)
-  if (!pattern.test(source)) {
-    throw new Error(`Could not find default ${key} in src/shared/appearance.ts.`)
+  await fs.rename(filePath, rollbackPath)
+  try {
+    await fs.rename(temporaryPath, filePath)
+    await fs.rm(rollbackPath, { force: true })
+  } catch (error) {
+    await fs.rename(rollbackPath, filePath)
+    await fs.rm(temporaryPath, { force: true })
+    throw error
   }
-
-  return source.replace(pattern, `${key}: "${value}",`)
 }
 
 const configPath = await findConfigPath()
 const config = JSON.parse(await fs.readFile(configPath, "utf8"))
-const source = await fs.readFile(appearanceSourcePath, "utf8")
-const eol = source.includes("\r\n") ? "\r\n" : "\n"
-const tokenNames = parseTokenNames(source)
+const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"))
+const tokenNames = manifest.groups.flatMap((group) =>
+  group.rows.flatMap((row) => [row.lightToken, row.darkToken]),
+)
 const overrides = normalizeTokenMap(config.overrides, tokenNames)
-const resolvedTokens = normalizeTokenMap(config.resolvedTokens, tokenNames)
 
 if (Object.keys(overrides).length === 0) {
   throw new Error("The selected appearance config has no valid overrides.")
 }
 
-if (Object.keys(resolvedTokens).length === 0) {
-  throw new Error("The selected appearance config has no valid resolvedTokens.")
+const defaultTheme = manifest.themes.find((theme) => theme.id === manifest.defaultThemeId)
+if (!defaultTheme) {
+  throw new Error(`Could not find default theme ${manifest.defaultThemeId} in the token manifest.`)
 }
 
-let nextSource = replaceTokenMapConst(source, "DEFAULT_APPEARANCE_OVERRIDES", overrides, eol)
-nextSource = replaceTokenMapConst(nextSource, "DEFAULT_APPEARANCE_RESOLVED_TOKENS", resolvedTokens, eol)
-nextSource = replaceDefaultScalar(nextSource, "brandTheme", config.brandTheme, ["terra", "sage"])
-nextSource = replaceDefaultScalar(nextSource, "colorMode", config.colorMode, ["system", "light", "dark"])
+defaultTheme.overrides = overrides
+if (config.brandTheme === "terra" || config.brandTheme === "sage") {
+  defaultTheme.brandTheme = config.brandTheme
+}
+if (config.colorMode === "system" || config.colorMode === "light" || config.colorMode === "dark") {
+  defaultTheme.colorMode = config.colorMode
+}
+if (["default", "system", "segoe", "microsoft-yahei", "pingfang"].includes(config.fontFamily)) {
+  defaultTheme.fontFamily = config.fontFamily
+}
 
-await fs.writeFile(appearanceSourcePath, nextSource, "utf8")
+await writeJsonAtomic(manifestPath, manifest)
 
 console.log(`Promoted appearance defaults from ${configPath}`)
-console.log(`Updated ${path.relative(process.cwd(), appearanceSourcePath)}`)
+console.log(`Updated ${path.relative(process.cwd(), manifestPath)} (${defaultTheme.id})`)
 console.log(`Overrides: ${Object.keys(overrides).length}`)
-console.log(`Resolved tokens: ${Object.keys(resolvedTokens).length}`)

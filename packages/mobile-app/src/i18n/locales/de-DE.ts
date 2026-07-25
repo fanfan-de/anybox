@@ -216,7 +216,7 @@ export const deDE = {
   "thread.loadingSession": "Sitzung wird geladen",
   "thread.noMessages": "Keine Nachrichten",
   "thread.readyInWorkspace": "Bereit in {workspace}. Sende eine Aufgabe, um eine fokussierte Sitzung zu erstellen.",
-  "thread.startConversation": "Chat starten",
+  "thread.startConversation": "Unterhaltung in {workspace} starten",
   "thread.reasoning": "Reasoning",
   "thread.reasoningActive": "Reasoning",
   "thread.reasoningComplete": "Begründet",

@@ -216,7 +216,7 @@ export const viVN = {
   "thread.loadingSession": "Đang tải phiên",
   "thread.noMessages": "Không có tin nhắn",
   "thread.readyInWorkspace": "Sẵn sàng trong {workspace}. Gửi tác vụ để tạo phiên tập trung.",
-  "thread.startConversation": "Bắt đầu trò chuyện",
+  "thread.startConversation": "Bắt đầu cuộc trò chuyện trong {workspace}",
   "thread.reasoning": "Suy luận",
   "thread.reasoningActive": "Suy luận",
   "thread.reasoningComplete": "Đã suy luận",

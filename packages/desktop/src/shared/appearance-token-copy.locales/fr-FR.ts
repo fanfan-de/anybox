@@ -74,7 +74,7 @@ export const appearanceTokenCopy = {
     },
     "component-sidebar-tree-rows": {
       "label": "Lignes d'arborescence de la barre latérale",
-      "description": "Jetons de ligne dédiés pour l'espace de travail et les arbres de compétences de la barre latérale gauche."
+      "description": "Jetons d'état dédiés aux lignes de conversations, espaces de travail, prompts, compétences, MCP et outils de la barre latérale gauche."
     },
     "component-settings-list-detail-rows": {
       "label": "Lignes de détail de la liste des paramètres",
@@ -660,7 +660,7 @@ export const appearanceTokenCopy = {
     },
     "semantic-sidebar-tree-row-leading-active": {
       "label": "Icône principale active",
-      "description": "Couleur de l'icône principale de la ligne sélectionnée pour les lignes de projet de la barre latérale."
+      "description": "Couleur de l'icône principale des lignes d'arbre sélectionnées dans la barre latérale gauche."
     },
     "semantic-settings-list-detail-row-surface-hover": {
       "label": "Surface de ligne au survol",

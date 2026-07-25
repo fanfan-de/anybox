@@ -218,8 +218,8 @@
 .terminal-shell-picker-option:hover,
 .terminal-shell-picker-option:focus-visible,
 .terminal-shell-picker-option.is-active {
-  background: var(--semantic-sidebar-tree-row-surface-hover, rgba(17, 24, 39, 0.06));
-  color: var(--semantic-sidebar-tree-row-text-hover, var(--seg-text-1));
+  background: var(--surface-panel-muted);
+  color: var(--text-primary);
   outline: none;
   box-shadow: none;
 }

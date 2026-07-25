@@ -107,6 +107,7 @@ async function main() {
     const expo = path.join(packageRoot, "node_modules", ".bin", `expo${isWindows ? ".CMD" : ""}`)
     const exportEnvironment = {
       ...process.env,
+      ANYBOX_MOBILE_BUILD_PROFILE: "production",
       ANYBOX_MOBILE_UPDATE_CHANNEL: "preview",
       NODE_ENV: "production",
     }

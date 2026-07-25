@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import {
-  APPEARANCE_TOKEN_NAMES,
   isAppearanceFontFamily,
   normalizeAppearanceConfigDocument,
   normalizeAppearanceRuntimeState,
@@ -11,6 +10,16 @@ import {
   type AppearanceTokenName,
 } from "../../../shared/appearance"
 import {
+  evaluateAppearanceContrastWarnings,
+  parseAppearanceColorLiteral,
+  resolveAppearanceTokenCssValues,
+} from "../../../shared/appearance-color"
+import {
+  AppearanceDtcgValidationError,
+  parseAppearanceDtcgJson,
+  serializeAppearanceThemeToDtcg,
+} from "../../../shared/appearance-dtcg"
+import {
   createAppearanceThemeLibrarySnapshot,
   createDefaultAppearanceThemeDocument,
   findAppearanceThemeByID,
@@ -18,7 +27,7 @@ import {
   type AppearanceThemeLibrarySnapshot,
   type AppearanceThemeSaveInput,
 } from "../../../shared/appearance-themes"
-import { applyAppearanceOverrides, normalizeAppearanceColorInputValue, readResolvedAppearanceTokenValues } from "./appearance-theme"
+import { applyAppearanceOverrides } from "./appearance-theme"
 import {
   normalizeCodeThemePreference,
   resolveCodeHighlightTheme,
@@ -39,9 +48,9 @@ const BRAND_THEME_STORAGE_KEY = "desktop.brandTheme"
 const FONT_FAMILY_STORAGE_KEY = "desktop.fontFamily"
 const APPEARANCE_CONFIG_SAVE_DEBOUNCE_MS = 160
 
-const EMPTY_APPEARANCE_TOKEN_VALUES = Object.fromEntries(
-  APPEARANCE_TOKEN_NAMES.map((tokenName) => [tokenName, "#000000"]),
-) as Record<AppearanceTokenName, string>
+const DEFAULT_APPEARANCE_TOKEN_VALUES = resolveAppearanceTokenCssValues({
+  brandTheme: "terra",
+})
 
 function createDefaultAppearanceThemeSnapshot(): AppearanceThemeLibrarySnapshot {
   return createAppearanceThemeLibrarySnapshot({
@@ -111,6 +120,7 @@ function getAppearanceRuntimeSignature(input: {
   fontFamily: AppearanceFontFamily
   htmlBackgroundConfig: HtmlBackgroundConfig
   overrides: AppearanceTokenMap
+  foreignDtcg: Record<string, unknown>
 }) {
   return JSON.stringify(input)
 }
@@ -123,6 +133,7 @@ function getAppearanceStateSignature(state: AppearanceRuntimeState) {
     fontFamily: state.document.fontFamily,
     htmlBackgroundConfig: state.htmlBackgroundConfig,
     overrides: state.document.overrides,
+    foreignDtcg: state.document.foreignDtcg,
   })
 }
 
@@ -134,14 +145,16 @@ export function useAppearanceState() {
   const [fontFamily, setFontFamily] = useState<AppearanceFontFamily>(readFontFamilyPreference)
   const [htmlBackgroundConfig, setHtmlBackgroundConfig] = useState<HtmlBackgroundConfig>(readHtmlBackgroundConfigPreference)
   const [appearanceOverrides, setAppearanceOverrides] = useState<AppearanceTokenMap>({})
+  const [appearanceForeignDtcg, setAppearanceForeignDtcg] = useState<Record<string, unknown>>({})
   const [appearanceTokenValues, setAppearanceTokenValues] =
-    useState<Record<AppearanceTokenName, string>>(EMPTY_APPEARANCE_TOKEN_VALUES)
+    useState<Record<AppearanceTokenName, string>>(DEFAULT_APPEARANCE_TOKEN_VALUES)
   const [appearanceConfigPath, setAppearanceConfigPath] = useState<string | null>(null)
   const [appearanceConfigError, setAppearanceConfigError] = useState<string | null>(null)
   const [isAppearanceConfigReady, setIsAppearanceConfigReady] = useState(false)
   const [appearanceThemeSnapshot, setAppearanceThemeSnapshot] =
     useState<AppearanceThemeLibrarySnapshot>(createDefaultAppearanceThemeSnapshot)
   const [appearanceThemeError, setAppearanceThemeError] = useState<string | null>(null)
+  const [appearanceThemeNotice, setAppearanceThemeNotice] = useState<string | null>(null)
   const lastRemoteAppearanceSignatureRef = useRef<string | null>(null)
   const lastPublishedAppearanceSignatureRef = useRef<string | null>(null)
 
@@ -151,13 +164,13 @@ export function useAppearanceState() {
   const resolvedCodeTheme = resolveCodeHighlightTheme(codeThemePreference, resolvedColorMode)
   const appearanceConfigPreview = JSON.stringify(
     {
-      version: 1,
+      version: 2,
       path: appearanceConfigPath,
       brandTheme,
       colorMode,
       fontFamily,
       overrides: appearanceOverrides,
-      resolvedTokens: appearanceTokenValues,
+      foreignDtcg: appearanceForeignDtcg,
     },
     null,
     2,
@@ -169,16 +182,24 @@ export function useAppearanceState() {
     fontFamily,
     htmlBackgroundConfig,
     overrides: appearanceOverrides,
+    foreignDtcg: appearanceForeignDtcg,
   })
+  const appearanceContrastWarnings = useMemo(
+    () => evaluateAppearanceContrastWarnings({
+      brandTheme,
+      overrides: appearanceOverrides,
+    }),
+    [appearanceOverrides, brandTheme],
+  )
 
   function createAppearanceRuntimeState(): AppearanceRuntimeState {
     const nextDocument: AppearanceConfigDocument = {
-      version: 1,
+      version: 2,
       brandTheme,
       colorMode,
       fontFamily,
       overrides: appearanceOverrides,
-      resolvedTokens: readResolvedAppearanceTokenValues(document.documentElement),
+      foreignDtcg: appearanceForeignDtcg,
       updatedAt: Date.now(),
     }
 
@@ -210,6 +231,7 @@ export function useAppearanceState() {
         setBrandTheme(nextDocument.brandTheme)
         setFontFamily(nextDocument.fontFamily)
         setAppearanceOverrides(nextDocument.overrides)
+        setAppearanceForeignDtcg(nextDocument.foreignDtcg)
       })
       .catch((error) => {
         if (!mounted) return
@@ -263,6 +285,7 @@ export function useAppearanceState() {
       setBrandTheme(normalizedState.document.brandTheme)
       setFontFamily(normalizedState.document.fontFamily)
       setAppearanceOverrides(normalizedState.document.overrides)
+      setAppearanceForeignDtcg(normalizedState.document.foreignDtcg)
       setCodeThemePreference(normalizedState.codeThemePreference)
       setHtmlBackgroundConfig(normalizedState.htmlBackgroundConfig)
       setAppearanceConfigError(null)
@@ -270,6 +293,7 @@ export function useAppearanceState() {
 
     return unsubscribe
   }, [
+    appearanceForeignDtcg,
     appearanceOverrides,
     brandTheme,
     codeThemePreference,
@@ -351,8 +375,11 @@ export function useAppearanceState() {
 
   useEffect(() => {
     applyAppearanceOverrides(document.documentElement, appearanceOverrides)
-    setAppearanceTokenValues(readResolvedAppearanceTokenValues(document.documentElement))
-  }, [appearanceOverrides, brandTheme, colorMode, fontFamily])
+    setAppearanceTokenValues(resolveAppearanceTokenCssValues({
+      brandTheme,
+      overrides: appearanceOverrides,
+    }))
+  }, [appearanceOverrides, brandTheme])
 
   useEffect(() => {
     const publishAppearanceState = window.desktop?.publishAppearanceState
@@ -393,16 +420,21 @@ export function useAppearanceState() {
   }, [appearanceRuntimeSignature, isAppearanceConfigReady])
 
   function handleAppearanceTokenChange(tokenName: AppearanceTokenName, nextValue: string) {
-    const normalizedValue = normalizeAppearanceColorInputValue(nextValue)
+    const normalizedValue = parseAppearanceColorLiteral(nextValue)
+    if (!normalizedValue) {
+      setAppearanceConfigError(`Invalid color value for --${tokenName}.`)
+      return
+    }
 
     setAppearanceOverrides((current) => {
-      if (current[tokenName] === normalizedValue) return current
+      if (JSON.stringify(current[tokenName]) === JSON.stringify(normalizedValue)) return current
 
       return {
         ...current,
         [tokenName]: normalizedValue,
       }
     })
+    setAppearanceConfigError(null)
   }
 
   function handleAppearanceTokenReset(tokenName: AppearanceTokenName) {
@@ -433,6 +465,7 @@ export function useAppearanceState() {
       codeThemePreference,
       htmlBackgroundConfig,
       overrides: appearanceOverrides,
+      foreignDtcg: appearanceForeignDtcg,
     }
   }
 
@@ -443,6 +476,7 @@ export function useAppearanceState() {
     setCodeThemePreference(theme.codeThemePreference)
     setHtmlBackgroundConfig({ ...theme.htmlBackgroundConfig })
     setAppearanceOverrides({ ...theme.overrides })
+    setAppearanceForeignDtcg(structuredClone(theme.foreignDtcg))
   }
 
   async function handleAppearanceThemeApply(themeID: string) {
@@ -485,10 +519,77 @@ export function useAppearanceState() {
       const result = await saveAppearanceTheme({ theme: createAppearanceThemeSaveInput(name) })
       setAppearanceThemeSnapshot(result.snapshot)
       setAppearanceThemeError(null)
+      setAppearanceThemeNotice(null)
       return result.theme
     } catch (error) {
       setAppearanceThemeError(error instanceof Error ? error.message : String(error))
       return null
+    }
+  }
+
+  async function handleAppearanceThemeImportDtcg(
+    json: string,
+    fallbackName?: string,
+  ): Promise<AppearanceTheme | null> {
+    const saveAppearanceTheme = window.desktop?.saveAppearanceTheme
+    if (!saveAppearanceTheme) {
+      setAppearanceThemeError("Desktop appearance theme APIs are unavailable.")
+      return null
+    }
+
+    try {
+      const imported = parseAppearanceDtcgJson(json, { fallbackName })
+      const result = await saveAppearanceTheme({ theme: imported.theme })
+      setAppearanceThemeSnapshot(result.snapshot)
+      setAppearanceThemeError(null)
+
+      if (result.theme) {
+        applyAppearanceTheme(result.theme)
+      }
+
+      const noticeParts = [
+        `Imported ${imported.importedTokenCount} Anybox tokens.`,
+        ...imported.warnings,
+      ]
+      if (imported.contrastWarnings.length > 0) {
+        noticeParts.push(
+          `${imported.contrastWarnings.length} contrast ${
+            imported.contrastWarnings.length === 1 ? "warning" : "warnings"
+          } were kept as non-blocking quality feedback.`,
+        )
+      }
+      setAppearanceThemeNotice(noticeParts.join(" "))
+      return result.theme
+    } catch (error) {
+      const message = error instanceof AppearanceDtcgValidationError
+        ? error.issues.join(" ")
+        : error instanceof Error
+          ? error.message
+          : String(error)
+      setAppearanceThemeError(message)
+      setAppearanceThemeNotice(null)
+      return null
+    }
+  }
+
+  function handleAppearanceThemeExportDtcg(themeID: string) {
+    const theme = findAppearanceThemeByID(appearanceThemeSnapshot.themes, themeID)
+    if (!theme) {
+      setAppearanceThemeError("Theme not found.")
+      return null
+    }
+
+    const fileStem = theme.name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9\u4e00-\u9fff]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      || "anybox-theme"
+    setAppearanceThemeError(null)
+    setAppearanceThemeNotice(`Exported "${theme.name}" as DTCG 2025.10 tokens.`)
+    return {
+      contents: serializeAppearanceThemeToDtcg(theme),
+      fileName: `${fileStem}.tokens.json`,
     }
   }
 
@@ -557,8 +658,10 @@ export function useAppearanceState() {
     appearanceConfigError,
     appearanceConfigPath,
     appearanceConfigPreview,
+    appearanceContrastWarnings,
     appearanceOverrides,
     appearanceThemeError,
+    appearanceThemeNotice,
     appearanceThemes: appearanceThemeSnapshot.themes,
     activeAppearanceThemeID: appearanceThemeSnapshot.activeThemeID,
     appearanceTokenValues,
@@ -570,6 +673,8 @@ export function useAppearanceState() {
     handleAppearanceThemeApply,
     handleAppearanceThemeDelete,
     handleAppearanceThemeDuplicate,
+    handleAppearanceThemeExportDtcg,
+    handleAppearanceThemeImportDtcg,
     handleAppearanceThemeRename,
     handleAppearanceThemeSaveCurrent,
     handleAppearanceTokenChange,

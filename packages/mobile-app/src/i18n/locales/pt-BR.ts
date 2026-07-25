@@ -216,7 +216,7 @@ export const ptBR = {
   "thread.loadingSession": "Carregando sessão",
   "thread.noMessages": "Nenhuma mensagem",
   "thread.readyInWorkspace": "Pronto em {workspace}. Envie uma tarefa para criar uma sessão focada.",
-  "thread.startConversation": "Iniciar chat",
+  "thread.startConversation": "Iniciar uma conversa em {workspace}",
   "thread.reasoning": "Raciocínio",
   "thread.reasoningActive": "Raciocínio",
   "thread.reasoningComplete": "Raciocinado",

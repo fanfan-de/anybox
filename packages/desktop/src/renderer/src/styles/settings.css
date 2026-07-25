@@ -252,9 +252,9 @@ body.is-dragging-settings-page {
 }
 
 .settings-nav-item.is-active {
-  background: var(--semantic-sidebar-tree-row-surface-active);
+  background: var(--semantic-settings-list-detail-row-surface-current);
   border-color: var(--mix-seg-accent-24-seg-border-76);
-  color: var(--semantic-sidebar-tree-row-text-active);
+  color: var(--semantic-settings-list-detail-row-current-text);
 }
 
 .settings-nav-item:disabled {
@@ -316,7 +316,7 @@ body.is-dragging-settings-page {
 
 .settings-primary-nav-item.is-active {
   border-color: transparent;
-  background: var(--semantic-sidebar-tree-row-surface-active);
+  background: var(--semantic-settings-list-detail-row-surface-current);
   color: #182532;
 }
 
@@ -364,7 +364,7 @@ body.is-dragging-settings-page {
 .settings-primary-nav-item:focus-visible .settings-primary-nav-icon,
 .settings-primary-nav-item.is-active .settings-primary-nav-icon {
   opacity: 1;
-  color: var(--semantic-sidebar-tree-row-leading-active);
+  color: var(--semantic-settings-list-detail-row-current-text);
 }
 
 .settings-page-content,
@@ -2061,10 +2061,10 @@ body.is-dragging-settings-page {
   min-width: 0;
   min-height: 48px;
   padding: 12px 14px;
-  border: 1px solid var(--seg-border);
+  border: 1px solid transparent;
   border-radius: 8px;
-  background: var(--mix-seg-panel-muted-72-seg-panel-28);
-  color: var(--seg-text-1);
+  background: transparent;
+  color: var(--semantic-sidebar-tree-row-text);
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -2077,12 +2077,17 @@ body.is-dragging-settings-page {
 }
 
 .mcp-server-sidebar-row:hover,
-.mcp-server-sidebar-row:focus-visible,
-.mcp-server-sidebar-row.is-active {
-  border-color: var(--mix-seg-accent-42-seg-border-58);
-  background: var(--mix-seg-accent-soft-72-seg-panel-28);
-  color: var(--seg-text-1);
+.mcp-server-sidebar-row:focus-visible {
+  border-color: transparent;
+  background: var(--semantic-sidebar-tree-row-surface-hover);
+  color: var(--semantic-sidebar-tree-row-text-hover);
   outline: none;
+}
+
+.mcp-server-sidebar-row.is-active {
+  border-color: transparent;
+  background: var(--semantic-sidebar-tree-row-surface-active);
+  color: var(--semantic-sidebar-tree-row-text-active);
 }
 
 .mcp-server-sidebar-copy {
@@ -2096,7 +2101,7 @@ body.is-dragging-settings-page {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--seg-text-1);
+  color: inherit;
   font-size: 13px;
   font-weight: 700;
   line-height: 1.2;
@@ -2665,24 +2670,34 @@ body.is-dragging-settings-page {
   border-color: transparent;
   border-radius: 8px;
   background: transparent;
+  color: var(--semantic-sidebar-tree-row-text);
   gap: 10px;
 }
 
 .mcp-server-sidebar-row:hover,
-.mcp-server-sidebar-row:focus-visible,
-.mcp-server-sidebar-row.is-active {
+.mcp-server-sidebar-row:focus-visible {
   border-color: transparent;
-  background: var(--semantic-settings-list-detail-row-surface-hover);
+  background: var(--semantic-sidebar-tree-row-surface-hover);
+  color: var(--semantic-sidebar-tree-row-text-hover);
 }
 
 .mcp-server-sidebar-row:hover .mcp-server-sidebar-name,
-.mcp-server-sidebar-row:focus-visible .mcp-server-sidebar-name,
+.mcp-server-sidebar-row:focus-visible .mcp-server-sidebar-name {
+  color: inherit;
+}
+
+.mcp-server-sidebar-row.is-active {
+  border-color: transparent;
+  background: var(--semantic-sidebar-tree-row-surface-active);
+  color: var(--semantic-sidebar-tree-row-text-active);
+}
+
 .mcp-server-sidebar-row.is-active .mcp-server-sidebar-name {
-  color: var(--semantic-settings-list-detail-row-primary-text);
+  color: inherit;
 }
 
 .mcp-server-sidebar-name {
-  color: var(--semantic-settings-list-detail-row-primary-text);
+  color: inherit;
   font-size: 15px;
   font-weight: 690;
 }
@@ -4737,6 +4752,63 @@ body.is-dragging-settings-page {
   gap: 14px;
 }
 
+.settings-theme-library-heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.settings-theme-library-heading-actions p {
+  margin: 0;
+}
+
+.settings-theme-library-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.settings-theme-config-notice {
+  color: var(--seg-success-text);
+}
+
+.settings-theme-validation-panel,
+.settings-theme-validation-list {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-theme-validation-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--seg-warning-border);
+  border-radius: var(--seg-radius-sm);
+  background: var(--seg-warning-surface);
+  color: var(--seg-warning-text);
+}
+
+.settings-theme-validation-row code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 12px/1.4 var(--font-mono);
+}
+
+.settings-theme-validation-row strong {
+  white-space: nowrap;
+  font-size: 12px;
+}
+
 .settings-theme-library-shell {
   display: grid;
   grid-template-columns: minmax(220px, 0.9fr) minmax(0, 1.1fr);
@@ -4955,9 +5027,26 @@ body.is-dragging-settings-page {
 }
 
 @media (max-width: 760px) {
+  .settings-theme-library-heading-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .settings-theme-library-heading-actions .secondary-button {
+    width: 100%;
+  }
+
   .settings-theme-library-shell,
   .settings-theme-library-meta {
     grid-template-columns: 1fr;
+  }
+
+  .settings-theme-validation-row {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-theme-validation-row > span[aria-hidden="true"] {
+    display: none;
   }
 
   .settings-theme-library-save {
@@ -5887,7 +5976,7 @@ body.is-dragging-settings-page {
 .canvas-top-menu-button.is-active,
 .right-sidebar-filter-chip.is-active,
 .settings-badge.is-highlight {
-  background: var(--semantic-sidebar-tree-row-surface-active);
+  background: var(--brand-primary-soft-active);
   color: var(--ui-accent-strong);
 }
 
@@ -6312,20 +6401,20 @@ body.is-dragging-settings-page {
 }
 
 .settings-primary-nav-item {
-  color: var(--semantic-sidebar-tree-row-text);
+  color: var(--semantic-settings-list-detail-row-primary-text);
 }
 
 .settings-primary-nav-item:hover,
 .settings-primary-nav-item:focus-visible {
   border-color: transparent;
-  background: var(--semantic-sidebar-tree-row-surface-active);
-  color: var(--semantic-sidebar-tree-row-text-active);
+  background: var(--semantic-settings-list-detail-row-surface-hover);
+  color: var(--semantic-settings-list-detail-row-primary-text);
 }
 
 .settings-primary-nav-item.is-active {
   border-color: transparent;
-  background: var(--semantic-sidebar-tree-row-surface-active);
-  color: var(--semantic-sidebar-tree-row-text-active);
+  background: var(--semantic-settings-list-detail-row-surface-current);
+  color: var(--semantic-settings-list-detail-row-current-text);
 }
 
 .settings-banner,
@@ -6466,12 +6555,18 @@ body.is-dragging-settings-page {
 }
 
 .environment-location-row:hover,
-.environment-location-row:focus-visible,
+.environment-location-row:focus-visible {
+  border-color: transparent;
+  outline: none;
+  background: var(--semantic-settings-list-detail-row-surface-hover);
+  color: var(--semantic-settings-list-detail-row-primary-text);
+}
+
 .environment-location-row.is-active {
   border-color: transparent;
   outline: none;
-  background: var(--semantic-sidebar-tree-row-surface-active);
-  color: var(--semantic-sidebar-tree-row-text-active);
+  background: var(--semantic-settings-list-detail-row-surface-current);
+  color: var(--semantic-settings-list-detail-row-current-text);
 }
 
 .environment-location-name {
@@ -7232,7 +7327,7 @@ body.is-dragging-settings-page {
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-toggle-card:focus-visible,
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-toggle-card.is-active {
   border-color: transparent;
-  background: var(--semantic-sidebar-tree-row-surface-hover);
+  background: var(--semantic-settings-list-detail-row-surface-hover);
   box-shadow: none;
   transform: none;
 }
@@ -7298,10 +7393,10 @@ body.is-dragging-settings-page {
   --settings-select-surface: var(--semantic-dropdown-menu-surface, var(--seg-dropdown-menu-surface));
   --settings-select-border: var(--seg-border);
   --settings-select-text: var(--seg-text-1);
-  --settings-select-hover-surface: var(--semantic-sidebar-tree-row-surface-hover);
-  --settings-select-hover-text: var(--semantic-sidebar-tree-row-text-hover);
-  --settings-select-selected-surface: var(--semantic-sidebar-tree-row-surface-active);
-  --settings-select-selected-text: var(--semantic-sidebar-tree-row-text-active);
+  --settings-select-hover-surface: var(--semantic-settings-list-detail-row-surface-hover);
+  --settings-select-hover-text: var(--semantic-settings-list-detail-row-primary-text);
+  --settings-select-selected-surface: var(--semantic-settings-list-detail-row-surface-current);
+  --settings-select-selected-text: var(--semantic-settings-list-detail-row-current-text);
   --settings-select-radius: var(--semantic-dropdown-menu-radius, var(--seg-radius-md));
   --settings-select-item-radius: var(--seg-radius-sm);
   --settings-select-focus-border: var(--mix-seg-accent-34-seg-border-66);
@@ -7599,7 +7694,7 @@ body.is-dragging-settings-page {
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-toggle-card:focus-visible,
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-toggle-card.is-active {
   border-color: transparent;
-  background: var(--semantic-sidebar-tree-row-surface-hover);
+  background: var(--semantic-settings-list-detail-row-surface-hover);
   box-shadow: none;
   transform: none;
 }
@@ -7832,7 +7927,7 @@ body.is-dragging-settings-page {
 
 .settings-account-link-button:hover,
 .settings-account-link-button:focus-visible {
-  background: var(--semantic-sidebar-tree-row-surface-hover);
+  background: var(--semantic-button-secondary-surface-hover);
   color: var(--brand-accent-active);
   text-decoration: underline;
 }
@@ -8011,7 +8106,7 @@ body.is-dragging-settings-page {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: var(--brand-primary);
+  background: var(--brand-primary-active);
 }
 
 .settings-subscription-quota-meta {
@@ -9109,8 +9204,8 @@ body.is-dragging-settings-page {
 
 .connections-search-control button:hover,
 .connections-search-control button:focus-visible {
-  background: var(--semantic-sidebar-tree-row-surface-hover);
-  color: var(--seg-text-1);
+  background: var(--semantic-icon-button-surface-hover);
+  color: var(--semantic-icon-button-text-hover);
   outline: none;
 }
 
@@ -12501,7 +12596,7 @@ body.is-dragging-settings-page {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--semantic-sidebar-tree-row-text);
+  color: var(--semantic-settings-list-detail-row-primary-text);
   display: grid;
   grid-template-columns: 14px 16px minmax(0, 1fr);
   align-items: center;
@@ -12513,14 +12608,14 @@ body.is-dragging-settings-page {
 
 .plugins-skill-tree-row:hover,
 .plugins-skill-tree-row:focus-visible {
-  background: var(--semantic-sidebar-tree-row-surface-hover);
-  color: var(--semantic-sidebar-tree-row-text-hover);
+  background: var(--semantic-settings-list-detail-row-surface-hover);
+  color: var(--semantic-settings-list-detail-row-primary-text);
   outline: none;
 }
 
 .plugins-skill-tree-row.is-selected {
-  background: var(--semantic-sidebar-tree-row-surface-active);
-  color: var(--semantic-sidebar-tree-row-text-active);
+  background: var(--semantic-settings-list-detail-row-surface-current);
+  color: var(--semantic-settings-list-detail-row-current-text);
 }
 
 .plugins-skill-tree-chevron,
@@ -12650,14 +12745,14 @@ body.is-dragging-settings-page {
 
 .plugins-skill-view-tabs button:hover,
 .plugins-skill-view-tabs button:focus-visible {
-  background: var(--semantic-sidebar-tree-row-surface-hover);
-  color: var(--seg-text-1);
+  background: var(--semantic-segmented-control-item-surface-hover);
+  color: var(--semantic-segmented-control-item-text-hover);
   outline: none;
 }
 
 .plugins-skill-view-tabs button.is-active {
-  background: var(--semantic-sidebar-tree-row-surface-active);
-  color: var(--seg-text-1);
+  background: var(--semantic-segmented-control-item-surface-active);
+  color: var(--semantic-segmented-control-item-text-active);
 }
 
 .plugins-skill-view-tabs svg {
@@ -13866,21 +13961,21 @@ body.is-dragging-settings-page {
   padding: 8px 10px;
   border: 0;
   border-radius: 6px;
-  color: var(--semantic-sidebar-tree-row-text);
+  color: var(--semantic-settings-list-detail-row-primary-text);
   gap: 10px;
 }
 
 .settings-primary-nav-item:hover,
 .settings-primary-nav-item:focus-visible {
   border-color: transparent;
-  background: var(--semantic-sidebar-tree-row-surface-hover);
-  color: var(--semantic-sidebar-tree-row-text-hover);
+  background: var(--semantic-settings-list-detail-row-surface-hover);
+  color: var(--semantic-settings-list-detail-row-primary-text);
 }
 
 .settings-primary-nav-item.is-active {
   border-color: transparent;
-  background: var(--semantic-sidebar-tree-row-surface-active);
-  color: var(--semantic-sidebar-tree-row-text-active);
+  background: var(--semantic-settings-list-detail-row-surface-current);
+  color: var(--semantic-settings-list-detail-row-current-text);
 }
 
 .settings-primary-nav-item:hover .settings-primary-nav-icon,
@@ -13889,7 +13984,7 @@ body.is-dragging-settings-page {
 }
 
 .settings-primary-nav-item.is-active .settings-primary-nav-icon {
-  color: var(--semantic-sidebar-tree-row-leading-active);
+  color: var(--semantic-settings-list-detail-row-current-text);
 }
 
 .settings-primary-nav-label {
@@ -14143,7 +14238,7 @@ body.is-dragging-settings-page {
   border-color: transparent;
   border-radius: 6px;
   background: transparent;
-  color: var(--semantic-sidebar-tree-row-text);
+  color: var(--semantic-settings-list-detail-row-primary-text);
   gap: 4px;
   transform: none;
 }
@@ -14151,15 +14246,15 @@ body.is-dragging-settings-page {
 .settings-page-main.is-services .settings-service-item:hover,
 .settings-page-main.is-services .settings-service-item:focus-visible {
   border-color: transparent;
-  background: var(--semantic-sidebar-tree-row-surface-hover);
-  color: var(--semantic-sidebar-tree-row-text-hover);
+  background: var(--semantic-settings-list-detail-row-surface-hover);
+  color: var(--semantic-settings-list-detail-row-primary-text);
   transform: none;
 }
 
 .settings-page-main.is-services .settings-service-item.is-active {
   border-color: transparent;
-  background: var(--semantic-sidebar-tree-row-surface-active);
-  color: var(--semantic-sidebar-tree-row-text-active);
+  background: var(--semantic-settings-list-detail-row-surface-current);
+  color: var(--semantic-settings-list-detail-row-current-text);
 }
 
 .settings-page-main.is-services .settings-service-item-title {

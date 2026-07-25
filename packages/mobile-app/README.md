@@ -45,10 +45,11 @@ On Windows, use a short pnpm virtual store path before local APK builds. Native 
 corepack pnpm install --frozen-lockfile --force --virtual-store-dir C:\p\a
 ```
 
-Scan the QR code with Expo Go first. For a custom Android build:
+Scan the QR code with Expo Go first. For the native Android development client
+backed by Metro:
 
 ```powershell
-corepack pnpm --filter anybox-mobile-app android:dev
+corepack pnpm mobile:android:dev
 ```
 
 This local custom build path requires Java, the Android SDK, and adb on `PATH`.
@@ -69,10 +70,60 @@ Reopen the terminal after `--set-env`, then install SDK packages and build the d
 
 ```powershell
 corepack pnpm mobile:android:setup -- --install-sdk
+```
+
+### Daily Android development package
+
+The daily development client has an identity separate from the public app:
+
+| Build | Application ID | Name | Scheme | Updates |
+| --- | --- | --- | --- | --- |
+| Public/production | `com.anybox.mobile` | `Anybox Mobile` | `anybox-mobile` | self-hosted OTA and signed APK |
+| Development | `com.anybox.mobile.dev` | `Anybox Mobile Dev` | `anybox-mobile-dev` | disabled |
+
+Build a standalone development APK with the latest JavaScript embedded:
+
+```powershell
+corepack pnpm mobile:android:build:dev
+```
+
+The artifact is
+`packages/mobile-app/build/anybox-mobile-dev.apk`. It starts without Metro.
+
+For the normal edit → build → phone loop, enable USB debugging and run:
+
+```powershell
+corepack pnpm mobile:android:deploy:dev -- --serial <adb-serial>
+```
+
+The command selects the device in this order: `--serial`, `ANDROID_SERIAL`, then
+the only online authorized device. It runs mobile typecheck, detects the
+phone ABI, builds the standalone APK, verifies package/name/Scheme, performs
+only `adb install -r`, and launches the app. It never uninstalls the app or
+clears its data. A signing conflict is reported for manual resolution.
+
+The ignored Expo `android/` project records its last build profile. The first
+build, `--clean`, or switching between production and development triggers a
+clean prebuild; repeated development deploys retain Gradle caches. Use
+`--skip-typecheck` only after an equivalent typecheck has already passed, and
+`--no-launch` when installation without launch is intentional.
+
+Android sandboxes data by application ID, so the development build has its own
+SecureStore, login, pairing, and cache. This isolation is local only: the
+development build still uses the configured Anybox Provider/Relay URL and can
+modify real server data. Use a test account when exercising production
+services.
+
+The existing production-identity debug validation remains available:
+
+```powershell
 corepack pnpm mobile:android:build:debug
 ```
 
-The APK is copied to `packages/mobile-app/build/anybox-mobile-debug.apk`.
+Its APK is copied to
+`packages/mobile-app/build/anybox-mobile-debug.apk`. Because it shares
+`com.anybox.mobile` with the public app but normally uses a debug certificate,
+do not install it over a production-signed personal installation.
 
 APK builds target real Android phones by default (`arm64-v8a,armeabi-v7a`). A
 developer who explicitly needs another ABI can set
@@ -149,6 +200,16 @@ Or pass the full Android deep link:
 corepack pnpm mobile:android:smoke:bridge -- --url "anybox-mobile://connect?url=..."
 ```
 
+For the installed development package, use:
+
+```powershell
+corepack pnpm mobile:android:smoke:bridge:dev -- --url "anybox-mobile://connect?url=..."
+```
+
+The development Smoke accepts the production link emitted by desktop and
+rewrites only its outer Anybox scheme to `anybox-mobile-dev` before the ADB
+launch. It preserves development app data by default.
+
 When the desktop handoff JSON exists, the URL can be omitted:
 
 ```powershell
@@ -185,6 +246,10 @@ The Android website build uses two self-hosted update paths:
   `version.sig`. GitHub `mobile-v*` releases are the fallback.
 
 No Expo/EAS account or hosted update service is used.
+
+The `com.anybox.mobile.dev` build does not participate in either update path.
+Its Updates diagnostics report the `development` profile without starting OTA
+or APK network checks.
 
 ### One-time key setup
 

@@ -269,6 +269,7 @@ function verifyApk(apkPath) {
 }
 
 function main() {
+  process.env.ANYBOX_MOBILE_BUILD_PROFILE = "production"
   requireReleaseSecrets()
   const channelIndex = process.argv.indexOf("--channel")
   const channel = channelIndex >= 0 ? process.argv[channelIndex + 1] : process.env.ANYBOX_MOBILE_UPDATE_CHANNEL || "production"
@@ -280,6 +281,8 @@ function main() {
 
   run("node", [
     path.join(packageRoot, "scripts", "build-android-debug.mjs"),
+    "--profile",
+    "production",
     "--clean",
     "--prepare-only",
     "--minify",

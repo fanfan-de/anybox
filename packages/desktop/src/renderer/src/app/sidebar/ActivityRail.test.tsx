@@ -77,24 +77,18 @@ describe("ActivityRail", () => {
     expect(props.onOpenSettings).toHaveBeenCalledTimes(1)
   })
 
-  it("uses disclosure icons for configuration shortcuts", () => {
+  it("keeps configuration shortcuts permanently visible without a disclosure control", () => {
     renderActivityRail()
 
-    const collapsedToggle = screen.getByRole("button", { name: "Show configuration shortcuts" })
-    expect(collapsedToggle.querySelector(".lucide-settings")).toBeNull()
-    expect(collapsedToggle.querySelector(".lucide-chevron-right")).not.toBeNull()
-
-    fireEvent.click(collapsedToggle)
-
-    const expandedToggle = screen.getByRole("button", { name: "Hide configuration shortcuts" })
-    expect(expandedToggle.querySelector(".lucide-settings")).toBeNull()
-    expect(expandedToggle.querySelector(".lucide-chevron-down")).not.toBeNull()
+    const configurationGroup = screen.getByLabelText("Configuration views")
+    expect(within(configurationGroup).getByRole("button", { name: "Open prompts and skills" })).toBeInTheDocument()
+    expect(within(configurationGroup).getByRole("button", { name: "Open tools" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Show configuration shortcuts" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Hide configuration shortcuts" })).not.toBeInTheDocument()
   })
 
   it("keeps external capability shortcuts out of the configuration stack", () => {
     const { props } = renderActivityRail()
-
-    fireEvent.click(screen.getByRole("button", { name: "Show configuration shortcuts" }))
 
     expect(screen.queryByRole("button", { name: "Open SSH" })).not.toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Open MCP" })).not.toBeInTheDocument()

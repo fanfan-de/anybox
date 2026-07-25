@@ -216,7 +216,7 @@ export const trTR = {
   "thread.loadingSession": "Oturum yükleniyor",
   "thread.noMessages": "Mesaj yok",
   "thread.readyInWorkspace": "{workspace} içinde hazır. Odaklanmış bir oturum oluşturmak için bir görev gönderin.",
-  "thread.startConversation": "Sohbete başla",
+  "thread.startConversation": "{workspace} içinde sohbet başlat",
   "thread.reasoning": "Muhakeme",
   "thread.reasoningActive": "Muhakeme",
   "thread.reasoningComplete": "Mantık yürüttü",

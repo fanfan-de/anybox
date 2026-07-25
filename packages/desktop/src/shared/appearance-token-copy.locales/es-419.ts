@@ -74,7 +74,7 @@ export const appearanceTokenCopy = {
     },
     "component-sidebar-tree-rows": {
       "label": "Filas de Árbol en Barra Lateral",
-      "description": "Tokens de fila dedicados para el espacio de trabajo de la barra lateral izquierda y árboles de habilidades."
+      "description": "Tokens de estado dedicados para filas de conversaciones, espacios de trabajo, prompts, habilidades, MCP y herramientas en la barra lateral izquierda."
     },
     "component-settings-list-detail-rows": {
       "label": "Filas de Detalle de Lista de Configuración",
@@ -660,7 +660,7 @@ export const appearanceTokenCopy = {
     },
     "semantic-sidebar-tree-row-leading-active": {
       "label": "Icono principal activo",
-      "description": "Color de icono principal de fila seleccionada para filas de proyecto en la barra lateral."
+      "description": "Color del icono principal de las filas de árbol seleccionadas en la barra lateral izquierda."
     },
     "semantic-settings-list-detail-row-surface-hover": {
       "label": "Superficie de fila al pasar el cursor",

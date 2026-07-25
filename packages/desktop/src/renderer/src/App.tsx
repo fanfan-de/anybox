@@ -745,8 +745,10 @@ function AppearanceWindowApp() {
     appearanceConfigError,
     appearanceConfigPath,
     appearanceConfigPreview,
+    appearanceContrastWarnings,
     appearanceOverrides,
     appearanceThemeError,
+    appearanceThemeNotice,
     appearanceThemes,
     activeAppearanceThemeID,
     appearanceTokenValues,
@@ -756,6 +758,8 @@ function AppearanceWindowApp() {
     handleAppearanceThemeApply,
     handleAppearanceThemeDelete,
     handleAppearanceThemeDuplicate,
+    handleAppearanceThemeExportDtcg,
+    handleAppearanceThemeImportDtcg,
     handleAppearanceThemeRename,
     handleAppearanceThemeSaveCurrent,
     handleAppearanceTokenChange,
@@ -796,8 +800,10 @@ function AppearanceWindowApp() {
               appearanceConfigError={appearanceConfigError}
               appearanceConfigPath={appearanceConfigPath}
               appearanceConfigPreview={appearanceConfigPreview}
+              appearanceContrastWarnings={appearanceContrastWarnings}
               appearanceOverrides={appearanceOverrides}
               appearanceThemeError={appearanceThemeError}
+              appearanceThemeNotice={appearanceThemeNotice}
               appearanceThemes={appearanceThemes}
               activeAppearanceThemeID={activeAppearanceThemeID}
               appearanceTokenValues={appearanceTokenValues}
@@ -808,6 +814,8 @@ function AppearanceWindowApp() {
               onAppearanceThemeApply={handleAppearanceThemeApply}
               onAppearanceThemeDelete={handleAppearanceThemeDelete}
               onAppearanceThemeDuplicate={handleAppearanceThemeDuplicate}
+              onAppearanceThemeExportDtcg={handleAppearanceThemeExportDtcg}
+              onAppearanceThemeImportDtcg={handleAppearanceThemeImportDtcg}
               onAppearanceThemeRename={handleAppearanceThemeRename}
               onAppearanceThemeSaveCurrent={handleAppearanceThemeSaveCurrent}
               onAppearanceTokenChange={handleAppearanceTokenChange}
@@ -1166,8 +1174,10 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     appearanceConfigError,
     appearanceConfigPath,
     appearanceConfigPreview,
+    appearanceContrastWarnings,
     appearanceOverrides,
     appearanceThemeError,
+    appearanceThemeNotice,
     appearanceThemes,
     activeAppearanceThemeID,
     appearanceTokenValues,
@@ -1181,6 +1191,8 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     handleAppearanceThemeApply,
     handleAppearanceThemeDelete,
     handleAppearanceThemeDuplicate,
+    handleAppearanceThemeExportDtcg,
+    handleAppearanceThemeImportDtcg,
     handleAppearanceThemeRename,
     handleAppearanceThemeSaveCurrent,
     handleAppearanceTokenChange,
@@ -3413,8 +3425,10 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               appearanceConfigError={appearanceConfigError}
               appearanceConfigPath={appearanceConfigPath}
               appearanceConfigPreview={appearanceConfigPreview}
+              appearanceContrastWarnings={appearanceContrastWarnings}
               appearanceOverrides={appearanceOverrides}
               appearanceThemeError={appearanceThemeError}
+              appearanceThemeNotice={appearanceThemeNotice}
               appearanceThemes={appearanceThemes}
               activeAppearanceThemeID={activeAppearanceThemeID}
               appearanceTokenValues={appearanceTokenValues}
@@ -3468,6 +3482,8 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               onAppearanceThemeApply={handleAppearanceThemeApply}
               onAppearanceThemeDelete={handleAppearanceThemeDelete}
               onAppearanceThemeDuplicate={handleAppearanceThemeDuplicate}
+              onAppearanceThemeExportDtcg={handleAppearanceThemeExportDtcg}
+              onAppearanceThemeImportDtcg={handleAppearanceThemeImportDtcg}
               onAppearanceThemeRename={handleAppearanceThemeRename}
               onAppearanceThemeSaveCurrent={handleAppearanceThemeSaveCurrent}
               onAppearanceTokenChange={handleAppearanceTokenChange}

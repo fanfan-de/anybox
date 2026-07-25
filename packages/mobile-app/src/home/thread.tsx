@@ -1,6 +1,6 @@
 import React from "react"
 import Feather from "@expo/vector-icons/Feather"
-import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native"
+import { Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native"
 import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native"
 import type { MobileApproval, MobileMessage, MobileProviderModel, MobileSessionSummary, MobileWorkspace } from "@/api/mobile-api"
 import { useI18n } from "@/i18n"
@@ -51,6 +51,7 @@ export function ThreadViewPage({
   onModelSelect,
   onNewChat,
   onOpenDrawer,
+  onSelectWorkspace,
   onSend,
   paddingBottom,
   paddingTop,
@@ -58,6 +59,7 @@ export function ThreadViewPage({
   savingModel,
   selectedModel,
   sending,
+  workspaces,
   answeringQuestionID,
 }: {
   actingApprovalID: string | null
@@ -83,6 +85,7 @@ export function ThreadViewPage({
   onModelSelect: (modelValue: string | null) => void
   onNewChat: () => void
   onOpenDrawer: () => void
+  onSelectWorkspace: (workspace: MobileWorkspace) => void
   onSend: () => void
   paddingBottom: number
   paddingTop: number
@@ -90,6 +93,7 @@ export function ThreadViewPage({
   savingModel: boolean
   selectedModel: string | null
   sending: boolean
+  workspaces: MobileWorkspace[]
 }) {
   const { t } = useI18n()
   const title = focusedSession?.title ?? t("thread.newSession")
@@ -101,6 +105,7 @@ export function ThreadViewPage({
   const previousSessionIDRef = React.useRef<string | null>(null)
   const previousTailMessageIDRef = React.useRef<string | null>(null)
   const newSessionToastTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [modelPanelOpen, setModelPanelOpen] = React.useState(false)
   const [newSessionToastVisible, setNewSessionToastVisible] = React.useState(false)
   const tailMessage = visibleMessages.length ? visibleMessages[visibleMessages.length - 1] : null
   const tailMessageID = tailMessage?.info?.id ?? null
@@ -184,11 +189,11 @@ export function ThreadViewPage({
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={0}
+      behavior="padding"
+      keyboardVerticalOffset={Platform.OS === "android" ? -paddingTop : 0}
       style={{ backgroundColor: "#171717", flex: 1, position: "relative" }}
     >
-      <View style={{ alignSelf: "center", flex: 1, width: "100%", maxWidth: 430, paddingBottom, paddingTop }}>
+      <View style={{ alignSelf: "center", flex: 1, width: "100%", maxWidth: 430, paddingBottom, paddingTop, position: "relative" }}>
         <View style={{ alignItems: "center", flexDirection: "row", gap: 10, height: 58, paddingHorizontal: 14 }}>
           <TopIconButton accessibilityLabel={t("thread.openProjects")} icon="menu" onPress={onOpenDrawer} />
           <View style={{ alignItems: "center", flex: 1, flexDirection: "row" }}>
@@ -224,7 +229,14 @@ export function ThreadViewPage({
             <DarkNotice title={t("thread.approvalFailed")} detail={approvalError} tone="danger" />
           ) : null}
           {focusedWorkspace && !focusedSession ? (
-            <AssistantIntro toastLabel={t("thread.alreadyInNewSession")} toastVisible={newSessionToastVisible} />
+            <AssistantIntro
+              currentWorkspace={focusedWorkspace}
+              disabled={sending}
+              onSelectWorkspace={onSelectWorkspace}
+              toastLabel={t("thread.alreadyInNewSession")}
+              toastVisible={newSessionToastVisible}
+              workspaces={workspaces}
+            />
           ) : null}
           {focusedSession ? (
             timelineItems.length ? (
@@ -253,6 +265,15 @@ export function ThreadViewPage({
           ) : null}
         </ScrollView>
 
+        {modelPanelOpen ? (
+          <Pressable
+            accessible={false}
+            onPress={() => setModelPanelOpen(false)}
+            style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0, zIndex: 1 }}
+            testID="model-selector-backdrop"
+          />
+        ) : null}
+
         <ThreadComposer
           disabled={disabled}
           draft={draft}
@@ -260,8 +281,10 @@ export function ThreadViewPage({
           modelError={modelError}
           modelOptions={modelOptions}
           modelSelectionEnabled={modelSelectionEnabled}
+          modelPanelOpen={modelPanelOpen}
           modelsLoading={modelsLoading}
           onChangeText={onChangeText}
+          onModelPanelOpenChange={setModelPanelOpen}
           onModelSelect={onModelSelect}
           onSend={onSend}
           placeholder={placeholder}
@@ -747,30 +770,179 @@ function formatToolName(tool: string | undefined) {
 }
 
 function AssistantIntro({
+  currentWorkspace,
+  disabled,
+  onSelectWorkspace,
   toastLabel,
   toastVisible,
+  workspaces,
 }: {
+  currentWorkspace: MobileWorkspace
+  disabled: boolean
+  onSelectWorkspace: (workspace: MobileWorkspace) => void
   toastLabel: string
   toastVisible: boolean
+  workspaces: MobileWorkspace[]
+}) {
+  const { t } = useI18n()
+  const [workspacePickerVisible, setWorkspacePickerVisible] = React.useState(false)
+  const conversationLabel = t("thread.startConversation", { workspace: currentWorkspace.name })
+
+  function handleSelectWorkspace(workspace: MobileWorkspace) {
+    setWorkspacePickerVisible(false)
+    if (workspace.id !== currentWorkspace.id) {
+      onSelectWorkspace(workspace)
+    }
+  }
+
+  return (
+    <>
+      <View style={{ alignItems: "center", gap: 14, paddingHorizontal: 6, paddingVertical: 24, position: "relative", width: "100%" }}>
+        <Image
+          accessibilityIgnoresInvertColors
+          source={require("../../assets/icon.png")}
+          style={{
+            borderRadius: 16,
+            height: 58,
+            width: 58,
+          }}
+        />
+        <Pressable
+          accessibilityHint={t("connection.selectProject")}
+          accessibilityLabel={conversationLabel}
+          accessibilityRole="button"
+          disabled={disabled}
+          onPress={() => setWorkspacePickerVisible(true)}
+          style={({ pressed }) => ({
+            alignItems: "center",
+            borderRadius: 12,
+            flexDirection: "row",
+            gap: 6,
+            justifyContent: "center",
+            maxWidth: "100%",
+            opacity: disabled ? 0.55 : pressed ? 0.68 : 1,
+            paddingHorizontal: 10,
+            paddingVertical: 6,
+          })}
+        >
+          <Text
+            numberOfLines={2}
+            style={{ color: "#f1f1f1", flexShrink: 1, fontSize: 22, fontWeight: "900", lineHeight: 28, textAlign: "center" }}
+          >
+            {conversationLabel}
+          </Text>
+          <Feather color="#a9a9a9" name="chevron-down" size={18} />
+        </Pressable>
+        {toastVisible ? <NewSessionToast label={toastLabel} /> : null}
+      </View>
+      <WorkspacePickerModal
+        currentWorkspaceID={currentWorkspace.id}
+        onClose={() => setWorkspacePickerVisible(false)}
+        onSelectWorkspace={handleSelectWorkspace}
+        visible={workspacePickerVisible}
+        workspaces={workspaces}
+      />
+    </>
+  )
+}
+
+function WorkspacePickerModal({
+  currentWorkspaceID,
+  onClose,
+  onSelectWorkspace,
+  visible,
+  workspaces,
+}: {
+  currentWorkspaceID: string
+  onClose: () => void
+  onSelectWorkspace: (workspace: MobileWorkspace) => void
+  visible: boolean
+  workspaces: MobileWorkspace[]
 }) {
   const { t } = useI18n()
 
   return (
-    <View style={{ alignItems: "center", gap: 14, paddingHorizontal: 6, paddingVertical: 24, position: "relative", width: "100%" }}>
-      <Image
-        accessibilityIgnoresInvertColors
-        source={require("../../assets/icon.png")}
-        style={{
-          borderRadius: 16,
-          height: 58,
-          width: 58,
-        }}
-      />
-      <Text selectable style={{ color: "#f1f1f1", fontSize: 25, fontWeight: "900", lineHeight: 31, textAlign: "center" }}>
-        {t("thread.startConversation")}
-      </Text>
-      {toastVisible ? <NewSessionToast label={toastLabel} /> : null}
-    </View>
+    <Modal animationType="fade" onRequestClose={onClose} statusBarTranslucent transparent visible={visible}>
+      <View style={{ alignItems: "center", backgroundColor: "rgba(0, 0, 0, 0.62)", flex: 1, justifyContent: "center", padding: 22 }}>
+        <Pressable
+          accessibilityLabel={t("app.cancel")}
+          onPress={onClose}
+          style={{ bottom: 0, left: 0, position: "absolute", right: 0, top: 0 }}
+        />
+        <View
+          style={{
+            backgroundColor: "#242424",
+            borderColor: "#3a3a3a",
+            borderRadius: 20,
+            borderWidth: 1,
+            maxHeight: "68%",
+            maxWidth: 380,
+            overflow: "hidden",
+            padding: 12,
+            shadowColor: "#000000",
+            shadowOpacity: 0.34,
+            shadowRadius: 18,
+            width: "100%",
+          }}
+        >
+          <View style={{ alignItems: "center", flexDirection: "row", minHeight: 42, paddingBottom: 8, paddingHorizontal: 4 }}>
+            <Text style={{ color: "#f2f2f2", flex: 1, fontSize: 18, fontWeight: "900" }}>
+              {t("connection.selectProject")}
+            </Text>
+            <Pressable
+              accessibilityLabel={t("app.cancel")}
+              accessibilityRole="button"
+              onPress={onClose}
+              style={({ pressed }) => ({
+                alignItems: "center",
+                borderRadius: 10,
+                height: 34,
+                justifyContent: "center",
+                opacity: pressed ? 0.62 : 1,
+                width: 34,
+              })}
+            >
+              <Feather color="#d6d6d6" name="x" size={20} />
+            </Pressable>
+          </View>
+          <ScrollView
+            contentContainerStyle={{ gap: 4 }}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {workspaces.map((workspace) => {
+              const selected = workspace.id === currentWorkspaceID
+              return (
+                <Pressable
+                  accessibilityLabel={workspace.name}
+                  accessibilityRole="button"
+                  key={workspace.id}
+                  onPress={() => onSelectWorkspace(workspace)}
+                  style={({ pressed }) => ({
+                    alignItems: "center",
+                    backgroundColor: selected ? "#343434" : pressed ? "#2d2d2d" : "transparent",
+                    borderRadius: 12,
+                    flexDirection: "row",
+                    gap: 11,
+                    minHeight: 50,
+                    paddingHorizontal: 12,
+                  })}
+                >
+                  <Feather color={selected ? "#f2f2f2" : "#a9a9a9"} name="folder" size={18} />
+                  <Text
+                    numberOfLines={2}
+                    style={{ color: selected ? "#ffffff" : "#d6d6d6", flex: 1, fontSize: 15, fontWeight: selected ? "900" : "700" }}
+                  >
+                    {workspace.name}
+                  </Text>
+                  {selected ? <Feather color="#74d58b" name="check" size={18} /> : null}
+                </Pressable>
+              )
+            })}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
   )
 }
 
@@ -813,8 +985,10 @@ function ThreadComposer({
   modelError,
   modelOptions,
   modelSelectionEnabled,
+  modelPanelOpen,
   modelsLoading,
   onChangeText,
+  onModelPanelOpenChange,
   onModelSelect,
   onSend,
   placeholder,
@@ -828,8 +1002,10 @@ function ThreadComposer({
   modelError: string | null
   modelOptions: MobileProviderModel[]
   modelSelectionEnabled: boolean
+  modelPanelOpen: boolean
   modelsLoading: boolean
   onChangeText: (value: string) => void
+  onModelPanelOpenChange: (open: boolean) => void
   onModelSelect: (modelValue: string | null) => void
   onSend: () => void
   placeholder: string
@@ -838,7 +1014,6 @@ function ThreadComposer({
   sending: boolean
 }) {
   const { t } = useI18n()
-  const [modelPanelOpen, setModelPanelOpen] = React.useState(false)
   const selectedModelOption = React.useMemo(
     () => modelOptions.find((model) => modelValue(model) === selectedModel) ?? null,
     [modelOptions, selectedModel],
@@ -847,12 +1022,12 @@ function ThreadComposer({
   const modelButtonDisabled = !modelSelectionEnabled || modelsLoading || Boolean(savingModel)
 
   function selectModel(value: string | null) {
-    setModelPanelOpen(false)
+    onModelPanelOpenChange(false)
     onModelSelect(value)
   }
 
   return (
-    <View style={{ backgroundColor: "#171717", paddingHorizontal: 14, paddingTop: 10 }}>
+    <View style={{ backgroundColor: "#171717", paddingHorizontal: 14, paddingTop: 10, position: "relative", zIndex: 2 }}>
       <View
         style={{
           backgroundColor: "#262626",
@@ -940,7 +1115,7 @@ function ThreadComposer({
             open={modelPanelOpen}
             onPress={() => {
               if (modelButtonDisabled && !modelPanelOpen) return
-              setModelPanelOpen((current) => !current)
+              onModelPanelOpenChange(!modelPanelOpen)
             }}
           />
           <View style={{ flexDirection: "row", gap: 14 }}>
@@ -997,7 +1172,6 @@ function ModelSelectorButton({
         paddingVertical: 5,
       })}
     >
-      <Feather color="#cfcfcf" name="cpu" size={15} />
       <Text numberOfLines={1} style={{ color: "#cfcfcf", flexShrink: 1, fontSize: 12, fontWeight: "800" }}>
         {label}
       </Text>

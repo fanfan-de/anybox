@@ -216,7 +216,7 @@ export const frFR = {
   "thread.loadingSession": "Chargement de la session",
   "thread.noMessages": "Aucun message",
   "thread.readyInWorkspace": "Prêt dans {workspace}. Envoyez une tâche pour créer une session ciblée.",
-  "thread.startConversation": "Commencer à discuter",
+  "thread.startConversation": "Démarrer une conversation dans {workspace}",
   "thread.reasoning": "Raisonnement",
   "thread.reasoningActive": "Raisonnement",
   "thread.reasoningComplete": "Raisonné",

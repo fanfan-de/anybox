@@ -73,12 +73,6 @@
 
 .sidebar {
   --left-sidebar-button-radius: 8px;
-  --left-sidebar-button-surface: transparent;
-  --left-sidebar-button-surface-hover: var(--semantic-sidebar-tree-row-surface-hover);
-  --left-sidebar-button-surface-active: var(--semantic-sidebar-tree-row-surface-active);
-  --left-sidebar-button-text: var(--semantic-sidebar-tree-row-text);
-  --left-sidebar-button-text-hover: var(--semantic-sidebar-tree-row-text-hover);
-  --left-sidebar-button-text-active: var(--semantic-sidebar-tree-row-text-active);
   grid-column: 2;
   min-height: 0;
   min-width: 0;
@@ -361,8 +355,8 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   top: -4px;
   bottom: 50%;
   width: 10px;
-  border-left: 1px solid var(--semantic-sidebar-tree-row-surface-hover);
-  border-bottom: 1px solid var(--semantic-sidebar-tree-row-surface-hover);
+  border-left: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
   border-bottom-left-radius: 6px;
   pointer-events: none;
 }
@@ -383,7 +377,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   box-shadow: none;
   text-align: left;
   background: transparent;
-  color: #617181;
+  color: var(--semantic-sidebar-tree-row-text);
   cursor: pointer;
   transition:
     background 160ms ease,
@@ -395,8 +389,8 @@ body.is-resizing-sidebar .sidebar-resizer::before {
 .session-row:hover,
 .session-row:focus-visible {
   border-color: transparent;
-  background: rgba(84, 96, 109, 0.08);
-  color: #20303e;
+  background: var(--semantic-sidebar-tree-row-surface-hover);
+  color: var(--semantic-sidebar-tree-row-text-hover);
   box-shadow: none;
   outline: none;
 }
@@ -407,8 +401,8 @@ body.is-resizing-sidebar .sidebar-resizer::before {
 .project-row:focus-visible,
 .session-row:focus-within {
   border-color: transparent;
-  background: rgba(84, 96, 109, 0.08);
-  color: #20303e;
+  background: var(--semantic-sidebar-tree-row-surface-hover);
+  color: var(--semantic-sidebar-tree-row-text-hover);
   box-shadow: none;
   outline: none;
 }
@@ -505,7 +499,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   font-size: 11px;
   line-height: 1.2;
   letter-spacing: 0.02em;
-  color: #7b8b99;
+  color: var(--text-tertiary);
 }
 
 .project-row-meta-label {
@@ -525,13 +519,13 @@ body.is-resizing-sidebar .sidebar-resizer::before {
 }
 
 .project-row-status.is-missing {
-  background: #f6dede;
-  color: #9b2d30;
+  background: var(--semantic-error-surface);
+  color: var(--semantic-error-text);
 }
 
 .project-row:hover .project-row-meta,
 .project-row:focus-visible .project-row-meta {
-  color: #567086;
+  color: var(--text-secondary);
 }
 
 .ui-context-menu {
@@ -539,8 +533,8 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   --context-menu-border: var(--seg-border, var(--border-default, rgba(17, 24, 39, 0.12)));
   --context-menu-text: var(--seg-text-1, var(--text-primary, #1f2937));
   --context-menu-muted: var(--seg-text-2, var(--text-secondary, #6b7280));
-  --context-menu-hover: var(--semantic-sidebar-tree-row-surface-hover, rgba(17, 24, 39, 0.06));
-  --context-menu-hover-text: var(--semantic-sidebar-tree-row-text-hover, var(--context-menu-text));
+  --context-menu-hover: var(--surface-panel-muted);
+  --context-menu-hover-text: var(--text-primary);
   --context-menu-danger-text: var(--semantic-error-text, var(--seg-danger-text, #b42318));
   --context-menu-danger-hover: var(--semantic-error-surface, var(--seg-danger-surface, rgba(180, 35, 24, 0.08)));
   --context-menu-radius: var(--semantic-dropdown-menu-radius, var(--seg-radius-md, calc(var(--seg-radius-xs, 6px) + 2px)));
@@ -715,8 +709,8 @@ body.is-resizing-sidebar .sidebar-resizer::before {
 
 .project-worktree-create-close:hover,
 .project-worktree-create-close:focus-visible {
-  background: var(--semantic-sidebar-tree-row-surface-hover, rgba(17, 24, 39, 0.08));
-  color: var(--seg-text-1, #1f2937);
+  background: var(--semantic-icon-button-surface-hover);
+  color: var(--semantic-icon-button-text-hover);
 }
 
 .project-worktree-create-close:disabled {
@@ -735,10 +729,10 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   width: 100%;
   min-height: 48px;
   padding: 0 12px;
-  border: 1px solid var(--seg-border, rgba(17, 24, 39, 0.14));
+  border: 1px solid var(--semantic-sidebar-inline-edit-border);
   border-radius: 8px;
-  background: var(--seg-panel, #ffffff);
-  color: var(--seg-text-1, #1f2937);
+  background: var(--semantic-sidebar-inline-edit-surface);
+  color: var(--semantic-sidebar-inline-edit-text);
   font-family: var(--font-sans);
   font-size: 20px;
   line-height: 1.2;
@@ -746,8 +740,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
 
 .project-worktree-create-input:focus-visible {
   outline: none;
-  border-color: var(--mix-seg-accent-42-seg-border-58, rgba(99, 102, 241, 0.48));
-  box-shadow: 0 0 0 3px var(--mix-seg-accent-12-transparent-88, rgba(99, 102, 241, 0.14));
+  border-color: var(--semantic-sidebar-inline-edit-border-focus);
 }
 
 .project-worktree-create-error {
@@ -925,7 +918,6 @@ body.is-resizing-sidebar .sidebar-resizer::before {
 
 .session-row.is-subagent {
   min-height: 30px;
-  color: var(--seg-text-2);
 }
 
 .session-row-copy {
@@ -1064,6 +1056,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   white-space: nowrap;
   font-size: 13px;
   font-weight: 500;
+  color: inherit;
 }
 
 .session-row-source-badge {
@@ -1093,8 +1086,8 @@ body.is-resizing-sidebar .sidebar-resizer::before {
 
 .session-row.is-active {
   border-color: transparent;
-  color: var(--seg-accent-strong);
-  background: var(--mix-seg-accent-soft-84-transparent-16);
+  color: var(--semantic-sidebar-tree-row-text-active);
+  background: var(--semantic-sidebar-tree-row-surface-active);
   box-shadow: none;
 }
 
@@ -1234,8 +1227,8 @@ body.is-resizing-sidebar .sidebar-resizer::before {
 
 .skills-tree-search-row button:hover,
 .skills-tree-search-row button:focus-visible {
-  background: var(--semantic-sidebar-tree-row-surface-hover);
-  color: var(--semantic-sidebar-tree-row-text-hover);
+  background: var(--semantic-icon-button-surface-hover);
+  color: var(--semantic-icon-button-text-hover);
   outline: none;
 }
 
@@ -1249,16 +1242,15 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   width: 100%;
   min-height: 34px;
   padding: 0 10px;
-  border: 1px solid rgba(166, 186, 208, 0.5);
+  border: 1px solid var(--semantic-sidebar-inline-edit-border);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.94);
-  color: #1f2f3d;
+  background: var(--semantic-sidebar-inline-edit-surface);
+  color: var(--semantic-sidebar-inline-edit-text);
   outline: none;
 }
 
 .skills-create-input:focus-visible {
-  border-color: var(--mix-seg-accent-42-seg-border-58);
-  box-shadow: 0 0 0 3px var(--mix-seg-accent-12-transparent-88);
+  border-color: var(--semantic-sidebar-inline-edit-border-focus);
 }
 
 .skills-create-actions {
@@ -1323,7 +1315,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: #50657a;
+  color: var(--semantic-sidebar-tree-row-text);
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -1332,14 +1324,14 @@ body.is-resizing-sidebar .sidebar-resizer::before {
 
 .skill-tree-row:hover,
 .skill-tree-row:focus-visible {
-  background: rgba(84, 96, 109, 0.08);
-  color: #20303e;
+  background: var(--semantic-sidebar-tree-row-surface-hover);
+  color: var(--semantic-sidebar-tree-row-text-hover);
   outline: none;
 }
 
 .skill-tree-row.is-active {
-  background: var(--mix-seg-accent-soft-84-transparent-16);
-  color: var(--seg-accent-strong);
+  background: var(--semantic-sidebar-tree-row-surface-active);
+  color: var(--semantic-sidebar-tree-row-text-active);
 }
 
 .skill-tree-leading {
@@ -1358,15 +1350,15 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   align-items: center;
   justify-content: center;
   flex: 0 0 16px;
-  color: var(--seg-text-3);
+  color: inherit;
 }
 
 .skill-tree-role-icon.is-folder {
-  color: #5f7488;
+  color: inherit;
 }
 
 .skill-tree-role-icon.is-skill {
-  color: var(--seg-accent-strong);
+  color: inherit;
 }
 
 .skill-tree-leading svg,
@@ -1395,8 +1387,8 @@ body.is-resizing-sidebar .sidebar-resizer::before {
 }
 
 .skill-tree-row-action.is-open {
-  background: var(--mix-seg-accent-soft-68-seg-panel-32);
-  color: var(--seg-accent-strong);
+  background: var(--semantic-icon-button-surface-active);
+  color: var(--semantic-icon-button-text-active);
 }
 
 .skill-tree-menu-shell {
@@ -1418,7 +1410,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   gap: 8px;
   padding: 0 8px;
   border-radius: 8px;
-  background: var(--mix-seg-accent-soft-72-transparent-28);
+  background: var(--semantic-sidebar-inline-edit-surface);
 }
 
 .skill-tree-rename-input {
@@ -1426,16 +1418,15 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   min-width: 0;
   min-height: 28px;
   padding: 0 8px;
-  border: 1px solid var(--mix-seg-accent-24-seg-border-76);
+  border: 1px solid var(--semantic-sidebar-inline-edit-border);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.96);
-  color: var(--seg-accent-strong);
+  background: var(--semantic-sidebar-inline-edit-surface);
+  color: var(--semantic-sidebar-inline-edit-text);
   outline: none;
 }
 
 .skill-tree-rename-input:focus-visible {
-  border-color: var(--mix-seg-accent-42-seg-border-58);
-  box-shadow: 0 0 0 3px var(--mix-seg-accent-12-transparent-88);
+  border-color: var(--semantic-sidebar-inline-edit-border-focus);
 }
 
 .sidebar-settings {
@@ -1443,8 +1434,8 @@ body.is-resizing-sidebar .sidebar-resizer::before {
 }
 
 .sidebar-settings.is-active {
-  background: var(--mix-seg-accent-soft-84-transparent-16);
-  color: var(--seg-accent-strong);
+  background: var(--semantic-icon-button-surface-active);
+  color: var(--semantic-icon-button-text-active);
 }
 
 .sidebar-toggle-button.is-top-menu svg {
@@ -1488,7 +1479,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   color: inherit;
 }
 
-/* Sage / Teal & Slate theme overrides */
+/* Semantic sidebar interaction states */
 
 .sidebar-action,
 .sidebar-toggle-button.is-sidebar,
@@ -1538,10 +1529,6 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   color: var(--semantic-sidebar-tree-row-text);
 }
 
-.session-row:not(.is-active) .session-row-label {
-  color: var(--text-primary);
-}
-
 .project-row:hover,
 .project-row:focus-visible,
 .session-row:hover,
@@ -1552,6 +1539,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   color: var(--semantic-sidebar-tree-row-text-hover);
 }
 
+.project-row.is-active,
 .session-row.is-active,
 .skill-tree-row.is-active {
   background: var(--semantic-sidebar-tree-row-surface-active);
@@ -1560,22 +1548,15 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   box-shadow: none;
 }
 
-.skill-tree-row.is-active .skill-tree-leading {
+.project-row.is-active .project-row-leading,
+.skill-tree-row.is-active .skill-tree-leading,
+.skill-tree-row.is-active .skill-tree-role-icon {
   color: var(--semantic-sidebar-tree-row-leading-active);
 }
 
 .skill-tree-row.is-active .skill-tree-label {
   color: inherit;
   font-weight: 650;
-}
-
-.skill-tree-row.is-read-only {
-  color: var(--seg-text-2);
-}
-
-.skill-tree-row.is-read-only:not(.is-active):hover,
-.skill-tree-row.is-read-only:not(.is-active):focus-visible {
-  color: var(--semantic-sidebar-tree-row-text-hover);
 }
 
 .skill-tree-source-badge {
@@ -1591,140 +1572,8 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   text-transform: uppercase;
 }
 
-.skill-tree-row.has-leading-disclosure {
-  position: relative;
-  background: transparent;
-}
-
-.skill-tree-row.has-leading-disclosure::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 0 34px;
-  border-radius: 8px;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.skill-tree-row.has-leading-disclosure > * {
-  position: relative;
-  z-index: 1;
-}
-
-.skill-tree-row.has-leading-disclosure:hover,
-.skill-tree-row.has-leading-disclosure:focus-visible {
-  background: transparent;
-}
-
-.skill-tree-row.has-leading-disclosure:hover::before,
-.skill-tree-row.has-leading-disclosure:focus-visible::before {
-  background: var(--semantic-sidebar-tree-row-surface-hover);
-  opacity: 1;
-}
-
 .project-row-meta,
 .session-row-meta,
 .skill-tree-row-meta {
   color: var(--seg-text-3);
-}
-
-.sidebar .sidebar-view-host .global-skills-open-folder-button,
-.sidebar .sidebar-view-host .global-skills-install-button {
-  min-height: 32px;
-  padding: 0 10px;
-  border: 1px solid transparent;
-  border-radius: var(--left-sidebar-button-radius);
-  background: var(--left-sidebar-button-surface);
-  box-shadow: none;
-  color: var(--left-sidebar-button-text);
-  transform: none;
-}
-
-.sidebar .sidebar-view-host .global-skills-new-button,
-.sidebar .sidebar-view-host .mcp-servers-new-button,
-.sidebar .sidebar-view-host .skills-tree-search-row button {
-  min-height: 32px;
-  border: 1px solid transparent;
-  border-radius: var(--left-sidebar-button-radius);
-  background: var(--left-sidebar-button-surface);
-  box-shadow: none;
-  color: var(--left-sidebar-button-text);
-  transform: none;
-}
-
-.sidebar .sidebar-view-host .skill-tree-row,
-.sidebar .sidebar-view-host .mcp-server-sidebar-row,
-.sidebar .sidebar-view-host .sidebar-view-tools .tools-category-item {
-  min-height: 32px;
-  padding: 0 8px;
-  border: 1px solid transparent;
-  border-radius: var(--left-sidebar-button-radius);
-  background: var(--left-sidebar-button-surface);
-  box-shadow: none;
-  color: var(--left-sidebar-button-text);
-  transform: none;
-}
-
-.sidebar .sidebar-view-host .global-skills-open-folder-button:hover,
-.sidebar .sidebar-view-host .global-skills-open-folder-button:focus-visible,
-.sidebar .sidebar-view-host .global-skills-install-button:hover,
-.sidebar .sidebar-view-host .global-skills-install-button:focus-visible,
-.sidebar .sidebar-view-host .global-skills-install-button.is-open,
-.sidebar .sidebar-view-host .global-skills-new-button:hover,
-.sidebar .sidebar-view-host .global-skills-new-button:focus-visible,
-.sidebar .sidebar-view-host .global-skills-new-button.is-open,
-.sidebar .sidebar-view-host .mcp-servers-new-button:hover,
-.sidebar .sidebar-view-host .mcp-servers-new-button:focus-visible,
-.sidebar .sidebar-view-host .skills-tree-search-row button:hover,
-.sidebar .sidebar-view-host .skills-tree-search-row button:focus-visible,
-.sidebar .sidebar-view-host .skill-tree-row:hover,
-.sidebar .sidebar-view-host .skill-tree-row:focus-visible,
-.sidebar .sidebar-view-host .mcp-server-sidebar-row:hover,
-.sidebar .sidebar-view-host .mcp-server-sidebar-row:focus-visible,
-.sidebar .sidebar-view-host .sidebar-view-tools .tools-category-item:hover,
-.sidebar .sidebar-view-host .sidebar-view-tools .tools-category-item:focus-visible {
-  border-color: transparent;
-  background: var(--left-sidebar-button-surface-hover);
-  box-shadow: none;
-  color: var(--left-sidebar-button-text-hover);
-  transform: none;
-}
-
-.sidebar .sidebar-view-host .global-skills-new-button.is-active,
-.sidebar .sidebar-view-host .mcp-servers-new-button.is-active,
-.sidebar .sidebar-view-host .skill-tree-row.is-active,
-.sidebar .sidebar-view-host .mcp-server-sidebar-row.is-active,
-.sidebar .sidebar-view-host .sidebar-view-tools .tools-category-item.is-active {
-  border-color: transparent;
-  background: var(--left-sidebar-button-surface-active);
-  box-shadow: none;
-  color: var(--left-sidebar-button-text-active);
-  transform: none;
-}
-
-.sidebar .sidebar-view-host .mcp-server-sidebar-name,
-.sidebar .sidebar-view-host .mcp-server-sidebar-row:hover .mcp-server-sidebar-name,
-.sidebar .sidebar-view-host .mcp-server-sidebar-row:focus-visible .mcp-server-sidebar-name,
-.sidebar .sidebar-view-host .mcp-server-sidebar-row.is-active .mcp-server-sidebar-name {
-  color: inherit;
-}
-
-.sidebar .sidebar-view-host .global-skills-open-folder-button:focus-visible,
-.sidebar .sidebar-view-host .global-skills-install-button:focus-visible,
-.sidebar .sidebar-view-host .global-skills-new-button:focus-visible,
-.sidebar .sidebar-view-host .mcp-servers-new-button:focus-visible,
-.sidebar .sidebar-view-host .skills-tree-search-row button:focus-visible,
-.sidebar .sidebar-view-host .skill-tree-row:focus-visible,
-.sidebar .sidebar-view-host .mcp-server-sidebar-row:focus-visible,
-.sidebar .sidebar-view-host .sidebar-view-tools .tools-category-item:focus-visible {
-  outline: var(--focus-outline-width) solid var(--focus-outline-color);
-  outline-offset: -1px;
-}
-
-.sidebar .sidebar-view-host .global-skills-open-folder-button:disabled,
-.sidebar .sidebar-view-host .global-skills-install-button:disabled,
-.sidebar .sidebar-view-host .global-skills-new-button:disabled,
-.sidebar .sidebar-view-host .mcp-servers-new-button:disabled,
-.sidebar .sidebar-view-host .skills-tree-search-row button:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
 }

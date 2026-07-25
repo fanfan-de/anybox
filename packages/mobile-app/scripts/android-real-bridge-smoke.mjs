@@ -2,6 +2,10 @@ import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs"
 import path from "node:path"
 import { spawnSync } from "node:child_process"
 import { fileURLToPath } from "node:url"
+import {
+  resolveAnyboxMobileScheme,
+  rewriteAnyboxMobileScheme,
+} from "./lib/android-development.mjs"
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const defaultApkPath = path.join(packageRoot, "build", "anybox-mobile-debug.apk")
@@ -37,6 +41,7 @@ function usage() {
     "  --handoff <path>       Desktop handoff JSON path. Defaults to %APPDATA%/anybox-desktop-agent/mobile-bridge-handoff.json.",
     "  --apk <path>           APK path. Defaults to build/anybox-mobile-debug.apk.",
     "  --package <name>       Android application ID.",
+    "  --scheme <scheme>      Deep-link scheme: anybox-mobile or anybox-mobile-dev.",
     "  --screenshot <path>    Local screenshot output path.",
     "  --wait <seconds>       Max seconds to wait for connected Home UI. Defaults to 45.",
     "  --android-host <host>   Hostname/IP used only inside the Android deep link.",
@@ -66,6 +71,7 @@ function parseArgs(argv) {
     noAdbReverse: false,
     noEmulatorRewrite: false,
     packageName: defaultPackageName,
+    scheme: "anybox-mobile",
     replaceExisting: false,
     screenshot: defaultScreenshotPath,
     skipPreflight: false,
@@ -93,6 +99,9 @@ function parseArgs(argv) {
       index += 1
     } else if (value === "--package") {
       args.packageName = argv[index + 1] ?? args.packageName
+      index += 1
+    } else if (value === "--scheme") {
+      args.scheme = argv[index + 1] ?? args.scheme
       index += 1
     } else if (value === "--screenshot") {
       args.screenshot = path.resolve(argv[index + 1] ?? args.screenshot)
@@ -206,7 +215,7 @@ function readBridgeUrlFromConnectDeepLink(value) {
   try {
     const parsed = new URL(value.trim())
     const route = parsed.hostname || parsed.pathname.replace(/^\/+/, "")
-    if (parsed.protocol !== "anybox-mobile:" || route !== "connect") return null
+    if (!isAnyboxMobileProtocol(parsed.protocol) || route !== "connect") return null
     return parsed.searchParams.get("url")?.trim() || null
   } catch {
     return null
@@ -217,7 +226,7 @@ function readRelayPairingFromDeepLink(value) {
   try {
     const parsed = new URL(value.trim())
     const route = parsed.hostname || parsed.pathname.replace(/^\/+/, "")
-    if (parsed.protocol !== "anybox-mobile:" || route !== "pair") return null
+    if (!isAnyboxMobileProtocol(parsed.protocol) || route !== "pair") return null
     const code = parsed.searchParams.get("code")?.trim() ?? ""
     const baseUrl = parsed.searchParams.get("url")?.trim() || "https://anybox.com.cn"
     return code ? { baseUrl: new URL(baseUrl).origin, code, deepLink: value.trim() } : null
@@ -230,7 +239,7 @@ function readConnectionOptionsFromDeepLink(value) {
   try {
     const parsed = new URL(value.trim())
     const route = parsed.hostname || parsed.pathname.replace(/^\/+/, "")
-    if (parsed.protocol !== "anybox-mobile:" || route !== "connect-options") return null
+    if (!isAnyboxMobileProtocol(parsed.protocol) || route !== "connect-options") return null
 
     const options = [
       parsed.searchParams.get("relay")?.trim(),
@@ -273,12 +282,16 @@ function reverseBridgePort(port) {
   console.log(`adb reverse: tcp:${port} -> tcp:${port}`)
 }
 
-function normalizeBridgeInput(input, token) {
+function isAnyboxMobileProtocol(protocol) {
+  return protocol === "anybox-mobile:" || protocol === "anybox-mobile-dev:"
+}
+
+function normalizeBridgeInput(input, token, scheme) {
   const trimmed = input.trim()
   if (!trimmed) throw new Error("Bridge URL is required. Pass --url or set MOBILE_BRIDGE_URL.")
   const connectionOptions = readConnectionOptionsFromDeepLink(trimmed)
   if (connectionOptions) {
-    return normalizeBridgeInput(connectionOptions[0], token)
+    return normalizeBridgeInput(connectionOptions[0], token, scheme)
   }
 
   const relayPairing = readRelayPairingFromDeepLink(trimmed)
@@ -288,7 +301,7 @@ function normalizeBridgeInput(input, token) {
       baseUrl: relayPairing.baseUrl,
       code: relayPairing.code,
       bridgeUrl: relayPairing.baseUrl,
-      deepLink: relayPairing.deepLink,
+      deepLink: rewriteAnyboxMobileScheme(relayPairing.deepLink, scheme),
     }
   }
 
@@ -299,7 +312,7 @@ function normalizeBridgeInput(input, token) {
       kind: "bridge",
       baseUrl: new URL(url).origin,
       bridgeUrl: url,
-      deepLink: `anybox-mobile://connect?url=${encodeURIComponent(url)}`,
+      deepLink: `${scheme}://connect?url=${encodeURIComponent(url)}`,
     }
   }
   const candidate = /^[a-z][a-z\d+\-.]*:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`
@@ -308,7 +321,7 @@ function normalizeBridgeInput(input, token) {
     kind: "bridge",
     baseUrl: new URL(url).origin,
     bridgeUrl: url,
-    deepLink: `anybox-mobile://connect?url=${encodeURIComponent(url)}`,
+    deepLink: `${scheme}://connect?url=${encodeURIComponent(url)}`,
   }
 }
 
@@ -316,7 +329,7 @@ function prepareAndroidBridgeInput(bridgeInput, args, device) {
   if (bridgeInput.kind === "relay") {
     return {
       ...bridgeInput,
-      deepLink: `anybox-mobile://connect?url=${encodeURIComponent(bridgeInput.deepLink)}`,
+      deepLink: `${args.scheme}://connect?url=${encodeURIComponent(bridgeInput.deepLink)}`,
     }
   }
 
@@ -342,7 +355,7 @@ function prepareAndroidBridgeInput(bridgeInput, args, device) {
   return {
     ...bridgeInput,
     androidBridgeUrl,
-    deepLink: `anybox-mobile://connect?url=${encodeURIComponent(androidBridgeUrl)}`,
+    deepLink: `${args.scheme}://connect?url=${encodeURIComponent(androidBridgeUrl)}`,
   }
 }
 
@@ -521,19 +534,24 @@ async function main() {
     console.log(usage())
     return
   }
+  args.scheme = resolveAnyboxMobileScheme(args.scheme)
 
   if (!args.url.trim()) {
     args.url = readHandoffUrl(args.handoff)
     if (args.url) console.log(`Desktop handoff: ${args.handoff}`)
   }
 
-  const bridgeInput = normalizeBridgeInput(args.url, args.token)
+  const bridgeInput = normalizeBridgeInput(args.url, args.token, args.scheme)
   if (!args.skipPreflight) {
     if (bridgeInput.kind === "relay") await preflightRelayPairing(bridgeInput)
     else await preflightBridgeStatus(bridgeInput.baseUrl)
   }
   const device = requireConnectedDevice()
   const androidBridgeInput = prepareAndroidBridgeInput(bridgeInput, args, device)
+  androidBridgeInput.deepLink = rewriteAnyboxMobileScheme(
+    androidBridgeInput.deepLink,
+    args.scheme,
+  )
   if (!args.skipInstall) {
     assertApkExists(args.apk)
     run("adb", ["install", "-r", args.apk])

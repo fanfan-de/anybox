@@ -119,6 +119,7 @@ function errorMessage(error: unknown, fallback: string) {
 
 export function UpdateCoordinatorProvider({ children }: { children: React.ReactNode }) {
   const { t } = useI18n()
+  const developmentBuild = getCurrentAppInfo().buildProfile === "development"
   const [phase, setPhase] = useState<CoordinatorPhase>("hydrating")
   const [result, setResult] = useState<AppUpdateCheckResult | null>(null)
   const [lastCheckedAt, setLastCheckedAt] = useState<number | null>(null)
@@ -160,6 +161,14 @@ export function UpdateCoordinatorProvider({ children }: { children: React.ReactN
 
   useEffect(() => {
     mountedRef.current = true
+    if (developmentBuild) {
+      forcedRecordRef.current = null
+      optionalDismissRef.current = null
+      setPhase("idle")
+      return () => {
+        mountedRef.current = false
+      }
+    }
     void Promise.all([
       SecureStore.getItemAsync(FORCED_UPDATE_KEY),
       SecureStore.getItemAsync(OPTIONAL_DISMISS_KEY),
@@ -193,7 +202,7 @@ export function UpdateCoordinatorProvider({ children }: { children: React.ReactN
     return () => {
       mountedRef.current = false
     }
-  }, [])
+  }, [developmentBuild])
 
   const shouldShowOptional = useCallback((release: AndroidReleaseManifest) => {
     return shouldShowOptionalUpdate(
@@ -323,16 +332,21 @@ export function UpdateCoordinatorProvider({ children }: { children: React.ReactN
   )
 
   useEffect(() => {
-    if (phase === "hydrating" || initialCheckStartedRef.current) return
+    if (
+      developmentBuild ||
+      phase === "hydrating" ||
+      initialCheckStartedRef.current
+    ) return
     initialCheckStartedRef.current = true
     const timeout = setTimeout(
       () => void checkNow({ manual: true }),
       INITIAL_CHECK_DELAY_MS,
     )
     return () => clearTimeout(timeout)
-  }, [checkNow, phase])
+  }, [checkNow, developmentBuild, phase])
 
   useEffect(() => {
+    if (developmentBuild) return
     let previousState: AppStateStatus = AppState.currentState
     const subscription = AppState.addEventListener("change", (nextState) => {
       const returnedToForeground =
@@ -347,7 +361,7 @@ export function UpdateCoordinatorProvider({ children }: { children: React.ReactN
       }
     })
     return () => subscription.remove()
-  }, [checkNow])
+  }, [checkNow, developmentBuild])
 
   const dismissOptionalUpdate = useCallback(async () => {
     if (!binaryRelease || binaryRequired) return

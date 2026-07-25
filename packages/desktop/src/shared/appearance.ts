@@ -1,3 +1,44 @@
+import {
+  APPEARANCE_TOKEN_NAMES,
+  DEFAULT_APPEARANCE_THEME_DEFINITION,
+  type AppearanceTokenMap,
+  type AppearanceTokenName,
+} from "./appearance-tokens.generated"
+import { normalizeAppearanceTokenValue } from "./appearance-color"
+
+export {
+  APPEARANCE_BRAND_DEFINITIONS,
+  APPEARANCE_BRAND_NAMES,
+  APPEARANCE_CONTRAST_CONTRACTS,
+  APPEARANCE_DTCG_SCHEMA_URL,
+  APPEARANCE_DTCG_VERSION,
+  APPEARANCE_TOKEN_GROUPS,
+  APPEARANCE_TOKEN_LAYERS,
+  APPEARANCE_TOKEN_MANIFEST_VERSION,
+  APPEARANCE_TOKEN_METADATA,
+  APPEARANCE_TOKEN_NAMES,
+  APPEARANCE_TOKEN_DERIVATIONS,
+  APPEARANCE_TOKEN_RUNTIME_MAP,
+  APPEARANCE_TOKEN_TEST_DATA,
+  DTCG_COLOR_SPACES,
+} from "./appearance-tokens.generated"
+export type {
+  AppearanceBrandName,
+  AppearanceContrastContract,
+  AppearanceTokenAlias,
+  AppearanceTokenDerivation,
+  AppearanceTokenGroup,
+  AppearanceTokenLayer,
+  AppearanceTokenLiteral,
+  AppearanceTokenMap,
+  AppearanceTokenMetadata,
+  AppearanceTokenName,
+  AppearanceTokenRow,
+  AppearanceTokenValue,
+  DtcgColorSpace,
+  DtcgColorValue,
+} from "./appearance-tokens.generated"
+
 export type AppearanceColorMode = "system" | "light" | "dark"
 export type AppearanceBrandTheme = "terra" | "sage"
 export type AppearanceFontFamily = "default" | "system" | "segoe" | "microsoft-yahei" | "pingfang"
@@ -9,329 +50,6 @@ export const APPEARANCE_FONT_FAMILIES = [
   "microsoft-yahei",
   "pingfang",
 ] as const satisfies readonly AppearanceFontFamily[]
-
-export const APPEARANCE_TOKEN_NAMES = [
-  "surface-app-light",
-  "surface-app-dark",
-  "surface-shell-light",
-  "surface-shell-dark",
-  "surface-panel-light",
-  "surface-panel-dark",
-  "surface-panel-muted-light",
-  "surface-panel-muted-dark",
-  "surface-sidebar-light",
-  "surface-sidebar-dark",
-  "surface-sidebar-strong-light",
-  "surface-sidebar-strong-dark",
-  "surface-user-bubble-light",
-  "surface-user-bubble-dark",
-  "surface-trace-light",
-  "surface-trace-dark",
-  "surface-elevated-light",
-  "surface-elevated-dark",
-  "surface-overlay-light",
-  "surface-overlay-dark",
-  "surface-code-light",
-  "surface-code-dark",
-  "surface-code-strong-light",
-  "surface-code-strong-dark",
-  "text-primary-light",
-  "text-primary-dark",
-  "text-secondary-light",
-  "text-secondary-dark",
-  "text-tertiary-light",
-  "text-tertiary-dark",
-  "text-on-dark-light",
-  "text-on-dark-dark",
-  "border-subtle-light",
-  "border-subtle-dark",
-  "border-default-light",
-  "border-default-dark",
-  "brand-primary",
-  "brand-primary-dark",
-  "brand-primary-hover",
-  "brand-primary-hover-dark",
-  "brand-accent-highlight",
-  "brand-accent-highlight-dark",
-  "brand-primary-soft",
-  "brand-primary-soft-dark",
-  "brand-primary-soft-strong",
-  "brand-primary-soft-strong-dark",
-  "semantic-accent-icon-light",
-  "semantic-accent-icon-dark",
-  "semantic-accent-icon-hover-light",
-  "semantic-accent-icon-hover-dark",
-  "semantic-accent-icon-active-light",
-  "semantic-accent-icon-active-dark",
-  "semantic-button-primary-surface-light",
-  "semantic-button-primary-surface-dark",
-  "semantic-button-primary-surface-hover-light",
-  "semantic-button-primary-surface-hover-dark",
-  "semantic-button-primary-border-light",
-  "semantic-button-primary-border-dark",
-  "semantic-button-primary-border-hover-light",
-  "semantic-button-primary-border-hover-dark",
-  "semantic-button-primary-text-light",
-  "semantic-button-primary-text-dark",
-  "semantic-button-primary-text-hover-light",
-  "semantic-button-primary-text-hover-dark",
-  "semantic-button-primary-disabled-surface-light",
-  "semantic-button-primary-disabled-surface-dark",
-  "semantic-button-primary-disabled-border-light",
-  "semantic-button-primary-disabled-border-dark",
-  "semantic-button-primary-disabled-text-light",
-  "semantic-button-primary-disabled-text-dark",
-  "semantic-button-secondary-surface-light",
-  "semantic-button-secondary-surface-dark",
-  "semantic-button-secondary-surface-hover-light",
-  "semantic-button-secondary-surface-hover-dark",
-  "semantic-button-secondary-border-light",
-  "semantic-button-secondary-border-dark",
-  "semantic-button-secondary-border-hover-light",
-  "semantic-button-secondary-border-hover-dark",
-  "semantic-button-secondary-text-light",
-  "semantic-button-secondary-text-dark",
-  "semantic-button-secondary-text-hover-light",
-  "semantic-button-secondary-text-hover-dark",
-  "semantic-button-secondary-disabled-surface-light",
-  "semantic-button-secondary-disabled-surface-dark",
-  "semantic-button-secondary-disabled-border-light",
-  "semantic-button-secondary-disabled-border-dark",
-  "semantic-button-secondary-disabled-text-light",
-  "semantic-button-secondary-disabled-text-dark",
-  "semantic-icon-button-text-light",
-  "semantic-icon-button-text-dark",
-  "semantic-icon-button-text-hover-light",
-  "semantic-icon-button-text-hover-dark",
-  "semantic-icon-button-text-active-light",
-  "semantic-icon-button-text-active-dark",
-  "semantic-icon-button-surface-hover-light",
-  "semantic-icon-button-surface-hover-dark",
-  "semantic-icon-button-surface-active-light",
-  "semantic-icon-button-surface-active-dark",
-  "semantic-button-danger-surface-light",
-  "semantic-button-danger-surface-dark",
-  "semantic-button-danger-surface-hover-light",
-  "semantic-button-danger-surface-hover-dark",
-  "semantic-button-danger-border-light",
-  "semantic-button-danger-border-dark",
-  "semantic-button-danger-border-hover-light",
-  "semantic-button-danger-border-hover-dark",
-  "semantic-button-danger-text-light",
-  "semantic-button-danger-text-dark",
-  "semantic-button-danger-text-hover-light",
-  "semantic-button-danger-text-hover-dark",
-  "semantic-button-danger-disabled-surface-light",
-  "semantic-button-danger-disabled-surface-dark",
-  "semantic-button-danger-disabled-border-light",
-  "semantic-button-danger-disabled-border-dark",
-  "semantic-button-danger-disabled-text-light",
-  "semantic-button-danger-disabled-text-dark",
-  "semantic-success-light",
-  "semantic-success-dark",
-  "semantic-success-strong-light",
-  "semantic-success-strong-dark",
-  "semantic-success-text-light",
-  "semantic-success-text-dark",
-  "semantic-success-border-light",
-  "semantic-success-border-dark",
-  "semantic-success-surface-light",
-  "semantic-success-surface-dark",
-  "semantic-success-surface-strong-light",
-  "semantic-success-surface-strong-dark",
-  "semantic-warning-light",
-  "semantic-warning-dark",
-  "semantic-warning-strong-light",
-  "semantic-warning-strong-dark",
-  "semantic-warning-text-light",
-  "semantic-warning-text-dark",
-  "semantic-warning-border-light",
-  "semantic-warning-border-dark",
-  "semantic-warning-surface-light",
-  "semantic-warning-surface-dark",
-  "semantic-warning-surface-strong-light",
-  "semantic-warning-surface-strong-dark",
-  "semantic-error-light",
-  "semantic-error-dark",
-  "semantic-error-strong-light",
-  "semantic-error-strong-dark",
-  "semantic-error-text-light",
-  "semantic-error-text-dark",
-  "semantic-error-border-light",
-  "semantic-error-border-dark",
-  "semantic-error-surface-light",
-  "semantic-error-surface-dark",
-  "semantic-error-surface-strong-light",
-  "semantic-error-surface-strong-dark",
-  "semantic-info-light",
-  "semantic-info-dark",
-  "semantic-info-strong-light",
-  "semantic-info-strong-dark",
-  "semantic-info-text-light",
-  "semantic-info-text-dark",
-  "semantic-info-border-light",
-  "semantic-info-border-dark",
-  "semantic-info-surface-light",
-  "semantic-info-surface-dark",
-  "semantic-info-surface-strong-light",
-  "semantic-info-surface-strong-dark",
-  "semantic-shell-chrome-surface-light",
-  "semantic-shell-chrome-surface-dark",
-  "semantic-terminal-surface-light",
-  "semantic-terminal-surface-dark",
-  "semantic-popup-panel-surface-light",
-  "semantic-popup-panel-surface-dark",
-  "semantic-settings-switch-row-surface-focus-light",
-  "semantic-settings-switch-row-surface-focus-dark",
-  "semantic-settings-switch-track-surface-light",
-  "semantic-settings-switch-track-surface-dark",
-  "semantic-settings-switch-track-border-light",
-  "semantic-settings-switch-track-border-dark",
-  "semantic-settings-switch-track-border-focus-light",
-  "semantic-settings-switch-track-border-focus-dark",
-  "semantic-settings-switch-track-surface-active-light",
-  "semantic-settings-switch-track-surface-active-dark",
-  "semantic-settings-switch-track-border-active-light",
-  "semantic-settings-switch-track-border-active-dark",
-  "semantic-settings-switch-track-surface-disabled-light",
-  "semantic-settings-switch-track-surface-disabled-dark",
-  "semantic-settings-switch-track-border-disabled-light",
-  "semantic-settings-switch-track-border-disabled-dark",
-  "semantic-settings-switch-thumb-surface-light",
-  "semantic-settings-switch-thumb-surface-dark",
-  "semantic-settings-switch-thumb-surface-disabled-light",
-  "semantic-settings-switch-thumb-surface-disabled-dark",
-  "semantic-segmented-control-surface-light",
-  "semantic-segmented-control-surface-dark",
-  "semantic-segmented-control-border-light",
-  "semantic-segmented-control-border-dark",
-  "semantic-segmented-control-item-surface-hover-light",
-  "semantic-segmented-control-item-surface-hover-dark",
-  "semantic-segmented-control-item-surface-active-light",
-  "semantic-segmented-control-item-surface-active-dark",
-  "semantic-segmented-control-item-text-light",
-  "semantic-segmented-control-item-text-dark",
-  "semantic-segmented-control-item-text-hover-light",
-  "semantic-segmented-control-item-text-hover-dark",
-  "semantic-segmented-control-item-text-active-light",
-  "semantic-segmented-control-item-text-active-dark",
-  "semantic-segmented-control-item-meta-text-light",
-  "semantic-segmented-control-item-meta-text-dark",
-  "semantic-segmented-control-item-meta-text-active-light",
-  "semantic-segmented-control-item-meta-text-active-dark",
-  "semantic-segmented-control-item-text-disabled-light",
-  "semantic-segmented-control-item-text-disabled-dark",
-  "semantic-question-card-surface-light",
-  "semantic-question-card-surface-dark",
-  "semantic-proposed-plan-card-surface-light",
-  "semantic-proposed-plan-card-surface-dark",
-  "semantic-thread-response-text-light",
-  "semantic-thread-response-text-dark",
-  "semantic-thread-reasoning-text-light",
-  "semantic-thread-reasoning-text-dark",
-  "semantic-thread-divider-light",
-  "semantic-thread-divider-dark",
-  "semantic-thread-panel-surface-light",
-  "semantic-thread-panel-surface-dark",
-  "semantic-thread-panel-surface-muted-light",
-  "semantic-thread-panel-surface-muted-dark",
-  "semantic-thread-tool-io-panel-surface-light",
-  "semantic-thread-tool-io-panel-surface-dark",
-  "semantic-thread-panel-surface-hover-light",
-  "semantic-thread-panel-surface-hover-dark",
-  "semantic-thread-user-message-diff-card-surface-light",
-  "semantic-thread-user-message-diff-card-surface-dark",
-  "semantic-thread-user-message-diff-card-border-light",
-  "semantic-thread-user-message-diff-card-border-dark",
-  "semantic-thread-user-message-diff-divider-light",
-  "semantic-thread-user-message-diff-divider-dark",
-  "semantic-thread-user-message-diff-row-surface-hover-light",
-  "semantic-thread-user-message-diff-row-surface-hover-dark",
-  "semantic-thread-user-message-diff-row-surface-focus-light",
-  "semantic-thread-user-message-diff-row-surface-focus-dark",
-  "semantic-thread-user-message-diff-preview-surface-light",
-  "semantic-thread-user-message-diff-preview-surface-dark",
-  "semantic-markdown-text-light",
-  "semantic-markdown-text-dark",
-  "semantic-markdown-muted-text-light",
-  "semantic-markdown-muted-text-dark",
-  "semantic-markdown-strong-text-light",
-  "semantic-markdown-strong-text-dark",
-  "semantic-markdown-accent-light",
-  "semantic-markdown-accent-dark",
-  "semantic-markdown-selection-background-light",
-  "semantic-markdown-selection-background-dark",
-  "semantic-markdown-selection-text-light",
-  "semantic-markdown-selection-text-dark",
-  "semantic-markdown-border-light",
-  "semantic-markdown-border-dark",
-  "semantic-markdown-border-strong-light",
-  "semantic-markdown-border-strong-dark",
-  "semantic-markdown-quote-surface-light",
-  "semantic-markdown-quote-surface-dark",
-  "semantic-markdown-inline-code-surface-light",
-  "semantic-markdown-inline-code-surface-dark",
-  "semantic-markdown-table-head-surface-light",
-  "semantic-markdown-table-head-surface-dark",
-  "semantic-markdown-table-row-alt-surface-light",
-  "semantic-markdown-table-row-alt-surface-dark",
-  "semantic-markdown-code-surface-light",
-  "semantic-markdown-code-surface-dark",
-  "semantic-markdown-code-text-light",
-  "semantic-markdown-code-text-dark",
-  "semantic-markdown-code-muted-text-light",
-  "semantic-markdown-code-muted-text-dark",
-  "semantic-markdown-code-border-light",
-  "semantic-markdown-code-border-dark",
-  "semantic-sidebar-tree-row-text-light",
-  "semantic-sidebar-tree-row-text-dark",
-  "semantic-sidebar-tree-row-text-hover-light",
-  "semantic-sidebar-tree-row-text-hover-dark",
-  "semantic-sidebar-tree-row-text-active-light",
-  "semantic-sidebar-tree-row-text-active-dark",
-  "semantic-sidebar-tree-row-surface-hover-light",
-  "semantic-sidebar-tree-row-surface-hover-dark",
-  "semantic-sidebar-tree-row-surface-active-light",
-  "semantic-sidebar-tree-row-surface-active-dark",
-  "semantic-sidebar-tree-row-leading-active-light",
-  "semantic-sidebar-tree-row-leading-active-dark",
-  "semantic-settings-list-detail-row-surface-hover-light",
-  "semantic-settings-list-detail-row-surface-hover-dark",
-  "semantic-composer-surface-light",
-  "semantic-composer-surface-dark",
-  "semantic-composer-border-light",
-  "semantic-composer-border-dark",
-  "semantic-dropdown-menu-surface-light",
-  "semantic-dropdown-menu-surface-dark",
-  "semantic-composer-button-surface-light",
-  "semantic-composer-button-surface-dark",
-  "semantic-composer-button-surface-strong-light",
-  "semantic-composer-button-surface-strong-dark",
-  "semantic-composer-button-text-light",
-  "semantic-composer-button-text-dark",
-  "semantic-composer-button-text-strong-light",
-  "semantic-composer-button-text-strong-dark",
-  "semantic-composer-icon-button-surface-light",
-  "semantic-composer-icon-button-surface-dark",
-  "semantic-composer-icon-button-surface-hover-light",
-  "semantic-composer-icon-button-surface-hover-dark",
-  "semantic-composer-icon-button-text-light",
-  "semantic-composer-icon-button-text-dark",
-  "semantic-composer-icon-button-text-hover-light",
-  "semantic-composer-icon-button-text-hover-dark",
-  "focus-outline-color-light",
-  "focus-outline-color-dark",
-  "selection-background-light",
-  "selection-background-dark",
-  "ui-panel-light",
-  "ui-panel-dark",
-  "ui-panel-subtle-light",
-  "ui-panel-subtle-dark",
-] as const
-
-export type AppearanceTokenName = (typeof APPEARANCE_TOKEN_NAMES)[number]
-
-export type AppearanceTokenMap = Partial<Record<AppearanceTokenName, string>>
 
 export const APPEARANCE_CODE_HIGHLIGHT_THEMES = [
   "github-light",
@@ -380,12 +98,12 @@ export const DEFAULT_APPEARANCE_HTML_BACKGROUND_CONFIG: AppearanceHtmlBackground
 }
 
 export interface AppearanceConfigDocument {
-  version: 1
+  version: 2
   brandTheme: AppearanceBrandTheme
   colorMode: AppearanceColorMode
   fontFamily: AppearanceFontFamily
   overrides: AppearanceTokenMap
-  resolvedTokens: AppearanceTokenMap
+  foreignDtcg: Record<string, unknown>
   updatedAt: number
 }
 
@@ -400,1358 +118,6 @@ export interface AppearanceRuntimeState {
   codeThemePreference: AppearanceCodeThemePreference
   htmlBackgroundConfig: AppearanceHtmlBackgroundConfig
 }
-
-export interface AppearanceTokenRow {
-  id: string
-  label: string
-  description: string
-  lightToken: AppearanceTokenName
-  darkToken: AppearanceTokenName
-}
-
-export type AppearanceTokenLayer = "foundation" | "component" | "product" | "status" | "global"
-
-export const APPEARANCE_TOKEN_LAYERS = [
-  "foundation",
-  "component",
-  "product",
-  "status",
-  "global",
-] as const satisfies readonly AppearanceTokenLayer[]
-
-export interface AppearanceTokenGroup {
-  id: string
-  layer: AppearanceTokenLayer
-  label: string
-  description: string
-  rows: readonly AppearanceTokenRow[]
-}
-
-export const APPEARANCE_TOKEN_GROUPS = [
-  {
-    id: "foundation-surfaces",
-    layer: "foundation",
-    label: "Foundation / Surfaces",
-    description: "Primary app, shell, panel, sidebar, trace, overlay, and code surfaces.",
-    rows: [
-      {
-        id: "surface-app",
-        label: "App Background",
-        description: "The farthest canvas background.",
-        lightToken: "surface-app-light",
-        darkToken: "surface-app-dark",
-      },
-      {
-        id: "surface-shell",
-        label: "Shell Background",
-        description: "Workbench, Dockview, and internal shell containers; excludes the outer window surface.",
-        lightToken: "surface-shell-light",
-        darkToken: "surface-shell-dark",
-      },
-      {
-        id: "surface-panel",
-        label: "Panel Surface",
-        description: "Primary cards and panel bodies.",
-        lightToken: "surface-panel-light",
-        darkToken: "surface-panel-dark",
-      },
-      {
-        id: "surface-panel-muted",
-        label: "Muted Panel",
-        description: "Secondary panel fills and low-emphasis rows.",
-        lightToken: "surface-panel-muted-light",
-        darkToken: "surface-panel-muted-dark",
-      },
-      {
-        id: "surface-sidebar",
-        label: "Sidebar Surface",
-        description: "Left and right sidebar backgrounds.",
-        lightToken: "surface-sidebar-light",
-        darkToken: "surface-sidebar-dark",
-      },
-      {
-        id: "surface-sidebar-strong",
-        label: "Sidebar Strong",
-        description: "Stronger sidebar accents and selected rails.",
-        lightToken: "surface-sidebar-strong-light",
-        darkToken: "surface-sidebar-strong-dark",
-      },
-      {
-        id: "surface-user-bubble",
-        label: "User Bubble",
-        description: "User message bubble background.",
-        lightToken: "surface-user-bubble-light",
-        darkToken: "surface-user-bubble-dark",
-      },
-      {
-        id: "surface-trace",
-        label: "Trace Surface",
-        description: "Trace and tool-call background surface.",
-        lightToken: "surface-trace-light",
-        darkToken: "surface-trace-dark",
-      },
-      {
-        id: "surface-elevated",
-        label: "Elevated Surface",
-        description: "Floating panels, menus, and elevated sheets.",
-        lightToken: "surface-elevated-light",
-        darkToken: "surface-elevated-dark",
-      },
-      {
-        id: "surface-overlay",
-        label: "Overlay",
-        description: "Modal and drag-overlay scrims.",
-        lightToken: "surface-overlay-light",
-        darkToken: "surface-overlay-dark",
-      },
-      {
-        id: "surface-code",
-        label: "Code Surface",
-        description: "Code block and terminal background.",
-        lightToken: "surface-code-light",
-        darkToken: "surface-code-dark",
-      },
-      {
-        id: "surface-code-strong",
-        label: "Code Surface Strong",
-        description: "Deeper code and terminal emphasis surface.",
-        lightToken: "surface-code-strong-light",
-        darkToken: "surface-code-strong-dark",
-      },
-    ],
-  },
-  {
-    id: "foundation-content",
-    layer: "foundation",
-    label: "Foundation / Content",
-    description: "Text and border tokens that define the base contrast system.",
-    rows: [
-      {
-        id: "text-primary",
-        label: "Primary Text",
-        description: "Highest-emphasis copy.",
-        lightToken: "text-primary-light",
-        darkToken: "text-primary-dark",
-      },
-      {
-        id: "text-secondary",
-        label: "Secondary Text",
-        description: "Supporting copy and labels.",
-        lightToken: "text-secondary-light",
-        darkToken: "text-secondary-dark",
-      },
-      {
-        id: "text-tertiary",
-        label: "Muted Text",
-        description: "Low-emphasis helper text.",
-        lightToken: "text-tertiary-light",
-        darkToken: "text-tertiary-dark",
-      },
-      {
-        id: "text-on-dark",
-        label: "Text On Dark",
-        description: "Text placed on dark or brand-heavy fills.",
-        lightToken: "text-on-dark-light",
-        darkToken: "text-on-dark-dark",
-      },
-      {
-        id: "border-subtle",
-        label: "Subtle Border",
-        description: "Low-emphasis separators.",
-        lightToken: "border-subtle-light",
-        darkToken: "border-subtle-dark",
-      },
-      {
-        id: "border-default",
-        label: "Default Border",
-        description: "Standard border color.",
-        lightToken: "border-default-light",
-        darkToken: "border-default-dark",
-      },
-    ],
-  },
-  {
-    id: "accent",
-    layer: "foundation",
-    label: "Accent States",
-    description: "Interactive brand tones that drive button, hover, and active emphasis.",
-    rows: [
-      {
-        id: "brand-primary",
-        label: "Accent Base",
-        description: "Primary accent color.",
-        lightToken: "brand-primary",
-        darkToken: "brand-primary-dark",
-      },
-      {
-        id: "brand-primary-hover",
-        label: "Accent Hover",
-        description: "Hover and stronger accent color.",
-        lightToken: "brand-primary-hover",
-        darkToken: "brand-primary-hover-dark",
-      },
-      {
-        id: "brand-accent-highlight",
-        label: "Accent Active",
-        description: "Active and highlight tone.",
-        lightToken: "brand-accent-highlight",
-        darkToken: "brand-accent-highlight-dark",
-      },
-      {
-        id: "semantic-accent-icon",
-        label: "Icon Rest",
-        description: "Default icon color for accent-driven icon buttons.",
-        lightToken: "semantic-accent-icon-light",
-        darkToken: "semantic-accent-icon-dark",
-      },
-      {
-        id: "semantic-accent-icon-hover",
-        label: "Icon Hover",
-        description: "Hover and focus icon color for accent-driven icon buttons.",
-        lightToken: "semantic-accent-icon-hover-light",
-        darkToken: "semantic-accent-icon-hover-dark",
-      },
-      {
-        id: "semantic-accent-icon-active",
-        label: "Icon Active",
-        description: "Selected and active icon color for accent-driven icon buttons.",
-        lightToken: "semantic-accent-icon-active-light",
-        darkToken: "semantic-accent-icon-active-dark",
-      },
-      {
-        id: "brand-primary-soft",
-        label: "Accent Soft",
-        description: "Soft accent surface used behind active controls.",
-        lightToken: "brand-primary-soft",
-        darkToken: "brand-primary-soft-dark",
-      },
-      {
-        id: "brand-primary-soft-strong",
-        label: "Accent Soft Strong",
-        description: "Stronger soft accent surface.",
-        lightToken: "brand-primary-soft-strong",
-        darkToken: "brand-primary-soft-strong-dark",
-      },
-    ],
-  },
-  {
-    id: "component-buttons",
-    layer: "component",
-    label: "Buttons",
-    description: "Dedicated semantic colors for primary, secondary, and danger action buttons.",
-    rows: [
-      {
-        id: "semantic-button-primary-surface",
-        label: "Primary Surface",
-        description: "Default fill for primary action buttons.",
-        lightToken: "semantic-button-primary-surface-light",
-        darkToken: "semantic-button-primary-surface-dark",
-      },
-      {
-        id: "semantic-button-primary-surface-hover",
-        label: "Primary Surface Hover",
-        description: "Hover and focus fill for primary action buttons.",
-        lightToken: "semantic-button-primary-surface-hover-light",
-        darkToken: "semantic-button-primary-surface-hover-dark",
-      },
-      {
-        id: "semantic-button-primary-border",
-        label: "Primary Border",
-        description: "Default border for primary action buttons.",
-        lightToken: "semantic-button-primary-border-light",
-        darkToken: "semantic-button-primary-border-dark",
-      },
-      {
-        id: "semantic-button-primary-border-hover",
-        label: "Primary Border Hover",
-        description: "Hover and focus border for primary action buttons.",
-        lightToken: "semantic-button-primary-border-hover-light",
-        darkToken: "semantic-button-primary-border-hover-dark",
-      },
-      {
-        id: "semantic-button-primary-text",
-        label: "Primary Text",
-        description: "Default text and icon color for primary action buttons.",
-        lightToken: "semantic-button-primary-text-light",
-        darkToken: "semantic-button-primary-text-dark",
-      },
-      {
-        id: "semantic-button-primary-text-hover",
-        label: "Primary Text Hover",
-        description: "Hover and focus text and icon color for primary action buttons.",
-        lightToken: "semantic-button-primary-text-hover-light",
-        darkToken: "semantic-button-primary-text-hover-dark",
-      },
-      {
-        id: "semantic-button-primary-disabled-surface",
-        label: "Primary Disabled Surface",
-        description: "Disabled fill for primary action buttons.",
-        lightToken: "semantic-button-primary-disabled-surface-light",
-        darkToken: "semantic-button-primary-disabled-surface-dark",
-      },
-      {
-        id: "semantic-button-primary-disabled-border",
-        label: "Primary Disabled Border",
-        description: "Disabled border for primary action buttons.",
-        lightToken: "semantic-button-primary-disabled-border-light",
-        darkToken: "semantic-button-primary-disabled-border-dark",
-      },
-      {
-        id: "semantic-button-primary-disabled-text",
-        label: "Primary Disabled Text",
-        description: "Disabled text and icon color for primary action buttons.",
-        lightToken: "semantic-button-primary-disabled-text-light",
-        darkToken: "semantic-button-primary-disabled-text-dark",
-      },
-      {
-        id: "semantic-button-secondary-surface",
-        label: "Secondary Surface",
-        description: "Default fill for secondary action buttons.",
-        lightToken: "semantic-button-secondary-surface-light",
-        darkToken: "semantic-button-secondary-surface-dark",
-      },
-      {
-        id: "semantic-button-secondary-surface-hover",
-        label: "Secondary Surface Hover",
-        description: "Hover and focus fill for secondary action buttons.",
-        lightToken: "semantic-button-secondary-surface-hover-light",
-        darkToken: "semantic-button-secondary-surface-hover-dark",
-      },
-      {
-        id: "semantic-button-secondary-border",
-        label: "Secondary Border",
-        description: "Default border for secondary action buttons.",
-        lightToken: "semantic-button-secondary-border-light",
-        darkToken: "semantic-button-secondary-border-dark",
-      },
-      {
-        id: "semantic-button-secondary-border-hover",
-        label: "Secondary Border Hover",
-        description: "Hover and focus border for secondary action buttons.",
-        lightToken: "semantic-button-secondary-border-hover-light",
-        darkToken: "semantic-button-secondary-border-hover-dark",
-      },
-      {
-        id: "semantic-button-secondary-text",
-        label: "Secondary Text",
-        description: "Default text and icon color for secondary action buttons.",
-        lightToken: "semantic-button-secondary-text-light",
-        darkToken: "semantic-button-secondary-text-dark",
-      },
-      {
-        id: "semantic-button-secondary-text-hover",
-        label: "Secondary Text Hover",
-        description: "Hover and focus text and icon color for secondary action buttons.",
-        lightToken: "semantic-button-secondary-text-hover-light",
-        darkToken: "semantic-button-secondary-text-hover-dark",
-      },
-      {
-        id: "semantic-button-secondary-disabled-surface",
-        label: "Secondary Disabled Surface",
-        description: "Disabled fill for secondary action buttons.",
-        lightToken: "semantic-button-secondary-disabled-surface-light",
-        darkToken: "semantic-button-secondary-disabled-surface-dark",
-      },
-      {
-        id: "semantic-button-secondary-disabled-border",
-        label: "Secondary Disabled Border",
-        description: "Disabled border for secondary action buttons.",
-        lightToken: "semantic-button-secondary-disabled-border-light",
-        darkToken: "semantic-button-secondary-disabled-border-dark",
-      },
-      {
-        id: "semantic-button-secondary-disabled-text",
-        label: "Secondary Disabled Text",
-        description: "Disabled text and icon color for secondary action buttons.",
-        lightToken: "semantic-button-secondary-disabled-text-light",
-        darkToken: "semantic-button-secondary-disabled-text-dark",
-      },
-      {
-        id: "semantic-button-danger-surface",
-        label: "Danger Surface",
-        description: "Default fill for destructive action buttons.",
-        lightToken: "semantic-button-danger-surface-light",
-        darkToken: "semantic-button-danger-surface-dark",
-      },
-      {
-        id: "semantic-button-danger-surface-hover",
-        label: "Danger Surface Hover",
-        description: "Hover and focus fill for destructive action buttons.",
-        lightToken: "semantic-button-danger-surface-hover-light",
-        darkToken: "semantic-button-danger-surface-hover-dark",
-      },
-      {
-        id: "semantic-button-danger-border",
-        label: "Danger Border",
-        description: "Default border for destructive action buttons.",
-        lightToken: "semantic-button-danger-border-light",
-        darkToken: "semantic-button-danger-border-dark",
-      },
-      {
-        id: "semantic-button-danger-border-hover",
-        label: "Danger Border Hover",
-        description: "Hover and focus border for destructive action buttons.",
-        lightToken: "semantic-button-danger-border-hover-light",
-        darkToken: "semantic-button-danger-border-hover-dark",
-      },
-      {
-        id: "semantic-button-danger-text",
-        label: "Danger Text",
-        description: "Default text and icon color for destructive action buttons.",
-        lightToken: "semantic-button-danger-text-light",
-        darkToken: "semantic-button-danger-text-dark",
-      },
-      {
-        id: "semantic-button-danger-text-hover",
-        label: "Danger Text Hover",
-        description: "Hover and focus text and icon color for destructive action buttons.",
-        lightToken: "semantic-button-danger-text-hover-light",
-        darkToken: "semantic-button-danger-text-hover-dark",
-      },
-      {
-        id: "semantic-button-danger-disabled-surface",
-        label: "Danger Disabled Surface",
-        description: "Disabled fill for destructive action buttons.",
-        lightToken: "semantic-button-danger-disabled-surface-light",
-        darkToken: "semantic-button-danger-disabled-surface-dark",
-      },
-      {
-        id: "semantic-button-danger-disabled-border",
-        label: "Danger Disabled Border",
-        description: "Disabled border for destructive action buttons.",
-        lightToken: "semantic-button-danger-disabled-border-light",
-        darkToken: "semantic-button-danger-disabled-border-dark",
-      },
-      {
-        id: "semantic-button-danger-disabled-text",
-        label: "Danger Disabled Text",
-        description: "Disabled text and icon color for destructive action buttons.",
-        lightToken: "semantic-button-danger-disabled-text-light",
-        darkToken: "semantic-button-danger-disabled-text-dark",
-      },
-      {
-        id: "semantic-icon-button-text",
-        label: "Icon Button Text",
-        description: "Default icon color for standalone icon-only buttons.",
-        lightToken: "semantic-icon-button-text-light",
-        darkToken: "semantic-icon-button-text-dark",
-      },
-      {
-        id: "semantic-icon-button-text-hover",
-        label: "Icon Button Text Hover",
-        description: "Hover and focus icon color for standalone icon-only buttons.",
-        lightToken: "semantic-icon-button-text-hover-light",
-        darkToken: "semantic-icon-button-text-hover-dark",
-      },
-      {
-        id: "semantic-icon-button-text-active",
-        label: "Icon Button Text Active",
-        description: "Active icon color for standalone icon-only buttons.",
-        lightToken: "semantic-icon-button-text-active-light",
-        darkToken: "semantic-icon-button-text-active-dark",
-      },
-      {
-        id: "semantic-icon-button-surface-hover",
-        label: "Icon Button Surface Hover",
-        description: "Hover and focus surface for icon-only buttons that display a state fill.",
-        lightToken: "semantic-icon-button-surface-hover-light",
-        darkToken: "semantic-icon-button-surface-hover-dark",
-      },
-      {
-        id: "semantic-icon-button-surface-active",
-        label: "Icon Button Surface Active",
-        description: "Active surface for icon-only buttons that display a state fill.",
-        lightToken: "semantic-icon-button-surface-active-light",
-        darkToken: "semantic-icon-button-surface-active-dark",
-      },
-    ],
-  },
-  {
-    id: "status-success",
-    layer: "status",
-    label: "Status / Success",
-    description: "Success tones from base hue to text, border, and surface treatments.",
-    rows: [
-      {
-        id: "semantic-success",
-        label: "Base",
-        description: "Primary success hue.",
-        lightToken: "semantic-success-light",
-        darkToken: "semantic-success-dark",
-      },
-      {
-        id: "semantic-success-strong",
-        label: "Strong",
-        description: "Higher-emphasis success accent.",
-        lightToken: "semantic-success-strong-light",
-        darkToken: "semantic-success-strong-dark",
-      },
-      {
-        id: "semantic-success-text",
-        label: "Text",
-        description: "Success text and icons on neutral surfaces.",
-        lightToken: "semantic-success-text-light",
-        darkToken: "semantic-success-text-dark",
-      },
-      {
-        id: "semantic-success-border",
-        label: "Border",
-        description: "Success outlines and separators.",
-        lightToken: "semantic-success-border-light",
-        darkToken: "semantic-success-border-dark",
-      },
-      {
-        id: "semantic-success-surface",
-        label: "Surface",
-        description: "Soft success fill.",
-        lightToken: "semantic-success-surface-light",
-        darkToken: "semantic-success-surface-dark",
-      },
-      {
-        id: "semantic-success-surface-strong",
-        label: "Surface Strong",
-        description: "Stronger success fill.",
-        lightToken: "semantic-success-surface-strong-light",
-        darkToken: "semantic-success-surface-strong-dark",
-      },
-    ],
-  },
-  {
-    id: "status-warning",
-    layer: "status",
-    label: "Status / Warning",
-    description: "Warning tones from base hue to text, border, and surface treatments.",
-    rows: [
-      {
-        id: "semantic-warning",
-        label: "Base",
-        description: "Primary warning hue.",
-        lightToken: "semantic-warning-light",
-        darkToken: "semantic-warning-dark",
-      },
-      {
-        id: "semantic-warning-strong",
-        label: "Strong",
-        description: "Higher-emphasis warning accent.",
-        lightToken: "semantic-warning-strong-light",
-        darkToken: "semantic-warning-strong-dark",
-      },
-      {
-        id: "semantic-warning-text",
-        label: "Text",
-        description: "Warning text and icons on neutral surfaces.",
-        lightToken: "semantic-warning-text-light",
-        darkToken: "semantic-warning-text-dark",
-      },
-      {
-        id: "semantic-warning-border",
-        label: "Border",
-        description: "Warning outlines and separators.",
-        lightToken: "semantic-warning-border-light",
-        darkToken: "semantic-warning-border-dark",
-      },
-      {
-        id: "semantic-warning-surface",
-        label: "Surface",
-        description: "Soft warning fill.",
-        lightToken: "semantic-warning-surface-light",
-        darkToken: "semantic-warning-surface-dark",
-      },
-      {
-        id: "semantic-warning-surface-strong",
-        label: "Surface Strong",
-        description: "Stronger warning fill.",
-        lightToken: "semantic-warning-surface-strong-light",
-        darkToken: "semantic-warning-surface-strong-dark",
-      },
-    ],
-  },
-  {
-    id: "status-error",
-    layer: "status",
-    label: "Status / Error",
-    description: "Error tones from base hue to text, border, and surface treatments.",
-    rows: [
-      {
-        id: "semantic-error",
-        label: "Base",
-        description: "Primary error hue.",
-        lightToken: "semantic-error-light",
-        darkToken: "semantic-error-dark",
-      },
-      {
-        id: "semantic-error-strong",
-        label: "Strong",
-        description: "Higher-emphasis error accent.",
-        lightToken: "semantic-error-strong-light",
-        darkToken: "semantic-error-strong-dark",
-      },
-      {
-        id: "semantic-error-text",
-        label: "Text",
-        description: "Error text and icons on neutral surfaces.",
-        lightToken: "semantic-error-text-light",
-        darkToken: "semantic-error-text-dark",
-      },
-      {
-        id: "semantic-error-border",
-        label: "Border",
-        description: "Error outlines and separators.",
-        lightToken: "semantic-error-border-light",
-        darkToken: "semantic-error-border-dark",
-      },
-      {
-        id: "semantic-error-surface",
-        label: "Surface",
-        description: "Soft error fill.",
-        lightToken: "semantic-error-surface-light",
-        darkToken: "semantic-error-surface-dark",
-      },
-      {
-        id: "semantic-error-surface-strong",
-        label: "Surface Strong",
-        description: "Stronger error fill.",
-        lightToken: "semantic-error-surface-strong-light",
-        darkToken: "semantic-error-surface-strong-dark",
-      },
-    ],
-  },
-  {
-    id: "status-info",
-    layer: "status",
-    label: "Status / Info",
-    description: "Informational tones from base hue to text, border, and surface treatments.",
-    rows: [
-      {
-        id: "semantic-info",
-        label: "Base",
-        description: "Primary info hue.",
-        lightToken: "semantic-info-light",
-        darkToken: "semantic-info-dark",
-      },
-      {
-        id: "semantic-info-strong",
-        label: "Strong",
-        description: "Higher-emphasis informational accent.",
-        lightToken: "semantic-info-strong-light",
-        darkToken: "semantic-info-strong-dark",
-      },
-      {
-        id: "semantic-info-text",
-        label: "Text",
-        description: "Informational text and icons on neutral surfaces.",
-        lightToken: "semantic-info-text-light",
-        darkToken: "semantic-info-text-dark",
-      },
-      {
-        id: "semantic-info-border",
-        label: "Border",
-        description: "Informational outlines and separators.",
-        lightToken: "semantic-info-border-light",
-        darkToken: "semantic-info-border-dark",
-      },
-      {
-        id: "semantic-info-surface",
-        label: "Surface",
-        description: "Soft informational fill.",
-        lightToken: "semantic-info-surface-light",
-        darkToken: "semantic-info-surface-dark",
-      },
-      {
-        id: "semantic-info-surface-strong",
-        label: "Surface Strong",
-        description: "Stronger informational fill.",
-        lightToken: "semantic-info-surface-strong-light",
-        darkToken: "semantic-info-surface-strong-dark",
-      },
-    ],
-  },
-  {
-    id: "component-shell-chrome",
-    layer: "product",
-    label: "Shell Chrome",
-    description: "Dedicated semantic surfaces for shell-level navigation and menu bars.",
-    rows: [
-      {
-        id: "semantic-shell-chrome-surface",
-        label: "Surface",
-        description: "Background fill for shell-level pane tabs and sidebar top menus.",
-        lightToken: "semantic-shell-chrome-surface-light",
-        darkToken: "semantic-shell-chrome-surface-dark",
-      },
-    ],
-  },
-  {
-    id: "component-terminal",
-    layer: "component",
-    label: "Terminal",
-    description: "Dedicated semantic color for embedded terminal surfaces.",
-    rows: [
-      {
-        id: "semantic-terminal-surface",
-        label: "Terminal Surface",
-        description: "Background fill for terminal content surfaces.",
-        lightToken: "semantic-terminal-surface-light",
-        darkToken: "semantic-terminal-surface-dark",
-      },
-    ],
-  },
-  {
-    id: "component-popup-panel",
-    layer: "product",
-    label: "Popup Panel",
-    description: "Dedicated semantic surface for panel-style popups, floating sheets, and modal panels.",
-    rows: [
-      {
-        id: "semantic-popup-panel-surface",
-        label: "Panel Surface",
-        description: "Background fill for popup panels such as settings, floating sheets, and panel-style popovers.",
-        lightToken: "semantic-popup-panel-surface-light",
-        darkToken: "semantic-popup-panel-surface-dark",
-      },
-    ],
-  },
-  {
-    id: "component-settings-switches",
-    layer: "component",
-    label: "Settings Switches",
-    description: "Switch row, track, and thumb colors used by settings toggle controls.",
-    rows: [
-      {
-        id: "semantic-settings-switch-row-surface-focus",
-        label: "Switch Focus Row",
-        description: "Row background used when a settings switch receives keyboard focus.",
-        lightToken: "semantic-settings-switch-row-surface-focus-light",
-        darkToken: "semantic-settings-switch-row-surface-focus-dark",
-      },
-      {
-        id: "semantic-settings-switch-track-surface",
-        label: "Switch Track",
-        description: "Default track fill for settings switch controls.",
-        lightToken: "semantic-settings-switch-track-surface-light",
-        darkToken: "semantic-settings-switch-track-surface-dark",
-      },
-      {
-        id: "semantic-settings-switch-track-border",
-        label: "Switch Track Border",
-        description: "Default track border for settings switch controls.",
-        lightToken: "semantic-settings-switch-track-border-light",
-        darkToken: "semantic-settings-switch-track-border-dark",
-      },
-      {
-        id: "semantic-settings-switch-track-border-focus",
-        label: "Switch Track Focus Border",
-        description: "Track border used when a settings switch receives keyboard focus.",
-        lightToken: "semantic-settings-switch-track-border-focus-light",
-        darkToken: "semantic-settings-switch-track-border-focus-dark",
-      },
-      {
-        id: "semantic-settings-switch-track-surface-active",
-        label: "Switch Active Track",
-        description: "Track fill for enabled settings switch controls.",
-        lightToken: "semantic-settings-switch-track-surface-active-light",
-        darkToken: "semantic-settings-switch-track-surface-active-dark",
-      },
-      {
-        id: "semantic-settings-switch-track-border-active",
-        label: "Switch Active Track Border",
-        description: "Track border for enabled settings switch controls.",
-        lightToken: "semantic-settings-switch-track-border-active-light",
-        darkToken: "semantic-settings-switch-track-border-active-dark",
-      },
-      {
-        id: "semantic-settings-switch-track-surface-disabled",
-        label: "Switch Disabled Track",
-        description: "Track fill for disabled settings switch controls.",
-        lightToken: "semantic-settings-switch-track-surface-disabled-light",
-        darkToken: "semantic-settings-switch-track-surface-disabled-dark",
-      },
-      {
-        id: "semantic-settings-switch-track-border-disabled",
-        label: "Switch Disabled Track Border",
-        description: "Track border for disabled settings switch controls.",
-        lightToken: "semantic-settings-switch-track-border-disabled-light",
-        darkToken: "semantic-settings-switch-track-border-disabled-dark",
-      },
-      {
-        id: "semantic-settings-switch-thumb-surface",
-        label: "Switch Thumb",
-        description: "Thumb fill for settings switch controls.",
-        lightToken: "semantic-settings-switch-thumb-surface-light",
-        darkToken: "semantic-settings-switch-thumb-surface-dark",
-      },
-      {
-        id: "semantic-settings-switch-thumb-surface-disabled",
-        label: "Switch Disabled Thumb",
-        description: "Thumb fill for disabled settings switch controls.",
-        lightToken: "semantic-settings-switch-thumb-surface-disabled-light",
-        darkToken: "semantic-settings-switch-thumb-surface-disabled-dark",
-      },
-    ],
-  },
-  {
-    id: "component-segmented-controls",
-    layer: "component",
-    label: "Segmented Controls",
-    description: "Container and item state colors used by segmented controls and view switches.",
-    rows: [
-      {
-        id: "semantic-segmented-control-surface",
-        label: "Control Surface",
-        description: "Outer container fill for compact segmented controls.",
-        lightToken: "semantic-segmented-control-surface-light",
-        darkToken: "semantic-segmented-control-surface-dark",
-      },
-      {
-        id: "semantic-segmented-control-border",
-        label: "Control Border",
-        description: "Outer container border for compact segmented controls.",
-        lightToken: "semantic-segmented-control-border-light",
-        darkToken: "semantic-segmented-control-border-dark",
-      },
-      {
-        id: "semantic-segmented-control-item-surface-hover",
-        label: "Item Hover Surface",
-        description: "Hover and focus fill for segmented control items.",
-        lightToken: "semantic-segmented-control-item-surface-hover-light",
-        darkToken: "semantic-segmented-control-item-surface-hover-dark",
-      },
-      {
-        id: "semantic-segmented-control-item-surface-active",
-        label: "Item Active Surface",
-        description: "Selected-item fill for segmented controls.",
-        lightToken: "semantic-segmented-control-item-surface-active-light",
-        darkToken: "semantic-segmented-control-item-surface-active-dark",
-      },
-      {
-        id: "semantic-segmented-control-item-text",
-        label: "Item Text",
-        description: "Default text and icon color for segmented control items.",
-        lightToken: "semantic-segmented-control-item-text-light",
-        darkToken: "semantic-segmented-control-item-text-dark",
-      },
-      {
-        id: "semantic-segmented-control-item-text-hover",
-        label: "Item Hover Text",
-        description: "Hover and focus text color for segmented control items.",
-        lightToken: "semantic-segmented-control-item-text-hover-light",
-        darkToken: "semantic-segmented-control-item-text-hover-dark",
-      },
-      {
-        id: "semantic-segmented-control-item-text-active",
-        label: "Item Active Text",
-        description: "Selected-item text and icon color for segmented controls.",
-        lightToken: "semantic-segmented-control-item-text-active-light",
-        darkToken: "semantic-segmented-control-item-text-active-dark",
-      },
-      {
-        id: "semantic-segmented-control-item-meta-text",
-        label: "Item Meta Text",
-        description: "Muted supporting text inside segmented control items.",
-        lightToken: "semantic-segmented-control-item-meta-text-light",
-        darkToken: "semantic-segmented-control-item-meta-text-dark",
-      },
-      {
-        id: "semantic-segmented-control-item-meta-text-active",
-        label: "Item Active Meta Text",
-        description: "Supporting text color inside selected segmented control items.",
-        lightToken: "semantic-segmented-control-item-meta-text-active-light",
-        darkToken: "semantic-segmented-control-item-meta-text-active-dark",
-      },
-      {
-        id: "semantic-segmented-control-item-text-disabled",
-        label: "Item Disabled Text",
-        description: "Disabled text and icon color for segmented control items.",
-        lightToken: "semantic-segmented-control-item-text-disabled-light",
-        darkToken: "semantic-segmented-control-item-text-disabled-dark",
-      },
-    ],
-  },
-  {
-    id: "component-dropdown-select",
-    layer: "component",
-    label: "Dropdown Select",
-    description: "Dedicated semantic color for expanded dropdown and select menus.",
-    rows: [
-      {
-        id: "semantic-dropdown-menu-surface",
-        label: "Menu Surface",
-        description: "Background fill for expanded dropdown and select menus.",
-        lightToken: "semantic-dropdown-menu-surface-light",
-        darkToken: "semantic-dropdown-menu-surface-dark",
-      },
-    ],
-  },
-  {
-    id: "component-question-card",
-    layer: "product",
-    label: "Question Card",
-    description: "Dedicated semantic color for agent question cards.",
-    rows: [
-      {
-        id: "semantic-question-card-surface",
-        label: "Surface",
-        description: "Background fill for question cards shown by the agent.",
-        lightToken: "semantic-question-card-surface-light",
-        darkToken: "semantic-question-card-surface-dark",
-      },
-    ],
-  },
-  {
-    id: "component-proposed-plan-card",
-    layer: "product",
-    label: "Proposed Plan",
-    description: "Dedicated semantic color for proposed plan cards.",
-    rows: [
-      {
-        id: "semantic-proposed-plan-card-surface",
-        label: "Card Surface",
-        description: "Background fill for proposed plan cards shown in assistant responses.",
-        lightToken: "semantic-proposed-plan-card-surface-light",
-        darkToken: "semantic-proposed-plan-card-surface-dark",
-      },
-    ],
-  },
-  {
-    id: "component-thread-view",
-    layer: "product",
-    label: "Thread View",
-    description: "Dedicated semantic colors for thread text, panel surfaces, and user-message diff cards.",
-    rows: [
-      {
-        id: "semantic-thread-response-text",
-        label: "Response Text",
-        description: "Text color for assistant response content in the thread view.",
-        lightToken: "semantic-thread-response-text-light",
-        darkToken: "semantic-thread-response-text-dark",
-      },
-      {
-        id: "semantic-thread-reasoning-text",
-        label: "Reasoning Text",
-        description: "Text color for assistant reasoning content in the thread view.",
-        lightToken: "semantic-thread-reasoning-text-light",
-        darkToken: "semantic-thread-reasoning-text-dark",
-      },
-      {
-        id: "semantic-thread-divider",
-        label: "Divider",
-        description: "Divider line color for thread trace headers.",
-        lightToken: "semantic-thread-divider-light",
-        darkToken: "semantic-thread-divider-dark",
-      },
-      {
-        id: "semantic-thread-panel-surface",
-        label: "Thread Panel Surface",
-        description: "Background fill for thread-owned panels such as side chats and default assistant cards.",
-        lightToken: "semantic-thread-panel-surface-light",
-        darkToken: "semantic-thread-panel-surface-dark",
-      },
-      {
-        id: "semantic-thread-panel-surface-muted",
-        label: "Thread Panel Muted",
-        description: "Low-emphasis background fill for trace, metadata, and nested thread panels.",
-        lightToken: "semantic-thread-panel-surface-muted-light",
-        darkToken: "semantic-thread-panel-surface-muted-dark",
-      },
-      {
-        id: "semantic-thread-tool-io-panel-surface",
-        label: "Tool IO Panel Surface",
-        description: "Background fill for the unified tool input and output scroll panel.",
-        lightToken: "semantic-thread-tool-io-panel-surface-light",
-        darkToken: "semantic-thread-tool-io-panel-surface-dark",
-      },
-      {
-        id: "semantic-thread-panel-surface-hover",
-        label: "Thread Panel Hover",
-        description: "Hover and focus background fill for compact controls inside thread panels.",
-        lightToken: "semantic-thread-panel-surface-hover-light",
-        darkToken: "semantic-thread-panel-surface-hover-dark",
-      },
-      {
-        id: "semantic-thread-user-message-diff-card-surface",
-        label: "Diff Card Surface",
-        description: "Background fill for user-message file change cards.",
-        lightToken: "semantic-thread-user-message-diff-card-surface-light",
-        darkToken: "semantic-thread-user-message-diff-card-surface-dark",
-      },
-      {
-        id: "semantic-thread-user-message-diff-card-border",
-        label: "Diff Card Border",
-        description: "Outer border for user-message file change cards and previews.",
-        lightToken: "semantic-thread-user-message-diff-card-border-light",
-        darkToken: "semantic-thread-user-message-diff-card-border-dark",
-      },
-      {
-        id: "semantic-thread-user-message-diff-divider",
-        label: "Diff Row Divider",
-        description: "Divider color between user-message file change rows.",
-        lightToken: "semantic-thread-user-message-diff-divider-light",
-        darkToken: "semantic-thread-user-message-diff-divider-dark",
-      },
-      {
-        id: "semantic-thread-user-message-diff-row-surface-hover",
-        label: "Diff Row Hover",
-        description: "Hover background for user-message file change rows and summary controls.",
-        lightToken: "semantic-thread-user-message-diff-row-surface-hover-light",
-        darkToken: "semantic-thread-user-message-diff-row-surface-hover-dark",
-      },
-      {
-        id: "semantic-thread-user-message-diff-row-surface-focus",
-        label: "Diff Row Focus",
-        description: "Keyboard focus background for user-message file change rows and summary controls.",
-        lightToken: "semantic-thread-user-message-diff-row-surface-focus-light",
-        darkToken: "semantic-thread-user-message-diff-row-surface-focus-dark",
-      },
-      {
-        id: "semantic-thread-user-message-diff-preview-surface",
-        label: "Diff Preview Surface",
-        description: "Background fill for embedded user-message diff previews.",
-        lightToken: "semantic-thread-user-message-diff-preview-surface-light",
-        darkToken: "semantic-thread-user-message-diff-preview-surface-dark",
-      },
-    ],
-  },
-  {
-    id: "component-markdown",
-    layer: "product",
-    label: "Markdown",
-    description: "Dedicated semantic colors for rendered Markdown content.",
-    rows: [
-      {
-        id: "semantic-markdown-text",
-        label: "Text",
-        description: "Default body text inside rendered Markdown.",
-        lightToken: "semantic-markdown-text-light",
-        darkToken: "semantic-markdown-text-dark",
-      },
-      {
-        id: "semantic-markdown-muted-text",
-        label: "Muted Text",
-        description: "Supporting Markdown text such as quote and image fallback text.",
-        lightToken: "semantic-markdown-muted-text-light",
-        darkToken: "semantic-markdown-muted-text-dark",
-      },
-      {
-        id: "semantic-markdown-strong-text",
-        label: "Strong Text",
-        description: "High-emphasis Markdown text and headings.",
-        lightToken: "semantic-markdown-strong-text-light",
-        darkToken: "semantic-markdown-strong-text-dark",
-      },
-      {
-        id: "semantic-markdown-accent",
-        label: "Accent",
-        description: "Markdown heading rails, list markers, and lightweight emphasis.",
-        lightToken: "semantic-markdown-accent-light",
-        darkToken: "semantic-markdown-accent-dark",
-      },
-      {
-        id: "semantic-markdown-selection-background",
-        label: "Selection Background",
-        description: "Selection highlight background inside rendered Markdown.",
-        lightToken: "semantic-markdown-selection-background-light",
-        darkToken: "semantic-markdown-selection-background-dark",
-      },
-      {
-        id: "semantic-markdown-selection-text",
-        label: "Selection Text",
-        description: "Selection text color inside rendered Markdown.",
-        lightToken: "semantic-markdown-selection-text-light",
-        darkToken: "semantic-markdown-selection-text-dark",
-      },
-      {
-        id: "semantic-markdown-border",
-        label: "Border",
-        description: "Default Markdown table, image, and divider border.",
-        lightToken: "semantic-markdown-border-light",
-        darkToken: "semantic-markdown-border-dark",
-      },
-      {
-        id: "semantic-markdown-border-strong",
-        label: "Border Strong",
-        description: "Stronger Markdown borders for inline code and table headers.",
-        lightToken: "semantic-markdown-border-strong-light",
-        darkToken: "semantic-markdown-border-strong-dark",
-      },
-      {
-        id: "semantic-markdown-quote-surface",
-        label: "Quote Surface",
-        description: "Background fill for Markdown blockquotes.",
-        lightToken: "semantic-markdown-quote-surface-light",
-        darkToken: "semantic-markdown-quote-surface-dark",
-      },
-      {
-        id: "semantic-markdown-inline-code-surface",
-        label: "Inline Code Surface",
-        description: "Background fill for inline code tokens inside Markdown.",
-        lightToken: "semantic-markdown-inline-code-surface-light",
-        darkToken: "semantic-markdown-inline-code-surface-dark",
-      },
-      {
-        id: "semantic-markdown-table-head-surface",
-        label: "Table Header Surface",
-        description: "Background fill for Markdown table headers.",
-        lightToken: "semantic-markdown-table-head-surface-light",
-        darkToken: "semantic-markdown-table-head-surface-dark",
-      },
-      {
-        id: "semantic-markdown-table-row-alt-surface",
-        label: "Table Row Alt Surface",
-        description: "Alternating row background for Markdown tables.",
-        lightToken: "semantic-markdown-table-row-alt-surface-light",
-        darkToken: "semantic-markdown-table-row-alt-surface-dark",
-      },
-      {
-        id: "semantic-markdown-code-surface",
-        label: "Code Block Surface",
-        description: "Background fill for fenced Markdown code blocks.",
-        lightToken: "semantic-markdown-code-surface-light",
-        darkToken: "semantic-markdown-code-surface-dark",
-      },
-      {
-        id: "semantic-markdown-code-text",
-        label: "Code Block Text",
-        description: "Text color for fenced Markdown code blocks.",
-        lightToken: "semantic-markdown-code-text-light",
-        darkToken: "semantic-markdown-code-text-dark",
-      },
-      {
-        id: "semantic-markdown-code-muted-text",
-        label: "Code Block Muted Text",
-        description: "Muted metadata text inside fenced Markdown code blocks.",
-        lightToken: "semantic-markdown-code-muted-text-light",
-        darkToken: "semantic-markdown-code-muted-text-dark",
-      },
-      {
-        id: "semantic-markdown-code-border",
-        label: "Code Block Border",
-        description: "Border color for fenced Markdown code blocks.",
-        lightToken: "semantic-markdown-code-border-light",
-        darkToken: "semantic-markdown-code-border-dark",
-      },
-    ],
-  },
-  {
-    id: "component-sidebar-tree-rows",
-    layer: "product",
-    label: "Sidebar Tree Rows",
-    description: "Dedicated row tokens for the left sidebar workspace and skills trees.",
-    rows: [
-      {
-        id: "semantic-sidebar-tree-row-text",
-        label: "Row Text",
-        description: "Default text and icon color for sidebar tree rows.",
-        lightToken: "semantic-sidebar-tree-row-text-light",
-        darkToken: "semantic-sidebar-tree-row-text-dark",
-      },
-      {
-        id: "semantic-sidebar-tree-row-text-hover",
-        label: "Row Text Hover",
-        description: "Hover and focus text color for sidebar tree rows.",
-        lightToken: "semantic-sidebar-tree-row-text-hover-light",
-        darkToken: "semantic-sidebar-tree-row-text-hover-dark",
-      },
-      {
-        id: "semantic-sidebar-tree-row-text-active",
-        label: "Row Text Active",
-        description: "Selected-row text color for sidebar tree rows.",
-        lightToken: "semantic-sidebar-tree-row-text-active-light",
-        darkToken: "semantic-sidebar-tree-row-text-active-dark",
-      },
-      {
-        id: "semantic-sidebar-tree-row-surface-hover",
-        label: "Row Surface Hover",
-        description: "Hover and focus background for sidebar tree rows.",
-        lightToken: "semantic-sidebar-tree-row-surface-hover-light",
-        darkToken: "semantic-sidebar-tree-row-surface-hover-dark",
-      },
-      {
-        id: "semantic-sidebar-tree-row-surface-active",
-        label: "Row Surface Active",
-        description: "Selected-row background for sidebar tree rows.",
-        lightToken: "semantic-sidebar-tree-row-surface-active-light",
-        darkToken: "semantic-sidebar-tree-row-surface-active-dark",
-      },
-      {
-        id: "semantic-sidebar-tree-row-leading-active",
-        label: "Leading Icon Active",
-        description: "Selected-row leading icon color for sidebar project rows.",
-        lightToken: "semantic-sidebar-tree-row-leading-active-light",
-        darkToken: "semantic-sidebar-tree-row-leading-active-dark",
-      },
-    ],
-  },
-  {
-    id: "component-settings-list-detail-rows",
-    layer: "component",
-    label: "Settings List Detail Rows",
-    description: "Dedicated row tokens for settings, plugins, connectors, MCP, and similar list-detail screens.",
-    rows: [
-      {
-        id: "semantic-settings-list-detail-row-surface-hover",
-        label: "Row Surface Hover",
-        description: "Hover and focus background for settings list-detail rows.",
-        lightToken: "semantic-settings-list-detail-row-surface-hover-light",
-        darkToken: "semantic-settings-list-detail-row-surface-hover-dark",
-      },
-    ],
-  },
-  {
-    id: "component-composer",
-    layer: "product",
-    label: "Composer",
-    description: "Dedicated semantic colors for the task composer surface and controls.",
-    rows: [
-      {
-        id: "semantic-composer-surface",
-        label: "Composer Surface",
-        description: "Dedicated background fill for composer input surfaces.",
-        lightToken: "semantic-composer-surface-light",
-        darkToken: "semantic-composer-surface-dark",
-      },
-      {
-        id: "semantic-composer-border",
-        label: "Input Border",
-        description: "Dedicated outline and border color for composer input surfaces.",
-        lightToken: "semantic-composer-border-light",
-        darkToken: "semantic-composer-border-dark",
-      },
-      {
-        id: "semantic-composer-button-surface",
-        label: "Button Surface",
-        description: "Hover fill for buttons inside the composer.",
-        lightToken: "semantic-composer-button-surface-light",
-        darkToken: "semantic-composer-button-surface-dark",
-      },
-      {
-        id: "semantic-composer-button-surface-strong",
-        label: "Button Surface Strong",
-        description: "Selected-state fill for menus and controls inside the composer.",
-        lightToken: "semantic-composer-button-surface-strong-light",
-        darkToken: "semantic-composer-button-surface-strong-dark",
-      },
-      {
-        id: "semantic-composer-button-text",
-        label: "Button Text",
-        description: "Hover text and icon color for buttons inside the composer.",
-        lightToken: "semantic-composer-button-text-light",
-        darkToken: "semantic-composer-button-text-dark",
-      },
-      {
-        id: "semantic-composer-button-text-strong",
-        label: "Button Text Strong",
-        description: "Selected-state text and icon color for buttons inside the composer.",
-        lightToken: "semantic-composer-button-text-strong-light",
-        darkToken: "semantic-composer-button-text-strong-dark",
-      },
-      {
-        id: "semantic-composer-icon-button-surface",
-        label: "Icon Button Surface",
-        description: "Default fill for icon-only buttons inside the composer.",
-        lightToken: "semantic-composer-icon-button-surface-light",
-        darkToken: "semantic-composer-icon-button-surface-dark",
-      },
-      {
-        id: "semantic-composer-icon-button-surface-hover",
-        label: "Icon Button Hover Surface",
-        description: "Hover and focus fill for icon-only buttons inside the composer.",
-        lightToken: "semantic-composer-icon-button-surface-hover-light",
-        darkToken: "semantic-composer-icon-button-surface-hover-dark",
-      },
-      {
-        id: "semantic-composer-icon-button-text",
-        label: "Icon Button Text",
-        description: "Default icon color for icon-only buttons inside the composer.",
-        lightToken: "semantic-composer-icon-button-text-light",
-        darkToken: "semantic-composer-icon-button-text-dark",
-      },
-      {
-        id: "semantic-composer-icon-button-text-hover",
-        label: "Icon Button Hover Text",
-        description: "Hover and focus icon color for icon-only buttons inside the composer.",
-        lightToken: "semantic-composer-icon-button-text-hover-light",
-        darkToken: "semantic-composer-icon-button-text-hover-dark",
-      },
-    ],
-  },
-  {
-    id: "global-interaction",
-    layer: "global",
-    label: "Global Interaction",
-    description: "Focus, selection, and translucent panel tokens used across multiple components.",
-    rows: [
-      {
-        id: "focus-outline-color",
-        label: "Focus Ring",
-        description: "Global focus outline color.",
-        lightToken: "focus-outline-color-light",
-        darkToken: "focus-outline-color-dark",
-      },
-      {
-        id: "selection-background",
-        label: "Selection Background",
-        description: "Text selection and lightweight selection fill.",
-        lightToken: "selection-background-light",
-        darkToken: "selection-background-dark",
-      },
-      {
-        id: "ui-panel",
-        label: "Translucent Panel",
-        description: "Default translucent panel fill.",
-        lightToken: "ui-panel-light",
-        darkToken: "ui-panel-dark",
-      },
-      {
-        id: "ui-panel-subtle",
-        label: "Translucent Panel Subtle",
-        description: "Lower-emphasis translucent panel fill.",
-        lightToken: "ui-panel-subtle-light",
-        darkToken: "ui-panel-subtle-dark",
-      },
-    ],
-  },
-] as const satisfies readonly AppearanceTokenGroup[]
-
-type AppearanceTokenMetadata = {
-  label: string
-  description: string
-  groupID: string
-  groupLabel: string
-  layer: AppearanceTokenLayer
-  rowID: string
-  mode: "light" | "dark"
-}
-
-export const APPEARANCE_TOKEN_METADATA = Object.fromEntries(
-  APPEARANCE_TOKEN_GROUPS.flatMap((group) =>
-    group.rows.flatMap((row) => [
-      [
-        row.lightToken,
-        {
-          label: row.label,
-          description: row.description,
-          groupID: group.id,
-          groupLabel: group.label,
-          layer: group.layer,
-          rowID: row.id,
-          mode: "light" as const,
-        },
-      ],
-      [
-        row.darkToken,
-        {
-          label: row.label,
-          description: row.description,
-          groupID: group.id,
-          groupLabel: group.label,
-          layer: group.layer,
-          rowID: row.id,
-          mode: "dark" as const,
-        },
-      ],
-    ]),
-  ),
-) as Record<AppearanceTokenName, AppearanceTokenMetadata>
 
 const APPEARANCE_TOKEN_NAME_SET = new Set<string>(APPEARANCE_TOKEN_NAMES)
 const APPEARANCE_FONT_FAMILY_SET = new Set<string>(APPEARANCE_FONT_FAMILIES)
@@ -1921,11 +287,9 @@ const LEGACY_APPEARANCE_TOKEN_MIGRATIONS: Record<string, readonly AppearanceToke
     "semantic-popup-panel-surface-dark",
   ],
   "semantic-settings-page-surface": [
-    "semantic-popup-panel-surface-light",
-    "semantic-popup-panel-surface-dark",
+    "semantic-settings-page-surface-light",
+    "semantic-settings-page-surface-dark",
   ],
-  "semantic-settings-page-surface-light": ["semantic-popup-panel-surface-light"],
-  "semantic-settings-page-surface-dark": ["semantic-popup-panel-surface-dark"],
   "semantic-settings-switch-row-surface-focus": [
     "semantic-settings-switch-row-surface-focus-light",
     "semantic-settings-switch-row-surface-focus-dark",
@@ -2184,381 +548,16 @@ export function isAppearanceFontFamily(value: string): value is AppearanceFontFa
   return APPEARANCE_FONT_FAMILY_SET.has(value)
 }
 
-const DEFAULT_APPEARANCE_OVERRIDES = {
-  "surface-app-light": "#ffffff",
-  "surface-shell-light": "#ffffff",
-  "surface-panel-light": "#ededed",
-  "surface-panel-muted-light": "#e8e8e8",
-  "surface-sidebar-light": "#e8e8e8",
-  "surface-sidebar-strong-light": "#e8e8e8",
-  "surface-user-bubble-light": "#ffffff",
-  "surface-trace-light": "#ffffff",
-  "surface-elevated-light": "#e3e3e3",
-  "surface-code-light": "#1c1c1c",
-  "surface-code-strong-light": "#000000",
-  "text-primary-light": "#000000",
-  "text-secondary-dark": "#a591d9",
-  "text-tertiary-light": "#c8ae9d",
-  "text-on-dark-light": "#fcfcfc",
-  "border-subtle-light": "#e0e0e0",
-  "border-default-light": "rgba(41, 37, 36, 0.08)",
-  "brand-primary": "#d7cbcb",
-  "brand-primary-dark": "#f3eded",
-  "brand-primary-hover": "#878787",
-  "brand-primary-hover-dark": "#f6efef",
-  "brand-accent-highlight": "#c7c7c7",
-  "brand-accent-highlight-dark": "#f0f0f0",
-  "semantic-accent-icon-light": "#666666",
-  "semantic-accent-icon-hover-light": "#000000",
-  "semantic-accent-icon-active-light": "#000000",
-  "semantic-shell-chrome-surface-light": "#e8e8e8",
-  "semantic-segmented-control-surface-light": "#e8e8e8",
-  "semantic-segmented-control-border-light": "rgba(41, 37, 36, 0.08)",
-  "semantic-segmented-control-item-surface-hover-light": "#dedede",
-  "semantic-segmented-control-item-surface-active-light": "#dedede",
-  "semantic-segmented-control-item-text-light": "#78716c",
-  "semantic-segmented-control-item-text-hover-light": "#000000",
-  "semantic-segmented-control-item-text-active-light": "#000000",
-  "semantic-segmented-control-item-meta-text-light": "#c8ae9d",
-  "semantic-segmented-control-item-meta-text-active-light": "#78716c",
-  "semantic-segmented-control-item-text-disabled-light": "#c8ae9d",
-  "semantic-markdown-inline-code-surface-light": "#d2d0d0",
-  "semantic-sidebar-tree-row-text-light": "#525252",
-  "semantic-sidebar-tree-row-text-active-light": "#000000",
-  "semantic-sidebar-tree-row-surface-hover-light": "#dedede",
-  "semantic-sidebar-tree-row-surface-active-light": "#dedede",
-  "semantic-sidebar-tree-row-leading-active-light": "#000000",
-  "semantic-dropdown-menu-surface-light": "#fafafa",
-  "semantic-composer-button-text-light": "#2a2828",
-  "semantic-composer-button-text-dark": "#595959",
-  "semantic-composer-button-text-strong-light": "#212121",
-  "semantic-composer-button-text-strong-dark": "#424242",
-} satisfies AppearanceTokenMap
-
-const DEFAULT_APPEARANCE_RESOLVED_TOKENS = {
-  "surface-app-light": "#ffffff",
-  "surface-app-dark": "#1c1917",
-  "surface-shell-light": "#ffffff",
-  "surface-shell-dark": "#221d1a",
-  "surface-panel-light": "#ededed",
-  "surface-panel-dark": "#292524",
-  "surface-panel-muted-light": "#e8e8e8",
-  "surface-panel-muted-dark": "#342d2a",
-  "surface-sidebar-light": "#e8e8e8",
-  "surface-sidebar-dark": "#241f1c",
-  "surface-sidebar-strong-light": "#e8e8e8",
-  "surface-sidebar-strong-dark": "#181311",
-  "surface-user-bubble-light": "#ffffff",
-  "surface-user-bubble-dark": "#e17068",
-  "surface-trace-light": "#ffffff",
-  "surface-trace-dark": "#241d1b",
-  "surface-elevated-light": "#e3e3e3",
-  "surface-elevated-dark": "#292524",
-  "surface-overlay-light": "#292524",
-  "surface-overlay-dark": "#0c0a09",
-  "surface-code-light": "#1c1c1c",
-  "surface-code-dark": "#27272a",
-  "surface-code-strong-light": "#000000",
-  "surface-code-strong-dark": "#14100f",
-  "text-primary-light": "#000000",
-  "text-primary-dark": "#f5f5f4",
-  "text-secondary-light": "#78716c",
-  "text-secondary-dark": "#a591d9",
-  "text-tertiary-light": "#c8ae9d",
-  "text-tertiary-dark": "#a8a29e",
-  "text-on-dark-light": "#fcfcfc",
-  "text-on-dark-dark": "#fafaf9",
-  "border-subtle-light": "#e0e0e0",
-  "border-subtle-dark": "#e7e5e4",
-  "border-default-light": "rgba(41, 37, 36, 0.08)",
-  "border-default-dark": "rgba(231, 229, 228, 0.18)",
-  "brand-primary": "#d7cbcb",
-  "brand-primary-dark": "#f3eded",
-  "brand-primary-hover": "#878787",
-  "brand-primary-hover-dark": "#f6efef",
-  "brand-accent-highlight": "#c7c7c7",
-  "brand-accent-highlight-dark": "#f0f0f0",
-  "brand-primary-soft": "#d46b63",
-  "brand-primary-soft-dark": "#e17068",
-  "brand-primary-soft-strong": "#d46b63",
-  "brand-primary-soft-strong-dark": "#e17068",
-  "semantic-accent-icon-light": "#666666",
-  "semantic-accent-icon-dark": "#d6d3d1",
-  "semantic-accent-icon-hover-light": "#000000",
-  "semantic-accent-icon-hover-dark": "#fca5a5",
-  "semantic-accent-icon-active-light": "#000000",
-  "semantic-accent-icon-active-dark": "#fca5a5",
-  "semantic-success-light": "#65a30d",
-  "semantic-success-dark": "#65a30d",
-  "semantic-success-strong-light": "#5b8f11",
-  "semantic-success-strong-dark": "#7cb032",
-  "semantic-success-text-light": "#5e9410",
-  "semantic-success-text-dark": "#76ad29",
-  "semantic-success-border-light": "#c3d3a8",
-  "semantic-success-border-dark": "#c3d3a8",
-  "semantic-success-surface-light": "#f0f6e7",
-  "semantic-success-surface-dark": "#2f3222",
-  "semantic-success-surface-strong-light": "#e6f0d8",
-  "semantic-success-surface-strong-dark": "#333920",
-  "semantic-warning-light": "#b45309",
-  "semantic-warning-dark": "#b45309",
-  "semantic-warning-strong-light": "#9e4c0d",
-  "semantic-warning-strong-dark": "#be6d2f",
-  "semantic-warning-text-light": "#a34d0c",
-  "semantic-warning-text-dark": "#bc6625",
-  "semantic-warning-border-light": "#d9bca7",
-  "semantic-warning-border-dark": "#d9bca7",
-  "semantic-warning-surface-light": "#f8eee6",
-  "semantic-warning-surface-dark": "#372a21",
-  "semantic-warning-surface-strong-light": "#f3e3d8",
-  "semantic-warning-surface-strong-dark": "#3f2c20",
-  "semantic-error-light": "#9f1239",
-  "semantic-error-dark": "#9f1239",
-  "semantic-error-strong-light": "#8c1536",
-  "semantic-error-strong-dark": "#ad3657",
-  "semantic-error-text-light": "#911436",
-  "semantic-error-text-dark": "#a92d4f",
-  "semantic-error-border-light": "#d3aab4",
-  "semantic-error-border-dark": "#d3aab4",
-  "semantic-error-surface-light": "#f5e7eb",
-  "semantic-error-surface-dark": "#352326",
-  "semantic-error-surface-strong-light": "#f0d9df",
-  "semantic-error-surface-strong-dark": "#3c2227",
-  "semantic-info-light": "#6366f1",
-  "semantic-info-dark": "#6366f1",
-  "semantic-info-strong-light": "#5a5cd0",
-  "semantic-info-strong-dark": "#7a7df1",
-  "semantic-info-text-light": "#5c5ed8",
-  "semantic-info-text-dark": "#7577f1",
-  "semantic-info-border-light": "#c2c1e8",
-  "semantic-info-border-dark": "#c2c1e8",
-  "semantic-info-surface-light": "#eff0fe",
-  "semantic-info-surface-dark": "#2f2c39",
-  "semantic-info-surface-strong-light": "#e6e7fd",
-  "semantic-info-surface-strong-dark": "#322f45",
-  "semantic-shell-chrome-surface-light": "#e8e8e8",
-  "semantic-shell-chrome-surface-dark": "#221d1a",
-  "semantic-terminal-surface-light": "#ffffff",
-  "semantic-terminal-surface-dark": "#000000",
-  "semantic-popup-panel-surface-light": "#ffffff",
-  "semantic-popup-panel-surface-dark": "#221d1a",
-  "semantic-settings-switch-row-surface-focus-light": "#dedede",
-  "semantic-settings-switch-row-surface-focus-dark": "#342d2a",
-  "semantic-settings-switch-track-surface-light": "#d7dce4",
-  "semantic-settings-switch-track-surface-dark": "#342d2a",
-  "semantic-settings-switch-track-border-light": "rgba(41, 37, 36, 0.08)",
-  "semantic-settings-switch-track-border-dark": "rgba(231, 229, 228, 0.18)",
-  "semantic-settings-switch-track-border-focus-light": "#878787",
-  "semantic-settings-switch-track-border-focus-dark": "#f6efef",
-  "semantic-settings-switch-track-surface-active-light": "#878787",
-  "semantic-settings-switch-track-surface-active-dark": "#f3eded",
-  "semantic-settings-switch-track-border-active-light": "#878787",
-  "semantic-settings-switch-track-border-active-dark": "#f3eded",
-  "semantic-settings-switch-track-surface-disabled-light": "#e8e8e8",
-  "semantic-settings-switch-track-surface-disabled-dark": "#342d2a",
-  "semantic-settings-switch-track-border-disabled-light": "rgba(41, 37, 36, 0.08)",
-  "semantic-settings-switch-track-border-disabled-dark": "rgba(231, 229, 228, 0.18)",
-  "semantic-settings-switch-thumb-surface-light": "#ffffff",
-  "semantic-settings-switch-thumb-surface-dark": "#ffffff",
-  "semantic-settings-switch-thumb-surface-disabled-light": "#ffffff",
-  "semantic-settings-switch-thumb-surface-disabled-dark": "#292524",
-  "semantic-segmented-control-surface-light": "#e8e8e8",
-  "semantic-segmented-control-surface-dark": "#342d2a",
-  "semantic-segmented-control-border-light": "rgba(41, 37, 36, 0.08)",
-  "semantic-segmented-control-border-dark": "rgba(231, 229, 228, 0.18)",
-  "semantic-segmented-control-item-surface-hover-light": "#dedede",
-  "semantic-segmented-control-item-surface-hover-dark": "#342d2a",
-  "semantic-segmented-control-item-surface-active-light": "#dedede",
-  "semantic-segmented-control-item-surface-active-dark": "rgba(225, 112, 104, 0.118)",
-  "semantic-segmented-control-item-text-light": "#78716c",
-  "semantic-segmented-control-item-text-dark": "#a591d9",
-  "semantic-segmented-control-item-text-hover-light": "#000000",
-  "semantic-segmented-control-item-text-hover-dark": "#f5f5f4",
-  "semantic-segmented-control-item-text-active-light": "#000000",
-  "semantic-segmented-control-item-text-active-dark": "#f5f5f4",
-  "semantic-segmented-control-item-meta-text-light": "#c8ae9d",
-  "semantic-segmented-control-item-meta-text-dark": "#a8a29e",
-  "semantic-segmented-control-item-meta-text-active-light": "#78716c",
-  "semantic-segmented-control-item-meta-text-active-dark": "#a591d9",
-  "semantic-segmented-control-item-text-disabled-light": "#c8ae9d",
-  "semantic-segmented-control-item-text-disabled-dark": "#a8a29e",
-  "semantic-question-card-surface-light": "#f8eeeb",
-  "semantic-question-card-surface-dark": "#332623",
-  "semantic-proposed-plan-card-surface-light": "#ffffff",
-  "semantic-proposed-plan-card-surface-dark": "#292524",
-  "semantic-thread-response-text-light": "#000000",
-  "semantic-thread-response-text-dark": "#f5f5f4",
-  "semantic-thread-reasoning-text-light": "#78716c",
-  "semantic-thread-reasoning-text-dark": "#a591d9",
-  "semantic-thread-divider-light": "rgba(41, 37, 36, 0.064)",
-  "semantic-thread-divider-dark": "rgba(231, 229, 228, 0.112)",
-  "semantic-thread-panel-surface-light": "#ffffff",
-  "semantic-thread-panel-surface-dark": "#292524",
-  "semantic-thread-panel-surface-muted-light": "#f7f1ee",
-  "semantic-thread-panel-surface-muted-dark": "#342d2a",
-  "semantic-thread-tool-io-panel-surface-light": "#f7f1ee",
-  "semantic-thread-tool-io-panel-surface-dark": "#342d2a",
-  "semantic-thread-panel-surface-hover-light": "#f8f3f0",
-  "semantic-thread-panel-surface-hover-dark": "#322b29",
-  "semantic-markdown-text-light": "#000000",
-  "semantic-markdown-text-dark": "#f5f5f4",
-  "semantic-markdown-muted-text-light": "#78716c",
-  "semantic-markdown-muted-text-dark": "#a591d9",
-  "semantic-markdown-strong-text-light": "#000000",
-  "semantic-markdown-strong-text-dark": "#f5f5f4",
-  "semantic-markdown-accent-light": "#878787",
-  "semantic-markdown-accent-dark": "#f6efef",
-  "semantic-markdown-selection-background-light": "rgba(212, 107, 99, 0.101)",
-  "semantic-markdown-selection-background-dark": "rgba(225, 112, 104, 0.118)",
-  "semantic-markdown-selection-text-light": "#000000",
-  "semantic-markdown-selection-text-dark": "#f5f5f4",
-  "semantic-markdown-border-light": "#e7e5e4",
-  "semantic-markdown-border-dark": "#e7e5e4",
-  "semantic-markdown-border-strong-light": "#e2c8c5",
-  "semantic-markdown-border-strong-dark": "#e4a39e",
-  "semantic-markdown-quote-surface-light": "#f5dcda",
-  "semantic-markdown-quote-surface-dark": "#5a3936",
-  "semantic-markdown-inline-code-surface-light": "#d2d0d0",
-  "semantic-markdown-inline-code-surface-dark": "#6b403c",
-  "semantic-markdown-table-head-surface-light": "#f8f4f1",
-  "semantic-markdown-table-head-surface-dark": "#322c29",
-  "semantic-markdown-table-row-alt-surface-light": "#f9f5f3",
-  "semantic-markdown-table-row-alt-surface-dark": "#312b28",
-  "semantic-markdown-code-surface-light": "#27272a",
-  "semantic-markdown-code-surface-dark": "#27272a",
-  "semantic-markdown-code-text-light": "#fcfcfc",
-  "semantic-markdown-code-text-dark": "#fafaf9",
-  "semantic-markdown-code-muted-text-light": "#fafaf9",
-  "semantic-markdown-code-muted-text-dark": "#fafaf9",
-  "semantic-markdown-code-border-light": "#8b8a8b",
-  "semantic-markdown-code-border-dark": "#4f4e50",
-  "semantic-sidebar-tree-row-text-light": "#525252",
-  "semantic-sidebar-tree-row-text-dark": "#a591d9",
-  "semantic-sidebar-tree-row-text-hover-light": "#000000",
-  "semantic-sidebar-tree-row-text-hover-dark": "#f5f5f4",
-  "semantic-sidebar-tree-row-text-active-light": "#000000",
-  "semantic-sidebar-tree-row-text-active-dark": "#f6efef",
-  "semantic-sidebar-tree-row-surface-hover-light": "#dedede",
-  "semantic-sidebar-tree-row-surface-hover-dark": "#342d2a",
-  "semantic-sidebar-tree-row-surface-active-light": "#dedede",
-  "semantic-sidebar-tree-row-surface-active-dark": "#e17068",
-  "semantic-sidebar-tree-row-leading-active-light": "#000000",
-  "semantic-sidebar-tree-row-leading-active-dark": "#f3eded",
-  "semantic-settings-list-detail-row-surface-hover-light": "#f7f1ee",
-  "semantic-settings-list-detail-row-surface-hover-dark": "#342d2a",
-  "semantic-composer-surface-light": "#ffffff",
-  "semantic-composer-surface-dark": "#292524",
-  "semantic-composer-border-light": "rgba(41, 37, 36, 0.08)",
-  "semantic-composer-border-dark": "rgba(231, 229, 228, 0.18)",
-  "semantic-dropdown-menu-surface-light": "#fafafa",
-  "semantic-dropdown-menu-surface-dark": "#302a28",
-  "semantic-composer-button-surface-light": "#f0f1ff",
-  "semantic-composer-button-surface-dark": "#333044",
-  "semantic-composer-button-surface-strong-light": "#e5e7ff",
-  "semantic-composer-button-surface-strong-dark": "#3d365a",
-  "semantic-composer-button-text-light": "#2a2828",
-  "semantic-composer-button-text-dark": "#595959",
-  "semantic-composer-button-text-strong-light": "#212121",
-  "semantic-composer-button-text-strong-dark": "#424242",
-  "semantic-composer-icon-button-surface-light": "rgba(0, 0, 0, 0)",
-  "semantic-composer-icon-button-surface-dark": "rgba(0, 0, 0, 0)",
-  "semantic-composer-icon-button-surface-hover-light": "#f0f1ff",
-  "semantic-composer-icon-button-surface-hover-dark": "#333044",
-  "semantic-composer-icon-button-text-light": "#000000",
-  "semantic-composer-icon-button-text-dark": "#f5f5f4",
-  "semantic-composer-icon-button-text-hover-light": "#2a2828",
-  "semantic-composer-icon-button-text-hover-dark": "#595959",
-  "semantic-button-primary-surface-light": "#878787",
-  "semantic-button-primary-surface-dark": "#878787",
-  "semantic-button-primary-surface-hover-light": "#878787",
-  "semantic-button-primary-surface-hover-dark": "#878787",
-  "semantic-button-primary-border-light": "#878787",
-  "semantic-button-primary-border-dark": "#878787",
-  "semantic-button-primary-border-hover-light": "#878787",
-  "semantic-button-primary-border-hover-dark": "#878787",
-  "semantic-button-primary-text-light": "#fcfcfc",
-  "semantic-button-primary-text-dark": "#fafaf9",
-  "semantic-button-primary-text-hover-light": "#fcfcfc",
-  "semantic-button-primary-text-hover-dark": "#fafaf9",
-  "semantic-button-primary-disabled-surface-light": "#e8e8e8",
-  "semantic-button-primary-disabled-surface-dark": "#342d2a",
-  "semantic-button-primary-disabled-border-light": "#dbdbdb",
-  "semantic-button-primary-disabled-border-dark": "#e7e5e4",
-  "semantic-button-primary-disabled-text-light": "#c8ae9d",
-  "semantic-button-primary-disabled-text-dark": "#a8a29e",
-  "semantic-button-secondary-surface-light": "#e8e8e8",
-  "semantic-button-secondary-surface-dark": "#342d2a",
-  "semantic-button-secondary-surface-hover-light": "#fdfbfa",
-  "semantic-button-secondary-surface-hover-dark": "#2c2726",
-  "semantic-button-secondary-border-light": "#dbdbdb",
-  "semantic-button-secondary-border-dark": "#e7e5e4",
-  "semantic-button-secondary-border-hover-light": "#e2c8c5",
-  "semantic-button-secondary-border-hover-dark": "#e4a39e",
-  "semantic-button-secondary-text-light": "#78716c",
-  "semantic-button-secondary-text-dark": "#a591d9",
-  "semantic-button-secondary-text-hover-light": "#000000",
-  "semantic-button-secondary-text-hover-dark": "#f5f5f4",
-  "semantic-button-secondary-disabled-surface-light": "#e8e8e8",
-  "semantic-button-secondary-disabled-surface-dark": "#342d2a",
-  "semantic-button-secondary-disabled-border-light": "#dbdbdb",
-  "semantic-button-secondary-disabled-border-dark": "#e7e5e4",
-  "semantic-button-secondary-disabled-text-light": "#c8ae9d",
-  "semantic-button-secondary-disabled-text-dark": "#a8a29e",
-  "semantic-icon-button-text-light": "#78716c",
-  "semantic-icon-button-text-dark": "#a591d9",
-  "semantic-icon-button-text-hover-light": "#000000",
-  "semantic-icon-button-text-hover-dark": "#f5f5f4",
-  "semantic-icon-button-text-active-light": "#878787",
-  "semantic-icon-button-text-active-dark": "#f6efef",
-  "semantic-icon-button-surface-hover-light": "#dedede",
-  "semantic-icon-button-surface-hover-dark": "#342d2a",
-  "semantic-icon-button-surface-active-light": "#dedede",
-  "semantic-icon-button-surface-active-dark": "#e17068",
-  "semantic-button-danger-surface-light": "#f5e7eb",
-  "semantic-button-danger-surface-dark": "#352326",
-  "semantic-button-danger-surface-hover-light": "#f0d9df",
-  "semantic-button-danger-surface-hover-dark": "#3c2227",
-  "semantic-button-danger-border-light": "#d3aab4",
-  "semantic-button-danger-border-dark": "#d3aab4",
-  "semantic-button-danger-border-hover-light": "#d3aab4",
-  "semantic-button-danger-border-hover-dark": "#d3aab4",
-  "semantic-button-danger-text-light": "#911436",
-  "semantic-button-danger-text-dark": "#a92d4f",
-  "semantic-button-danger-text-hover-light": "#8c1536",
-  "semantic-button-danger-text-hover-dark": "#ad3657",
-  "semantic-button-danger-disabled-surface-light": "#e8e8e8",
-  "semantic-button-danger-disabled-surface-dark": "#342d2a",
-  "semantic-button-danger-disabled-border-light": "#dbdbdb",
-  "semantic-button-danger-disabled-border-dark": "#e7e5e4",
-  "semantic-button-danger-disabled-text-light": "#c8ae9d",
-  "semantic-button-danger-disabled-text-dark": "#a8a29e",
-  "focus-outline-color-light": "#d46b63",
-  "focus-outline-color-dark": "#e17068",
-  "selection-background-light": "#d46b63",
-  "selection-background-dark": "#e17068",
-  "ui-panel-light": "#ffffff",
-  "ui-panel-dark": "#292524",
-  "ui-panel-subtle-light": "#f7f1ee",
-  "ui-panel-subtle-dark": "#342d2a",
-} satisfies AppearanceTokenMap
-
 export function createDefaultAppearanceConfigDocument(): AppearanceConfigDocument {
   return {
-    version: 1,
-    brandTheme: "terra",
-    colorMode: "light",
-    fontFamily: "default",
-    overrides: { ...DEFAULT_APPEARANCE_OVERRIDES },
-    resolvedTokens: { ...DEFAULT_APPEARANCE_RESOLVED_TOKENS },
+    version: 2,
+    brandTheme: DEFAULT_APPEARANCE_THEME_DEFINITION.brandTheme,
+    colorMode: DEFAULT_APPEARANCE_THEME_DEFINITION.colorMode,
+    fontFamily: DEFAULT_APPEARANCE_THEME_DEFINITION.fontFamily,
+    overrides: { ...DEFAULT_APPEARANCE_THEME_DEFINITION.overrides },
+    foreignDtcg: {},
     updatedAt: 0,
   }
-}
-
-function normalizeAppearanceColorTokenValue(value: unknown) {
-  if (typeof value !== "string") return null
-
-  const trimmed = value.trim()
-  return trimmed || null
 }
 
 function normalizeAppearanceTokenMap(input: unknown): AppearanceTokenMap {
@@ -2571,9 +570,12 @@ function normalizeAppearanceTokenMap(input: unknown): AppearanceTokenMap {
   for (const [key, value] of Object.entries(input)) {
     if (!isAppearanceTokenName(key)) continue
 
-    const trimmed = normalizeAppearanceColorTokenValue(value)
-    if (trimmed) {
-      normalized[key] = trimmed
+    const normalizedValue = normalizeAppearanceTokenValue(value)
+    if (
+      normalizedValue &&
+      (normalizedValue.type !== "alias" || isAppearanceTokenName(normalizedValue.token))
+    ) {
+      normalized[key] = normalizedValue
     }
   }
 
@@ -2583,15 +585,200 @@ function normalizeAppearanceTokenMap(input: unknown): AppearanceTokenMap {
     const migratedTokenNames = LEGACY_APPEARANCE_TOKEN_MIGRATIONS[key]
     if (!migratedTokenNames) continue
 
-    const trimmed = normalizeAppearanceColorTokenValue(value)
-    if (!trimmed) continue
+    const normalizedValue = normalizeAppearanceTokenValue(value)
+    if (
+      !normalizedValue ||
+      (normalizedValue.type === "alias" && !isAppearanceTokenName(normalizedValue.token))
+    ) continue
 
     for (const tokenName of migratedTokenNames) {
-      normalized[tokenName] ??= trimmed
+      normalized[tokenName] ??= normalizedValue
     }
   }
 
   return normalized
+}
+
+const MAX_FOREIGN_DTCG_JSON_LENGTH = 1_000_000
+
+function normalizeForeignDtcg(input: unknown): Record<string, unknown> {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return {}
+
+  try {
+    const serialized = JSON.stringify(input)
+    if (!serialized || serialized.length > MAX_FOREIGN_DTCG_JSON_LENGTH) return {}
+    const parsed = JSON.parse(serialized) as unknown
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {}
+  } catch {
+    return {}
+  }
+}
+
+function validateAppearanceOverrideAliasCycles(
+  overrides: Record<string, unknown>,
+): string[] {
+  const aliases = new Map<AppearanceTokenName, AppearanceTokenName>()
+  for (const [tokenName, value] of Object.entries(overrides)) {
+    if (!isAppearanceTokenName(tokenName)) continue
+    const normalized = normalizeAppearanceTokenValue(value)
+    if (
+      normalized?.type === "alias" &&
+      isAppearanceTokenName(normalized.token)
+    ) {
+      aliases.set(tokenName, normalized.token)
+    }
+  }
+
+  const visiting = new Set<AppearanceTokenName>()
+  const visited = new Set<AppearanceTokenName>()
+  const errors: string[] = []
+
+  function visit(tokenName: AppearanceTokenName, stack: AppearanceTokenName[]) {
+    if (visited.has(tokenName)) return
+    if (visiting.has(tokenName)) {
+      const cycleStart = stack.indexOf(tokenName)
+      const cycle = [...stack.slice(Math.max(0, cycleStart)), tokenName]
+      errors.push(
+        `Appearance token alias cycle: ${cycle
+          .map((name) => `--${name}`)
+          .join(" -> ")}.`,
+      )
+      return
+    }
+
+    visiting.add(tokenName)
+    const target = aliases.get(tokenName)
+    if (target) visit(target, [...stack, tokenName])
+    visiting.delete(tokenName)
+    visited.add(tokenName)
+  }
+
+  for (const tokenName of aliases.keys()) visit(tokenName, [])
+  return [...new Set(errors)]
+}
+
+export function validateAppearanceConfigDocumentStructure(
+  input: unknown,
+  options: { requireComplete?: boolean } = {},
+): string[] {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return ["Appearance config must be a JSON object."]
+  }
+
+  const record = input as Record<string, unknown>
+  const errors: string[] = []
+  if (record.version !== 1 && record.version !== 2 && record.version !== undefined) {
+    errors.push(`Unsupported appearance config version "${String(record.version)}".`)
+  }
+  if (options.requireComplete && record.version !== 2) {
+    errors.push("Appearance config version must be 2.")
+  }
+
+  const requiredFields = [
+    "brandTheme",
+    "colorMode",
+    "fontFamily",
+    "overrides",
+    "foreignDtcg",
+    "updatedAt",
+  ] as const
+  if (options.requireComplete) {
+    for (const field of requiredFields) {
+      if (!Object.hasOwn(record, field)) {
+        errors.push(`Appearance config is missing "${field}".`)
+      }
+    }
+  }
+  if (
+    record.brandTheme !== undefined &&
+    record.brandTheme !== "terra" &&
+    record.brandTheme !== "sage"
+  ) {
+    errors.push("Appearance config brandTheme must be \"terra\" or \"sage\".")
+  }
+  if (
+    record.colorMode !== undefined &&
+    record.colorMode !== "system" &&
+    record.colorMode !== "light" &&
+    record.colorMode !== "dark"
+  ) {
+    errors.push("Appearance config colorMode must be \"system\", \"light\", or \"dark\".")
+  }
+  if (
+    record.fontFamily !== undefined &&
+    (
+      typeof record.fontFamily !== "string" ||
+      !isAppearanceFontFamily(record.fontFamily)
+    )
+  ) {
+    errors.push("Appearance config fontFamily is unsupported.")
+  }
+  if (
+    record.updatedAt !== undefined &&
+    (
+      typeof record.updatedAt !== "number" ||
+      !Number.isFinite(record.updatedAt) ||
+      record.updatedAt < 0
+    )
+  ) {
+    errors.push("Appearance config updatedAt must be a non-negative finite number.")
+  }
+  if (
+    record.foreignDtcg !== undefined &&
+    (
+      !record.foreignDtcg ||
+      typeof record.foreignDtcg !== "object" ||
+      Array.isArray(record.foreignDtcg)
+    )
+  ) {
+    errors.push("Appearance config foreignDtcg must be an object.")
+  } else if (record.foreignDtcg !== undefined) {
+    try {
+      const serialized = JSON.stringify(record.foreignDtcg)
+      if (!serialized || serialized.length > MAX_FOREIGN_DTCG_JSON_LENGTH) {
+        errors.push(
+          `Appearance config foreignDtcg exceeds the ${MAX_FOREIGN_DTCG_JSON_LENGTH.toLocaleString()} character limit.`,
+        )
+      }
+    } catch {
+      errors.push("Appearance config foreignDtcg must be JSON-serializable.")
+    }
+  }
+  if (!record.overrides || typeof record.overrides !== "object" || Array.isArray(record.overrides)) {
+    if (record.overrides !== undefined || options.requireComplete) {
+      errors.push("Appearance config overrides must be an object.")
+    }
+    return errors
+  }
+
+  for (const [tokenName, value] of Object.entries(record.overrides)) {
+    const isKnownName = isAppearanceTokenName(tokenName)
+    const isLegacyName = Boolean(LEGACY_APPEARANCE_TOKEN_MIGRATIONS[tokenName])
+    if (!isKnownName && !(record.version !== 2 && isLegacyName)) {
+      errors.push(`Unknown appearance token "--${tokenName}".`)
+      continue
+    }
+
+    const normalizedValue = normalizeAppearanceTokenValue(value)
+    if (!normalizedValue) {
+      errors.push(`Appearance token "--${tokenName}" has an invalid color value.`)
+      continue
+    }
+    if (normalizedValue.type === "alias" && !isAppearanceTokenName(normalizedValue.token)) {
+      errors.push(
+        `Appearance token "--${tokenName}" aliases unknown public mode token "--${normalizedValue.token}".`,
+      )
+    }
+  }
+
+  errors.push(
+    ...validateAppearanceOverrideAliasCycles(
+      record.overrides as Record<string, unknown>,
+    ),
+  )
+  return errors
 }
 
 export function normalizeAppearanceConfigDocument(input: unknown): AppearanceConfigDocument {
@@ -2618,12 +805,14 @@ export function normalizeAppearanceConfigDocument(input: unknown): AppearanceCon
     : 0
 
   return {
-    version: 1,
+    version: 2,
     brandTheme,
     colorMode,
     fontFamily,
     overrides: normalizeAppearanceTokenMap(partial.overrides),
-    resolvedTokens: normalizeAppearanceTokenMap(partial.resolvedTokens),
+    foreignDtcg: normalizeForeignDtcg(
+      (input as { foreignDtcg?: unknown }).foreignDtcg,
+    ),
     updatedAt,
   }
 }

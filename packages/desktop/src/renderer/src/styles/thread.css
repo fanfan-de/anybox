@@ -999,19 +999,19 @@ body.is-resizing-sidebar .trace-log-detail.is-collapsing {
 }
 
 .assistant-execution-summary-button:hover {
-  background: var(--semantic-sidebar-tree-row-surface-hover);
+  background: var(--semantic-thread-panel-surface-hover);
   color: var(--seg-text-1);
 }
 
 .assistant-execution-summary-button:focus-visible {
   outline: none;
   border-color: var(--seg-accent-strong);
-  background: var(--semantic-sidebar-tree-row-surface-hover);
+  background: var(--semantic-thread-panel-surface-hover);
   color: var(--seg-text-1);
 }
 
 .assistant-execution-summary-button:active {
-  background: var(--semantic-sidebar-tree-row-surface-active);
+  background: var(--brand-primary-soft-active);
   color: var(--seg-text-1);
 }
 
@@ -2158,20 +2158,20 @@ body.is-resizing-sidebar .trace-log-detail.is-collapsing {
   border-radius: var(--radius-control);
   outline: none;
   background: transparent;
-  color: var(--semantic-sidebar-tree-row-text);
+  color: var(--semantic-thread-reasoning-text);
   text-align: left;
   cursor: pointer;
 }
 
 .thread-turn-navigator-compact-item:hover,
 .thread-turn-navigator-compact-item:focus-visible {
-  background: var(--semantic-sidebar-tree-row-surface-hover);
-  color: var(--semantic-sidebar-tree-row-text-hover);
+  background: var(--semantic-thread-panel-surface-hover);
+  color: var(--semantic-thread-response-text);
 }
 
 .thread-turn-navigator-compact-item[data-current="true"] {
-  background: var(--semantic-sidebar-tree-row-surface-active);
-  color: var(--semantic-sidebar-tree-row-text-active);
+  background: var(--brand-primary-soft-active);
+  color: var(--brand-primary-strong);
 }
 
 .thread-turn-navigator-compact-index {
@@ -2701,7 +2701,7 @@ body.is-image-lightbox-open {
   width: 18px;
   height: 18px;
   border-radius: var(--seg-radius-xs);
-  background: var(--semantic-sidebar-tree-row-surface-hover);
+  background: var(--semantic-thread-panel-surface-hover);
   color: var(--seg-text-3);
 }
 
@@ -2782,7 +2782,7 @@ body.is-image-lightbox-open {
 
 .ask-user-question-option-button:not(:disabled):hover {
   border-color: var(--mix-seg-accent-24-seg-border-76);
-  background: var(--semantic-sidebar-tree-row-surface-hover);
+  background: var(--semantic-thread-panel-surface-hover);
 }
 
 .ask-user-question-option-button:not(:disabled):hover .ask-user-question-option-label,
@@ -2793,7 +2793,7 @@ body.is-image-lightbox-open {
 .ask-user-question-option-button:focus-visible {
   outline: none;
   border-color: var(--mix-seg-accent-40-seg-border-60);
-  background: var(--semantic-sidebar-tree-row-surface-active);
+  background: var(--brand-primary-soft-active);
 }
 
 .ask-user-question-option-button:disabled {

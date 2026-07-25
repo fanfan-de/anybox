@@ -2,6 +2,7 @@ import { fireEvent, render as testingLibraryRender, screen, waitFor, within } fr
 import type { ComponentProps, ReactElement } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { APPEARANCE_TOKEN_NAMES } from "../../../../shared/appearance"
+import { parseAppearanceColorLiteral } from "../../../../shared/appearance-color"
 import type { AppearanceTheme } from "../../../../shared/appearance-themes"
 import type { DesktopAppUpdateState, DesktopStorageUsageSnapshot } from "../../../../shared/desktop-ipc-contract"
 import { I18nProvider } from "../i18n/I18nProvider"
@@ -77,6 +78,12 @@ function createAppearanceTokenValues(
   >["appearanceTokenValues"]
 }
 
+function colorLiteral(value: string) {
+  const literal = parseAppearanceColorLiteral(value)
+  if (!literal) throw new Error(`Invalid test color: ${value}`)
+  return literal
+}
+
 function createAppearanceTheme(overrides: Partial<AppearanceTheme> = {}): AppearanceTheme {
   return {
     id: "built-in:classic",
@@ -91,6 +98,7 @@ function createAppearanceTheme(overrides: Partial<AppearanceTheme> = {}): Appear
     codeThemePreference: "auto",
     htmlBackgroundConfig: DEFAULT_HTML_BACKGROUND_CONFIG,
     overrides: {},
+    foreignDtcg: {},
     ...overrides,
   }
 }
@@ -1050,13 +1058,16 @@ describe("SettingsPage built-in tools", () => {
       selector: ".settings-subscription-overview-balance-copy strong",
     })).toBeInTheDocument()
 
+    fireEvent.click(screen.getByRole("button", { name: "provider.anybox.com.cn" }))
+    expect(openExternalUrl).toHaveBeenCalledWith({ url: "https://provider.anybox.com.cn/app/dashboard" })
+
     fireEvent.click(screen.getByRole("button", { name: "www.anybox.com.cn" }))
     expect(openExternalUrl).toHaveBeenCalledWith({ url: "https://www.anybox.com.cn" })
 
     fireEvent.click(screen.getByRole("button", { name: "Recharge" }))
     expect(screen.getByRole("tab", { name: "Balance & recharge" })).toHaveAttribute("aria-selected", "true")
     expect(await screen.findByRole("heading", { name: "Add prepaid balance" })).toBeInTheDocument()
-    expect(openExternalUrl).toHaveBeenCalledTimes(1)
+    expect(openExternalUrl).toHaveBeenCalledTimes(2)
 
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }))
     expect(onDeleteProviderAuthSession).toHaveBeenCalledWith("anybox")
@@ -2192,7 +2203,7 @@ describe("SettingsPage built-in tools", () => {
               source: "user",
               readonly: false,
               overrides: {
-                "surface-panel-light": "#fefefe",
+                "surface-panel-light": colorLiteral("#fefefe"),
               },
             }),
           ],
@@ -2244,6 +2255,72 @@ describe("SettingsPage built-in tools", () => {
     await waitFor(() => {
       expect(onAppearanceThemeSaveCurrent).toHaveBeenCalledWith("Focused Work")
     })
+  })
+
+  it("imports and exports DTCG themes and shows contrast feedback", async () => {
+    const importedTheme = createAppearanceTheme({
+      id: "user:imported",
+      name: "Imported",
+      source: "imported",
+      readonly: false,
+    })
+    const onAppearanceThemeImportDtcg = vi.fn().mockResolvedValue(importedTheme)
+    const onAppearanceThemeExportDtcg = vi.fn().mockReturnValue({
+      contents: "{\"$schema\":\"test\"}\n",
+      fileName: "classic.tokens.json",
+    })
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {})
+
+    render(
+      <SettingsPage
+        {...createSettingsPageProps({
+          activeAppearanceThemeID: "built-in:classic",
+          appearanceThemes: [createAppearanceTheme()],
+          appearanceContrastWarnings: [
+            {
+              contractID: "primary-text-on-app",
+              kind: "text",
+              mode: "light",
+              foregroundToken: "text-primary-light",
+              backgroundToken: "surface-app-light",
+              contrast: 1,
+              minimumContrast: 4.5,
+            },
+          ],
+          appearanceThemeNotice: "Imported 2 Anybox tokens.",
+          onAppearanceThemeExportDtcg,
+          onAppearanceThemeImportDtcg,
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Appearance" }))
+
+    const file = new File(["{}"], "shared.tokens.json", {
+      type: "application/json",
+    })
+    Object.defineProperty(file, "text", {
+      configurable: true,
+      value: vi.fn().mockResolvedValue("{}"),
+    })
+    fireEvent.change(
+      screen.getByLabelText("Choose a DTCG token file to import"),
+      { target: { files: [file] } },
+    )
+
+    await waitFor(() => {
+      expect(onAppearanceThemeImportDtcg).toHaveBeenCalledWith(
+        "{}",
+        "shared",
+      )
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Export DTCG" }))
+    expect(onAppearanceThemeExportDtcg).toHaveBeenCalledWith("built-in:classic")
+    expect(anchorClick).toHaveBeenCalled()
+    expect(screen.getByRole("heading", {
+      name: "Contrast warnings (1)",
+    })).toBeInTheDocument()
+    expect(screen.getByText("Imported 2 Anybox tokens.")).toBeInTheDocument()
   })
 
   it("edits the static HTML background settings from appearance", () => {
@@ -2482,7 +2559,7 @@ describe("SettingsPage built-in tools", () => {
       <SettingsPage
         {...createSettingsPageProps({
           appearanceOverrides: {
-            "surface-app-light": "#ffffff",
+            "surface-app-light": colorLiteral("#ffffff"),
           },
         })}
       />,

@@ -1,49 +1,49 @@
-# Anybox Mobile Development, Test, and Release
+# Anybox 移动端开发、测试与发布
 
-## Contents
+## 目录
 
-1. Operating model
-2. Safety boundary
-3. Gate 1: local development
-4. Gate 2: standalone Android validation
-5. Gate 3: classify the change
-6. OTA preview and production
-7. Native APK candidate and production
-8. Post-release verification
-9. Device strategy
-10. Manual device checklist
-11. Feasibility validation without publishing
-12. Known workflow gap
+1. 运行模型
+2. 安全边界
+3. 门禁 1：本地开发
+4. 门禁 2：Android 独立包验证
+5. 门禁 3：变更分类
+6. OTA preview 与 production
+7. 原生 APK 候选包与 production
+8. 发布后验证
+9. 设备策略
+10. 人工真机清单
+11. 不发布情况下验证流程
+12. 已知流程缺口
 
-## Operating Model
+## 运行模型
 
-Use three environments and four gates:
+使用三个环境和四道门禁：
 
 ```text
-local source
-  -> local development
-  -> standalone real-device validation
-  -> preview or signed native candidate
-  -> production publication
-  -> production-path verification
+本地源码
+  -> 本地开发
+  -> 独立包真实设备验证
+  -> preview 或正式签名原生候选包
+  -> production 发布
+  -> production 正常路径复验
 ```
 
-Do not make the number of installed apps the foundation of the workflow. A
-separate development application ID is useful when one personal phone must also
-retain the public app, but a dedicated physical test device gives the most
-faithful package, scheme, signing, and upgrade validation.
+不要把“安装多少个应用”作为流程基础。独立 development application ID 适用于个人
+手机必须保留正式版的场景；专用真实测试机仍能最准确地验证包名、Scheme、签名和
+升级行为。
 
-Use a test Provider account, a staging Provider, or only the developer's
-desktop bridge. A separate app sandbox does not prevent a development client
-from modifying production server data.
+使用测试 Provider 账号、staging Provider 或仅连接开发者自己的桌面 Bridge。独立
+应用沙箱只隔离手机本地数据，不能阻止开发客户端修改 production 服务端数据。
 
-## Safety Boundary
+## 安全边界
 
-Treat these as local-only commands:
+将以下命令视为仅本地操作：
 
 ```powershell
 corepack pnpm mobile:start
 corepack pnpm mobile:android:dev
+corepack pnpm mobile:android:build:dev
+corepack pnpm mobile:android:deploy:dev
 corepack pnpm mobile:android:build:debug
 corepack pnpm mobile:android:build:release
 corepack pnpm mobile:android:install:debug
@@ -52,7 +52,7 @@ corepack pnpm mobile:fingerprint:check
 corepack pnpm mobile:release:github:prepare
 ```
 
-Treat these as external publication commands:
+将以下命令视为外部发布操作：
 
 ```powershell
 corepack pnpm mobile:update:preview
@@ -63,86 +63,132 @@ gh release create
 gh release upload
 ```
 
-Do not run an external publication command while merely validating
-feasibility. Require an explicit request to mutate preview or production.
+仅验证可行性时不得执行外部发布命令。修改 preview 或 production 前必须取得明确
+授权。
 
-Do not uninstall an app, clear app data, replace a paired desktop, or install a
-different build onto a personal device until the package name, signing
-compatibility, target serial, and data-loss behavior are resolved.
+卸载应用、清除数据、替换已配对桌面端或向个人设备安装不同构建前，必须先确认
+包名、签名兼容性、目标序列号和数据丢失行为。
 
-## Gate 1: Local Development
+## 门禁 1：本地开发
 
-Work on a feature branch. Do not bump a production version for ordinary local
-development.
+在功能分支工作。普通本地开发不得提升 production 版本。
 
-Run the environment and cheap checks first:
+先执行环境与低成本检查：
 
 ```powershell
-corepack pnpm mobile:doctor -- --strict
+corepack pnpm mobile:doctor --strict
 corepack pnpm mobile:typecheck
 corepack pnpm --filter anybox-mobile-app exec expo install --check
 ```
 
-For JavaScript, UI, translations, and ordinary business logic, use Metro on the
-LAN:
+### 页面与 JavaScript 快速验证
+
+仅修改页面、React 组件、样式、文案、翻译或普通 JavaScript/TypeScript 业务逻辑
+时，优先使用真实手机上的 development 原生客户端连接 Metro：
+
+```powershell
+corepack pnpm mobile:android:dev -- --device <adb-serial>
+```
+
+首次执行会准备并覆盖安装 `com.anybox.mobile.dev` 原生客户端，然后启动 Metro。
+保持该终端运行；保存源码后让 Fast Refresh 更新手机。正常增量反馈通常为秒级，
+可把 1～3 秒作为经验预期，但必须报告实测结果，不能将其作为成功保证。未自动刷新
+时，在 Metro 终端按 `r`；若页面状态阻止刷新，先重新加载应用，不要为刷新而卸载
+或清除开发版数据。
+
+只有纯 UI/JavaScript 路径不依赖 Anybox 自定义原生模块时，才使用 Expo Go 快速
+预览：
 
 ```powershell
 corepack pnpm mobile:start -- --lan --port 8082
 ```
 
-For permissions, native dependencies, Expo SDK changes, config plugins, native
-modules, package identity, or scheme changes, use a native development build:
+让手机与电脑位于可互通的局域网，并用 Expo Go 扫描 Metro 二维码。Expo Go 不能
+证明自定义原生模块、包身份、Scheme、签名或原生配置正确；相关流程优先使用
+`mobile:android:dev`。
+
+停止 Metro 后，Metro 驱动的客户端不能继续加载最新开发代码。结束一轮快速开发前，
+运行低成本检查、与改动匹配的测试，并重新生成内嵌最新 JavaScript 的独立 APK：
 
 ```powershell
-corepack pnpm mobile:android:dev
+corepack pnpm mobile:typecheck
+corepack pnpm mobile:android:deploy:dev -- --serial <adb-serial>
 ```
 
-The current debug and production builds share `com.anybox.mobile` but use
-different signing keys. A debug build cannot replace an installed
-production-signed app. Use a dedicated test device, uninstall only with
-explicit authorization, or implement a separate development application ID.
+部署命令会再次执行 typecheck、保留开发版数据、覆盖安装并启动应用。完成后停止
+Metro，再次启动开发版，验证内嵌 bundle 确实可独立运行。Metro 验证成功不是独立
+APK 或发布门禁的替代品。
 
-For a personal phone that must retain the public app, a separate development
-application ID is therefore required for simultaneous installation. It is not
-required when a dedicated test phone can be reset and reserved for development.
-Even with a development ID, finish native releases with a production-signed
-upgrade test because package identity, signing, deep links, updater behavior,
-and data migration differ.
+修改权限、原生依赖、Expo SDK、React Native、config plugin、原生模块、
+`app.config.js`、包身份、Scheme、签名或更新配置时，不要只使用 Fast Refresh；
+重新运行 `mobile:android:dev` 构建原生 development 客户端，最终仍执行独立 APK
+验收。
 
-Metro success is not a release gate. Continue to a standalone APK before
-classifying or publishing the change.
+需要只构建内嵌最新 JavaScript、停止 Metro 后仍可独立启动的 APK 时执行：
 
-## Gate 2: Standalone Android Validation
+```powershell
+corepack pnpm mobile:android:build:dev
+```
 
-Run focused tests appropriate to the touched code. For the update toolchain:
+日常真实手机循环使用：
+
+```powershell
+corepack pnpm mobile:android:deploy:dev -- --serial <adb-serial>
+```
+
+设备解析顺序为 `--serial`、`ANDROID_SERIAL`、唯一在线且已授权的设备。部署器会
+执行 typecheck、选择目标 ABI、校验 development APK 身份、只调用
+`adb install -r`，随后启动应用。不得卸载或清数据；证书冲突时停止并报告。
+
+被忽略的 `android/` 工程会记录上次构建 profile。首次构建、传入 `--clean` 或
+production/development 切换时执行 clean prebuild；连续 development 部署保留
+Gradle 缓存。development 与正式包拥有独立 Android 沙箱、SecureStore、登录、
+配对和缓存，但仍可能指向同一 Provider/Relay；连接真实服务时使用测试账号。
+
+production 身份的 debug 包和 production release 都使用 `com.anybox.mobile`，但
+通常采用不同签名。不得把 `anybox-mobile-debug.apk` 覆盖安装到正式签名的个人
+应用上。即使日常开发使用独立包名，原生发布仍必须完成 production 签名升级测试，
+因为包身份、签名、深链、更新器和数据迁移行为不同。
+
+Metro 成功不是发布门禁。分类或发布前必须继续验证独立 APK。
+
+## 门禁 2：Android 独立包验证
+
+运行与改动代码匹配的测试。涉及更新工具链时执行：
 
 ```powershell
 corepack pnpm --filter anybox-mobile-app test:update-tools
 ```
 
-Build the standalone debug APK:
+development profile、部署工具和双 Scheme 测试统一执行：
+
+```powershell
+corepack pnpm mobile:test:dev
+```
+
+构建 production 身份的独立 debug APK：
 
 ```powershell
 corepack pnpm mobile:android:build:debug
 ```
 
-The expected artifact is:
+预期产物：
 
 ```text
 packages/mobile-app/build/anybox-mobile-debug.apk
 ```
 
-### Windows native build path
+### Windows 原生构建路径
 
-pnpm's normal isolated dependency paths can push Prefab and CMake inputs close
-to the Windows path limit. A characteristic failure is:
+pnpm 默认隔离依赖路径可能使 Prefab 与 CMake 输入接近 Windows 路径上限，典型错误
+如下：
 
 ```text
 ninja: error: manifest 'build.ninja' still dirty after 100 tries
 ```
 
-When this occurs, keep the frozen lockfile and give that checkout its own short
-virtual store. Do not share one virtual store between active worktrees:
+出现该错误时，保留冻结锁文件，并为当前 worktree 使用独立的短 virtual store。
+不得在多个活动 worktree 之间共享同一个 virtual store：
 
 ```powershell
 $anyboxVirtualStore = "C:\pvs\m"
@@ -151,27 +197,25 @@ $env:ANYBOX_ANDROID_ARCHITECTURES = "arm64-v8a"
 corepack pnpm mobile:android:build:debug -- --clean
 ```
 
-The short store changes only the local dependency layout. It must not change
-`package.json` or `pnpm-lock.yaml`. Check `git status` immediately afterward.
-Use a different short directory for every worktree. A verified build must still
-report `BUILD SUCCESSFUL` and produce the expected APK; merely moving the Git
-checkout to a shorter path is not sufficient.
+短 virtual store 只能改变本地依赖布局，不得修改 `package.json` 或
+`pnpm-lock.yaml`。完成后立即检查 `git status`。每个 worktree 使用不同短目录。
+有效构建必须明确报告 `BUILD SUCCESSFUL` 并生成目标 APK；只把 Git 检出目录改短
+不能作为成功证据。
 
-Select the exact device before installation:
+安装前选择准确设备：
 
 ```powershell
 $env:ANDROID_SERIAL = "<adb-serial>"
 adb devices -l
 ```
 
-Install only when signing compatibility and data impact are acceptable:
+只有在签名兼容且数据影响可接受时才能安装：
 
 ```powershell
 corepack pnpm mobile:android:install:debug
 ```
 
-Before replacing an existing installation, compare the installed APK and
-candidate certificates:
+替换已有安装前比较设备 APK 与候选包证书：
 
 ```powershell
 $installedApk = (adb -s <serial> shell pm path com.anybox.mobile).Trim() -replace "^package:", ""
@@ -181,263 +225,235 @@ $apksigner = "$env:LOCALAPPDATA\Android\Sdk\build-tools\36.0.0\apksigner.bat"
 & $apksigner verify --print-certs packages/mobile-app/build/anybox-mobile-debug.apk
 ```
 
-Different certificate digests plus the same package name means Android cannot
-perform an in-place update. Phone-side USB installation confirmation does not
-override this rule. Do not uninstall or clear data merely to make the command
-pass.
+相同包名但证书摘要不同，表示 Android 无法原地升级。手机上的 USB 安装确认不能
+绕过此规则；不得为了让命令成功而卸载或清数据。
 
-Run local checks:
+执行本地检查：
 
 ```powershell
 corepack pnpm mobile:android:smoke:debug
 corepack pnpm mobile:android:smoke:pairing
-corepack pnpm mobile:android:smoke:bridge -- --url "<pairing-url-or-deep-link>"
+corepack pnpm mobile:android:smoke:bridge -- --url "<配对 URL 或深链>"
+corepack pnpm mobile:android:smoke:bridge:dev -- --url "<配对 URL 或深链>"
 corepack pnpm mobile:android:delivery-check -- --strict --no-manifest
 ```
 
-`android:smoke:debug` clears app data unless `--keep-data` is passed.
-`android:smoke:pairing` intentionally starts from clean app data. Use a
-dedicated test installation for clean-state smoke.
+`android:smoke:debug` 默认清数据，除非传入 `--keep-data`。
+`android:smoke:pairing` 会有意从干净应用状态开始，因此只在专用测试安装上运行。
+development Bridge Smoke 默认保留数据，并在启动 development 包前将桌面端生成的
+`anybox-mobile:` 改写为 `anybox-mobile-dev:`。
 
-The current launch-smoke readiness check recognizes the English `Connect` and
-`Account` screens. On a localized client or when the app restores a nested
-route such as Updates, a healthy launch can be reported as a failure. Until the
-script uses stable test IDs or locale-independent resource IDs, either run this
-gate in its supported locale and start route or record a manual launch check,
-process check, fatal-log check, and screenshot. Never convert that manual
-evidence into a claimed automated pass.
+当前启动 Smoke 只识别英文 `Connect` 和 `Account` 页面。本地化客户端或恢复到
+Updates 等嵌套路由时，健康启动可能被误判为失败。在脚本改用稳定 test ID 或与语言
+无关的资源 ID 前，使用其支持的语言和起始路由，或者明确记录人工启动检查、进程
+检查、fatal 日志检查和截图。不得把人工证据声称为自动化通过。
 
-Do not fabricate screenshots or claim real-device coverage when device
-installation or smoke did not run.
+没有实际安装或 Smoke 时，不得虚构截图或真实设备覆盖。
 
-## Gate 3: Classify the Change
+## 门禁 3：变更分类
 
-Run:
+执行：
 
 ```powershell
 corepack pnpm mobile:fingerprint:check
 ```
 
-Before trusting the result, verify fingerprint portability: the same commit,
-lockfile, package manager version, and native inputs must produce the same hash
-from two different checkout paths. If they do not, the fingerprint source still
-contains environment-specific paths or autolinking output. Treat classification
-as blocked, use a fixed canonical release workspace temporarily, and fix the
-normalization before production OTA.
+信任结果前必须验证可移植性：相同提交、锁文件、包管理器版本和原生输入应在两个
+不同检出路径中产生相同哈希。若不同，fingerprint 源仍包含环境路径或自动链接输出。
+此时阻止 OTA 分类，临时使用固定规范发布工作区，并优先修复归一化。
 
-Never run `mobile:fingerprint:record -- --replace` merely to silence a mismatch.
-A replacement baseline is valid only after a reviewed native change and a new
-APK version, or after a reviewed normalization fix whose cross-worktree test
-passes.
+不得仅为消除不一致而执行 `mobile:fingerprint:record -- --replace`。只有以下情况
+可以替换基线：
 
-Use OTA only when the native fingerprint still matches the recorded baseline.
-Typical OTA-safe changes include React code, styling, translations, business
-logic, and JavaScript assets.
+- 已评审的原生变更，并同步提升 APK 版本；
+- 已评审的 fingerprint 归一化修复，且跨 worktree 测试通过。
 
-Publish a new APK when the native fingerprint changes or the change touches
-permissions, native dependencies, Expo or React Native versions, native
-modules, package identity, scheme, signing, update source, or app metadata.
+仅在原生 fingerprint 与记录基线一致时使用 OTA。典型 OTA 安全变更包括 React
+代码、样式、翻译、业务逻辑和 JavaScript 资产。
 
-When uncertain, use an APK. Never force an OTA around a fingerprint mismatch.
+当 fingerprint 改变，或改动涉及权限、原生依赖、Expo/React Native、原生模块、
+包身份、Scheme、签名、更新源或应用元数据时，发布新 APK。
 
-## OTA Preview and Production
+无法确定时选择 APK，不得绕过 fingerprint 不一致强制发布 OTA。
 
-Start from a committed, scoped-clean source tree.
+## OTA preview 与 production
 
-Ensure a physical test client is subscribed to `preview`. A local
-production-signed preview shell can be built and installed without publishing:
+从已提交、任务范围内干净的源码开始。
+
+确保真实测试客户端订阅 `preview`。可以先在本地构建并安装 production 签名的
+preview 外壳，而不发布 OTA：
 
 ```powershell
 corepack pnpm mobile:android:build:release -- --channel preview
 adb -s <serial> install -r packages/mobile-app/build/anybox-mobile-release.apk
 ```
 
-This replaces the installed app with the same package name, so confirm signing
-and device-data implications first.
+该 APK 使用与正式版相同包名，会替换已有安装；必须先确认签名和设备数据影响。
 
-Publish the immutable OTA to preview:
+将不可变 OTA 发布到 preview：
 
 ```powershell
-corepack pnpm mobile:update:preview -- --message "Describe the update"
+corepack pnpm mobile:update:preview -- --message "描述更新"
 ```
 
-Record the printed `updateId`. On the preview device, verify that exact
-`updateId`, cold start, foreground/background behavior, networking, and the
-affected product flows.
+记录输出的 `updateId`。在 preview 设备验证准确 `updateId`、冷启动、前后台切换、
+网络和受影响产品流程。
 
-Promote only that immutable update:
+只提升已经验证的不可变更新：
 
 ```powershell
 corepack pnpm mobile:update:promote -- --update-id <update-id>
 ```
 
-Do not rebuild between preview and promotion. Promotion must move the channel
-pointer to the already-tested update.
+preview 与 promotion 之间不得重新构建。promotion 只移动通道指针。
 
-Emergency rollback:
+紧急回滚：
 
 ```powershell
 corepack pnpm mobile:update:rollback -- --channel production --embedded
 ```
 
-Preview is channel-scoped, not device-scoped. It affects every compatible
-client subscribed to preview. A strict one-device preview requires a server
-allowlist or authenticated device-scoped routing.
+preview 按通道生效，会影响所有订阅 preview 的兼容客户端。严格单设备 preview
+需要服务端 allowlist 或带认证的设备级路由。
 
-## Native APK Candidate and Production
+## 原生 APK 候选包与 production
 
-Before a native release, update all of:
+原生发布前更新：
 
-- `packages/mobile-app/app.json` `expo.version`
-- `packages/mobile-app/app.json` `expo.android.versionCode`
-- `packages/mobile-app/package.json` `version`
-- `packages/mobile-app/app.json` `expo.ios.buildNumber` when mobile versions
-  should remain aligned
+- `packages/mobile-app/app.json` 中的 `expo.version`
+- `packages/mobile-app/app.json` 中的 `expo.android.versionCode`
+- `packages/mobile-app/package.json` 中的 `version`
+- 需要保持移动端版本一致时更新 `expo.ios.buildNumber`
 
-Require a strictly increasing Android `versionCode`.
+Android `versionCode` 必须严格递增。
 
-When the native configuration is final, record the new compatibility baseline:
+原生配置最终确定后记录兼容基线：
 
 ```powershell
 corepack pnpm mobile:fingerprint:record
 ```
 
-Build a production-signed candidate locally:
+本地构建 production 签名候选包：
 
 ```powershell
 corepack pnpm mobile:android:build:release -- --channel production
 ```
 
-Install it on a physical device and test upgrade data preservation, cold start,
-permissions, pairing, authentication, and updater behavior:
+在真实设备上覆盖安装，并验证数据保留、冷启动、权限、配对、认证和更新器：
 
 ```powershell
 adb -s <serial> install -r packages/mobile-app/build/anybox-mobile-release.apk
 ```
 
-The one-command production path is:
+一键 production 流程：
 
 ```powershell
-corepack pnpm mobile:release:publish -- --notes "Release note"
+corepack pnpm mobile:release:publish -- --notes "发布说明"
 ```
 
-It requires a clean source tree and a physical device, builds the production
-APK, runs device smoke, creates the `mobile-v*` GitHub release, uploads
-immutable GitHub and CDN assets, and changes the fixed production pointer last.
+该命令要求干净源码和真实设备，会构建 production APK、运行设备 Smoke、创建
+`mobile-v*` GitHub Release、上传不可变 GitHub/CDN 资产，并最后修改固定
+production 指针。
 
-Never mark a mobile GitHub release as latest. Never use `releases/latest` for
-mobile discovery.
+不得把移动端 GitHub Release 标记为 latest，也不得通过 `releases/latest`
+发现移动端更新。
 
-The GitHub asset preparation step is local and can be validated without
-creating a release:
+只验证本地 GitHub 资产准备流程时执行：
 
 ```powershell
 corepack pnpm mobile:release:github:prepare -- `
   --apk packages/mobile-app/build/anybox-mobile-release.apk `
   --out-dir packages/mobile-app/build/github-release-feasibility `
-  --notes "Local feasibility validation"
+  --notes "仅本地验证"
 ```
 
-It must produce `anybox-mobile.apk`, `anybox-mobile-release.json`, and
-`anybox-mobile-release.json.sig`. Verify the APK hash in the manifest and its
-detached signature locally. Do not run the printed `gh release create` command
-unless publication was explicitly authorized.
+该命令必须生成 `anybox-mobile.apk`、`anybox-mobile-release.json` 和
+`anybox-mobile-release.json.sig`。在本地核对 Manifest 中的 APK 哈希和分离签名。
+未明确授权发布时，不得执行命令输出的 `gh release create`。
 
-Asset preparation proves manifest construction and signing; it does not prove
-that the supplied APK was built from the current commit. Before treating the
-output as a release candidate, independently verify APK freshness, source
-commit, version, certificate, native fingerprint, and byte identity.
+资产准备只能证明 Manifest 构造与签名，不能证明 APK 来自当前提交。把产物视为
+候选包前，必须独立验证 APK 新鲜度、源码提交、版本、证书、原生 fingerprint 和
+字节身份。
 
-## Post-Release Verification
+## 发布后验证
 
-Use a production-channel client and follow the user path:
+使用 production 通道客户端走正常用户路径：
 
-- discover the OTA or APK release;
-- verify signed manifest status;
-- download through the public CDN or GitHub fallback;
-- install or reload;
-- verify version, build number, update ID, and retained data;
-- repeat the critical product flows;
-- inspect update diagnostics and fatal Android logs.
+- 发现 OTA 或 APK；
+- 验证签名 Manifest；
+- 通过公开 CDN 或 GitHub fallback 下载；
+- 安装或重新加载；
+- 核对版本、构建号、update ID 和数据保留；
+- 重复关键产品流程；
+- 检查更新诊断和 Android fatal 日志。
 
-An OTA can roll back to the embedded bundle. A native APK cannot safely roll
-back by decreasing `versionCode`; fix it with another, higher-version APK.
+OTA 可以回退到内嵌 bundle。原生 APK 不能通过降低 `versionCode` 安全回滚，必须
+发布更高版本号的修复 APK。
 
-## Device Strategy
+## 设备策略
 
-Prefer, in order:
+优先顺序：
 
-1. a dedicated physical Android test device using the real production package
-   identity for maximum fidelity;
-2. one personal phone with a separate development package for daily iteration,
-   followed by a production-signed candidate gate;
-3. Expo Go for fast JavaScript feedback, followed by standalone and signed
-   device gates.
+1. 使用 production 包身份的专用真实 Android 测试机，获得最高保真度；
+2. 在个人手机并存独立 development 包完成日常迭代，最后通过 production 签名
+   候选包门禁；
+3. 使用 Expo Go 快速反馈 JavaScript，随后补充独立包和签名真机门禁。
 
-A development package is operational isolation, not proof that the production
-package, scheme, signing, self-update, or upgrade path works.
+development 包提供运行隔离，但不能证明 production 包名、Scheme、签名、自更新
+或升级路径正确。
 
-## Manual Device Checklist
+## 人工真机清单
 
-Verify at least:
+至少验证：
 
-- first install, cold start, force-stop, and restart;
-- upgrade over the previous public version with data retained;
-- registration, login, token refresh, and logout;
-- camera permission, QR scan, pasted links, and deep links;
-- relay and LAN pairing;
-- offline, reconnect, background, and foreground behavior;
-- workspaces, chats, streaming messages, tasks, approvals, and files;
-- update check, OTA reload, APK download, and unknown-app install permission;
-- version, package, channel, update ID, and diagnostic display;
-- fatal Android logs.
+- 首次安装、冷启动、force-stop 和重启；
+- 覆盖上一正式版并保留数据；
+- 注册、登录、token 刷新和退出；
+- 相机权限、扫码、粘贴链接和深链；
+- Relay 与局域网配对；
+- 离线、重连、后台和前台切换；
+- 工作区、聊天、流式消息、任务、审批和文件；
+- 更新检查、OTA reload、APK 下载和未知来源安装权限；
+- 版本、包名、通道、update ID 和诊断显示；
+- Android fatal 日志。
 
-## Feasibility Validation Without Publishing
+## 不发布情况下验证流程
 
-Validate the workflow in this order:
+依次执行：
 
-1. Inspect `git status`, mobile config, configured versions, and connected
-   devices.
-2. Run doctor, typecheck, Expo dependency check, and focused tests.
-3. Run `mobile:fingerprint:check`.
-   If it fails unexpectedly, repeat the same commit in another checkout before
-   classifying the change or replacing the baseline.
-4. Run delivery check with `--no-manifest` to expose stale or missing
-   evidence.
-5. Rebuild the debug APK. On Windows, use a checkout-specific short pnpm
-   virtual store if Ninja repeatedly regenerates `build.ninja`.
-6. Re-run delivery check.
-7. Compare installed and candidate package names, versions, and signing
-   certificates before installation.
-8. Install and smoke only when the selected device and data effects are
-   acceptable.
-9. Validate preview and production publisher guards with tests and source
-   inspection. Local GitHub asset preparation is allowed; do not invoke
-   external publication commands merely to prove they exist.
-10. Report every skipped physical-device or external-publication gate
-    explicitly.
+1. 检查 `git status`、移动端配置、版本和已连接设备。
+2. 运行 doctor、typecheck、Expo 依赖检查和聚焦测试。
+3. 运行 `mobile:fingerprint:check`。若意外失败，先在另一检出路径重复同一提交，
+   再分类变更；不得直接替换基线。
+4. 使用 `--no-manifest` 运行 delivery check，暴露陈旧或缺失证据。
+5. 重新构建 debug APK。Windows 上 Ninja 反复生成 `build.ninja` 时，为当前
+   worktree 使用独立短 pnpm virtual store。
+6. 再次运行 delivery check。
+7. 安装前比较设备与候选包的包名、版本和签名证书。
+8. 只有目标设备和数据影响可接受时才安装并执行 Smoke。
+9. 通过测试和源码检查验证 preview/production 发布器保护。本地 GitHub 资产准备
+   可以执行；不得仅为证明命令存在而发布到外部。
+10. 明确报告所有跳过的真实设备和外部发布门禁。
 
-## Known Workflow Gaps
+## 已知流程缺口
 
-`mobile:release:publish` rebuilds the APK immediately before device smoke and
-publication. A separately hand-tested APK is therefore not guaranteed to be
-the byte-identical file later uploaded.
+`mobile:release:publish` 会在设备 Smoke 与发布前重新构建 APK，因此单独长时间人工
+测试过的 APK 不保证与稍后上传文件字节一致。
 
-`mobile:release:github:prepare` also accepts a caller-supplied APK without a
-source-commit attestation. Its success alone is not a candidate-integrity gate.
+`mobile:release:github:prepare` 接受调用者提供的 APK，但没有源码提交证明。只完成
+该步骤不能证明候选包完整性。
 
-For extended manual release-candidate testing, add a two-phase workflow:
+需要长时间验证候选包时，实现两阶段流程：
 
 ```text
 mobile:release:candidate
-  -> build, sign, verify, and record commit/hash/certificate/version/fingerprint
+  -> 构建、签名、验证并记录 commit/hash/certificate/version/fingerprint
 
 mobile:release:publish -- --candidate <record>
-  -> re-verify and upload the exact recorded files without rebuilding
+  -> 重新验证并上传记录中的准确文件，不再重新构建
 ```
 
-Do not claim this candidate command exists until it is implemented and tested.
+在命令真正实现并测试前，不得声称它已经存在。
 
-The launch-smoke script also needs locale-independent readiness selectors and a
-deterministic start route. Until implemented, localized or restored nested
-screens require explicitly labeled manual evidence.
+启动 Smoke 还需要与语言无关的就绪选择器和确定性起始路由。在此之前，本地化界面
+或恢复的嵌套路由必须明确标记为人工验证证据。

@@ -74,7 +74,7 @@ export const appearanceTokenCopy = {
     },
     "component-sidebar-tree-rows": {
       "label": "側邊欄樹行",
-      "description": "左側工作區樹和 Skills 樹的專用行狀態 token。"
+      "description": "左側邊欄中對話、工作區、Prompts、Skills、MCP 和工具行的專用狀態 token。"
     },
     "component-settings-list-detail-rows": {
       "label": "設定列表明細行",
@@ -660,7 +660,7 @@ export const appearanceTokenCopy = {
     },
     "semantic-sidebar-tree-row-leading-active": {
       "label": "前置圖示啟用色",
-      "description": "側邊欄項目行選中時的前置圖示顏色。"
+      "description": "左側邊欄樹行選中時的前置圖示顏色。"
     },
     "semantic-settings-list-detail-row-surface-hover": {
       "label": "行懸停背景",

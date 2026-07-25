@@ -963,6 +963,7 @@ export default function HomeScreen() {
             onModelSelect={(modelValue) => void handleModelSelection(modelValue)}
             onNewChat={() => void handleCreateConversation()}
             onOpenDrawer={openSessionDrawer}
+            onSelectWorkspace={handleSelectWorkspace}
             onSend={() => void handleSend()}
             paddingBottom={Math.max(insets.bottom, 10)}
             paddingTop={insets.top}
@@ -970,6 +971,7 @@ export default function HomeScreen() {
             savingModel={savingModel}
             selectedModel={modelSelection.model ?? null}
             sending={sending}
+            workspaces={sortedWorkspaces}
           />
           {drawerMounted ? (
             <>

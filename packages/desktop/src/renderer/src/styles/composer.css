@@ -384,7 +384,7 @@
 }
 
 .composer-utility-git-branch-option.is-current:disabled {
-  background: var(--semantic-sidebar-tree-row-surface-active);
+  background: var(--semantic-composer-button-surface-strong);
   color: var(--seg-text-1);
   cursor: default;
   opacity: 1;
@@ -395,7 +395,7 @@
 }
 
 .composer-utility-git-branch-option.is-current:disabled .composer-menu-option-check {
-  color: var(--semantic-sidebar-tree-row-text-active);
+  color: var(--semantic-composer-button-text-strong);
 }
 
 .composer-utility-git-branch-meta {
@@ -1726,15 +1726,15 @@
 
 .composer-command-option:not(:disabled):hover,
 .composer-command-option:not(:disabled):focus-visible {
-  background: var(--semantic-sidebar-tree-row-surface-hover);
+  background: var(--semantic-composer-button-surface);
   border-color: transparent;
-  color: var(--semantic-sidebar-tree-row-text-hover);
+  color: var(--semantic-composer-button-text);
 }
 
 .composer-command-option.is-active:not(:disabled) {
-  background: var(--semantic-sidebar-tree-row-surface-active);
+  background: var(--semantic-composer-button-surface-strong);
   border-color: var(--mix-seg-accent-24-seg-border-76);
-  color: var(--semantic-sidebar-tree-row-text-active);
+  color: var(--semantic-composer-button-text-strong);
 }
 
 .composer-command-option:disabled {

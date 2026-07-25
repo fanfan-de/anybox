@@ -74,7 +74,7 @@ export const appearanceTokenCopy = {
     },
     "component-sidebar-tree-rows": {
       "label": "サイドバーツリー行",
-      "description": "左サイドバーのワークスペースとスキルツリー専用の行トークン。"
+      "description": "左サイドバーの会話、ワークスペース、プロンプト、スキル、MCP、ツール行専用の状態トークン。"
     },
     "component-settings-list-detail-rows": {
       "label": "設定リスト詳細行",
@@ -660,7 +660,7 @@ export const appearanceTokenCopy = {
     },
     "semantic-sidebar-tree-row-leading-active": {
       "label": "先頭アイコン（アクティブ）",
-      "description": "サイドバープロジェクト行の選択時の先頭アイコンの色。"
+      "description": "左サイドバーのツリー行を選択したときの先頭アイコンの色。"
     },
     "semantic-settings-list-detail-row-surface-hover": {
       "label": "行サーフェス（ホバー）",

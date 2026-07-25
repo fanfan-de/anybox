@@ -216,7 +216,7 @@ export const plPL = {
   "thread.loadingSession": "Ładowanie sesji",
   "thread.noMessages": "Brak wiadomości",
   "thread.readyInWorkspace": "Gotowe w {workspace}. Wyślij zadanie, aby utworzyć sesję skupioną.",
-  "thread.startConversation": "Rozpocznij czat",
+  "thread.startConversation": "Rozpocznij rozmowę w {workspace}",
   "thread.reasoning": "Rozumowanie",
   "thread.reasoningActive": "Rozumowanie",
   "thread.reasoningComplete": "Przemyślane",

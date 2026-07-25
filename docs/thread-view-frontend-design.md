@@ -110,6 +110,8 @@ ComposerUtilityBar
 
 `--debug-region-thread-shell` 当前值为 `#bee3f8`。普通模式下 `.thread-shell` 和 `.thread-column` 自身不设置背景，保持透明，露出父级 pane/shell 背景。
 
+工作台的大面积 shell 背景由 `.canvas.is-workbench` 单点绘制。Dockview 的外框、view、group view 和 content container 保持透明，避免带 alpha 的 `surface-shell` 在嵌套容器中重复合成并产生比其他 full-surface 页面更深的颜色；tab bar、活动标签和 composer 仍分别消费自己的语义 surface。
+
 宽度策略：
 
 - `workbench-pane-live-region` 定义 `--pane-content-max-width: 880px`。

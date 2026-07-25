@@ -21,8 +21,8 @@
   --automations-text: var(--text-primary);
   --automations-text-muted: var(--text-secondary);
   --automations-text-faint: var(--text-tertiary);
-  --automations-accent: var(--brand-primary);
-  --automations-accent-hover: var(--brand-primary-hover);
+  --automations-accent: var(--brand-primary-active);
+  --automations-accent-hover: var(--brand-primary-strong);
   --automations-danger: var(--semantic-error-text);
   --automations-radius-panel: var(--radius-panel);
   --automations-radius-control: var(--radius-control);
@@ -981,8 +981,8 @@
 
 .automations-create-menu-option.automation-cadence-menu-option.is-selected,
 .automations-create-menu-option.automation-cadence-menu-option[aria-checked="true"] {
-  background: var(--semantic-sidebar-tree-row-surface-active, var(--mix-seg-accent-soft-84-transparent-16, var(--automations-surface-hover)));
-  color: var(--semantic-sidebar-tree-row-text-active, var(--automations-accent));
+  background: var(--automations-surface-hover);
+  color: var(--automations-accent);
 }
 
 .automations-create-menu-option.automation-cadence-menu-option:disabled,
@@ -1008,7 +1008,7 @@
 }
 
 .automation-cadence-menu-state {
-  color: var(--semantic-sidebar-tree-row-text-active, var(--automations-accent));
+  color: var(--automations-accent);
 }
 
 .automation-cadence-menu-submenu-icon {
@@ -1378,13 +1378,13 @@
 
 .automations-page .automations-create-button {
   justify-content: center;
-  background: var(--brand-primary);
+  background: var(--brand-primary-active);
   color: var(--text-on-dark);
 }
 
 .automations-page .automations-create-button:hover,
 .automations-page .automations-create-button:focus-visible {
-  background: var(--brand-primary-hover);
+  background: var(--brand-primary-strong);
   color: var(--text-on-dark);
 }
 

@@ -4,7 +4,7 @@
 
 - 确认所属组件和 CSS 文件。
 - 阅读同一 surface 附近的 UI 实现。
-- 检查 `tokens.css` 中已有 token。
+- 检查 `appearance-token-manifest.json` 和生成的 runtime token 中是否已有合适语义。
 - 判断是否需要同步更新项目文档。
 
 ## 修改中
@@ -16,6 +16,7 @@
 - 长标签可能出现的位置补 `min-width: 0` 和 ellipsis。
 - 保留 `focus-visible`、键盘行为、disabled 状态和 aria label。
 - 按钮必须检查 default、hover、disabled 在 light/dark 下都来自成组 `--semantic-button-<variant>-*` token，不能直接消费 accent、status、icon 或 text token。
+- 新增颜色只能进入 manifest 的公开 `literal`/`alias`；确需双来源联动时使用内部 derivation，组件不得新增 `--mix-*` 依赖。
 - 必要时让 popover 脱离裁剪容器。
 
 ## 视觉 QA
@@ -38,6 +39,7 @@
 ```powershell
 npm run typecheck
 npm run test
+npm run appearance:tokens:check
 ```
 
 如果改动跨越 desktop 与 agent server 契约，也检查 `packages/anyboxagent` 相关测试。

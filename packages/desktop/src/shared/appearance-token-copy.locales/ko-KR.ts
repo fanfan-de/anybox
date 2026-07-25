@@ -74,7 +74,7 @@ export const appearanceTokenCopy = {
     },
     "component-sidebar-tree-rows": {
       "label": "사이드바 트리 행",
-      "description": "왼쪽 사이드바 작업 공간 및 스킬 트리를 위한 전용 행 토큰"
+      "description": "왼쪽 사이드바의 대화, 작업 공간, 프롬프트, 스킬, MCP 및 도구 행을 위한 전용 상태 토큰"
     },
     "component-settings-list-detail-rows": {
       "label": "설정 목록 세부 행",
@@ -660,7 +660,7 @@ export const appearanceTokenCopy = {
     },
     "semantic-sidebar-tree-row-leading-active": {
       "label": "선행 아이콘 활성",
-      "description": "사이드바 프로젝트 행의 선택된 행 선행 아이콘 색상"
+      "description": "왼쪽 사이드바에서 선택된 트리 행의 선행 아이콘 색상"
     },
     "semantic-settings-list-detail-row-surface-hover": {
       "label": "행 표면 호버",

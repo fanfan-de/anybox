@@ -74,7 +74,7 @@ export const appearanceTokenCopy = {
     },
     "component-sidebar-tree-rows": {
       "label": "Linhas da Árvore da Barra Lateral",
-      "description": "Tokens de linha dedicados para a árvore de workspace e habilidades na barra lateral esquerda."
+      "description": "Tokens de estado dedicados para linhas de conversas, workspaces, prompts, habilidades, MCP e ferramentas na barra lateral esquerda."
     },
     "component-settings-list-detail-rows": {
       "label": "Linhas de Detalhe da Lista de Configurações",
@@ -660,7 +660,7 @@ export const appearanceTokenCopy = {
     },
     "semantic-sidebar-tree-row-leading-active": {
       "label": "Ícone Principal Ativo",
-      "description": "Cor do ícone principal da linha selecionada para linhas de projeto da barra lateral."
+      "description": "Cor do ícone principal das linhas de árvore selecionadas na barra lateral esquerda."
     },
     "semantic-settings-list-detail-row-surface-hover": {
       "label": "Superfície da Linha ao Passar o Mouse",

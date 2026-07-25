@@ -192,7 +192,7 @@
   display: grid;
   grid-template-rows: minmax(0, 1fr);
   border: 1px solid var(--seg-border);
-  background: var(--seg-panel);
+  background: var(--skills-workspace-shell-surface, var(--seg-panel));
   color: var(--seg-text-1);
   cursor: text;
   overflow: hidden;
@@ -243,7 +243,7 @@
   overflow: auto;
   scrollbar-color: var(--seg-border) transparent;
   padding: 24px 28px;
-  background: var(--seg-panel);
+  background: var(--skills-workspace-shell-surface, var(--seg-panel));
   color: var(--seg-text-1);
   font-size: 14px;
   line-height: 1.65;
@@ -517,13 +517,14 @@
 }
 
 .skills-workspace-page {
+  --skills-workspace-shell-surface: var(--surface-shell);
   min-width: 0;
   min-height: 0;
   height: 100%;
   position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  background: var(--seg-shell);
+  background: var(--skills-workspace-shell-surface);
 }
 
 .skills-workspace-toolbar {
@@ -535,7 +536,7 @@
   gap: 12px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--seg-border);
-  background: var(--seg-panel);
+  background: var(--skills-workspace-shell-surface);
 }
 
 .skills-workspace-search-field {
@@ -588,7 +589,7 @@
 .skills-workspace-search-field button:hover,
 .skills-workspace-search-field button:focus-visible {
   outline: none;
-  background: var(--semantic-sidebar-tree-row-surface-hover);
+  background: var(--surface-panel-muted);
   color: var(--seg-text-1);
 }
 
@@ -638,13 +639,13 @@
 .skills-workspace-tab:hover,
 .skills-workspace-tab:focus-visible {
   outline: none;
-  background: var(--semantic-sidebar-tree-row-surface-hover);
-  color: var(--semantic-sidebar-tree-row-text-hover);
+  background: var(--surface-panel-muted);
+  color: var(--text-primary);
 }
 
 .skills-workspace-tab.is-active {
   background: var(--seg-panel);
-  color: var(--semantic-sidebar-tree-row-text-active);
+  color: var(--brand-primary-strong);
   box-shadow: inset 0 0 0 1px var(--seg-border);
 }
 
@@ -725,7 +726,7 @@
   display: grid;
   grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
   overflow: hidden;
-  background: var(--seg-panel);
+  background: var(--skills-workspace-shell-surface);
 }
 
 .skills-workspace-list-panel,
@@ -734,20 +735,20 @@
   min-height: 0;
   height: 100%;
   overflow: hidden;
+  background: var(--skills-workspace-shell-surface);
 }
 
 .skills-workspace-list-panel {
   border-right: 1px solid var(--seg-border);
-  background: var(--seg-panel-muted);
-}
-
-.skills-workspace-detail-panel {
-  background: var(--seg-panel);
 }
 
 .skills-workspace-detail-panel > .global-skills-page {
   min-height: 0;
   height: 100%;
+}
+
+.skills-workspace-detail-panel > .skill-library-detail-panel {
+  background: var(--skills-workspace-shell-surface);
 }
 
 .skills-workspace-fallback-list {
@@ -933,13 +934,13 @@
 .skill-library-filter-button:hover,
 .skill-library-filter-button:focus-visible {
   outline: none;
-  background: var(--semantic-sidebar-tree-row-surface-hover);
-  color: var(--semantic-sidebar-tree-row-text-hover);
+  background: var(--surface-panel-muted);
+  color: var(--text-primary);
 }
 
 .skill-library-filter-button.is-active {
-  background: var(--semantic-sidebar-tree-row-surface-active);
-  color: var(--semantic-sidebar-tree-row-text-active);
+  background: var(--brand-primary-soft-active);
+  color: var(--brand-primary-strong);
 }
 
 .skill-library-filter-button:disabled {
@@ -1010,7 +1011,7 @@
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--semantic-sidebar-tree-row-text);
+  color: var(--text-secondary);
   text-align: left;
   cursor: pointer;
 }
@@ -1018,13 +1019,13 @@
 .skill-library-result-row:hover,
 .skill-library-result-row:focus-visible {
   outline: none;
-  background: var(--semantic-sidebar-tree-row-surface-hover);
-  color: var(--semantic-sidebar-tree-row-text-hover);
+  background: var(--surface-panel-muted);
+  color: var(--text-primary);
 }
 
 .skill-library-result-row.is-selected {
-  background: var(--semantic-sidebar-tree-row-surface-active);
-  color: var(--semantic-sidebar-tree-row-text-active);
+  background: var(--brand-primary-soft-active);
+  color: var(--brand-primary-strong);
 }
 
 .skill-library-product-icon {
@@ -1055,8 +1056,8 @@
 
 .skill-library-product-icon.is-skill-default {
   border-color: var(--seg-border);
-  background: var(--brand-primary-soft);
-  color: var(--brand-primary);
+  background: var(--brand-primary-soft-active);
+  color: var(--brand-primary-active);
 }
 
 .skill-library-product-icon.is-skill-default .skill-default-logo-mark {
@@ -1247,7 +1248,7 @@
 }
 
 .skill-library-product-icon.is-local {
-  color: var(--brand-primary);
+  color: var(--brand-primary-active);
 }
 
 .skills-workspace-local-row-menu {
@@ -1436,13 +1437,13 @@
 .skill-library-detail-tab:hover,
 .skill-library-detail-tab:focus-visible {
   outline: none;
-  background: var(--semantic-sidebar-tree-row-surface-hover);
-  color: var(--semantic-sidebar-tree-row-text-hover);
+  background: var(--surface-panel-muted);
+  color: var(--text-primary);
 }
 
 .skill-library-detail-tab.is-active {
-  background: var(--semantic-sidebar-tree-row-surface-active);
-  color: var(--semantic-sidebar-tree-row-text-active);
+  background: var(--brand-primary-soft-active);
+  color: var(--brand-primary-strong);
 }
 
 .skill-library-detail-content {
@@ -1500,7 +1501,7 @@
   border: 0;
   border-radius: 5px;
   background: transparent;
-  color: var(--semantic-sidebar-tree-row-text);
+  color: var(--text-secondary);
   text-align: left;
   cursor: pointer;
 }
@@ -1508,13 +1509,13 @@
 .skill-library-file-row:hover,
 .skill-library-file-row:focus-visible {
   outline: none;
-  background: var(--semantic-sidebar-tree-row-surface-hover);
-  color: var(--semantic-sidebar-tree-row-text-hover);
+  background: var(--surface-panel-muted);
+  color: var(--text-primary);
 }
 
 .skill-library-file-row.is-selected {
-  background: var(--semantic-sidebar-tree-row-surface-active);
-  color: var(--semantic-sidebar-tree-row-text-active);
+  background: var(--brand-primary-soft-active);
+  color: var(--brand-primary-strong);
 }
 
 .skill-library-file-row svg {
@@ -1621,8 +1622,8 @@
 .skill-library-version-row:focus-visible,
 .skill-library-version-row.is-selected {
   outline: none;
-  background: var(--semantic-sidebar-tree-row-surface-active);
-  color: var(--semantic-sidebar-tree-row-text-active);
+  background: var(--brand-primary-soft-active);
+  color: var(--brand-primary-strong);
 }
 
 .skill-library-security-signals p,
@@ -1641,7 +1642,7 @@
 
 .skill-library-local-detail {
   gap: 0;
-  background: var(--seg-panel);
+  background: var(--skills-workspace-shell-surface, var(--seg-panel));
 }
 
 .skill-library-local-overview .skill-library-detail-empty {
@@ -1677,7 +1678,7 @@
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
-  background: var(--seg-panel);
+  background: var(--skills-workspace-shell-surface, var(--seg-panel));
 }
 
 .skill-library-local-file-editor .global-skills-toolbar {
@@ -1692,7 +1693,7 @@
 
 .skill-library-downloaded-chrome {
   flex: 0 0 auto;
-  background: var(--seg-panel);
+  background: var(--skills-workspace-shell-surface, var(--seg-panel));
 }
 
 .skill-library-downloaded-chrome .skill-library-detail-header {
@@ -2473,7 +2474,7 @@
 
 .global-skills-navigator.is-unified {
   gap: 0;
-  background: var(--seg-panel-muted);
+  background: var(--skills-workspace-shell-surface, var(--seg-shell));
 }
 
 .global-skills-navigator.is-unified .global-skills-section-bar {
@@ -2582,8 +2583,8 @@
 
 .global-skills-install-menu-item:hover,
 .global-skills-install-menu-item:focus-visible {
-  background: var(--semantic-sidebar-tree-row-surface-hover);
-  color: var(--semantic-sidebar-tree-row-text-hover);
+  background: var(--surface-panel-muted);
+  color: var(--text-primary);
   outline: none;
 }
 
@@ -2608,7 +2609,7 @@
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: var(--semantic-sidebar-tree-row-text);
+  color: var(--text-secondary);
   box-shadow: none;
   display: inline-flex;
   align-items: center;
@@ -2628,9 +2629,9 @@
 .global-skills-new-button:focus-visible,
 .global-skills-new-button.is-open {
   transform: none;
-  background: var(--semantic-sidebar-tree-row-surface-hover);
+  background: var(--surface-panel-muted);
   border: 0;
-  color: var(--semantic-sidebar-tree-row-text-hover);
+  color: var(--text-primary);
   box-shadow: none;
   outline: none;
 }
@@ -3679,8 +3680,8 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   --context-menu-border: var(--seg-border, var(--border-default, rgba(17, 24, 39, 0.12)));
   --context-menu-text: var(--seg-text-1, var(--text-primary, #1f2937));
   --context-menu-muted: var(--seg-text-2, var(--text-secondary, #6b7280));
-  --context-menu-hover: var(--semantic-sidebar-tree-row-surface-hover, rgba(17, 24, 39, 0.06));
-  --context-menu-hover-text: var(--semantic-sidebar-tree-row-text-hover, var(--context-menu-text));
+  --context-menu-hover: var(--surface-panel-muted);
+  --context-menu-hover-text: var(--text-primary);
   --context-menu-radius: var(--semantic-dropdown-menu-radius, var(--seg-radius-md, calc(var(--seg-radius-xs, 6px) + 2px)));
   --context-menu-focus: var(--focus-outline-color, rgba(212, 107, 99, 0.32));
   --context-menu-shadow: var(--ui-shadow-md, var(--shadow-md, 0 14px 34px rgba(17, 24, 39, 0.14)));
@@ -4118,14 +4119,14 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 }
 
 .git-quick-menu-branch-option.is-current:disabled {
-  background: var(--semantic-sidebar-tree-row-surface-active);
+  background: var(--brand-primary-soft-active);
   color: var(--seg-text-1);
   cursor: default;
   opacity: 1;
 }
 
 .git-quick-menu-branch-option.is-current:disabled .composer-menu-option-check {
-  color: var(--semantic-sidebar-tree-row-text-active);
+  color: var(--brand-primary-strong);
 }
 
 .git-quick-menu-main-option svg,
@@ -4168,7 +4169,7 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 
 .git-quick-menu-summary-row:hover,
 .git-quick-menu-summary-row:focus-visible {
-  color: var(--semantic-sidebar-tree-row-text-hover);
+  color: var(--text-primary);
 }
 
 .git-quick-menu-summary-label {
@@ -5029,8 +5030,8 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 .create-session-select-trigger:hover,
 .create-session-select-trigger:focus-visible,
 .create-session-select-trigger.is-active {
-  background: var(--semantic-sidebar-tree-row-surface-hover);
-  color: var(--semantic-sidebar-tree-row-text-hover);
+  background: var(--surface-panel-muted);
+  color: var(--text-primary);
   outline: none;
   box-shadow: none;
 }
@@ -5103,8 +5104,8 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 .create-session-select-option:focus-visible,
 .create-session-select-option.is-active,
 .create-session-select-option.is-selected {
-  background: var(--semantic-sidebar-tree-row-surface-hover);
-  color: var(--semantic-sidebar-tree-row-text-hover, var(--seg-text-1));
+  background: var(--surface-panel-muted);
+  color: var(--text-primary);
   outline: none;
   box-shadow: none;
 }

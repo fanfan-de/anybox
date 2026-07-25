@@ -216,7 +216,7 @@ export const itIT = {
   "thread.loadingSession": "Caricamento sessione",
   "thread.noMessages": "Nessun messaggio",
   "thread.readyInWorkspace": "Pronto in {workspace}. Invia un'attività per creare una sessione focalizzata.",
-  "thread.startConversation": "Inizia a chattare",
+  "thread.startConversation": "Avvia una conversazione in {workspace}",
   "thread.reasoning": "Ragionamento",
   "thread.reasoningActive": "Ragionamento",
   "thread.reasoningComplete": "Ragionato",

@@ -216,7 +216,7 @@ export const zhTW = {
   "thread.loadingSession": "正在載入會話",
   "thread.noMessages": "暫無訊息",
   "thread.readyInWorkspace": "{workspace} 已就緒。傳送任務即可建立聚焦會話。",
-  "thread.startConversation": "開始對話",
+  "thread.startConversation": "在 {workspace} 中開始對話",
   "thread.reasoning": "推理",
   "thread.reasoningActive": "正在推理",
   "thread.reasoningComplete": "已推理",

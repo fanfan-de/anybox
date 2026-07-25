@@ -350,10 +350,6 @@
   gap: 6px;
 }
 
-.activity-rail-config-stack[hidden] {
-  display: none;
-}
-
 .activity-rail-view-button {
   width: var(--activity-rail-button-size);
   min-width: var(--activity-rail-button-size);

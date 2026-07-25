@@ -189,7 +189,9 @@ export function assertScopedReleaseTreeClean() {
 export async function computeAndroidNativeFingerprint() {
   const { createProjectHashAsync } = await import("@expo/fingerprint")
   const previousChannel = process.env.ANYBOX_MOBILE_UPDATE_CHANNEL
+  const previousBuildProfile = process.env.ANYBOX_MOBILE_BUILD_PROFILE
   process.env.ANYBOX_MOBILE_UPDATE_CHANNEL = "production"
+  process.env.ANYBOX_MOBILE_BUILD_PROFILE = "production"
   try {
     return await createProjectHashAsync(packageRoot, {
       platforms: ["android"],
@@ -198,6 +200,8 @@ export async function computeAndroidNativeFingerprint() {
   } finally {
     if (previousChannel === undefined) delete process.env.ANYBOX_MOBILE_UPDATE_CHANNEL
     else process.env.ANYBOX_MOBILE_UPDATE_CHANNEL = previousChannel
+    if (previousBuildProfile === undefined) delete process.env.ANYBOX_MOBILE_BUILD_PROFILE
+    else process.env.ANYBOX_MOBILE_BUILD_PROFILE = previousBuildProfile
   }
 }
 

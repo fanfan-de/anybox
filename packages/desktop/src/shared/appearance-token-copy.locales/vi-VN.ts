@@ -74,7 +74,7 @@ export const appearanceTokenCopy = {
     },
     "component-sidebar-tree-rows": {
       "label": "Hàng Cây Thanh bên",
-      "description": "Token hàng chuyên dụng cho cây không gian làm việc và kỹ năng ở thanh bên trái."
+      "description": "Token trạng thái chuyên dụng cho các hàng hội thoại, không gian làm việc, prompt, kỹ năng, MCP và công cụ ở thanh bên trái."
     },
     "component-settings-list-detail-rows": {
       "label": "Hàng Chi tiết Danh sách Cài đặt",
@@ -660,7 +660,7 @@ export const appearanceTokenCopy = {
     },
     "semantic-sidebar-tree-row-leading-active": {
       "label": "Biểu tượng dẫn khi chọn",
-      "description": "Màu biểu tượng dẫn cho hàng dự án được chọn trong cây thanh bên."
+      "description": "Màu biểu tượng dẫn cho hàng cây được chọn ở thanh bên trái."
     },
     "semantic-settings-list-detail-row-surface-hover": {
       "label": "Nền hàng khi di chuột",

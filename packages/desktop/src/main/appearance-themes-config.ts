@@ -11,6 +11,8 @@ import {
   normalizeAppearanceThemeDocument,
   normalizeAppearanceThemeID,
   normalizeAppearanceThemeSaveInput,
+  validateAppearanceThemeDocumentStructure,
+  validateAppearanceThemeSaveInputStructure,
   type AppearanceTheme,
   type AppearanceThemeDocument,
   type AppearanceThemeDuplicateInput,
@@ -19,6 +21,7 @@ import {
   type AppearanceThemeRenameInput,
   type AppearanceThemeSaveInput,
 } from "../shared/appearance-themes"
+import { preserveVersionedJsonBackup, writeJsonFileAtomic } from "./atomic-json-file"
 
 const APPEARANCE_THEMES_FILE_NAME = "appearance-themes.json"
 
@@ -34,9 +37,13 @@ async function writeAppearanceThemeDocument(
   configPath: string,
   input: AppearanceThemeDocument,
 ): Promise<AppearanceThemeDocument> {
+  const errors = validateAppearanceThemeDocumentStructure(input)
+  if (errors.length > 0) {
+    throw new Error(`Invalid appearance theme library:\n${errors.join("\n")}`)
+  }
+
   const document = normalizeAppearanceThemeDocument(input)
-  await fs.mkdir(path.dirname(configPath), { recursive: true })
-  await fs.writeFile(configPath, `${JSON.stringify(document, null, 2)}\n`, "utf8")
+  await writeJsonFileAtomic(configPath, document)
   return document
 }
 
@@ -46,12 +53,30 @@ export async function readAppearanceThemesSnapshot(): Promise<AppearanceThemeLib
   try {
     const raw = await fs.readFile(configPath, "utf8")
     const parsed = JSON.parse(raw) as unknown
+    const errors = validateAppearanceThemeDocumentStructure(parsed)
+    if (errors.length > 0) {
+      throw new Error(`Invalid appearance theme library:\n${errors.join("\n")}`)
+    }
+
+    const document = normalizeAppearanceThemeDocument(parsed)
+    const isLegacyDocument =
+      !parsed ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed) ||
+      (parsed as { version?: unknown }).version !== 2
+    if (isLegacyDocument) {
+      await preserveVersionedJsonBackup(configPath, raw, 1)
+      await writeJsonFileAtomic(configPath, document)
+    }
+
     return createAppearanceThemeLibrarySnapshot({
       path: configPath,
       exists: true,
-      document: normalizeAppearanceThemeDocument(parsed),
+      document,
     })
-  } catch {
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
+
     return createAppearanceThemeLibrarySnapshot({
       path: configPath,
       exists: false,
@@ -76,6 +101,11 @@ export async function writeAppearanceThemesSnapshot(
 export async function saveAppearanceTheme(
   input: AppearanceThemeSaveInput,
 ): Promise<AppearanceThemeMutationResult> {
+  const errors = validateAppearanceThemeSaveInputStructure(input)
+  if (errors.length > 0) {
+    throw new Error(`Invalid appearance theme:\n${errors.join("\n")}`)
+  }
+
   const snapshot = await readAppearanceThemesSnapshot()
   const requestedID = normalizeAppearanceThemeID(input.id)
   const existingTheme = requestedID
@@ -154,7 +184,9 @@ export async function renameAppearanceTheme(
   })
   const nextSnapshot = await writeAppearanceThemesSnapshot({
     ...snapshot.document,
-    userThemes: snapshot.document.userThemes.map((item) => item.id === existingTheme.id ? theme : item),
+    userThemes: snapshot.document.userThemes.map(
+      (item) => item.id === existingTheme.id ? theme : item,
+    ),
   })
 
   return {
@@ -163,7 +195,9 @@ export async function renameAppearanceTheme(
   }
 }
 
-export async function deleteAppearanceTheme(themeID: string): Promise<AppearanceThemeLibrarySnapshot> {
+export async function deleteAppearanceTheme(
+  themeID: string,
+): Promise<AppearanceThemeLibrarySnapshot> {
   if (isBuiltInAppearanceThemeID(themeID)) {
     throw new Error("Built-in themes cannot be deleted.")
   }
@@ -181,7 +215,9 @@ export async function deleteAppearanceTheme(themeID: string): Promise<Appearance
   })
 }
 
-export async function setActiveAppearanceTheme(themeID: string): Promise<AppearanceThemeLibrarySnapshot> {
+export async function setActiveAppearanceTheme(
+  themeID: string,
+): Promise<AppearanceThemeLibrarySnapshot> {
   const snapshot = await readAppearanceThemesSnapshot()
   const theme = findAppearanceThemeByID(snapshot.themes, themeID)
   if (!theme) {
@@ -194,7 +230,9 @@ export async function setActiveAppearanceTheme(themeID: string): Promise<Appeara
   })
 }
 
-export function createAppearanceThemeSaveInputFromTheme(theme: AppearanceTheme): AppearanceThemeSaveInput {
+export function createAppearanceThemeSaveInputFromTheme(
+  theme: AppearanceTheme,
+): AppearanceThemeSaveInput {
   return {
     id: theme.id,
     name: theme.name,
@@ -205,5 +243,6 @@ export function createAppearanceThemeSaveInputFromTheme(theme: AppearanceTheme):
     codeThemePreference: theme.codeThemePreference,
     htmlBackgroundConfig: { ...theme.htmlBackgroundConfig },
     overrides: { ...theme.overrides },
+    foreignDtcg: structuredClone(theme.foreignDtcg),
   }
 }

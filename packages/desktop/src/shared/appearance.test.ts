@@ -10,7 +10,18 @@ import {
   createDefaultAppearanceRuntimeState,
   normalizeAppearanceConfigDocument,
   normalizeAppearanceRuntimeState,
+  type AppearanceTokenMap,
 } from "./appearance"
+import { appearanceTokenValueToCss } from "./appearance-color"
+
+function cssTokenMap(values: AppearanceTokenMap) {
+  return Object.fromEntries(
+    Object.entries(values).map(([tokenName, value]) => [
+      tokenName,
+      appearanceTokenValueToCss(value),
+    ]),
+  )
+}
 
 describe("appearance font family", () => {
   it("normalizes font family preferences", () => {
@@ -64,13 +75,11 @@ describe("appearance runtime state", () => {
       fontFamily: "microsoft-yahei",
       updatedAt: 42,
     })
-    expect(state.document.overrides).toEqual({
+    expect(cssTokenMap(state.document.overrides)).toEqual({
       "surface-app-light": "#123456",
       "surface-app-dark": "#000000",
     })
-    expect(state.document.resolvedTokens).toEqual({
-      "surface-app-dark": "#654321",
-    })
+    expect(state.document).not.toHaveProperty("resolvedTokens")
     expect(state.codeThemePreference).toBe("dracula")
     expect(state.htmlBackgroundConfig).toEqual({
       blurPx: 24,
@@ -169,7 +178,7 @@ describe("appearance token catalog", () => {
       },
     })
 
-    expect(document.overrides).toMatchObject({
+    expect(cssTokenMap(document.overrides)).toMatchObject({
       "semantic-composer-icon-button-text-light": "#111111",
       "semantic-composer-icon-button-text-dark": "#111111",
       "semantic-composer-icon-button-surface-hover-dark": "#222222",
@@ -202,7 +211,7 @@ describe("appearance token catalog", () => {
       },
     })
 
-    expect(document.overrides).toEqual({
+    expect(cssTokenMap(document.overrides)).toEqual({
       "semantic-shell-chrome-surface-light": "#444444",
       "semantic-shell-chrome-surface-dark": "#222222",
     })
@@ -317,25 +326,22 @@ describe("appearance token catalog", () => {
       },
     })
 
-    expect(document.overrides).toEqual({
+    expect(cssTokenMap(document.overrides)).toEqual({
       "semantic-popup-panel-surface-light": "#111111",
-      "semantic-popup-panel-surface-dark": "#222222",
+      "semantic-settings-page-surface-dark": "#222222",
       "semantic-settings-switch-track-surface-light": "#444444",
       "semantic-settings-switch-track-surface-dark": "#444444",
       "semantic-settings-switch-thumb-surface-disabled-dark": "#555555",
     })
-    expect(document.resolvedTokens).toEqual({
-      "semantic-popup-panel-surface-light": "#333333",
-      "semantic-settings-switch-track-surface-light": "#666666",
-    })
+    expect(document).not.toHaveProperty("resolvedTokens")
 
-    expect(normalizeAppearanceConfigDocument({
+    expect(cssTokenMap(normalizeAppearanceConfigDocument({
       overrides: {
         "semantic-settings-page-surface": "#777777",
       },
-    }).overrides).toEqual({
-      "semantic-popup-panel-surface-light": "#777777",
-      "semantic-popup-panel-surface-dark": "#777777",
+    }).overrides)).toEqual({
+      "semantic-settings-page-surface-light": "#777777",
+      "semantic-settings-page-surface-dark": "#777777",
     })
   })
 
@@ -393,7 +399,7 @@ describe("appearance token catalog", () => {
       },
     })
 
-    expect(document.overrides).toEqual({
+    expect(cssTokenMap(document.overrides)).toEqual({
       "semantic-button-primary-surface-light": "#111111",
       "semantic-button-primary-surface-dark": "#123456",
       "semantic-button-secondary-text-light": "#abcdef",
@@ -403,10 +409,7 @@ describe("appearance token catalog", () => {
       "semantic-icon-button-text-dark": "#334455",
       "semantic-icon-button-surface-hover-dark": "#223344",
     })
-    expect(document.resolvedTokens).toEqual({
-      "semantic-button-danger-text-hover-dark": "#222222",
-      "semantic-icon-button-text-hover-light": "#445566",
-    })
+    expect(document).not.toHaveProperty("resolvedTokens")
   })
 })
 
@@ -502,14 +505,12 @@ describe("appearance segmented control tokens", () => {
       },
     })
 
-    expect(document.overrides).toEqual({
+    expect(cssTokenMap(document.overrides)).toEqual({
       "semantic-segmented-control-surface-light": "#111111",
       "semantic-segmented-control-surface-dark": "#111111",
       "semantic-segmented-control-item-text-active-dark": "#222222",
     })
-    expect(document.resolvedTokens).toEqual({
-      "semantic-segmented-control-item-surface-hover-light": "#333333",
-    })
+    expect(document).not.toHaveProperty("resolvedTokens")
   })
 })
 
@@ -544,13 +545,11 @@ describe("appearance proposed plan card tokens", () => {
       },
     })
 
-    expect(document.overrides).toEqual({
+    expect(cssTokenMap(document.overrides)).toEqual({
       "semantic-proposed-plan-card-surface-light": "#123456",
       "semantic-proposed-plan-card-surface-dark": "#abcdef",
     })
-    expect(document.resolvedTokens).toEqual({
-      "semantic-proposed-plan-card-surface-light": "#654321",
-    })
+    expect(document).not.toHaveProperty("resolvedTokens")
   })
 })
 
@@ -560,7 +559,7 @@ describe("appearance sidebar tree row tokens", () => {
       id: "component-sidebar-tree-rows",
       layer: "product",
       label: "Sidebar Tree Rows",
-      description: "Dedicated row tokens for the left sidebar workspace and skills trees.",
+      description: "Dedicated state tokens for conversation, workspace, prompt, skill, MCP, and tool rows in the left sidebar.",
       rows: [
         {
           id: "semantic-sidebar-tree-row-text",
@@ -600,7 +599,7 @@ describe("appearance sidebar tree row tokens", () => {
         {
           id: "semantic-sidebar-tree-row-leading-active",
           label: "Leading Icon Active",
-          description: "Selected-row leading icon color for sidebar project rows.",
+          description: "Selected-row leading icon color for left sidebar tree rows.",
           lightToken: "semantic-sidebar-tree-row-leading-active-light",
           darkToken: "semantic-sidebar-tree-row-leading-active-dark",
         },
@@ -624,13 +623,11 @@ describe("appearance sidebar tree row tokens", () => {
       },
     })
 
-    expect(document.overrides).toEqual({
+    expect(cssTokenMap(document.overrides)).toEqual({
       "semantic-sidebar-tree-row-text-light": "#123456",
       "semantic-sidebar-tree-row-surface-active-dark": "#abcdef",
     })
-    expect(document.resolvedTokens).toEqual({
-      "semantic-sidebar-tree-row-text-hover-dark": "#654321",
-    })
+    expect(document).not.toHaveProperty("resolvedTokens")
     expect(document.colorMode).toBe("dark")
     expect(document.updatedAt).toBe(42)
   })
@@ -757,7 +754,7 @@ describe("appearance thread view tokens", () => {
       },
     })
 
-    expect(document.overrides).toEqual({
+    expect(cssTokenMap(document.overrides)).toEqual({
       "semantic-thread-response-text-light": "#123456",
       "semantic-thread-response-text-dark": "#000000",
       "semantic-thread-reasoning-text-dark": "#abcdef",
@@ -770,11 +767,7 @@ describe("appearance thread view tokens", () => {
       "semantic-thread-user-message-diff-card-surface-light": "#fedcba",
       "semantic-thread-user-message-diff-card-surface-dark": "#fedcba",
     })
-    expect(document.resolvedTokens).toEqual({
-      "semantic-thread-reasoning-text-light": "#654321",
-      "semantic-thread-panel-surface-hover-dark": "#445566",
-      "semantic-thread-user-message-diff-row-surface-focus-dark": "#334455",
-    })
+    expect(document).not.toHaveProperty("resolvedTokens")
   })
 })
 
@@ -914,14 +907,12 @@ describe("appearance markdown tokens", () => {
       },
     })
 
-    expect(document.overrides).toEqual({
+    expect(cssTokenMap(document.overrides)).toEqual({
       "semantic-markdown-inline-code-surface-light": "#123456",
       "semantic-markdown-code-surface-dark": "#abcdef",
       "semantic-markdown-code-text-light": "#000000",
       "semantic-markdown-code-text-dark": "#000000",
     })
-    expect(document.resolvedTokens).toEqual({
-      "semantic-markdown-table-head-surface-light": "#654321",
-    })
+    expect(document).not.toHaveProperty("resolvedTokens")
   })
 })

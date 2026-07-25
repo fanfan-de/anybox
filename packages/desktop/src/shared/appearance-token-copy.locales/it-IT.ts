@@ -74,7 +74,7 @@ export const appearanceTokenCopy = {
     },
     "component-sidebar-tree-rows": {
       "label": "Righe Albero Sidebar",
-      "description": "Token di riga dedicati per l'albero dell'area di lavoro e delle competenze nella barra laterale sinistra."
+      "description": "Token di stato dedicati per le righe di conversazioni, aree di lavoro, prompt, competenze, MCP e strumenti nella barra laterale sinistra."
     },
     "component-settings-list-detail-rows": {
       "label": "Righe Dettaglio Elenco Impostazioni",
@@ -660,7 +660,7 @@ export const appearanceTokenCopy = {
     },
     "semantic-sidebar-tree-row-leading-active": {
       "label": "Icona principale attiva",
-      "description": "Colore dell'icona principale per la riga selezionata nei progetti della barra laterale."
+      "description": "Colore dell'icona principale per le righe dell'albero selezionate nella barra laterale sinistra."
     },
     "semantic-settings-list-detail-row-surface-hover": {
       "label": "Superficie riga al passaggio",

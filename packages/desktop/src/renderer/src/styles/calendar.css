@@ -8,6 +8,7 @@
 .calendar-page {
   --calendar-bg: var(--surface-app, var(--surface-panel));
   --calendar-top-surface: var(--top-chrome-surface, var(--seg-shell-chrome-surface, var(--surface-shell)));
+  --calendar-shell-surface: var(--surface-shell);
   --calendar-panel: var(--surface-panel);
   --calendar-panel-muted: var(--surface-panel-muted);
   --calendar-panel-inset: var(--surface-app, var(--surface-panel));
@@ -15,16 +16,16 @@
   --calendar-border-subtle: var(--border-subtle);
   --calendar-hover: var(--mix-seg-panel-muted-86-transparent-14, var(--surface-panel-muted));
   --calendar-control-surface: var(--surface-panel-muted);
-  --calendar-control-surface-hover: var(--semantic-sidebar-tree-row-surface-hover);
-  --calendar-control-surface-active: var(--semantic-sidebar-tree-row-surface-active);
+  --calendar-control-surface-hover: var(--surface-panel-muted);
+  --calendar-control-surface-active: var(--brand-primary-soft-active);
   --calendar-control-border-hover: var(--semantic-button-secondary-border-hover);
   --calendar-grid-border: var(--mix-seg-border-82-transparent-18, var(--border-subtle));
   --calendar-grid-surface: var(--surface-app, var(--surface-panel));
-  --calendar-grid-header-surface: var(--surface-panel);
-  --calendar-grid-hover: var(--semantic-sidebar-tree-row-surface-hover);
+  --calendar-grid-header-surface: var(--calendar-shell-surface);
+  --calendar-grid-hover: var(--surface-panel-muted);
   --calendar-event-surface: transparent;
   --calendar-event-surface-hover: var(--mix-seg-panel-72-seg-panel-muted-28, var(--surface-panel));
-  --calendar-selected-surface: var(--semantic-sidebar-tree-row-surface-active);
+  --calendar-selected-surface: var(--brand-primary-soft-active);
   --calendar-focus-border: var(--semantic-button-secondary-border-hover);
   --calendar-today-surface: var(--semantic-button-primary-surface);
   --calendar-today-text: var(--semantic-button-primary-text);
@@ -36,7 +37,7 @@
   --calendar-text: var(--text-primary);
   --calendar-text-muted: var(--text-secondary);
   --calendar-text-faint: var(--text-tertiary);
-  --calendar-accent: var(--brand-primary);
+  --calendar-accent: var(--brand-primary-active);
   --calendar-radius: var(--radius-control);
   --calendar-panel-radius: var(--radius-panel);
   --calendar-left-sidebar-width: 356px;
@@ -122,7 +123,7 @@
   align-items: center;
   gap: 0;
   border-bottom: 1px solid var(--calendar-border);
-  background: var(--calendar-panel);
+  background: var(--calendar-shell-surface);
 }
 
 .calendar-toolbar-spacer {
@@ -644,7 +645,7 @@
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  background: var(--calendar-panel);
+  background: var(--calendar-shell-surface);
 }
 
 .calendar-sources-panel {

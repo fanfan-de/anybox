@@ -3773,6 +3773,7 @@
 
 .right-sidebar-diff-hunk-header {
   background: var(--surface-code-strong);
+  /* This surface stays dark in both app modes, so it intentionally uses the dark-mode muted text token. */
   color: var(--text-secondary-dark);
 }
 
@@ -3942,7 +3943,7 @@
 
 .workspace-files-tree-toggle:hover,
 .workspace-files-tree-toggle:focus-visible {
-  background: var(--semantic-sidebar-tree-row-surface-hover);
+  background: var(--surface-panel-muted);
   color: var(--seg-text-1);
   outline: none;
 }
@@ -3992,7 +3993,7 @@
 .workspace-files-splitter:hover,
 .workspace-files-splitter:focus-visible,
 .workspace-files-split.is-resizing .workspace-files-splitter {
-  background: var(--semantic-sidebar-tree-row-surface-hover);
+  background: var(--surface-panel-muted);
   outline: none;
 }
 
@@ -4374,14 +4375,14 @@
 
 .workspace-files-tree-row:hover,
 .workspace-files-tree-row:focus-visible {
-  background: var(--semantic-sidebar-tree-row-surface-hover);
-  color: var(--semantic-sidebar-tree-row-text-hover);
+  background: var(--surface-panel-muted);
+  color: var(--text-primary);
   outline: none;
 }
 
 .workspace-files-tree-row.is-active {
-  background: var(--semantic-sidebar-tree-row-surface-active);
-  color: var(--semantic-sidebar-tree-row-text-active);
+  background: var(--brand-primary-soft-active);
+  color: var(--brand-primary-strong);
 }
 
 .workspace-files-tree-chevron,

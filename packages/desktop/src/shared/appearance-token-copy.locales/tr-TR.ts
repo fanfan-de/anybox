@@ -74,7 +74,7 @@ export const appearanceTokenCopy = {
     },
     "component-sidebar-tree-rows": {
       "label": "Kenar Çubuğu Ağaç Satırları",
-      "description": "Sol kenar çubuğu çalışma alanı ve beceri ağaçları için özel satır tokenları."
+      "description": "Sol kenar çubuğundaki konuşma, çalışma alanı, istem, beceri, MCP ve araç satırları için özel durum tokenları."
     },
     "component-settings-list-detail-rows": {
       "label": "Ayarlar Liste Detay Satırları",
@@ -660,7 +660,7 @@ export const appearanceTokenCopy = {
     },
     "semantic-sidebar-tree-row-leading-active": {
       "label": "Öncü Simge Aktif",
-      "description": "Kenar çubuğu proje satırları için seçili satır öncü simge rengi."
+      "description": "Sol kenar çubuğundaki seçili ağaç satırlarının öncü simge rengi."
     },
     "semantic-settings-list-detail-row-surface-hover": {
       "label": "Satır Yüzeyi Üzerine Gelme",

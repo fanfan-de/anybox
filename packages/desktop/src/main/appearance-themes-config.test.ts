@@ -1,8 +1,9 @@
-import { mkdtemp, rm } from "node:fs/promises"
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { DEFAULT_APPEARANCE_THEME_ID } from "../shared/appearance-themes"
+import { parseAppearanceColorLiteral } from "../shared/appearance-color"
 
 const userDataPathMock = vi.hoisted(() => ({
   value: "",
@@ -25,6 +26,12 @@ import {
 
 let tempDirectory = ""
 
+function colorLiteral(value: string) {
+  const literal = parseAppearanceColorLiteral(value)
+  if (!literal) throw new Error(`Invalid test color: ${value}`)
+  return literal
+}
+
 beforeEach(async () => {
   tempDirectory = await mkdtemp(path.join(os.tmpdir(), "anybox-appearance-themes-"))
   userDataPathMock.value = tempDirectory
@@ -40,7 +47,7 @@ describe("appearance theme library persistence", () => {
       exists: false,
       activeThemeID: DEFAULT_APPEARANCE_THEME_ID,
       document: {
-        version: 1,
+        version: 2,
         activeThemeID: DEFAULT_APPEARANCE_THEME_ID,
         userThemes: [],
       },
@@ -52,6 +59,71 @@ describe("appearance theme library persistence", () => {
         { id: "built-in:soft-light", readonly: true },
       ],
     })
+  })
+
+  it("backs up and migrates a v1 theme library", async () => {
+    const filePath = path.join(tempDirectory, "appearance-themes.json")
+    const legacy = {
+      version: 1,
+      activeThemeID: "user:legacy",
+      userThemes: [
+        {
+          id: "user:legacy",
+          name: "Legacy",
+          source: "user",
+          readonly: false,
+          createdAt: 1,
+          updatedAt: 2,
+          colorMode: "light",
+          brandTheme: "terra",
+          fontFamily: "default",
+          codeThemePreference: "auto",
+          htmlBackgroundConfig: {},
+          overrides: {
+            "surface-app-light": "#123456",
+          },
+        },
+      ],
+    }
+    const raw = `${JSON.stringify(legacy, null, 2)}\n`
+    await writeFile(filePath, raw, "utf8")
+
+    const snapshot = await readAppearanceThemesSnapshot()
+
+    expect(snapshot.document.version).toBe(2)
+    expect(snapshot.document.userThemes[0].overrides).toEqual({
+      "surface-app-light": colorLiteral("#123456"),
+    })
+    expect(snapshot.document.userThemes[0].foreignDtcg).toEqual({})
+    await expect(readFile(
+      path.join(tempDirectory, "appearance-themes.v1.backup.json"),
+      "utf8",
+    )).resolves.toBe(raw)
+    await expect(readFile(filePath, "utf8").then(JSON.parse)).resolves.toMatchObject({
+      version: 2,
+    })
+  })
+
+  it("surfaces corrupt and invalid current theme libraries", async () => {
+    const filePath = path.join(tempDirectory, "appearance-themes.json")
+    await writeFile(filePath, "{not-json", "utf8")
+    await expect(readAppearanceThemesSnapshot()).rejects.toThrow()
+    await expect(readFile(filePath, "utf8")).resolves.toBe("{not-json")
+
+    await writeFile(filePath, JSON.stringify({
+      version: 2,
+      activeThemeID: DEFAULT_APPEARANCE_THEME_ID,
+      userThemes: [
+        {
+          id: "user:broken",
+          name: "Broken",
+          overrides: {},
+        },
+      ],
+    }), "utf8")
+    await expect(readAppearanceThemesSnapshot()).rejects.toThrow(
+      /Appearance config is missing/,
+    )
   })
 
   it("saves and reads user themes", async () => {
@@ -73,7 +145,7 @@ describe("appearance theme library persistence", () => {
         surfaceOpacity: 0.72,
       },
       overrides: {
-        "surface-panel-dark": "#111111",
+        "surface-panel-dark": colorLiteral("#111111"),
       },
     })
 
@@ -88,7 +160,7 @@ describe("appearance theme library persistence", () => {
         html: "<main>background</main>",
       },
       overrides: {
-        "surface-panel-dark": "#111111",
+        "surface-panel-dark": colorLiteral("#111111"),
       },
     })
     expect(result.snapshot.activeThemeID).toBe("user:work")
@@ -192,7 +264,7 @@ describe("appearance theme library persistence", () => {
         surfaceOpacity: 0.68,
       },
       overrides: {
-        "surface-panel-dark": "#111111",
+        "surface-panel-dark": colorLiteral("#111111"),
       },
     })
     await setActiveAppearanceTheme("user:active")
@@ -208,7 +280,7 @@ describe("appearance theme library persistence", () => {
       colorMode: "dark",
       brandTheme: "sage",
       overrides: {
-        "surface-panel-dark": "#111111",
+        "surface-panel-dark": colorLiteral("#111111"),
       },
     })
     expect(result.snapshot.activeThemeID).toBe("user:active")

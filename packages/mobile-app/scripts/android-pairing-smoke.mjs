@@ -3,6 +3,7 @@ import http from "node:http"
 import path from "node:path"
 import { spawnSync } from "node:child_process"
 import { fileURLToPath } from "node:url"
+import { resolveAnyboxMobileScheme } from "./lib/android-development.mjs"
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const defaultApkPath = path.join(packageRoot, "build", "anybox-mobile-debug.apk")
@@ -49,6 +50,7 @@ function usage() {
     "Options:",
     "  --apk <path>          APK path. Defaults to build/anybox-mobile-debug.apk.",
     "  --package <name>      Android application ID.",
+    "  --scheme <scheme>     Deep-link scheme: anybox-mobile or anybox-mobile-dev.",
     "  --screenshot <path>   Local screenshot output path.",
     "  --wait <seconds>      Max seconds to wait for paired Home UI. Defaults to 30.",
     "  --skip-install        Reuse the app already installed on the connected device.",
@@ -61,6 +63,7 @@ function parseArgs(argv) {
     apk: defaultApkPath,
     help: false,
     packageName: defaultPackageName,
+    scheme: "anybox-mobile",
     screenshot: defaultScreenshotPath,
     skipInstall: false,
     waitSeconds: 30,
@@ -75,6 +78,9 @@ function parseArgs(argv) {
       index += 1
     } else if (value === "--package") {
       args.packageName = argv[index + 1] ?? args.packageName
+      index += 1
+    } else if (value === "--scheme") {
+      args.scheme = argv[index + 1] ?? args.scheme
       index += 1
     } else if (value === "--screenshot") {
       args.screenshot = path.resolve(argv[index + 1] ?? args.screenshot)
@@ -977,6 +983,7 @@ async function main() {
     console.log(usage())
     return
   }
+  args.scheme = resolveAnyboxMobileScheme(args.scheme)
 
   const device = requireConnectedDevice()
   prepareInteractiveDevice()
@@ -989,7 +996,7 @@ async function main() {
   let replacementBridge = null
   try {
     const bridgeUrl = `${androidLocalBridgeUrl(bridge.port, device)}/?code=${encodeURIComponent(mockPairingCode)}`
-    const deepLink = `anybox-mobile://connect?url=${encodeURIComponent(bridgeUrl)}`
+    const deepLink = `${args.scheme}://connect?url=${encodeURIComponent(bridgeUrl)}`
 
     run("adb", ["shell", "pm", "clear", args.packageName])
     run("adb", ["logcat", "-c"])
@@ -1001,7 +1008,7 @@ async function main() {
 
     replacementBridge = await startMockBridge()
     const replacementBridgeUrl = `${androidLocalBridgeUrl(replacementBridge.port, device)}/?code=${encodeURIComponent(mockPairingCode)}`
-    const replacementDeepLink = `anybox-mobile://connect?url=${encodeURIComponent(replacementBridgeUrl)}`
+    const replacementDeepLink = `${args.scheme}://connect?url=${encodeURIComponent(replacementBridgeUrl)}`
 
     prepareInteractiveDevice()
     run("adb", ["shell", "am", "start", "-W", "-a", "android.intent.action.VIEW", "-d", replacementDeepLink, args.packageName])
@@ -1027,7 +1034,7 @@ async function main() {
       "-a",
       "android.intent.action.VIEW",
       "-d",
-      "anybox-mobile://workspaces/workspace-smoke",
+      `${args.scheme}://workspaces/workspace-smoke`,
       args.packageName,
     ])
     await waitForWorkspaceUi(args.packageName, args.waitSeconds)

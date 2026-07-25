@@ -216,7 +216,7 @@ export const es419 = {
   "thread.loadingSession": "Cargando sesión",
   "thread.noMessages": "Sin mensajes",
   "thread.readyInWorkspace": "Listo en {workspace}. Envía una tarea para crear una sesión enfocada.",
-  "thread.startConversation": "Iniciar chat",
+  "thread.startConversation": "Inicia una conversación en {workspace}",
   "thread.reasoning": "Razonamiento",
   "thread.reasoningActive": "Razonamiento",
   "thread.reasoningComplete": "Razonado",

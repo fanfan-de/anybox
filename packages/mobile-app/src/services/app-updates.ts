@@ -27,13 +27,17 @@ const DEFAULT_RELEASE_TIMEOUT_MS = 12_000
 const DEFAULT_GITHUB_API_VERSION = "2022-11-28"
 const MAX_APK_BYTES = 500 * 1024 * 1024
 const EXPECTED_PACKAGE_NAME = "com.anybox.mobile"
+const DEVELOPMENT_PACKAGE_NAME = "com.anybox.mobile.dev"
 const SHA256_PATTERN = /^[a-f0-9]{64}$/
+
+export type MobileBuildProfile = "production" | "development"
 
 export interface CurrentAppInfo {
   version: string
   buildVersion: string | null
   versionCode: number | null
   packageName: string | null
+  buildProfile: MobileBuildProfile
   platform: string
   channel: string | null
   runtimeVersion: string | null
@@ -142,30 +146,43 @@ export function getCurrentAppInfo(): CurrentAppInfo {
   const version = Application.nativeApplicationVersion ?? Constants.expoConfig?.version ?? "0.0.0"
   const buildVersion = Application.nativeBuildVersion
   const versionCode = Platform.OS === "android" ? readInteger(buildVersion) : null
+  const packageName = Application.applicationId
+  const buildProfile: MobileBuildProfile =
+    packageName === DEVELOPMENT_PACKAGE_NAME ? "development" : "production"
+  const development = buildProfile === "development"
   return {
     version,
     buildVersion,
     versionCode,
-    packageName: Application.applicationId,
+    packageName,
+    buildProfile,
     platform: Platform.OS,
-    channel: Updates.channel || getConfiguredString("anyboxMobileUpdateChannel"),
+    channel:
+      buildProfile === "development"
+        ? "development"
+        : Updates.channel || getConfiguredString("anyboxMobileUpdateChannel"),
     runtimeVersion: Updates.runtimeVersion,
     updateId: Updates.updateId,
     updateCreatedAt: Updates.createdAt?.toISOString() ?? null,
     isEmbeddedUpdate: Updates.isEmbeddedLaunch,
-    updatesEnabled: Updates.isEnabled,
-    updatesUrl: readString(Constants.expoConfig?.updates?.url),
+    updatesEnabled: !development && Updates.isEnabled,
+    updatesUrl: development ? null : readString(Constants.expoConfig?.updates?.url),
     releaseManifestUrl:
-      getConfiguredString(
-        "anyboxMobileReleaseUrl",
-        process.env.EXPO_PUBLIC_ANYBOX_MOBILE_RELEASE_URL,
-      ) ?? null,
+      development
+        ? null
+        : getConfiguredString(
+            "anyboxMobileReleaseUrl",
+            process.env.EXPO_PUBLIC_ANYBOX_MOBILE_RELEASE_URL,
+          ) ?? null,
     releaseSignatureUrl:
-      getConfiguredString(
-        "anyboxMobileReleaseSignatureUrl",
-        process.env.EXPO_PUBLIC_ANYBOX_MOBILE_RELEASE_SIGNATURE_URL,
-      ) ?? null,
-    updaterAvailable: Platform.OS === "android" && isAndroidUpdaterAvailable,
+      development
+        ? null
+        : getConfiguredString(
+            "anyboxMobileReleaseSignatureUrl",
+            process.env.EXPO_PUBLIC_ANYBOX_MOBILE_RELEASE_SIGNATURE_URL,
+          ) ?? null,
+    updaterAvailable:
+      !development && Platform.OS === "android" && isAndroidUpdaterAvailable,
   }
 }
 
@@ -189,14 +206,15 @@ export async function checkAppUpdates(
 }
 
 export async function checkOtaUpdate(): Promise<OtaUpdateCheck> {
+  const current = getCurrentAppInfo()
   const base = {
     checked: true,
-    enabled: Updates.isEnabled,
-    channel: getCurrentAppInfo().channel,
+    enabled: current.updatesEnabled,
+    channel: current.channel,
     runtimeVersion: Updates.runtimeVersion,
     updateId: Updates.updateId,
   }
-  if (!Updates.isEnabled) {
+  if (!current.updatesEnabled) {
     return {
       ...base,
       available: false,
@@ -225,7 +243,9 @@ export async function checkOtaUpdate(): Promise<OtaUpdateCheck> {
 }
 
 export async function downloadOtaUpdate() {
-  if (!Updates.isEnabled) throw new Error("OTA updates are not enabled in this build.")
+  if (!getCurrentAppInfo().updatesEnabled) {
+    throw new Error("OTA updates are not enabled in this build.")
+  }
   const result = await Updates.fetchUpdateAsync()
   if (!result.isNew && !result.isRollBackToEmbedded) {
     throw new Error("No downloaded OTA update is ready to apply.")
@@ -241,6 +261,18 @@ export async function reloadToDownloadedOtaUpdate() {
 }
 
 export async function checkBinaryUpdate(current = getCurrentAppInfo()): Promise<BinaryUpdateCheck> {
+  if (current.buildProfile === "development") {
+    return {
+      checked: false,
+      configured: false,
+      available: false,
+      required: false,
+      signatureVerified: false,
+      source: "none",
+      release: null,
+      status: "unsupported",
+    }
+  }
   if (Platform.OS !== "android") {
     return {
       checked: false,
@@ -569,6 +601,9 @@ export async function downloadBinaryRelease(
   release: AndroidReleaseManifest,
   onProgress?: (progress: DownloadProgress) => void,
 ): Promise<DownloadedApk> {
+  if (getCurrentAppInfo().buildProfile === "development") {
+    throw new Error("Production APK updates are disabled in the development build.")
+  }
   const subscription = onProgress ? addDownloadProgressListener(onProgress) : null
   try {
     await clearStaleDownloads()
@@ -617,7 +652,7 @@ export async function openBinaryReleaseInBrowser(release: AndroidReleaseManifest
 }
 
 export async function readOtaDiagnosticErrors() {
-  if (!Updates.isEnabled) return []
+  if (!getCurrentAppInfo().updatesEnabled) return []
   try {
     const entries = await Updates.readLogEntriesAsync(24 * 60 * 60 * 1000)
     return entries
@@ -630,12 +665,13 @@ export async function readOtaDiagnosticErrors() {
 }
 
 function createSkippedOtaUpdateCheck(): OtaUpdateCheck {
+  const current = getCurrentAppInfo()
   return {
     checked: false,
-    enabled: Updates.isEnabled,
+    enabled: current.updatesEnabled,
     available: false,
     rollback: false,
-    channel: getCurrentAppInfo().channel,
+    channel: current.channel,
     runtimeVersion: Updates.runtimeVersion,
     updateId: Updates.updateId,
     status: "skipped",

@@ -74,7 +74,7 @@ export const appearanceTokenCopy = {
     },
     "component-sidebar-tree-rows": {
       "label": "Seitenleisten-Baumzeilen",
-      "description": "Dedizierte Zeilen-Tokens für den linken Seitenleisten-Workspace und Skill-Bäume."
+      "description": "Dedizierte Status-Tokens für Unterhaltungs-, Workspace-, Prompt-, Skill-, MCP- und Werkzeugzeilen in der linken Seitenleiste."
     },
     "component-settings-list-detail-rows": {
       "label": "Einstellungs-Listendetailzeilen",
@@ -660,7 +660,7 @@ export const appearanceTokenCopy = {
     },
     "semantic-sidebar-tree-row-leading-active": {
       "label": "Führendes Symbol Aktiv",
-      "description": "Farbe des führenden Symbols für ausgewählte Seitenleisten-Projektzeilen."
+      "description": "Farbe des führenden Symbols für ausgewählte Baumzeilen in der linken Seitenleiste."
     },
     "semantic-settings-list-detail-row-surface-hover": {
       "label": "Zeilenhintergrund Hover",

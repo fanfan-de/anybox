@@ -74,7 +74,7 @@ export const appearanceTokenCopy = {
     },
     "component-sidebar-tree-rows": {
       "label": "Wiersze drzewa bocznego",
-      "description": "Dedykowane tokeny wierszy dla obszaru roboczego lewego panelu bocznego i drzew umiejętności."
+      "description": "Dedykowane tokeny stanu dla wierszy rozmów, obszarów roboczych, promptów, umiejętności, MCP i narzędzi w lewym panelu bocznym."
     },
     "component-settings-list-detail-rows": {
       "label": "Wiersze szczegółów listy ustawień",
@@ -660,7 +660,7 @@ export const appearanceTokenCopy = {
     },
     "semantic-sidebar-tree-row-leading-active": {
       "label": "Ikona prowadząca aktywna",
-      "description": "Kolor ikony prowadzącej zaznaczonego wiersza projektu."
+      "description": "Kolor ikony prowadzącej zaznaczonego wiersza drzewa w lewym panelu bocznym."
     },
     "semantic-settings-list-detail-row-surface-hover": {
       "label": "Tło wiersza po najechaniu",

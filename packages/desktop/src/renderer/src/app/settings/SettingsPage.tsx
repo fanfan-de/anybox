@@ -20,6 +20,10 @@ import {
   type AppearanceTokenMap,
   type AppearanceTokenName,
 } from "../../../../shared/appearance"
+import {
+  resolveAppearanceTokenCssValues,
+  type AppearanceContrastWarning,
+} from "../../../../shared/appearance-color"
 import { getAppearanceTokenGroupCopy, getAppearanceTokenRowCopy } from "../../../../shared/appearance-token-copy"
 import type { AppearanceTheme } from "../../../../shared/appearance-themes"
 import type {
@@ -1131,6 +1135,7 @@ function formatPlanCode(value: string | undefined) {
     .join(" ")
 }
 
+const ANYBOX_ACCOUNT_DASHBOARD_URL = "https://provider.anybox.com.cn/app/dashboard"
 const ANYBOX_PRODUCT_HOME_URL = "https://www.anybox.com.cn"
 const ANYBOX_COMMUNITY_QR_IMAGE_SRC = "/anybox-community-qr.png"
 
@@ -1588,23 +1593,22 @@ function resolveAppearanceThemeSwatchColor(
   theme: AppearanceTheme,
   lightToken: AppearanceTokenName,
   darkToken: AppearanceTokenName,
-  appearanceTokenValues: Record<AppearanceTokenName, string>,
+  themeTokenValues: Record<AppearanceTokenName, string>,
 ) {
   const preferredToken = theme.colorMode === "dark" ? darkToken : lightToken
-  return theme.overrides[preferredToken]
-    ?? theme.overrides[lightToken]
-    ?? theme.overrides[darkToken]
-    ?? appearanceTokenValues[preferredToken]
+  return themeTokenValues[preferredToken]
     ?? "var(--seg-panel)"
 }
 
-function AppearanceThemeSwatches({
-  appearanceTokenValues,
-  theme,
-}: {
-  appearanceTokenValues: Record<AppearanceTokenName, string>
-  theme: AppearanceTheme
-}) {
+function AppearanceThemeSwatches({ theme }: { theme: AppearanceTheme }) {
+  const themeTokenValues = useMemo(
+    () => resolveAppearanceTokenCssValues({
+      brandTheme: theme.brandTheme,
+      overrides: theme.overrides,
+    }),
+    [theme.brandTheme, theme.overrides],
+  )
+
   return (
     <span className="settings-theme-library-swatches" aria-hidden="true">
       {appearanceThemeSwatchTokenPairs.map(([lightToken, darkToken]) => (
@@ -1615,7 +1619,7 @@ function AppearanceThemeSwatches({
               theme,
               lightToken,
               darkToken,
-              appearanceTokenValues,
+              themeTokenValues,
             ),
           } as CSSProperties}
         />
@@ -1626,11 +1630,13 @@ function AppearanceThemeSwatches({
 
 interface AppearanceThemeLibraryPanelProps {
   activeThemeID?: string
-  appearanceTokenValues: Record<AppearanceTokenName, string>
   error?: string | null
+  notice?: string | null
   onApply?: (themeID: string) => void | Promise<void>
   onDelete?: (themeID: string) => void | Promise<void>
   onDuplicate?: (themeID: string, name?: string) => Promise<AppearanceTheme | null>
+  onExportDtcg?: (themeID: string) => { contents: string; fileName: string } | null
+  onImportDtcg?: (json: string, fallbackName?: string) => Promise<AppearanceTheme | null>
   onRename?: (themeID: string, name: string) => Promise<AppearanceTheme | null>
   onSaveCurrent?: (name: string) => Promise<AppearanceTheme | null>
   themes: readonly AppearanceTheme[]
@@ -1638,11 +1644,13 @@ interface AppearanceThemeLibraryPanelProps {
 
 function AppearanceThemeLibraryPanel({
   activeThemeID,
-  appearanceTokenValues,
   error,
+  notice,
   onApply,
   onDelete,
   onDuplicate,
+  onExportDtcg,
+  onImportDtcg,
   onRename,
   onSaveCurrent,
   themes,
@@ -1652,6 +1660,7 @@ function AppearanceThemeLibraryPanel({
   const [selectedThemeID, setSelectedThemeID] = useState(() => activeThemeID ?? themes[0]?.id ?? "")
   const [themeNameDraft, setThemeNameDraft] = useState(defaultNewThemeName)
   const [pendingThemeAction, setPendingThemeAction] = useState<string | null>(null)
+  const importInputRef = useRef<HTMLInputElement | null>(null)
   const pendingSelectedThemeIDRef = useRef<string | null>(null)
   const selectedTheme = themes.find((theme) => theme.id === selectedThemeID) ?? themes[0] ?? null
   const trimmedThemeName = themeNameDraft.trim()
@@ -1760,6 +1769,36 @@ function AppearanceThemeLibraryPanel({
     })
   }
 
+  async function handleImportDtcgFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ""
+    if (!file || !onImportDtcg) return
+
+    await runThemeAction("import", async () => {
+      const fallbackName = file.name.replace(/(?:\.tokens)?\.json$/i, "")
+      const theme = await onImportDtcg(await file.text(), fallbackName)
+      if (theme) {
+        pendingSelectedThemeIDRef.current = theme.id
+        setSelectedThemeID(theme.id)
+      }
+    })
+  }
+
+  function handleExportDtcg() {
+    if (!selectedTheme || !onExportDtcg) return
+    const exported = onExportDtcg(selectedTheme.id)
+    if (!exported) return
+
+    const url = URL.createObjectURL(
+      new Blob([exported.contents], { type: "application/json;charset=utf-8" }),
+    )
+    const anchor = document.createElement("a")
+    anchor.href = url
+    anchor.download = exported.fileName
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
+
   if (themes.length === 0) return null
 
   return (
@@ -1769,7 +1808,25 @@ function AppearanceThemeLibraryPanel({
           <span className="label">{t("settings.appearance.themeLibraryLabel")}</span>
           <h3>{t("settings.appearance.themeLibraryTitle")}</h3>
         </div>
-        <p>{t("settings.appearance.themeLibraryCopy")}</p>
+        <div className="settings-theme-library-heading-actions">
+          <p>{t("settings.appearance.themeLibraryCopy")}</p>
+          <input
+            ref={importInputRef}
+            className="settings-theme-library-file-input"
+            type="file"
+            accept=".json,.tokens.json,application/json"
+            aria-label={t("settings.appearance.themeImportDtcgLabel")}
+            onChange={handleImportDtcgFile}
+          />
+          <button
+            className="secondary-button"
+            type="button"
+            disabled={!onImportDtcg || pendingThemeAction !== null}
+            onClick={() => importInputRef.current?.click()}
+          >
+            {t("settings.appearance.themeImportDtcg")}
+          </button>
+        </div>
       </div>
 
       <div className="settings-theme-library-shell">
@@ -1795,10 +1852,7 @@ function AppearanceThemeLibraryPanel({
                 aria-selected={isSelected}
                 onClick={() => setSelectedThemeID(theme.id)}
               >
-                <AppearanceThemeSwatches
-                  appearanceTokenValues={appearanceTokenValues}
-                  theme={theme}
-                />
+                <AppearanceThemeSwatches theme={theme} />
                 <span className="settings-theme-library-item-copy">
                   <strong>{theme.name}</strong>
                   <small>
@@ -1819,10 +1873,7 @@ function AppearanceThemeLibraryPanel({
                   <span className="label">{getThemeSourceLabel(selectedTheme)}</span>
                   <h4>{selectedTheme.name}</h4>
                 </div>
-                <AppearanceThemeSwatches
-                  appearanceTokenValues={appearanceTokenValues}
-                  theme={selectedTheme}
-                />
+                <AppearanceThemeSwatches theme={selectedTheme} />
               </div>
 
               <dl className="settings-theme-library-meta">
@@ -1856,6 +1907,14 @@ function AppearanceThemeLibraryPanel({
                   onClick={handleDuplicateTheme}
                 >
                   {t("settings.appearance.themeDuplicate")}
+                </button>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  disabled={!onExportDtcg || pendingThemeAction !== null}
+                  onClick={handleExportDtcg}
+                >
+                  {t("settings.appearance.themeExportDtcg")}
                 </button>
                 <button
                   className="secondary-button is-danger"
@@ -1901,6 +1960,11 @@ function AppearanceThemeLibraryPanel({
           {error ? (
             <p className="settings-helper-text settings-theme-config-error">{error}</p>
           ) : null}
+          {notice ? (
+            <p className="settings-helper-text settings-theme-config-notice" aria-live="polite">
+              {notice}
+            </p>
+          ) : null}
         </div>
       </div>
     </section>
@@ -1911,8 +1975,10 @@ interface AppearanceSettingsPanelProps {
   appearanceConfigError: string | null
   appearanceConfigPath: string | null
   appearanceConfigPreview: string
+  appearanceContrastWarnings?: readonly AppearanceContrastWarning[]
   appearanceOverrides: AppearanceTokenMap
   appearanceThemeError?: string | null
+  appearanceThemeNotice?: string | null
   appearanceThemes?: readonly AppearanceTheme[]
   activeAppearanceThemeID?: string
   appearanceTokenValues: Record<AppearanceTokenName, string>
@@ -1926,6 +1992,8 @@ interface AppearanceSettingsPanelProps {
   onAppearanceThemeApply?: (themeID: string) => void | Promise<void>
   onAppearanceThemeDelete?: (themeID: string) => void | Promise<void>
   onAppearanceThemeDuplicate?: (themeID: string, name?: string) => Promise<AppearanceTheme | null>
+  onAppearanceThemeExportDtcg?: (themeID: string) => { contents: string; fileName: string } | null
+  onAppearanceThemeImportDtcg?: (json: string, fallbackName?: string) => Promise<AppearanceTheme | null>
   onAppearanceThemeRename?: (themeID: string, name: string) => Promise<AppearanceTheme | null>
   onAppearanceThemeSaveCurrent?: (name: string) => Promise<AppearanceTheme | null>
   onAppearanceTokenChange: (tokenName: AppearanceTokenName, value: string) => void
@@ -1940,8 +2008,10 @@ export function AppearanceSettingsPanel({
   appearanceConfigError,
   appearanceConfigPath,
   appearanceConfigPreview,
+  appearanceContrastWarnings = [],
   appearanceOverrides,
   appearanceThemeError,
+  appearanceThemeNotice,
   appearanceThemes = [],
   activeAppearanceThemeID,
   appearanceTokenValues,
@@ -1955,6 +2025,8 @@ export function AppearanceSettingsPanel({
   onAppearanceThemeApply,
   onAppearanceThemeDelete,
   onAppearanceThemeDuplicate,
+  onAppearanceThemeExportDtcg,
+  onAppearanceThemeImportDtcg,
   onAppearanceThemeRename,
   onAppearanceThemeSaveCurrent,
   onAppearanceTokenChange,
@@ -1984,12 +2056,14 @@ export function AppearanceSettingsPanel({
     <div className="settings-appearance-layout">
       <AppearanceThemeLibraryPanel
         activeThemeID={activeAppearanceThemeID}
-        appearanceTokenValues={appearanceTokenValues}
         error={appearanceThemeError}
+        notice={appearanceThemeNotice}
         themes={appearanceThemes}
         onApply={onAppearanceThemeApply}
         onDelete={onAppearanceThemeDelete}
         onDuplicate={onAppearanceThemeDuplicate}
+        onExportDtcg={onAppearanceThemeExportDtcg}
+        onImportDtcg={onAppearanceThemeImportDtcg}
         onRename={onAppearanceThemeRename}
         onSaveCurrent={onAppearanceThemeSaveCurrent}
       />
@@ -2218,6 +2292,36 @@ export function AppearanceSettingsPanel({
           />
         </label>
       </section>
+
+      {appearanceContrastWarnings.length > 0 ? (
+        <section className="settings-panel settings-theme-validation-panel">
+          <div className="settings-section-header">
+            <div>
+              <span className="label">{t("settings.appearance.validationLabel")}</span>
+              <h3>{t("settings.appearance.contrastWarningsTitle", {
+                count: appearanceContrastWarnings.length,
+              })}</h3>
+            </div>
+            <p>{t("settings.appearance.contrastWarningsCopy")}</p>
+          </div>
+          <div className="settings-theme-validation-list">
+            {appearanceContrastWarnings.map((warning) => (
+              <div
+                key={`${warning.contractID}:${warning.mode}`}
+                className="settings-theme-validation-row"
+              >
+                <span>{warning.mode}</span>
+                <code>--{warning.foregroundToken}</code>
+                <span aria-hidden="true">/</span>
+                <code>--{warning.backgroundToken}</code>
+                <strong>
+                  {warning.contrast.toFixed(2)} : 1 · ≥ {warning.minimumContrast} : 1
+                </strong>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <AppearanceTokenEditor
         appearanceOverrides={appearanceOverrides}
@@ -2952,8 +3056,10 @@ interface SettingsPageProps {
   appearanceConfigError: string | null
   appearanceConfigPath: string | null
   appearanceConfigPreview: string
+  appearanceContrastWarnings?: readonly AppearanceContrastWarning[]
   appearanceOverrides: AppearanceTokenMap
   appearanceThemeError?: string | null
+  appearanceThemeNotice?: string | null
   appearanceThemes?: readonly AppearanceTheme[]
   activeAppearanceThemeID?: string
   appearanceTokenValues: Record<AppearanceTokenName, string>
@@ -3017,6 +3123,8 @@ interface SettingsPageProps {
   onAppearanceThemeApply?: (themeID: string) => void | Promise<void>
   onAppearanceThemeDelete?: (themeID: string) => void | Promise<void>
   onAppearanceThemeDuplicate?: (themeID: string, name?: string) => Promise<AppearanceTheme | null>
+  onAppearanceThemeExportDtcg?: (themeID: string) => { contents: string; fileName: string } | null
+  onAppearanceThemeImportDtcg?: (json: string, fallbackName?: string) => Promise<AppearanceTheme | null>
   onAppearanceThemeRename?: (themeID: string, name: string) => Promise<AppearanceTheme | null>
   onAppearanceThemeSaveCurrent?: (name: string) => Promise<AppearanceTheme | null>
   onAppearanceTokenChange: (tokenName: AppearanceTokenName, value: string) => void
@@ -3089,8 +3197,10 @@ export function SettingsPage({
   appearanceConfigError,
   appearanceConfigPath,
   appearanceConfigPreview,
+  appearanceContrastWarnings,
   appearanceOverrides,
   appearanceThemeError,
+  appearanceThemeNotice,
   appearanceThemes,
   activeAppearanceThemeID,
   appearanceTokenValues,
@@ -3153,6 +3263,8 @@ export function SettingsPage({
   onAppearanceThemeApply,
   onAppearanceThemeDelete,
   onAppearanceThemeDuplicate,
+  onAppearanceThemeExportDtcg,
+  onAppearanceThemeImportDtcg,
   onAppearanceThemeRename,
   onAppearanceThemeSaveCurrent,
   onAppearanceTokenChange,
@@ -4227,6 +4339,17 @@ export function SettingsPage({
       <section className="settings-panel settings-account-panel" aria-label={t("settings.account.related")}>
         <div className="settings-account-list">
           <div className="settings-account-row">
+            <span className="settings-account-title">{t("settings.account.providerDashboard")}</span>
+            <button
+              className="settings-account-link-button"
+              type="button"
+              onClick={() => void openExternalUrl(ANYBOX_ACCOUNT_DASHBOARD_URL)}
+            >
+              provider.anybox.com.cn
+            </button>
+          </div>
+
+          <div className="settings-account-row">
             <span className="settings-account-title">{t("settings.account.productPage")}</span>
             <button
               className="settings-account-link-button"
@@ -4448,8 +4571,10 @@ export function SettingsPage({
                   appearanceConfigError={appearanceConfigError}
                   appearanceConfigPath={appearanceConfigPath}
                   appearanceConfigPreview={appearanceConfigPreview}
+                  appearanceContrastWarnings={appearanceContrastWarnings}
                   appearanceOverrides={appearanceOverrides}
                   appearanceThemeError={appearanceThemeError}
+                  appearanceThemeNotice={appearanceThemeNotice}
                   appearanceThemes={appearanceThemes}
                   activeAppearanceThemeID={activeAppearanceThemeID}
                   appearanceTokenValues={appearanceTokenValues}
@@ -4463,6 +4588,8 @@ export function SettingsPage({
                   onAppearanceThemeApply={onAppearanceThemeApply}
                   onAppearanceThemeDelete={onAppearanceThemeDelete}
                   onAppearanceThemeDuplicate={onAppearanceThemeDuplicate}
+                  onAppearanceThemeExportDtcg={onAppearanceThemeExportDtcg}
+                  onAppearanceThemeImportDtcg={onAppearanceThemeImportDtcg}
                   onAppearanceThemeRename={onAppearanceThemeRename}
                   onAppearanceThemeSaveCurrent={onAppearanceThemeSaveCurrent}
                   onAppearanceTokenChange={onAppearanceTokenChange}

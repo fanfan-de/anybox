@@ -74,7 +74,7 @@ export const appearanceTokenCopy = {
     },
     "component-sidebar-tree-rows": {
       "label": "Baris Pohon Sidebar",
-      "description": "Token baris khusus untuk pohon ruang kerja dan keterampilan di sidebar kiri."
+      "description": "Token status khusus untuk baris percakapan, ruang kerja, prompt, keterampilan, MCP, dan alat di sidebar kiri."
     },
     "component-settings-list-detail-rows": {
       "label": "Baris Detail Daftar Pengaturan",
@@ -660,7 +660,7 @@ export const appearanceTokenCopy = {
     },
     "semantic-sidebar-tree-row-leading-active": {
       "label": "Ikon Utama Aktif",
-      "description": "Warna ikon utama baris terpilih untuk baris proyek sidebar."
+      "description": "Warna ikon utama untuk baris pohon terpilih di sidebar kiri."
     },
     "semantic-settings-list-detail-row-surface-hover": {
       "label": "Permukaan Baris Hover",
