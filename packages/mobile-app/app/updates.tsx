@@ -88,6 +88,15 @@ export default function UpdatesScreen() {
           subtitle={current.updateId ?? t("updates.embedded")}
           title={t("updates.channel")}
         />
+        <ListRow
+          meta={
+            current.updateCreatedAt
+              ? new Date(current.updateCreatedAt).toLocaleString(locale)
+              : t("updates.unavailable")
+          }
+          subtitle={current.updateId ?? t("updates.embedded")}
+          title={t("updates.otaPublishedAt")}
+        />
       </Section>
 
       <Section title={t("updates.status")}>
