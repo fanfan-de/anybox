@@ -186,12 +186,144 @@ export function assertScopedReleaseTreeClean() {
   }
 }
 
+function normalizeFingerprintPath(projectRoot, virtualStoreDirectory, value) {
+  const resolved = path.resolve(projectRoot, value)
+  const relativeToStore = path.relative(virtualStoreDirectory, resolved)
+  if (
+    relativeToStore &&
+    !relativeToStore.startsWith("..") &&
+    !path.isAbsolute(relativeToStore)
+  ) {
+    return `@pnpm/${relativeToStore.replaceAll("\\", "/")}`
+  }
+  if (!relativeToStore) return "@pnpm"
+  return value.replaceAll("\\", "/")
+}
+
+function canonicalDebugHash(debugInfo, projectRoot, virtualStoreDirectory, hashAlgorithm) {
+  if (!debugInfo || typeof debugInfo.hash !== "string") {
+    throw new Error("Expo fingerprint debug information is incomplete.")
+  }
+  if (!Array.isArray(debugInfo.children)) return debugInfo.hash
+  const hasher = createHash(hashAlgorithm)
+  for (const child of debugInfo.children) {
+    if (!child) continue
+    hasher.update(
+      normalizeFingerprintPath(projectRoot, virtualStoreDirectory, child.path),
+    )
+    hasher.update(
+      canonicalDebugHash(child, projectRoot, virtualStoreDirectory, hashAlgorithm),
+    )
+  }
+  return hasher.digest("hex")
+}
+
+function canonicalFingerprintContents(contents, projectRoot, virtualStoreDirectory) {
+  if (typeof contents !== "string") return contents
+  const relativeStore = path.relative(projectRoot, virtualStoreDirectory)
+  const pathForms = [
+    relativeStore,
+    relativeStore.replaceAll("\\", "/"),
+    relativeStore.replaceAll("\\", "\\\\"),
+    virtualStoreDirectory,
+    virtualStoreDirectory.replaceAll("\\", "/"),
+    virtualStoreDirectory.replaceAll("\\", "\\\\"),
+  ]
+  let normalized = contents
+  for (const pathForm of new Set(pathForms.filter(Boolean))) {
+    normalized = normalized.replaceAll(pathForm, "@pnpm")
+  }
+  return normalized
+}
+
+export function canonicalFingerprintSources(
+  fingerprint,
+  {
+    projectRoot,
+    virtualStoreDirectory,
+    hashAlgorithm = "sha1",
+  },
+) {
+  const typeOrder = { file: 0, dir: 1, contents: 2 }
+  return fingerprint.sources
+    .filter((source) => source.hash !== null)
+    .map((source) => {
+      const id =
+        source.type === "contents"
+          ? source.id
+          : source.overrideHashKey ??
+            normalizeFingerprintPath(
+              projectRoot,
+              virtualStoreDirectory,
+              source.filePath,
+            )
+      const hash =
+        source.type === "dir"
+          ? canonicalDebugHash(
+              source.debugInfo,
+              projectRoot,
+              virtualStoreDirectory,
+              hashAlgorithm,
+            )
+          : source.type === "contents"
+            ? createHash(hashAlgorithm)
+                .update(
+                  canonicalFingerprintContents(
+                    source.contents,
+                    projectRoot,
+                    virtualStoreDirectory,
+                  ),
+                )
+                .digest("hex")
+          : source.hash
+      return { hash, id, type: source.type }
+    })
+    // Expo also fingerprints the physical files inside pnpm's virtual store.
+    // Those directories may contain install/build output and their layout can
+    // legitimately differ between machines. Dependency identities, versions,
+    // native autolinking metadata, Expo config, local config plugins, and the
+    // app's local native module remain in the canonical source set.
+    .filter((source) => source.id !== "@pnpm" && !source.id.startsWith("@pnpm/"))
+    .sort((left, right) => {
+      const typeResult = typeOrder[left.type] - typeOrder[right.type]
+      return typeResult || left.id.localeCompare(right.id)
+    })
+}
+
+export function canonicalFingerprintHash(
+  fingerprint,
+  options,
+) {
+  const { hashAlgorithm = "sha1" } = options
+  const sources = canonicalFingerprintSources(fingerprint, options)
+  const hasher = createHash(hashAlgorithm)
+  for (const source of sources) {
+    hasher.update(source.id)
+    hasher.update(source.hash)
+  }
+  return hasher.digest("hex")
+}
+
+function readPnpmVirtualStoreDirectory() {
+  const modulesPath = path.join(repoRoot, "node_modules", ".modules.yaml")
+  if (!existsSync(modulesPath)) {
+    throw new Error("pnpm dependency metadata is missing. Run pnpm install first.")
+  }
+  const rawModules = readFileSync(modulesPath, "utf8")
+  const configured = rawModules.match(/^virtualStoreDir:\s*(.+)$/m)?.[1]?.trim()
+  if (!configured) {
+    throw new Error("pnpm dependency metadata does not declare virtualStoreDir.")
+  }
+  return path.resolve(configured.replace(/^["']|["']$/g, ""))
+}
+
 export async function computeAndroidNativeFingerprint() {
-  const { createProjectHashAsync } = await import("@expo/fingerprint")
+  const { createFingerprintAsync } = await import("@expo/fingerprint")
   const previousChannel = process.env.ANYBOX_MOBILE_UPDATE_CHANNEL
   process.env.ANYBOX_MOBILE_UPDATE_CHANNEL = "production"
   try {
-    return await createProjectHashAsync(packageRoot, {
+    const fingerprint = await createFingerprintAsync(packageRoot, {
+      debug: true,
       // The root android directory is generated by Expo prebuild. Ignoring its
       // generated files keeps the managed-project fingerprint identical before
       // and after an APK build while native modules and config plugins remain
@@ -199,6 +331,10 @@ export async function computeAndroidNativeFingerprint() {
       ignorePaths: ["android/**/*"],
       platforms: ["android"],
       silent: true,
+    })
+    return canonicalFingerprintHash(fingerprint, {
+      projectRoot: packageRoot,
+      virtualStoreDirectory: readPnpmVirtualStoreDirectory(),
     })
   } finally {
     if (previousChannel === undefined) delete process.env.ANYBOX_MOBILE_UPDATE_CHANNEL
