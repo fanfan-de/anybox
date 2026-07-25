@@ -26,8 +26,18 @@ export const pointerCacheControl = "public, max-age=60"
 const isWindows = process.platform === "win32"
 
 export function loadMobileReleaseEnvironment() {
-  loadEnvFile(path.join(repoRoot, ".env.downloads"))
-  loadEnvFile(path.join(repoRoot, ".env.mobile-signing.local"))
+  loadEnvFile(
+    path.resolve(
+      process.env.ANYBOX_DOWNLOADS_ENV_PATH ??
+        path.join(repoRoot, ".env.downloads"),
+    ),
+  )
+  loadEnvFile(
+    path.resolve(
+      process.env.ANYBOX_MOBILE_SIGNING_ENV_PATH ??
+        path.join(repoRoot, ".env.mobile-signing.local"),
+    ),
+  )
 }
 
 export function readMobileConfig() {
