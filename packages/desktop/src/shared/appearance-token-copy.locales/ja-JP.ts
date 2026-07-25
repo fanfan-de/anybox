@@ -96,7 +96,7 @@ export const appearanceTokenCopy = {
     },
     "surface-shell": {
       "label": "シェル背景",
-      "description": "メインのクロームとシェルコンテナ。"
+      "description": "ワークベンチ、Dockview、内部シェルコンテナの背景。ウィンドウ最外面は含みません。"
     },
     "surface-panel": {
       "label": "パネルサーフェス",

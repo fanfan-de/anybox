@@ -7730,6 +7730,28 @@ body.is-dragging-settings-page {
   gap: 0;
 }
 
+.settings-account-tab-list {
+  width: 100%;
+  min-height: 34px;
+  padding: 2px 0;
+  overflow-y: hidden;
+}
+
+.settings-account-tab {
+  flex: 0 0 auto;
+}
+
+.settings-account-tabpanel {
+  min-width: 0;
+  width: 100%;
+  display: grid;
+  gap: 18px;
+}
+
+.settings-account-tabpanel > .settings-subscription-layout {
+  width: 100%;
+}
+
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-account-status-row {
   grid-template-columns: minmax(0, 1fr) minmax(320px, max-content);
 }
@@ -7764,20 +7786,20 @@ body.is-dragging-settings-page {
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: #9a9a9a;
+  background: var(--text-tertiary);
 }
 
 .settings-account-status.is-connected .settings-account-status-dot {
-  background: #4d9662;
+  background: var(--semantic-success);
 }
 
 .settings-account-status.is-pending .settings-account-status-dot {
-  background: #c19783;
+  background: var(--semantic-warning);
 }
 
 .settings-account-status.is-expired .settings-account-status-dot,
 .settings-account-status.is-error .settings-account-status-dot {
-  background: #c35f5f;
+  background: var(--semantic-error);
 }
 
 .settings-account-value {
@@ -7810,13 +7832,13 @@ body.is-dragging-settings-page {
 
 .settings-account-link-button:hover,
 .settings-account-link-button:focus-visible {
+  background: var(--semantic-sidebar-tree-row-surface-hover);
   color: var(--brand-accent-active);
   text-decoration: underline;
 }
 
 .settings-account-link-button:focus-visible {
-  outline: var(--focus-outline-width) solid var(--focus-outline-color);
-  outline-offset: 3px;
+  outline: none;
 }
 
 .settings-account-community {
@@ -7863,6 +7885,16 @@ body.is-dragging-settings-page {
 .settings-subscription-layout {
   min-width: 0;
   gap: 18px;
+}
+
+.settings-subscription-view {
+  min-width: 0;
+  display: grid;
+  gap: 18px;
+}
+
+.settings-subscription-view[hidden] {
+  display: none;
 }
 
 .settings-subscription-summary {
@@ -8009,6 +8041,38 @@ body.is-dragging-settings-page {
   font-size: 13px;
   display: grid;
   place-items: center;
+}
+
+.settings-subscription-overview-balance {
+  min-width: 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--seg-border);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px 18px;
+}
+
+.settings-subscription-overview-balance-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.settings-subscription-overview-balance-copy span {
+  color: var(--seg-text-3);
+  font-size: 12px;
+}
+
+.settings-subscription-overview-balance-copy strong {
+  color: var(--seg-text-1);
+  font-size: 18px;
+  line-height: 1.1;
+}
+
+.settings-subscription-overview-balance .secondary-button {
+  min-height: 32px;
+  white-space: nowrap;
 }
 
 .settings-subscription-purchase {
@@ -8721,6 +8785,15 @@ body.is-dragging-settings-page {
   .settings-subscription-summary-actions {
     width: 100%;
     justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .settings-subscription-overview-balance {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-subscription-overview-balance .secondary-button {
+    justify-self: start;
   }
 
   .settings-subscription-quota-meta {

@@ -96,7 +96,7 @@ export const appearanceTokenCopy = {
     },
     "surface-shell": {
       "label": "外殼背景",
-      "description": "主外殼和視窗框架容器的背景。"
+      "description": "工作台、Dockview 與內部 shell 容器的背景；不控制視窗最外層表面。"
     },
     "surface-panel": {
       "label": "面板背景",

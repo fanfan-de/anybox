@@ -100,6 +100,11 @@ function selectSettingsOption(label: string, option: string) {
   fireEvent.click(within(screen.getByRole("listbox", { name: label })).getByRole("option", { name: option }))
 }
 
+function openAccountSettingsTab(name: "Overview" | "Subscription & credits" | "Balance & recharge") {
+  fireEvent.click(screen.getByRole("button", { name: "Account" }))
+  fireEvent.click(screen.getByRole("tab", { name }))
+}
+
 function createSettingsPageProps(
   overrides: Partial<ComponentProps<typeof SettingsPage>> = {},
 ): ComponentProps<typeof SettingsPage> {
@@ -646,7 +651,7 @@ describe("SettingsPage built-in tools", () => {
     const nav = screen.getByLabelText("Settings sections")
     const labels = within(nav).getAllByRole("button").map((button) => button.textContent)
 
-    expect(labels.slice(0, 5)).toEqual(["General", "Account", "Subscription & credits", "Provider", "Models"])
+    expect(labels.slice(0, 5)).toEqual(["General", "Account", "Provider", "Models", "Appearance"])
     expect(screen.queryByRole("button", { name: "Generation Providers" })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole("button", { name: "Provider" }))
@@ -972,10 +977,24 @@ describe("SettingsPage built-in tools", () => {
     expect(onCancelProviderAuthFlow).toHaveBeenCalledWith("anybox")
   })
 
-  it("shows connected Anybox account details and signs out from the account page", () => {
+  it("shows connected Anybox account details and signs out from the account page", async () => {
     const onDeleteProviderAuthSession = vi.fn()
     const openExternalUrl = vi.fn().mockResolvedValue({ ok: true, url: "https://provider.example/billing" })
-    setDesktopMock({ openExternalUrl })
+    setDesktopMock({
+      openExternalUrl,
+      getAnyboxSubscriptionOverview: vi.fn().mockResolvedValue({
+        connected: true,
+        balanceMicrocents: 250000000,
+        currency: "CNY",
+        subscription: {
+          status: "active",
+          planCode: "pro",
+          planName: "Pro",
+        },
+        limits: [],
+        plans: [],
+      }),
+    })
 
     render(
       <SettingsPage
@@ -1026,25 +1045,36 @@ describe("SettingsPage built-in tools", () => {
     expect(screen.getByText("Logged in")).toBeInTheDocument()
     expect(screen.getByText("agent@example.com")).toBeInTheDocument()
     expect(screen.getByText("Studio")).toBeInTheDocument()
-    expect(screen.getByText("Pro")).toBeInTheDocument()
-    expect(screen.getByText(/2\.50/)).toBeInTheDocument()
+    expect(await screen.findByText("Pro")).toBeInTheDocument()
+    expect(screen.getByText(/2\.50/, {
+      selector: ".settings-subscription-overview-balance-copy strong",
+    })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole("button", { name: "www.anybox.com.cn" }))
     expect(openExternalUrl).toHaveBeenCalledWith({ url: "https://www.anybox.com.cn" })
 
     fireEvent.click(screen.getByRole("button", { name: "Recharge" }))
-    expect(openExternalUrl).toHaveBeenCalledWith({ url: "https://provider.example/billing" })
+    expect(screen.getByRole("tab", { name: "Balance & recharge" })).toHaveAttribute("aria-selected", "true")
+    expect(await screen.findByRole("heading", { name: "Add prepaid balance" })).toBeInTheDocument()
+    expect(openExternalUrl).toHaveBeenCalledTimes(1)
 
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }))
     expect(onDeleteProviderAuthSession).toHaveBeenCalledWith("anybox")
   })
 
-  it("opens the Provider dashboard when an Anybox account has no recharge URL", () => {
-    const openExternalUrl = vi.fn().mockResolvedValue({
-      ok: true,
-      url: "https://provider.anybox.com.cn/app/dashboard",
+  it("keeps recharge inside the unified account page when the provider has no recharge URL", async () => {
+    const openExternalUrl = vi.fn()
+    setDesktopMock({
+      openExternalUrl,
+      getAnyboxSubscriptionOverview: vi.fn().mockResolvedValue({
+        connected: true,
+        balanceMicrocents: 0,
+        currency: "CNY",
+        subscription: null,
+        limits: [],
+        plans: [],
+      }),
     })
-    setDesktopMock({ openExternalUrl })
 
     render(
       <SettingsPage
@@ -1068,7 +1098,9 @@ describe("SettingsPage built-in tools", () => {
     fireEvent.click(screen.getByRole("button", { name: "Account" }))
     fireEvent.click(screen.getByRole("button", { name: "Recharge" }))
 
-    expect(openExternalUrl).toHaveBeenCalledWith({ url: "https://provider.anybox.com.cn/app/dashboard" })
+    expect(screen.getByRole("tab", { name: "Balance & recharge" })).toHaveAttribute("aria-selected", "true")
+    expect(await screen.findByRole("heading", { name: "Add prepaid balance" })).toBeInTheDocument()
+    expect(openExternalUrl).not.toHaveBeenCalled()
   })
 
   it("moves Anybox provider browser login controls to the Account page", () => {
@@ -1463,7 +1495,7 @@ describe("SettingsPage built-in tools", () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole("button", { name: "Subscription & credits" }))
+    openAccountSettingsTab("Subscription & credits")
     expect(await screen.findByText("Subscription weekly credits")).toBeInTheDocument()
     expect(screen.getByText("Pro")).toBeInTheDocument()
     expect(screen.queryByRole("radio", { name: "WeChat Pay" })).not.toBeInTheDocument()
@@ -1525,7 +1557,7 @@ describe("SettingsPage built-in tools", () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole("button", { name: "Subscription & credits" }))
+    openAccountSettingsTab("Subscription & credits")
 
     expect(await screen.findByText("Weekly remaining")).toBeInTheDocument()
     expect(screen.queryByText(/Monthly remaining/)).not.toBeInTheDocument()
@@ -1651,7 +1683,7 @@ describe("SettingsPage built-in tools", () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole("button", { name: "Subscription & credits" }))
+    openAccountSettingsTab("Subscription & credits")
     fireEvent.click(await screen.findByRole("button", { name: "Upgrade now" }))
 
     expect(await screen.findByRole("dialog", { name: "Confirm immediate upgrade" })).toBeInTheDocument()
@@ -1729,7 +1761,7 @@ describe("SettingsPage built-in tools", () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole("button", { name: "Subscription & credits" }))
+    openAccountSettingsTab("Subscription & credits")
     expect(await screen.findByText(/automatic renewal is not available yet/i)).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Renew for one month" })).not.toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Switch next month" })).not.toBeInTheDocument()
@@ -1794,7 +1826,7 @@ describe("SettingsPage built-in tools", () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole("button", { name: "Subscription & credits" }))
+    openAccountSettingsTab("Subscription & credits")
     expect(await screen.findByText(/Renewed until/)).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Renew for one month" })).not.toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Switch next month" })).not.toBeInTheDocument()
@@ -1854,7 +1886,7 @@ describe("SettingsPage built-in tools", () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole("button", { name: "Subscription & credits" }))
+    openAccountSettingsTab("Subscription & credits")
     expect(await screen.findByRole("button", { name: "Open Alipay" })).toBeInTheDocument()
     expect(screen.queryByRole("radio", { name: "Alipay" })).not.toBeInTheDocument()
 
@@ -1938,7 +1970,7 @@ describe("SettingsPage built-in tools", () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole("button", { name: "Subscription & credits" }))
+    openAccountSettingsTab("Subscription & credits")
     const cancelButton = await screen.findByRole("button", { name: "Cancel order" })
     fireEvent.click(cancelButton)
 
@@ -1989,7 +2021,7 @@ describe("SettingsPage built-in tools", () => {
       />,
     )
 
-    fireEvent.click(screen.getByRole("button", { name: "Subscription & credits" }))
+    openAccountSettingsTab("Subscription & credits")
     fireEvent.click(await screen.findByRole("button", { name: "Cancel order" }))
 
     expect(await screen.findByText("Payment provider could not close this order.")).toBeInTheDocument()

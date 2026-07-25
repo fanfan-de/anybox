@@ -96,7 +96,7 @@ export const appearanceTokenCopy = {
     },
     "surface-shell": {
       "label": "Latar Belakang Shell",
-      "description": "Wadah utama chrome dan shell."
+      "description": "Latar area kerja, Dockview, dan wadah shell internal; tidak mencakup permukaan jendela terluar."
     },
     "surface-panel": {
       "label": "Permukaan Panel",

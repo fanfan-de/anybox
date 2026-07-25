@@ -16,10 +16,15 @@ import { useI18n } from "../i18n/I18nProvider"
 import { useToast } from "../toast"
 import { openExternalUrl } from "./client"
 
+export type SubscriptionSettingsView = "all" | "overview" | "subscription" | "recharge"
+type UnifiedSubscriptionSettingsView = Exclude<SubscriptionSettingsView, "all">
+
 interface SubscriptionSettingsPanelProps {
   accountBusy: boolean
   connected: boolean
   onSignIn: () => void
+  view?: SubscriptionSettingsView
+  onViewChange?: (view: UnifiedSubscriptionSettingsView) => void
 }
 
 const terminalOrderStatuses = new Set(["paid", "failed", "expired", "canceled"])
@@ -148,6 +153,8 @@ export function SubscriptionSettingsPanel({
   accountBusy,
   connected,
   onSignIn,
+  view = "all",
+  onViewChange,
 }: SubscriptionSettingsPanelProps) {
   const { t } = useI18n()
   const toast = useToast()
@@ -456,6 +463,10 @@ export function SubscriptionSettingsPanel({
     }
   }
 
+  const isOverviewView = view === "overview"
+  const showSubscriptionDetails = view === "all" || view === "subscription"
+  const showRecharge = view === "all" || view === "recharge"
+
   if (!connected) {
     return (
       <div className="settings-subscription-layout">
@@ -474,10 +485,15 @@ export function SubscriptionSettingsPanel({
     <div className="settings-subscription-layout">
       {error ? <div className="settings-banner is-error">{error}</div> : null}
 
+      {view === "recharge" ? null : (
       <section className="settings-subscription-summary" aria-label={t("settings.subscription.summary")}>
         <header className="settings-subscription-summary-header">
           <div>
-            <h3>{t("settings.subscription.remainingCredits")}</h3>
+            <h3>
+              {t(isOverviewView
+                ? "settings.subscription.currentPlan"
+                : "settings.subscription.remainingCredits")}
+            </h3>
             <span>
               {overview?.subscription?.planName ?? t("settings.subscription.noPlan")}
               {overview?.subscription?.currentPeriodEndsAt
@@ -493,6 +509,15 @@ export function SubscriptionSettingsPanel({
             </span>
           </div>
           <div className="settings-subscription-summary-actions">
+            {isOverviewView && onViewChange ? (
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => onViewChange("subscription")}
+              >
+                {t("settings.account.manageSubscription")}
+              </button>
+            ) : null}
             <button className="secondary-button" type="button" disabled={isLoading} onClick={() => void loadOverview()}>
               {t("app.refresh")}
             </button>
@@ -548,11 +573,31 @@ export function SubscriptionSettingsPanel({
               : overview?.subscription && !hasActiveSubscription
                 ? t("settings.subscription.subscriptionExpired")
                 : t("settings.subscription.noActiveCredits")}
-          </div>
-        )}
-      </section>
+            </div>
+          )}
 
-      <section className="settings-subscription-purchase" aria-label={t("settings.subscription.plans")}>
+        {isOverviewView ? (
+          <div className="settings-subscription-overview-balance">
+            <span className="settings-subscription-overview-balance-copy">
+              <span>{t("settings.subscription.currentBalance")}</span>
+              <strong>{formatMoneyFromMicrocents(overview?.balanceMicrocents ?? 0, currency)}</strong>
+            </span>
+            {onViewChange ? (
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => onViewChange("recharge")}
+              >
+                {t("settings.account.recharge")}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
+      )}
+
+      <div className="settings-subscription-view" hidden={!showSubscriptionDetails}>
+        <section className="settings-subscription-purchase" aria-label={t("settings.subscription.plans")}>
         <div className="settings-subscription-toolbar">
           <h3>{t("settings.subscription.plans")}</h3>
         </div>
@@ -632,26 +677,29 @@ export function SubscriptionSettingsPanel({
         ) : (
           <div className="settings-subscription-no-plans">{isLoading ? t("app.loadingData") : t("settings.subscription.noPlans")}</div>
         )}
-      </section>
+        </section>
 
-      {order ? (
-        <SubscriptionPaymentPanel
-          order={order}
-          upgrade={orderResponse?.upgrade}
-          qrDataUrl={qrDataUrl}
-          cancelError={cancelError}
-          canceling={cancelingOrderId === order.id}
-          onCancel={cancelOrder}
-          onChangePaymentMethod={beginPaymentMethodChange}
+        {order ? (
+          <SubscriptionPaymentPanel
+            order={order}
+            upgrade={orderResponse?.upgrade}
+            qrDataUrl={qrDataUrl}
+            cancelError={cancelError}
+            canceling={cancelingOrderId === order.id}
+            onCancel={cancelOrder}
+            onChangePaymentMethod={beginPaymentMethodChange}
+          />
+        ) : null}
+      </div>
+
+      <div className="settings-subscription-view" hidden={!showRecharge}>
+        <RechargeSettingsSection
+          balanceMicrocents={overview?.balanceMicrocents ?? 0}
+          currency={currency}
+          initialOrder={overview?.pendingRechargeOrder ?? null}
+          onPaid={loadOverview}
         />
-      ) : null}
-
-      <RechargeSettingsSection
-        balanceMicrocents={overview?.balanceMicrocents ?? 0}
-        currency={currency}
-        initialOrder={overview?.pendingRechargeOrder ?? null}
-        onPaid={loadOverview}
-      />
+      </div>
 
       {upgradeQuote && !paymentIntent ? (
         <div

@@ -444,7 +444,7 @@ export const APPEARANCE_TOKEN_GROUPS = [
       {
         id: "surface-shell",
         label: "Shell Background",
-        description: "Main chrome and shell containers.",
+        description: "Workbench, Dockview, and internal shell containers; excludes the outer window surface.",
         lightToken: "surface-shell-light",
         darkToken: "surface-shell-dark",
       },

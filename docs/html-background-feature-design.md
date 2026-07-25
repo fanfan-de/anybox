@@ -576,6 +576,7 @@ CSS 归属：
 .window-shell {
   position: relative;
   isolation: isolate;
+  background: var(--surface-app);
 }
 
 .html-background-layer {
@@ -584,7 +585,7 @@ CSS 归属：
   z-index: 0;
   overflow: hidden;
   pointer-events: none;
-  background: var(--seg-shell);
+  background: var(--surface-app);
 }
 
 .html-background-frame,
@@ -608,12 +609,18 @@ CSS 归属：
 .app-shell {
   position: relative;
   z-index: 1;
+  background: var(--surface-app);
+}
+
+.window-shell[data-background-mode="custom-html"] .app-shell {
+  background: transparent;
 }
 ```
 
 注意：
 
 - 不要使用硬编码颜色；新增 scrim token 时需补 light/dark 成对值。
+- 窗口最外层和 HTML 背景兜底由 `--surface-app` 控制；`--surface-shell` 只控制工作台与内部 shell 容器。
 - 不要让 hover/focus 改变背景层尺寸。
 - 不要让背景层进入 tab order。
 - 不要让背景层影响窗口 drag region。

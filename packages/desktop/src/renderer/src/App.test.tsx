@@ -9404,7 +9404,6 @@ describe("App", () => {
     expect(Array.from(settingsDialog.querySelectorAll(".settings-primary-nav-label"), (node) => node.textContent)).toEqual([
       "General",
       "Account",
-      "Subscription & credits",
       "Provider",
       "Models",
       "Appearance",
@@ -11366,6 +11365,73 @@ describe("App", () => {
       expect(payload).not.toHaveProperty("proxyMode")
       expect(payload).not.toHaveProperty("proxyURL")
     })
+  })
+
+  it("routes subscription and recharge through the unified Account entry", async () => {
+    window.desktop!.getGlobalProviderCatalog = vi.fn().mockResolvedValue([
+      {
+        id: "anybox",
+        name: "Anybox",
+        source: "api",
+        env: [],
+        configured: true,
+        available: true,
+        apiKeyConfigured: false,
+        baseURL: "https://anybox.test/v1",
+        modelCount: 0,
+        authCapabilities: [],
+        authState: {
+          providerID: "anybox",
+          scope: "global",
+          status: "connected",
+          capabilities: [],
+          credentials: [],
+          account: {
+            email: "user@anybox.test",
+            workspaceName: "Personal",
+          },
+        },
+      },
+    ])
+    window.desktop!.getGlobalModels = vi.fn().mockResolvedValue({
+      items: [],
+      selection: {},
+    })
+    window.desktop!.getAnyboxSubscriptionOverview = vi.fn().mockResolvedValue({
+      connected: true,
+      balanceMicrocents: 2_500_000_000,
+      currency: "CNY",
+      plans: [],
+      subscription: null,
+      limits: [],
+      pendingOrder: null,
+      pendingOrderPlanVersionId: null,
+      pendingUpgrade: null,
+    })
+
+    render(<App />)
+
+    fireEvent.click(screen.getByRole("button", { name: "Open settings" }))
+    await screen.findByRole("dialog", { name: "Settings" })
+    fireEvent.click(screen.getByRole("button", { name: "Account" }))
+
+    const accountTabs = await screen.findByRole("tablist", { name: "Account sections" })
+    const overviewTab = within(accountTabs).getByRole("tab", { name: "Overview" })
+    const subscriptionTab = within(accountTabs).getByRole("tab", { name: "Subscription & credits" })
+    const rechargeTab = within(accountTabs).getByRole("tab", { name: "Balance & recharge" })
+
+    expect(overviewTab).toHaveAttribute("aria-selected", "true")
+    expect(await screen.findByRole("heading", { name: "Current plan" })).toBeInTheDocument()
+
+    fireEvent.click(subscriptionTab)
+    expect(subscriptionTab).toHaveAttribute("aria-selected", "true")
+    expect(await screen.findByRole("heading", { name: "Plans" })).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Add prepaid balance" })).not.toBeInTheDocument()
+
+    fireEvent.click(rechargeTab)
+    expect(rechargeTab).toHaveAttribute("aria-selected", "true")
+    expect(await screen.findByRole("heading", { name: "Add prepaid balance" })).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Plans" })).not.toBeInTheDocument()
   })
 
   it("keeps the Anybox account available when the Cinema provider catalog fails", async () => {
@@ -14943,11 +15009,16 @@ describe("App", () => {
     expect(styles).toMatch(
       /\.window-shell\s*\{[^}]*--surface-profile-shell:\s*var\(--surface-shell\);[^}]*--surface-profile-tab:\s*var\(--semantic-shell-chrome-surface\);[^}]*--surface-profile-composer:\s*var\(--semantic-composer-surface\);/s,
     )
+    expect(styles).toMatch(/--semantic-html-background-scrim-light:\s*var\(--surface-app-light\);/s)
+    expect(styles).toMatch(/--semantic-html-background-scrim-dark:\s*var\(--surface-app-dark\);/s)
+    expect(styles).toMatch(/\.window-shell\s*\{[^}]*background:\s*var\(--surface-app\);/s)
+    expect(styles).toMatch(/\.html-background-layer\s*\{[^}]*background:\s*var\(--surface-app\);/s)
+    expect(styles).toMatch(/\.app-shell\s*\{[^}]*background:\s*var\(--surface-app\);/s)
     expect(styles).toMatch(
-      /\.window-shell\[data-background-mode="custom-html"\]\s*\{[^}]*--top-chrome-surface:\s*var\(--surface-profile-tab\);[^}]*--top-chrome-active-surface:\s*var\(--surface-profile-shell\);[^}]*background:\s*var\(--surface-shell\);/s,
+      /\.window-shell\[data-background-mode="custom-html"\]\s*\{[^}]*--top-chrome-surface:\s*var\(--surface-profile-tab\);[^}]*--top-chrome-active-surface:\s*var\(--surface-profile-shell\);[^}]*background:\s*var\(--surface-app\);/s,
     )
     expect(styles).toMatch(
-      /\.window-shell\[data-background-mode="custom-html"\]\s+\.app-shell\s*\{[^}]*background:\s*var\(--surface-profile-shell\);/s,
+      /\.window-shell\[data-background-mode="custom-html"\]\s+\.app-shell\s*\{[^}]*background:\s*transparent;/s,
     )
     expect(styles).toMatch(
       /\.window-shell\[data-background-mode="custom-html"\]\s+\.activity-rail\s*\{[^}]*background:\s*var\(--surface-profile-sidebar-strong\);/s,
@@ -14978,7 +15049,10 @@ describe("App", () => {
       /\.window-shell\.is-windows\[data-background-mode="default"\],[\s\S]*?\.session-popout-shell\.is-windows\s*\{[^}]*--surface-profile-shell:\s*var\(--surface-shell\);[^}]*--surface-profile-content:\s*var\(--surface-panel\);[^}]*--surface-profile-composer:\s*var\(--semantic-composer-surface\);[^}]*--surface-profile-popup-panel:\s*var\(--semantic-popup-panel-surface\);[^}]*--surface-profile-popup-panel-nav:\s*var\(--semantic-popup-panel-surface\);[^}]*background:\s*transparent;/s,
     )
     expect(styles).toMatch(
-      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.app-shell,\s*\.session-popout-shell\.is-windows\s+\.session-popout-app\s*\{[^}]*background:\s*var\(--surface-profile-shell\);/s,
+      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.app-shell\s*\{[^}]*background:\s*var\(--surface-app\);/s,
+    )
+    expect(styles).toMatch(
+      /\.session-popout-shell\.is-windows\s+\.session-popout-app\s*\{[^}]*background:\s*var\(--surface-profile-shell\);/s,
     )
     expect(styles).toMatch(
       /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.sidebar\s*\{[^}]*background:\s*var\(--surface-profile-sidebar\);/s,

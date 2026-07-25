@@ -23,7 +23,10 @@
   background: transparent;
 }
 
-.window-shell.is-windows[data-background-mode="default"] .app-shell,
+.window-shell.is-windows[data-background-mode="default"] .app-shell {
+  background: var(--surface-app);
+}
+
 .session-popout-shell.is-windows .session-popout-app {
   background: var(--surface-profile-shell);
 }

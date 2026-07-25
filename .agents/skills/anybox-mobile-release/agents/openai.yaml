@@ -1,4 +1,4 @@
 interface:
-  display_name: "Anybox Mobile Release"
-  short_description: "Publish Anybox Mobile via GitHub Releases"
-  default_prompt: "Use $anybox-mobile-release to prepare and publish an Anybox Mobile GitHub release."
+  display_name: "Anybox Mobile Delivery"
+  short_description: "Develop, test, preview, and release Anybox Mobile"
+  default_prompt: "Use $anybox-mobile-release to develop, validate, and safely publish an Anybox Mobile update."

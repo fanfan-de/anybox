@@ -96,7 +96,7 @@ export const appearanceTokenCopy = {
     },
     "surface-shell": {
       "label": "Tło powłoki",
-      "description": "Główne kontenery chrome i powłoki."
+      "description": "Tło obszaru roboczego, Dockview i wewnętrznych kontenerów powłoki; nie obejmuje zewnętrznej powierzchni okna."
     },
     "surface-panel": {
       "label": "Powierzchnia panelu",

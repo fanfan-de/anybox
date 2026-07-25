@@ -96,7 +96,7 @@ export const appearanceTokenCopy = {
     },
     "surface-shell": {
       "label": "Kabuk Arka Planı",
-      "description": "Ana krom ve kabuk konteynerleri."
+      "description": "Çalışma alanı, Dockview ve iç kabuk kapsayıcılarının arka planı; en dış pencere yüzeyini kapsamaz."
     },
     "surface-panel": {
       "label": "Panel Yüzeyi",

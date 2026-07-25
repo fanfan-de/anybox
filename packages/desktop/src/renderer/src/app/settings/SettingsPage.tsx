@@ -53,7 +53,6 @@ import {
   ProviderSettingsIcon,
   ResetIcon,
   SearchIcon,
-  SubscriptionSettingsIcon,
 } from "../icons"
 import {
   type AppearanceColorChannels,
@@ -1132,18 +1131,8 @@ function formatPlanCode(value: string | undefined) {
     .join(" ")
 }
 
-const ANYBOX_ACCOUNT_DASHBOARD_URL = "https://provider.anybox.com.cn/app/dashboard"
 const ANYBOX_PRODUCT_HOME_URL = "https://www.anybox.com.cn"
 const ANYBOX_COMMUNITY_QR_IMAGE_SRC = "/anybox-community-qr.png"
-
-function getAnyboxRechargeUrl(provider: ProviderCatalogItem) {
-  const account = provider.authState.account
-  const credential = getProviderActiveCredential(provider)
-  const direct = account?.rechargeUrl ?? credential?.rechargeUrl
-  if (direct) return direct
-
-  return ANYBOX_ACCOUNT_DASHBOARD_URL
-}
 
 type AnyboxAccountStatus = "unavailable" | "not_connected" | "pending" | "connected" | "expired" | "error"
 
@@ -2737,7 +2726,6 @@ function doesMcpServerMatchSearch(
 type SettingsSectionKey =
   | "general"
   | "account"
-  | "subscription"
   | "services"
   | "defaults"
   | "mcp"
@@ -2746,6 +2734,7 @@ type SettingsSectionKey =
   | "environments"
   | "storage"
   | "archive"
+type AccountSettingsView = "overview" | "subscription" | "recharge"
 type ProviderCapabilityFilterKey = "all" | "text" | "image" | "video" | "connected"
 type ProviderDetailKind = "model" | "cinema"
 
@@ -3220,6 +3209,7 @@ export function SettingsPage({
       }
       return "general"
     })
+    const [accountSettingsView, setAccountSettingsView] = useState<AccountSettingsView>("overview")
     const [environmentSettingsDirty, setEnvironmentSettingsDirty] = useState(false)
     const [storagePaths, setStoragePaths] = useState<DesktopStoragePaths | null>(null)
     const [storagePathStatus, setStoragePathStatus] = useState<AppUpdateStatus | null>(null)
@@ -3417,7 +3407,6 @@ export function SettingsPage({
       : false
     const anyboxAccountBalance = anyboxAccountProvider ? formatProviderBalance(anyboxAccountView.account ?? undefined) : null
     const anyboxAccountPlanLabel = formatProviderPlanLabel(anyboxAccountView.account ?? undefined)
-    const anyboxAccountRechargeUrl = anyboxAccountProvider ? getAnyboxRechargeUrl(anyboxAccountProvider) : null
     const activeProviderModels = activeProvider ? catalogModelGroups[activeProvider.id] ?? [] : []
     const activeProviderBusy = activeProvider ? savingProviderID === activeProvider.id || deletingProviderID === activeProvider.id : false
     const activeCinemaVideoProviderID = activeCinemaVideoProvider?.manifest.id ?? null
@@ -4045,7 +4034,6 @@ export function SettingsPage({
         items: [
           { key: "general" as const, label: t("settings.nav.general"), Icon: GeneralSettingsIcon },
           { key: "account" as const, label: t("settings.nav.account"), Icon: AccountSettingsIcon },
-          { key: "subscription" as const, label: t("settings.nav.subscription"), Icon: SubscriptionSettingsIcon },
           { key: "services" as const, label: t("settings.nav.provider"), Icon: ProviderSettingsIcon },
           { key: "defaults" as const, label: t("settings.nav.models"), Icon: ModelSettingsIcon },
           { key: "appearance" as const, label: t("settings.nav.appearance"), Icon: PaletteIcon },
@@ -4123,130 +4111,201 @@ export function SettingsPage({
       </section>
     )
 
-    const accountSection = (
-      <div className="settings-account-layout">
-        <section className="settings-panel settings-account-panel" aria-label={t("settings.account.title")}>
-          <div className="settings-account-list">
-            <div className="settings-account-row settings-account-status-row">
-              <span className="settings-account-copy">
-                <span className="settings-account-title">{t("settings.account.status")}</span>
+    const accountSettingsTabs = [
+      { key: "overview" as const, label: t("settings.account.tabOverview") },
+      { key: "subscription" as const, label: t("settings.nav.subscription") },
+      { key: "recharge" as const, label: t("settings.account.tabRecharge") },
+    ]
+
+    function handleAccountSettingsTabKeyDown(
+      event: KeyboardEvent<HTMLButtonElement>,
+      currentIndex: number,
+    ) {
+      let nextIndex: number | null = null
+      if (event.key === "ArrowLeft") {
+        nextIndex = (currentIndex - 1 + accountSettingsTabs.length) % accountSettingsTabs.length
+      } else if (event.key === "ArrowRight") {
+        nextIndex = (currentIndex + 1) % accountSettingsTabs.length
+      } else if (event.key === "Home") {
+        nextIndex = 0
+      } else if (event.key === "End") {
+        nextIndex = accountSettingsTabs.length - 1
+      }
+      if (nextIndex === null) return
+
+      event.preventDefault()
+      const tabList = event.currentTarget.parentElement
+      const nextTab = accountSettingsTabs[nextIndex]
+      setAccountSettingsView(nextTab.key)
+      window.requestAnimationFrame(() => {
+        tabList
+          ?.querySelector<HTMLButtonElement>(`[data-account-settings-view="${nextTab.key}"]`)
+          ?.focus()
+      })
+    }
+
+    const accountIdentitySection = (
+      <section className="settings-panel settings-account-panel" aria-label={t("settings.account.title")}>
+        <div className="settings-account-list">
+          <div className="settings-account-row settings-account-status-row">
+            <span className="settings-account-copy">
+              <span className="settings-account-title">{t("settings.account.status")}</span>
+              {anyboxAccountView.status === "connected" ? null : (
+                <span className="settings-account-description">{t("settings.account.signInBenefit")}</span>
+              )}
+            </span>
+            <div className="settings-account-status-side">
+              <span className={`settings-account-status is-${anyboxAccountView.status}`}>
+                <span className="settings-account-status-dot" aria-hidden="true" />
+                <span>{anyboxAccountView.title}</span>
               </span>
-              <div className="settings-account-status-side">
-                <span className={`settings-account-status is-${anyboxAccountView.status}`}>
-                  <span className="settings-account-status-dot" aria-hidden="true" />
-                  <span>{anyboxAccountView.title}</span>
-                </span>
-                <span className="settings-inline-actions settings-account-actions">
-                  {anyboxAccountView.status === "connected" && anyboxAccountRechargeUrl ? (
+              <span className="settings-inline-actions settings-account-actions">
+                {anyboxAccountView.status === "connected" ? (
+                  <>
                     <button
                       className="secondary-button"
                       type="button"
                       disabled={anyboxAccountBusy}
-                      onClick={() => void openExternalUrl(anyboxAccountRechargeUrl)}
-                    >
-                      {t("settings.account.recharge")}
-                    </button>
-                  ) : null}
-                  {anyboxAccountView.status === "connected" ? (
-                    <>
-                      <button
-                        className="secondary-button"
-                        type="button"
-                        disabled={anyboxAccountBusy}
-                        onClick={handleAnyboxAccountSignIn}
-                      >
-                        {t("settings.account.signInAgain")}
-                      </button>
-                      <button
-                        className="secondary-button is-danger"
-                        type="button"
-                        disabled={anyboxAccountBusy}
-                        onClick={handleAnyboxAccountSignOut}
-                      >
-                        {t("settings.account.signOut")}
-                      </button>
-                    </>
-                  ) : anyboxAccountView.status === "pending" ? (
-                    <button
-                      className="secondary-button"
-                      type="button"
-                      disabled={anyboxAccountBusy}
-                      onClick={handleAnyboxAccountCancel}
-                    >
-                      {t("settings.account.cancelSignIn")}
-                    </button>
-                  ) : (
-                    <button
-                      className="primary-button"
-                      type="button"
-                      disabled={!anyboxAccountProvider || anyboxAccountBusy}
                       onClick={handleAnyboxAccountSignIn}
                     >
-                      {t("settings.account.signIn")}
+                      {t("settings.account.signInAgain")}
                     </button>
-                  )}
-                </span>
-              </div>
-            </div>
-
-            <div className="settings-account-row">
-              <span className="settings-account-title">{t("settings.account.productPage")}</span>
-              <button
-                className="settings-account-link-button"
-                type="button"
-                onClick={() => void openExternalUrl(ANYBOX_PRODUCT_HOME_URL)}
-              >
-                www.anybox.com.cn
-              </button>
-            </div>
-
-            {anyboxAccountView.status === "connected" ? (
-              <>
-                <div className="settings-account-row">
-                  <span className="settings-account-title">{t("settings.account.email")}</span>
-                  <strong className="settings-account-value">
-                    {anyboxAccountView.account?.email ?? t("settings.account.noValue")}
-                  </strong>
-                </div>
-
-                <div className="settings-account-row">
-                  <span className="settings-account-title">{t("settings.account.workspace")}</span>
-                  <strong className="settings-account-value">
-                    {anyboxAccountView.account?.workspaceName ?? t("settings.account.noValue")}
-                  </strong>
-                </div>
-
-                <div className="settings-account-row">
-                  <span className="settings-account-title">{t("settings.account.plan")}</span>
-                  <strong className="settings-account-value">
-                    {anyboxAccountPlanLabel ?? t("settings.account.noValue")}
-                  </strong>
-                </div>
-
-                {anyboxAccountBalance ? (
-                  <div className="settings-account-row">
-                    <span className="settings-account-title">{t("settings.account.balance")}</span>
-                    <strong className="settings-account-value">{anyboxAccountBalance}</strong>
-                  </div>
-                ) : null}
-              </>
-            ) : null}
-
-            <div className="settings-account-community" aria-label={t("settings.account.communityTitle")}>
-              <span className="settings-account-community-copy">
-                <span className="settings-account-community-title">{t("settings.account.communityTitle")}</span>
-                <span className="settings-account-community-description">
-                  {t("settings.account.communityDescription")}
-                </span>
+                    <button
+                      className="secondary-button is-danger"
+                      type="button"
+                      disabled={anyboxAccountBusy}
+                      onClick={handleAnyboxAccountSignOut}
+                    >
+                      {t("settings.account.signOut")}
+                    </button>
+                  </>
+                ) : anyboxAccountView.status === "pending" ? (
+                  <button
+                    className="secondary-button"
+                    type="button"
+                    disabled={anyboxAccountBusy}
+                    onClick={handleAnyboxAccountCancel}
+                  >
+                    {t("settings.account.cancelSignIn")}
+                  </button>
+                ) : (
+                  <button
+                    className="primary-button"
+                    type="button"
+                    disabled={!anyboxAccountProvider || anyboxAccountBusy}
+                    onClick={handleAnyboxAccountSignIn}
+                  >
+                    {t("settings.account.signIn")}
+                  </button>
+                )}
               </span>
-              <img
-                className="settings-account-community-qr"
-                src={ANYBOX_COMMUNITY_QR_IMAGE_SRC}
-                alt={t("settings.account.communityQrAlt")}
-              />
             </div>
           </div>
-        </section>
+
+          {anyboxAccountView.status === "connected" ? (
+            <>
+              <div className="settings-account-row">
+                <span className="settings-account-title">{t("settings.account.email")}</span>
+                <strong className="settings-account-value">
+                  {anyboxAccountView.account?.email ?? t("settings.account.noValue")}
+                </strong>
+              </div>
+
+              <div className="settings-account-row">
+                <span className="settings-account-title">{t("settings.account.workspace")}</span>
+                <strong className="settings-account-value">
+                  {anyboxAccountView.account?.workspaceName ?? t("settings.account.noValue")}
+                </strong>
+              </div>
+            </>
+          ) : null}
+        </div>
+      </section>
+    )
+
+    const accountRelatedSection = (
+      <section className="settings-panel settings-account-panel" aria-label={t("settings.account.related")}>
+        <div className="settings-account-list">
+          <div className="settings-account-row">
+            <span className="settings-account-title">{t("settings.account.productPage")}</span>
+            <button
+              className="settings-account-link-button"
+              type="button"
+              onClick={() => void openExternalUrl(ANYBOX_PRODUCT_HOME_URL)}
+            >
+              www.anybox.com.cn
+            </button>
+          </div>
+
+          <div className="settings-account-community" aria-label={t("settings.account.communityTitle")}>
+            <span className="settings-account-community-copy">
+              <span className="settings-account-community-title">{t("settings.account.communityTitle")}</span>
+              <span className="settings-account-community-description">
+                {t("settings.account.communityDescription")}
+              </span>
+            </span>
+            <img
+              className="settings-account-community-qr"
+              src={ANYBOX_COMMUNITY_QR_IMAGE_SRC}
+              alt={t("settings.account.communityQrAlt")}
+            />
+          </div>
+        </div>
+      </section>
+    )
+
+    const accountSection = (
+      <div className="settings-account-layout">
+        {accountIdentitySection}
+
+        {anyboxAccountView.status === "connected" ? (
+          <>
+            <div
+              className="top-menu-segment-list settings-account-tab-list"
+              role="tablist"
+              aria-label={t("settings.account.tabs")}
+            >
+              {accountSettingsTabs.map((tab, index) => {
+                const isSelected = accountSettingsView === tab.key
+                return (
+                  <button
+                    key={tab.key}
+                    id={`settings-account-tab-${tab.key}`}
+                    className="top-menu-segment settings-account-tab"
+                    data-account-settings-view={tab.key}
+                    type="button"
+                    role="tab"
+                    aria-controls="settings-account-panel"
+                    aria-selected={isSelected}
+                    tabIndex={isSelected ? 0 : -1}
+                    onClick={() => setAccountSettingsView(tab.key)}
+                    onKeyDown={(event) => handleAccountSettingsTabKeyDown(event, index)}
+                  >
+                    {tab.label}
+                  </button>
+                )
+              })}
+            </div>
+
+            <div
+              id="settings-account-panel"
+              className="settings-account-tabpanel"
+              role="tabpanel"
+              aria-labelledby={`settings-account-tab-${accountSettingsView}`}
+            >
+              <SubscriptionSettingsPanel
+                accountBusy={anyboxAccountBusy}
+                connected
+                onSignIn={handleAnyboxAccountSignIn}
+                view={accountSettingsView}
+                onViewChange={setAccountSettingsView}
+              />
+              {accountSettingsView === "overview" ? accountRelatedSection : null}
+            </div>
+          </>
+        ) : (
+          accountRelatedSection
+        )}
       </div>
     )
 
@@ -4384,12 +4443,6 @@ export function SettingsPage({
                 </div>
               ) : activeSection === "account" ? (
                 accountSection
-              ) : activeSection === "subscription" ? (
-                <SubscriptionSettingsPanel
-                  accountBusy={anyboxAccountBusy}
-                  connected={anyboxAccountView.status === "connected"}
-                  onSignIn={handleAnyboxAccountSignIn}
-                />
               ) : activeSection === "appearance" ? (
                 <AppearanceSettingsPanel
                   appearanceConfigError={appearanceConfigError}
@@ -5347,7 +5400,10 @@ export function SettingsPage({
                                         <button
                                           className="primary-button"
                                           type="button"
-                                          onClick={() => setActiveSection("account")}
+                                          onClick={() => {
+                                            setAccountSettingsView("overview")
+                                            setActiveSection("account")
+                                          }}
                                         >
                                           {t("settings.account.openAccountPage")}
                                         </button>

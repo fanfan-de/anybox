@@ -96,7 +96,7 @@ export const appearanceTokenCopy = {
     },
     "surface-shell": {
       "label": "셸 배경",
-      "description": "메인 크롬 및 쉘 컨테이너."
+      "description": "워크벤치, Dockview 및 내부 셸 컨테이너의 배경입니다. 창의 최외곽 표면은 제외됩니다."
     },
     "surface-panel": {
       "label": "패널 표면",

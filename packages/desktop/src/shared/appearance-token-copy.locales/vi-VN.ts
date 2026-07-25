@@ -96,7 +96,7 @@ export const appearanceTokenCopy = {
     },
     "surface-shell": {
       "label": "Nền Shell",
-      "description": "Vùng chứa chrome và shell chính."
+      "description": "Nền của khu vực làm việc, Dockview và các vùng chứa shell bên trong; không bao gồm bề mặt ngoài cùng của cửa sổ."
     },
     "surface-panel": {
       "label": "Bề mặt Panel",

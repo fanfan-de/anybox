@@ -74,7 +74,7 @@
   grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
   padding: 0;
-  background: #e9edf2;
+  background: var(--surface-app);
   isolation: isolate;
 }
 
@@ -89,7 +89,7 @@
   min-height: 0;
   overflow: hidden;
   pointer-events: none;
-  background: var(--seg-shell);
+  background: var(--surface-app);
 }
 
 .html-background-frame {
@@ -114,7 +114,7 @@
 .window-shell[data-background-mode="custom-html"] {
   --top-chrome-surface: var(--surface-profile-tab);
   --top-chrome-active-surface: var(--surface-profile-shell);
-  background: var(--surface-shell);
+  background: var(--surface-app);
 }
 
 .window-controls {
@@ -220,12 +220,12 @@
   border: 0;
   border-top: 1px solid var(--seg-border);
   border-radius: 0;
-  background: var(--seg-shell);
+  background: var(--surface-app);
   box-shadow: none;
 }
 
 .window-shell[data-background-mode="custom-html"] .app-shell {
-  background: var(--surface-profile-shell);
+  background: transparent;
 }
 
 .window-shell[data-background-mode="custom-html"] .activity-rail {
@@ -535,10 +535,6 @@
 }
 
 /* Sage / Teal & Slate theme overrides */
-
-.window-shell {
-  background: var(--seg-shell);
-}
 
 .window-control {
   color: var(--seg-text-2);

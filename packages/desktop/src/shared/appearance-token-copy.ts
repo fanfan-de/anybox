@@ -120,7 +120,7 @@ const zhCNTokenRowCopy = {
   },
   "surface-shell": {
     label: "外壳背景",
-    description: "主外壳和窗口框架容器的背景。",
+    description: "工作台、Dockview 和内部 shell 容器的背景；不控制窗口最外层表面。",
   },
   "surface-panel": {
     label: "面板背景",

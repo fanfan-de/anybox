@@ -96,7 +96,7 @@ export const appearanceTokenCopy = {
     },
     "surface-shell": {
       "label": "Arrière-plan du shell",
-      "description": "Conteneurs principaux du chrome et du shell."
+      "description": "Plan de travail, Dockview et conteneurs internes du shell, à l’exclusion de la surface extérieure de la fenêtre."
     },
     "surface-panel": {
       "label": "Surface du panneau",

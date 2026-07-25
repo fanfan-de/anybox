@@ -272,8 +272,8 @@
   --semantic-shell-chrome-surface-dark: #221d1a;
   --semantic-terminal-surface-light: #ffffff;
   --semantic-terminal-surface-dark: #000000;
-  --semantic-html-background-scrim-light: var(--surface-shell-light);
-  --semantic-html-background-scrim-dark: var(--surface-shell-dark);
+  --semantic-html-background-scrim-light: var(--surface-app-light);
+  --semantic-html-background-scrim-dark: var(--surface-app-dark);
   --semantic-popup-panel-surface-light: var(--surface-shell-light);
   --semantic-popup-panel-surface-dark: var(--surface-shell-dark);
   --semantic-settings-page-surface-light: var(--semantic-popup-panel-surface-light);

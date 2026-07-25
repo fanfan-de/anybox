@@ -4,11 +4,12 @@
 
 - Repository: read from `packages/mobile-app/app.json` `expo.extra.anyboxMobileGitHubRepository` (currently `fanfan-de/anybox`)
 - Mobile package: `packages/mobile-app`
-- Default APK input: `packages/mobile-app/build/anybox-mobile-debug.apk`
+- Default APK input: `packages/mobile-app/build/anybox-mobile-release.apk`
 - Generated release asset directory: `packages/mobile-app/build/github-release`
 - Release tag prefix: `mobile-v`
 - APK asset name: `anybox-mobile.apk`
 - Manifest asset name: `anybox-mobile-release.json`
+- Manifest signature asset name: `anybox-mobile-release.json.sig`
 
 ## Manifest Shape
 
@@ -41,14 +42,14 @@ From repo root:
 
 ```powershell
 corepack pnpm mobile:android:delivery-check -- --strict --no-manifest
-corepack pnpm mobile:android:build:debug
+corepack pnpm mobile:android:build:release -- --channel production
 corepack pnpm mobile:release:github:prepare -- --notes "Fix pairing reliability"
 ```
 
 The prepare command prints a command like:
 
 ```powershell
-gh release create mobile-v0.2.0 "packages/mobile-app/build/github-release/anybox-mobile.apk" "packages/mobile-app/build/github-release/anybox-mobile-release.json" --repo fanfan-de/anybox --title "Anybox Mobile 0.2.0" --notes "Anybox Mobile 0.2.0" --latest=false
+gh release create mobile-v0.2.0 "packages/mobile-app/build/github-release/anybox-mobile.apk" "packages/mobile-app/build/github-release/anybox-mobile-release.json" "packages/mobile-app/build/github-release/anybox-mobile-release.json.sig" --repo fanfan-de/anybox --title "Anybox Mobile 0.2.0" --notes "Anybox Mobile 0.2.0" --latest=false
 ```
 
 For large APKs, allow a long timeout. If `gh release create` times out, check whether it created a draft:
@@ -113,6 +114,7 @@ Copy-Item packages/mobile-app/android/app/build/outputs/apk/debug/app-debug.apk 
 - If the app does not see a release, confirm the tag starts with `mobile-v` and the release is not a draft.
 - If the release is a prerelease, it is ignored unless the app config enables prerelease checks.
 - If the app finds the release but cannot open download, confirm the asset is named `anybox-mobile.apk`.
+- If the app rejects the release manifest, confirm `anybox-mobile-release.json.sig` is present and was produced from the same manifest bytes.
 - If desktop releases interfere, confirm no code path uses `releases/latest` for mobile updates.
 - If Gradle fails with `Could not resolve com.android.tools.build:gradle:8.5.0`, make sure `packages/mobile-app/scripts/build-android-debug.mjs` patches `expo-updates-gradle-plugin/build.gradle.kts` repositories in addition to the Expo and React Native Gradle plugins.
 - If Gradle fails with `[CXX1101] NDK ... did not have a source.properties file`, list `"$env:LOCALAPPDATA\Android\Sdk\ndk"` and move incomplete installer-only NDK directories out of the `ndk` folder before rebuilding.

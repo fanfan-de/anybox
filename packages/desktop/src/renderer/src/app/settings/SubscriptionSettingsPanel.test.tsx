@@ -6,7 +6,10 @@ import type {
   DesktopSubscriptionPlan,
 } from "../../../../shared/desktop-ipc-contract"
 import { ToastProvider } from "../toast"
-import { SubscriptionSettingsPanel } from "./SubscriptionSettingsPanel"
+import {
+  SubscriptionSettingsPanel,
+  type SubscriptionSettingsView,
+} from "./SubscriptionSettingsPanel"
 
 vi.mock("qrcode", () => ({
   default: {
@@ -55,10 +58,22 @@ function createPendingOrder(): DesktopSubscriptionOrderResponse {
   }
 }
 
-function renderPanel() {
+function renderPanel({
+  view = "all",
+  onViewChange,
+}: {
+  view?: SubscriptionSettingsView
+  onViewChange?: (view: Exclude<SubscriptionSettingsView, "all">) => void
+} = {}) {
   return render(
     <ToastProvider>
-      <SubscriptionSettingsPanel accountBusy={false} connected onSignIn={vi.fn()} />
+      <SubscriptionSettingsPanel
+        accountBusy={false}
+        connected
+        onSignIn={vi.fn()}
+        view={view}
+        onViewChange={onViewChange}
+      />
     </ToastProvider>,
   )
 }
@@ -67,6 +82,34 @@ describe("SubscriptionSettingsPanel payment flow", () => {
   afterEach(() => {
     vi.restoreAllMocks()
     delete (window as typeof window & { desktop?: unknown }).desktop
+  })
+
+  it("separates overview, subscription, and recharge content for the unified account page", async () => {
+    window.desktop = {
+      getAnyboxSubscriptionOverview: vi.fn().mockResolvedValue(createOverview()),
+    } as unknown as Window["desktop"]
+    const onViewChange = vi.fn()
+
+    const overview = renderPanel({ view: "overview", onViewChange })
+    expect(await screen.findByRole("heading", { name: "Current plan" })).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Plans" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Add prepaid balance" })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Manage subscription" }))
+    fireEvent.click(screen.getByRole("button", { name: "Recharge" }))
+    expect(onViewChange).toHaveBeenNthCalledWith(1, "subscription")
+    expect(onViewChange).toHaveBeenNthCalledWith(2, "recharge")
+    overview.unmount()
+
+    const subscription = renderPanel({ view: "subscription" })
+    expect(await screen.findByRole("heading", { name: "Plans" })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Subscription weekly credits" })).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Add prepaid balance" })).not.toBeInTheDocument()
+    subscription.unmount()
+
+    renderPanel({ view: "recharge" })
+    expect(await screen.findByRole("heading", { name: "Add prepaid balance" })).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Plans" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Subscription weekly credits" })).not.toBeInTheDocument()
   })
 
   it("asks for a payment method only after a plan action", async () => {

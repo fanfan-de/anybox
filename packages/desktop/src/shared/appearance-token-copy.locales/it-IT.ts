@@ -96,7 +96,7 @@ export const appearanceTokenCopy = {
     },
     "surface-shell": {
       "label": "Sfondo Shell",
-      "description": "Contenitori principali di chrome e shell."
+      "description": "Sfondo del workbench, di Dockview e dei contenitori interni della shell; esclude la superficie esterna della finestra."
     },
     "surface-panel": {
       "label": "Superficie Pannello",
