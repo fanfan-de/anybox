@@ -3865,7 +3865,7 @@ describe("server api", () => {
     })
   })
 
-  test("prompt preset routes should manage assignments, custom presets, resets, and runtime overrides", async () => {
+  test("prompt preset routes should keep bundled presets read-only and manage custom presets", async () => {
     await withTempPromptRoot(async (promptRoot) => {
     const app = createServerApp()
     const customPlanPrompt = "Custom plan-mode prompt for runtime verification."
@@ -3892,6 +3892,7 @@ describe("server api", () => {
           expect.objectContaining({
             id: "system-default",
             source: "bundled",
+            editable: false,
             hasOverride: false,
             root: promptRoot,
             filePath: join(promptRoot, "bundled", "system-default.md"),
@@ -3899,21 +3900,25 @@ describe("server api", () => {
           expect.objectContaining({
             id: "plan-mode",
             source: "bundled",
+            editable: false,
             hasOverride: false,
           }),
           expect.objectContaining({
             id: "side-chat",
             source: "bundled",
+            editable: false,
             hasOverride: false,
           }),
           expect.objectContaining({
             id: "git-commit-message",
             source: "bundled",
+            editable: false,
             hasOverride: false,
           }),
           expect.objectContaining({
             id: "provider-gpt",
             source: "bundled",
+            editable: false,
             hasOverride: false,
           }),
         ]),
@@ -3950,6 +3955,7 @@ describe("server api", () => {
       expect(createBody.data).toMatchObject({
         label: "Focus preset",
         source: "custom",
+        editable: true,
         content: customSystemPrompt,
         root: promptRoot,
       })
@@ -3998,15 +4004,11 @@ describe("server api", () => {
           content: customPlanPrompt,
         }),
       })
-      const updateBody = (await updateResponse.json()) as PromptPresetDocumentEnvelope
+      const updateBody = (await updateResponse.json()) as JsonEnvelope
 
-      expect(updateResponse.status).toBe(200)
-      expect(updateBody.success).toBe(true)
-      expect(updateBody.data).toMatchObject({
-        id: "plan-mode",
-        hasOverride: true,
-        content: customPlanPrompt,
-      })
+      expect(updateResponse.status).toBe(409)
+      expect(updateBody.success).toBe(false)
+      expect(updateBody.error?.code).toBe("BUNDLED_PROMPT_READ_ONLY")
 
       const updateCustomPresetResponse = await app.request(
         `http://localhost/api/prompts/${encodeURIComponent(customPresetIDValue)}`,
@@ -4053,15 +4055,11 @@ describe("server api", () => {
           content: "",
         }),
       })
-      const blankOverrideBody = (await blankOverrideResponse.json()) as PromptPresetDocumentEnvelope
+      const blankOverrideBody = (await blankOverrideResponse.json()) as JsonEnvelope
 
-      expect(blankOverrideResponse.status).toBe(200)
-      expect(blankOverrideBody.success).toBe(true)
-      expect(blankOverrideBody.data).toMatchObject({
-        id: "provider-gpt",
-        hasOverride: true,
-        content: "",
-      })
+      expect(blankOverrideResponse.status).toBe(409)
+      expect(blankOverrideBody.success).toBe(false)
+      expect(blankOverrideBody.error?.code).toBe("BUNDLED_PROMPT_READ_ONLY")
 
       const resetResponse = await app.request("http://localhost/api/prompts/plan-mode", {
         method: "DELETE",

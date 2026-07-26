@@ -336,6 +336,8 @@ function toPromptPresetApiError(error: unknown) {
       case "INVALID_PROMPT_PATH":
       case "DUPLICATE_PROMPT_PRESET":
         return new ApiError(400, error.code, error.message)
+      case "BUNDLED_PROMPT_READ_ONLY":
+        return new ApiError(409, error.code, error.message)
       default:
         return error
     }

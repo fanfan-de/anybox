@@ -74,6 +74,13 @@ interface UseSettingsPageOptions {
   onProviderModelsUpdated?: () => void | Promise<void>
 }
 
+interface CreatePromptPresetOptions {
+  label?: string
+  content?: string
+  description?: string
+  replaceAssignmentsFromPresetID?: string
+}
+
 type ProviderMutationPayload = {
   name?: string
   env?: string[]
@@ -117,6 +124,35 @@ const EMPTY_PROJECT_MODEL_SELECTION: ProjectModelSelection = {
   imageModel: null,
   imageDefaultSize: null,
   imageDefaultCount: null,
+}
+
+function replacePromptPresetAssignments(
+  selection: PromptPresetSelection,
+  sourcePresetID: string,
+  replacementPresetID: string,
+): PromptPresetSelection {
+  return {
+    systemPromptPresetID:
+      selection.systemPromptPresetID === sourcePresetID
+        ? replacementPresetID
+        : selection.systemPromptPresetID,
+    planModePromptPresetID:
+      selection.planModePromptPresetID === sourcePresetID
+        ? replacementPresetID
+        : selection.planModePromptPresetID,
+    sideChatPromptPresetID:
+      selection.sideChatPromptPresetID === sourcePresetID
+        ? replacementPresetID
+        : selection.sideChatPromptPresetID,
+    gitCommitPromptPresetID:
+      selection.gitCommitPromptPresetID === sourcePresetID
+        ? replacementPresetID
+        : selection.gitCommitPromptPresetID,
+    cinemaTextGenerationPromptPresetID:
+      selection.cinemaTextGenerationPromptPresetID === sourcePresetID
+        ? replacementPresetID
+        : selection.cinemaTextGenerationPromptPresetID,
+  }
 }
 const ANYBOX_ACCOUNT_PROVIDER_ID = "anybox"
 const ANYBOX_BROWSER_AUTH_METHOD = "anybox-browser"
@@ -2204,16 +2240,50 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     return persistPromptPresetSelection(selectionToSave, field)
   }
 
-  async function createPromptPreset() {
+  async function createPromptPreset(options: CreatePromptPresetOptions = {}) {
     if (!window.desktop?.createPromptPreset) return false
 
     setIsCreatingPromptPreset(true)
 
     try {
       const document = await window.desktop.createPromptPreset({
-        label: "Untitled preset",
-        content: "",
+        label: options.label?.trim() || "Untitled preset",
+        content: options.content ?? "",
+        description: options.description,
       })
+      let assignmentUpdateError: unknown = null
+
+      if (
+        options.replaceAssignmentsFromPresetID &&
+        promptPresetSelection &&
+        window.desktop.updatePromptPresetSelection
+      ) {
+        const nextSelection = replacePromptPresetAssignments(
+          promptPresetSelection,
+          options.replaceAssignmentsFromPresetID,
+          document.id,
+        )
+        const selectionChanged = Object.keys(nextSelection).some((key) => {
+          const field = key as keyof PromptPresetSelection
+          return nextSelection[field] !== promptPresetSelection[field]
+        })
+
+        if (selectionChanged) {
+          setIsSavingPromptPresetSelection(true)
+          setSavingPromptPresetSelectionField(null)
+          try {
+            const savedSelection = await window.desktop.updatePromptPresetSelection(nextSelection)
+            setPromptPresetSelection(savedSelection)
+            setSavedPromptPresetSelection(savedSelection)
+          } catch (error) {
+            assignmentUpdateError = error
+          } finally {
+            setIsSavingPromptPresetSelection(false)
+            setSavingPromptPresetSelectionField(null)
+          }
+        }
+      }
+
       setPromptPresets((current) => [...current, {
         id: document.id,
         label: document.label,
@@ -2232,10 +2302,17 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       setSavedPromptLabel(document.label)
       setPromptDraftContent(document.content)
       setSavedPromptContent(document.content)
-      showMessage({
-        tone: "success",
-        text: t("prompts.message.created"),
-      })
+      if (assignmentUpdateError) {
+        showMessage({
+          tone: "error",
+          text: getErrorMessage(assignmentUpdateError),
+        })
+      } else {
+        showMessage({
+          tone: "success",
+          text: t("prompts.message.created"),
+        })
+      }
       return true
     } catch (error) {
       showMessage({
@@ -2490,7 +2567,15 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
   }
 
   async function savePromptPreset() {
-    if (!selectedPromptPresetID || !selectedPromptPreset || !window.desktop?.updatePromptPreset) return false
+    if (
+      !selectedPromptPresetID ||
+      !selectedPromptPreset ||
+      selectedPromptPreset.source !== "custom" ||
+      !selectedPromptPreset.editable ||
+      !window.desktop?.updatePromptPreset
+    ) {
+      return false
+    }
 
     setSavingPromptPresetID(selectedPromptPresetID)
 

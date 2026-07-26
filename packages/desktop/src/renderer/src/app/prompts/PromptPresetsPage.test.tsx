@@ -80,6 +80,77 @@ function createProps(overrides: Partial<PromptPresetsPageProps> = {}): PromptPre
 }
 
 describe("PromptPresetsPage", () => {
+  it("omits the repeated document icon from prompt navigator rows", () => {
+    render(<PromptPresetsPage {...createProps({ hideNavigator: false })} />)
+
+    const promptRow = screen.getByRole("button", { name: LONG_PROMPT_LABEL })
+
+    expect(promptRow.querySelector("svg")).toBeNull()
+  })
+
+  it("omits status badges from prompt navigator rows", () => {
+    const bundledPrompt = createPromptPreset({
+      id: "system-default",
+      label: "System prompt",
+      source: "bundled",
+      hasOverride: true,
+      editable: false,
+    })
+
+    render(<PromptPresetsPage {...createProps({
+      hideNavigator: false,
+      promptDraftContent: bundledPrompt.content,
+      promptDraftLabel: bundledPrompt.label,
+      promptPresets: [bundledPrompt],
+      promptPresetSelection: {
+        systemPromptPresetID: bundledPrompt.id,
+        planModePromptPresetID: bundledPrompt.id,
+        sideChatPromptPresetID: bundledPrompt.id,
+        gitCommitPromptPresetID: bundledPrompt.id,
+        cinemaTextGenerationPromptPresetID: bundledPrompt.id,
+      },
+      selectedPromptPreset: bundledPrompt,
+    })} />)
+
+    const promptRow = screen.getByRole("button", { name: "System prompt" })
+
+    expect(promptRow.querySelector(".settings-badge")).toBeNull()
+    expect(screen.getByText("Edited")).toBeInTheDocument()
+  })
+
+  it("keeps bundled prompts read-only until a custom copy is created", () => {
+    const bundledPrompt = createPromptPreset({
+      id: "system-default",
+      label: "System prompt",
+      description: "Bundled system prompt.",
+      source: "bundled",
+      editable: false,
+      content: "Bundled prompt content.",
+    })
+    const onCreatePromptPreset = vi.fn(() => true)
+
+    render(<PromptPresetsPage {...createProps({
+      promptDraftContent: bundledPrompt.content,
+      promptDraftLabel: bundledPrompt.label,
+      promptPresets: [bundledPrompt],
+      selectedPromptPreset: bundledPrompt,
+      onCreatePromptPreset,
+    })} />)
+
+    expect(screen.getByRole("textbox", { name: "System prompt content" })).toHaveAttribute("readonly")
+    expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument()
+    expect(screen.getByText("Bundled prompts are read-only. Make a custom copy before editing.")).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("button", { name: "Make custom copy" }))
+
+    expect(onCreatePromptPreset).toHaveBeenCalledWith({
+      label: "System prompt (Custom)",
+      content: "Bundled prompt content.",
+      description: "Bundled system prompt.",
+      replaceAssignmentsFromPresetID: "system-default",
+    })
+  })
+
   it("uses a wrapping textarea for custom prompt titles", () => {
     render(<PromptPresetsPage {...createProps()} />)
 

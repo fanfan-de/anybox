@@ -1241,6 +1241,8 @@ export const deDE = {
   "prompts.usage.gitCommit": "Git-Commit",
   "prompts.usage.cinemaTextGeneration": "Kinotextgenerierung",
   "prompts.status.edited": "Bearbeitet",
+  "prompts.createCustomCopy": "Benutzerdefinierte Kopie erstellen",
+  "prompts.bundledReadOnly": "Gebündelte Prompts sind schreibgeschützt. Erstellen Sie vor dem Bearbeiten eine benutzerdefinierte Kopie.",
   "prompts.emptyCustom": "Noch keine benutzerdefinierten Prompts.",
   "prompts.emptyBundled": "Keine gebündelten Prompts.",
   "prompts.noSearchResults": "Keine Prompts entsprechen Ihrer Suche.",

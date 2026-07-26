@@ -22,7 +22,7 @@
 ## 设置行
 
 - 重复设置项使用左侧 row copy、右侧 control 的结构。
-- 布尔设置优先使用整行 `<button role="switch">`，右侧 pill 只作为 `aria-hidden` 的视觉状态；设置页 switch 使用 `--semantic-settings-switch-*` 运行时 token，不复用按钮、segmented 或硬编码 accent 色。
+- 布尔设置优先使用整行 `<button role="switch">`，右侧 pill 只作为 `aria-hidden` 的视觉状态；设置页 switch 与其他区域一样使用通用 `--semantic-switch-*` 运行时 token，不复用按钮、segmented 或硬编码 accent 色。
 - helper text 只在影响用户决策时保留。
 - 长 provider/model 行优先使用 divider，不要每行都包重卡片。
 - status、badge、control 出现时，row 高度必须稳定。
@@ -32,7 +32,7 @@
 - provider/model 列表是操作库存，应可搜索、可扫描、紧凑。
 - 状态优先用 dot/icon/color；状态接近且容易混淆时再加文字。
 - plugin 和 connector 详情页可以有更丰富媒体，但控件和元信息仍遵守桌面紧凑规则。
-- plugin marketplace 的占位图标底板、边框、文字、item border、state、tag 和 status 必须分别消费 `--semantic-plugin-market-*` runtime token；真实图片 Logo 保持资产原色且容器不绘制主题底色，图片缺失或加载失败才回退到中性字形/首字母占位；插件清单中的品牌色不得通过 `color-mix()` 派生这些组件颜色。
+- plugin marketplace 的占位图标底板、边框、文字、item hover surface、item border、state、tag 和 status 必须分别消费 `--semantic-plugin-market-*` runtime token；真实图片 Logo 保持资产原色且容器不绘制主题底色，图片缺失或加载失败才回退到中性字形/首字母占位；插件清单中的品牌色不得通过 `color-mix()` 派生这些组件颜色。
 - global skills 编辑界面优先保证文档编辑、metadata 可读性和文件操作可预测。
 
 ## 管理型 List + Detail 组件

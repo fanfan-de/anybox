@@ -44,9 +44,9 @@ export const appearanceTokenCopy = {
       "label": "Panneau contextuel",
       "description": "Surface sémantique dédiée pour les popups, panneaux flottants et modaux."
     },
-    "component-settings-switches": {
-      "label": "Interrupteurs de paramètres",
-      "description": "Couleurs de ligne, piste et pouce pour les interrupteurs de paramètres."
+    "component-switches": {
+      "label": "Interrupteurs",
+      "description": "Couleurs partagées de ligne, de piste et de curseur pour les interrupteurs booléens."
     },
     "component-segmented-controls": {
       "label": "Contrôles segmentés",
@@ -434,43 +434,43 @@ export const appearanceTokenCopy = {
       "label": "Surface du panneau",
       "description": "Remplissage d’arrière-plan pour les panneaux contextuels tels que les paramètres, les feuilles flottantes et les popovers de type panneau."
     },
-    "semantic-settings-switch-row-surface-focus": {
+    "semantic-switch-row-surface-focus": {
       "label": "Ligne de focus du commutateur",
-      "description": "Arrière-plan de ligne utilisé lorsqu’un commutateur de paramètres reçoit le focus clavier."
+      "description": "Arrière-plan de ligne utilisé lorsqu’un commutateur reçoit le focus clavier."
     },
-    "semantic-settings-switch-track-surface": {
+    "semantic-switch-track-surface": {
       "label": "Piste du commutateur",
-      "description": "Remplissage de piste par défaut pour les contrôles de commutateur de paramètres."
+      "description": "Remplissage de piste par défaut pour les contrôles de commutateur."
     },
-    "semantic-settings-switch-track-border": {
+    "semantic-switch-track-border": {
       "label": "Bordure de piste du commutateur",
-      "description": "Bordure de piste par défaut pour les contrôles de commutateur de paramètres."
+      "description": "Bordure de piste par défaut pour les contrôles de commutateur."
     },
-    "semantic-settings-switch-track-border-focus": {
+    "semantic-switch-track-border-focus": {
       "label": "Bordure de focus du commutateur",
       "description": "Bordure du commutateur lorsqu'il reçoit le focus clavier."
     },
-    "semantic-settings-switch-track-surface-active": {
+    "semantic-switch-track-surface-active": {
       "label": "Piste du commutateur actif",
       "description": "Remplissage de la piste pour les commutateurs activés."
     },
-    "semantic-settings-switch-track-border-active": {
+    "semantic-switch-track-border-active": {
       "label": "Bordure de la piste du commutateur actif",
       "description": "Bordure de la piste pour les commutateurs activés."
     },
-    "semantic-settings-switch-track-surface-disabled": {
+    "semantic-switch-track-surface-disabled": {
       "label": "Piste du commutateur désactivé",
       "description": "Remplissage de la piste pour les commutateurs désactivés."
     },
-    "semantic-settings-switch-track-border-disabled": {
+    "semantic-switch-track-border-disabled": {
       "label": "Bordure de la piste du commutateur désactivé",
       "description": "Bordure de la piste pour les commutateurs désactivés."
     },
-    "semantic-settings-switch-thumb-surface": {
+    "semantic-switch-thumb-surface": {
       "label": "Curseur du commutateur",
       "description": "Remplissage du curseur pour les commutateurs."
     },
-    "semantic-settings-switch-thumb-surface-disabled": {
+    "semantic-switch-thumb-surface-disabled": {
       "label": "Curseur du commutateur désactivé",
       "description": "Remplissage du curseur pour les commutateurs désactivés."
     },

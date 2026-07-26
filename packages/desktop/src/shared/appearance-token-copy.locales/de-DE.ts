@@ -44,9 +44,9 @@ export const appearanceTokenCopy = {
       "label": "Popup-Panel",
       "description": "Dedizierte semantische Oberfläche für Panel-Popups, schwebende Sheets und modale Panels."
     },
-    "component-settings-switches": {
-      "label": "Einstellungs-Schalter",
-      "description": "Switch-Zeilen-, Track- und Daumenfarben für Einstellungs-Toggle-Steuerelemente."
+    "component-switches": {
+      "label": "Schalter",
+      "description": "Gemeinsame Zeilen-, Spur- und Knopffarben für boolesche Schalter."
     },
     "component-segmented-controls": {
       "label": "Segmentierte Steuerelemente",
@@ -434,43 +434,43 @@ export const appearanceTokenCopy = {
       "label": "Panel-Oberfläche",
       "description": "Hintergrundfüllung für Popup-Bedienfelder wie Einstellungen, schwebende Blätter und panelartige Popover."
     },
-    "semantic-settings-switch-row-surface-focus": {
+    "semantic-switch-row-surface-focus": {
       "label": "Switch-Fokuszeile",
-      "description": "Zeilenhintergrund, wenn ein Einstellungsschalter Tastaturfokus erhält."
+      "description": "Zeilenhintergrund, wenn ein Schalter Tastaturfokus erhält."
     },
-    "semantic-settings-switch-track-surface": {
+    "semantic-switch-track-surface": {
       "label": "Switch-Spur",
-      "description": "Standard-Spurfüllung für Einstellungsschalter."
+      "description": "Standard-Spurfüllung für Schalter."
     },
-    "semantic-settings-switch-track-border": {
+    "semantic-switch-track-border": {
       "label": "Switch-Spur-Rahmen",
-      "description": "Standard-Spurrahmen für Einstellungsschalter."
+      "description": "Standard-Spurrahmen für Schalter."
     },
-    "semantic-settings-switch-track-border-focus": {
+    "semantic-switch-track-border-focus": {
       "label": "Fokusrahmen für Schalter",
       "description": "Rahmen eines Schalters, der den Tastaturfokus erhält."
     },
-    "semantic-settings-switch-track-surface-active": {
+    "semantic-switch-track-surface-active": {
       "label": "Aktiver Schalter-Hintergrund",
       "description": "Hintergrundfarbe für aktivierte Schalter."
     },
-    "semantic-settings-switch-track-border-active": {
+    "semantic-switch-track-border-active": {
       "label": "Rahmen aktiver Schalter",
       "description": "Rahmenfarbe für aktivierte Schalter."
     },
-    "semantic-settings-switch-track-surface-disabled": {
+    "semantic-switch-track-surface-disabled": {
       "label": "Deaktivierter Schalter-Hintergrund",
       "description": "Hintergrundfarbe für deaktivierte Schalter."
     },
-    "semantic-settings-switch-track-border-disabled": {
+    "semantic-switch-track-border-disabled": {
       "label": "Rahmen deaktivierter Schalter",
       "description": "Rahmenfarbe für deaktivierte Schalter."
     },
-    "semantic-settings-switch-thumb-surface": {
+    "semantic-switch-thumb-surface": {
       "label": "Schalter-Knopf",
       "description": "Füllfarbe des Knopfes bei Schaltern."
     },
-    "semantic-settings-switch-thumb-surface-disabled": {
+    "semantic-switch-thumb-surface-disabled": {
       "label": "Deaktivierter Schalter-Knopf",
       "description": "Füllfarbe des Knopfes bei deaktivierten Schaltern."
     },

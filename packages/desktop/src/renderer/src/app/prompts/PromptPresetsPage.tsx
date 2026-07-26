@@ -76,6 +76,13 @@ interface PromptEditorMessage {
   text: string
 }
 
+export interface PromptPresetCreateOptions {
+  label?: string
+  content?: string
+  description?: string
+  replaceAssignmentsFromPresetID?: string
+}
+
 interface PromptPresetsPageProps {
   deletingPromptPresetID: string | null
   isCreatingPromptPreset: boolean
@@ -104,7 +111,7 @@ interface PromptPresetsPageProps {
   hideTopMenu?: boolean
   hideNavigator?: boolean
   windowControls?: ReactNode
-  onCreatePromptPreset: () => boolean | Promise<boolean>
+  onCreatePromptPreset: (options?: PromptPresetCreateOptions) => boolean | Promise<boolean>
   onDeletePromptPreset: (presetID?: string) => boolean | Promise<boolean>
   onInstallPromptsFromUrl: () => boolean | Promise<boolean>
   onPromptDraftChange: (value: string) => void
@@ -133,9 +140,8 @@ export interface PromptPresetsSidebarViewProps {
   isPromptDirty: boolean
   promptRoot: string
   promptPresets: PromptPresetSummary[]
-  promptPresetSelection: PromptPresetSelection | null
   selectedPromptPreset: PromptPresetDocument | null
-  onCreatePromptPreset: () => boolean | Promise<boolean>
+  onCreatePromptPreset: (options?: PromptPresetCreateOptions) => boolean | Promise<boolean>
   onDeletePromptPreset: (presetID?: string) => boolean | Promise<boolean>
   onOpenPromptFolder: () => boolean | Promise<boolean>
   onPromptPresetSelect: (presetID: string) => boolean | Promise<boolean>
@@ -484,7 +490,6 @@ export function PromptPresetsSidebarView({
   isPromptDirty,
   promptRoot,
   promptPresets,
-  promptPresetSelection,
   selectedPromptPreset,
   onCreatePromptPreset,
   onDeletePromptPreset,
@@ -705,7 +710,6 @@ export function PromptPresetsSidebarView({
                       folder.presets.map((preset) => {
                         const isActive = preset.id === selectedPromptPreset?.id
                         const displayLabel = getPromptPresetDisplayLabel(preset, t)
-                        const usageLabels = getPromptPresetUsageLabels(preset.id, promptPresetSelection, t)
                         const isDeleting = deletingPromptPresetID === preset.id
 
                         return (
@@ -719,18 +723,7 @@ export function PromptPresetsSidebarView({
                                 type="button"
                                 onClick={() => handlePromptPresetSelection(preset.id)}
                               >
-                                <span className="skill-tree-role-icon is-skill" aria-hidden="true">
-                                  <FileTextIcon />
-                                </span>
                                 <span className="skill-tree-label">{displayLabel}</span>
-                                <span className="prompt-tree-row-badges" aria-hidden="true">
-                                  {usageLabels.map((label) => (
-                                    <span key={`${preset.id}-${label}`} className="settings-badge is-highlight">
-                                      {label}
-                                    </span>
-                                  ))}
-                                  {preset.hasOverride ? <span className="settings-badge is-warning">{t("prompts.status.edited")}</span> : null}
-                                </span>
                               </button>
                               {preset.source === "custom" ? (
                                 <button
@@ -858,6 +851,7 @@ export function PromptPresetsPage({
   const selectedPromptPresetDisplayLabel = selectedPromptPreset
     ? getPromptPresetDisplayLabel(selectedPromptPreset, t)
     : ""
+  const selectedPromptPresetIsBundled = selectedPromptPreset?.source === "bundled"
   const promptPresetSelectOptions = promptPresetOptions.map((preset) => ({
     value: preset.id,
     label: getPromptPresetDisplayLabel(preset, t),
@@ -910,6 +904,21 @@ export function PromptPresetsPage({
   function handlePromptDraftLabelChange(event: ChangeEvent<HTMLTextAreaElement>) {
     onPromptDraftLabelChange(event.target.value.replace(/[\r\n]+/g, " "))
     resizePromptNameTextarea(event.target)
+  }
+
+  async function createCustomPromptCopy() {
+    if (!selectedPromptPreset || !selectedPromptPresetIsBundled) return false
+
+    const created = await onCreatePromptPreset({
+      label: `${selectedPromptPresetDisplayLabel} (${t("prompts.source.custom")})`,
+      content: promptDraftContent,
+      description: selectedPromptPreset.description,
+      replaceAssignmentsFromPresetID: selectedPromptPreset.id,
+    })
+    if (created) {
+      setPromptEditorMode("edit")
+    }
+    return created
   }
 
   return (
@@ -1066,7 +1075,6 @@ export function PromptPresetsPage({
                     isPromptDirty={isPromptDirty}
                     promptRoot={promptRoot}
                     promptPresets={promptPresets}
-                    promptPresetSelection={promptPresetSelection}
                     selectedPromptPreset={selectedPromptPreset}
                     onCreatePromptPreset={onCreatePromptPreset}
                     onDeletePromptPreset={onDeletePromptPreset}
@@ -1156,24 +1164,35 @@ export function PromptPresetsPage({
                             >
                               {deletingPromptPresetID === selectedPromptPreset.id ? t("prompts.deleting") : t("app.delete")}
                             </button>
-                          ) : (
+                          ) : selectedPromptPreset.hasOverride ? (
                             <button
                               className="secondary-button"
                               type="button"
-                              disabled={!selectedPromptPreset.hasOverride || selectedPromptPresetBusy || isLoadingPromptPreset}
+                              disabled={selectedPromptPresetBusy || isLoadingPromptPreset}
                               onClick={() => void onResetPromptPreset()}
                             >
                               {resettingPromptPresetID === selectedPromptPreset.id ? t("app.resetting") : t("app.reset")}
                             </button>
+                          ) : null}
+                          {selectedPromptPreset.source === "custom" ? (
+                            <button
+                              className="primary-button"
+                              type="button"
+                              disabled={!isPromptDirty || selectedPromptPresetBusy || isLoadingPromptPreset}
+                              onClick={() => void onSavePromptPreset()}
+                            >
+                              {savingPromptPresetID === selectedPromptPreset.id ? t("app.saving") : t("app.save")}
+                            </button>
+                          ) : (
+                            <button
+                              className="primary-button"
+                              type="button"
+                              disabled={isCreatingPromptPreset || selectedPromptPresetBusy || isLoadingPromptPreset}
+                              onClick={() => void createCustomPromptCopy()}
+                            >
+                              {isCreatingPromptPreset ? t("prompts.creating") : t("prompts.createCustomCopy")}
+                            </button>
                           )}
-                          <button
-                            className="primary-button"
-                            type="button"
-                            disabled={!isPromptDirty || selectedPromptPresetBusy || isLoadingPromptPreset}
-                            onClick={() => void onSavePromptPreset()}
-                          >
-                            {savingPromptPresetID === selectedPromptPreset.id ? t("app.saving") : t("app.save")}
-                          </button>
                         </div>
                       </div>
                     </div>
@@ -1184,7 +1203,7 @@ export function PromptPresetsPage({
                           className="settings-prompt-editor"
                           aria-label={t("prompts.contentAria", { label: selectedPromptPresetDisplayLabel })}
                           value={promptDraftContent}
-                          readOnly={!selectedPromptPreset.editable || isLoadingPromptPreset}
+                          readOnly={selectedPromptPresetIsBundled || !selectedPromptPreset.editable || isLoadingPromptPreset}
                           onChange={(event: ChangeEvent<HTMLTextAreaElement>) => onPromptDraftChange(event.target.value)}
                         />
                       ) : (
@@ -1204,6 +1223,12 @@ export function PromptPresetsPage({
                         </div>
                       )}
                     </div>
+
+                    {selectedPromptPresetIsBundled ? (
+                      <p className="settings-helper-text settings-prompt-read-only-note">
+                        {t("prompts.bundledReadOnly")}
+                      </p>
+                    ) : null}
 
                     {selectedPromptPreset.sourcePath ? (
                       <p className="settings-helper-text settings-prompt-source-path">

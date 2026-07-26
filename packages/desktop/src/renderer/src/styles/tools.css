@@ -412,11 +412,14 @@
   cursor: pointer;
 }
 
-.tools-card-expander:focus-visible,
-.tools-card-toggle-button:focus-visible {
+.tools-card-expander:focus-visible {
   outline: none;
   border-color: var(--focus-outline-color);
   background: var(--semantic-icon-button-surface-hover);
+}
+
+.tools-card-toggle-button:focus-visible {
+  outline: none;
 }
 
 .tools-card-expander-icon {
@@ -499,9 +502,9 @@
   flex: 0 0 auto;
   width: 48px;
   height: 28px;
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--semantic-switch-track-border);
   border-radius: 999px;
-  background: var(--border-default);
+  background: var(--semantic-switch-track-surface);
 }
 
 .tools-toggle-thumb {
@@ -511,18 +514,35 @@
   width: 20px;
   height: 20px;
   border-radius: 999px;
-  background: var(--seg-panel);
+  background: var(--semantic-switch-thumb-surface);
   box-shadow: none;
   transition: transform 160ms ease;
 }
 
-.tools-toggle-card.is-active .tools-toggle-control {
-  border-color: var(--seg-accent);
-  background: var(--seg-accent);
+.tools-card-toggle-button:focus-visible .tools-toggle-control {
+  border-color: var(--semantic-switch-track-border-focus);
 }
 
-.tools-toggle-card.is-active .tools-toggle-thumb {
+.tools-card-toggle-button[aria-checked="true"] .tools-toggle-control {
+  border-color: var(--semantic-switch-track-border-active);
+  background: var(--semantic-switch-track-surface-active);
+}
+
+.tools-card-toggle-button[aria-checked="true"] .tools-toggle-thumb {
   transform: translateX(20px);
+}
+
+.tools-card-toggle-button:disabled {
+  cursor: default;
+}
+
+.tools-card-toggle-button:disabled .tools-toggle-control {
+  border-color: var(--semantic-switch-track-border-disabled);
+  background: var(--semantic-switch-track-surface-disabled);
+}
+
+.tools-card-toggle-button:disabled .tools-toggle-thumb {
+  background: var(--semantic-switch-thumb-surface-disabled);
 }
 
 .tools-card-details {
@@ -935,8 +955,6 @@
 .builtin-tools-page .tools-toggle-control {
   width: 40px;
   height: 24px;
-  border-color: var(--semantic-settings-switch-track-border);
-  background: var(--semantic-settings-switch-track-surface);
 }
 
 .builtin-tools-page .tools-toggle-thumb {
@@ -944,15 +962,9 @@
   left: 2px;
   width: 18px;
   height: 18px;
-  background: var(--semantic-settings-switch-thumb-surface);
 }
 
-.builtin-tools-page .tools-toggle-card.is-active .tools-toggle-control {
-  border-color: var(--tools-obs-accent);
-  background: var(--tools-obs-accent);
-}
-
-.builtin-tools-page .tools-toggle-card.is-active .tools-toggle-thumb {
+.builtin-tools-page .tools-card-toggle-button[aria-checked="true"] .tools-toggle-thumb {
   transform: translateX(16px);
 }
 
@@ -1062,11 +1074,6 @@
 :root[data-theme="dark"] .builtin-tools-page .tools-detail-actions .secondary-button:hover,
 :root[data-theme="dark"] .builtin-tools-page .tools-detail-actions .secondary-button:focus-visible {
   background: var(--surface-elevated);
-}
-
-:root[data-theme="dark"] .builtin-tools-page .tools-toggle-control {
-  border-color: var(--seg-border);
-  background: var(--seg-panel-muted);
 }
 
 :root[data-theme="dark"] .sidebar-view-tools .tools-badge {

@@ -44,9 +44,9 @@ export const appearanceTokenCopy = {
       "label": "Panel wyskakujący",
       "description": "Dedykowana powierzchnia semantyczna dla wyskakujących paneli, arkuszy i paneli modalnych."
     },
-    "component-settings-switches": {
-      "label": "Przełączniki ustawień",
-      "description": "Kolory wiersza, toru i kciuka przełączników używane w elementach sterujących ustawień."
+    "component-switches": {
+      "label": "Przełączniki",
+      "description": "Wspólne kolory wiersza, ścieżki i suwaka dla przełączników logicznych."
     },
     "component-segmented-controls": {
       "label": "Kontrolki segmentowane",
@@ -434,45 +434,45 @@ export const appearanceTokenCopy = {
       "label": "Powierzchnia panelu",
       "description": "Wypełnienie tła dla paneli wyskakujących, takich jak ustawienia, arkusze pływające i popovery panelowe."
     },
-    "semantic-settings-switch-row-surface-focus": {
+    "semantic-switch-row-surface-focus": {
       "label": "Wiersz fokusu przełącznika",
-      "description": "Tło wiersza używane, gdy przełącznik ustawień otrzymuje fokus klawiatury."
+      "description": "Tło wiersza używane, gdy przełącznik otrzymuje fokus klawiatury."
     },
-    "semantic-settings-switch-track-surface": {
+    "semantic-switch-track-surface": {
       "label": "Ścieżka przełącznika",
-      "description": "Domyślne wypełnienie ścieżki dla kontrolek przełącznika ustawień."
+      "description": "Domyślne wypełnienie ścieżki dla kontrolek przełącznika."
     },
-    "semantic-settings-switch-track-border": {
+    "semantic-switch-track-border": {
       "label": "Obramowanie ścieżki przełącznika",
-      "description": "Domyślne obramowanie ścieżki dla kontrolek przełącznika ustawień."
+      "description": "Domyślne obramowanie ścieżki dla kontrolek przełącznika."
     },
-    "semantic-settings-switch-track-border-focus": {
+    "semantic-switch-track-border-focus": {
       "label": "Obramowanie fokusu przełącznika",
-      "description": "Obramowanie ścieżki używane, gdy przełącznik ustawień otrzymuje fokus klawiatury."
+      "description": "Obramowanie ścieżki używane, gdy przełącznik otrzymuje fokus klawiatury."
     },
-    "semantic-settings-switch-track-surface-active": {
+    "semantic-switch-track-surface-active": {
       "label": "Aktywna ścieżka przełącznika",
-      "description": "Wypełnienie ścieżki dla włączonych przełączników ustawień."
+      "description": "Wypełnienie ścieżki dla włączonych przełączników."
     },
-    "semantic-settings-switch-track-border-active": {
+    "semantic-switch-track-border-active": {
       "label": "Obramowanie aktywnej ścieżki przełącznika",
-      "description": "Obramowanie ścieżki dla włączonych przełączników ustawień."
+      "description": "Obramowanie ścieżki dla włączonych przełączników."
     },
-    "semantic-settings-switch-track-surface-disabled": {
+    "semantic-switch-track-surface-disabled": {
       "label": "Wyłączona ścieżka przełącznika",
-      "description": "Wypełnienie ścieżki dla wyłączonych przełączników ustawień."
+      "description": "Wypełnienie ścieżki dla wyłączonych przełączników."
     },
-    "semantic-settings-switch-track-border-disabled": {
+    "semantic-switch-track-border-disabled": {
       "label": "Obramowanie wyłączonej ścieżki przełącznika",
-      "description": "Obramowanie ścieżki dla wyłączonych przełączników ustawień."
+      "description": "Obramowanie ścieżki dla wyłączonych przełączników."
     },
-    "semantic-settings-switch-thumb-surface": {
+    "semantic-switch-thumb-surface": {
       "label": "Suwak przełącznika",
-      "description": "Wypełnienie suwaka dla przełączników ustawień."
+      "description": "Wypełnienie suwaka dla przełączników."
     },
-    "semantic-settings-switch-thumb-surface-disabled": {
+    "semantic-switch-thumb-surface-disabled": {
       "label": "Wyłączony suwak przełącznika",
-      "description": "Wypełnienie suwaka dla wyłączonych przełączników ustawień."
+      "description": "Wypełnienie suwaka dla wyłączonych przełączników."
     },
     "semantic-segmented-control-surface": {
       "label": "Powierzchnia sterowania",

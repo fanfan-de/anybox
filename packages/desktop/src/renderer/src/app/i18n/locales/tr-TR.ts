@@ -1241,6 +1241,8 @@ export const trTR = {
   "prompts.usage.gitCommit": "Git commit",
   "prompts.usage.cinemaTextGeneration": "Sinema metni oluşturma",
   "prompts.status.edited": "Düzenlendi",
+  "prompts.createCustomCopy": "Özel kopya oluştur",
+  "prompts.bundledReadOnly": "Yerleşik istemler salt okunurdur. Düzenlemeden önce özel bir kopya oluşturun.",
   "prompts.emptyCustom": "Henüz özel istem yok.",
   "prompts.emptyBundled": "Yerleşik istem yok.",
   "prompts.noSearchResults": "Aramanızla eşleşen istem yok.",

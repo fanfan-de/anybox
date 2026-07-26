@@ -1789,7 +1789,7 @@
   align-items: center;
   gap: 9px;
   padding: 0 8px 0 10px;
-  border: 1px solid var(--semantic-settings-switch-track-border);
+  border: 1px solid var(--semantic-switch-track-border);
   border-radius: 6px;
   background: var(--seg-panel-muted);
   color: var(--seg-text-2);
@@ -1802,8 +1802,8 @@
 .skill-library-enable-compact:hover,
 .skill-library-enable-compact:focus-visible {
   outline: none;
-  border-color: var(--semantic-settings-switch-track-border-focus);
-  background: var(--semantic-settings-switch-row-surface-focus);
+  border-color: var(--semantic-switch-track-border-focus);
+  background: var(--semantic-switch-row-surface-focus);
 }
 
 .skill-library-enable-compact:disabled {
@@ -2051,22 +2051,22 @@
   display: flex;
   align-items: center;
   padding: 2px;
-  border: 1px solid var(--semantic-settings-switch-track-border);
+  border: 1px solid var(--semantic-switch-track-border);
   border-radius: 10px;
-  background: var(--semantic-settings-switch-track-surface);
+  background: var(--semantic-switch-track-surface);
 }
 
 .skill-library-enable-track > span {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: var(--semantic-settings-switch-thumb-surface);
+  background: var(--semantic-switch-thumb-surface);
   transition: transform 120ms ease;
 }
 
 .skill-library-enable-track.is-active {
-  border-color: var(--semantic-settings-switch-track-border-active);
-  background: var(--semantic-settings-switch-track-surface-active);
+  border-color: var(--semantic-switch-track-border-active);
+  background: var(--semantic-switch-track-surface-active);
 }
 
 .skill-library-enable-track.is-active > span {
@@ -3549,6 +3549,37 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   outline-offset: var(--focus-outline-offset);
 }
 
+.session-canvas-top-menu .canvas-top-menu-button.canvas-top-menu-selection-trigger {
+  border-color: var(--semantic-button-secondary-border);
+  background: var(--semantic-button-secondary-surface);
+  color: var(--semantic-button-secondary-text);
+}
+
+.session-canvas-top-menu .canvas-top-menu-button.canvas-top-menu-selection-trigger:not(:disabled):hover,
+.session-canvas-top-menu .canvas-top-menu-button.canvas-top-menu-selection-trigger:not(:disabled):focus-visible,
+.session-canvas-top-menu .canvas-top-menu-button.canvas-top-menu-selection-trigger:not(:disabled).is-active,
+.session-canvas-top-menu .canvas-top-menu-button.canvas-top-menu-selection-trigger:not(:disabled)[aria-expanded="true"] {
+  border-color: var(--semantic-button-secondary-border-hover);
+  background: var(--semantic-button-secondary-surface-hover);
+  color: var(--semantic-button-secondary-text-hover);
+  box-shadow: none;
+  transform: none;
+}
+
+.session-canvas-top-menu .canvas-top-menu-button.canvas-top-menu-selection-trigger:focus-visible {
+  outline: none;
+  outline-offset: 0;
+}
+
+.session-canvas-top-menu .canvas-top-menu-button.canvas-top-menu-selection-trigger:disabled {
+  border-color: var(--semantic-button-secondary-disabled-border);
+  background: var(--semantic-button-secondary-disabled-surface);
+  color: var(--semantic-button-secondary-disabled-text);
+  opacity: 1;
+  cursor: default;
+  transform: none;
+}
+
 .external-editor-split-button-anchor {
   max-width: none;
 }
@@ -3710,6 +3741,13 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   scrollbar-color: var(--context-menu-scrollbar-thumb) var(--context-menu-scrollbar-track);
 }
 
+.canvas-top-menu-trace-panel {
+  --context-menu-text: var(--semantic-dropdown-option-text);
+  --context-menu-muted: var(--semantic-dropdown-option-meta-text);
+  --context-menu-hover: var(--semantic-dropdown-option-surface-hover);
+  --context-menu-hover-text: var(--semantic-dropdown-option-text-hover);
+}
+
 .canvas-top-menu-selection-panel {
   background: var(--semantic-dropdown-menu-surface);
   color: var(--semantic-dropdown-option-text);
@@ -3771,6 +3809,10 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   text-align: left;
   box-shadow: none;
   cursor: pointer;
+}
+
+.canvas-top-menu-fit-panel .canvas-top-menu-trace-option {
+  grid-template-columns: 16px minmax(0, 1fr) auto;
 }
 
 .canvas-top-menu-context-option:hover,

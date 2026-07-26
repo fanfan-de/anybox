@@ -1238,6 +1238,8 @@ export const zhTW = {
   "prompts.usage.gitCommit": "Git 提交",
   "prompts.usage.cinemaTextGeneration": "Cinema 文字生成",
   "prompts.status.edited": "已編輯",
+  "prompts.createCustomCopy": "轉為自訂",
+  "prompts.bundledReadOnly": "內建提示詞為唯讀。若要修改，請先轉為自訂提示詞。",
   "prompts.emptyCustom": "還沒有自訂提示詞。",
   "prompts.emptyBundled": "還沒有內建提示詞。",
   "prompts.noSearchResults": "沒有符合的提示詞。",

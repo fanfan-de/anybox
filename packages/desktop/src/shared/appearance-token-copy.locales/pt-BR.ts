@@ -44,9 +44,9 @@ export const appearanceTokenCopy = {
       "label": "Painel Popup",
       "description": "Superfície semântica dedicada para popups em estilo painel, folhas flutuantes e painéis modais."
     },
-    "component-settings-switches": {
-      "label": "Interruptores de Configurações",
-      "description": "Cores de linha, trilho e polegar usadas pelos controles de alternância de configurações."
+    "component-switches": {
+      "label": "Interruptores",
+      "description": "Cores compartilhadas de linha, trilho e polegar para controles de interruptor booleanos."
     },
     "component-segmented-controls": {
       "label": "Controles Segmentados",
@@ -434,45 +434,45 @@ export const appearanceTokenCopy = {
       "label": "Superfície do Painel",
       "description": "Preenchimento de fundo para painéis pop-up como configurações, folhas flutuantes e popovers estilo painel."
     },
-    "semantic-settings-switch-row-surface-focus": {
+    "semantic-switch-row-surface-focus": {
       "label": "Linha de Foco do Interruptor",
-      "description": "Fundo de linha usado quando um interruptor de configurações recebe foco do teclado."
+      "description": "Fundo de linha usado quando um interruptor recebe foco do teclado."
     },
-    "semantic-settings-switch-track-surface": {
+    "semantic-switch-track-surface": {
       "label": "Trilho do Interruptor",
-      "description": "Preenchimento de trilho padrão para controles de interruptor de configurações."
+      "description": "Preenchimento de trilho padrão para controles de interruptor."
     },
-    "semantic-settings-switch-track-border": {
+    "semantic-switch-track-border": {
       "label": "Borda do Trilho do Interruptor",
-      "description": "Borda de trilho padrão para controles de interruptor de configurações."
+      "description": "Borda de trilho padrão para controles de interruptor."
     },
-    "semantic-settings-switch-track-border-focus": {
+    "semantic-switch-track-border-focus": {
       "label": "Borda de Foco do Interruptor",
-      "description": "Borda do trilho usada quando um interruptor de configuração recebe foco do teclado."
+      "description": "Borda do trilho usada quando um interruptor recebe foco do teclado."
     },
-    "semantic-settings-switch-track-surface-active": {
+    "semantic-switch-track-surface-active": {
       "label": "Trilho do Interruptor Ativo",
-      "description": "Preenchimento do trilho para controles de interruptor de configuração ativados."
+      "description": "Preenchimento do trilho para controles de interruptor ativados."
     },
-    "semantic-settings-switch-track-border-active": {
+    "semantic-switch-track-border-active": {
       "label": "Borda do Trilho do Interruptor Ativo",
-      "description": "Borda do trilho para controles de interruptor de configuração ativados."
+      "description": "Borda do trilho para controles de interruptor ativados."
     },
-    "semantic-settings-switch-track-surface-disabled": {
+    "semantic-switch-track-surface-disabled": {
       "label": "Trilho do Interruptor Desativado",
-      "description": "Preenchimento do trilho para controles de interruptor de configuração desativados."
+      "description": "Preenchimento do trilho para controles de interruptor desativados."
     },
-    "semantic-settings-switch-track-border-disabled": {
+    "semantic-switch-track-border-disabled": {
       "label": "Borda do Trilho do Interruptor Desativado",
-      "description": "Borda do trilho para controles de interruptor de configuração desativados."
+      "description": "Borda do trilho para controles de interruptor desativados."
     },
-    "semantic-settings-switch-thumb-surface": {
+    "semantic-switch-thumb-surface": {
       "label": "Polegar do Interruptor",
-      "description": "Preenchimento do polegar para controles de interruptor de configuração."
+      "description": "Preenchimento do polegar para controles de interruptor."
     },
-    "semantic-settings-switch-thumb-surface-disabled": {
+    "semantic-switch-thumb-surface-disabled": {
       "label": "Polegar do Interruptor Desativado",
-      "description": "Preenchimento do polegar para controles de interruptor de configuração desativados."
+      "description": "Preenchimento do polegar para controles de interruptor desativados."
     },
     "semantic-segmented-control-surface": {
       "label": "Superfície de Controle",

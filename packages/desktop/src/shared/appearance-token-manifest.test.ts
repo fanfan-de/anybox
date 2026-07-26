@@ -23,6 +23,7 @@ const manualTokensCss = readFileSync(resolve(stylesRoot, "tokens.css"), "utf8")
 const baseCss = readFileSync(resolve(stylesRoot, "base.css"), "utf8")
 const calendarCss = readFileSync(resolve(stylesRoot, "calendar.css"), "utf8")
 const rightSidebarCss = readFileSync(resolve(stylesRoot, "right-sidebar.css"), "utf8")
+const settingsCss = readFileSync(resolve(stylesRoot, "settings.css"), "utf8")
 const manifest = JSON.parse(
   readFileSync(
     resolve(packageRoot, "src/shared/appearance-token-manifest.json"),
@@ -132,6 +133,36 @@ describe("appearance token manifest", () => {
     }
   })
 
+  it("gives plugin marketplace rows their own hover surface semantic", () => {
+    const pluginMarketplaceGroup = APPEARANCE_TOKEN_GROUPS.find(
+      (group) => group.id === "component-plugin-marketplace",
+    )
+
+    expect(pluginMarketplaceGroup?.rows.map((row) => row.id)).toContain(
+      "semantic-plugin-market-item-surface-hover",
+    )
+    expect(generatedCss).toMatch(
+      /--semantic-plugin-market-item-surface-hover-light:\s*var\(--surface-shell-light\);/,
+    )
+    expect(generatedCss).toMatch(
+      /--semantic-plugin-market-item-surface-hover-dark:\s*var\(--surface-shell-dark\);/,
+    )
+    expect(settingsCss).toMatch(
+      /\.plugins-page-main\s*\{[^}]*--plugins-market-item-surface-hover:\s*var\(--semantic-plugin-market-item-surface-hover\);/s,
+    )
+
+    const pluginItemHoverRule = settingsCss.match(
+      /\.plugins-market-item:hover,\s*\.plugins-market-item:has\(\.plugins-market-item-main:focus-visible\),\s*\.plugins-market-item\.is-active\s*\{[^}]*\}/s,
+    )?.[0] ?? ""
+
+    expect(pluginItemHoverRule).toContain(
+      "background: var(--plugins-market-item-surface-hover);",
+    )
+    expect(pluginItemHoverRule).not.toContain("--plugins-market-surface-hover")
+    expect(pluginItemHoverRule).not.toContain("--seg-shell")
+    expect(pluginItemHoverRule).not.toContain("--semantic-list-detail-row-surface-hover")
+  })
+
   it("generates one complete typed catalog for editor and runtime consumers", () => {
     const rows: Array<{
       id: keyof typeof APPEARANCE_TOKEN_RUNTIME_MAP
@@ -225,7 +256,7 @@ describe("appearance token manifest", () => {
     )
   })
 
-  it("exposes complete dropdown option semantics and uses them for the calendar project filter", () => {
+  it("exposes complete dropdown option semantics and uses them for selection pickers", () => {
     const dropdownGroup = APPEARANCE_TOKEN_GROUPS.find(
       (group) => group.id === "component-dropdown-select",
     )
@@ -268,6 +299,56 @@ describe("appearance token manifest", () => {
     )
     expect(dropdownStyles).not.toContain("--calendar-control-")
     expect(dropdownStyles).not.toContain("--calendar-panel")
+
+    expect(settingsCss).toMatch(
+      /\.provider-model-picker-button\s*\{[^}]*border:\s*1px solid var\(--semantic-button-secondary-border\);[^}]*background:\s*var\(--semantic-button-secondary-surface\);[^}]*color:\s*var\(--semantic-button-secondary-text\);/s,
+    )
+    expect(settingsCss).toMatch(
+      /\.provider-model-picker-button:hover,\s*\.provider-model-picker-button:focus-visible,\s*\.provider-model-picker-button\.is-open\s*\{[^}]*border-color:\s*var\(--semantic-button-secondary-border-hover\);[^}]*background:\s*var\(--semantic-button-secondary-surface-hover\);[^}]*color:\s*var\(--semantic-button-secondary-text-hover\);/s,
+    )
+    expect(settingsCss).toMatch(
+      /\.provider-model-picker-panel\s*\{[^}]*background:\s*var\(--semantic-dropdown-menu-surface\);[^}]*color:\s*var\(--semantic-dropdown-option-text\);/s,
+    )
+    expect(settingsCss).toMatch(
+      /\.provider-model-picker-search\s*\{[^}]*border:\s*1px solid var\(--semantic-field-border\);[^}]*background:\s*var\(--semantic-field-surface\);[^}]*color:\s*var\(--semantic-field-text\);/s,
+    )
+    expect(settingsCss).toMatch(
+      /\.provider-model-picker-search::placeholder\s*\{[^}]*color:\s*var\(--semantic-field-placeholder\);/s,
+    )
+    expect(settingsCss).toMatch(
+      /\.provider-model-picker-search:focus\s*\{[^}]*border-color:\s*var\(--semantic-field-border-focus\);[^}]*background:\s*var\(--semantic-field-surface-focus\);/s,
+    )
+    expect(settingsCss).toMatch(
+      /\.provider-model-picker-provider\s*\{[^}]*background:\s*transparent;[^}]*color:\s*var\(--semantic-dropdown-option-text\);/s,
+    )
+    expect(settingsCss).toMatch(
+      /\.provider-model-picker-model\s*\{[^}]*background:\s*transparent;[^}]*color:\s*var\(--semantic-dropdown-option-text\);/s,
+    )
+    expect(settingsCss).toMatch(
+      /\.provider-model-picker-provider:hover,\s*\.provider-model-picker-provider:focus-visible\s*\{[^}]*background:\s*var\(--semantic-dropdown-option-surface-hover\);[^}]*color:\s*var\(--semantic-dropdown-option-text-hover\);/s,
+    )
+    expect(settingsCss).toMatch(
+      /\.provider-model-picker-model:hover,\s*\.provider-model-picker-model:focus-visible\s*\{[^}]*background:\s*var\(--semantic-dropdown-option-surface-hover\);[^}]*color:\s*var\(--semantic-dropdown-option-text-hover\);/s,
+    )
+    expect(settingsCss).toMatch(
+      /\.provider-model-picker-provider\.is-active\s*\{[^}]*background:\s*var\(--semantic-dropdown-option-surface-selected\);[^}]*color:\s*var\(--semantic-dropdown-option-text-selected\);/s,
+    )
+    expect(settingsCss).toMatch(
+      /\.provider-model-picker-model\[aria-selected="true"\]\s*\{[^}]*background:\s*var\(--semantic-dropdown-option-surface-selected\);[^}]*color:\s*var\(--semantic-dropdown-option-text-selected\);/s,
+    )
+    expect(settingsCss).toMatch(
+      /\.provider-model-picker-empty\s*\{[^}]*background:\s*transparent;[^}]*color:\s*var\(--semantic-dropdown-option-meta-text\);/s,
+    )
+
+    const providerModelPickerStyles = settingsCss.slice(
+      settingsCss.indexOf(".provider-model-picker {"),
+      settingsCss.indexOf(".mcp-tools-policy-panel"),
+    )
+    expect(providerModelPickerStyles).not.toContain("--semantic-list-detail-")
+    expect(providerModelPickerStyles).not.toMatch(/--seg-(?:border|dropdown|panel|text)/)
+    expect(providerModelPickerStyles).not.toMatch(
+      /--(?:border-subtle|focus-outline-color|surface-panel-muted)/,
+    )
   })
 
   it("keeps editable field fills off generic panel and shell tokens", () => {

@@ -44,9 +44,9 @@ export const appearanceTokenCopy = {
       "label": "Panel Popup",
       "description": "Permukaan semantik khusus untuk popup panel, lembaran mengambang, dan panel modal."
     },
-    "component-settings-switches": {
-      "label": "Sakelar Pengaturan",
-      "description": "Warna baris, trek, dan thumb sakelar yang digunakan oleh kontrol toggle pengaturan."
+    "component-switches": {
+      "label": "Sakelar",
+      "description": "Warna baris, trek, dan thumb bersama untuk kontrol sakelar Boolean."
     },
     "component-segmented-controls": {
       "label": "Kontrol Tersegmentasi",
@@ -434,45 +434,45 @@ export const appearanceTokenCopy = {
       "label": "Permukaan Panel",
       "description": "Isian latar untuk panel popup seperti pengaturan, lembaran mengambang, dan popover bergaya panel."
     },
-    "semantic-settings-switch-row-surface-focus": {
+    "semantic-switch-row-surface-focus": {
       "label": "Baris Fokus Sakelar",
-      "description": "Latar baris yang digunakan saat sakelar pengaturan menerima fokus keyboard."
+      "description": "Latar baris yang digunakan saat sakelar menerima fokus keyboard."
     },
-    "semantic-settings-switch-track-surface": {
+    "semantic-switch-track-surface": {
       "label": "Jalur Sakelar",
-      "description": "Isian jalur default untuk kontrol sakelar pengaturan."
+      "description": "Isian jalur default untuk kontrol sakelar."
     },
-    "semantic-settings-switch-track-border": {
+    "semantic-switch-track-border": {
       "label": "Batas Jalur Sakelar",
-      "description": "Batas jalur default untuk kontrol sakelar pengaturan."
+      "description": "Batas jalur default untuk kontrol sakelar."
     },
-    "semantic-settings-switch-track-border-focus": {
+    "semantic-switch-track-border-focus": {
       "label": "Batas Fokus Alihkan Track",
-      "description": "Batas track yang digunakan saat sakelar pengaturan menerima fokus keyboard."
+      "description": "Batas track yang digunakan saat sakelar menerima fokus keyboard."
     },
-    "semantic-settings-switch-track-surface-active": {
+    "semantic-switch-track-surface-active": {
       "label": "Track Aktif Alihkan",
-      "description": "Isian track untuk kontrol sakelar pengaturan yang diaktifkan."
+      "description": "Isian track untuk kontrol sakelar yang diaktifkan."
     },
-    "semantic-settings-switch-track-border-active": {
+    "semantic-switch-track-border-active": {
       "label": "Batas Track Aktif Alihkan",
-      "description": "Batas track untuk kontrol sakelar pengaturan yang diaktifkan."
+      "description": "Batas track untuk kontrol sakelar yang diaktifkan."
     },
-    "semantic-settings-switch-track-surface-disabled": {
+    "semantic-switch-track-surface-disabled": {
       "label": "Track Nonaktif Alihkan",
-      "description": "Isian track untuk kontrol sakelar pengaturan yang dinonaktifkan."
+      "description": "Isian track untuk kontrol sakelar yang dinonaktifkan."
     },
-    "semantic-settings-switch-track-border-disabled": {
+    "semantic-switch-track-border-disabled": {
       "label": "Batas Track Nonaktif Alihkan",
-      "description": "Batas track untuk kontrol sakelar pengaturan yang dinonaktifkan."
+      "description": "Batas track untuk kontrol sakelar yang dinonaktifkan."
     },
-    "semantic-settings-switch-thumb-surface": {
+    "semantic-switch-thumb-surface": {
       "label": "Thumb Alihkan",
-      "description": "Isian thumb untuk kontrol sakelar pengaturan."
+      "description": "Isian thumb untuk kontrol sakelar."
     },
-    "semantic-settings-switch-thumb-surface-disabled": {
+    "semantic-switch-thumb-surface-disabled": {
       "label": "Thumb Nonaktif Alihkan",
-      "description": "Isian thumb untuk kontrol sakelar pengaturan yang dinonaktifkan."
+      "description": "Isian thumb untuk kontrol sakelar yang dinonaktifkan."
     },
     "semantic-segmented-control-surface": {
       "label": "Permukaan Kontrol",

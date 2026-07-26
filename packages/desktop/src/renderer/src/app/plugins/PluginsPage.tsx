@@ -558,7 +558,6 @@ function PluginCategoryNavigation({
             onClick={() => onCategoryChange(category)}
           >
             <span>{label}</span>
-            <span>{count}</span>
           </button>
         )
       })}
@@ -878,7 +877,6 @@ function InstalledPluginsSidebar({
       <aside className="plugins-installed-sidebar" aria-label={t("plugins.sidebar.installedAria")}>
         <div className="plugins-installed-sidebar-header">
           <h2>{t("plugins.sidebar.installed")}</h2>
-          <span>{installedPlugins.length}</span>
         </div>
 
         {installedRows.length > 0 ? (

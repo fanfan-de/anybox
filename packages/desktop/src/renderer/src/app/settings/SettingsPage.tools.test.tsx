@@ -2417,12 +2417,12 @@ describe("SettingsPage built-in tools", () => {
     expect(screen.queryByText("App Background")).not.toBeInTheDocument()
 
     fireEvent.change(searchBox, {
-      target: { value: "semantic-settings-switch-track-surface" },
+      target: { value: "semantic-switch-track-surface" },
     })
 
-    expect(screen.getByText("Settings Switches")).toBeInTheDocument()
+    expect(screen.getByText("Switches")).toBeInTheDocument()
     expect(screen.getByText("Switch Track")).toBeInTheDocument()
-    expect(screen.getByTitle(/^semantic-settings-switch-track-surface \//)).toBeInTheDocument()
+    expect(screen.getByTitle(/^semantic-switch-track-surface \//)).toBeInTheDocument()
     expect(screen.queryByText("App Background")).not.toBeInTheDocument()
 
     fireEvent.change(searchBox, {
@@ -2459,7 +2459,7 @@ describe("SettingsPage built-in tools", () => {
     fireEvent.click(screen.getByRole("option", { name: "Components" }))
 
     expect(screen.getByText("Buttons")).toBeInTheDocument()
-    expect(screen.getByText("Settings Switches")).toBeInTheDocument()
+    expect(screen.getByText("Switches")).toBeInTheDocument()
     expect(screen.queryByText("App Background")).not.toBeInTheDocument()
     expect(screen.queryByText("Thread View")).not.toBeInTheDocument()
 
@@ -2494,9 +2494,9 @@ describe("SettingsPage built-in tools", () => {
       target: { value: "\u5f00\u5173\u8f68\u9053" },
     })
 
-    expect(screen.getByText("\u8bbe\u7f6e\u5f00\u5173")).toBeInTheDocument()
+    expect(screen.getByText("\u5f00\u5173")).toBeInTheDocument()
     expect(screen.getByText("\u5f00\u5173\u8f68\u9053")).toBeInTheDocument()
-    expect(screen.getByText("\u8bbe\u7f6e\u5f00\u5173\u63a7\u4ef6\u7684\u9ed8\u8ba4\u8f68\u9053\u586b\u5145\u8272\u3002")).toBeInTheDocument()
+    expect(screen.getByText("\u5f00\u5173\u63a7\u4ef6\u7684\u9ed8\u8ba4\u8f68\u9053\u586b\u5145\u8272\u3002")).toBeInTheDocument()
     expect(screen.queryByText("\u5e94\u7528\u80cc\u666f")).not.toBeInTheDocument()
   })
 
@@ -2642,11 +2642,19 @@ describe("SettingsPage built-in tools", () => {
     const picker = screen.getByRole("dialog", { name: "Primary model model picker" })
     const providerList = within(picker).getByRole("listbox", { name: "Primary model providers" })
     const modelList = within(picker).getByRole("listbox", { name: "Primary model models" })
-    expect(within(providerList).getByRole("option", { name: /DeepSeek/ })).toHaveAttribute("aria-selected", "true")
+    const deepSeekProvider = within(providerList).getByRole("option", { name: /DeepSeek/ })
+    const openAIProvider = within(providerList).getByRole("option", { name: /OpenAI/ })
+    expect(deepSeekProvider).toHaveAttribute("aria-selected", "true")
     expect(within(modelList).getByRole("option", { name: "DeepSeek Reasoner" })).toHaveAttribute(
       "aria-selected",
       "true",
     )
+
+    deepSeekProvider.focus()
+    fireEvent.keyDown(deepSeekProvider, { key: "ArrowDown" })
+    expect(openAIProvider).toHaveFocus()
+    fireEvent.keyDown(openAIProvider, { key: "Home" })
+    expect(deepSeekProvider).toHaveFocus()
 
     fireEvent.change(within(picker).getByRole("searchbox", { name: "Search providers or models" }), {
       target: {

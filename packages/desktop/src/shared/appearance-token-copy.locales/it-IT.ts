@@ -44,9 +44,9 @@ export const appearanceTokenCopy = {
       "label": "Pannello Popup",
       "description": "Superficie semantica dedicata per popup a pannello, fogli flottanti e pannelli modali."
     },
-    "component-settings-switches": {
-      "label": "Interruttori Impostazioni",
-      "description": "Colori di riga, traccia e pollice per i controlli di attivazione delle impostazioni."
+    "component-switches": {
+      "label": "Interruttori",
+      "description": "Colori condivisi di riga, traccia e cursore per i controlli interruttore booleani."
     },
     "component-segmented-controls": {
       "label": "Controlli Segmentati",
@@ -434,43 +434,43 @@ export const appearanceTokenCopy = {
       "label": "Superficie Pannello",
       "description": "Sfondo per pannelli popup come impostazioni, fogli mobili e popover a pannello."
     },
-    "semantic-settings-switch-row-surface-focus": {
+    "semantic-switch-row-surface-focus": {
       "label": "Riga Focus Interruttore",
-      "description": "Sfondo riga quando un interruttore impostazioni riceve il focus da tastiera."
+      "description": "Sfondo riga quando un interruttore riceve il focus da tastiera."
     },
-    "semantic-settings-switch-track-surface": {
+    "semantic-switch-track-surface": {
       "label": "Traccia Interruttore",
-      "description": "Riempimento traccia predefinito per controlli interruttore impostazioni."
+      "description": "Riempimento traccia predefinito per controlli interruttore."
     },
-    "semantic-settings-switch-track-border": {
+    "semantic-switch-track-border": {
       "label": "Bordo Traccia Interruttore",
-      "description": "Bordo traccia predefinito per controlli interruttore impostazioni."
+      "description": "Bordo traccia predefinito per controlli interruttore."
     },
-    "semantic-settings-switch-track-border-focus": {
+    "semantic-switch-track-border-focus": {
       "label": "Bordo focus interruttore",
       "description": "Bordo dell'interruttore quando riceve il focus da tastiera."
     },
-    "semantic-settings-switch-track-surface-active": {
+    "semantic-switch-track-surface-active": {
       "label": "Traccia interruttore attivo",
       "description": "Riempimento traccia per interruttori abilitati."
     },
-    "semantic-settings-switch-track-border-active": {
+    "semantic-switch-track-border-active": {
       "label": "Bordo traccia interruttore attivo",
       "description": "Bordo traccia per interruttori abilitati."
     },
-    "semantic-settings-switch-track-surface-disabled": {
+    "semantic-switch-track-surface-disabled": {
       "label": "Traccia interruttore disabilitato",
       "description": "Riempimento traccia per interruttori disabilitati."
     },
-    "semantic-settings-switch-track-border-disabled": {
+    "semantic-switch-track-border-disabled": {
       "label": "Bordo traccia interruttore disabilitato",
       "description": "Bordo traccia per interruttori disabilitati."
     },
-    "semantic-settings-switch-thumb-surface": {
+    "semantic-switch-thumb-surface": {
       "label": "Pomello interruttore",
       "description": "Riempimento pomello per interruttori."
     },
-    "semantic-settings-switch-thumb-surface-disabled": {
+    "semantic-switch-thumb-surface-disabled": {
       "label": "Pomello interruttore disabilitato",
       "description": "Riempimento pomello per interruttori disabilitati."
     },

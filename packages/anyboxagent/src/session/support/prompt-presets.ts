@@ -525,6 +525,7 @@ async function readBundledPromptPresetRecords(root: string) {
       ...record,
       label: preset.label,
       description: record.description || preset.description,
+      editable: false,
       hasOverride: getPromptPresetSeedHash(record.content) !== seedHash,
       seedHash,
     })
@@ -744,9 +745,10 @@ export async function updatePromptPreset(
   const normalizedPresetID = presetID.trim()
   const bundledPreset = getPromptPresetDefinition(normalizedPresetID)
   if (bundledPreset) {
-    const root = await ensurePromptRoot(configID)
-    await writeBundledPromptFile(root, bundledPreset, input.content)
-    return readPromptPresetDocument(bundledPreset.id, configID)
+    throw new PromptPresetStoreError(
+      "BUNDLED_PROMPT_READ_ONLY",
+      `Bundled prompt preset '${bundledPreset.id}' is read-only. Create a custom copy before editing.`,
+    )
   }
 
   const index = await readPromptPresetIndex(configID)

@@ -1241,6 +1241,8 @@ export const frFR = {
   "prompts.usage.gitCommit": "Commit Git",
   "prompts.usage.cinemaTextGeneration": "Génération de texte cinéma",
   "prompts.status.edited": "Modifié",
+  "prompts.createCustomCopy": "Créer une copie personnalisée",
+  "prompts.bundledReadOnly": "Les prompts intégrés sont en lecture seule. Créez une copie personnalisée avant de les modifier.",
   "prompts.emptyCustom": "Aucun prompt personnalisé pour l'instant.",
   "prompts.emptyBundled": "Aucun prompt intégré.",
   "prompts.noSearchResults": "Aucun prompt ne correspond à votre recherche.",

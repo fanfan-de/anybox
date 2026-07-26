@@ -571,7 +571,7 @@ const PROMPT_PRESET_FIXTURES: PromptPresetFixture[] = [
     description: "Base instructions applied to every session execution.",
     source: "bundled" as const,
     hasOverride: false,
-    editable: true,
+    editable: false,
     sourcePath: "src/session/prompt/default.md",
   },
   {
@@ -580,7 +580,7 @@ const PROMPT_PRESET_FIXTURES: PromptPresetFixture[] = [
     description: "Additional instructions appended when the plan agent is active.",
     source: "bundled" as const,
     hasOverride: false,
-    editable: true,
+    editable: false,
     sourcePath: "src/session/prompt/plan.md",
   },
   {
@@ -589,7 +589,7 @@ const PROMPT_PRESET_FIXTURES: PromptPresetFixture[] = [
     description: "Additional instructions appended when a side chat session is active.",
     source: "bundled" as const,
     hasOverride: false,
-    editable: true,
+    editable: false,
     sourcePath: "src/session/prompt/side-chat.md",
   },
   {
@@ -598,7 +598,7 @@ const PROMPT_PRESET_FIXTURES: PromptPresetFixture[] = [
     description: "Instructions used when auto-generating Git commit subjects.",
     source: "bundled" as const,
     hasOverride: false,
-    editable: true,
+    editable: false,
     sourcePath: "src/session/prompt/git-commit-message.md",
   },
   {
@@ -607,7 +607,7 @@ const PROMPT_PRESET_FIXTURES: PromptPresetFixture[] = [
     description: "System instructions used when generating content for Cinema text nodes.",
     source: "bundled" as const,
     hasOverride: false,
-    editable: true,
+    editable: false,
     sourcePath: "src/session/prompt/cinema-text-generation.md",
   },
   {
@@ -616,7 +616,7 @@ const PROMPT_PRESET_FIXTURES: PromptPresetFixture[] = [
     description: "Reserved provider-specific prompt for GPT-family models.",
     source: "bundled" as const,
     hasOverride: false,
-    editable: true,
+    editable: false,
     sourcePath: "src/session/prompt/gpt.md",
   },
 ]
@@ -1868,7 +1868,7 @@ describe("App", () => {
 
     const trigger = await screen.findByRole("button", { name: "工具权限：默认权限" })
     fireEvent.click(trigger)
-    fireEvent.click(screen.getByRole("menuitem", { name: /完全访问权限/ }))
+    fireEvent.click(screen.getByRole("menuitemradio", { name: /完全访问权限/ }))
 
     await waitFor(() => {
       expect(window.desktop!.updateToolPermissionMode).toHaveBeenCalledWith({
@@ -9703,12 +9703,21 @@ describe("App", () => {
     window.desktop!.readPromptPreset = vi.fn().mockImplementation(({ presetID }: { presetID: string }) =>
       Promise.resolve(readPromptPresetDocumentForTest(presetID)),
     )
-    window.desktop!.createPromptPreset = vi.fn().mockImplementation(() => {
-      const document = createPromptPresetDocument("custom-untitled-preset", {
-        label: "Untitled preset",
+    window.desktop!.createPromptPreset = vi.fn().mockImplementation((input: {
+      label?: string
+      content?: string
+      description?: string
+    }) => {
+      const label = input.label ?? "Untitled preset"
+      const presetID =
+        label === "Untitled preset"
+          ? "custom-untitled-preset"
+          : `custom-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}`
+      const document = createPromptPresetDocument(presetID, {
+        label,
         source: "custom",
-        description: "Custom prompt preset.",
-        content: "",
+        description: input.description ?? "Custom prompt preset.",
+        content: input.content ?? "",
       })
       upsertPromptPresetDocument(document)
       return Promise.resolve(document)
@@ -9953,6 +9962,7 @@ describe("App", () => {
       "remote installed prompt",
     )
 
+    await choosePromptPreset("System prompt preset", "GPT Provider Prompt")
     fireEvent.click(screen.getByRole("button", { name: "GPT Provider Prompt" }))
 
     await waitFor(() => {
@@ -9961,8 +9971,34 @@ describe("App", () => {
       })
     })
 
-    const textarea = screen.getByRole("textbox", { name: "GPT Provider Prompt content" })
-    fireEvent.change(textarea, {
+    const bundledTextarea = screen.getByRole("textbox", { name: "GPT Provider Prompt content" })
+    expect(bundledTextarea).toHaveAttribute("readonly")
+    expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("button", { name: "Make custom copy" }))
+
+    await waitFor(() => {
+      expect(window.desktop!.createPromptPreset).toHaveBeenLastCalledWith({
+        label: "GPT Provider Prompt (Custom)",
+        content: "GPT provider prompt placeholder. This preset is currently inactive.",
+        description: "Reserved provider-specific prompt for GPT-family models.",
+      })
+    })
+    await waitFor(() => {
+      expect(window.desktop!.updatePromptPresetSelection).toHaveBeenLastCalledWith({
+        systemPromptPresetID: "custom-gpt-provider-prompt-custom",
+        planModePromptPresetID: "plan-mode",
+        sideChatPromptPresetID: "side-chat",
+        gitCommitPromptPresetID: "git-commit-message",
+        cinemaTextGenerationPromptPresetID: "cinema-text-generation",
+      })
+    })
+
+    const customCopyTextarea = await screen.findByRole("textbox", {
+      name: "GPT Provider Prompt (Custom) content",
+    })
+    expect(customCopyTextarea).not.toHaveAttribute("readonly")
+    fireEvent.change(customCopyTextarea, {
       target: {
         value: "custom gpt provider prompt",
       },
@@ -9972,23 +10008,14 @@ describe("App", () => {
 
     await waitFor(() => {
       expect(window.desktop!.updatePromptPreset).toHaveBeenCalledWith({
-        presetID: "provider-gpt",
-        label: undefined,
+        presetID: "custom-gpt-provider-prompt-custom",
+        label: "GPT Provider Prompt (Custom)",
         content: "custom gpt provider prompt",
       })
     })
 
     expect(await screen.findByText("Prompt preset saved.")).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole("button", { name: "Reset" }))
-
-    await waitFor(() => {
-      expect(window.desktop!.resetPromptPreset).toHaveBeenCalledWith({
-        presetID: "provider-gpt",
-      })
-    })
-
-    expect(await screen.findByText("Prompt preset reset to default.")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Reset" })).not.toBeInTheDocument()
   })
 
   it("translates prompt presets into a new custom prompt without changing the current selection", async () => {
@@ -10854,12 +10881,14 @@ describe("App", () => {
     expect(screen.getByLabelText("Shell Chrome Surface Dark semantic-shell-chrome-surface-dark")).toBeInTheDocument()
     expect(screen.getByLabelText("Shell Chrome Selected Tab Surface Light semantic-shell-chrome-tab-surface-active-light")).toBeInTheDocument()
     expect(screen.getByLabelText("Shell Chrome Selected Tab Surface Dark semantic-shell-chrome-tab-surface-active-dark")).toBeInTheDocument()
+    expect(screen.getByLabelText("Shell Chrome Selected Tab Indicator Light semantic-shell-chrome-tab-indicator-active-light")).toBeInTheDocument()
+    expect(screen.getByLabelText("Shell Chrome Selected Tab Indicator Dark semantic-shell-chrome-tab-indicator-active-dark")).toBeInTheDocument()
     expect(screen.getByLabelText("Popup Panel Panel Surface Light semantic-popup-panel-surface-light")).toBeInTheDocument()
     expect(screen.getByLabelText("Popup Panel Panel Surface Dark semantic-popup-panel-surface-dark")).toBeInTheDocument()
-    expect(screen.getByLabelText("Settings Switches Switch Track Light semantic-settings-switch-track-surface-light")).toBeInTheDocument()
-    expect(screen.getByLabelText("Settings Switches Switch Track Dark semantic-settings-switch-track-surface-dark")).toBeInTheDocument()
-    expect(screen.getByLabelText("Settings Switches Switch Thumb Light semantic-settings-switch-thumb-surface-light")).toBeInTheDocument()
-    expect(screen.getByLabelText("Settings Switches Switch Thumb Dark semantic-settings-switch-thumb-surface-dark")).toBeInTheDocument()
+    expect(screen.getByLabelText("Switches Switch Track Light semantic-switch-track-surface-light")).toBeInTheDocument()
+    expect(screen.getByLabelText("Switches Switch Track Dark semantic-switch-track-surface-dark")).toBeInTheDocument()
+    expect(screen.getByLabelText("Switches Switch Thumb Light semantic-switch-thumb-surface-light")).toBeInTheDocument()
+    expect(screen.getByLabelText("Switches Switch Thumb Dark semantic-switch-thumb-surface-dark")).toBeInTheDocument()
     expect(screen.getByLabelText("Segmented Controls Control Surface Light semantic-segmented-control-surface-light")).toBeInTheDocument()
     expect(screen.getByLabelText("Segmented Controls Item Active Surface Dark semantic-segmented-control-item-surface-active-dark")).toBeInTheDocument()
     expect(screen.getByLabelText("Segmented Controls Item Active Text Light semantic-segmented-control-item-text-active-light")).toBeInTheDocument()
@@ -14636,12 +14665,21 @@ describe("App", () => {
     expect(styles).toMatch(
       /\.canvas-top-menu-context-option:hover,\s*\.canvas-top-menu-context-option:focus-visible,\s*\.canvas-top-menu-context-option\.is-selected,\s*\.canvas-top-menu-context-option\[aria-selected="true"\],\s*\.canvas-top-menu-context-option\[aria-checked="true"\]\s*\{[^}]*background:\s*var\(--context-menu-hover\);[^}]*color:\s*var\(--context-menu-hover-text\);/s,
     )
+    const tracePanelRule = styles.match(/\.canvas-top-menu-trace-panel\s*\{[^}]*\}/s)?.[0] ?? ""
+    expect(tracePanelRule).toContain("--context-menu-text: var(--semantic-dropdown-option-text);")
+    expect(tracePanelRule).toContain("--context-menu-muted: var(--semantic-dropdown-option-meta-text);")
+    expect(tracePanelRule).toContain("--context-menu-hover: var(--semantic-dropdown-option-surface-hover);")
+    expect(tracePanelRule).toContain("--context-menu-hover-text: var(--semantic-dropdown-option-text-hover);")
+    expect(tracePanelRule).not.toMatch(/var\(--(?:surface-panel-muted|text-primary|text-secondary)\)/)
     expect(styles).toMatch(/\.canvas-top-menu-searchable-panel\s+\.composer-menu-search-input\s*\{[^}]*border-radius:\s*max\(4px,\s*calc\(var\(--context-menu-radius\) - 2px\)\);/s)
     expect(styles).toMatch(/\.canvas-top-menu-searchable-panel\s+\.composer-menu-options\s*\{[^}]*overflow-y:\s*auto;[^}]*scrollbar-width:\s*none;/s)
     expect(styles).toMatch(/\.canvas-top-menu-searchable-panel\s+\.composer-menu-options::-webkit-scrollbar\s*\{[^}]*width:\s*0;/s)
     expect(styles).not.toMatch(/\.canvas-top-menu-searchable-panel\s+\.composer-menu-options\s*\{[^}]*scrollbar-gutter/s)
     expect(styles).toMatch(/\.canvas-top-menu-fit-panel\s*\{[^}]*width:\s*max-content;[^}]*min-width:\s*0;/s)
     expect(styles).toMatch(/\.canvas-top-menu-fit-panel\s+\.canvas-top-menu-context-option\s*\{[^}]*width:\s*100%;[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);/s)
+    expect(styles).toMatch(
+      /\.canvas-top-menu-fit-panel\s+\.canvas-top-menu-trace-option\s*\{[^}]*grid-template-columns:\s*16px minmax\(0,\s*1fr\) auto;/s,
+    )
     expect(styles).toMatch(/\.external-editor-menu-panel\s*\{[^}]*width:\s*max-content;/s)
     expect(styles).toMatch(/\.external-editor-menu-panel\s*\{[^}]*min-width:\s*0;/s)
     expect(styles).toMatch(/\.external-editor-menu-option\s*\{[^}]*border-radius:\s*var\(--seg-radius-sm\);/s)
@@ -14682,6 +14720,65 @@ describe("App", () => {
     ).join("\n")
     expect(selectionRules).not.toMatch(
       /var\(--context-menu-(?:hover|hover-text|text|muted|focus)\)/,
+    )
+  })
+
+  it("routes top-menu selection triggers through secondary button semantic tokens", () => {
+    const selectionTriggerRules = Array.from(
+      styles.matchAll(/[^{}]*\.canvas-top-menu-selection-trigger[^{}]*\{[^{}]*\}/g),
+      (match) => match[0],
+    ).join("\n")
+
+    expect(selectionTriggerRules).toMatch(
+      /\.canvas-top-menu-button\.canvas-top-menu-selection-trigger\s*\{[^}]*border-color:\s*var\(--semantic-button-secondary-border\);[^}]*background:\s*var\(--semantic-button-secondary-surface\);[^}]*color:\s*var\(--semantic-button-secondary-text\);/s,
+    )
+    expect(selectionTriggerRules).toMatch(
+      /\.canvas-top-menu-button\.canvas-top-menu-selection-trigger:not\(:disabled\):hover,[\s\S]*?\.canvas-top-menu-button\.canvas-top-menu-selection-trigger:not\(:disabled\)\[aria-expanded="true"\]\s*\{[^}]*border-color:\s*var\(--semantic-button-secondary-border-hover\);[^}]*background:\s*var\(--semantic-button-secondary-surface-hover\);[^}]*color:\s*var\(--semantic-button-secondary-text-hover\);/s,
+    )
+    expect(selectionTriggerRules).toMatch(
+      /\.canvas-top-menu-button\.canvas-top-menu-selection-trigger:focus-visible\s*\{[^}]*outline:\s*none;[^}]*outline-offset:\s*0;/s,
+    )
+    expect(selectionTriggerRules).toMatch(
+      /\.canvas-top-menu-button\.canvas-top-menu-selection-trigger:disabled\s*\{[^}]*border-color:\s*var\(--semantic-button-secondary-disabled-border\);[^}]*background:\s*var\(--semantic-button-secondary-disabled-surface\);[^}]*color:\s*var\(--semantic-button-secondary-disabled-text\);[^}]*opacity:\s*1;/s,
+    )
+    expect(selectionTriggerRules).not.toMatch(
+      /var\(--(?:seg-composer-button|semantic-composer-button|semantic-icon-button|seg-text|border-subtle|focus-outline)/,
+    )
+  })
+
+  it("wires switch controls through the shared semantic switch group", () => {
+    const stylesRoot = resolve(process.cwd(), "src/renderer/src/styles")
+    const switchConsumerStyles = ["settings.css", "tools.css", "workbench.css"]
+      .map((fileName) => readFileSync(resolve(stylesRoot, fileName), "utf8"))
+      .join("\n")
+    const toolsStyles = readFileSync(resolve(stylesRoot, "tools.css"), "utf8")
+    const toolSwitchRules = Array.from(
+      toolsStyles.matchAll(
+        /[^{}]*(?:\.tools-card-toggle-button|\.tools-toggle-control|\.tools-toggle-thumb)[^{}]*\{[^{}]*\}/g,
+      ),
+      (match) => match[0],
+    ).join("\n")
+
+    for (const tokenName of [
+      "semantic-switch-track-surface",
+      "semantic-switch-track-border",
+      "semantic-switch-track-border-focus",
+      "semantic-switch-track-surface-active",
+      "semantic-switch-track-border-active",
+      "semantic-switch-track-surface-disabled",
+      "semantic-switch-track-border-disabled",
+      "semantic-switch-thumb-surface",
+      "semantic-switch-thumb-surface-disabled",
+    ]) {
+      expect(toolSwitchRules).toContain(`var(--${tokenName})`)
+    }
+
+    expect(switchConsumerStyles).not.toContain("--semantic-settings-switch-")
+    expect(toolSwitchRules).not.toMatch(
+      /var\(--(?:seg-|tools-obs-accent|semantic-button|semantic-icon-button)/,
+    )
+    expect(toolsStyles).not.toMatch(
+      /:root\[data-theme="dark"\][^{]*\.tools-toggle-control\s*\{/,
     )
   })
 
@@ -14873,14 +14970,14 @@ describe("App", () => {
     )
     expect(styles).toMatch(/--canvas-region-tab-inactive-bg:\s*var\(--semantic-shell-chrome-surface\);/s)
     expect(styles).toMatch(/--canvas-region-tab-focus:\s*var\(--semantic-icon-button-surface-hover\);/s)
-    expect(styles).toMatch(/--dockview-tab-focus-accent:\s*var\(--focus-outline-color\);/s)
+    expect(styles).toMatch(/--dockview-tab-active-indicator:\s*var\(--semantic-shell-chrome-tab-indicator-active\);/s)
     expect(styles).toMatch(/\.dockview-theme-anybox\s+\.dv-tab\s*\{[^}]*position:\s*relative;[^}]*margin:\s*0 0 -1px;[^}]*background:\s*transparent;[^}]*overflow:\s*hidden;/s)
     expect(styles).toMatch(
       /\.dockview-theme-anybox\s+\.dv-groupview\.dv-active-group > \.dv-tabs-and-actions-container \.dv-tabs-container > \.dv-tab\.dv-active-tab,[\s\S]*?\.dv-tab\.dv-active-tab\s*\{[^}]*background:\s*var\(--dockview-tab-active-bg\);[^}]*box-shadow:\s*inset 0 1px 0 var\(--dockview-tab-border\),\s*inset 0 -1px 0 var\(--dockview-tab-border\);/s,
     )
     expect(styles).not.toMatch(/\.dockview-theme-anybox\s+\.dv-tab\.dv-active-tab,[\s\S]*?\{[^}]*box-shadow:\s*none;/s)
     expect(styles).toMatch(
-      /\.dockview-theme-anybox\s+\.dv-groupview\.dv-active-group > \.dv-tabs-and-actions-container \.dv-tabs-container > \.dv-tab\.dv-active-tab::after\s*\{[^}]*content:\s*"";[^}]*top:\s*0;[^}]*width:\s*auto;[^}]*height:\s*4px;[^}]*background:\s*var\(--dockview-tab-focus-accent\);[^}]*outline:\s*0 !important;/s,
+      /\.dockview-theme-anybox\s+\.dv-groupview\.dv-active-group > \.dv-tabs-and-actions-container \.dv-tabs-container > \.dv-tab\.dv-active-tab::after\s*\{[^}]*content:\s*"";[^}]*top:\s*0;[^}]*width:\s*auto;[^}]*height:\s*4px;[^}]*background:\s*var\(--dockview-tab-active-indicator\);[^}]*outline:\s*0 !important;/s,
     )
     expect(styles).toMatch(
       /\.dockview-theme-anybox\s+\.dv-groupview\.dv-active-group > \.dv-tabs-and-actions-container \.dv-tabs-container > \.dv-tab\.dv-active-tab:first-child::after\s*\{[^}]*left:\s*-1px;/s,
@@ -14914,12 +15011,15 @@ describe("App", () => {
     )
     expect(styles).toMatch(/\.dockview-theme-anybox\s+\.dockview-workbench-tab-content\s*\{[^}]*height:\s*100%;[^}]*padding:\s*0 8px 0 12px;/s)
     expect(styles).not.toMatch(/session-tab-active-curve/)
-    expect(styles).toMatch(/--right-sidebar-tab-focus-accent:\s*var\(--focus-outline-color\);/s)
+    expect(styles).toMatch(/--right-sidebar-tab-active-indicator:\s*var\(--semantic-shell-chrome-tab-indicator-active\);/s)
     expect(styles).toMatch(
       /\.right-sidebar-tab\.is-active\s*\{[^}]*box-shadow:\s*inset 0 1px 0 var\(--right-sidebar-tab-border\),\s*inset 0 -1px 0 var\(--right-sidebar-tab-border\);/s,
     )
     expect(styles).toMatch(
-      /\.right-sidebar-tab\.is-active::before\s*\{[^}]*content:\s*"";[^}]*top:\s*0;[^}]*height:\s*4px;[^}]*background:\s*var\(--right-sidebar-tab-focus-accent\);/s,
+      /\.right-sidebar-tab\.is-active::before\s*\{[^}]*content:\s*"";[^}]*top:\s*0;[^}]*height:\s*4px;[^}]*background:\s*var\(--right-sidebar-tab-active-indicator\);/s,
+    )
+    expect(styles).not.toMatch(
+      /--(?:dockview|right-sidebar)-tab-(?:focus-accent|active-indicator):\s*var\(--focus-outline-color\);/s,
     )
     expect(styles).toMatch(
       /\.canvas-region-top-menu\s+\.session-tab:hover,\s*\.canvas-region-top-menu\s+\.session-tab:focus-within\s*\{[^}]*background:\s*var\(--top-chrome-focus-surface\);[^}]*border-color:\s*transparent;/s,
@@ -15003,11 +15103,14 @@ describe("App", () => {
     expect(styles).toMatch(/--semantic-settings-page-surface-dark:\s*var\(--semantic-popup-panel-surface-dark\);/s)
     expect(styles).toMatch(/--semantic-settings-page-surface:\s*var\(--semantic-settings-page-surface-light\);/s)
     expect(styles).toMatch(/--semantic-settings-page-surface:\s*var\(--semantic-settings-page-surface-dark\);/s)
-    expect(styles).toMatch(/--semantic-settings-switch-track-surface-light:\s*color-mix\(in srgb,\s*var\(--border-default-light\) 72%,\s*var\(--surface-panel-light\) 28%\);/s)
-    expect(styles).toMatch(/--semantic-settings-switch-track-surface-active-dark:\s*var\(--brand-primary-dark\);/s)
-    expect(styles).toMatch(/--semantic-settings-switch-thumb-surface-disabled-dark:\s*var\(--surface-panel-dark\);/s)
-    expect(styles).toMatch(/--semantic-settings-switch-track-surface:\s*var\(--semantic-settings-switch-track-surface-light\);/s)
-    expect(styles).toMatch(/--semantic-settings-switch-track-surface:\s*var\(--semantic-settings-switch-track-surface-dark\);/s)
+    expect(styles).toMatch(/--semantic-switch-track-surface-light:\s*color-mix\(in srgb,\s*var\(--border-default-light\) 72%,\s*var\(--surface-panel-light\) 28%\);/s)
+    expect(styles).toMatch(/--semantic-switch-track-surface-active-dark:\s*var\(--brand-primary-dark\);/s)
+    expect(styles).toMatch(/--semantic-switch-thumb-surface-disabled-dark:\s*var\(--surface-panel-dark\);/s)
+    expect(styles).toMatch(/--semantic-switch-track-surface:\s*var\(--semantic-switch-track-surface-light\);/s)
+    expect(styles).toMatch(/--semantic-switch-track-surface:\s*var\(--semantic-switch-track-surface-dark\);/s)
+    expect(styles).toMatch(/--semantic-settings-switch-track-surface:\s*var\(--semantic-switch-track-surface\);/s)
+    expect(styles).toMatch(/--semantic-settings-switch-track-surface-light:\s*var\(--semantic-switch-track-surface-light\);/s)
+    expect(styles).toMatch(/--semantic-settings-switch-track-surface-dark:\s*var\(--semantic-switch-track-surface-dark\);/s)
     expect(styles).toMatch(/--seg-shell-chrome-surface:\s*var\(--semantic-shell-chrome-surface\);/s)
     expect(styles).toMatch(/--seg-accent-icon:\s*var\(--semantic-accent-icon\);/s)
     expect(styles).toMatch(/--seg-accent-icon-hover:\s*var\(--semantic-accent-icon-hover\);/s)
@@ -15449,6 +15552,14 @@ describe("App", () => {
     expect(styles).toMatch(
       /\.plugins-tag-row \.settings-badge\s*\{[^}]*background:\s*var\(--semantic-plugin-market-tag-surface\);[^}]*color:\s*var\(--semantic-plugin-market-tag-text\);/s,
     )
+  })
+
+  it("wires the plugin URL import dialog through the popup panel semantic", () => {
+    const dialogRule = styles.match(/\.plugins-import-url-dialog\s*\{[^}]*\}/s)?.[0] ?? ""
+
+    expect(dialogRule).toContain("background: var(--semantic-popup-panel-surface);")
+    expect(dialogRule).not.toContain("background: var(--seg-panel);")
+    expect(dialogRule).not.toContain("background: var(--surface-panel);")
   })
 
   it("wires installed plugin row backgrounds through list-detail state tokens", () => {

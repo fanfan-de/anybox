@@ -1241,6 +1241,8 @@ export const idID = {
   "prompts.usage.gitCommit": "Git commit",
   "prompts.usage.cinemaTextGeneration": "Pembuatan teks Cinema",
   "prompts.status.edited": "Diedit",
+  "prompts.createCustomCopy": "Buat salinan kustom",
+  "prompts.bundledReadOnly": "Prompt bawaan bersifat hanya-baca. Buat salinan kustom sebelum mengedit.",
   "prompts.emptyCustom": "Belum ada prompt kustom.",
   "prompts.emptyBundled": "Tidak ada prompt bawaan.",
   "prompts.noSearchResults": "Tidak ada prompt yang cocok dengan pencarian Anda.",

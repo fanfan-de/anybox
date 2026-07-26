@@ -44,9 +44,9 @@ export const appearanceTokenCopy = {
       "label": "Panel Emergente",
       "description": "Superficie semántica dedicada para paneles emergentes, hojas flotantes y paneles modales."
     },
-    "component-settings-switches": {
-      "label": "Interruptores de Configuración",
-      "description": "Colores de fila, pista y pulgar usados por los controles de alternancia de configuración."
+    "component-switches": {
+      "label": "Interruptores",
+      "description": "Colores compartidos de fila, pista y pulgar para controles de interruptor booleanos."
     },
     "component-segmented-controls": {
       "label": "Controles Segmentados",
@@ -434,45 +434,45 @@ export const appearanceTokenCopy = {
       "label": "Superficie de panel",
       "description": "Relleno de fondo para paneles emergentes como configuraciones, hojas flotantes y popovers de panel."
     },
-    "semantic-settings-switch-row-surface-focus": {
+    "semantic-switch-row-surface-focus": {
       "label": "Fila de enfoque de interruptor",
-      "description": "Fondo de fila usado cuando un interruptor de configuración recibe el foco del teclado."
+      "description": "Fondo de fila usado cuando un interruptor recibe el foco del teclado."
     },
-    "semantic-settings-switch-track-surface": {
+    "semantic-switch-track-surface": {
       "label": "Pista de interruptor",
-      "description": "Relleno de pista predeterminado para controles de interruptor de configuración."
+      "description": "Relleno de pista predeterminado para controles de interruptor."
     },
-    "semantic-settings-switch-track-border": {
+    "semantic-switch-track-border": {
       "label": "Borde de pista de interruptor",
-      "description": "Borde de pista predeterminado para controles de interruptor de configuración."
+      "description": "Borde de pista predeterminado para controles de interruptor."
     },
-    "semantic-settings-switch-track-border-focus": {
+    "semantic-switch-track-border-focus": {
       "label": "Borde de enfoque de interruptor",
-      "description": "Borde de pista usado cuando un interruptor de configuración recibe el foco del teclado."
+      "description": "Borde de pista usado cuando un interruptor recibe el foco del teclado."
     },
-    "semantic-settings-switch-track-surface-active": {
+    "semantic-switch-track-surface-active": {
       "label": "Pista de interruptor activo",
-      "description": "Relleno de pista para controles de interruptor de configuración habilitados."
+      "description": "Relleno de pista para controles de interruptor habilitados."
     },
-    "semantic-settings-switch-track-border-active": {
+    "semantic-switch-track-border-active": {
       "label": "Borde de pista de interruptor activo",
-      "description": "Borde de pista para controles de interruptor de configuración habilitados."
+      "description": "Borde de pista para controles de interruptor habilitados."
     },
-    "semantic-settings-switch-track-surface-disabled": {
+    "semantic-switch-track-surface-disabled": {
       "label": "Pista de interruptor deshabilitado",
-      "description": "Relleno de pista para controles de interruptor de configuración deshabilitados."
+      "description": "Relleno de pista para controles de interruptor deshabilitados."
     },
-    "semantic-settings-switch-track-border-disabled": {
+    "semantic-switch-track-border-disabled": {
       "label": "Borde de pista de interruptor deshabilitado",
-      "description": "Borde de pista para controles de interruptor de configuración deshabilitados."
+      "description": "Borde de pista para controles de interruptor deshabilitados."
     },
-    "semantic-settings-switch-thumb-surface": {
+    "semantic-switch-thumb-surface": {
       "label": "Pulgar de interruptor",
-      "description": "Relleno del pulgar para controles de interruptor de configuración."
+      "description": "Relleno del pulgar para controles de interruptor."
     },
-    "semantic-settings-switch-thumb-surface-disabled": {
+    "semantic-switch-thumb-surface-disabled": {
       "label": "Pulgar de interruptor deshabilitado",
-      "description": "Relleno del pulgar para controles de interruptor de configuración deshabilitados."
+      "description": "Relleno del pulgar para controles de interruptor deshabilitados."
     },
     "semantic-segmented-control-surface": {
       "label": "Superficie de control",

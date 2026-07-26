@@ -2170,6 +2170,32 @@ function ProviderModelPicker({
     onChange(toModelValue(model))
   }
 
+  function handleListboxKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return
+
+    const options = Array.from(
+      event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="option"]:not(:disabled)'),
+    )
+    if (options.length === 0) return
+
+    event.preventDefault()
+    const focusedIndex = options.findIndex((option) => option === document.activeElement)
+    const nextIndex =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? options.length - 1
+          : event.key === "ArrowDown"
+            ? focusedIndex < 0
+              ? 0
+              : (focusedIndex + 1) % options.length
+            : focusedIndex < 0
+              ? options.length - 1
+              : (focusedIndex - 1 + options.length) % options.length
+
+    options[nextIndex]?.focus()
+  }
+
   return (
     <div className="provider-model-picker">
       <button
@@ -2212,7 +2238,12 @@ function ProviderModelPicker({
 
           {providerGroups.length > 0 ? (
             <div className="provider-model-picker-body">
-              <div className="provider-model-picker-provider-list" role="listbox" aria-label={`${label} providers`}>
+              <div
+                className="provider-model-picker-provider-list"
+                role="listbox"
+                aria-label={`${label} providers`}
+                onKeyDown={handleListboxKeyDown}
+              >
                 {providerGroups.map((group) => {
                   const isActive = activeProviderGroup?.provider.id === group.provider.id
 
@@ -2235,7 +2266,12 @@ function ProviderModelPicker({
                 })}
               </div>
 
-              <div className="provider-model-picker-model-list" role="listbox" aria-label={`${label} models`}>
+              <div
+                className="provider-model-picker-model-list"
+                role="listbox"
+                aria-label={`${label} models`}
+                onKeyDown={handleListboxKeyDown}
+              >
                 {activeProviderGroup && activeProviderGroup.matchingModels.length > 0 ? (
                   activeProviderGroup.matchingModels.map((model) => {
                     const modelValue = toModelValue(model)

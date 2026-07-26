@@ -44,9 +44,9 @@ export const appearanceTokenCopy = {
       "label": "ポップアップパネル",
       "description": "パネルスタイルのポップアップ、フローティングシート、モーダルパネル専用のセマンティックサーフェス。"
     },
-    "component-settings-switches": {
-      "label": "設定スイッチ",
-      "description": "設定のトグルコントロールで使用されるスイッチ行、トラック、サムの色。"
+    "component-switches": {
+      "label": "スイッチ",
+      "description": "ブール型スイッチコントロールで共有される行、トラック、サムの色。"
     },
     "component-segmented-controls": {
       "label": "セグメントコントロール",
@@ -434,45 +434,45 @@ export const appearanceTokenCopy = {
       "label": "パネルサーフェス",
       "description": "設定、フローティングシート、パネルスタイルのポップオーバーなどのポップアップパネルの背景塗りつぶし。"
     },
-    "semantic-settings-switch-row-surface-focus": {
+    "semantic-switch-row-surface-focus": {
       "label": "スイッチフォーカス行",
-      "description": "設定スイッチがキーボードフォーカスを受け取ったときの行背景。"
+      "description": "スイッチがキーボードフォーカスを受け取ったときの行背景。"
     },
-    "semantic-settings-switch-track-surface": {
+    "semantic-switch-track-surface": {
       "label": "スイッチトラック",
-      "description": "設定スイッチコントロールのデフォルトトラック塗りつぶし。"
+      "description": "スイッチコントロールのデフォルトトラック塗りつぶし。"
     },
-    "semantic-settings-switch-track-border": {
+    "semantic-switch-track-border": {
       "label": "スイッチトラック境界線",
-      "description": "設定スイッチコントロールのデフォルトトラック境界線。"
+      "description": "スイッチコントロールのデフォルトトラック境界線。"
     },
-    "semantic-settings-switch-track-border-focus": {
+    "semantic-switch-track-border-focus": {
       "label": "スイッチフォーカス境界線",
-      "description": "設定スイッチがキーボードフォーカスを受け取ったときのトラック境界線。"
+      "description": "スイッチがキーボードフォーカスを受け取ったときのトラック境界線。"
     },
-    "semantic-settings-switch-track-surface-active": {
+    "semantic-switch-track-surface-active": {
       "label": "スイッチアクティブトラック",
-      "description": "有効な設定スイッチコントロールのトラック塗りつぶし。"
+      "description": "有効なスイッチコントロールのトラック塗りつぶし。"
     },
-    "semantic-settings-switch-track-border-active": {
+    "semantic-switch-track-border-active": {
       "label": "スイッチアクティブトラック境界線",
-      "description": "有効な設定スイッチコントロールのトラック境界線。"
+      "description": "有効なスイッチコントロールのトラック境界線。"
     },
-    "semantic-settings-switch-track-surface-disabled": {
+    "semantic-switch-track-surface-disabled": {
       "label": "スイッチ無効トラック",
-      "description": "無効な設定スイッチコントロールのトラック塗りつぶし。"
+      "description": "無効なスイッチコントロールのトラック塗りつぶし。"
     },
-    "semantic-settings-switch-track-border-disabled": {
+    "semantic-switch-track-border-disabled": {
       "label": "スイッチ無効トラック境界線",
-      "description": "無効な設定スイッチコントロールのトラック境界線。"
+      "description": "無効なスイッチコントロールのトラック境界線。"
     },
-    "semantic-settings-switch-thumb-surface": {
+    "semantic-switch-thumb-surface": {
       "label": "スイッチサム",
-      "description": "設定スイッチコントロールのサム塗りつぶし。"
+      "description": "スイッチコントロールのサム塗りつぶし。"
     },
-    "semantic-settings-switch-thumb-surface-disabled": {
+    "semantic-switch-thumb-surface-disabled": {
       "label": "スイッチ無効サム",
-      "description": "無効な設定スイッチコントロールのサム塗りつぶし。"
+      "description": "無効なスイッチコントロールのサム塗りつぶし。"
     },
     "semantic-segmented-control-surface": {
       "label": "コントロールサーフェス",

@@ -315,6 +315,13 @@ describe("appearance token catalog", () => {
           lightToken: "semantic-shell-chrome-tab-surface-active-light",
           darkToken: "semantic-shell-chrome-tab-surface-active-dark",
         },
+        {
+          id: "semantic-shell-chrome-tab-indicator-active",
+          label: "Selected Tab Indicator",
+          description: "Indicator color for selected tabs in the active workbench group and right sidebar.",
+          lightToken: "semantic-shell-chrome-tab-indicator-active-light",
+          darkToken: "semantic-shell-chrome-tab-indicator-active-dark",
+        },
       ],
     })
 
@@ -326,6 +333,14 @@ describe("appearance token catalog", () => {
       "semantic-shell-chrome-tab-surface-active-dark": {
         type: "alias",
         token: "surface-panel-dark",
+      },
+      "semantic-shell-chrome-tab-indicator-active-light": {
+        type: "alias",
+        token: "focus-outline-color-light",
+      },
+      "semantic-shell-chrome-tab-indicator-active-dark": {
+        type: "alias",
+        token: "focus-outline-color-dark",
       },
     })
 
@@ -344,7 +359,7 @@ describe("appearance token catalog", () => {
     })
   })
 
-  it("registers and normalizes the popup panel surface token", () => {
+  it("registers and normalizes popup panel and shared switch tokens", () => {
     expect(APPEARANCE_TOKEN_GROUPS.find((group) => group.id === "component-popup-panel")).toEqual({
       id: "component-popup-panel",
       layer: "product",
@@ -361,81 +376,81 @@ describe("appearance token catalog", () => {
       ],
     })
 
-    expect(APPEARANCE_TOKEN_GROUPS.find((group) => group.id === "component-settings-switches")).toEqual({
-      id: "component-settings-switches",
+    expect(APPEARANCE_TOKEN_GROUPS.find((group) => group.id === "component-switches")).toEqual({
+      id: "component-switches",
       layer: "component",
-      label: "Settings Switches",
-      description: "Switch row, track, and thumb colors used by settings toggle controls.",
+      label: "Switches",
+      description: "Shared row, track, and thumb colors for Boolean switch controls.",
       rows: [
         {
-          id: "semantic-settings-switch-row-surface-focus",
+          id: "semantic-switch-row-surface-focus",
           label: "Switch Focus Row",
-          description: "Row background used when a settings switch receives keyboard focus.",
-          lightToken: "semantic-settings-switch-row-surface-focus-light",
-          darkToken: "semantic-settings-switch-row-surface-focus-dark",
+          description: "Row background used when a switch receives keyboard focus.",
+          lightToken: "semantic-switch-row-surface-focus-light",
+          darkToken: "semantic-switch-row-surface-focus-dark",
         },
         {
-          id: "semantic-settings-switch-track-surface",
+          id: "semantic-switch-track-surface",
           label: "Switch Track",
-          description: "Default track fill for settings switch controls.",
-          lightToken: "semantic-settings-switch-track-surface-light",
-          darkToken: "semantic-settings-switch-track-surface-dark",
+          description: "Default track fill for switch controls.",
+          lightToken: "semantic-switch-track-surface-light",
+          darkToken: "semantic-switch-track-surface-dark",
         },
         {
-          id: "semantic-settings-switch-track-border",
+          id: "semantic-switch-track-border",
           label: "Switch Track Border",
-          description: "Default track border for settings switch controls.",
-          lightToken: "semantic-settings-switch-track-border-light",
-          darkToken: "semantic-settings-switch-track-border-dark",
+          description: "Default track border for switch controls.",
+          lightToken: "semantic-switch-track-border-light",
+          darkToken: "semantic-switch-track-border-dark",
         },
         {
-          id: "semantic-settings-switch-track-border-focus",
+          id: "semantic-switch-track-border-focus",
           label: "Switch Track Focus Border",
-          description: "Track border used when a settings switch receives keyboard focus.",
-          lightToken: "semantic-settings-switch-track-border-focus-light",
-          darkToken: "semantic-settings-switch-track-border-focus-dark",
+          description: "Track border used when a switch receives keyboard focus.",
+          lightToken: "semantic-switch-track-border-focus-light",
+          darkToken: "semantic-switch-track-border-focus-dark",
         },
         {
-          id: "semantic-settings-switch-track-surface-active",
+          id: "semantic-switch-track-surface-active",
           label: "Switch Active Track",
-          description: "Track fill for enabled settings switch controls.",
-          lightToken: "semantic-settings-switch-track-surface-active-light",
-          darkToken: "semantic-settings-switch-track-surface-active-dark",
+          description: "Track fill for enabled switch controls.",
+          lightToken: "semantic-switch-track-surface-active-light",
+          darkToken: "semantic-switch-track-surface-active-dark",
         },
         {
-          id: "semantic-settings-switch-track-border-active",
+          id: "semantic-switch-track-border-active",
           label: "Switch Active Track Border",
-          description: "Track border for enabled settings switch controls.",
-          lightToken: "semantic-settings-switch-track-border-active-light",
-          darkToken: "semantic-settings-switch-track-border-active-dark",
+          description: "Track border for enabled switch controls.",
+          lightToken: "semantic-switch-track-border-active-light",
+          darkToken: "semantic-switch-track-border-active-dark",
         },
         {
-          id: "semantic-settings-switch-track-surface-disabled",
+          id: "semantic-switch-track-surface-disabled",
           label: "Switch Disabled Track",
-          description: "Track fill for disabled settings switch controls.",
-          lightToken: "semantic-settings-switch-track-surface-disabled-light",
-          darkToken: "semantic-settings-switch-track-surface-disabled-dark",
+          description: "Track fill for disabled switch controls.",
+          lightToken: "semantic-switch-track-surface-disabled-light",
+          darkToken: "semantic-switch-track-surface-disabled-dark",
         },
         {
-          id: "semantic-settings-switch-track-border-disabled",
+          id: "semantic-switch-track-border-disabled",
           label: "Switch Disabled Track Border",
-          description: "Track border for disabled settings switch controls.",
-          lightToken: "semantic-settings-switch-track-border-disabled-light",
-          darkToken: "semantic-settings-switch-track-border-disabled-dark",
+          description: "Track border for disabled switch controls.",
+          lightToken: "semantic-switch-track-border-disabled-light",
+          darkToken: "semantic-switch-track-border-disabled-dark",
         },
         {
-          id: "semantic-settings-switch-thumb-surface",
+          id: "semantic-switch-thumb-surface",
           label: "Switch Thumb",
-          description: "Thumb fill for settings switch controls.",
-          lightToken: "semantic-settings-switch-thumb-surface-light",
-          darkToken: "semantic-settings-switch-thumb-surface-dark",
+          description: "Thumb fill for switch controls.",
+          lightToken: "semantic-switch-thumb-surface-light",
+          darkToken: "semantic-switch-thumb-surface-dark",
         },
         {
-          id: "semantic-settings-switch-thumb-surface-disabled",
+          id: "semantic-switch-thumb-surface-disabled",
           label: "Switch Disabled Thumb",
-          description: "Thumb fill for disabled settings switch controls.",
-          lightToken: "semantic-settings-switch-thumb-surface-disabled-light",
-          darkToken: "semantic-settings-switch-thumb-surface-disabled-dark",
+          description: "Thumb fill for disabled switch controls.",
+          lightToken: "semantic-switch-thumb-surface-disabled-light",
+          darkToken: "semantic-switch-thumb-surface-disabled-dark",
         },
       ],
     })
@@ -444,23 +459,36 @@ describe("appearance token catalog", () => {
       overrides: {
         "semantic-popup-panel-surface-light": " #111111 ",
         "semantic-settings-page-surface-dark": "#222222",
-        "semantic-settings-switch-track-surface": " #444444 ",
-        "semantic-settings-switch-thumb-surface-disabled-dark": "#555555",
+        "semantic-switch-track-surface": " #444444 ",
+        "semantic-switch-thumb-surface-disabled-dark": "#555555",
       },
       resolvedTokens: {
         "semantic-settings-page-surface-light": " #333333 ",
-        "semantic-settings-switch-track-surface-light": " #666666 ",
+        "semantic-switch-track-surface-light": " #666666 ",
       },
     })
 
     expect(cssTokenMap(document.overrides)).toEqual({
       "semantic-popup-panel-surface-light": "#111111",
       "semantic-settings-page-surface-dark": "#222222",
-      "semantic-settings-switch-track-surface-light": "#444444",
-      "semantic-settings-switch-track-surface-dark": "#444444",
-      "semantic-settings-switch-thumb-surface-disabled-dark": "#555555",
+      "semantic-switch-track-surface-light": "#444444",
+      "semantic-switch-track-surface-dark": "#444444",
+      "semantic-switch-thumb-surface-disabled-dark": "#555555",
     })
     expect(document).not.toHaveProperty("resolvedTokens")
+
+    expect(cssTokenMap(normalizeAppearanceConfigDocument({
+      overrides: {
+        "semantic-settings-switch-track-surface": "#888888",
+        "semantic-settings-switch-track-border-focus-light": "#999999",
+        "semantic-settings-switch-thumb-surface-disabled-dark": "#aaaaaa",
+      },
+    }).overrides)).toEqual({
+      "semantic-switch-track-surface-light": "#888888",
+      "semantic-switch-track-surface-dark": "#888888",
+      "semantic-switch-track-border-focus-light": "#999999",
+      "semantic-switch-thumb-surface-disabled-dark": "#aaaaaa",
+    })
 
     expect(cssTokenMap(normalizeAppearanceConfigDocument({
       overrides: {

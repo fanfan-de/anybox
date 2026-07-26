@@ -247,30 +247,32 @@ export const APPEARANCE_TOKEN_NAMES = [
   "semantic-shell-chrome-surface-dark",
   "semantic-shell-chrome-tab-surface-active-light",
   "semantic-shell-chrome-tab-surface-active-dark",
+  "semantic-shell-chrome-tab-indicator-active-light",
+  "semantic-shell-chrome-tab-indicator-active-dark",
   "semantic-terminal-surface-light",
   "semantic-terminal-surface-dark",
   "semantic-popup-panel-surface-light",
   "semantic-popup-panel-surface-dark",
-  "semantic-settings-switch-row-surface-focus-light",
-  "semantic-settings-switch-row-surface-focus-dark",
-  "semantic-settings-switch-track-surface-light",
-  "semantic-settings-switch-track-surface-dark",
-  "semantic-settings-switch-track-border-light",
-  "semantic-settings-switch-track-border-dark",
-  "semantic-settings-switch-track-border-focus-light",
-  "semantic-settings-switch-track-border-focus-dark",
-  "semantic-settings-switch-track-surface-active-light",
-  "semantic-settings-switch-track-surface-active-dark",
-  "semantic-settings-switch-track-border-active-light",
-  "semantic-settings-switch-track-border-active-dark",
-  "semantic-settings-switch-track-surface-disabled-light",
-  "semantic-settings-switch-track-surface-disabled-dark",
-  "semantic-settings-switch-track-border-disabled-light",
-  "semantic-settings-switch-track-border-disabled-dark",
-  "semantic-settings-switch-thumb-surface-light",
-  "semantic-settings-switch-thumb-surface-dark",
-  "semantic-settings-switch-thumb-surface-disabled-light",
-  "semantic-settings-switch-thumb-surface-disabled-dark",
+  "semantic-switch-row-surface-focus-light",
+  "semantic-switch-row-surface-focus-dark",
+  "semantic-switch-track-surface-light",
+  "semantic-switch-track-surface-dark",
+  "semantic-switch-track-border-light",
+  "semantic-switch-track-border-dark",
+  "semantic-switch-track-border-focus-light",
+  "semantic-switch-track-border-focus-dark",
+  "semantic-switch-track-surface-active-light",
+  "semantic-switch-track-surface-active-dark",
+  "semantic-switch-track-border-active-light",
+  "semantic-switch-track-border-active-dark",
+  "semantic-switch-track-surface-disabled-light",
+  "semantic-switch-track-surface-disabled-dark",
+  "semantic-switch-track-border-disabled-light",
+  "semantic-switch-track-border-disabled-dark",
+  "semantic-switch-thumb-surface-light",
+  "semantic-switch-thumb-surface-dark",
+  "semantic-switch-thumb-surface-disabled-light",
+  "semantic-switch-thumb-surface-disabled-dark",
   "semantic-segmented-control-surface-light",
   "semantic-segmented-control-surface-dark",
   "semantic-segmented-control-border-light",
@@ -545,6 +547,8 @@ export const APPEARANCE_TOKEN_NAMES = [
   "semantic-plugin-market-icon-border-dark",
   "semantic-plugin-market-icon-text-light",
   "semantic-plugin-market-icon-text-dark",
+  "semantic-plugin-market-item-surface-hover-light",
+  "semantic-plugin-market-item-surface-hover-dark",
   "semantic-plugin-market-item-border-hover-light",
   "semantic-plugin-market-item-border-hover-dark",
   "semantic-plugin-market-item-border-current-light",
@@ -1371,6 +1375,13 @@ export const APPEARANCE_TOKEN_GROUPS = [
         "description": "Background fill for selected tabs in the central workbench and right sidebar.",
         "lightToken": "semantic-shell-chrome-tab-surface-active-light",
         "darkToken": "semantic-shell-chrome-tab-surface-active-dark"
+      },
+      {
+        "id": "semantic-shell-chrome-tab-indicator-active",
+        "label": "Selected Tab Indicator",
+        "description": "Indicator color for selected tabs in the active workbench group and right sidebar.",
+        "lightToken": "semantic-shell-chrome-tab-indicator-active-light",
+        "darkToken": "semantic-shell-chrome-tab-indicator-active-dark"
       }
     ]
   },
@@ -1405,80 +1416,80 @@ export const APPEARANCE_TOKEN_GROUPS = [
     ]
   },
   {
-    "id": "component-settings-switches",
+    "id": "component-switches",
     "layer": "component",
-    "label": "Settings Switches",
-    "description": "Switch row, track, and thumb colors used by settings toggle controls.",
+    "label": "Switches",
+    "description": "Shared row, track, and thumb colors for Boolean switch controls.",
     "rows": [
       {
-        "id": "semantic-settings-switch-row-surface-focus",
+        "id": "semantic-switch-row-surface-focus",
         "label": "Switch Focus Row",
-        "description": "Row background used when a settings switch receives keyboard focus.",
-        "lightToken": "semantic-settings-switch-row-surface-focus-light",
-        "darkToken": "semantic-settings-switch-row-surface-focus-dark"
+        "description": "Row background used when a switch receives keyboard focus.",
+        "lightToken": "semantic-switch-row-surface-focus-light",
+        "darkToken": "semantic-switch-row-surface-focus-dark"
       },
       {
-        "id": "semantic-settings-switch-track-surface",
+        "id": "semantic-switch-track-surface",
         "label": "Switch Track",
-        "description": "Default track fill for settings switch controls.",
-        "lightToken": "semantic-settings-switch-track-surface-light",
-        "darkToken": "semantic-settings-switch-track-surface-dark"
+        "description": "Default track fill for switch controls.",
+        "lightToken": "semantic-switch-track-surface-light",
+        "darkToken": "semantic-switch-track-surface-dark"
       },
       {
-        "id": "semantic-settings-switch-track-border",
+        "id": "semantic-switch-track-border",
         "label": "Switch Track Border",
-        "description": "Default track border for settings switch controls.",
-        "lightToken": "semantic-settings-switch-track-border-light",
-        "darkToken": "semantic-settings-switch-track-border-dark"
+        "description": "Default track border for switch controls.",
+        "lightToken": "semantic-switch-track-border-light",
+        "darkToken": "semantic-switch-track-border-dark"
       },
       {
-        "id": "semantic-settings-switch-track-border-focus",
+        "id": "semantic-switch-track-border-focus",
         "label": "Switch Track Focus Border",
-        "description": "Track border used when a settings switch receives keyboard focus.",
-        "lightToken": "semantic-settings-switch-track-border-focus-light",
-        "darkToken": "semantic-settings-switch-track-border-focus-dark"
+        "description": "Track border used when a switch receives keyboard focus.",
+        "lightToken": "semantic-switch-track-border-focus-light",
+        "darkToken": "semantic-switch-track-border-focus-dark"
       },
       {
-        "id": "semantic-settings-switch-track-surface-active",
+        "id": "semantic-switch-track-surface-active",
         "label": "Switch Active Track",
-        "description": "Track fill for enabled settings switch controls.",
-        "lightToken": "semantic-settings-switch-track-surface-active-light",
-        "darkToken": "semantic-settings-switch-track-surface-active-dark"
+        "description": "Track fill for enabled switch controls.",
+        "lightToken": "semantic-switch-track-surface-active-light",
+        "darkToken": "semantic-switch-track-surface-active-dark"
       },
       {
-        "id": "semantic-settings-switch-track-border-active",
+        "id": "semantic-switch-track-border-active",
         "label": "Switch Active Track Border",
-        "description": "Track border for enabled settings switch controls.",
-        "lightToken": "semantic-settings-switch-track-border-active-light",
-        "darkToken": "semantic-settings-switch-track-border-active-dark"
+        "description": "Track border for enabled switch controls.",
+        "lightToken": "semantic-switch-track-border-active-light",
+        "darkToken": "semantic-switch-track-border-active-dark"
       },
       {
-        "id": "semantic-settings-switch-track-surface-disabled",
+        "id": "semantic-switch-track-surface-disabled",
         "label": "Switch Disabled Track",
-        "description": "Track fill for disabled settings switch controls.",
-        "lightToken": "semantic-settings-switch-track-surface-disabled-light",
-        "darkToken": "semantic-settings-switch-track-surface-disabled-dark"
+        "description": "Track fill for disabled switch controls.",
+        "lightToken": "semantic-switch-track-surface-disabled-light",
+        "darkToken": "semantic-switch-track-surface-disabled-dark"
       },
       {
-        "id": "semantic-settings-switch-track-border-disabled",
+        "id": "semantic-switch-track-border-disabled",
         "label": "Switch Disabled Track Border",
-        "description": "Track border for disabled settings switch controls.",
-        "lightToken": "semantic-settings-switch-track-border-disabled-light",
-        "darkToken": "semantic-settings-switch-track-border-disabled-dark"
+        "description": "Track border for disabled switch controls.",
+        "lightToken": "semantic-switch-track-border-disabled-light",
+        "darkToken": "semantic-switch-track-border-disabled-dark"
       },
       {
-        "id": "semantic-settings-switch-thumb-surface",
+        "id": "semantic-switch-thumb-surface",
         "label": "Switch Thumb",
-        "description": "Thumb fill for settings switch controls.",
-        "lightToken": "semantic-settings-switch-thumb-surface-light",
-        "darkToken": "semantic-settings-switch-thumb-surface-dark"
+        "description": "Thumb fill for switch controls.",
+        "lightToken": "semantic-switch-thumb-surface-light",
+        "darkToken": "semantic-switch-thumb-surface-dark"
       },
       {
-        "id": "semantic-settings-switch-thumb-surface-disabled",
+        "id": "semantic-switch-thumb-surface-disabled",
         "label": "Switch Disabled Thumb",
-        "description": "Thumb fill for disabled settings switch controls.",
-        "lightToken": "semantic-settings-switch-thumb-surface-disabled-light",
-        "darkToken": "semantic-settings-switch-thumb-surface-disabled-dark"
+        "description": "Thumb fill for disabled switch controls.",
+        "lightToken": "semantic-switch-thumb-surface-disabled-light",
+        "darkToken": "semantic-switch-thumb-surface-disabled-dark"
       }
     ]
   },
@@ -2568,6 +2579,13 @@ export const APPEARANCE_TOKEN_GROUPS = [
         "darkToken": "semantic-plugin-market-icon-text-dark"
       },
       {
+        "id": "semantic-plugin-market-item-surface-hover",
+        "label": "Plugin Item Hover Surface",
+        "description": "Surface color for hovered and keyboard-focused plugin rows.",
+        "lightToken": "semantic-plugin-market-item-surface-hover-light",
+        "darkToken": "semantic-plugin-market-item-surface-hover-dark"
+      },
+      {
         "id": "semantic-plugin-market-item-border-hover",
         "label": "Plugin Item Hover Border",
         "description": "Border color for hovered and keyboard-focused plugin rows.",
@@ -2760,18 +2778,19 @@ export const APPEARANCE_TOKEN_RUNTIME_MAP = {
   "semantic-info-surface-strong": "semantic-info-surface-strong",
   "semantic-shell-chrome-surface": "semantic-shell-chrome-surface",
   "semantic-shell-chrome-tab-surface-active": "semantic-shell-chrome-tab-surface-active",
+  "semantic-shell-chrome-tab-indicator-active": "semantic-shell-chrome-tab-indicator-active",
   "semantic-terminal-surface": "semantic-terminal-surface",
   "semantic-popup-panel-surface": "semantic-popup-panel-surface",
-  "semantic-settings-switch-row-surface-focus": "semantic-settings-switch-row-surface-focus",
-  "semantic-settings-switch-track-surface": "semantic-settings-switch-track-surface",
-  "semantic-settings-switch-track-border": "semantic-settings-switch-track-border",
-  "semantic-settings-switch-track-border-focus": "semantic-settings-switch-track-border-focus",
-  "semantic-settings-switch-track-surface-active": "semantic-settings-switch-track-surface-active",
-  "semantic-settings-switch-track-border-active": "semantic-settings-switch-track-border-active",
-  "semantic-settings-switch-track-surface-disabled": "semantic-settings-switch-track-surface-disabled",
-  "semantic-settings-switch-track-border-disabled": "semantic-settings-switch-track-border-disabled",
-  "semantic-settings-switch-thumb-surface": "semantic-settings-switch-thumb-surface",
-  "semantic-settings-switch-thumb-surface-disabled": "semantic-settings-switch-thumb-surface-disabled",
+  "semantic-switch-row-surface-focus": "semantic-switch-row-surface-focus",
+  "semantic-switch-track-surface": "semantic-switch-track-surface",
+  "semantic-switch-track-border": "semantic-switch-track-border",
+  "semantic-switch-track-border-focus": "semantic-switch-track-border-focus",
+  "semantic-switch-track-surface-active": "semantic-switch-track-surface-active",
+  "semantic-switch-track-border-active": "semantic-switch-track-border-active",
+  "semantic-switch-track-surface-disabled": "semantic-switch-track-surface-disabled",
+  "semantic-switch-track-border-disabled": "semantic-switch-track-border-disabled",
+  "semantic-switch-thumb-surface": "semantic-switch-thumb-surface",
+  "semantic-switch-thumb-surface-disabled": "semantic-switch-thumb-surface-disabled",
   "semantic-segmented-control-surface": "semantic-segmented-control-surface",
   "semantic-segmented-control-border": "semantic-segmented-control-border",
   "semantic-segmented-control-item-surface-hover": "semantic-segmented-control-item-surface-hover",
@@ -2909,6 +2928,7 @@ export const APPEARANCE_TOKEN_RUNTIME_MAP = {
   "semantic-plugin-market-icon-surface": "semantic-plugin-market-icon-surface",
   "semantic-plugin-market-icon-border": "semantic-plugin-market-icon-border",
   "semantic-plugin-market-icon-text": "semantic-plugin-market-icon-text",
+  "semantic-plugin-market-item-surface-hover": "semantic-plugin-market-item-surface-hover",
   "semantic-plugin-market-item-border-hover": "semantic-plugin-market-item-border-hover",
   "semantic-plugin-market-item-border-current": "semantic-plugin-market-item-border-current",
   "semantic-plugin-market-title-text-active": "semantic-plugin-market-title-text-active",
@@ -4636,6 +4656,14 @@ export const APPEARANCE_BRAND_DEFINITIONS = {
         "type": "alias",
         "token": "surface-panel-dark"
       },
+      "semantic-shell-chrome-tab-indicator-active-light": {
+        "type": "alias",
+        "token": "focus-outline-color-light"
+      },
+      "semantic-shell-chrome-tab-indicator-active-dark": {
+        "type": "alias",
+        "token": "focus-outline-color-dark"
+      },
       "semantic-terminal-surface-light": {
         "type": "literal",
         "value": {
@@ -4670,51 +4698,51 @@ export const APPEARANCE_BRAND_DEFINITIONS = {
         "type": "alias",
         "token": "surface-shell-dark"
       },
-      "semantic-settings-switch-track-border-light": {
+      "semantic-switch-track-border-light": {
         "type": "alias",
         "token": "border-default-light"
       },
-      "semantic-settings-switch-track-border-dark": {
+      "semantic-switch-track-border-dark": {
         "type": "alias",
         "token": "border-default-dark"
       },
-      "semantic-settings-switch-track-surface-active-light": {
+      "semantic-switch-track-surface-active-light": {
         "type": "alias",
         "token": "brand-primary-hover"
       },
-      "semantic-settings-switch-track-surface-active-dark": {
+      "semantic-switch-track-surface-active-dark": {
         "type": "alias",
         "token": "brand-primary-dark"
       },
-      "semantic-settings-switch-track-border-active-light": {
+      "semantic-switch-track-border-active-light": {
         "type": "alias",
-        "token": "semantic-settings-switch-track-surface-active-light"
+        "token": "semantic-switch-track-surface-active-light"
       },
-      "semantic-settings-switch-track-border-active-dark": {
+      "semantic-switch-track-border-active-dark": {
         "type": "alias",
-        "token": "semantic-settings-switch-track-surface-active-dark"
+        "token": "semantic-switch-track-surface-active-dark"
       },
-      "semantic-settings-switch-track-border-disabled-light": {
+      "semantic-switch-track-border-disabled-light": {
         "type": "alias",
         "token": "border-default-light"
       },
-      "semantic-settings-switch-track-border-disabled-dark": {
+      "semantic-switch-track-border-disabled-dark": {
         "type": "alias",
         "token": "border-default-dark"
       },
-      "semantic-settings-switch-thumb-surface-light": {
+      "semantic-switch-thumb-surface-light": {
         "type": "alias",
         "token": "surface-panel-light"
       },
-      "semantic-settings-switch-thumb-surface-dark": {
+      "semantic-switch-thumb-surface-dark": {
         "type": "alias",
         "token": "surface-panel-light"
       },
-      "semantic-settings-switch-thumb-surface-disabled-light": {
+      "semantic-switch-thumb-surface-disabled-light": {
         "type": "alias",
         "token": "surface-panel-light"
       },
-      "semantic-settings-switch-thumb-surface-disabled-dark": {
+      "semantic-switch-thumb-surface-disabled-dark": {
         "type": "alias",
         "token": "surface-panel-dark"
       },
@@ -5869,6 +5897,14 @@ export const APPEARANCE_BRAND_DEFINITIONS = {
       "semantic-plugin-market-icon-text-dark": {
         "type": "alias",
         "token": "text-primary-dark"
+      },
+      "semantic-plugin-market-item-surface-hover-light": {
+        "type": "alias",
+        "token": "surface-shell-light"
+      },
+      "semantic-plugin-market-item-surface-hover-dark": {
+        "type": "alias",
+        "token": "surface-shell-dark"
       },
       "semantic-plugin-market-item-border-hover-light": {
         "type": "alias",
@@ -8086,7 +8122,7 @@ export const APPEARANCE_TOKEN_DERIVATIONS =
     ],
     "compatibility": false
   },
-  "semantic-settings-switch-row-surface-focus-light": {
+  "semantic-switch-row-surface-focus-light": {
     "kind": "blend",
     "colorSpace": "srgb",
     "sources": [
@@ -8116,7 +8152,7 @@ export const APPEARANCE_TOKEN_DERIVATIONS =
     ],
     "compatibility": false
   },
-  "semantic-settings-switch-row-surface-focus-dark": {
+  "semantic-switch-row-surface-focus-dark": {
     "kind": "blend",
     "colorSpace": "srgb",
     "sources": [
@@ -8146,7 +8182,7 @@ export const APPEARANCE_TOKEN_DERIVATIONS =
     ],
     "compatibility": false
   },
-  "semantic-settings-switch-track-surface-light": {
+  "semantic-switch-track-surface-light": {
     "kind": "blend",
     "colorSpace": "srgb",
     "sources": [
@@ -8167,7 +8203,7 @@ export const APPEARANCE_TOKEN_DERIVATIONS =
     ],
     "compatibility": false
   },
-  "semantic-settings-switch-track-surface-dark": {
+  "semantic-switch-track-surface-dark": {
     "kind": "blend",
     "colorSpace": "srgb",
     "sources": [
@@ -8188,7 +8224,7 @@ export const APPEARANCE_TOKEN_DERIVATIONS =
     ],
     "compatibility": false
   },
-  "semantic-settings-switch-track-border-focus-light": {
+  "semantic-switch-track-border-focus-light": {
     "kind": "blend",
     "colorSpace": "srgb",
     "sources": [
@@ -8209,7 +8245,7 @@ export const APPEARANCE_TOKEN_DERIVATIONS =
     ],
     "compatibility": false
   },
-  "semantic-settings-switch-track-border-focus-dark": {
+  "semantic-switch-track-border-focus-dark": {
     "kind": "blend",
     "colorSpace": "srgb",
     "sources": [
@@ -8230,7 +8266,7 @@ export const APPEARANCE_TOKEN_DERIVATIONS =
     ],
     "compatibility": false
   },
-  "semantic-settings-switch-track-surface-disabled-light": {
+  "semantic-switch-track-surface-disabled-light": {
     "kind": "blend",
     "colorSpace": "srgb",
     "sources": [
@@ -8251,7 +8287,7 @@ export const APPEARANCE_TOKEN_DERIVATIONS =
     ],
     "compatibility": false
   },
-  "semantic-settings-switch-track-surface-disabled-dark": {
+  "semantic-switch-track-surface-disabled-dark": {
     "kind": "blend",
     "colorSpace": "srgb",
     "sources": [
@@ -11380,7 +11416,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#ffffff"
         }
       },
-      "semantic-settings-switch-row-surface-focus-light": {
+      "semantic-switch-row-surface-focus-light": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -11770,7 +11806,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#000000"
         }
       },
-      "semantic-settings-switch-track-border-light": {
+      "semantic-switch-track-border-light": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -11783,7 +11819,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#000000"
         }
       },
-      "semantic-settings-switch-track-surface-active-light": {
+      "semantic-switch-track-surface-active-light": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -11796,7 +11832,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#3c00ff"
         }
       },
-      "semantic-settings-switch-track-surface-light": {
+      "semantic-switch-track-surface-light": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -11809,7 +11845,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#646464"
         }
       },
-      "semantic-settings-switch-track-border-focus-light": {
+      "semantic-switch-track-border-focus-light": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -11822,7 +11858,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#000000"
         }
       },
-      "semantic-settings-switch-track-border-active-light": {
+      "semantic-switch-track-border-active-light": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -12628,7 +12664,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#2b2b2b"
         }
       },
-      "semantic-settings-switch-row-surface-focus-dark": {
+      "semantic-switch-row-surface-focus-dark": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -12667,7 +12703,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#ffffff"
         }
       },
-      "semantic-settings-switch-track-surface-dark": {
+      "semantic-switch-track-surface-dark": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -12680,7 +12716,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#a5a5a5"
         }
       },
-      "semantic-settings-switch-track-border-dark": {
+      "semantic-switch-track-border-dark": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -12693,7 +12729,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#e7e5e4"
         }
       },
-      "semantic-settings-switch-track-border-focus-dark": {
+      "semantic-switch-track-border-focus-dark": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -12706,7 +12742,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#e28d87"
         }
       },
-      "semantic-settings-switch-track-surface-active-dark": {
+      "semantic-switch-track-surface-active-dark": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -12719,7 +12755,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#ab8cff"
         }
       },
-      "semantic-settings-switch-track-border-active-dark": {
+      "semantic-switch-track-border-active-dark": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -12732,7 +12768,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#a5a5a5"
         }
       },
-      "semantic-settings-switch-track-border-disabled-dark": {
+      "semantic-switch-track-border-disabled-dark": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -12745,7 +12781,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#e7e5e4"
         }
       },
-      "semantic-settings-switch-thumb-surface-dark": {
+      "semantic-switch-thumb-surface-dark": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -12758,7 +12794,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#ffffff"
         }
       },
-      "semantic-settings-switch-thumb-surface-disabled-dark": {
+      "semantic-switch-thumb-surface-disabled-dark": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -13987,7 +14023,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#ffffff"
         }
       },
-      "semantic-settings-switch-row-surface-focus-light": {
+      "semantic-switch-row-surface-focus-light": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -14377,7 +14413,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#000000"
         }
       },
-      "semantic-settings-switch-track-border-light": {
+      "semantic-switch-track-border-light": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -14390,7 +14426,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#000000"
         }
       },
-      "semantic-settings-switch-track-surface-active-light": {
+      "semantic-switch-track-surface-active-light": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -14403,7 +14439,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#3c00ff"
         }
       },
-      "semantic-settings-switch-track-surface-light": {
+      "semantic-switch-track-surface-light": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -14416,7 +14452,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#646464"
         }
       },
-      "semantic-settings-switch-track-border-focus-light": {
+      "semantic-switch-track-border-focus-light": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -14429,7 +14465,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#000000"
         }
       },
-      "semantic-settings-switch-track-border-active-light": {
+      "semantic-switch-track-border-active-light": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -15235,7 +15271,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#2b2b2b"
         }
       },
-      "semantic-settings-switch-row-surface-focus-dark": {
+      "semantic-switch-row-surface-focus-dark": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -15274,7 +15310,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#ffffff"
         }
       },
-      "semantic-settings-switch-track-surface-dark": {
+      "semantic-switch-track-surface-dark": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -15287,7 +15323,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#a5a5a5"
         }
       },
-      "semantic-settings-switch-track-border-dark": {
+      "semantic-switch-track-border-dark": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -15300,7 +15336,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#e7e5e4"
         }
       },
-      "semantic-settings-switch-track-border-focus-dark": {
+      "semantic-switch-track-border-focus-dark": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -15313,7 +15349,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#e28d87"
         }
       },
-      "semantic-settings-switch-track-surface-active-dark": {
+      "semantic-switch-track-surface-active-dark": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -15326,7 +15362,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#ab8cff"
         }
       },
-      "semantic-settings-switch-track-border-active-dark": {
+      "semantic-switch-track-border-active-dark": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -15339,7 +15375,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#a5a5a5"
         }
       },
-      "semantic-settings-switch-track-border-disabled-dark": {
+      "semantic-switch-track-border-disabled-dark": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -15352,7 +15388,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#e7e5e4"
         }
       },
-      "semantic-settings-switch-thumb-surface-dark": {
+      "semantic-switch-thumb-surface-dark": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -15365,7 +15401,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#ffffff"
         }
       },
-      "semantic-settings-switch-thumb-surface-disabled-dark": {
+      "semantic-switch-thumb-surface-disabled-dark": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -16475,9 +16511,9 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
   "schemaVersion": 2,
   "dtcgVersion": "2025.10",
   "groupCount": 30,
-  "pairCount": 257,
-  "modeTokenCount": 514,
-  "runtimeTokenCount": 257,
+  "pairCount": 259,
+  "modeTokenCount": 518,
+  "runtimeTokenCount": 259,
   "derivationCount": 92,
   "canonicalDerivationCount": 92,
   "legacyMixPairCount": 0,
@@ -16675,30 +16711,32 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
     "semantic-shell-chrome-surface-dark",
     "semantic-shell-chrome-tab-surface-active-light",
     "semantic-shell-chrome-tab-surface-active-dark",
+    "semantic-shell-chrome-tab-indicator-active-light",
+    "semantic-shell-chrome-tab-indicator-active-dark",
     "semantic-terminal-surface-light",
     "semantic-terminal-surface-dark",
     "semantic-popup-panel-surface-light",
     "semantic-popup-panel-surface-dark",
-    "semantic-settings-switch-row-surface-focus-light",
-    "semantic-settings-switch-row-surface-focus-dark",
-    "semantic-settings-switch-track-surface-light",
-    "semantic-settings-switch-track-surface-dark",
-    "semantic-settings-switch-track-border-light",
-    "semantic-settings-switch-track-border-dark",
-    "semantic-settings-switch-track-border-focus-light",
-    "semantic-settings-switch-track-border-focus-dark",
-    "semantic-settings-switch-track-surface-active-light",
-    "semantic-settings-switch-track-surface-active-dark",
-    "semantic-settings-switch-track-border-active-light",
-    "semantic-settings-switch-track-border-active-dark",
-    "semantic-settings-switch-track-surface-disabled-light",
-    "semantic-settings-switch-track-surface-disabled-dark",
-    "semantic-settings-switch-track-border-disabled-light",
-    "semantic-settings-switch-track-border-disabled-dark",
-    "semantic-settings-switch-thumb-surface-light",
-    "semantic-settings-switch-thumb-surface-dark",
-    "semantic-settings-switch-thumb-surface-disabled-light",
-    "semantic-settings-switch-thumb-surface-disabled-dark",
+    "semantic-switch-row-surface-focus-light",
+    "semantic-switch-row-surface-focus-dark",
+    "semantic-switch-track-surface-light",
+    "semantic-switch-track-surface-dark",
+    "semantic-switch-track-border-light",
+    "semantic-switch-track-border-dark",
+    "semantic-switch-track-border-focus-light",
+    "semantic-switch-track-border-focus-dark",
+    "semantic-switch-track-surface-active-light",
+    "semantic-switch-track-surface-active-dark",
+    "semantic-switch-track-border-active-light",
+    "semantic-switch-track-border-active-dark",
+    "semantic-switch-track-surface-disabled-light",
+    "semantic-switch-track-surface-disabled-dark",
+    "semantic-switch-track-border-disabled-light",
+    "semantic-switch-track-border-disabled-dark",
+    "semantic-switch-thumb-surface-light",
+    "semantic-switch-thumb-surface-dark",
+    "semantic-switch-thumb-surface-disabled-light",
+    "semantic-switch-thumb-surface-disabled-dark",
     "semantic-segmented-control-surface-light",
     "semantic-segmented-control-surface-dark",
     "semantic-segmented-control-border-light",
@@ -16973,6 +17011,8 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
     "semantic-plugin-market-icon-border-dark",
     "semantic-plugin-market-icon-text-light",
     "semantic-plugin-market-icon-text-dark",
+    "semantic-plugin-market-item-surface-hover-light",
+    "semantic-plugin-market-item-surface-hover-dark",
     "semantic-plugin-market-item-border-hover-light",
     "semantic-plugin-market-item-border-hover-dark",
     "semantic-plugin-market-item-border-current-light",
@@ -17095,18 +17135,19 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
     "semantic-info-surface-strong",
     "semantic-shell-chrome-surface",
     "semantic-shell-chrome-tab-surface-active",
+    "semantic-shell-chrome-tab-indicator-active",
     "semantic-terminal-surface",
     "semantic-popup-panel-surface",
-    "semantic-settings-switch-row-surface-focus",
-    "semantic-settings-switch-track-surface",
-    "semantic-settings-switch-track-border",
-    "semantic-settings-switch-track-border-focus",
-    "semantic-settings-switch-track-surface-active",
-    "semantic-settings-switch-track-border-active",
-    "semantic-settings-switch-track-surface-disabled",
-    "semantic-settings-switch-track-border-disabled",
-    "semantic-settings-switch-thumb-surface",
-    "semantic-settings-switch-thumb-surface-disabled",
+    "semantic-switch-row-surface-focus",
+    "semantic-switch-track-surface",
+    "semantic-switch-track-border",
+    "semantic-switch-track-border-focus",
+    "semantic-switch-track-surface-active",
+    "semantic-switch-track-border-active",
+    "semantic-switch-track-surface-disabled",
+    "semantic-switch-track-border-disabled",
+    "semantic-switch-thumb-surface",
+    "semantic-switch-thumb-surface-disabled",
     "semantic-segmented-control-surface",
     "semantic-segmented-control-border",
     "semantic-segmented-control-item-surface-hover",
@@ -17244,6 +17285,7 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
     "semantic-plugin-market-icon-surface",
     "semantic-plugin-market-icon-border",
     "semantic-plugin-market-icon-text",
+    "semantic-plugin-market-item-surface-hover",
     "semantic-plugin-market-item-border-hover",
     "semantic-plugin-market-item-border-current",
     "semantic-plugin-market-title-text-active",
@@ -17259,13 +17301,13 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
   ],
   "legacyMixRuntimeTokens": [],
   "brandTokenCounts": {
-    "terra": 422,
+    "terra": 426,
     "sage": 141
   },
   "brandValueTypes": {
     "terra": {
       "literal": 154,
-      "alias": 268
+      "alias": 272
     },
     "sage": {
       "literal": 141,

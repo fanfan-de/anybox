@@ -81,7 +81,7 @@
   --right-sidebar-tab-divider: var(--seg-divider);
   --right-sidebar-tab-radius: 0px;
   --right-sidebar-tab-active-bg: var(--semantic-shell-chrome-tab-surface-active);
-  --right-sidebar-tab-focus-accent: var(--focus-outline-color);
+  --right-sidebar-tab-active-indicator: var(--semantic-shell-chrome-tab-indicator-active);
   --right-sidebar-tab-icon-color: currentColor;
   position: relative;
   min-height: 40px;
@@ -211,7 +211,7 @@
   left: -1px;
   z-index: 3;
   height: 4px;
-  background: var(--right-sidebar-tab-focus-accent);
+  background: var(--right-sidebar-tab-active-indicator);
   pointer-events: none;
 }
 

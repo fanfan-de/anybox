@@ -129,7 +129,7 @@ html[data-dv-containment~="view"] .dockview-theme-anybox .dv-split-view-containe
   --dockview-tab-radius: 0px;
   --dockview-tab-active-bg: var(--semantic-shell-chrome-tab-surface-active);
   --dockview-tab-hover-bg: var(--surface-panel-muted);
-  --dockview-tab-focus-accent: var(--focus-outline-color);
+  --dockview-tab-active-indicator: var(--semantic-shell-chrome-tab-indicator-active);
   --dockview-tab-icon-color: var(--semantic-accent-icon);
   --dockview-tab-icon-hover-color: var(--semantic-accent-icon-hover);
   position: relative;
@@ -226,7 +226,7 @@ html[data-dv-containment~="view"] .dockview-theme-anybox .dv-split-view-containe
   width: auto;
   z-index: 3;
   height: 4px;
-  background: var(--dockview-tab-focus-accent);
+  background: var(--dockview-tab-active-indicator);
   outline: 0 !important;
   pointer-events: none;
 }

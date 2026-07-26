@@ -24,6 +24,27 @@ describe("appearance token localization", () => {
     expect(getAppearanceTokenRowCopy(locale, row).label).not.toBe(row.label)
   })
 
+  it.each([
+    ["zh-TW", "開關"],
+    ["ja-JP", "スイッチ"],
+    ["ko-KR", "스위치"],
+    ["pt-BR", "Interruptores"],
+    ["es-419", "Interruptores"],
+    ["de-DE", "Schalter"],
+    ["fr-FR", "Interrupteurs"],
+    ["id-ID", "Sakelar"],
+    ["it-IT", "Interruttori"],
+    ["pl-PL", "Przełączniki"],
+    ["tr-TR", "Anahtarlar"],
+    ["vi-VN", "Công tắc"],
+  ] as const)("localizes the shared switch group for %s", (locale, expectedLabel) => {
+    const switchGroup = APPEARANCE_TOKEN_GROUPS.find((candidate) => candidate.id === "component-switches")
+
+    expect(switchGroup).toBeDefined()
+    expect(getAppearanceTokenGroupCopy(locale, switchGroup!).label).toBe(expectedLabel)
+    expect(getAppearanceTokenRowCopy(locale, switchGroup!.rows[0]).label).not.toBe(switchGroup!.rows[0].label)
+  })
+
   it("keeps the source copy for English", () => {
     expect(getAppearanceTokenGroupCopy("en-US", group)).toEqual(group)
     expect(getAppearanceTokenRowCopy("en-US", row)).toEqual(row)

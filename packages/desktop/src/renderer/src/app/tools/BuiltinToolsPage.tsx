@@ -138,9 +138,6 @@ export function BuiltinToolsSidebarView({
               type="button"
               onClick={() => onActiveToolKindChange(group.kind)}
             >
-              <span className="skill-tree-role-icon is-skill" aria-hidden="true">
-                <ToolsIcon />
-              </span>
               <span className="skill-tree-label">{group.label}</span>
               <span className="prompt-tree-row-badges" aria-hidden="true">
                 <span className="tools-badge">{group.items.length}</span>
@@ -363,8 +360,10 @@ export function BuiltinToolsPage({
                                 <button
                                   className="tools-card-toggle-button"
                                   type="button"
-                                  aria-pressed={tool.enabled}
-                                  aria-label={`${tool.enabled ? "Disable" : "Enable"} ${tool.title}`}
+                                  role="switch"
+                                  aria-checked={tool.enabled}
+                                  aria-label={tool.title}
+                                  disabled={isSavingBuiltinTools}
                                   onClick={() => onBuiltinToolToggle(tool.id, !tool.enabled)}
                                 >
                                   <span className="tools-toggle-control" aria-hidden="true">

@@ -44,9 +44,9 @@ export const appearanceTokenCopy = {
       "label": "Bảng Popup",
       "description": "Bề mặt ngữ nghĩa chuyên dụng cho popup dạng bảng, sheet nổi và bảng modal."
     },
-    "component-settings-switches": {
-      "label": "Công tắc Cài đặt",
-      "description": "Màu hàng, đường ray và ngón cái của công tắc dùng trong điều khiển bật/tắt cài đặt."
+    "component-switches": {
+      "label": "Công tắc",
+      "description": "Màu hàng, đường ray và núm dùng chung cho các điều khiển công tắc Boolean."
     },
     "component-segmented-controls": {
       "label": "Điều khiển Phân đoạn",
@@ -434,45 +434,45 @@ export const appearanceTokenCopy = {
       "label": "Bề mặt Panel",
       "description": "Nền cho bảng popup như cài đặt, trang tính nổi và popover dạng bảng."
     },
-    "semantic-settings-switch-row-surface-focus": {
+    "semantic-switch-row-surface-focus": {
       "label": "Hàng tiêu điểm chuyển đổi",
-      "description": "Nền hàng khi công tắc cài đặt nhận tiêu điểm bàn phím."
+      "description": "Nền hàng khi công tắc nhận tiêu điểm bàn phím."
     },
-    "semantic-settings-switch-track-surface": {
+    "semantic-switch-track-surface": {
       "label": "Đường ray chuyển đổi",
-      "description": "Tô đường ray mặc định cho công tắc cài đặt."
+      "description": "Tô đường ray mặc định cho công tắc."
     },
-    "semantic-settings-switch-track-border": {
+    "semantic-switch-track-border": {
       "label": "Viền đường ray chuyển đổi",
-      "description": "Viền đường ray mặc định cho công tắc cài đặt."
+      "description": "Viền đường ray mặc định cho công tắc."
     },
-    "semantic-settings-switch-track-border-focus": {
+    "semantic-switch-track-border-focus": {
       "label": "Viền tiêu điểm của công tắc",
-      "description": "Viền của thanh trượt khi công tắc cài đặt nhận tiêu điểm bàn phím."
+      "description": "Viền của thanh trượt khi công tắc nhận tiêu điểm bàn phím."
     },
-    "semantic-settings-switch-track-surface-active": {
+    "semantic-switch-track-surface-active": {
       "label": "Thanh trượt công tắc đang bật",
-      "description": "Màu nền thanh trượt cho công tắc cài đặt đang bật."
+      "description": "Màu nền thanh trượt cho công tắc đang bật."
     },
-    "semantic-settings-switch-track-border-active": {
+    "semantic-switch-track-border-active": {
       "label": "Viền thanh trượt công tắc đang bật",
-      "description": "Viền thanh trượt cho công tắc cài đặt đang bật."
+      "description": "Viền thanh trượt cho công tắc đang bật."
     },
-    "semantic-settings-switch-track-surface-disabled": {
+    "semantic-switch-track-surface-disabled": {
       "label": "Thanh trượt công tắc tắt",
-      "description": "Màu nền thanh trượt cho công tắc cài đặt bị tắt."
+      "description": "Màu nền thanh trượt cho công tắc bị tắt."
     },
-    "semantic-settings-switch-track-border-disabled": {
+    "semantic-switch-track-border-disabled": {
       "label": "Viền thanh trượt công tắc tắt",
-      "description": "Viền thanh trượt cho công tắc cài đặt bị tắt."
+      "description": "Viền thanh trượt cho công tắc bị tắt."
     },
-    "semantic-settings-switch-thumb-surface": {
+    "semantic-switch-thumb-surface": {
       "label": "Núm công tắc",
-      "description": "Màu nền núm cho công tắc cài đặt."
+      "description": "Màu nền núm cho công tắc."
     },
-    "semantic-settings-switch-thumb-surface-disabled": {
+    "semantic-switch-thumb-surface-disabled": {
       "label": "Núm công tắc tắt",
-      "description": "Màu nền núm cho công tắc cài đặt bị tắt."
+      "description": "Màu nền núm cho công tắc bị tắt."
     },
     "semantic-segmented-control-surface": {
       "label": "Bề mặt điều khiển",

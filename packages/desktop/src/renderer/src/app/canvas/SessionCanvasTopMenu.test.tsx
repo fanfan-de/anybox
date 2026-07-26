@@ -168,7 +168,9 @@ describe("SessionCanvasTopMenu project skills", () => {
       skillOptions,
     })
 
-    fireEvent.click(screen.getByRole("button", { name: "Select project skills: code-review" }))
+    const trigger = screen.getByRole("button", { name: "Select project skills: code-review" })
+    expect(trigger).toHaveClass("canvas-top-menu-selection-trigger")
+    fireEvent.click(trigger)
 
     const menu = screen.getByRole("dialog", { name: "Project skill selection" })
     expect(menu).toHaveClass("canvas-top-menu-selection-panel")
@@ -226,16 +228,21 @@ describe("SessionCanvasTopMenu project MCP servers", () => {
       selectedMcpServerLabel: "Filesystem",
     })
 
-    fireEvent.click(screen.getByRole("button", { name: "Select project MCP servers: Filesystem" }))
+    const trigger = screen.getByRole("button", { name: "Select project MCP servers: Filesystem" })
+    expect(trigger).toHaveClass("canvas-top-menu-selection-trigger")
+    fireEvent.click(trigger)
 
     const menu = screen.getByRole("menu", { name: "Project MCP server selection" })
     expect(menu).toHaveClass("canvas-top-menu-selection-panel")
     const filesystemOption = within(menu).getByRole("menuitemcheckbox", { name: /Filesystem/ })
     expect(filesystemOption).toHaveAttribute("aria-checked", "true")
     expect(filesystemOption).toHaveAttribute("title", "Access project files.")
+    expect(filesystemOption.querySelector(".canvas-top-menu-context-option-status")).not.toBeInTheDocument()
     expect(within(menu).queryByText("Access project files.")).not.toBeInTheDocument()
 
-    fireEvent.click(within(menu).getByRole("menuitemcheckbox", { name: /Browser/ }))
+    const browserOption = within(menu).getByRole("menuitemcheckbox", { name: /Browser/ })
+    expect(browserOption.querySelector(".canvas-top-menu-context-option-status")).not.toBeInTheDocument()
+    fireEvent.click(browserOption)
 
     expect(onMcpServerToggle).toHaveBeenCalledWith("browser")
   })
@@ -266,7 +273,9 @@ describe("SessionCanvasTopMenu project plugins", () => {
       selectedPluginLabel: "Build Web Apps",
     })
 
-    fireEvent.click(screen.getByRole("button", { name: "Select project plugins: Build Web Apps" }))
+    const trigger = screen.getByRole("button", { name: "Select project plugins: Build Web Apps" })
+    expect(trigger).toHaveClass("canvas-top-menu-selection-trigger")
+    fireEvent.click(trigger)
 
     const menu = screen.getByRole("menu", { name: "Project plugin selection" })
     expect(menu).toHaveClass("canvas-top-menu-selection-panel")
@@ -274,9 +283,11 @@ describe("SessionCanvasTopMenu project plugins", () => {
     expect(selectedOption).toHaveAttribute("aria-checked", "true")
     expect(selectedOption).toHaveAttribute("title", "Frontend workflows - 1 MCP, 3 skills")
     expect(selectedOption.querySelector(".canvas-top-menu-plugin-mark-glyph")).toHaveTextContent("BWA")
+    expect(selectedOption.querySelector(".canvas-top-menu-context-option-status")).not.toBeInTheDocument()
 
     const chromeOption = within(menu).getByRole("menuitemcheckbox", { name: /Chrome/ })
     expect(chromeOption.querySelector(".canvas-top-menu-plugin-mark img")).toHaveAttribute("src", "https://example.test/chrome.png")
+    expect(chromeOption.querySelector(".canvas-top-menu-context-option-status")).not.toBeInTheDocument()
 
     fireEvent.click(chromeOption)
 
@@ -323,7 +334,15 @@ describe("SessionCanvasTopMenu trace export", () => {
     renderTopMenu()
 
     fireEvent.click(screen.getByRole("button", { name: "Export session trace" }))
-    fireEvent.click(screen.getByRole("menuitem", { name: /Copy trace JSON/ }))
+    const menu = screen.getByRole("menu", { name: "Session trace export" })
+    expect(menu).toHaveClass("canvas-top-menu-context-panel", "canvas-top-menu-fit-panel")
+    const copyOption = within(menu).getByRole("menuitem", { name: "Copy trace JSON" })
+    expect(copyOption).toHaveClass("canvas-top-menu-context-option", "canvas-top-menu-trace-option")
+    expect(copyOption.querySelector(".ui-context-menu__icon")).not.toBeNull()
+    expect(copyOption.querySelector(".ui-context-menu__label")).toHaveTextContent("Copy trace JSON")
+    expect(copyOption.querySelector("strong")).toBeNull()
+    expect(copyOption.querySelector(".canvas-top-menu-context-option-status")).toBeNull()
+    fireEvent.click(copyOption)
 
     await waitFor(() => {
       expect(getSessionTraceExport).toHaveBeenCalledWith({ sessionID: "session-1" })
@@ -611,19 +630,27 @@ describe("SessionCanvasTopMenu tool permission mode", () => {
     const onToolPermissionModeChange = vi.fn()
     renderTopMenu({ onToolPermissionModeChange })
 
-    fireEvent.click(screen.getByRole("button", { name: "工具权限：默认权限" }))
+    const trigger = screen.getByRole("button", { name: "工具权限：默认权限" })
+    expect(trigger).toHaveClass("canvas-top-menu-selection-trigger")
+    fireEvent.click(trigger)
 
     const menu = screen.getByRole("menu", { name: "工具权限模式选择" })
     expect(menu).toHaveClass("canvas-top-menu-selection-panel")
     expect(within(menu).getByText("默认权限")).toBeInTheDocument()
     expect(within(menu).getByText("完全访问权限")).toBeInTheDocument()
     expect(within(menu).queryByText("ask 进入审批，allow 直接执行，deny 拒绝。")).not.toBeInTheDocument()
-    expect(within(menu).getByRole("menuitem", { name: /默认权限/ })).toHaveAttribute(
+    const defaultOption = within(menu).getByRole("menuitemradio", { name: /默认权限/ })
+    expect(defaultOption).toHaveAttribute("aria-checked", "true")
+    expect(defaultOption.querySelector(".canvas-top-menu-context-option-status")).not.toBeInTheDocument()
+    expect(defaultOption).toHaveAttribute(
       "title",
       "ask 进入审批，allow 直接执行，deny 拒绝。",
     )
 
-    fireEvent.click(within(menu).getByRole("menuitem", { name: /完全访问权限/ }))
+    const fullAccessOption = within(menu).getByRole("menuitemradio", { name: /完全访问权限/ })
+    expect(fullAccessOption).toHaveAttribute("aria-checked", "false")
+    expect(fullAccessOption.querySelector(".canvas-top-menu-context-option-status")).not.toBeInTheDocument()
+    fireEvent.click(fullAccessOption)
 
     expect(onToolPermissionModeChange).toHaveBeenCalledWith("full_access")
   })
@@ -665,7 +692,7 @@ describe("SessionCanvasTopMenu tool permission mode", () => {
 
     expect(screen.getAllByRole("button", { name: "工具权限：默认权限" })).toHaveLength(2)
     fireEvent.click(screen.getAllByRole("button", { name: "工具权限：默认权限" })[0]!)
-    fireEvent.click(screen.getByRole("menuitem", { name: /完全访问权限/ }))
+    fireEvent.click(screen.getByRole("menuitemradio", { name: /完全访问权限/ }))
 
     expect(screen.getAllByRole("button", { name: "工具权限：完全访问权限" })).toHaveLength(2)
   })

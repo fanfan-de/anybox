@@ -1241,6 +1241,8 @@ export const itIT = {
   "prompts.usage.gitCommit": "Commit Git",
   "prompts.usage.cinemaTextGeneration": "Generazione testo cinema",
   "prompts.status.edited": "Modificato",
+  "prompts.createCustomCopy": "Crea copia personalizzata",
+  "prompts.bundledReadOnly": "I prompt inclusi sono di sola lettura. Crea una copia personalizzata prima di modificarli.",
   "prompts.emptyCustom": "Ancora nessun prompt personalizzato.",
   "prompts.emptyBundled": "Nessun prompt incluso.",
   "prompts.noSearchResults": "Nessun prompt corrisponde alla ricerca.",

@@ -9,7 +9,7 @@
 | Primary / secondary / danger button | `--semantic-button-<variant>-*` |
 | Icon-only button | `--semantic-icon-button-*` |
 | Input / textarea / select field / search field | `--semantic-field-*` |
-| Settings switch | `--semantic-settings-switch-*` |
+| Switch / toggle | `--semantic-switch-*` |
 | Segmented control / view switch | `--semantic-segmented-control-*` |
 | Dropdown / picker / listbox 的展开面板与选项 | `--semantic-dropdown-*` |
 | 通用 list-detail row 及其 count/detail icon | `--semantic-list-detail-*` / `--semantic-detail-icon-*` |
@@ -115,15 +115,15 @@
 - Switch/toggle 用于一个独立布尔设置，例如启用/禁用、显示/隐藏、自动更新。不要用 switch 表达多个视图或多个模式之间的互斥选择；这种场景使用 segmented control、tabs 或 radio group。
 - 使用真实 `<button>`，并设置 `role="switch"`、`aria-checked` 和可访问名称。内部轨道和圆点只作为视觉元素，使用 `aria-hidden="true"`。
 - 设置页 row switch 默认沿用左侧 copy、右侧 control 结构；整行可点击时，row 本身是 switch button，右侧 pill 只负责状态展示。
-- 轨道、边框、圆点、active、focus、disabled 必须使用运行时 semantic token。设置页 switch 默认消费：
-  - focus row：`var(--semantic-settings-switch-row-surface-focus)`
-  - track default：`var(--semantic-settings-switch-track-surface)` / `var(--semantic-settings-switch-track-border)`
-  - track focus：`var(--semantic-settings-switch-track-border-focus)`
-  - track active：`var(--semantic-settings-switch-track-surface-active)` / `var(--semantic-settings-switch-track-border-active)`
-  - track disabled：`var(--semantic-settings-switch-track-surface-disabled)` / `var(--semantic-settings-switch-track-border-disabled)`
-  - thumb：`var(--semantic-settings-switch-thumb-surface)`
-  - thumb disabled：`var(--semantic-settings-switch-thumb-surface-disabled)`
-- 不要把 `--semantic-button-*`、segmented token、`--seg-accent`、品牌色或状态色直接当作 switch 的完整状态矩阵；缺少区域语义时，先在 schema v2 manifest 补成对 light/dark 的 `--semantic-<area>-switch-*` token，再运行生成器暴露不带后缀的运行时 token。
+- 所有 switch 的轨道、边框、圆点、active、focus、disabled 必须消费完整的通用 `--semantic-switch-*` 运行时 token 组合：
+  - focus row：`var(--semantic-switch-row-surface-focus)`
+  - track default：`var(--semantic-switch-track-surface)` / `var(--semantic-switch-track-border)`
+  - track focus：`var(--semantic-switch-track-border-focus)`
+  - track active：`var(--semantic-switch-track-surface-active)` / `var(--semantic-switch-track-border-active)`
+  - track disabled：`var(--semantic-switch-track-surface-disabled)` / `var(--semantic-switch-track-border-disabled)`
+  - thumb：`var(--semantic-switch-thumb-surface)`
+  - thumb disabled：`var(--semantic-switch-thumb-surface-disabled)`
+- 不要把 `--semantic-button-*`、segmented token、`--seg-accent`、品牌色或状态色直接当作 switch 的完整状态矩阵。只有通用 switch 组合确实无法表达产品组件的状态时，才在 schema v2 manifest 补成对 light/dark 的 `--semantic-<area>-switch-*` token，再运行生成器暴露不带后缀的运行时 token。
 - default、focus-visible、active/on、disabled 状态都要在 light/dark 下可读。focus 使用 row 背景或 track 边框表达，不使用 outline、inset ring 或 box-shadow ring。
 - 尺寸必须稳定：track、thumb、thumb 位移、row 高度都显式定义，hover/focus/active/disabled 不改变尺寸、padding 或布局。
 

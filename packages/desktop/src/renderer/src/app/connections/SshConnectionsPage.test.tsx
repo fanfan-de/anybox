@@ -1,4 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import type {
   AgentFolderWorkspace,
@@ -9,6 +11,8 @@ import type {
 } from "../../../../shared/desktop-ipc-contract"
 import { ToastProvider } from "../toast"
 import { SshConnectionsPage } from "./SshConnectionsPage"
+
+const settingsStyles = readFileSync(resolve(process.cwd(), "src/renderer/src/styles/settings.css"), "utf8")
 
 const PROFILE: AgentSshProfile = {
   id: "profile-1",
@@ -104,6 +108,56 @@ afterEach(() => {
 })
 
 describe("SshConnectionsPage remote browser", () => {
+  it("keeps the SSH workspace frameless on the page canvas", () => {
+    expect(settingsStyles).toMatch(
+      /\.ssh-connections-page\s*\{[^}]*border:\s*0;[^}]*border-radius:\s*0;[^}]*background:\s*transparent;/s,
+    )
+    expect(settingsStyles).toMatch(
+      /\.ssh-profile-sidebar\s*\{[^}]*background:\s*transparent;/s,
+    )
+    expect(settingsStyles).toMatch(
+      /\.ssh-detail-panel\s*\{[^}]*background:\s*transparent;/s,
+    )
+    expect(settingsStyles).toMatch(
+      /\.ssh-card\s*\{[^}]*border:\s*0;[^}]*border-radius:\s*0;[^}]*background:\s*transparent;/s,
+    )
+  })
+
+  it("keeps profile names readable above connection metadata", () => {
+    expect(settingsStyles).toMatch(
+      /\.ssh-profile-card\s*\{[^}]*align-items:\s*start;[^}]*min-height:\s*52px;/s,
+    )
+    expect(settingsStyles).toMatch(
+      /\.ssh-profile-card-main\s*\{[^}]*display:\s*grid;[^}]*gap:\s*2px;/s,
+    )
+    expect(settingsStyles).toMatch(
+      /\.ssh-profile-card-main strong,\s*\.ssh-profile-card-main span\s*\{[^}]*width:\s*100%;/s,
+    )
+  })
+
+  it("uses scrollbar semantic tokens for every SSH-owned scroll area", () => {
+    const sshScrollbarStyles = settingsStyles.match(
+      /\.ssh-profile-list,\s*\.ssh-directory-list,\s*\.ssh-form-grid\s*\{[\s\S]*?(?=\.ssh-profile-card,)/,
+    )?.[0]
+
+    expect(sshScrollbarStyles).toBeDefined()
+    expect(settingsStyles).toMatch(
+      /\.ssh-profile-list,\s*\.ssh-directory-list,\s*\.ssh-form-grid\s*\{[^}]*scrollbar-color:\s*var\(--semantic-scrollbar-thumb-surface\)\s+transparent;/s,
+    )
+    expect(settingsStyles).toMatch(
+      /\.ssh-profile-list::\-webkit-scrollbar-thumb,\s*\.ssh-directory-list::\-webkit-scrollbar-thumb,\s*\.ssh-form-grid::\-webkit-scrollbar-thumb\s*\{[^}]*background-color:\s*var\(--semantic-scrollbar-thumb-surface\);/s,
+    )
+    expect(settingsStyles).toMatch(
+      /\.ssh-profile-list:hover::\-webkit-scrollbar-thumb,[^}]*\.ssh-form-grid::\-webkit-scrollbar-thumb:active\s*\{[^}]*background-color:\s*var\(--semantic-scrollbar-thumb-surface-hover\);/s,
+    )
+    expect(settingsStyles).toMatch(
+      /\.ssh-profile-list::\-webkit-scrollbar-button,\s*\.ssh-directory-list::\-webkit-scrollbar-button,\s*\.ssh-form-grid::\-webkit-scrollbar-button\s*\{[^}]*display:\s*none;/s,
+    )
+    expect(sshScrollbarStyles).not.toMatch(
+      /var\(--(?:seg-|text-|surface-|border-|brand-|semantic-(?!scrollbar))/,
+    )
+  })
+
   it("shows directories and files, selects rows, and enters a directory on double click", async () => {
     const listSshDirectory = vi.fn().mockImplementation(async ({ path }: { path?: string | null }) => {
       if (path === "/home/ubuntu/app2") return createListing("/home/ubuntu/app2")

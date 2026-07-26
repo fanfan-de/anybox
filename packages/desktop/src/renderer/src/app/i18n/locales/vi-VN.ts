@@ -1241,6 +1241,8 @@ export const viVN = {
   "prompts.usage.gitCommit": "Git commit",
   "prompts.usage.cinemaTextGeneration": "Tạo văn bản Cinema",
   "prompts.status.edited": "Đã chỉnh sửa",
+  "prompts.createCustomCopy": "Tạo bản sao tùy chỉnh",
+  "prompts.bundledReadOnly": "Prompt tích hợp chỉ có thể đọc. Hãy tạo bản sao tùy chỉnh trước khi chỉnh sửa.",
   "prompts.emptyCustom": "Chưa có lời nhắc tùy chỉnh nào.",
   "prompts.emptyBundled": "Không có lời nhắc đi kèm.",
   "prompts.noSearchResults": "Không có lời nhắc nào khớp với tìm kiếm của bạn.",

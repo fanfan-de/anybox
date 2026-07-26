@@ -908,9 +908,10 @@ body.is-dragging-settings-page {
   width: 100%;
   min-height: 44px;
   padding: 0 12px;
-  border: 1px solid var(--border-subtle);
-  background: var(--seg-panel);
-  color: var(--seg-text-1);
+  border: 1px solid var(--semantic-button-secondary-border);
+  border-radius: var(--radius-control);
+  background: var(--semantic-button-secondary-surface);
+  color: var(--semantic-button-secondary-text);
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -926,9 +927,19 @@ body.is-dragging-settings-page {
 .provider-model-picker-button:hover,
 .provider-model-picker-button:focus-visible,
 .provider-model-picker-button.is-open {
-  border-color: var(--focus-outline-color);
-  background: var(--surface-panel-muted);
+  border-color: var(--semantic-button-secondary-border-hover);
+  background: var(--semantic-button-secondary-surface-hover);
+  color: var(--semantic-button-secondary-text-hover);
   outline: none;
+}
+
+.provider-model-picker-button:disabled,
+.provider-model-picker-button:disabled:hover,
+.provider-model-picker-button:disabled:focus-visible {
+  border-color: var(--semantic-button-secondary-disabled-border);
+  background: var(--semantic-button-secondary-disabled-surface);
+  color: var(--semantic-button-secondary-disabled-text);
+  cursor: default;
 }
 
 .provider-model-picker-button svg {
@@ -949,7 +960,7 @@ body.is-dragging-settings-page {
 }
 
 .provider-model-picker-value.is-empty {
-  color: var(--seg-text-3);
+  color: inherit;
 }
 
 .provider-model-picker-panel {
@@ -965,9 +976,10 @@ body.is-dragging-settings-page {
   grid-template-rows: auto minmax(0, 1fr);
   gap: 10px;
   overflow: hidden;
-  border: 1px solid var(--seg-border);
-  border-radius: var(--seg-radius-sm);
-  background: var(--seg-dropdown-menu-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-overlay);
+  background: var(--semantic-dropdown-menu-surface);
+  color: var(--semantic-dropdown-option-text);
   box-shadow: var(--shadow-md);
 }
 
@@ -985,21 +997,21 @@ body.is-dragging-settings-page {
   min-height: 36px;
   box-sizing: border-box;
   padding: 0 12px;
-  border: 1px solid var(--seg-border);
-  border-radius: var(--seg-radius-xs);
-  background: var(--seg-panel);
-  color: var(--seg-text-1);
+  border: 1px solid var(--semantic-field-border);
+  border-radius: var(--radius-control);
+  background: var(--semantic-field-surface);
+  color: var(--semantic-field-text);
   font: inherit;
   outline: none;
 }
 
 .provider-model-picker-search::placeholder {
-  color: var(--seg-text-3);
+  color: var(--semantic-field-placeholder);
 }
 
 .provider-model-picker-search:focus {
-  border-color: var(--focus-outline-color);
-  background: var(--surface-panel-muted);
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
 }
 
 .provider-model-picker-body {
@@ -1013,20 +1025,28 @@ body.is-dragging-settings-page {
 .provider-model-picker-model-list {
   min-height: 0;
   overflow: auto;
-  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   display: grid;
   align-content: start;
   gap: 6px;
+}
+
+.provider-model-picker-provider-list::-webkit-scrollbar,
+.provider-model-picker-model-list::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .provider-model-picker-provider {
   width: 100%;
   min-height: 38px;
   padding: 0 10px;
-  border: 1px solid transparent;
-  border-radius: var(--seg-radius-xs);
+  border: 0;
+  border-radius: var(--radius-control);
   background: transparent;
-  color: var(--seg-text-2);
+  color: var(--semantic-dropdown-option-text);
   display: flex;
   align-items: center;
   text-align: left;
@@ -1035,26 +1055,24 @@ body.is-dragging-settings-page {
 
 .provider-model-picker-provider:hover,
 .provider-model-picker-provider:focus-visible {
-  border-color: var(--seg-border);
-  background: var(--semantic-list-detail-row-surface-hover);
-  color: var(--seg-text-1);
+  background: var(--semantic-dropdown-option-surface-hover);
+  color: var(--semantic-dropdown-option-text-hover);
   outline: none;
 }
 
 .provider-model-picker-provider.is-active {
-  border-color: var(--focus-outline-color);
-  background: var(--semantic-list-detail-row-surface-current);
-  color: var(--semantic-list-detail-row-current-text);
+  background: var(--semantic-dropdown-option-surface-selected);
+  color: var(--semantic-dropdown-option-text-selected);
 }
 
 .provider-model-picker-model {
   width: 100%;
   min-height: 38px;
   padding: 0 12px;
-  border: 1px solid transparent;
-  border-radius: var(--seg-radius-xs);
+  border: 0;
+  border-radius: var(--radius-control);
   background: transparent;
-  color: var(--seg-text-2);
+  color: var(--semantic-dropdown-option-text);
   display: flex;
   align-items: center;
   text-align: left;
@@ -1067,16 +1085,14 @@ body.is-dragging-settings-page {
 
 .provider-model-picker-model:hover,
 .provider-model-picker-model:focus-visible {
-  border-color: var(--seg-border);
-  background: var(--semantic-list-detail-row-surface-hover);
-  color: var(--seg-text-1);
+  background: var(--semantic-dropdown-option-surface-hover);
+  color: var(--semantic-dropdown-option-text-hover);
   outline: none;
 }
 
 .provider-model-picker-model[aria-selected="true"] {
-  border-color: var(--focus-outline-color);
-  background: var(--semantic-list-detail-row-surface-current);
-  color: var(--semantic-list-detail-row-current-text);
+  background: var(--semantic-dropdown-option-surface-selected);
+  color: var(--semantic-dropdown-option-text-selected);
 }
 
 .provider-model-picker-provider-name,
@@ -1092,9 +1108,9 @@ body.is-dragging-settings-page {
 .provider-model-picker-empty {
   margin: 0;
   padding: 14px;
-  border-radius: var(--seg-radius-xs);
-  background: var(--seg-panel-muted);
-  color: var(--seg-text-2);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--semantic-dropdown-option-meta-text);
   font-size: 13px;
   line-height: 1.5;
 }
@@ -1557,14 +1573,14 @@ body.is-dragging-settings-page {
 
 .settings-about-toggle-row:focus-visible {
   outline: none;
-  background: var(--semantic-settings-switch-row-surface-focus);
+  background: var(--semantic-switch-row-surface-focus);
 }
 
 .settings-about-toggle-row .settings-toggle-control {
   width: 58px;
   height: 32px;
-  border: 1px solid var(--semantic-settings-switch-track-border);
-  background: var(--semantic-settings-switch-track-surface);
+  border: 1px solid var(--semantic-switch-track-border);
+  background: var(--semantic-switch-track-surface);
 }
 
 .settings-about-toggle-row .settings-toggle-thumb {
@@ -1572,17 +1588,17 @@ body.is-dragging-settings-page {
   left: 2px;
   width: 28px;
   height: 28px;
-  background: var(--semantic-settings-switch-thumb-surface);
+  background: var(--semantic-switch-thumb-surface);
   box-shadow: none;
 }
 
 .settings-about-toggle-row:focus-visible .settings-toggle-control {
-  border-color: var(--semantic-settings-switch-track-border-focus);
+  border-color: var(--semantic-switch-track-border-focus);
 }
 
 .settings-about-toggle-row.is-active .settings-toggle-control {
-  border-color: var(--semantic-settings-switch-track-border-active);
-  background: var(--semantic-settings-switch-track-surface-active);
+  border-color: var(--semantic-switch-track-border-active);
+  background: var(--semantic-switch-track-surface-active);
 }
 
 .settings-about-toggle-row.is-active .settings-toggle-thumb {
@@ -1590,12 +1606,12 @@ body.is-dragging-settings-page {
 }
 
 .settings-about-toggle-row:disabled .settings-toggle-control {
-  border-color: var(--semantic-settings-switch-track-border-disabled);
-  background: var(--semantic-settings-switch-track-surface-disabled);
+  border-color: var(--semantic-switch-track-border-disabled);
+  background: var(--semantic-switch-track-surface-disabled);
 }
 
 .settings-about-toggle-row:disabled .settings-toggle-thumb {
-  background: var(--semantic-settings-switch-thumb-surface-disabled);
+  background: var(--semantic-switch-thumb-surface-disabled);
 }
 
 .settings-about-status {
@@ -4389,7 +4405,7 @@ body.is-dragging-settings-page {
 .settings-toggle-card:focus-visible {
   outline: none;
   border-color: var(--focus-outline-color);
-  background: var(--semantic-settings-switch-row-surface-focus);
+  background: var(--semantic-switch-row-surface-focus);
   box-shadow: none;
 }
 
@@ -4444,9 +4460,9 @@ body.is-dragging-settings-page {
   flex: 0 0 auto;
   width: 48px;
   height: 28px;
-  border: 1px solid var(--semantic-settings-switch-track-border);
+  border: 1px solid var(--semantic-switch-track-border);
   border-radius: 999px;
-  background: var(--semantic-settings-switch-track-surface);
+  background: var(--semantic-switch-track-surface);
 }
 
 .settings-toggle-thumb {
@@ -4456,18 +4472,18 @@ body.is-dragging-settings-page {
   width: 20px;
   height: 20px;
   border-radius: 999px;
-  background: var(--semantic-settings-switch-thumb-surface);
+  background: var(--semantic-switch-thumb-surface);
   box-shadow: none;
   transition: transform 160ms ease;
 }
 
 .settings-toggle-card:focus-visible .settings-toggle-control {
-  border-color: var(--semantic-settings-switch-track-border-focus);
+  border-color: var(--semantic-switch-track-border-focus);
 }
 
 .settings-toggle-card.is-active .settings-toggle-control {
-  border-color: var(--semantic-settings-switch-track-border-active);
-  background: var(--semantic-settings-switch-track-surface-active);
+  border-color: var(--semantic-switch-track-border-active);
+  background: var(--semantic-switch-track-surface-active);
 }
 
 .settings-toggle-card.is-active .settings-toggle-thumb {
@@ -4475,12 +4491,12 @@ body.is-dragging-settings-page {
 }
 
 .settings-toggle-card:disabled .settings-toggle-control {
-  border-color: var(--semantic-settings-switch-track-border-disabled);
-  background: var(--semantic-settings-switch-track-surface-disabled);
+  border-color: var(--semantic-switch-track-border-disabled);
+  background: var(--semantic-switch-track-surface-disabled);
 }
 
 .settings-toggle-card:disabled .settings-toggle-thumb {
-  background: var(--semantic-settings-switch-thumb-surface-disabled);
+  background: var(--semantic-switch-thumb-surface-disabled);
 }
 
 .settings-color-mode-group {
@@ -6355,30 +6371,30 @@ body.is-dragging-settings-page {
 }
 
 .settings-toggle-control {
-  border-color: var(--semantic-settings-switch-track-border);
-  background: var(--semantic-settings-switch-track-surface);
+  border-color: var(--semantic-switch-track-border);
+  background: var(--semantic-switch-track-surface);
 }
 
 .settings-toggle-thumb {
-  background: var(--semantic-settings-switch-thumb-surface);
+  background: var(--semantic-switch-thumb-surface);
 }
 
 .settings-toggle-card:focus-visible .settings-toggle-control {
-  border-color: var(--semantic-settings-switch-track-border-focus);
+  border-color: var(--semantic-switch-track-border-focus);
 }
 
 .settings-toggle-card.is-active .settings-toggle-control {
-  border-color: var(--semantic-settings-switch-track-border-active);
-  background: var(--semantic-settings-switch-track-surface-active);
+  border-color: var(--semantic-switch-track-border-active);
+  background: var(--semantic-switch-track-surface-active);
 }
 
 .settings-toggle-card:disabled .settings-toggle-control {
-  border-color: var(--semantic-settings-switch-track-border-disabled);
-  background: var(--semantic-settings-switch-track-surface-disabled);
+  border-color: var(--semantic-switch-track-border-disabled);
+  background: var(--semantic-switch-track-surface-disabled);
 }
 
 .settings-toggle-card:disabled .settings-toggle-thumb {
-  background: var(--semantic-settings-switch-thumb-surface-disabled);
+  background: var(--semantic-switch-thumb-surface-disabled);
 }
 
 /* Obsidian-style settings rows */
@@ -7620,7 +7636,7 @@ body.is-dragging-settings-page {
 
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-about-toggle-row:focus-visible {
   outline: none;
-  background: var(--semantic-settings-switch-row-surface-focus);
+  background: var(--semantic-switch-row-surface-focus);
 }
 
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-about-copy,
@@ -9308,6 +9324,8 @@ body.is-dragging-settings-page {
 }
 
 .mobile-connection-pairing-panel {
+  grid-column: 1 / -1;
+  grid-row: 1;
   width: min(560px, 100%);
   justify-self: center;
   display: grid;
@@ -9436,6 +9454,9 @@ body.is-dragging-settings-page {
 }
 
 .mobile-connection-side-panel {
+  grid-column: 1;
+  grid-row: 1;
+  z-index: 1;
   min-width: 0;
   min-height: 0;
   padding-top: 16px;
@@ -9791,6 +9812,16 @@ body.is-dragging-settings-page {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .mobile-connection-pairing-panel {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .mobile-connection-side-panel {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
   .mobile-connection-pairing-panel,
   .mobile-connection-side-panel {
     justify-self: stretch;
@@ -9850,9 +9881,9 @@ body.is-dragging-settings-page {
   display: grid;
   grid-template-columns: minmax(220px, 248px) minmax(0, 1fr);
   overflow: hidden;
-  border: 1px solid var(--seg-border);
-  border-radius: var(--radius-panel);
-  background: var(--seg-panel);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--seg-text-1);
 }
 
@@ -9869,7 +9900,7 @@ body.is-dragging-settings-page {
   min-height: 0;
   padding: 12px 10px;
   border-right: 1px solid var(--seg-border);
-  background: var(--seg-panel);
+  background: transparent;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 10px;
@@ -9933,6 +9964,62 @@ body.is-dragging-settings-page {
   padding-right: 4px;
 }
 
+.ssh-profile-list,
+.ssh-directory-list,
+.ssh-form-grid {
+  scrollbar-width: thin;
+  scrollbar-color: var(--semantic-scrollbar-thumb-surface) transparent;
+}
+
+.ssh-profile-list::-webkit-scrollbar,
+.ssh-directory-list::-webkit-scrollbar,
+.ssh-form-grid::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.ssh-profile-list::-webkit-scrollbar-track,
+.ssh-directory-list::-webkit-scrollbar-track,
+.ssh-form-grid::-webkit-scrollbar-track,
+.ssh-profile-list::-webkit-scrollbar-corner,
+.ssh-directory-list::-webkit-scrollbar-corner,
+.ssh-form-grid::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.ssh-profile-list::-webkit-scrollbar-button,
+.ssh-directory-list::-webkit-scrollbar-button,
+.ssh-form-grid::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.ssh-profile-list::-webkit-scrollbar-thumb,
+.ssh-directory-list::-webkit-scrollbar-thumb,
+.ssh-form-grid::-webkit-scrollbar-thumb {
+  min-height: 32px;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-color: var(--semantic-scrollbar-thumb-surface);
+  background-clip: content-box;
+}
+
+.ssh-profile-list:hover::-webkit-scrollbar-thumb,
+.ssh-profile-list:focus-within::-webkit-scrollbar-thumb,
+.ssh-profile-list::-webkit-scrollbar-thumb:hover,
+.ssh-directory-list:hover::-webkit-scrollbar-thumb,
+.ssh-directory-list:focus-within::-webkit-scrollbar-thumb,
+.ssh-directory-list::-webkit-scrollbar-thumb:hover,
+.ssh-form-grid:hover::-webkit-scrollbar-thumb,
+.ssh-form-grid:focus-within::-webkit-scrollbar-thumb,
+.ssh-form-grid::-webkit-scrollbar-thumb:hover,
+.ssh-profile-list::-webkit-scrollbar-thumb:active,
+.ssh-directory-list::-webkit-scrollbar-thumb:active,
+.ssh-form-grid::-webkit-scrollbar-thumb:active {
+  background-color: var(--semantic-scrollbar-thumb-surface-hover);
+}
+
 .ssh-profile-card,
 .ssh-directory-row {
   width: 100%;
@@ -9952,8 +10039,8 @@ body.is-dragging-settings-page {
 
 .ssh-profile-card {
   grid-template-columns: minmax(0, 1fr) minmax(34px, auto);
-  align-items: center;
-  min-height: 38px;
+  align-items: start;
+  min-height: 52px;
   padding: 7px 9px;
   gap: 8px;
 }
@@ -9974,9 +10061,8 @@ body.is-dragging-settings-page {
 
 .ssh-profile-card-main {
   min-width: 0;
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
+  display: grid;
+  gap: 2px;
 }
 
 .ssh-profile-card-main strong,
@@ -10004,8 +10090,14 @@ body.is-dragging-settings-page {
   white-space: nowrap;
 }
 
+.ssh-profile-card-main strong,
+.ssh-profile-card-main span {
+  width: 100%;
+}
+
 .ssh-profile-card-path {
   max-width: 76px;
+  align-self: start;
   justify-self: end;
   text-align: right;
 }
@@ -10016,7 +10108,7 @@ body.is-dragging-settings-page {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
-  background: var(--seg-panel);
+  background: transparent;
 }
 
 .ssh-workspace {
@@ -10091,7 +10183,7 @@ body.is-dragging-settings-page {
   padding: 14px;
   border: 0;
   border-radius: 0;
-  background: var(--seg-panel);
+  background: transparent;
   display: grid;
   gap: 14px;
 }
@@ -11751,6 +11843,7 @@ body.is-dragging-settings-page {
   --plugins-market-icon-surface: var(--semantic-plugin-market-icon-surface);
   --plugins-market-icon-border: var(--semantic-plugin-market-icon-border);
   --plugins-market-icon-text: var(--semantic-plugin-market-icon-text);
+  --plugins-market-item-surface-hover: var(--semantic-plugin-market-item-surface-hover);
   --plugins-market-item-border-hover: var(--semantic-plugin-market-item-border-hover);
   --plugins-market-item-border-current: var(--semantic-plugin-market-item-border-current);
   --plugins-market-title-text-active: var(--semantic-plugin-market-title-text-active);
@@ -11926,20 +12019,6 @@ body.is-dragging-settings-page {
   font-weight: 680;
   line-height: 1.2;
   letter-spacing: 0;
-}
-
-.plugins-installed-sidebar-header span {
-  min-width: 20px;
-  height: 20px;
-  border-radius: 999px;
-  background: var(--semantic-list-detail-count-surface);
-  color: var(--semantic-list-detail-count-text);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 650;
-  line-height: 1;
 }
 
 .plugins-installed-list {
@@ -12183,26 +12262,6 @@ body.is-dragging-settings-page {
   white-space: nowrap;
 }
 
-.plugins-marketplace-category-nav button span:last-child {
-  min-width: 20px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: var(--plugins-market-chip-surface);
-  color: var(--plugins-market-subtle);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 680;
-  line-height: 1;
-}
-
-.plugins-marketplace-category-nav button.is-active span:last-child {
-  background: var(--seg-accent-soft);
-  color: var(--seg-accent-strong);
-}
-
 .plugins-import-url-overlay {
   position: fixed;
   inset: 0;
@@ -12223,7 +12282,7 @@ body.is-dragging-settings-page {
   padding: 20px;
   border: 1px solid var(--seg-border);
   border-radius: var(--radius-overlay);
-  background: var(--seg-panel);
+  background: var(--semantic-popup-panel-surface);
   color: var(--seg-text-1);
   display: grid;
   gap: 18px;
@@ -12977,7 +13036,7 @@ body.is-dragging-settings-page {
 .plugins-market-item:has(.plugins-market-item-main:focus-visible),
 .plugins-market-item.is-active {
   border-color: var(--plugins-market-item-border-hover);
-  background: var(--plugins-market-surface-hover);
+  background: var(--plugins-market-item-surface-hover);
   transform: translateY(-1px);
 }
 
@@ -13647,9 +13706,9 @@ body.is-dragging-settings-page {
   width: 42px;
   height: 24px;
   padding: 0;
-  border: 1px solid var(--semantic-settings-switch-track-border);
+  border: 1px solid var(--semantic-switch-track-border);
   border-radius: 999px;
-  background: var(--semantic-settings-switch-track-surface);
+  background: var(--semantic-switch-track-surface);
   cursor: pointer;
   transition:
     border-color 160ms ease,
@@ -13664,13 +13723,13 @@ body.is-dragging-settings-page {
   width: 16px;
   height: 16px;
   border-radius: 999px;
-  background: var(--semantic-settings-switch-thumb-surface);
+  background: var(--semantic-switch-thumb-surface);
   transition: transform 160ms ease;
 }
 
 .plugins-mcp-switch.is-active {
-  border-color: var(--semantic-settings-switch-track-border-active);
-  background: var(--semantic-settings-switch-track-surface-active);
+  border-color: var(--semantic-switch-track-border-active);
+  background: var(--semantic-switch-track-surface-active);
 }
 
 .plugins-mcp-switch.is-active > span {
@@ -13678,19 +13737,19 @@ body.is-dragging-settings-page {
 }
 
 .plugins-mcp-switch:focus-visible {
-  outline: 2px solid var(--semantic-settings-switch-track-border-focus);
-  outline-offset: 2px;
+  outline: none;
+  border-color: var(--semantic-switch-track-border-focus);
 }
 
 .plugins-mcp-switch:disabled {
-  border-color: var(--semantic-settings-switch-track-border-disabled);
-  background: var(--semantic-settings-switch-track-surface-disabled);
+  border-color: var(--semantic-switch-track-border-disabled);
+  background: var(--semantic-switch-track-surface-disabled);
   cursor: default;
   opacity: 0.72;
 }
 
 .plugins-mcp-switch:disabled > span {
-  background: var(--semantic-settings-switch-thumb-surface-disabled);
+  background: var(--semantic-switch-thumb-surface-disabled);
 }
 
 .plugins-mcp-binding-error {
@@ -14798,6 +14857,7 @@ body.is-dragging-settings-page {
   outline: none;
 }
 
+.settings-page-main.is-services.prompt-presets-page-main .settings-prompt-read-only-note,
 .settings-page-main.is-services.prompt-presets-page-main .settings-prompt-source-path {
   width: min(100%, var(--settings-document-width));
   justify-self: center;

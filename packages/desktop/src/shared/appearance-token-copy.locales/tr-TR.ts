@@ -44,9 +44,9 @@ export const appearanceTokenCopy = {
       "label": "Popup Paneli",
       "description": "Panel tarzı popuplar, uçan sayfalar ve modal paneller için özel anlamsal yüzey."
     },
-    "component-settings-switches": {
-      "label": "Ayarlar Anahtarları",
-      "description": "Ayarlar geçiş kontrollerinde kullanılan anahtar satırı, izi ve başparmak renkleri."
+    "component-switches": {
+      "label": "Anahtarlar",
+      "description": "Boole anahtar kontrolleri için ortak satır, iz ve düğme renkleri."
     },
     "component-segmented-controls": {
       "label": "Bölümlü Kontroller",
@@ -434,45 +434,45 @@ export const appearanceTokenCopy = {
       "label": "Panel Yüzeyi",
       "description": "Ayarlar, kayan sayfalar ve panel tarzı açılır pencereler gibi açılır paneller için arka plan dolgusu."
     },
-    "semantic-settings-switch-row-surface-focus": {
+    "semantic-switch-row-surface-focus": {
       "label": "Anahtara Odaklanma Satırı",
-      "description": "Bir ayar anahtarı klavye odağı aldığında kullanılan satır arka planı."
+      "description": "Bir anahtarı klavye odağı aldığında kullanılan satır arka planı."
     },
-    "semantic-settings-switch-track-surface": {
+    "semantic-switch-track-surface": {
       "label": "Anahtar Yolu",
-      "description": "Ayar anahtarı kontrolleri için varsayılan yol dolgusu."
+      "description": "anahtarı kontrolleri için varsayılan yol dolgusu."
     },
-    "semantic-settings-switch-track-border": {
+    "semantic-switch-track-border": {
       "label": "Anahtar Yolu Kenarlığı",
-      "description": "Ayar anahtarı kontrolleri için varsayılan yol kenarlığı."
+      "description": "anahtarı kontrolleri için varsayılan yol kenarlığı."
     },
-    "semantic-settings-switch-track-border-focus": {
+    "semantic-switch-track-border-focus": {
       "label": "Odak Kenarlığı Geçişi",
-      "description": "Bir ayar geçişi klavye odağı aldığında kullanılan iz kenarlığı."
+      "description": "Bir geçişi klavye odağı aldığında kullanılan iz kenarlığı."
     },
-    "semantic-settings-switch-track-surface-active": {
+    "semantic-switch-track-surface-active": {
       "label": "Etkin Geçiş İzi",
-      "description": "Etkin ayar geçiş kontrolleri için iz dolgusu."
+      "description": "Etkin geçiş kontrolleri için iz dolgusu."
     },
-    "semantic-settings-switch-track-border-active": {
+    "semantic-switch-track-border-active": {
       "label": "Etkin Geçiş İzi Kenarlığı",
-      "description": "Etkin ayar geçiş kontrolleri için iz kenarlığı."
+      "description": "Etkin geçiş kontrolleri için iz kenarlığı."
     },
-    "semantic-settings-switch-track-surface-disabled": {
+    "semantic-switch-track-surface-disabled": {
       "label": "Devre Dışı Geçiş İzi",
-      "description": "Devre dışı ayar geçiş kontrolleri için iz dolgusu."
+      "description": "Devre dışı geçiş kontrolleri için iz dolgusu."
     },
-    "semantic-settings-switch-track-border-disabled": {
+    "semantic-switch-track-border-disabled": {
       "label": "Devre Dışı Geçiş İzi Kenarlığı",
-      "description": "Devre dışı ayar geçiş kontrolleri için iz kenarlığı."
+      "description": "Devre dışı geçiş kontrolleri için iz kenarlığı."
     },
-    "semantic-settings-switch-thumb-surface": {
+    "semantic-switch-thumb-surface": {
       "label": "Geçiş Düğmesi",
-      "description": "Ayar geçiş kontrolleri için düğme dolgusu."
+      "description": "geçiş kontrolleri için düğme dolgusu."
     },
-    "semantic-settings-switch-thumb-surface-disabled": {
+    "semantic-switch-thumb-surface-disabled": {
       "label": "Devre Dışı Geçiş Düğmesi",
-      "description": "Devre dışı ayar geçiş kontrolleri için düğme dolgusu."
+      "description": "Devre dışı geçiş kontrolleri için düğme dolgusu."
     },
     "semantic-segmented-control-surface": {
       "label": "Kontrol Yüzeyi",

@@ -89,7 +89,6 @@ function renderSidebar(overrides: Partial<ComponentProps<typeof Sidebar>> = {}) 
       isPromptDirty: false,
       promptRoot: "",
       promptPresets: [],
-      promptPresetSelection: null,
       selectedPromptPreset: null,
       onCreatePromptPreset: vi.fn(),
       onDeletePromptPreset: vi.fn(),

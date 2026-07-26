@@ -352,7 +352,9 @@ describe("PluginsPage", () => {
     )
 
     const categoryNav = screen.getByRole("navigation", { name: "Plugin categories" })
-    expect(within(categoryNav).getByRole("button", { name: "All, 3 plugins" })).toHaveAttribute("aria-pressed", "true")
+    const allCategoryButton = within(categoryNav).getByRole("button", { name: "All, 3 plugins" })
+    expect(allCategoryButton).toHaveAttribute("aria-pressed", "true")
+    expect(allCategoryButton).toHaveTextContent(/^All$/)
     expect(screen.queryByRole("region", { name: "Plugin promotion" })).not.toBeInTheDocument()
     expect(screen.getByRole("region", { name: "Featured plugins" })).toBeInTheDocument()
     expect(screen.getByRole("list", { name: "Featured" })).toBeInTheDocument()
@@ -478,6 +480,8 @@ describe("PluginsPage", () => {
 
     const installedSidebar = screen.getByRole("complementary", { name: "Installed plugins" })
     expect(installedSidebar).toBeInTheDocument()
+    const installedHeading = within(installedSidebar).getByRole("heading", { name: "Installed" })
+    expect(installedHeading.parentElement).toHaveTextContent(/^Installed$/)
     const installedButton = within(installedSidebar).getByRole("button", { name: "Filesystem installed enabled" })
     fireEvent.click(installedButton)
 

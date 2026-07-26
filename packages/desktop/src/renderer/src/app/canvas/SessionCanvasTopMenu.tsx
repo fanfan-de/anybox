@@ -123,7 +123,7 @@ function ToolPermissionModeMenuButton({
       <button
         ref={buttonRef}
         type="button"
-        className={isMenuOpen ? "canvas-top-menu-button canvas-top-menu-permission-trigger is-active" : "canvas-top-menu-button canvas-top-menu-permission-trigger"}
+        className={isMenuOpen ? "canvas-top-menu-button canvas-top-menu-selection-trigger canvas-top-menu-permission-trigger is-active" : "canvas-top-menu-button canvas-top-menu-selection-trigger canvas-top-menu-permission-trigger"}
         aria-controls="canvas-top-menu-permission-menu"
         aria-expanded={isMenuOpen}
         aria-haspopup="menu"
@@ -150,17 +150,17 @@ function ToolPermissionModeMenuButton({
             return (
               <button
                 key={option.value}
+                aria-checked={isSelected}
                 className={isSelected ? "canvas-top-menu-context-option canvas-top-menu-permission-option is-selected" : "canvas-top-menu-context-option canvas-top-menu-permission-option"}
                 disabled={isSaving}
                 onClick={() => handleOptionClick(option.value)}
-                role="menuitem"
+                role="menuitemradio"
                 title={option.description}
                 type="button"
               >
                 <span className="canvas-top-menu-context-option-label canvas-top-menu-permission-option-label">
                   <strong>{option.label}</strong>
                 </span>
-                <span className="canvas-top-menu-context-option-status canvas-top-menu-permission-option-status">{isSelected ? "已选择" : "切换"}</span>
               </button>
             )
           })}
@@ -216,7 +216,7 @@ function ProjectMcpMenuButton({
       <button
         ref={buttonRef}
         type="button"
-        className={isMenuOpen ? "canvas-top-menu-button canvas-top-menu-mcp-trigger is-active" : "canvas-top-menu-button canvas-top-menu-mcp-trigger"}
+        className={isMenuOpen ? "canvas-top-menu-button canvas-top-menu-selection-trigger canvas-top-menu-mcp-trigger is-active" : "canvas-top-menu-button canvas-top-menu-selection-trigger canvas-top-menu-mcp-trigger"}
         aria-controls="canvas-top-menu-mcp-menu"
         aria-expanded={isMenuOpen}
         aria-haspopup="menu"
@@ -253,7 +253,6 @@ function ProjectMcpMenuButton({
                   <span className="canvas-top-menu-context-option-label">
                     <strong>{option.label}</strong>
                   </span>
-                  <span className="canvas-top-menu-context-option-status">{isSelected ? "Enabled" : "Enable"}</span>
                 </button>
               )
             })
@@ -339,7 +338,7 @@ function ProjectPluginsMenuButton({
       <button
         ref={buttonRef}
         type="button"
-        className={isMenuOpen ? "canvas-top-menu-button canvas-top-menu-plugin-trigger is-active" : "canvas-top-menu-button canvas-top-menu-plugin-trigger"}
+        className={isMenuOpen ? "canvas-top-menu-button canvas-top-menu-selection-trigger canvas-top-menu-plugin-trigger is-active" : "canvas-top-menu-button canvas-top-menu-selection-trigger canvas-top-menu-plugin-trigger"}
         aria-controls="canvas-top-menu-plugin-menu"
         aria-expanded={isMenuOpen}
         aria-haspopup="menu"
@@ -379,7 +378,6 @@ function ProjectPluginsMenuButton({
                       <strong>{option.label}</strong>
                     </span>
                   </span>
-                  <span className="canvas-top-menu-context-option-status">{isSelected ? "Enabled" : "Enable"}</span>
                 </button>
               )
             })
@@ -449,7 +447,7 @@ function ProjectSkillsMenuButton({
       <button
         ref={buttonRef}
         type="button"
-        className={isMenuOpen ? "canvas-top-menu-button canvas-top-menu-skill-trigger is-active" : "canvas-top-menu-button canvas-top-menu-skill-trigger"}
+        className={isMenuOpen ? "canvas-top-menu-button canvas-top-menu-selection-trigger canvas-top-menu-skill-trigger is-active" : "canvas-top-menu-button canvas-top-menu-selection-trigger canvas-top-menu-skill-trigger"}
         aria-controls="canvas-top-menu-skill-menu"
         aria-expanded={isMenuOpen}
         aria-haspopup="dialog"
@@ -1001,7 +999,7 @@ function SessionTraceExportMenuButton({
         <div
           ref={menuRef}
           id="canvas-top-menu-trace-menu"
-          className="canvas-top-menu-selector-panel canvas-top-menu-action-selector-panel canvas-top-menu-context-panel canvas-top-menu-trace-panel"
+          className="canvas-top-menu-selector-panel canvas-top-menu-context-panel canvas-top-menu-fit-panel canvas-top-menu-trace-panel"
           role="menu"
           aria-label="Session trace export"
         >
@@ -1012,11 +1010,9 @@ function SessionTraceExportMenuButton({
             role="menuitem"
             type="button"
           >
-            <span className="canvas-top-menu-context-option-label">
-              <CopyIcon />
-              <strong>Copy trace JSON</strong>
-            </span>
-            <span className="canvas-top-menu-context-option-status">{busyAction === "copy" ? "Copying" : "Copy"}</span>
+            <span className="ui-context-menu__icon" aria-hidden="true"><CopyIcon /></span>
+            <span className="ui-context-menu__label">Copy trace JSON</span>
+            {busyAction === "copy" ? <span className="canvas-top-menu-context-option-status">Copying</span> : null}
           </button>
           <button
             className="canvas-top-menu-context-option canvas-top-menu-trace-option"
@@ -1025,11 +1021,9 @@ function SessionTraceExportMenuButton({
             role="menuitem"
             type="button"
           >
-            <span className="canvas-top-menu-context-option-label">
-              <DownloadIcon />
-              <strong>Save trace JSON</strong>
-            </span>
-            <span className="canvas-top-menu-context-option-status">{busyAction === "save" ? "Saving" : "Save"}</span>
+            <span className="ui-context-menu__icon" aria-hidden="true"><DownloadIcon /></span>
+            <span className="ui-context-menu__label">Save trace JSON</span>
+            {busyAction === "save" ? <span className="canvas-top-menu-context-option-status">Saving</span> : null}
           </button>
           <button
             className="canvas-top-menu-context-option canvas-top-menu-trace-option"
@@ -1038,11 +1032,9 @@ function SessionTraceExportMenuButton({
             role="menuitem"
             type="button"
           >
-            <span className="canvas-top-menu-context-option-label">
-              <DownloadIcon />
-              <strong>Save split trace folder</strong>
-            </span>
-            <span className="canvas-top-menu-context-option-status">{busyAction === "saveDirectory" ? "Saving" : "Folder"}</span>
+            <span className="ui-context-menu__icon" aria-hidden="true"><DownloadIcon /></span>
+            <span className="ui-context-menu__label">Save split trace folder</span>
+            {busyAction === "saveDirectory" ? <span className="canvas-top-menu-context-option-status">Saving</span> : null}
           </button>
           <button
             className="canvas-top-menu-context-option canvas-top-menu-trace-option"
@@ -1052,11 +1044,9 @@ function SessionTraceExportMenuButton({
             title="Includes unredacted tool artifact files after a separate warning"
             type="button"
           >
-            <span className="canvas-top-menu-context-option-label">
-              <DownloadIcon />
-              <strong>Save split trace with raw payloads…</strong>
-            </span>
-            <span className="canvas-top-menu-context-option-status">{busyAction === "saveRawDirectory" ? "Saving" : "Raw"}</span>
+            <span className="ui-context-menu__icon" aria-hidden="true"><DownloadIcon /></span>
+            <span className="ui-context-menu__label">Save split trace with raw payloads…</span>
+            {busyAction === "saveRawDirectory" ? <span className="canvas-top-menu-context-option-status">Saving</span> : null}
           </button>
           <button
             className="canvas-top-menu-context-option canvas-top-menu-trace-option"
@@ -1066,11 +1056,9 @@ function SessionTraceExportMenuButton({
             title={trimmedProjectDirectory ? "Save under the app data trace folder for this project" : "No project directory available"}
             type="button"
           >
-            <span className="canvas-top-menu-context-option-label">
-              <FolderIcon />
-              <strong>Save to project default</strong>
-            </span>
-            <span className="canvas-top-menu-context-option-status">{busyAction === "saveProject" ? "Saving" : "Project"}</span>
+            <span className="ui-context-menu__icon" aria-hidden="true"><FolderIcon /></span>
+            <span className="ui-context-menu__label">Save to project default</span>
+            {busyAction === "saveProject" ? <span className="canvas-top-menu-context-option-status">Saving</span> : null}
           </button>
           {statusMessage ? <p className="canvas-top-menu-quick-status">{statusMessage}</p> : null}
           {errorMessage ? <p className="canvas-top-menu-quick-status is-error">{errorMessage}</p> : null}

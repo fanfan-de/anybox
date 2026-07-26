@@ -104,7 +104,9 @@ describe("BuiltinToolsPage", () => {
     expect(screen.getByLabelText("Tools top menu")).toBeInTheDocument()
     expect(screen.getByText("Global tool availability")).toBeInTheDocument()
     expect(screen.getByText("2 of 4 built-in tools enabled.")).toBeInTheDocument()
-    expect(screen.getByRole("list", { name: "Tool categories" })).toBeInTheDocument()
+    const toolCategories = screen.getByRole("list", { name: "Tool categories" })
+    expect(toolCategories).toBeInTheDocument()
+    expect(toolCategories.querySelector(".skill-tree-role-icon")).toBeNull()
 
     const shellCategory = screen.getByRole("button", { name: "Shell tools, 1 of 1 enabled" })
     expect(shellCategory).toHaveAttribute("aria-pressed", "true")
@@ -131,7 +133,9 @@ describe("BuiltinToolsPage", () => {
     expect(screen.getByText("1 aliases")).toBeInTheDocument()
     expect(screen.queryByText("Git Bash")).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole("button", { name: "Enable Apply Patch" }))
+    const applyPatchSwitch = screen.getByRole("switch", { name: "Apply Patch" })
+    expect(applyPatchSwitch).toHaveAttribute("aria-checked", "false")
+    fireEvent.click(applyPatchSwitch)
     expect(props.onBuiltinToolToggle).toHaveBeenCalledWith("apply_patch", true)
 
     fireEvent.click(screen.getByRole("button", { name: "Read tools, 0 of 1 enabled" }))
@@ -144,11 +148,15 @@ describe("BuiltinToolsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Show details for Tool Search" }))
     expect(props.container.querySelector(".tools-card-input-schema pre")?.textContent).toContain('"query"')
 
-    fireEvent.click(screen.getByRole("button", { name: "Disable Tool Search" }))
+    const toolSearchSwitch = screen.getByRole("switch", { name: "Tool Search" })
+    expect(toolSearchSwitch).toHaveAttribute("aria-checked", "true")
+    fireEvent.click(toolSearchSwitch)
     expect(props.onBuiltinToolToggle).toHaveBeenCalledWith("tool_search", false)
 
     fireEvent.click(shellCategory)
-    fireEvent.click(screen.getByRole("button", { name: "Disable Git Bash" }))
+    const gitBashSwitch = screen.getByRole("switch", { name: "Git Bash" })
+    expect(gitBashSwitch).toHaveAttribute("aria-checked", "true")
+    fireEvent.click(gitBashSwitch)
     expect(props.onBuiltinToolToggle).toHaveBeenCalledWith("git_bash_command", false)
 
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }))
@@ -156,6 +164,12 @@ describe("BuiltinToolsPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Reset to default" }))
     expect(props.onResetBuiltinTools).toHaveBeenCalled()
+  })
+
+  it("disables tool switches while availability changes are being saved", () => {
+    renderBuiltinToolsPage({ isSavingBuiltinTools: true })
+
+    expect(screen.getByRole("switch", { name: "Git Bash" })).toBeDisabled()
   })
 
   it("renders load error, loading, and empty states", () => {

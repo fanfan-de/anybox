@@ -1241,6 +1241,8 @@ export const es419 = {
   "prompts.usage.gitCommit": "Commit de Git",
   "prompts.usage.cinemaTextGeneration": "Generación de texto cinematográfico",
   "prompts.status.edited": "Editado",
+  "prompts.createCustomCopy": "Crear copia personalizada",
+  "prompts.bundledReadOnly": "Los prompts incluidos son de solo lectura. Crea una copia personalizada antes de editarlos.",
   "prompts.emptyCustom": "Aún no hay avisos personalizados.",
   "prompts.emptyBundled": "No hay avisos integrados.",
   "prompts.noSearchResults": "Ningún aviso coincide con tu búsqueda.",

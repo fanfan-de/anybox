@@ -2767,7 +2767,6 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                 isPromptDirty,
                 promptRoot,
                 promptPresets,
-                promptPresetSelection,
                 selectedPromptPreset,
                 onCreatePromptPreset: createPromptPreset,
                 onDeletePromptPreset: deletePromptPreset,

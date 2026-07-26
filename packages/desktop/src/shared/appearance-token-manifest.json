@@ -854,6 +854,14 @@
           "lightToken": "semantic-shell-chrome-tab-surface-active-light",
           "darkToken": "semantic-shell-chrome-tab-surface-active-dark",
           "runtimeToken": "semantic-shell-chrome-tab-surface-active"
+        },
+        {
+          "id": "semantic-shell-chrome-tab-indicator-active",
+          "label": "Selected Tab Indicator",
+          "description": "Indicator color for selected tabs in the active workbench group and right sidebar.",
+          "lightToken": "semantic-shell-chrome-tab-indicator-active-light",
+          "darkToken": "semantic-shell-chrome-tab-indicator-active-dark",
+          "runtimeToken": "semantic-shell-chrome-tab-indicator-active"
         }
       ]
     },
@@ -890,90 +898,90 @@
       ]
     },
     {
-      "id": "component-settings-switches",
+      "id": "component-switches",
       "layer": "component",
-      "label": "Settings Switches",
-      "description": "Switch row, track, and thumb colors used by settings toggle controls.",
+      "label": "Switches",
+      "description": "Shared row, track, and thumb colors for Boolean switch controls.",
       "rows": [
         {
-          "id": "semantic-settings-switch-row-surface-focus",
+          "id": "semantic-switch-row-surface-focus",
           "label": "Switch Focus Row",
-          "description": "Row background used when a settings switch receives keyboard focus.",
-          "lightToken": "semantic-settings-switch-row-surface-focus-light",
-          "darkToken": "semantic-settings-switch-row-surface-focus-dark",
-          "runtimeToken": "semantic-settings-switch-row-surface-focus"
+          "description": "Row background used when a switch receives keyboard focus.",
+          "lightToken": "semantic-switch-row-surface-focus-light",
+          "darkToken": "semantic-switch-row-surface-focus-dark",
+          "runtimeToken": "semantic-switch-row-surface-focus"
         },
         {
-          "id": "semantic-settings-switch-track-surface",
+          "id": "semantic-switch-track-surface",
           "label": "Switch Track",
-          "description": "Default track fill for settings switch controls.",
-          "lightToken": "semantic-settings-switch-track-surface-light",
-          "darkToken": "semantic-settings-switch-track-surface-dark",
-          "runtimeToken": "semantic-settings-switch-track-surface"
+          "description": "Default track fill for switch controls.",
+          "lightToken": "semantic-switch-track-surface-light",
+          "darkToken": "semantic-switch-track-surface-dark",
+          "runtimeToken": "semantic-switch-track-surface"
         },
         {
-          "id": "semantic-settings-switch-track-border",
+          "id": "semantic-switch-track-border",
           "label": "Switch Track Border",
-          "description": "Default track border for settings switch controls.",
-          "lightToken": "semantic-settings-switch-track-border-light",
-          "darkToken": "semantic-settings-switch-track-border-dark",
-          "runtimeToken": "semantic-settings-switch-track-border"
+          "description": "Default track border for switch controls.",
+          "lightToken": "semantic-switch-track-border-light",
+          "darkToken": "semantic-switch-track-border-dark",
+          "runtimeToken": "semantic-switch-track-border"
         },
         {
-          "id": "semantic-settings-switch-track-border-focus",
+          "id": "semantic-switch-track-border-focus",
           "label": "Switch Track Focus Border",
-          "description": "Track border used when a settings switch receives keyboard focus.",
-          "lightToken": "semantic-settings-switch-track-border-focus-light",
-          "darkToken": "semantic-settings-switch-track-border-focus-dark",
-          "runtimeToken": "semantic-settings-switch-track-border-focus"
+          "description": "Track border used when a switch receives keyboard focus.",
+          "lightToken": "semantic-switch-track-border-focus-light",
+          "darkToken": "semantic-switch-track-border-focus-dark",
+          "runtimeToken": "semantic-switch-track-border-focus"
         },
         {
-          "id": "semantic-settings-switch-track-surface-active",
+          "id": "semantic-switch-track-surface-active",
           "label": "Switch Active Track",
-          "description": "Track fill for enabled settings switch controls.",
-          "lightToken": "semantic-settings-switch-track-surface-active-light",
-          "darkToken": "semantic-settings-switch-track-surface-active-dark",
-          "runtimeToken": "semantic-settings-switch-track-surface-active"
+          "description": "Track fill for enabled switch controls.",
+          "lightToken": "semantic-switch-track-surface-active-light",
+          "darkToken": "semantic-switch-track-surface-active-dark",
+          "runtimeToken": "semantic-switch-track-surface-active"
         },
         {
-          "id": "semantic-settings-switch-track-border-active",
+          "id": "semantic-switch-track-border-active",
           "label": "Switch Active Track Border",
-          "description": "Track border for enabled settings switch controls.",
-          "lightToken": "semantic-settings-switch-track-border-active-light",
-          "darkToken": "semantic-settings-switch-track-border-active-dark",
-          "runtimeToken": "semantic-settings-switch-track-border-active"
+          "description": "Track border for enabled switch controls.",
+          "lightToken": "semantic-switch-track-border-active-light",
+          "darkToken": "semantic-switch-track-border-active-dark",
+          "runtimeToken": "semantic-switch-track-border-active"
         },
         {
-          "id": "semantic-settings-switch-track-surface-disabled",
+          "id": "semantic-switch-track-surface-disabled",
           "label": "Switch Disabled Track",
-          "description": "Track fill for disabled settings switch controls.",
-          "lightToken": "semantic-settings-switch-track-surface-disabled-light",
-          "darkToken": "semantic-settings-switch-track-surface-disabled-dark",
-          "runtimeToken": "semantic-settings-switch-track-surface-disabled"
+          "description": "Track fill for disabled switch controls.",
+          "lightToken": "semantic-switch-track-surface-disabled-light",
+          "darkToken": "semantic-switch-track-surface-disabled-dark",
+          "runtimeToken": "semantic-switch-track-surface-disabled"
         },
         {
-          "id": "semantic-settings-switch-track-border-disabled",
+          "id": "semantic-switch-track-border-disabled",
           "label": "Switch Disabled Track Border",
-          "description": "Track border for disabled settings switch controls.",
-          "lightToken": "semantic-settings-switch-track-border-disabled-light",
-          "darkToken": "semantic-settings-switch-track-border-disabled-dark",
-          "runtimeToken": "semantic-settings-switch-track-border-disabled"
+          "description": "Track border for disabled switch controls.",
+          "lightToken": "semantic-switch-track-border-disabled-light",
+          "darkToken": "semantic-switch-track-border-disabled-dark",
+          "runtimeToken": "semantic-switch-track-border-disabled"
         },
         {
-          "id": "semantic-settings-switch-thumb-surface",
+          "id": "semantic-switch-thumb-surface",
           "label": "Switch Thumb",
-          "description": "Thumb fill for settings switch controls.",
-          "lightToken": "semantic-settings-switch-thumb-surface-light",
-          "darkToken": "semantic-settings-switch-thumb-surface-dark",
-          "runtimeToken": "semantic-settings-switch-thumb-surface"
+          "description": "Thumb fill for switch controls.",
+          "lightToken": "semantic-switch-thumb-surface-light",
+          "darkToken": "semantic-switch-thumb-surface-dark",
+          "runtimeToken": "semantic-switch-thumb-surface"
         },
         {
-          "id": "semantic-settings-switch-thumb-surface-disabled",
+          "id": "semantic-switch-thumb-surface-disabled",
           "label": "Switch Disabled Thumb",
-          "description": "Thumb fill for disabled settings switch controls.",
-          "lightToken": "semantic-settings-switch-thumb-surface-disabled-light",
-          "darkToken": "semantic-settings-switch-thumb-surface-disabled-dark",
-          "runtimeToken": "semantic-settings-switch-thumb-surface-disabled"
+          "description": "Thumb fill for disabled switch controls.",
+          "lightToken": "semantic-switch-thumb-surface-disabled-light",
+          "darkToken": "semantic-switch-thumb-surface-disabled-dark",
+          "runtimeToken": "semantic-switch-thumb-surface-disabled"
         }
       ]
     },
@@ -2198,6 +2206,14 @@
           "lightToken": "semantic-plugin-market-icon-text-light",
           "darkToken": "semantic-plugin-market-icon-text-dark",
           "runtimeToken": "semantic-plugin-market-icon-text"
+        },
+        {
+          "id": "semantic-plugin-market-item-surface-hover",
+          "label": "Plugin Item Hover Surface",
+          "description": "Surface color for hovered and keyboard-focused plugin rows.",
+          "lightToken": "semantic-plugin-market-item-surface-hover-light",
+          "darkToken": "semantic-plugin-market-item-surface-hover-dark",
+          "runtimeToken": "semantic-plugin-market-item-surface-hover"
         },
         {
           "id": "semantic-plugin-market-item-border-hover",
@@ -3982,6 +3998,14 @@
           "type": "alias",
           "token": "surface-panel-dark"
         },
+        "semantic-shell-chrome-tab-indicator-active-light": {
+          "type": "alias",
+          "token": "focus-outline-color-light"
+        },
+        "semantic-shell-chrome-tab-indicator-active-dark": {
+          "type": "alias",
+          "token": "focus-outline-color-dark"
+        },
         "semantic-terminal-surface-light": {
           "type": "literal",
           "value": {
@@ -4016,51 +4040,51 @@
           "type": "alias",
           "token": "surface-shell-dark"
         },
-        "semantic-settings-switch-track-border-light": {
+        "semantic-switch-track-border-light": {
           "type": "alias",
           "token": "border-default-light"
         },
-        "semantic-settings-switch-track-border-dark": {
+        "semantic-switch-track-border-dark": {
           "type": "alias",
           "token": "border-default-dark"
         },
-        "semantic-settings-switch-track-surface-active-light": {
+        "semantic-switch-track-surface-active-light": {
           "type": "alias",
           "token": "brand-primary-hover"
         },
-        "semantic-settings-switch-track-surface-active-dark": {
+        "semantic-switch-track-surface-active-dark": {
           "type": "alias",
           "token": "brand-primary-dark"
         },
-        "semantic-settings-switch-track-border-active-light": {
+        "semantic-switch-track-border-active-light": {
           "type": "alias",
-          "token": "semantic-settings-switch-track-surface-active-light"
+          "token": "semantic-switch-track-surface-active-light"
         },
-        "semantic-settings-switch-track-border-active-dark": {
+        "semantic-switch-track-border-active-dark": {
           "type": "alias",
-          "token": "semantic-settings-switch-track-surface-active-dark"
+          "token": "semantic-switch-track-surface-active-dark"
         },
-        "semantic-settings-switch-track-border-disabled-light": {
+        "semantic-switch-track-border-disabled-light": {
           "type": "alias",
           "token": "border-default-light"
         },
-        "semantic-settings-switch-track-border-disabled-dark": {
+        "semantic-switch-track-border-disabled-dark": {
           "type": "alias",
           "token": "border-default-dark"
         },
-        "semantic-settings-switch-thumb-surface-light": {
+        "semantic-switch-thumb-surface-light": {
           "type": "alias",
           "token": "surface-panel-light"
         },
-        "semantic-settings-switch-thumb-surface-dark": {
+        "semantic-switch-thumb-surface-dark": {
           "type": "alias",
           "token": "surface-panel-light"
         },
-        "semantic-settings-switch-thumb-surface-disabled-light": {
+        "semantic-switch-thumb-surface-disabled-light": {
           "type": "alias",
           "token": "surface-panel-light"
         },
-        "semantic-settings-switch-thumb-surface-disabled-dark": {
+        "semantic-switch-thumb-surface-disabled-dark": {
           "type": "alias",
           "token": "surface-panel-dark"
         },
@@ -5215,6 +5239,14 @@
         "semantic-plugin-market-icon-text-dark": {
           "type": "alias",
           "token": "text-primary-dark"
+        },
+        "semantic-plugin-market-item-surface-hover-light": {
+          "type": "alias",
+          "token": "surface-shell-light"
+        },
+        "semantic-plugin-market-item-surface-hover-dark": {
+          "type": "alias",
+          "token": "surface-shell-dark"
         },
         "semantic-plugin-market-item-border-hover-light": {
           "type": "alias",
@@ -8271,7 +8303,7 @@
             "hex": "#ffffff"
           }
         },
-        "semantic-settings-switch-row-surface-focus-light": {
+        "semantic-switch-row-surface-focus-light": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -8661,7 +8693,7 @@
             "hex": "#000000"
           }
         },
-        "semantic-settings-switch-track-border-light": {
+        "semantic-switch-track-border-light": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -8674,7 +8706,7 @@
             "hex": "#000000"
           }
         },
-        "semantic-settings-switch-track-surface-active-light": {
+        "semantic-switch-track-surface-active-light": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -8687,7 +8719,7 @@
             "hex": "#3c00ff"
           }
         },
-        "semantic-settings-switch-track-surface-light": {
+        "semantic-switch-track-surface-light": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -8700,7 +8732,7 @@
             "hex": "#646464"
           }
         },
-        "semantic-settings-switch-track-border-focus-light": {
+        "semantic-switch-track-border-focus-light": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -8713,7 +8745,7 @@
             "hex": "#000000"
           }
         },
-        "semantic-settings-switch-track-border-active-light": {
+        "semantic-switch-track-border-active-light": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -9519,7 +9551,7 @@
             "hex": "#2b2b2b"
           }
         },
-        "semantic-settings-switch-row-surface-focus-dark": {
+        "semantic-switch-row-surface-focus-dark": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -9558,7 +9590,7 @@
             "hex": "#ffffff"
           }
         },
-        "semantic-settings-switch-track-surface-dark": {
+        "semantic-switch-track-surface-dark": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -9571,7 +9603,7 @@
             "hex": "#a5a5a5"
           }
         },
-        "semantic-settings-switch-track-border-dark": {
+        "semantic-switch-track-border-dark": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -9584,7 +9616,7 @@
             "hex": "#e7e5e4"
           }
         },
-        "semantic-settings-switch-track-border-focus-dark": {
+        "semantic-switch-track-border-focus-dark": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -9597,7 +9629,7 @@
             "hex": "#e28d87"
           }
         },
-        "semantic-settings-switch-track-surface-active-dark": {
+        "semantic-switch-track-surface-active-dark": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -9610,7 +9642,7 @@
             "hex": "#ab8cff"
           }
         },
-        "semantic-settings-switch-track-border-active-dark": {
+        "semantic-switch-track-border-active-dark": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -9623,7 +9655,7 @@
             "hex": "#a5a5a5"
           }
         },
-        "semantic-settings-switch-track-border-disabled-dark": {
+        "semantic-switch-track-border-disabled-dark": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -9636,7 +9668,7 @@
             "hex": "#e7e5e4"
           }
         },
-        "semantic-settings-switch-thumb-surface-dark": {
+        "semantic-switch-thumb-surface-dark": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -9649,7 +9681,7 @@
             "hex": "#ffffff"
           }
         },
-        "semantic-settings-switch-thumb-surface-disabled-dark": {
+        "semantic-switch-thumb-surface-disabled-dark": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -10878,7 +10910,7 @@
             "hex": "#ffffff"
           }
         },
-        "semantic-settings-switch-row-surface-focus-light": {
+        "semantic-switch-row-surface-focus-light": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -11268,7 +11300,7 @@
             "hex": "#000000"
           }
         },
-        "semantic-settings-switch-track-border-light": {
+        "semantic-switch-track-border-light": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -11281,7 +11313,7 @@
             "hex": "#000000"
           }
         },
-        "semantic-settings-switch-track-surface-active-light": {
+        "semantic-switch-track-surface-active-light": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -11294,7 +11326,7 @@
             "hex": "#3c00ff"
           }
         },
-        "semantic-settings-switch-track-surface-light": {
+        "semantic-switch-track-surface-light": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -11307,7 +11339,7 @@
             "hex": "#646464"
           }
         },
-        "semantic-settings-switch-track-border-focus-light": {
+        "semantic-switch-track-border-focus-light": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -11320,7 +11352,7 @@
             "hex": "#000000"
           }
         },
-        "semantic-settings-switch-track-border-active-light": {
+        "semantic-switch-track-border-active-light": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -12126,7 +12158,7 @@
             "hex": "#2b2b2b"
           }
         },
-        "semantic-settings-switch-row-surface-focus-dark": {
+        "semantic-switch-row-surface-focus-dark": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -12165,7 +12197,7 @@
             "hex": "#ffffff"
           }
         },
-        "semantic-settings-switch-track-surface-dark": {
+        "semantic-switch-track-surface-dark": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -12178,7 +12210,7 @@
             "hex": "#a5a5a5"
           }
         },
-        "semantic-settings-switch-track-border-dark": {
+        "semantic-switch-track-border-dark": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -12191,7 +12223,7 @@
             "hex": "#e7e5e4"
           }
         },
-        "semantic-settings-switch-track-border-focus-dark": {
+        "semantic-switch-track-border-focus-dark": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -12204,7 +12236,7 @@
             "hex": "#e28d87"
           }
         },
-        "semantic-settings-switch-track-surface-active-dark": {
+        "semantic-switch-track-surface-active-dark": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -12217,7 +12249,7 @@
             "hex": "#ab8cff"
           }
         },
-        "semantic-settings-switch-track-border-active-dark": {
+        "semantic-switch-track-border-active-dark": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -12230,7 +12262,7 @@
             "hex": "#a5a5a5"
           }
         },
-        "semantic-settings-switch-track-border-disabled-dark": {
+        "semantic-switch-track-border-disabled-dark": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -12243,7 +12275,7 @@
             "hex": "#e7e5e4"
           }
         },
-        "semantic-settings-switch-thumb-surface-dark": {
+        "semantic-switch-thumb-surface-dark": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -12256,7 +12288,7 @@
             "hex": "#ffffff"
           }
         },
-        "semantic-settings-switch-thumb-surface-disabled-dark": {
+        "semantic-switch-thumb-surface-disabled-dark": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -13564,7 +13596,7 @@
       ],
       "compatibility": false
     },
-    "semantic-settings-switch-row-surface-focus-light": {
+    "semantic-switch-row-surface-focus-light": {
       "kind": "blend",
       "colorSpace": "srgb",
       "sources": [
@@ -13594,7 +13626,7 @@
       ],
       "compatibility": false
     },
-    "semantic-settings-switch-row-surface-focus-dark": {
+    "semantic-switch-row-surface-focus-dark": {
       "kind": "blend",
       "colorSpace": "srgb",
       "sources": [
@@ -13624,7 +13656,7 @@
       ],
       "compatibility": false
     },
-    "semantic-settings-switch-track-surface-light": {
+    "semantic-switch-track-surface-light": {
       "kind": "blend",
       "colorSpace": "srgb",
       "sources": [
@@ -13645,7 +13677,7 @@
       ],
       "compatibility": false
     },
-    "semantic-settings-switch-track-surface-dark": {
+    "semantic-switch-track-surface-dark": {
       "kind": "blend",
       "colorSpace": "srgb",
       "sources": [
@@ -13666,7 +13698,7 @@
       ],
       "compatibility": false
     },
-    "semantic-settings-switch-track-border-focus-light": {
+    "semantic-switch-track-border-focus-light": {
       "kind": "blend",
       "colorSpace": "srgb",
       "sources": [
@@ -13687,7 +13719,7 @@
       ],
       "compatibility": false
     },
-    "semantic-settings-switch-track-border-focus-dark": {
+    "semantic-switch-track-border-focus-dark": {
       "kind": "blend",
       "colorSpace": "srgb",
       "sources": [
@@ -13708,7 +13740,7 @@
       ],
       "compatibility": false
     },
-    "semantic-settings-switch-track-surface-disabled-light": {
+    "semantic-switch-track-surface-disabled-light": {
       "kind": "blend",
       "colorSpace": "srgb",
       "sources": [
@@ -13729,7 +13761,7 @@
       ],
       "compatibility": false
     },
-    "semantic-settings-switch-track-surface-disabled-dark": {
+    "semantic-switch-track-surface-disabled-dark": {
       "kind": "blend",
       "colorSpace": "srgb",
       "sources": [

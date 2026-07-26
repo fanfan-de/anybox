@@ -1241,6 +1241,8 @@ export const ptBR = {
   "prompts.usage.gitCommit": "Commit Git",
   "prompts.usage.cinemaTextGeneration": "Geração de texto cinema",
   "prompts.status.edited": "Editado",
+  "prompts.createCustomCopy": "Criar cópia personalizada",
+  "prompts.bundledReadOnly": "Os prompts incluídos são somente leitura. Crie uma cópia personalizada antes de editar.",
   "prompts.emptyCustom": "Nenhum prompt personalizado ainda.",
   "prompts.emptyBundled": "Nenhum prompt empacotado.",
   "prompts.noSearchResults": "Nenhum prompt corresponde à sua pesquisa.",

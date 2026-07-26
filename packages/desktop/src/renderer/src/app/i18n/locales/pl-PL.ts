@@ -1241,6 +1241,8 @@ export const plPL = {
   "prompts.usage.gitCommit": "Git commit",
   "prompts.usage.cinemaTextGeneration": "Generowanie tekstu Cinema",
   "prompts.status.edited": "Edytowane",
+  "prompts.createCustomCopy": "Utwórz kopię niestandardową",
+  "prompts.bundledReadOnly": "Wbudowane prompty są tylko do odczytu. Przed edycją utwórz kopię niestandardową.",
   "prompts.emptyCustom": "Brak niestandardowych promptów.",
   "prompts.emptyBundled": "Brak dołączonych promptów.",
   "prompts.noSearchResults": "Brak promptów pasujących do wyszukiwania.",

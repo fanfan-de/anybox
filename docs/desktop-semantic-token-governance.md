@@ -154,7 +154,7 @@ semantic-plugin-market-*
 Component semantic token 描述一个控件或组件家族的属性和状态：
 
 ```text
-semantic-settings-switch-track-surface-active
+semantic-switch-track-surface-active
 semantic-segmented-control-item-text-disabled
 semantic-list-detail-row-surface-current
 semantic-plugin-market-tag-surface
@@ -421,7 +421,7 @@ Semantic token 可以默认 alias 到 foundation token，但必须满足：
 | 插件 Tag 背景 | 使用 `--semantic-plugin-market-tag-surface` | **已确认** |
 | 插件 Tag 文字 | 使用 `--semantic-plugin-market-tag-text` | **已确认** |
 | 危险操作按钮 | 使用完整 `--semantic-button-danger-*` 状态组 | **已确认** |
-| Settings Switch | 轨道、边框、thumb 和状态使用 `--semantic-settings-switch-*` | **已确认** |
+| Switch / Toggle | 轨道、边框、thumb 和状态使用通用 `--semantic-switch-*` | **已确认** |
 | 功能型前置图标 | 不应借用品牌 Logo 占位 token | **已确认** |
 | 管理型功能图标通用名称 | 建议使用 `semantic-management-leading-icon-*` | **待确认** |
 | 图标颜色属性名 | 新 token 建议使用 `foreground` 代替 `text` | **待确认** |

@@ -44,9 +44,9 @@ export const appearanceTokenCopy = {
       "label": "팝업 패널",
       "description": "패널 스타일 팝업, 플로팅 시트 및 모달 패널을 위한 전용 의미 표면"
     },
-    "component-settings-switches": {
-      "label": "설정 스위치",
-      "description": "설정 토글 컨트롤에 사용되는 스위치 행, 트랙 및 썸 색상"
+    "component-switches": {
+      "label": "스위치",
+      "description": "불리언 스위치 컨트롤이 공유하는 행, 트랙 및 썸 색상."
     },
     "component-segmented-controls": {
       "label": "세그먼트 컨트롤",
@@ -434,45 +434,45 @@ export const appearanceTokenCopy = {
       "label": "패널 표면",
       "description": "설정, 플로팅 시트, 패널 스타일 팝오버와 같은 팝업 패널의 배경 채움."
     },
-    "semantic-settings-switch-row-surface-focus": {
+    "semantic-switch-row-surface-focus": {
       "label": "스위치 포커스 행",
-      "description": "설정 스위치가 키보드 포커스를 받을 때 사용되는 행 배경."
+      "description": "스위치가 키보드 포커스를 받을 때 사용되는 행 배경."
     },
-    "semantic-settings-switch-track-surface": {
+    "semantic-switch-track-surface": {
       "label": "스위치 트랙",
-      "description": "설정 스위치 컨트롤의 기본 트랙 채움."
+      "description": "스위치 컨트롤의 기본 트랙 채움."
     },
-    "semantic-settings-switch-track-border": {
+    "semantic-switch-track-border": {
       "label": "스위치 트랙 테두리",
-      "description": "설정 스위치 컨트롤의 기본 트랙 테두리."
+      "description": "스위치 컨트롤의 기본 트랙 테두리."
     },
-    "semantic-settings-switch-track-border-focus": {
+    "semantic-switch-track-border-focus": {
       "label": "스위치 포커스 테두리 전환",
-      "description": "설정 스위치가 키보드 포커스를 받을 때 사용되는 트랙 테두리입니다."
+      "description": "스위치가 키보드 포커스를 받을 때 사용되는 트랙 테두리입니다."
     },
-    "semantic-settings-switch-track-surface-active": {
+    "semantic-switch-track-surface-active": {
       "label": "스위치 활성 트랙",
-      "description": "활성화된 설정 스위치 컨트롤의 트랙 채움색입니다."
+      "description": "활성화된 스위치 컨트롤의 트랙 채움색입니다."
     },
-    "semantic-settings-switch-track-border-active": {
+    "semantic-switch-track-border-active": {
       "label": "스위치 활성 트랙 테두리",
-      "description": "활성화된 설정 스위치 컨트롤의 트랙 테두리입니다."
+      "description": "활성화된 스위치 컨트롤의 트랙 테두리입니다."
     },
-    "semantic-settings-switch-track-surface-disabled": {
+    "semantic-switch-track-surface-disabled": {
       "label": "스위치 비활성 트랙",
-      "description": "비활성화된 설정 스위치 컨트롤의 트랙 채움색입니다."
+      "description": "비활성화된 스위치 컨트롤의 트랙 채움색입니다."
     },
-    "semantic-settings-switch-track-border-disabled": {
+    "semantic-switch-track-border-disabled": {
       "label": "스위치 비활성 트랙 테두리",
-      "description": "비활성화된 설정 스위치 컨트롤의 트랙 테두리입니다."
+      "description": "비활성화된 스위치 컨트롤의 트랙 테두리입니다."
     },
-    "semantic-settings-switch-thumb-surface": {
+    "semantic-switch-thumb-surface": {
       "label": "스위치 썸",
-      "description": "설정 스위치 컨트롤의 썸 채움색입니다."
+      "description": "스위치 컨트롤의 썸 채움색입니다."
     },
-    "semantic-settings-switch-thumb-surface-disabled": {
+    "semantic-switch-thumb-surface-disabled": {
       "label": "스위치 비활성 썸",
-      "description": "비활성화된 설정 스위치 컨트롤의 썸 채움색입니다."
+      "description": "비활성화된 스위치 컨트롤의 썸 채움색입니다."
     },
     "semantic-segmented-control-surface": {
       "label": "컨트롤 표면",

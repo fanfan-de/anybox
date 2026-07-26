@@ -71,9 +71,9 @@ const zhCNTokenGroupCopy = {
     label: "弹出面板",
     description: "设置窗口、浮层面板和面板式弹出内容的专用语义背景。",
   },
-  "component-settings-switches": {
-    label: "设置开关",
-    description: "设置页开关控件的行背景、轨道和滑块颜色。",
+  "component-switches": {
+    label: "开关",
+    description: "通用布尔开关控件的行背景、轨道和滑块颜色。",
   },
   "component-segmented-controls": {
     label: "分段控件",
@@ -510,6 +510,10 @@ const zhCNTokenRowCopy = {
     label: "选中标签背景",
     description: "中央工作台和右侧栏中当前选中标签的背景。",
   },
+  "semantic-shell-chrome-tab-indicator-active": {
+    label: "选中标签标记",
+    description: "中央工作台活动分组和右侧栏中当前选中标签顶部的标记颜色。",
+  },
   "semantic-terminal-surface": {
     label: "终端背景",
     description: "终端内容区域的背景。",
@@ -518,45 +522,45 @@ const zhCNTokenRowCopy = {
     label: "面板背景",
     description: "设置窗口、浮层面板和面板式弹出内容的背景。",
   },
-  "semantic-settings-switch-row-surface-focus": {
+  "semantic-switch-row-surface-focus": {
     label: "开关聚焦行",
-    description: "设置开关获得键盘焦点时的行背景。",
+    description: "开关获得键盘焦点时的行背景。",
   },
-  "semantic-settings-switch-track-surface": {
+  "semantic-switch-track-surface": {
     label: "开关轨道",
-    description: "设置开关控件的默认轨道填充色。",
+    description: "开关控件的默认轨道填充色。",
   },
-  "semantic-settings-switch-track-border": {
+  "semantic-switch-track-border": {
     label: "开关轨道边框",
-    description: "设置开关控件的默认轨道边框。",
+    description: "开关控件的默认轨道边框。",
   },
-  "semantic-settings-switch-track-border-focus": {
+  "semantic-switch-track-border-focus": {
     label: "开关聚焦边框",
-    description: "设置开关获得键盘焦点时的轨道边框。",
+    description: "开关获得键盘焦点时的轨道边框。",
   },
-  "semantic-settings-switch-track-surface-active": {
+  "semantic-switch-track-surface-active": {
     label: "开关启用轨道",
-    description: "设置开关启用时的轨道填充色。",
+    description: "开关启用时的轨道填充色。",
   },
-  "semantic-settings-switch-track-border-active": {
+  "semantic-switch-track-border-active": {
     label: "开关启用边框",
-    description: "设置开关启用时的轨道边框。",
+    description: "开关启用时的轨道边框。",
   },
-  "semantic-settings-switch-track-surface-disabled": {
+  "semantic-switch-track-surface-disabled": {
     label: "开关禁用轨道",
-    description: "设置开关禁用时的轨道填充色。",
+    description: "开关禁用时的轨道填充色。",
   },
-  "semantic-settings-switch-track-border-disabled": {
+  "semantic-switch-track-border-disabled": {
     label: "开关禁用边框",
-    description: "设置开关禁用时的轨道边框。",
+    description: "开关禁用时的轨道边框。",
   },
-  "semantic-settings-switch-thumb-surface": {
+  "semantic-switch-thumb-surface": {
     label: "开关滑块",
-    description: "设置开关控件的滑块填充色。",
+    description: "开关控件的滑块填充色。",
   },
-  "semantic-settings-switch-thumb-surface-disabled": {
+  "semantic-switch-thumb-surface-disabled": {
     label: "开关禁用滑块",
-    description: "设置开关禁用时的滑块填充色。",
+    description: "开关禁用时的滑块填充色。",
   },
   "semantic-segmented-control-surface": {
     label: "控件背景",
@@ -817,6 +821,10 @@ const zhCNTokenRowCopy = {
   "semantic-plugin-market-icon-text": {
     label: "插件占位图标文字",
     description: "字形和首字母占位图标的中性前景色。",
+  },
+  "semantic-plugin-market-item-surface-hover": {
+    label: "插件项悬停背景",
+    description: "插件列表项悬停和键盘聚焦时的背景颜色。",
   },
   "semantic-plugin-market-item-border-hover": {
     label: "插件项悬停边框",

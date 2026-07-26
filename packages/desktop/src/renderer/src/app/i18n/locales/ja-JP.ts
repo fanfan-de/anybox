@@ -1241,6 +1241,8 @@ export const jaJP = {
   "prompts.usage.gitCommit": "Git コミット",
   "prompts.usage.cinemaTextGeneration": "シネマテキスト生成",
   "prompts.status.edited": "編集済み",
+  "prompts.createCustomCopy": "カスタムコピーを作成",
+  "prompts.bundledReadOnly": "組み込みプロンプトは読み取り専用です。編集するには、先にカスタムコピーを作成してください。",
   "prompts.emptyCustom": "カスタムプロンプトはまだありません。",
   "prompts.emptyBundled": "バンドルプロンプトはありません。",
   "prompts.noSearchResults": "検索に一致するプロンプトはありません。",

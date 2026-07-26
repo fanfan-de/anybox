@@ -1241,6 +1241,8 @@ export const koKR = {
   "prompts.usage.gitCommit": "Git 커밋",
   "prompts.usage.cinemaTextGeneration": "시네마 텍스트 생성",
   "prompts.status.edited": "편집됨",
+  "prompts.createCustomCopy": "사용자 지정 복사본 만들기",
+  "prompts.bundledReadOnly": "기본 제공 프롬프트는 읽기 전용입니다. 편집하려면 먼저 사용자 지정 복사본을 만드세요.",
   "prompts.emptyCustom": "아직 사용자 정의 프롬프트가 없습니다.",
   "prompts.emptyBundled": "번들 프롬프트가 없습니다.",
   "prompts.noSearchResults": "검색 결과와 일치하는 프롬프트가 없습니다.",

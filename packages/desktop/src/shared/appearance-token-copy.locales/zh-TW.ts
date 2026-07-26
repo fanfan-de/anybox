@@ -44,9 +44,9 @@ export const appearanceTokenCopy = {
       "label": "彈出面板",
       "description": "設定視窗、浮動面板和面板式彈出內容的專用語意背景。"
     },
-    "component-settings-switches": {
-      "label": "設定開關",
-      "description": "設定頁開關控制項的行背景、軌道和滑塊顏色。"
+    "component-switches": {
+      "label": "開關",
+      "description": "通用布林開關控制項的行背景、軌道和滑塊顏色。"
     },
     "component-segmented-controls": {
       "label": "分段控制項",
@@ -434,45 +434,45 @@ export const appearanceTokenCopy = {
       "label": "面板背景",
       "description": "設定視窗、浮動面板和面板式彈出內容的背景。"
     },
-    "semantic-settings-switch-row-surface-focus": {
+    "semantic-switch-row-surface-focus": {
       "label": "開關聚焦行",
-      "description": "設定開關獲得鍵盤焦點時的行背景。"
+      "description": "開關獲得鍵盤焦點時的行背景。"
     },
-    "semantic-settings-switch-track-surface": {
+    "semantic-switch-track-surface": {
       "label": "開關軌道",
-      "description": "設定開關控制項的預設軌道填滿色。"
+      "description": "開關控制項的預設軌道填滿色。"
     },
-    "semantic-settings-switch-track-border": {
+    "semantic-switch-track-border": {
       "label": "開關軌道邊框",
-      "description": "設定開關控制項的預設軌道邊框。"
+      "description": "開關控制項的預設軌道邊框。"
     },
-    "semantic-settings-switch-track-border-focus": {
+    "semantic-switch-track-border-focus": {
       "label": "開關聚焦邊框",
-      "description": "設定開關獲得鍵盤焦點時的軌道邊框。"
+      "description": "開關獲得鍵盤焦點時的軌道邊框。"
     },
-    "semantic-settings-switch-track-surface-active": {
+    "semantic-switch-track-surface-active": {
       "label": "開關啟用軌道",
-      "description": "設定開關啟用時的軌道填滿色。"
+      "description": "開關啟用時的軌道填滿色。"
     },
-    "semantic-settings-switch-track-border-active": {
+    "semantic-switch-track-border-active": {
       "label": "開關啟用邊框",
-      "description": "設定開關啟用時的軌道邊框。"
+      "description": "開關啟用時的軌道邊框。"
     },
-    "semantic-settings-switch-track-surface-disabled": {
+    "semantic-switch-track-surface-disabled": {
       "label": "開關禁用軌道",
-      "description": "設定開關禁用時的軌道填滿色。"
+      "description": "開關禁用時的軌道填滿色。"
     },
-    "semantic-settings-switch-track-border-disabled": {
+    "semantic-switch-track-border-disabled": {
       "label": "開關禁用邊框",
-      "description": "設定開關禁用時的軌道邊框。"
+      "description": "開關禁用時的軌道邊框。"
     },
-    "semantic-settings-switch-thumb-surface": {
+    "semantic-switch-thumb-surface": {
       "label": "開關滑塊",
-      "description": "設定開關控制項的滑塊填滿色。"
+      "description": "開關控制項的滑塊填滿色。"
     },
-    "semantic-settings-switch-thumb-surface-disabled": {
+    "semantic-switch-thumb-surface-disabled": {
       "label": "開關禁用滑塊",
-      "description": "設定開關禁用時的滑塊填滿色。"
+      "description": "開關禁用時的滑塊填滿色。"
     },
     "semantic-segmented-control-surface": {
       "label": "控件背景",
