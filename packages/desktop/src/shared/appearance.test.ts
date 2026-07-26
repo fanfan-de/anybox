@@ -222,6 +222,85 @@ describe("appearance token catalog", () => {
 
   })
 
+  it("migrates deprecated settings-scoped list-detail tokens", () => {
+    const renamedTokens = [
+      [
+        "semantic-settings-list-detail-row-surface-hover",
+        "semantic-list-detail-row-surface-hover",
+      ],
+      [
+        "semantic-settings-list-detail-row-surface-current",
+        "semantic-list-detail-row-surface-current",
+      ],
+      [
+        "semantic-settings-list-detail-row-primary-text",
+        "semantic-list-detail-row-primary-text",
+      ],
+      [
+        "semantic-settings-list-detail-row-secondary-text",
+        "semantic-list-detail-row-secondary-text",
+      ],
+      [
+        "semantic-settings-list-detail-row-current-text",
+        "semantic-list-detail-row-current-text",
+      ],
+      [
+        "semantic-settings-list-detail-count-surface",
+        "semantic-list-detail-count-surface",
+      ],
+      [
+        "semantic-settings-list-detail-count-text",
+        "semantic-list-detail-count-text",
+      ],
+      [
+        "semantic-settings-list-detail-icon-surface",
+        "semantic-detail-icon-surface",
+      ],
+      [
+        "semantic-settings-list-detail-icon-border",
+        "semantic-detail-icon-border",
+      ],
+      [
+        "semantic-settings-list-detail-icon-text",
+        "semantic-detail-icon-text",
+      ],
+    ] as const
+
+    for (const [legacyToken, currentToken] of renamedTokens) {
+      expect(cssTokenMap(normalizeAppearanceConfigDocument({
+        overrides: {
+          [legacyToken]: "#111111",
+        },
+      }).overrides)).toEqual({
+        [`${currentToken}-light`]: "#111111",
+        [`${currentToken}-dark`]: "#111111",
+      })
+      expect(cssTokenMap(normalizeAppearanceConfigDocument({
+        overrides: {
+          [`${legacyToken}-light`]: "#222222",
+        },
+      }).overrides)).toEqual({
+        [`${currentToken}-light`]: "#222222",
+      })
+      expect(cssTokenMap(normalizeAppearanceConfigDocument({
+        overrides: {
+          [`${legacyToken}-dark`]: "#333333",
+        },
+      }).overrides)).toEqual({
+        [`${currentToken}-dark`]: "#333333",
+      })
+    }
+
+    expect(cssTokenMap(normalizeAppearanceConfigDocument({
+      overrides: {
+        "semantic-settings-list-detail-row-surface-hover-light": "#111111",
+        "semantic-list-detail-row-surface-hover-light": "#222222",
+      },
+    }).overrides)).toEqual({
+      "semantic-list-detail-row-surface-hover-light": "#222222",
+    })
+  })
+
   it("registers composer icon button tokens in the composer group", () => {
     const composerGroup = APPEARANCE_TOKEN_GROUPS.find((group) => group.id === "component-composer")
 

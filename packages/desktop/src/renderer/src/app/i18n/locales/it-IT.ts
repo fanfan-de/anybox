@@ -384,6 +384,8 @@ export const itIT = {
   "settings.appearance.themeLibraryLabel": "Tema",
   "settings.appearance.themeLibraryTitle": "Libreria temi",
   "settings.appearance.themeLibraryCopy": "Scegli un preset ufficiale o salva l'aspetto corrente come tema personalizzato.",
+  "settings.appearance.builtInThemesTitle": "Temi integrati",
+  "settings.appearance.builtInThemesCopy": "Scegli un tema incluso con Anybox.",
   "settings.appearance.themeLibraryListLabel": "Elenco temi",
   "settings.appearance.themeSourceBuiltIn": "Preset ufficiale",
   "settings.appearance.themeSourceUser": "Mio tema",

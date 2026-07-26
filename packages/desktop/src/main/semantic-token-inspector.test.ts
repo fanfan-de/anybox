@@ -375,6 +375,19 @@ describe("SemanticTokenInspectorSessionManager", () => {
     })
   })
 
+  it("never attaches the debugger in packaged builds", async () => {
+    const manager = new SemanticTokenInspectorSessionManager(() => undefined, {
+      packaged: true,
+    })
+    const contents = new FakeWebContents()
+
+    await expect(manager.start(asWebContents(contents))).resolves.toMatchObject({
+      status: "blocked",
+      reason: "packaged",
+    })
+    expect(contents.debugger.isAttached()).toBe(false)
+  })
+
   it("emits a detach event and releases the session when DevTools opens", async () => {
     const events: SemanticTokenInspectorEvent[] = []
     const manager = new SemanticTokenInspectorSessionManager((_contents, event) => events.push(event))

@@ -283,7 +283,9 @@ export function clearRendererPerformanceEntries() {
   }
 }
 
-export function installRendererMemoryDiagnostics() {
+export function installRendererMemoryDiagnostics(options: {
+  exposeDebugApi?: boolean
+} = {}) {
   if (typeof window === "undefined" || diagnosticsInstalled) return
   diagnosticsInstalled = true
 
@@ -294,10 +296,12 @@ export function installRendererMemoryDiagnostics() {
     }, PERFORMANCE_ENTRY_CLEANUP_INTERVAL_MS)
   }
 
-  window.__ANYBOX_RENDERER_DIAGNOSTICS__ = {
-    getSnapshot: getRendererMemoryDiagnosticsSnapshot,
-    report: (reason?: string) => reportRendererMemoryDiagnostics(reason, { force: true }),
-    updateCurrentSession: updateRendererCurrentSessionDiagnostics,
+  if (options.exposeDebugApi ?? import.meta.env.DEV) {
+    window.__ANYBOX_RENDERER_DIAGNOSTICS__ = {
+      getSnapshot: getRendererMemoryDiagnosticsSnapshot,
+      report: (reason?: string) => reportRendererMemoryDiagnostics(reason, { force: true }),
+      updateCurrentSession: updateRendererCurrentSessionDiagnostics,
+    }
   }
   reportRendererMemoryDiagnostics("install", { force: true })
 

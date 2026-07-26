@@ -5,7 +5,6 @@ import {
   useRef,
   useState,
   type ChangeEvent,
-  type CSSProperties,
   type KeyboardEvent,
   type MouseEvent,
   type ReactNode,
@@ -20,10 +19,7 @@ import {
   type AppearanceTokenMap,
   type AppearanceTokenName,
 } from "../../../../shared/appearance"
-import {
-  resolveAppearanceTokenCssValues,
-  type AppearanceContrastWarning,
-} from "../../../../shared/appearance-color"
+import type { AppearanceContrastWarning } from "../../../../shared/appearance-color"
 import { getAppearanceTokenGroupCopy, getAppearanceTokenRowCopy } from "../../../../shared/appearance-token-copy"
 import type { AppearanceTheme } from "../../../../shared/appearance-themes"
 import type {
@@ -1206,55 +1202,10 @@ export function AppearanceTokenEditor({
   )
 }
 
-const appearanceThemeSwatchTokenPairs = [
-  ["surface-app-light", "surface-app-dark"],
-  ["surface-panel-light", "surface-panel-dark"],
-  ["text-primary-light", "text-primary-dark"],
-  ["brand-primary", "brand-primary-dark"],
-] as const satisfies readonly (readonly [AppearanceTokenName, AppearanceTokenName])[]
-
-function resolveAppearanceThemeSwatchColor(
-  theme: AppearanceTheme,
-  lightToken: AppearanceTokenName,
-  darkToken: AppearanceTokenName,
-  themeTokenValues: Record<AppearanceTokenName, string>,
-) {
-  const preferredToken = theme.colorMode === "dark" ? darkToken : lightToken
-  return themeTokenValues[preferredToken]
-    ?? "var(--seg-panel)"
-}
-
-function AppearanceThemeSwatches({ theme }: { theme: AppearanceTheme }) {
-  const themeTokenValues = useMemo(
-    () => resolveAppearanceTokenCssValues({
-      brandTheme: theme.brandTheme,
-      overrides: theme.overrides,
-    }),
-    [theme.brandTheme, theme.overrides],
-  )
-
-  return (
-    <span className="settings-theme-library-swatches" aria-hidden="true">
-      {appearanceThemeSwatchTokenPairs.map(([lightToken, darkToken]) => (
-        <span
-          key={`${theme.id}:${lightToken}`}
-          style={{
-            "--settings-theme-library-swatch": resolveAppearanceThemeSwatchColor(
-              theme,
-              lightToken,
-              darkToken,
-              themeTokenValues,
-            ),
-          } as CSSProperties}
-        />
-      ))}
-    </span>
-  )
-}
-
 interface AppearanceThemeLibraryPanelProps {
   activeThemeID?: string
   error?: string | null
+  mode: AppearanceSurfaceMode
   notice?: string | null
   onApply?: (themeID: string) => void | Promise<void>
   onDelete?: (themeID: string) => void | Promise<void>
@@ -1269,6 +1220,7 @@ interface AppearanceThemeLibraryPanelProps {
 function AppearanceThemeLibraryPanel({
   activeThemeID,
   error,
+  mode,
   notice,
   onApply,
   onDelete,
@@ -1280,6 +1232,7 @@ function AppearanceThemeLibraryPanel({
   themes,
 }: AppearanceThemeLibraryPanelProps) {
   const { t } = useI18n()
+  const isAuthoring = mode === "authoring"
   const defaultNewThemeName = t("settings.appearance.themeNewNameDefault")
   const [selectedThemeID, setSelectedThemeID] = useState(() => activeThemeID ?? themes[0]?.id ?? "")
   const [themeNameDraft, setThemeNameDraft] = useState(defaultNewThemeName)
@@ -1430,27 +1383,37 @@ function AppearanceThemeLibraryPanel({
       <div className="settings-section-header">
         <div>
           <span className="label">{t("settings.appearance.themeLibraryLabel")}</span>
-          <h3>{t("settings.appearance.themeLibraryTitle")}</h3>
+          <h3>
+            {t(
+              isAuthoring
+                ? "settings.appearance.themeLibraryTitle"
+                : "settings.appearance.builtInThemesTitle",
+            )}
+          </h3>
         </div>
-        <div className="settings-theme-library-heading-actions">
-          <p>{t("settings.appearance.themeLibraryCopy")}</p>
-          <input
-            ref={importInputRef}
-            className="settings-theme-library-file-input"
-            type="file"
-            accept=".json,.tokens.json,application/json"
-            aria-label={t("settings.appearance.themeImportDtcgLabel")}
-            onChange={handleImportDtcgFile}
-          />
-          <button
-            className="secondary-button"
-            type="button"
-            disabled={!onImportDtcg || pendingThemeAction !== null}
-            onClick={() => importInputRef.current?.click()}
-          >
-            {t("settings.appearance.themeImportDtcg")}
-          </button>
-        </div>
+        {isAuthoring ? (
+          <div className="settings-theme-library-heading-actions">
+            <p>{t("settings.appearance.themeLibraryCopy")}</p>
+            <input
+              ref={importInputRef}
+              className="settings-theme-library-file-input"
+              type="file"
+              accept=".json,.tokens.json,application/json"
+              aria-label={t("settings.appearance.themeImportDtcgLabel")}
+              onChange={handleImportDtcgFile}
+            />
+            <button
+              className="secondary-button"
+              type="button"
+              disabled={!onImportDtcg || pendingThemeAction !== null}
+              onClick={() => importInputRef.current?.click()}
+            >
+              {t("settings.appearance.themeImportDtcg")}
+            </button>
+          </div>
+        ) : (
+          <p>{t("settings.appearance.builtInThemesCopy")}</p>
+        )}
       </div>
 
       <div className="settings-theme-library-shell">
@@ -1476,7 +1439,6 @@ function AppearanceThemeLibraryPanel({
                 aria-selected={isSelected}
                 onClick={() => setSelectedThemeID(theme.id)}
               >
-                <AppearanceThemeSwatches theme={theme} />
                 <span className="settings-theme-library-item-copy">
                   <strong>{theme.name}</strong>
                   <small>
@@ -1497,7 +1459,6 @@ function AppearanceThemeLibraryPanel({
                   <span className="label">{getThemeSourceLabel(selectedTheme)}</span>
                   <h4>{selectedTheme.name}</h4>
                 </div>
-                <AppearanceThemeSwatches theme={selectedTheme} />
               </div>
 
               <dl className="settings-theme-library-meta">
@@ -1524,35 +1485,40 @@ function AppearanceThemeLibraryPanel({
                 >
                   {t("settings.appearance.themeApply")}
                 </button>
-                <button
-                  className="secondary-button"
-                  type="button"
-                  disabled={!onDuplicate || pendingThemeAction !== null}
-                  onClick={handleDuplicateTheme}
-                >
-                  {t("settings.appearance.themeDuplicate")}
-                </button>
-                <button
-                  className="secondary-button"
-                  type="button"
-                  disabled={!onExportDtcg || pendingThemeAction !== null}
-                  onClick={handleExportDtcg}
-                >
-                  {t("settings.appearance.themeExportDtcg")}
-                </button>
-                <button
-                  className="secondary-button is-danger"
-                  type="button"
-                  disabled={selectedTheme.readonly || !onDelete || pendingThemeAction !== null}
-                  onClick={handleDeleteTheme}
-                >
-                  {t("settings.appearance.themeDelete")}
-                </button>
+                {isAuthoring ? (
+                  <>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      disabled={!onDuplicate || pendingThemeAction !== null}
+                      onClick={handleDuplicateTheme}
+                    >
+                      {t("settings.appearance.themeDuplicate")}
+                    </button>
+                    <button
+                      className="secondary-button"
+                      type="button"
+                      disabled={!onExportDtcg || pendingThemeAction !== null}
+                      onClick={handleExportDtcg}
+                    >
+                      {t("settings.appearance.themeExportDtcg")}
+                    </button>
+                    <button
+                      className="secondary-button is-danger"
+                      type="button"
+                      disabled={selectedTheme.readonly || !onDelete || pendingThemeAction !== null}
+                      onClick={handleDeleteTheme}
+                    >
+                      {t("settings.appearance.themeDelete")}
+                    </button>
+                  </>
+                ) : null}
               </div>
             </>
           ) : null}
 
-          <div className="settings-theme-library-save">
+          {isAuthoring ? (
+            <div className="settings-theme-library-save">
             <label>
               <span className="label">{t("settings.appearance.themeNameLabel")}</span>
               <input
@@ -1579,7 +1545,8 @@ function AppearanceThemeLibraryPanel({
             >
               {t("settings.appearance.themeSaveCurrent")}
             </button>
-          </div>
+            </div>
+          ) : null}
 
           {error ? (
             <p className="settings-helper-text settings-theme-config-error">{error}</p>
@@ -1595,6 +1562,8 @@ function AppearanceThemeLibraryPanel({
   )
 }
 
+export type AppearanceSurfaceMode = "authoring" | "consumer"
+
 interface AppearanceSettingsPanelProps {
   appearanceConfigError: string | null
   appearanceConfigPath: string | null
@@ -1608,6 +1577,7 @@ interface AppearanceSettingsPanelProps {
   appearanceTokenValues: Record<AppearanceTokenName, string>
   colorMode: ColorMode
   fontFamily: AppearanceFontFamily
+  mode?: AppearanceSurfaceMode
   isActivityRailVisible?: boolean
   showShellLayoutSettings?: boolean
   onActivityRailVisibilityChange?: (value: boolean) => void
@@ -1639,6 +1609,7 @@ export function AppearanceSettingsPanel({
   appearanceTokenValues,
   colorMode,
   fontFamily,
+  mode = "consumer",
   isActivityRailVisible = true,
   showShellLayoutSettings = false,
   onActivityRailVisibilityChange,
@@ -1658,19 +1629,85 @@ export function AppearanceSettingsPanel({
 }: AppearanceSettingsPanelProps) {
   const { t } = useI18n()
   const colorModeOptions: Array<{ value: ColorMode; label: string }> = [
+    { value: "system", label: t("settings.appearance.system") },
     { value: "light", label: t("settings.appearance.light") },
     { value: "dark", label: t("settings.appearance.dark") },
-    { value: "system", label: t("settings.appearance.system") },
   ]
   const hasCustomAppearanceOverrides = Object.keys(appearanceOverrides).length > 0
+  const visibleAppearanceThemes = mode === "authoring"
+    ? appearanceThemes
+    : appearanceThemes.filter((theme) => theme.source === "built-in")
 
   return (
     <div className="settings-appearance-layout">
+      <section className="settings-panel settings-color-mode-panel">
+        <div className="settings-section-header">
+          <div>
+            <span className="label">{t("settings.appearance.theme")}</span>
+            <h3>{t("settings.appearance.colorMode")}</h3>
+          </div>
+        </div>
+
+        <div
+          className="settings-color-mode-group"
+          role="radiogroup"
+          aria-label={t("settings.appearance.colorMode")}
+        >
+          {colorModeOptions.map((option) => {
+            const previewModes: readonly ("light" | "dark")[] =
+              option.value === "system" ? ["light", "dark"] : [option.value]
+
+            return (
+              <label
+                key={option.value}
+                className={
+                  colorMode === option.value
+                    ? "settings-color-mode-option is-active"
+                    : "settings-color-mode-option"
+                }
+              >
+                <input
+                  className="settings-color-mode-input"
+                  type="radio"
+                  name="settings-color-mode"
+                  value={option.value}
+                  checked={colorMode === option.value}
+                  onChange={() => onColorModeChange(option.value)}
+                />
+                <span
+                  className={`settings-color-mode-preview is-${option.value}`}
+                  aria-hidden="true"
+                >
+                  {previewModes.map((previewMode) => (
+                    <span
+                      key={previewMode}
+                      className={`settings-color-mode-preview-theme is-${previewMode}`}
+                    >
+                      <span className="settings-color-mode-preview-toolbar">
+                        <span />
+                        <span />
+                      </span>
+                      <span className="settings-color-mode-preview-window">
+                        <span />
+                        <span />
+                        <span />
+                      </span>
+                    </span>
+                  ))}
+                </span>
+                <span className="settings-color-mode-label">{option.label}</span>
+              </label>
+            )
+          })}
+        </div>
+      </section>
+
       <AppearanceThemeLibraryPanel
         activeThemeID={activeAppearanceThemeID}
         error={appearanceThemeError}
+        mode={mode}
         notice={appearanceThemeNotice}
-        themes={appearanceThemes}
+        themes={visibleAppearanceThemes}
         onApply={onAppearanceThemeApply}
         onDelete={onAppearanceThemeDelete}
         onDuplicate={onAppearanceThemeDuplicate}
@@ -1682,20 +1719,6 @@ export function AppearanceSettingsPanel({
 
       <section className="settings-panel">
         <div className="settings-select-list">
-          <div className="settings-select-row">
-            <span className="settings-select-copy">
-              <span className="settings-select-title">{t("settings.appearance.colorMode")}</span>
-            </span>
-            <span className="settings-select-control">
-              <SettingsSelect<ColorMode>
-                ariaLabel={t("settings.appearance.colorMode")}
-                options={colorModeOptions}
-                value={colorMode}
-                onChange={onColorModeChange}
-              />
-            </span>
-          </div>
-
           <div className="settings-select-row">
             <span className="settings-select-copy">
               <span className="settings-select-title">{t("settings.appearance.interfaceFont")}</span>
@@ -1712,57 +1735,59 @@ export function AppearanceSettingsPanel({
         </div>
       </section>
 
-      <section className="settings-panel">
-        <div className="settings-section-header">
-          <div>
-            <span className="label">{t("settings.appearance.config")}</span>
-            <h3>{t("settings.appearance.themeConfigFile")}</h3>
-          </div>
-          <div className="settings-inline-actions">
-            {onOpenAppearanceWindow ? (
+      {mode === "authoring" ? (
+        <section className="settings-panel">
+          <div className="settings-section-header">
+            <div>
+              <span className="label">{t("settings.appearance.config")}</span>
+              <h3>{t("settings.appearance.themeConfigFile")}</h3>
+            </div>
+            <div className="settings-inline-actions">
+              {onOpenAppearanceWindow ? (
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={onOpenAppearanceWindow}
+                >
+                  {t("settings.appearance.openWindow")}
+                </button>
+              ) : null}
               <button
                 className="secondary-button"
                 type="button"
-                onClick={onOpenAppearanceWindow}
+                disabled={!hasCustomAppearanceOverrides}
+                onClick={onAppearancePaletteReset}
               >
-                {t("settings.appearance.openWindow")}
+                {t("settings.appearance.resetPalette")}
               </button>
+            </div>
+          </div>
+
+          <div className="settings-theme-config-meta">
+            <div className="settings-theme-config-path">
+              <span className="label">{t("settings.appearance.savedTo")}</span>
+              <code>{appearanceConfigPath ?? t("settings.appearance.configUnavailable")}</code>
+            </div>
+            <p className="settings-helper-text">
+              {t("settings.appearance.configAutoSavedCopy")}
+            </p>
+            {appearanceConfigError ? (
+              <p className="settings-helper-text settings-theme-config-error">{appearanceConfigError}</p>
             ) : null}
-            <button
-              className="secondary-button"
-              type="button"
-              disabled={!hasCustomAppearanceOverrides}
-              onClick={onAppearancePaletteReset}
-            >
-              {t("settings.appearance.resetPalette")}
-            </button>
           </div>
-        </div>
 
-        <div className="settings-theme-config-meta">
-          <div className="settings-theme-config-path">
-            <span className="label">{t("settings.appearance.savedTo")}</span>
-            <code>{appearanceConfigPath ?? t("settings.appearance.configUnavailable")}</code>
-          </div>
-          <p className="settings-helper-text">
-            {t("settings.appearance.configAutoSavedCopy")}
-          </p>
-          {appearanceConfigError ? (
-            <p className="settings-helper-text settings-theme-config-error">{appearanceConfigError}</p>
-          ) : null}
-        </div>
+          <label className="settings-theme-config-preview">
+            <span className="label">{t("settings.appearance.currentJson")}</span>
+            <textarea
+              aria-label={t("settings.appearance.currentJsonLabel")}
+              readOnly
+              value={appearanceConfigPreview}
+            />
+          </label>
+        </section>
+      ) : null}
 
-        <label className="settings-theme-config-preview">
-          <span className="label">{t("settings.appearance.currentJson")}</span>
-          <textarea
-            aria-label={t("settings.appearance.currentJsonLabel")}
-            readOnly
-            value={appearanceConfigPreview}
-          />
-        </label>
-      </section>
-
-      {appearanceContrastWarnings.length > 0 ? (
+      {mode === "authoring" && appearanceContrastWarnings.length > 0 ? (
         <section className="settings-panel settings-theme-validation-panel">
           <div className="settings-section-header">
             <div>
@@ -1792,12 +1817,14 @@ export function AppearanceSettingsPanel({
         </section>
       ) : null}
 
-      <AppearanceTokenEditor
-        appearanceOverrides={appearanceOverrides}
-        appearanceTokenValues={appearanceTokenValues}
-        onAppearanceTokenChange={onAppearanceTokenChange}
-        onAppearanceTokenReset={onAppearanceTokenReset}
-      />
+      {mode === "authoring" ? (
+        <AppearanceTokenEditor
+          appearanceOverrides={appearanceOverrides}
+          appearanceTokenValues={appearanceTokenValues}
+          onAppearanceTokenChange={onAppearanceTokenChange}
+          onAppearanceTokenReset={onAppearanceTokenReset}
+        />
+      ) : null}
 
       {showShellLayoutSettings ? (
         <>
@@ -2558,6 +2585,7 @@ function SettingsDisclosurePanel({
 interface SettingsPageProps {
   activeMcpServerID: string | null
   activeMcpServerDiagnostic: McpServerDiagnostic | null
+  developmentFeaturesEnabled?: boolean
   appearanceConfigError: string | null
   appearanceConfigPath: string | null
   appearanceConfigPreview: string
@@ -2699,6 +2727,7 @@ interface SettingsPageProps {
 export function SettingsPage({
   activeMcpServerID,
   activeMcpServerDiagnostic,
+  developmentFeaturesEnabled = false,
   appearanceConfigError,
   appearanceConfigPath,
   appearanceConfigPreview,
@@ -2858,6 +2887,9 @@ export function SettingsPage({
     const enabledTraceVisibilityCount = assistantTraceVisibilityOptions.filter(
       (option) => assistantTraceVisibility[option.key],
     ).length
+    const appearanceSurfaceMode: AppearanceSurfaceMode = developmentFeaturesEnabled
+      ? "authoring"
+      : "consumer"
 
     const modelGroups = useMemo(() => models.reduce<Record<string, ProviderModel[]>>((result, model) => {
       result[model.providerID] = [...(result[model.providerID] ?? []), model]
@@ -3213,6 +3245,12 @@ export function SettingsPage({
         setProviderCapabilityFilter("all")
       }
     }, [isOpen])
+
+    useEffect(() => {
+      if (!developmentFeaturesEnabled && activeSection === "developer") {
+        setActiveSection("general")
+      }
+    }, [activeSection, developmentFeaturesEnabled])
 
     useEffect(() => {
       if (!isOpen || activeSection !== "archive") return
@@ -3654,7 +3692,9 @@ export function SettingsPage({
           { key: "services" as const, label: t("settings.nav.provider"), Icon: ProviderSettingsIcon },
           { key: "defaults" as const, label: t("settings.nav.models"), Icon: ModelSettingsIcon },
           { key: "appearance" as const, label: t("settings.nav.appearance"), Icon: PaletteIcon },
-          { key: "developer" as const, label: t("settings.nav.developer"), Icon: CodeModeIcon },
+          ...(developmentFeaturesEnabled
+            ? [{ key: "developer" as const, label: t("settings.nav.developer"), Icon: CodeModeIcon }]
+            : []),
           { key: "environments" as const, label: t("settings.nav.environments"), Icon: TerminalIcon },
           { key: "storage" as const, label: t("settings.nav.storage"), Icon: StorageSettingsIcon },
           { key: "archive" as const, label: t("settings.nav.archive"), Icon: ArchiveRestoreIcon },
@@ -4086,6 +4126,7 @@ export function SettingsPage({
                   colorMode={colorMode}
                   fontFamily={fontFamily}
                   isActivityRailVisible={isActivityRailVisible}
+                  mode={appearanceSurfaceMode}
                   showShellLayoutSettings
                   onActivityRailVisibilityChange={onActivityRailVisibilityChange}
                   onAppearancePaletteReset={onAppearancePaletteReset}
@@ -4100,11 +4141,15 @@ export function SettingsPage({
                   onAppearanceTokenReset={onAppearanceTokenReset}
                   onColorModeChange={onColorModeChange}
                   onFontFamilyChange={onFontFamilyChange}
-                  onOpenAppearanceWindow={() => void openAppearanceWindow()}
+                  onOpenAppearanceWindow={
+                    developmentFeaturesEnabled
+                      ? () => void openAppearanceWindow()
+                      : undefined
+                  }
                 />
               ) : activeSection === "environments" ? (
                 <EnvironmentsSettingsPage onDirtyChange={setEnvironmentSettingsDirty} />
-              ) : activeSection === "developer" ? (
+              ) : developmentFeaturesEnabled && activeSection === "developer" ? (
                 <div className="settings-developer-layout">
                   <SettingsDisclosurePanel
                     panelID="developer-agent-monitor"

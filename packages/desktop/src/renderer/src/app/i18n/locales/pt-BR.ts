@@ -384,6 +384,8 @@ export const ptBR = {
   "settings.appearance.themeLibraryLabel": "Tema",
   "settings.appearance.themeLibraryTitle": "Biblioteca de Temas",
   "settings.appearance.themeLibraryCopy": "Escolha uma predefinição oficial ou salve a aparência atual como seu próprio tema.",
+  "settings.appearance.builtInThemesTitle": "Temas integrados",
+  "settings.appearance.builtInThemesCopy": "Escolha um tema incluído com o Anybox.",
   "settings.appearance.themeLibraryListLabel": "Lista de temas",
   "settings.appearance.themeSourceBuiltIn": "Predefinição oficial",
   "settings.appearance.themeSourceUser": "Meu tema",

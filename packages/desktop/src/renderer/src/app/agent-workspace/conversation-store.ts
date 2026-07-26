@@ -5,6 +5,7 @@ import {
   deriveConversationMessages,
   updateAssistantMessageInTurn,
 } from "../thread-turn-state"
+import { getRendererRuntimeCapabilities } from "../runtime-capabilities"
 
 export type ConversationMessageMap = Record<string, ThreadMessage[]>
 export type ConversationStoreUpdater = SetStateAction<ConversationMessageMap>
@@ -246,7 +247,7 @@ function readThreadDebugWatchSnapshot(conversations: ConversationMessageMap, ses
   }
 }
 
-function installThreadDebugApi(store: ConversationStoreApi) {
+function exposeThreadDebugApi(store: ConversationStoreApi) {
   if (typeof window === "undefined") return
 
   window.__ANYBOX_THREAD_DEBUG__?.unwatch()
@@ -330,6 +331,20 @@ function installThreadDebugApi(store: ConversationStoreApi) {
   }
 
   window.__ANYBOX_THREAD_DEBUG__ = api
+}
+
+function installThreadDebugApi(store: ConversationStoreApi) {
+  if (typeof window === "undefined" || !import.meta.env.DEV) return
+
+  void getRendererRuntimeCapabilities().then((capabilities) => {
+    if (!capabilities.developmentFeaturesEnabled) {
+      window.__ANYBOX_THREAD_DEBUG__?.unwatch()
+      delete window.__ANYBOX_THREAD_DEBUG__
+      return
+    }
+
+    exposeThreadDebugApi(store)
+  })
 }
 
 export function createConversationStore(initialConversations: ConversationMessageMap = {}): ConversationStoreApi {

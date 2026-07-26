@@ -165,6 +165,23 @@ describe("appearance token manifest", () => {
     expect(pluginItemHoverRule).not.toContain("--semantic-list-detail-row-surface-hover")
   })
 
+  it("routes appearance color mode cards through segmented-control semantics", () => {
+    const colorModeRules =
+      settingsCss.match(/\.settings-color-mode[^{}]*\{[^{}]*\}/g)?.join("\n") ?? ""
+
+    expect(colorModeRules).toContain("--semantic-segmented-control-surface")
+    expect(colorModeRules).toContain("--semantic-segmented-control-border")
+    expect(colorModeRules).toContain("--semantic-segmented-control-item-surface-hover")
+    expect(colorModeRules).toContain("--semantic-segmented-control-item-surface-active")
+    expect(colorModeRules).toContain("--semantic-segmented-control-item-text")
+    expect(colorModeRules).toContain("--semantic-segmented-control-item-text-hover")
+    expect(colorModeRules).toContain("--semantic-segmented-control-item-text-active")
+    expect(colorModeRules).not.toMatch(
+      /var\(--(?:color-|seg-(?:accent|border|danger|panel|shell|text)|surface-|text-|border-|brand-|mix-)/,
+    )
+    expect(colorModeRules).not.toContain("color-mix(")
+  })
+
   it("generates one complete typed catalog for editor and runtime consumers", () => {
     const rows: Array<{
       id: keyof typeof APPEARANCE_TOKEN_RUNTIME_MAP

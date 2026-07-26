@@ -1262,6 +1262,10 @@ export interface DesktopIpcContract {
     input: void
     output: DesktopInfo
   }
+  "desktop:get-runtime-capabilities": {
+    input: void
+    output: DesktopRuntimeCapabilities
+  }
   "desktop:start-semantic-token-inspector": {
     input: void
     output: SemanticTokenInspectorStartResult
@@ -2563,8 +2567,14 @@ export interface DesktopApiBase {
   versions: Partial<NodeJS.ProcessVersions>
 }
 
+export interface DesktopRuntimeCapabilities {
+  developmentFeaturesEnabled: boolean
+  appearanceAuthoringEnabled: boolean
+}
+
 export interface DesktopApiMethods {
   getInfo(): Promise<DesktopIpcOutput<"desktop:get-info">>
+  getRuntimeCapabilities(): Promise<DesktopIpcOutput<"desktop:get-runtime-capabilities">>
   startSemanticTokenInspector(): Promise<DesktopIpcOutput<"desktop:start-semantic-token-inspector">>
   inspectSemanticTokenAtPoint(
     input: DesktopIpcInput<"desktop:inspect-semantic-token-at-point">,

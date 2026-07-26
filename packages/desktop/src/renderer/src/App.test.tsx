@@ -110,7 +110,7 @@ function openActivityRailConfigurationView(label: string | RegExp) {
 async function openLocalSkillEditor() {
   const detailTabs = await screen.findByRole("tablist", { name: "Skill detail sections" })
   fireEvent.click(within(detailTabs).getByRole("tab", { name: "Files" }))
-  const viewMode = screen.getByRole("group", { name: "Skill file view mode" })
+  const viewMode = await screen.findByRole("group", { name: "Skill file view mode" })
   fireEvent.click(within(viewMode).getByRole("button", { name: "Edit" }))
   return screen.findByRole("textbox", { name: "Local skill editor" })
 }
@@ -221,15 +221,6 @@ function getAppearanceThemeLibrary() {
     throw new Error("Theme Library section not found.")
   }
   return themeLibrary
-}
-
-function getSettingsCombobox(name: string) {
-  return screen.getByRole("combobox", { name })
-}
-
-async function chooseSettingsSelectOption(name: string, optionName: string) {
-  fireEvent.click(getSettingsCombobox(name))
-  fireEvent.click(await screen.findByRole("option", { name: optionName }))
 }
 
 async function getWorkbenchDockviewApi() {
@@ -821,6 +812,10 @@ describe("App", () => {
         node: "22.0.0",
         chrome: "130.0.0",
         electron: "39.0.0",
+      }),
+      getRuntimeCapabilities: vi.fn().mockResolvedValue({
+        developmentFeaturesEnabled: true,
+        appearanceAuthoringEnabled: true,
       }),
       startSemanticTokenInspector: vi.fn().mockResolvedValue({ status: "active" }),
       inspectSemanticTokenAtPoint: vi.fn().mockResolvedValue({
@@ -10777,7 +10772,10 @@ describe("App", () => {
     expect(within(themeLibrary).getByText("Color Mode")).toBeInTheDocument()
     expect(within(themeLibrary).getByText("Accent Theme")).toBeInTheDocument()
     expect(within(themeLibrary).getByText("Code Theme")).toBeInTheDocument()
-    expect(screen.getByRole("combobox", { name: "Color Mode" })).toBeInTheDocument()
+    expect(screen.getByRole("radiogroup", { name: "Color Mode" })).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: "System" })).toBeChecked()
+    expect(screen.getByRole("radio", { name: "Light" })).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: "Dark" })).toBeInTheDocument()
     expect(screen.queryByRole("combobox", { name: "Accent Theme" })).not.toBeInTheDocument()
     expect(screen.queryByRole("combobox", { name: "Code Theme" })).not.toBeInTheDocument()
     expect(screen.getByText("Theme Config File")).toBeInTheDocument()
@@ -10848,12 +10846,12 @@ describe("App", () => {
     await screen.findByRole("dialog", { name: "Settings" })
     fireEvent.click(screen.getByRole("button", { name: /^Appearance/ }))
 
-    await chooseSettingsSelectOption("Color Mode", "Dark")
+    fireEvent.click(screen.getByRole("radio", { name: "Dark" }))
 
     expect(document.documentElement).toHaveAttribute("data-theme", "dark")
     expect(window.localStorage.getItem("desktop.colorMode")).toBe("dark")
 
-    await chooseSettingsSelectOption("Color Mode", "System")
+    fireEvent.click(screen.getByRole("radio", { name: "System" }))
 
     expect(document.documentElement).not.toHaveAttribute("data-theme")
     expect(window.localStorage.getItem("desktop.colorMode")).toBe("system")

@@ -144,7 +144,13 @@ export type SemanticTokenInspectorStartResult =
     }
   | {
       status: "blocked"
-      reason: "devtools-open" | "debugger-in-use" | "protocol-unsupported" | "attach-failed"
+      reason:
+        | "packaged"
+        | "development-disabled"
+        | "devtools-open"
+        | "debugger-in-use"
+        | "protocol-unsupported"
+        | "attach-failed"
       message: string
     }
 

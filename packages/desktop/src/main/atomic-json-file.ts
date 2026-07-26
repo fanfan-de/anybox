@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto"
 import fs from "node:fs/promises"
 import path from "node:path"
 
-export async function writeJsonFileAtomic(filePath: string, value: unknown) {
+export async function writeTextFileAtomic(filePath: string, contents: string) {
   const directory = path.dirname(filePath)
   const temporaryPath = path.join(
     directory,
@@ -12,8 +12,6 @@ export async function writeJsonFileAtomic(filePath: string, value: unknown) {
     directory,
     `.${path.basename(filePath)}.${process.pid}.${randomUUID()}.rollback`,
   )
-  const contents = `${JSON.stringify(value, null, 2)}\n`
-
   await fs.mkdir(directory, { recursive: true })
   const handle = await fs.open(temporaryPath, "wx")
   try {
@@ -55,6 +53,10 @@ export async function writeJsonFileAtomic(filePath: string, value: unknown) {
     await fs.rm(temporaryPath, { force: true })
     throw error
   }
+}
+
+export async function writeJsonFileAtomic(filePath: string, value: unknown) {
+  await writeTextFileAtomic(filePath, `${JSON.stringify(value, null, 2)}\n`)
 }
 
 export async function preserveVersionedJsonBackup(

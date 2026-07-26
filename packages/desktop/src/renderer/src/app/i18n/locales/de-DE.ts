@@ -384,6 +384,8 @@ export const deDE = {
   "settings.appearance.themeLibraryLabel": "Design",
   "settings.appearance.themeLibraryTitle": "Designbibliothek",
   "settings.appearance.themeLibraryCopy": "Wählen Sie eine offizielle Vorlage oder speichern Sie das aktuelle Erscheinungsbild als eigenes Design.",
+  "settings.appearance.builtInThemesTitle": "Integrierte Designs",
+  "settings.appearance.builtInThemesCopy": "Wählen Sie ein mit Anybox bereitgestelltes Design.",
   "settings.appearance.themeLibraryListLabel": "Designliste",
   "settings.appearance.themeSourceBuiltIn": "Offizielle Vorlage",
   "settings.appearance.themeSourceUser": "Mein Design",

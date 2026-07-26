@@ -29,6 +29,7 @@ import type { ThreadNavigationRequest, ThreadScrollSnapshot } from "../thread/Th
 import type { AssistantTraceVisibility, ComposerDraftState, SessionDiffFile, SessionDiffSummary, ToolPermissionMode } from "../types"
 import type { ComposerCommandStatus } from "../agent-workspace/composer-controller"
 import { createID } from "../utils"
+import { areRendererDevelopmentFeaturesEnabled } from "../runtime-capabilities"
 import {
   buildWorkbenchHeaderState,
   buildWorkbenchPaneState,
@@ -302,7 +303,10 @@ function dockviewLayoutSizesAreEqual(left: DockviewLayoutSize | null, right: Doc
 }
 
 function isDockviewLayoutDebugEnabled() {
-  if (typeof window === "undefined") return false
+  if (
+    typeof window === "undefined" ||
+    !areRendererDevelopmentFeaturesEnabled()
+  ) return false
   const debugWindow = window as DockviewLayoutDebugWindow
   if (debugWindow.__ANYBOX_DOCKVIEW_LAYOUT_DEBUG__?.enabled === true) return true
 

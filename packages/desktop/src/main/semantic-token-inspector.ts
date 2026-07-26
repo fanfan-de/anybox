@@ -812,6 +812,13 @@ export class SemanticTokenInspectorSessionManager {
   }
 
   async start(contents: WebContents): Promise<SemanticTokenInspectorStartResult> {
+    if (this.options.packaged) {
+      return {
+        status: "blocked",
+        reason: "packaged",
+        message: "Semantic Token Inspector is unavailable in packaged builds.",
+      }
+    }
     if (contents.isDestroyed()) {
       return {
         status: "blocked",

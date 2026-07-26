@@ -22,6 +22,7 @@ import {
   queueRendererLayoutWrite,
   type RendererFrameTaskCancel,
 } from "./renderer-frame-coordinator"
+import { useDesktopRuntimeCapabilities } from "./runtime-capabilities"
 
 const ACTIVITY_RAIL_VISIBILITY_STORAGE_KEY = "desktop.activityRailVisible"
 const DEBUG_UI_REGIONS_STORAGE_KEY = "desktop.debugUiRegions"
@@ -129,6 +130,11 @@ function readAssistantTraceVisibilityPreference() {
 }
 
 export function useDesktopShell() {
+  const {
+    appearanceAuthoringEnabled,
+    developmentFeaturesEnabled,
+    runtimeCapabilitiesReady,
+  } = useDesktopRuntimeCapabilities()
   const appShellRef = useRef<HTMLElement | null>(null)
   const [windowControlsElement, setWindowControlsElement] = useState<HTMLDivElement | null>(null)
   const windowControlsRef = useCallback((node: HTMLDivElement | null) => {
@@ -140,7 +146,10 @@ export function useDesktopShell() {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH)
   const [rightSidebarWidth, setRightSidebarWidth] = useState(DEFAULT_RIGHT_SIDEBAR_WIDTH)
   const [isActivityRailVisible, setIsActivityRailVisible] = useState(readActivityRailVisibilityPreference)
-  const appearanceState = useAppearanceState()
+  const appearanceState = useAppearanceState({
+    appearanceAuthoringEnabled,
+    runtimeCapabilitiesReady,
+  })
   const {
     appearanceConfigError,
     appearanceConfigPath,
@@ -174,12 +183,14 @@ export function useDesktopShell() {
     resolvedColorMode,
     resolvedCodeTheme,
   } = appearanceState
-  const [isDebugUiRegionsEnabled, setIsDebugUiRegionsEnabled] = useState(readDebugUiRegionsPreference)
-  const [isDebugLineColorsEnabled, setIsDebugLineColorsEnabled] = useState(readDebugLineColorsPreference)
+  const [isDebugUiRegionsEnabled, setIsDebugUiRegionsEnabled] = useState(false)
+  const [isDebugLineColorsEnabled, setIsDebugLineColorsEnabled] = useState(false)
   const [isSemanticTokenInspectorEnabled, setIsSemanticTokenInspectorEnabled] =
-    useState(readSemanticTokenInspectorPreference)
-  const [isMobileConnectionAdvancedInfoEnabled, setIsMobileConnectionAdvancedInfoEnabled] = useState(readMobileConnectionAdvancedInfoPreference)
-  const [assistantTraceVisibility, setAssistantTraceVisibility] = useState(readAssistantTraceVisibilityPreference)
+    useState(false)
+  const [isMobileConnectionAdvancedInfoEnabled, setIsMobileConnectionAdvancedInfoEnabled] = useState(false)
+  const [assistantTraceVisibility, setAssistantTraceVisibility] = useState<AssistantTraceVisibility>({
+    ...DEFAULT_ASSISTANT_TRACE_VISIBILITY,
+  })
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(false)
   const [agentDefaultDirectory, setAgentDefaultDirectory] = useState("")
@@ -321,6 +332,25 @@ export function useDesktopShell() {
   }, [])
 
   useEffect(() => {
+    if (!runtimeCapabilitiesReady) return
+
+    if (!developmentFeaturesEnabled) {
+      setIsDebugUiRegionsEnabled(false)
+      setIsDebugLineColorsEnabled(false)
+      setIsSemanticTokenInspectorEnabled(false)
+      setIsMobileConnectionAdvancedInfoEnabled(false)
+      setAssistantTraceVisibility({ ...DEFAULT_ASSISTANT_TRACE_VISIBILITY })
+      return
+    }
+
+    setIsDebugUiRegionsEnabled(readDebugUiRegionsPreference())
+    setIsDebugLineColorsEnabled(readDebugLineColorsPreference())
+    setIsSemanticTokenInspectorEnabled(readSemanticTokenInspectorPreference())
+    setIsMobileConnectionAdvancedInfoEnabled(readMobileConnectionAdvancedInfoPreference())
+    setAssistantTraceVisibility(readAssistantTraceVisibilityPreference())
+  }, [developmentFeaturesEnabled, runtimeCapabilitiesReady])
+
+  useEffect(() => {
     const controls = windowControlsElement
     if (!controls) return
 
@@ -405,22 +435,25 @@ export function useDesktopShell() {
   }, [isActivityRailVisible])
 
   useEffect(() => {
+    if (!developmentFeaturesEnabled) return
     try {
       window.localStorage.setItem(DEBUG_UI_REGIONS_STORAGE_KEY, String(isDebugUiRegionsEnabled))
     } catch {
       return
     }
-  }, [isDebugUiRegionsEnabled])
+  }, [developmentFeaturesEnabled, isDebugUiRegionsEnabled])
 
   useEffect(() => {
+    if (!developmentFeaturesEnabled) return
     try {
       window.localStorage.setItem(DEBUG_LINE_COLORS_STORAGE_KEY, String(isDebugLineColorsEnabled))
     } catch {
       return
     }
-  }, [isDebugLineColorsEnabled])
+  }, [developmentFeaturesEnabled, isDebugLineColorsEnabled])
 
   useEffect(() => {
+    if (!developmentFeaturesEnabled) return
     try {
       window.localStorage.setItem(
         SEMANTIC_TOKEN_INSPECTOR_STORAGE_KEY,
@@ -429,17 +462,19 @@ export function useDesktopShell() {
     } catch {
       return
     }
-  }, [isSemanticTokenInspectorEnabled])
+  }, [developmentFeaturesEnabled, isSemanticTokenInspectorEnabled])
 
   useEffect(() => {
+    if (!developmentFeaturesEnabled) return
     try {
       window.localStorage.setItem(MOBILE_CONNECTION_ADVANCED_INFO_STORAGE_KEY, String(isMobileConnectionAdvancedInfoEnabled))
     } catch {
       return
     }
-  }, [isMobileConnectionAdvancedInfoEnabled])
+  }, [developmentFeaturesEnabled, isMobileConnectionAdvancedInfoEnabled])
 
   useEffect(() => {
+    if (!developmentFeaturesEnabled) return
     try {
       window.localStorage.setItem(
         ASSISTANT_TRACE_VISIBILITY_STORAGE_KEY,
@@ -449,7 +484,7 @@ export function useDesktopShell() {
     } catch {
       return
     }
-  }, [assistantTraceVisibility])
+  }, [assistantTraceVisibility, developmentFeaturesEnabled])
 
   useEffect(() => {
     function syncSidebarWidthToViewport() {
@@ -743,22 +778,27 @@ export function useDesktopShell() {
   }
 
   function handleDebugUiRegionsChange(nextEnabled: boolean) {
+    if (!developmentFeaturesEnabled) return
     setIsDebugUiRegionsEnabled(nextEnabled)
   }
 
   function handleDebugLineColorsChange(nextEnabled: boolean) {
+    if (!developmentFeaturesEnabled) return
     setIsDebugLineColorsEnabled(nextEnabled)
   }
 
   function handleSemanticTokenInspectorChange(nextEnabled: boolean) {
+    if (!developmentFeaturesEnabled) return
     setIsSemanticTokenInspectorEnabled(nextEnabled)
   }
 
   function handleMobileConnectionAdvancedInfoChange(nextEnabled: boolean) {
+    if (!developmentFeaturesEnabled) return
     setIsMobileConnectionAdvancedInfoEnabled(nextEnabled)
   }
 
   function handleAssistantTraceVisibilityChange(key: AssistantTraceVisibilityKey, nextEnabled: boolean) {
+    if (!developmentFeaturesEnabled) return
     setAssistantTraceVisibility((current) => {
       if (current[key] === nextEnabled) return current
       return {
@@ -803,6 +843,7 @@ export function useDesktopShell() {
   return {
     agentConnected,
     agentDefaultDirectory,
+    appearanceAuthoringEnabled,
     appearanceConfigError,
     appearanceConfigPath,
     appearanceConfigPreview,
@@ -819,6 +860,7 @@ export function useDesktopShell() {
     brandTheme,
     codeThemePreference,
     colorMode,
+    developmentFeaturesEnabled,
     fontFamily,
     handleBrandThemeChange,
     handleCodeThemeChange,
@@ -865,6 +907,7 @@ export function useDesktopShell() {
     rightSidebarWidth,
     resolvedCodeTheme,
     resolvedColorMode,
+    runtimeCapabilitiesReady,
     sidebarWidthBounds,
     sidebarWidth,
     windowControlsRef,

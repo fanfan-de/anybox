@@ -384,6 +384,8 @@ export const koKR = {
   "settings.appearance.themeLibraryLabel": "테마",
   "settings.appearance.themeLibraryTitle": "테마 라이브러리",
   "settings.appearance.themeLibraryCopy": "공식 프리셋을 선택하거나 현재 모양을 자신의 테마로 저장하세요.",
+  "settings.appearance.builtInThemesTitle": "기본 제공 테마",
+  "settings.appearance.builtInThemesCopy": "Anybox에 포함된 테마를 선택하세요.",
   "settings.appearance.themeLibraryListLabel": "테마 목록",
   "settings.appearance.themeSourceBuiltIn": "공식 프리셋",
   "settings.appearance.themeSourceUser": "내 테마",

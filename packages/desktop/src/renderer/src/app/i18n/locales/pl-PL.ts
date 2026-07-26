@@ -384,6 +384,8 @@ export const plPL = {
   "settings.appearance.themeLibraryLabel": "Motyw",
   "settings.appearance.themeLibraryTitle": "Biblioteka motywów",
   "settings.appearance.themeLibraryCopy": "Wybierz oficjalny preset lub zapisz bieżący wygląd jako własny motyw.",
+  "settings.appearance.builtInThemesTitle": "Wbudowane motywy",
+  "settings.appearance.builtInThemesCopy": "Wybierz motyw dostarczony z Anybox.",
   "settings.appearance.themeLibraryListLabel": "Lista motywów",
   "settings.appearance.themeSourceBuiltIn": "Oficjalny preset",
   "settings.appearance.themeSourceUser": "Mój motyw",

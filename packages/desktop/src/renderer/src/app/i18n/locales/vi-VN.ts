@@ -384,6 +384,8 @@ export const viVN = {
   "settings.appearance.themeLibraryLabel": "Chủ đề",
   "settings.appearance.themeLibraryTitle": "Thư viện chủ đề",
   "settings.appearance.themeLibraryCopy": "Chọn một bộ cài đặt sẵn chính thức hoặc lưu giao diện hiện tại làm chủ đề của riêng bạn.",
+  "settings.appearance.builtInThemesTitle": "Chủ đề tích hợp",
+  "settings.appearance.builtInThemesCopy": "Chọn một chủ đề đi kèm với Anybox.",
   "settings.appearance.themeLibraryListLabel": "Danh sách chủ đề",
   "settings.appearance.themeSourceBuiltIn": "Bộ cài đặt sẵn chính thức",
   "settings.appearance.themeSourceUser": "Chủ đề của tôi",

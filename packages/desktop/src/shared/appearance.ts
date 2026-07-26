@@ -273,6 +273,95 @@ const LEGACY_APPEARANCE_TOKEN_MIGRATIONS: Record<string, readonly AppearanceToke
     "semantic-settings-page-surface-light",
     "semantic-settings-page-surface-dark",
   ],
+  // Deprecated settings-scoped list-detail names migrate to the shared list-detail groups.
+  "semantic-settings-list-detail-row-surface-hover": [
+    "semantic-list-detail-row-surface-hover-light",
+    "semantic-list-detail-row-surface-hover-dark",
+  ],
+  "semantic-settings-list-detail-row-surface-hover-light": [
+    "semantic-list-detail-row-surface-hover-light",
+  ],
+  "semantic-settings-list-detail-row-surface-hover-dark": [
+    "semantic-list-detail-row-surface-hover-dark",
+  ],
+  "semantic-settings-list-detail-row-surface-current": [
+    "semantic-list-detail-row-surface-current-light",
+    "semantic-list-detail-row-surface-current-dark",
+  ],
+  "semantic-settings-list-detail-row-surface-current-light": [
+    "semantic-list-detail-row-surface-current-light",
+  ],
+  "semantic-settings-list-detail-row-surface-current-dark": [
+    "semantic-list-detail-row-surface-current-dark",
+  ],
+  "semantic-settings-list-detail-row-primary-text": [
+    "semantic-list-detail-row-primary-text-light",
+    "semantic-list-detail-row-primary-text-dark",
+  ],
+  "semantic-settings-list-detail-row-primary-text-light": [
+    "semantic-list-detail-row-primary-text-light",
+  ],
+  "semantic-settings-list-detail-row-primary-text-dark": [
+    "semantic-list-detail-row-primary-text-dark",
+  ],
+  "semantic-settings-list-detail-row-secondary-text": [
+    "semantic-list-detail-row-secondary-text-light",
+    "semantic-list-detail-row-secondary-text-dark",
+  ],
+  "semantic-settings-list-detail-row-secondary-text-light": [
+    "semantic-list-detail-row-secondary-text-light",
+  ],
+  "semantic-settings-list-detail-row-secondary-text-dark": [
+    "semantic-list-detail-row-secondary-text-dark",
+  ],
+  "semantic-settings-list-detail-row-current-text": [
+    "semantic-list-detail-row-current-text-light",
+    "semantic-list-detail-row-current-text-dark",
+  ],
+  "semantic-settings-list-detail-row-current-text-light": [
+    "semantic-list-detail-row-current-text-light",
+  ],
+  "semantic-settings-list-detail-row-current-text-dark": [
+    "semantic-list-detail-row-current-text-dark",
+  ],
+  "semantic-settings-list-detail-count-surface": [
+    "semantic-list-detail-count-surface-light",
+    "semantic-list-detail-count-surface-dark",
+  ],
+  "semantic-settings-list-detail-count-surface-light": [
+    "semantic-list-detail-count-surface-light",
+  ],
+  "semantic-settings-list-detail-count-surface-dark": [
+    "semantic-list-detail-count-surface-dark",
+  ],
+  "semantic-settings-list-detail-count-text": [
+    "semantic-list-detail-count-text-light",
+    "semantic-list-detail-count-text-dark",
+  ],
+  "semantic-settings-list-detail-count-text-light": [
+    "semantic-list-detail-count-text-light",
+  ],
+  "semantic-settings-list-detail-count-text-dark": [
+    "semantic-list-detail-count-text-dark",
+  ],
+  "semantic-settings-list-detail-icon-surface": [
+    "semantic-detail-icon-surface-light",
+    "semantic-detail-icon-surface-dark",
+  ],
+  "semantic-settings-list-detail-icon-surface-light": ["semantic-detail-icon-surface-light"],
+  "semantic-settings-list-detail-icon-surface-dark": ["semantic-detail-icon-surface-dark"],
+  "semantic-settings-list-detail-icon-border": [
+    "semantic-detail-icon-border-light",
+    "semantic-detail-icon-border-dark",
+  ],
+  "semantic-settings-list-detail-icon-border-light": ["semantic-detail-icon-border-light"],
+  "semantic-settings-list-detail-icon-border-dark": ["semantic-detail-icon-border-dark"],
+  "semantic-settings-list-detail-icon-text": [
+    "semantic-detail-icon-text-light",
+    "semantic-detail-icon-text-dark",
+  ],
+  "semantic-settings-list-detail-icon-text-light": ["semantic-detail-icon-text-light"],
+  "semantic-settings-list-detail-icon-text-dark": ["semantic-detail-icon-text-dark"],
   "semantic-switch-row-surface-focus": [
     "semantic-switch-row-surface-focus-light",
     "semantic-switch-row-surface-focus-dark",

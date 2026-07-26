@@ -164,6 +164,58 @@ describe("appearance theme library persistence", () => {
     })
   })
 
+  it("saves with existing themes that use renamed settings list-detail tokens", async () => {
+    const filePath = path.join(tempDirectory, "appearance-themes.json")
+    const legacyToken = "semantic-settings-list-detail-row-surface-hover-light"
+    const currentToken = "semantic-list-detail-row-surface-hover-light"
+    const legacyValue = colorLiteral("#c4c4c4")
+    const userThemes = Array.from({ length: 4 }, (_, index) => ({
+      id: `user:legacy-${index + 1}`,
+      name: `Legacy ${index + 1}`,
+      source: "user",
+      readonly: false,
+      createdAt: index + 1,
+      updatedAt: index + 1,
+      colorMode: "light",
+      brandTheme: "terra",
+      fontFamily: "default",
+      codeThemePreference: "auto",
+      overrides: {
+        [legacyToken]: legacyValue,
+      },
+      foreignDtcg: {},
+    }))
+    await writeFile(filePath, JSON.stringify({
+      version: 2,
+      activeThemeID: DEFAULT_APPEARANCE_THEME_ID,
+      userThemes,
+    }), "utf8")
+
+    const result = await saveAppearanceTheme({
+      id: "user:current",
+      name: "Current",
+      colorMode: "light",
+      brandTheme: "terra",
+      fontFamily: "default",
+      codeThemePreference: "auto",
+      overrides: {},
+    })
+
+    expect(result.snapshot.activeThemeID).toBe("user:current")
+    expect(result.snapshot.document.userThemes).toHaveLength(5)
+    for (const theme of result.snapshot.document.userThemes.slice(0, 4)) {
+      expect(theme.overrides).not.toHaveProperty(legacyToken)
+      expect(theme.overrides).toHaveProperty(currentToken, legacyValue)
+    }
+
+    const persisted = JSON.parse(await readFile(filePath, "utf8"))
+    expect(persisted.userThemes).toHaveLength(5)
+    for (const theme of persisted.userThemes.slice(0, 4)) {
+      expect(theme.overrides).not.toHaveProperty(legacyToken)
+      expect(theme.overrides).toHaveProperty(currentToken, legacyValue)
+    }
+  })
+
   it("duplicates built-in themes as user themes", async () => {
     const result = await duplicateAppearanceTheme({
       themeID: "built-in:sage-slate",

@@ -117,6 +117,7 @@ function createSettingsPageProps(
   return {
     activeMcpServerDiagnostic: null,
     activeMcpServerID: null,
+    developmentFeaturesEnabled: true,
     appearanceConfigError: null,
     appearanceConfigPath: null,
     appearanceConfigPreview: "{}",
@@ -2157,6 +2158,87 @@ describe("SettingsPage built-in tools", () => {
     expect(onFontFamilyChange).toHaveBeenCalledWith("microsoft-yahei")
   })
 
+  it("selects the color mode from preview cards shown before the theme library", () => {
+    const onColorModeChange = vi.fn()
+
+    render(
+      <SettingsPage
+        {...createSettingsPageProps({
+          colorMode: "system",
+          onColorModeChange,
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Appearance" }))
+
+    const colorModeGroup = screen.getByRole("radiogroup", { name: "Color Mode" })
+    const colorModePanel = colorModeGroup.closest("section")
+    expect(document.querySelector(".settings-appearance-layout")?.firstElementChild).toBe(colorModePanel)
+    expect(colorModeGroup.querySelectorAll(".settings-color-mode-preview")).toHaveLength(3)
+    expect(within(colorModeGroup).getByRole("radio", { name: "System" })).toBeChecked()
+
+    fireEvent.click(within(colorModeGroup).getByRole("radio", { name: "Dark" }))
+
+    expect(onColorModeChange).toHaveBeenCalledWith("dark")
+  })
+
+  it("shows only consumer appearance controls when development features are disabled", async () => {
+    const onAppearanceThemeApply = vi.fn().mockResolvedValue(undefined)
+
+    render(
+      <SettingsPage
+        {...createSettingsPageProps({
+          developmentFeaturesEnabled: false,
+          activeAppearanceThemeID: "built-in:classic",
+          appearanceThemes: [
+            createAppearanceTheme(),
+            createAppearanceTheme({
+              id: "built-in:sage-slate",
+              name: "Sage Slate",
+              brandTheme: "sage",
+            }),
+            createAppearanceTheme({
+              id: "user:private",
+              name: "Private Draft",
+              source: "user",
+              readonly: false,
+            }),
+          ],
+          appearanceOverrides: {
+            "surface-app-light": colorLiteral("#123456"),
+          },
+          onAppearanceThemeApply,
+        })}
+      />,
+    )
+
+    expect(screen.queryByRole("button", { name: "Developer Mode" })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: "Appearance" }))
+
+    expect(screen.getByRole("radiogroup", { name: "Color Mode" })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Built-in Themes" })).toBeInTheDocument()
+    expect(screen.getByText("Interface Font")).toBeInTheDocument()
+    expect(screen.getByRole("switch", { name: "Show left rail" })).toBeInTheDocument()
+    expect(screen.queryByText("Private Draft")).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Import DTCG" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Duplicate" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Export DTCG" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Save Current" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Open Appearance Window" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("textbox", { name: "Current appearance JSON" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("searchbox", { name: "Search semantic tokens" })).not.toBeInTheDocument()
+
+    const library = screen.getByRole("heading", { name: "Built-in Themes" }).closest("section")!
+    fireEvent.click(within(library).getByRole("option", { name: /Sage Slate/ }))
+    fireEvent.click(within(library).getByRole("button", { name: "Apply" }))
+
+    await waitFor(() => {
+      expect(onAppearanceThemeApply).toHaveBeenCalledWith("built-in:sage-slate")
+    })
+  })
+
   it("manages appearance themes from the appearance settings", async () => {
     const onAppearanceThemeApply = vi.fn().mockResolvedValue(undefined)
     const onAppearanceThemeSaveCurrent = vi.fn().mockResolvedValue(createAppearanceTheme({
@@ -2215,6 +2297,7 @@ describe("SettingsPage built-in tools", () => {
     fireEvent.click(screen.getByRole("button", { name: "Appearance" }))
 
     const library = screen.getByRole("heading", { name: "Theme Library" }).closest("section")!
+    expect(library.querySelector(".settings-theme-library-swatches")).toBeNull()
     expect(within(library).getByRole("option", { name: /经典/ })).toHaveAttribute("aria-selected", "true")
     expect(within(library).getByRole("button", { name: "Delete" })).toBeDisabled()
 
@@ -2539,7 +2622,11 @@ describe("SettingsPage built-in tools", () => {
     expect(within(themeLibrary).getByText("颜色模式")).toBeInTheDocument()
     expect(within(themeLibrary).getByText("强调主题")).toBeInTheDocument()
     expect(within(themeLibrary).getByText("代码主题")).toBeInTheDocument()
-    expect(screen.getByRole("combobox", { name: "颜色模式" })).toBeInTheDocument()
+    const colorModeGroup = screen.getByRole("radiogroup", { name: "颜色模式" })
+    expect(within(colorModeGroup).getByRole("radio", { name: "跟随系统" })).toBeInTheDocument()
+    expect(within(colorModeGroup).getByRole("radio", { name: "亮色" })).toBeInTheDocument()
+    expect(within(colorModeGroup).getByRole("radio", { name: "暗色" })).toBeInTheDocument()
+    expect(screen.queryByRole("combobox", { name: "颜色模式" })).not.toBeInTheDocument()
     expect(screen.queryByRole("combobox", { name: "强调主题" })).not.toBeInTheDocument()
     expect(screen.queryByRole("combobox", { name: "代码主题" })).not.toBeInTheDocument()
     expect(screen.getByRole("combobox", { name: "界面字体" })).toBeInTheDocument()

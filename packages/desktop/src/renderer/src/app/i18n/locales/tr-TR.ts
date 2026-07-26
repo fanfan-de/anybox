@@ -384,6 +384,8 @@ export const trTR = {
   "settings.appearance.themeLibraryLabel": "Tema",
   "settings.appearance.themeLibraryTitle": "Tema Kütüphanesi",
   "settings.appearance.themeLibraryCopy": "Resmi bir ön ayar seçin veya mevcut görünümü kendi temanız olarak kaydedin.",
+  "settings.appearance.builtInThemesTitle": "Yerleşik Temalar",
+  "settings.appearance.builtInThemesCopy": "Anybox ile sunulan bir tema seçin.",
   "settings.appearance.themeLibraryListLabel": "Tema listesi",
   "settings.appearance.themeSourceBuiltIn": "Resmi ön ayar",
   "settings.appearance.themeSourceUser": "Temam",

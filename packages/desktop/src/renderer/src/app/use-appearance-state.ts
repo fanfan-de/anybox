@@ -192,7 +192,10 @@ function getAppearanceStateSignature(state: AppearanceRuntimeState) {
   })
 }
 
-export function useAppearanceState() {
+export function useAppearanceState(options: {
+  appearanceAuthoringEnabled: boolean
+  runtimeCapabilitiesReady: boolean
+}) {
   const [colorMode, setColorMode] = useState<ColorMode>(readColorModePreference)
   const [codeThemePreference, setCodeThemePreference] = useState<CodeThemePreference>(readCodeThemePreference)
   const [isSystemDarkMode, setIsSystemDarkMode] = useState(readSystemDarkModePreference)
@@ -264,6 +267,11 @@ export function useAppearanceState() {
 
   useEffect(() => {
     let mounted = true
+    if (!options.runtimeCapabilitiesReady) {
+      return () => {
+        mounted = false
+      }
+    }
 
     if (!window.desktop?.getAppearanceConfig) {
       setIsAppearanceConfigReady(true)
@@ -299,10 +307,15 @@ export function useAppearanceState() {
     return () => {
       mounted = false
     }
-  }, [])
+  }, [options.runtimeCapabilitiesReady])
 
   useEffect(() => {
     let mounted = true
+    if (!options.runtimeCapabilitiesReady) {
+      return () => {
+        mounted = false
+      }
+    }
     const getAppearanceThemes = window.desktop?.getAppearanceThemes
 
     if (!getAppearanceThemes) {
@@ -316,6 +329,12 @@ export function useAppearanceState() {
       .then((snapshot) => {
         if (!mounted) return
         setAppearanceThemeSnapshot(snapshot)
+        if (!options.appearanceAuthoringEnabled) {
+          const activeTheme = findAppearanceThemeByID(snapshot.themes, snapshot.activeThemeID)
+          if (activeTheme) {
+            setCodeThemePreference(activeTheme.codeThemePreference)
+          }
+        }
         setAppearanceThemeError(null)
       })
       .catch((error) => {
@@ -327,7 +346,7 @@ export function useAppearanceState() {
     return () => {
       mounted = false
     }
-  }, [])
+  }, [options.appearanceAuthoringEnabled, options.runtimeCapabilitiesReady])
 
   useEffect(() => {
     const unsubscribe = window.desktop?.onAppearanceStateChange?.((state) => {

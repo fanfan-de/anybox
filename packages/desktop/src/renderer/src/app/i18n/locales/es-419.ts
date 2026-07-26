@@ -384,6 +384,8 @@ export const es419 = {
   "settings.appearance.themeLibraryLabel": "Tema",
   "settings.appearance.themeLibraryTitle": "Biblioteca de temas",
   "settings.appearance.themeLibraryCopy": "Elige un ajuste preestablecido oficial o guarda la apariencia actual como tu propio tema.",
+  "settings.appearance.builtInThemesTitle": "Temas integrados",
+  "settings.appearance.builtInThemesCopy": "Elige un tema incluido con Anybox.",
   "settings.appearance.themeLibraryListLabel": "Lista de temas",
   "settings.appearance.themeSourceBuiltIn": "Ajuste preestablecido oficial",
   "settings.appearance.themeSourceUser": "Mi tema",

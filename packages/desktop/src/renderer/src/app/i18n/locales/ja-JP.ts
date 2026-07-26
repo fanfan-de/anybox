@@ -384,6 +384,8 @@ export const jaJP = {
   "settings.appearance.themeLibraryLabel": "テーマ",
   "settings.appearance.themeLibraryTitle": "テーマライブラリ",
   "settings.appearance.themeLibraryCopy": "公式プリセットを選択するか、現在の外観を自分のテーマとして保存します。",
+  "settings.appearance.builtInThemesTitle": "組み込みテーマ",
+  "settings.appearance.builtInThemesCopy": "Anybox に付属するテーマを選択します。",
   "settings.appearance.themeLibraryListLabel": "テーマリスト",
   "settings.appearance.themeSourceBuiltIn": "公式プリセット",
   "settings.appearance.themeSourceUser": "マイテーマ",

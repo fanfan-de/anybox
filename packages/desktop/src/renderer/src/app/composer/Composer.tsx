@@ -32,6 +32,7 @@ import { toLocalImageProtocolUrl } from "../../../../shared/local-image-protocol
 import { ArrowUpIcon, ChevronDownIcon, CloseIcon, PaperclipIcon, StopIcon } from "../icons"
 import { useI18n } from "../i18n/I18nProvider"
 import { translateLiteral, type TranslationKey } from "../i18n/translations"
+import { areRendererDevelopmentFeaturesEnabled } from "../runtime-capabilities"
 import { joinClassNames } from "../shared-ui"
 import type {
   ComposerAttachment,
@@ -554,7 +555,10 @@ function getComposerSelectionRect() {
 }
 
 function isComposerDebugEnabled() {
-  if (typeof window === "undefined") return false
+  if (
+    typeof window === "undefined" ||
+    !areRendererDevelopmentFeaturesEnabled()
+  ) return false
 
   try {
     const debugWindow = window as ComposerDebugWindow

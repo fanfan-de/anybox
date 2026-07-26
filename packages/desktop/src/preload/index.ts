@@ -155,6 +155,8 @@ try {
         chrome: string
         node: string
       }>,
+    getRuntimeCapabilities: () =>
+      invokeDesktop("desktop:get-runtime-capabilities"),
     startSemanticTokenInspector: () =>
       invokeDesktop("desktop:start-semantic-token-inspector"),
     inspectSemanticTokenAtPoint: (

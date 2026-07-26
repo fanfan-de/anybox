@@ -18,7 +18,7 @@
     "dev:info": "corepack pnpm run build:dockview-css && node ./scripts/dev.mjs --agent-log-level=INFO",
     "dev:warn": "corepack pnpm run build:dockview-css && node ./scripts/dev.mjs --agent-log-level=WARN",
     "dev:error": "corepack pnpm run build:dockview-css && node ./scripts/dev.mjs --agent-log-level=ERROR",
-    "appearance:promote": "node ./scripts/promote-appearance-theme.mjs && node ./scripts/generate-appearance-tokens.mjs",
+    "appearance:promote": "node ./scripts/promote-appearance-theme.mjs",
     "appearance:tokens:generate": "node ./scripts/generate-appearance-tokens.mjs",
     "appearance:tokens:check": "node ./scripts/generate-appearance-tokens.mjs --check",
     "appearance:tokens:catalog": "node ./scripts/generate-semantic-token-catalog.mjs",
@@ -52,7 +52,7 @@
     "preview": "electron-vite preview",
     "pretypecheck": "npm run appearance:tokens:check",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "pretest": "npm run appearance:tokens:check",
+    "pretest": "npm run appearance:tokens:check && node --test ./scripts/promote-appearance-theme.test.mjs",
     "test": "vitest run"
   },
   "dependencies": {

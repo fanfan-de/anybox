@@ -64,6 +64,15 @@ import {
 import { AgentAPIError, getAgentConfig, readAgentSSEStream, requestAgentJSON, resolveAgentURL } from "./agent-client"
 import { AgentCompletionNotificationManager } from "./agent-completion-notification"
 import { openAppearanceWindow } from "./appearance-window"
+import {
+  assertConsumerAppearanceThemeID,
+  constrainConsumerAppearanceDocument,
+  constrainConsumerAppearanceRuntimeState,
+  createConsumerAppearanceThemeSnapshot,
+  createSafeConsumerAppearanceState,
+  migratePackagedAppearanceState,
+  resolveConsumerAppearanceTheme,
+} from "./appearance-consumer-policy"
 import { readAppearanceConfigSnapshot, writeAppearanceConfigSnapshot } from "./appearance-config"
 import {
   deleteAppearanceTheme,
@@ -100,6 +109,7 @@ import {
 } from "./renderer-memory-diagnostics-store"
 import { safeError, safeWarn } from "./safe-console"
 import { SemanticTokenInspectorSessionManager } from "./semantic-token-inspector"
+import { getDesktopRuntimeCapabilities } from "./runtime-capabilities"
 import { sendWebContentsSafely } from "./safe-web-contents-send"
 import {
   checkForAppUpdates,
@@ -3701,6 +3711,7 @@ async function previewDownloadedRegistrySkillUpdate(
 }
 
 export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandlerOptions = {}) {
+  const runtimeCapabilities = getDesktopRuntimeCapabilities()
   const platformAdapter = createPlatformAdapter({
     platform: process.platform,
     openPath: shell.openPath,
@@ -3717,14 +3728,41 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
   const externalEditorMenuIconLoadCache = new Map<string, Promise<NativeImage | undefined>>()
   let cachedAvailableExternalEditors: ReturnType<typeof listAvailableExternalEditors> | null = null
   let lastAppearanceRuntimeState = createDefaultAppearanceRuntimeState()
+  let packagedAppearanceMigration:
+    | ReturnType<typeof migratePackagedAppearanceState>
+    | null = null
+
+  function requireDevelopmentFeatures(feature: string) {
+    if (runtimeCapabilities.developmentFeaturesEnabled) return
+    throw new Error(`${feature} is unavailable because desktop development features are disabled.`)
+  }
+
+  function requireAppearanceAuthoring(feature: string) {
+    if (runtimeCapabilities.appearanceAuthoringEnabled) return
+    throw new Error(`${feature} is unavailable because appearance authoring is disabled.`)
+  }
 
   handleDesktopIpc(
     "desktop:start-semantic-token-inspector",
-    (event) => semanticTokenInspectorManager.start(event.sender),
+    (event) => {
+      if (!runtimeCapabilities.developmentFeaturesEnabled) {
+        return {
+          status: "blocked" as const,
+          reason: app.isPackaged ? "packaged" as const : "development-disabled" as const,
+          message: app.isPackaged
+            ? "Semantic Token Inspector is unavailable in packaged builds."
+            : "Semantic Token Inspector requires desktop development features.",
+        }
+      }
+      return semanticTokenInspectorManager.start(event.sender)
+    },
   )
   handleDesktopIpc(
     "desktop:inspect-semantic-token-at-point",
-    (event, input) => semanticTokenInspectorManager.inspect(event.sender, input),
+    (event, input) => {
+      requireDevelopmentFeatures("Semantic Token Inspector")
+      return semanticTokenInspectorManager.inspect(event.sender, input)
+    },
   )
   handleDesktopIpc(
     "desktop:stop-semantic-token-inspector",
@@ -3732,15 +3770,24 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
   )
   handleDesktopIpc(
     "desktop:prepare-semantic-token-authoring-commit",
-    (event, input) => semanticTokenInspectorManager.prepareAuthoringCommit(event.sender, input),
+    (event, input) => {
+      requireAppearanceAuthoring("Semantic Token authoring")
+      return semanticTokenInspectorManager.prepareAuthoringCommit(event.sender, input)
+    },
   )
   handleDesktopIpc(
     "desktop:commit-semantic-token-authoring-commit",
-    (event, input) => semanticTokenInspectorManager.commitAuthoringCommit(event.sender, input),
+    (event, input) => {
+      requireAppearanceAuthoring("Semantic Token authoring")
+      return semanticTokenInspectorManager.commitAuthoringCommit(event.sender, input)
+    },
   )
   handleDesktopIpc(
     "desktop:discard-semantic-token-authoring-commit",
-    (event, input) => semanticTokenInspectorManager.discardAuthoringCommit(event.sender, input),
+    (event, input) => {
+      requireAppearanceAuthoring("Semantic Token authoring")
+      return semanticTokenInspectorManager.discardAuthoringCommit(event.sender, input)
+    },
   )
 
   function broadcastAppearanceRuntimeState(state: AppearanceRuntimeState, exceptSender?: WebContents) {
@@ -3766,6 +3813,44 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
   if (!automationEventBridgeRegistered) {
     automationEventBridgeRegistered = true
     createAutomationEventBridge().start()
+  }
+
+  async function loadConsumerAppearanceState() {
+    try {
+      if (app.isPackaged) {
+        packagedAppearanceMigration ??= migratePackagedAppearanceState().catch((error) => {
+          packagedAppearanceMigration = null
+          throw error
+        })
+        await packagedAppearanceMigration
+      }
+
+      const [configSnapshot, themeSnapshot] = await Promise.all([
+        readAppearanceConfigSnapshot(),
+        readAppearanceThemesSnapshot(),
+      ])
+      const activeTheme = resolveConsumerAppearanceTheme(themeSnapshot)
+      return {
+        activeTheme,
+        configSnapshot: {
+          ...configSnapshot,
+          document: constrainConsumerAppearanceDocument(
+            configSnapshot.document,
+            activeTheme,
+          ),
+        },
+        themeSnapshot: createConsumerAppearanceThemeSnapshot(themeSnapshot),
+        migrationFailed: false,
+      }
+    } catch (error) {
+      safeWarn("[desktop] packaged appearance migration failed; using safe built-in defaults", error)
+      const safeState = createSafeConsumerAppearanceState()
+      return {
+        activeTheme: resolveConsumerAppearanceTheme(safeState.themeSnapshot),
+        ...safeState,
+        migrationFailed: true,
+      }
+    }
   }
 
   if (!environmentEventBridgeRegistered) {
@@ -4028,6 +4113,8 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
     node: process.versions.node,
   }))
 
+  handleDesktopIpc("desktop:get-runtime-capabilities", () => runtimeCapabilities)
+
   handleDesktopIpc("desktop:get-app-update-settings", async () => getAppUpdateSettingsSnapshot())
 
   handleDesktopIpc("desktop:get-app-update-state", async () => getAppUpdateStateSnapshot())
@@ -4185,48 +4272,100 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
   })
 
   handleDesktopIpc("desktop:get-appearance-config", async () => {
-    const snapshot = await readAppearanceConfigSnapshot()
-    lastAppearanceRuntimeState = normalizeAppearanceRuntimeState({
+    if (runtimeCapabilities.appearanceAuthoringEnabled) {
+      const snapshot = await readAppearanceConfigSnapshot()
+      lastAppearanceRuntimeState = normalizeAppearanceRuntimeState({
+        ...lastAppearanceRuntimeState,
+        document: snapshot.document,
+      }, lastAppearanceRuntimeState)
+      return snapshot
+    }
+
+    const state = await loadConsumerAppearanceState()
+    lastAppearanceRuntimeState = constrainConsumerAppearanceRuntimeState({
       ...lastAppearanceRuntimeState,
-      document: snapshot.document,
-    }, lastAppearanceRuntimeState)
-    return snapshot
+      document: state.configSnapshot.document,
+    }, state.activeTheme)
+    return state.configSnapshot
   })
 
   handleDesktopIpc("desktop:save-appearance-config", async (event, input: { document: AppearanceConfigDocument }) => {
-    const snapshot = await writeAppearanceConfigSnapshot(input.document)
-    broadcastAppearanceRuntimeState({
-      ...lastAppearanceRuntimeState,
-      document: snapshot.document,
-    }, event.sender)
+    const consumerState = runtimeCapabilities.appearanceAuthoringEnabled
+      ? null
+      : await loadConsumerAppearanceState()
+    const document = consumerState
+      ? constrainConsumerAppearanceDocument(input.document, consumerState.activeTheme)
+      : input.document
+    if (consumerState?.migrationFailed) {
+      throw new Error("Appearance settings could not be saved after a failed packaged-state migration.")
+    }
+    const snapshot = await writeAppearanceConfigSnapshot(document)
+    const runtimeState = consumerState
+      ? constrainConsumerAppearanceRuntimeState({
+          ...lastAppearanceRuntimeState,
+          document: snapshot.document,
+        }, consumerState.activeTheme)
+      : {
+          ...lastAppearanceRuntimeState,
+          document: snapshot.document,
+        }
+    broadcastAppearanceRuntimeState(runtimeState, event.sender)
     return snapshot
   })
 
-  handleDesktopIpc("desktop:publish-appearance-state", (event, input: AppearanceRuntimeState) => {
-    broadcastAppearanceRuntimeState(input, event.sender)
+  handleDesktopIpc("desktop:publish-appearance-state", async (event, input: AppearanceRuntimeState) => {
+    if (runtimeCapabilities.appearanceAuthoringEnabled) {
+      broadcastAppearanceRuntimeState(input, event.sender)
+      return
+    }
+
+    const state = await loadConsumerAppearanceState()
+    broadcastAppearanceRuntimeState(
+      constrainConsumerAppearanceRuntimeState(input, state.activeTheme),
+      event.sender,
+    )
   })
 
-  handleDesktopIpc("desktop:get-appearance-themes", async () => readAppearanceThemesSnapshot())
+  handleDesktopIpc("desktop:get-appearance-themes", async () => {
+    if (runtimeCapabilities.appearanceAuthoringEnabled) {
+      return readAppearanceThemesSnapshot()
+    }
+    return (await loadConsumerAppearanceState()).themeSnapshot
+  })
 
-  handleDesktopIpc("desktop:save-appearance-theme", async (_event, input) =>
-    saveAppearanceTheme(input.theme)
-  )
+  handleDesktopIpc("desktop:save-appearance-theme", async (_event, input) => {
+    requireAppearanceAuthoring("Saving custom themes")
+    return saveAppearanceTheme(input.theme)
+  })
 
-  handleDesktopIpc("desktop:delete-appearance-theme", async (_event, input) =>
-    deleteAppearanceTheme(input.themeID)
-  )
+  handleDesktopIpc("desktop:delete-appearance-theme", async (_event, input) => {
+    requireAppearanceAuthoring("Deleting custom themes")
+    return deleteAppearanceTheme(input.themeID)
+  })
 
-  handleDesktopIpc("desktop:set-active-appearance-theme", async (_event, input) =>
-    setActiveAppearanceTheme(input.themeID)
-  )
+  handleDesktopIpc("desktop:set-active-appearance-theme", async (_event, input) => {
+    if (!runtimeCapabilities.appearanceAuthoringEnabled) {
+      const consumerState = await loadConsumerAppearanceState()
+      if (consumerState.migrationFailed) {
+        throw new Error("The active theme could not be changed after a failed packaged-state migration.")
+      }
+      assertConsumerAppearanceThemeID(input.themeID)
+    }
+    const snapshot = await setActiveAppearanceTheme(input.themeID)
+    return runtimeCapabilities.appearanceAuthoringEnabled
+      ? snapshot
+      : createConsumerAppearanceThemeSnapshot(snapshot)
+  })
 
-  handleDesktopIpc("desktop:duplicate-appearance-theme", async (_event, input) =>
-    duplicateAppearanceTheme(input)
-  )
+  handleDesktopIpc("desktop:duplicate-appearance-theme", async (_event, input) => {
+    requireAppearanceAuthoring("Duplicating themes")
+    return duplicateAppearanceTheme(input)
+  })
 
-  handleDesktopIpc("desktop:rename-appearance-theme", async (_event, input) =>
-    renameAppearanceTheme(input)
-  )
+  handleDesktopIpc("desktop:rename-appearance-theme", async (_event, input) => {
+    requireAppearanceAuthoring("Renaming themes")
+    return renameAppearanceTheme(input)
+  })
 
   handleDesktopIpc("desktop:get-locale-config", async () => readLocaleConfigSnapshot())
 
@@ -4308,9 +4447,13 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
     })
   })
 
-  handleDesktopIpc("desktop:open-monitor-window", async () => openMonitorWindow())
+  handleDesktopIpc("desktop:open-monitor-window", async () => {
+    requireDevelopmentFeatures("Agent Monitor")
+    return openMonitorWindow()
+  })
 
   handleDesktopIpc("desktop:open-appearance-window", async () => {
+    requireAppearanceAuthoring("The standalone appearance window")
     if (!options.mainDir || !options.rendererEntryUrl) {
       throw new Error("Appearance window options are unavailable.")
     }

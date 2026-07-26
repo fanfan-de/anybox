@@ -384,6 +384,8 @@ export const idID = {
   "settings.appearance.themeLibraryLabel": "Tema",
   "settings.appearance.themeLibraryTitle": "Pustaka Tema",
   "settings.appearance.themeLibraryCopy": "Pilih preset resmi atau simpan tampilan saat ini sebagai tema Anda sendiri.",
+  "settings.appearance.builtInThemesTitle": "Tema Bawaan",
+  "settings.appearance.builtInThemesCopy": "Pilih tema yang disertakan bersama Anybox.",
   "settings.appearance.themeLibraryListLabel": "Daftar tema",
   "settings.appearance.themeSourceBuiltIn": "Preset resmi",
   "settings.appearance.themeSourceUser": "Tema saya",

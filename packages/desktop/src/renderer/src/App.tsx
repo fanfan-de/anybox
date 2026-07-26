@@ -40,6 +40,7 @@ import type {
 import { useAgentWorkspace } from "./app/use-agent-workspace"
 import { useAppearanceState } from "./app/use-appearance-state"
 import { useDesktopShell } from "./app/use-desktop-shell"
+import { useDesktopRuntimeCapabilities } from "./app/runtime-capabilities"
 import { useGlobalSkills } from "./app/use-global-skills"
 import { useSettingsPage } from "./app/use-settings-page"
 import { ToastProvider, useToast } from "./app/toast"
@@ -741,6 +742,10 @@ function useStandaloneWindowControls() {
 
 function AppearanceWindowApp() {
   const {
+    appearanceAuthoringEnabled,
+    runtimeCapabilitiesReady,
+  } = useDesktopRuntimeCapabilities()
+  const {
     appearanceConfigError,
     appearanceConfigPath,
     appearanceConfigPreview,
@@ -765,7 +770,10 @@ function AppearanceWindowApp() {
     handleAppearanceTokenReset,
     handleColorModeChange,
     handleFontFamilyChange,
-  } = useAppearanceState()
+  } = useAppearanceState({
+    appearanceAuthoringEnabled,
+    runtimeCapabilitiesReady,
+  })
   const { handleWindowAction, isWindowMaximized } = useStandaloneWindowControls()
   const platform = typeof window === "undefined" ? "Desktop" : window.desktop?.platform ?? "Desktop"
   const isWindows = platform === "win32"
@@ -774,6 +782,8 @@ function AppearanceWindowApp() {
     "appearance-window-shell",
     isWindows ? "is-windows" : "",
   ].filter(Boolean).join(" ")
+  if (!runtimeCapabilitiesReady || !appearanceAuthoringEnabled) return null
+
   return (
     <div className={windowShellClassName}>
       <main className="appearance-window-app-shell">
@@ -799,6 +809,7 @@ function AppearanceWindowApp() {
               appearanceTokenValues={appearanceTokenValues}
               colorMode={colorMode}
               fontFamily={fontFamily}
+              mode="authoring"
               onAppearancePaletteReset={handleAppearancePaletteReset}
               onAppearanceThemeApply={handleAppearanceThemeApply}
               onAppearanceThemeDelete={handleAppearanceThemeDelete}
@@ -1159,6 +1170,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
   const {
     agentConnected,
     agentDefaultDirectory,
+    appearanceAuthoringEnabled,
     appearanceConfigError,
     appearanceConfigPath,
     appearanceConfigPreview,
@@ -1200,6 +1212,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     handleSidebarToggle,
     handleWindowAction,
     colorMode,
+    developmentFeaturesEnabled,
     handleColorModeChange,
     handleFontFamilyChange,
     isActivityRailVisible,
@@ -3397,6 +3410,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
             <SettingsPage
               activeMcpServerID={activeMcpServerID}
               activeMcpServerDiagnostic={activeMcpServerDiagnostic}
+              developmentFeaturesEnabled={developmentFeaturesEnabled}
               archivedSessions={archivedSessions}
               archivedSessionsError={archivedSessionsError}
               catalog={catalog}
@@ -3530,14 +3544,16 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
           />
         ) : null}
         </main>
-        <SemanticTokenInspectorOverlay
-          enabled={isSemanticTokenInspectorEnabled}
-          resolvedColorMode={resolvedColorMode}
-          onEnabledChange={handleSemanticTokenInspectorChange}
-          appearanceThemes={appearanceThemes}
-          activeAppearanceThemeID={activeAppearanceThemeID}
-          onAuthoringCommitted={handleSemanticTokenAuthoringCommitted}
-        />
+        {appearanceAuthoringEnabled ? (
+          <SemanticTokenInspectorOverlay
+            enabled={isSemanticTokenInspectorEnabled}
+            resolvedColorMode={resolvedColorMode}
+            onEnabledChange={handleSemanticTokenInspectorChange}
+            appearanceThemes={appearanceThemes}
+            activeAppearanceThemeID={activeAppearanceThemeID}
+            onAuthoringCommitted={handleSemanticTokenAuthoringCommitted}
+          />
+        ) : null}
         </div>
       </ThreadLinkRoutingProvider>
     </WorkspaceStoreProvider>

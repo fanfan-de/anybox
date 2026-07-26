@@ -381,6 +381,8 @@ export const zhTW = {
   "settings.appearance.themeLibraryLabel": "主題",
   "settings.appearance.themeLibraryTitle": "主題庫",
   "settings.appearance.themeLibraryCopy": "選擇官方預設，或把目前外觀儲存成自己的主題。",
+  "settings.appearance.builtInThemesTitle": "內建主題",
+  "settings.appearance.builtInThemesCopy": "選擇 Anybox 隨應用程式提供的主題。",
   "settings.appearance.themeLibraryListLabel": "主題列表",
   "settings.appearance.themeSourceBuiltIn": "官方預設",
   "settings.appearance.themeSourceUser": "我的主題",

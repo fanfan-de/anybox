@@ -384,6 +384,8 @@ export const frFR = {
   "settings.appearance.themeLibraryLabel": "Thème",
   "settings.appearance.themeLibraryTitle": "Bibliothèque de thèmes",
   "settings.appearance.themeLibraryCopy": "Choisissez un préréglage officiel ou enregistrez l'apparence actuelle comme votre propre thème.",
+  "settings.appearance.builtInThemesTitle": "Thèmes intégrés",
+  "settings.appearance.builtInThemesCopy": "Choisissez un thème fourni avec Anybox.",
   "settings.appearance.themeLibraryListLabel": "Liste des thèmes",
   "settings.appearance.themeSourceBuiltIn": "Préréglage officiel",
   "settings.appearance.themeSourceUser": "Mon thème",
