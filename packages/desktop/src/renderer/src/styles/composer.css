@@ -804,10 +804,10 @@
   max-height: min(480px, calc(100vh - 250px));
   resize: vertical;
   padding: 12px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--semantic-field-border);
   border-radius: 8px;
-  background: var(--seg-panel);
-  color: var(--seg-text-1);
+  background: var(--semantic-field-surface);
+  color: var(--semantic-field-text);
   font: inherit;
   font-size: 14px;
   line-height: 1.55;
@@ -815,7 +815,8 @@
 }
 
 .composer-long-text-field textarea:focus {
-  border-color: var(--focus-outline-color);
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
   box-shadow: none;
 }
 
@@ -923,21 +924,25 @@
   max-height: 220px;
   resize: vertical;
   padding: 10px 11px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--semantic-field-border);
   border-radius: var(--seg-radius-sm);
-  background: var(--seg-panel);
-  color: var(--seg-text-1);
+  background: var(--semantic-field-surface);
+  color: var(--semantic-field-text);
   font-size: 13px;
   line-height: 1.5;
   outline: none;
 }
 
 .session-bag-problem-field textarea:focus {
-  border-color: var(--focus-outline-color);
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
   box-shadow: none;
 }
 
 .session-bag-problem-field textarea:disabled {
+  border-color: var(--semantic-field-border-disabled);
+  background: var(--semantic-field-surface-disabled);
+  color: var(--semantic-field-text-disabled);
   cursor: default;
   opacity: 0.72;
 }
@@ -1070,17 +1075,18 @@
 .git-branch-create-field input {
   min-height: 42px;
   padding: 0 12px;
-  border: 1px solid var(--border-subtle);
-  background: var(--seg-panel);
-  color: var(--seg-text-1);
+  border: 1px solid var(--semantic-field-border);
+  background: var(--semantic-field-surface);
+  color: var(--semantic-field-text);
 }
 
 .git-branch-create-field input::placeholder {
-  color: var(--seg-text-3);
+  color: var(--semantic-field-placeholder);
 }
 
 .git-branch-create-field input:focus-visible {
-  border-color: var(--focus-outline-color);
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
   box-shadow: none;
 }
 
@@ -1636,21 +1642,22 @@
   height: 32px;
   box-sizing: border-box;
   padding: 0 10px;
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--semantic-field-border);
   border-radius: var(--seg-radius-xs);
-  background: var(--surface-elevated);
-  color: var(--seg-text-1);
+  background: var(--semantic-field-surface);
+  color: var(--semantic-field-text);
   font: inherit;
   font-size: 13px;
   outline: none;
 }
 
 .composer-menu-search-input::placeholder {
-  color: var(--seg-text-3);
+  color: var(--semantic-field-placeholder);
 }
 
 .composer-menu-search-input:focus {
-  border-color: var(--focus-outline-color);
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
   box-shadow: none;
 }
 

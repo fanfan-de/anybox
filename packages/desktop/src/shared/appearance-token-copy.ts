@@ -39,6 +39,10 @@ const zhCNTokenGroupCopy = {
     label: "按钮",
     description: "主按钮、次按钮和危险操作按钮的专用语义颜色。",
   },
+  "component-fields": {
+    label: "输入字段",
+    description: "文本输入、文本区域、选择器、搜索框和可编辑控件外壳的共享语义颜色。",
+  },
   "status-success": {
     label: "状态 / 成功",
     description: "成功状态从基础色到文字、边框和背景处理的颜色组。",
@@ -77,7 +81,7 @@ const zhCNTokenGroupCopy = {
   },
   "component-dropdown-select": {
     label: "下拉选择",
-    description: "展开后的下拉菜单和选择器菜单的专用语义背景。",
+    description: "展开后的下拉菜单、选择器菜单背景与选项状态的专用语义颜色。",
   },
   "component-question-card": {
     label: "问题卡片",
@@ -99,9 +103,9 @@ const zhCNTokenGroupCopy = {
     label: "侧边栏树行",
     description: "左侧边栏中对话、工作区、Prompts、Skills、MCP 和工具行的专用状态 token。",
   },
-  "component-settings-list-detail-rows": {
-    label: "设置列表明细行",
-    description: "设置、插件、连接器、MCP 等列表明细界面的专用行状态 token。",
+  "component-list-detail-rows": {
+    label: "列表明细行",
+    description: "可复用于设置、插件、连接器、MCP 等区域的列表明细行状态 token。",
   },
   "component-workspace-files": {
     label: "工作区文件",
@@ -138,9 +142,13 @@ const zhCNTokenRowCopy = {
     label: "弱化面板",
     description: "次级面板填充和低强调行背景。",
   },
-  "surface-sidebar": {
-    label: "侧边栏背景",
-    description: "左侧和右侧边栏的背景。",
+  "surface-left-sidebar": {
+    label: "左侧边栏背景",
+    description: "左侧导航边栏的背景。",
+  },
+  "surface-right-sidebar": {
+    label: "右侧边栏背景",
+    description: "右侧检查与工具边栏的背景。",
   },
   "surface-sidebar-strong": {
     label: "侧边栏强调",
@@ -354,6 +362,50 @@ const zhCNTokenRowCopy = {
     label: "图标按钮激活背景",
     description: "需要状态底色的纯图标按钮激活背景。",
   },
+  "semantic-field-surface": {
+    label: "输入字段背景",
+    description: "可编辑字段和控件外壳的默认背景。",
+  },
+  "semantic-field-surface-muted": {
+    label: "弱化输入字段背景",
+    description: "紧凑或次级可编辑字段的低强调背景。",
+  },
+  "semantic-field-surface-focus": {
+    label: "输入字段聚焦背景",
+    description: "可编辑字段包含键盘焦点时的背景。",
+  },
+  "semantic-field-surface-disabled": {
+    label: "输入字段禁用背景",
+    description: "可编辑字段禁用时的背景。",
+  },
+  "semantic-field-border": {
+    label: "输入字段边框",
+    description: "可编辑字段的默认边框。",
+  },
+  "semantic-field-border-focus": {
+    label: "输入字段聚焦边框",
+    description: "可编辑字段包含键盘焦点时的边框。",
+  },
+  "semantic-field-border-disabled": {
+    label: "输入字段禁用边框",
+    description: "可编辑字段禁用时的边框。",
+  },
+  "semantic-field-border-invalid": {
+    label: "输入字段无效边框",
+    description: "可编辑字段内容无效时的边框。",
+  },
+  "semantic-field-text": {
+    label: "输入字段文字",
+    description: "可编辑字段值的文字颜色。",
+  },
+  "semantic-field-text-disabled": {
+    label: "输入字段禁用文字",
+    description: "可编辑字段禁用时的文字颜色。",
+  },
+  "semantic-field-placeholder": {
+    label: "输入字段占位符",
+    description: "可编辑字段占位提示的文字颜色。",
+  },
   "semantic-success": {
     label: "基础色",
     description: "主要成功状态色。",
@@ -454,6 +506,10 @@ const zhCNTokenRowCopy = {
     label: "背景",
     description: "外壳级面板标签和侧边栏顶部菜单的背景。",
   },
+  "semantic-shell-chrome-tab-surface-active": {
+    label: "选中标签背景",
+    description: "中央工作台和右侧栏中当前选中标签的背景。",
+  },
   "semantic-terminal-surface": {
     label: "终端背景",
     description: "终端内容区域的背景。",
@@ -545,6 +601,34 @@ const zhCNTokenRowCopy = {
   "semantic-dropdown-menu-surface": {
     label: "菜单背景",
     description: "展开后的下拉菜单和选择器菜单背景。",
+  },
+  "semantic-dropdown-option-surface-hover": {
+    label: "选项悬停背景",
+    description: "下拉选项悬停或键盘聚焦时的背景。",
+  },
+  "semantic-dropdown-option-surface-selected": {
+    label: "选项选中背景",
+    description: "下拉菜单当前选中选项的背景。",
+  },
+  "semantic-dropdown-option-text": {
+    label: "选项文字",
+    description: "下拉选项默认文字和图标颜色。",
+  },
+  "semantic-dropdown-option-text-hover": {
+    label: "选项悬停文字",
+    description: "下拉选项悬停或键盘聚焦时的文字和图标颜色。",
+  },
+  "semantic-dropdown-option-text-selected": {
+    label: "选项选中文字",
+    description: "下拉菜单当前选中选项的文字和图标颜色。",
+  },
+  "semantic-dropdown-option-meta-text": {
+    label: "选项辅助文字",
+    description: "下拉选项内计数和辅助信息的文字颜色。",
+  },
+  "semantic-dropdown-option-meta-text-selected": {
+    label: "选项选中辅助文字",
+    description: "下拉菜单当前选中选项内计数和辅助信息的文字颜色。",
   },
   "semantic-question-card-surface": {
     label: "背景",
@@ -694,9 +778,13 @@ const zhCNTokenRowCopy = {
     label: "前置图标激活色",
     description: "左侧边栏树行选中时的前置图标颜色。",
   },
-  "semantic-settings-list-detail-row-surface-hover": {
+  "semantic-list-detail-row-surface": {
+    label: "行默认背景",
+    description: "列表明细行处于常态时的背景。",
+  },
+  "semantic-list-detail-row-surface-hover": {
     label: "行悬停背景",
-    description: "设置列表明细行悬停和聚焦时的背景。",
+    description: "列表明细行悬停和聚焦时的背景。",
   },
   "semantic-detail-icon-surface": {
     label: "明细图标背景",

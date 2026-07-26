@@ -547,15 +547,15 @@
   align-items: center;
   gap: 8px;
   padding: 0 9px;
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--semantic-field-border);
   border-radius: 6px;
-  background: var(--seg-panel-muted);
-  color: var(--seg-text-3);
+  background: var(--semantic-field-surface-muted);
+  color: var(--semantic-field-placeholder);
 }
 
 .skills-workspace-search-field:focus-within {
-  border-color: var(--seg-text-2);
-  background: var(--seg-panel);
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
 }
 
 .skills-workspace-search-field > svg,
@@ -569,9 +569,13 @@
   border: 0;
   outline: 0;
   background: transparent;
-  color: var(--seg-text-1);
+  color: var(--semantic-field-text);
   font: inherit;
   font-size: 13px;
+}
+
+.skills-workspace-search-field input::placeholder {
+  color: var(--semantic-field-placeholder);
 }
 
 .skills-workspace-search-field button {
@@ -589,7 +593,7 @@
 .skills-workspace-search-field button:hover,
 .skills-workspace-search-field button:focus-visible {
   outline: none;
-  background: var(--surface-panel-muted);
+  background: var(--semantic-icon-button-surface-hover);
   color: var(--seg-text-1);
 }
 
@@ -836,16 +840,16 @@
   align-items: center;
   gap: 8px;
   padding: 0 9px;
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--semantic-field-border);
   border-radius: 6px;
-  background: var(--seg-panel-muted);
-  color: var(--seg-text-3);
+  background: var(--semantic-field-surface-muted);
+  color: var(--semantic-field-placeholder);
 }
 
 .skill-library-search-field:focus-within {
-  border-color: var(--seg-text-2);
-  background: var(--seg-panel);
-  color: var(--seg-text-2);
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
+  color: var(--semantic-field-text);
 }
 
 .skill-library-search-field > svg {
@@ -858,13 +862,13 @@
   border: 0;
   outline: none;
   background: transparent;
-  color: var(--seg-text-1);
+  color: var(--semantic-field-text);
   font: inherit;
   font-size: 13px;
 }
 
 .skill-library-search-field input::placeholder {
-  color: var(--seg-text-3);
+  color: var(--semantic-field-placeholder);
 }
 
 .skill-library-spinner {
@@ -2732,10 +2736,10 @@
   min-width: 0;
   height: 42px;
   padding: 0 12px;
-  border: 1px solid var(--seg-accent);
+  border: 1px solid var(--semantic-field-border);
   border-radius: var(--seg-radius-xs);
-  background: var(--seg-panel);
-  color: var(--seg-text-1);
+  background: var(--semantic-field-surface);
+  color: var(--semantic-field-text);
   font-size: 14px;
   outline: none;
 }
@@ -2745,17 +2749,18 @@
   min-width: 0;
   height: 40px;
   padding: 0 10px;
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--semantic-field-border);
   border-radius: var(--seg-radius-xs);
-  background: var(--seg-panel);
-  color: var(--seg-text-1);
+  background: var(--semantic-field-surface);
+  color: var(--semantic-field-text);
   font-size: 13px;
   outline: none;
 }
 
 .global-skills-git-install-input:focus,
 .global-skills-target-select:focus-visible {
-  border-color: var(--focus-outline-color);
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
   box-shadow: none;
 }
 
@@ -3169,7 +3174,7 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 .canvas-region-top-menu {
   --canvas-region-tab-border: var(--seg-border);
   --canvas-region-tab-divider: var(--border-subtle);
-  --canvas-region-tab-active-bg: var(--seg-panel);
+  --canvas-region-tab-active-bg: var(--semantic-shell-chrome-tab-surface-active);
   --canvas-region-tab-inactive-bg: var(--semantic-shell-chrome-surface);
   --canvas-region-tab-focus: var(--semantic-icon-button-surface-hover);
   --canvas-region-tab-cap-radius: 8px;
@@ -3705,6 +3710,11 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   scrollbar-color: var(--context-menu-scrollbar-thumb) var(--context-menu-scrollbar-track);
 }
 
+.canvas-top-menu-selection-panel {
+  background: var(--semantic-dropdown-menu-surface);
+  color: var(--semantic-dropdown-option-text);
+}
+
 .canvas-top-menu-context-panel::-webkit-scrollbar {
   width: 10px;
 }
@@ -3861,6 +3871,75 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   color: currentColor;
 }
 
+.canvas-top-menu-selection-panel .canvas-top-menu-context-option {
+  color: var(--semantic-dropdown-option-text);
+}
+
+.canvas-top-menu-selection-panel .canvas-top-menu-context-option:hover,
+.canvas-top-menu-selection-panel .canvas-top-menu-context-option:focus-visible {
+  background: var(--semantic-dropdown-option-surface-hover);
+  color: var(--semantic-dropdown-option-text-hover);
+  outline: none;
+  box-shadow: none;
+}
+
+.canvas-top-menu-selection-panel .canvas-top-menu-context-option.is-selected,
+.canvas-top-menu-selection-panel .canvas-top-menu-context-option[aria-selected="true"],
+.canvas-top-menu-selection-panel .canvas-top-menu-context-option[aria-checked="true"] {
+  background: var(--semantic-dropdown-option-surface-selected);
+  color: var(--semantic-dropdown-option-text-selected);
+  box-shadow: none;
+}
+
+.canvas-top-menu-selection-panel .canvas-top-menu-context-option-status {
+  color: var(--semantic-dropdown-option-meta-text);
+}
+
+.canvas-top-menu-selection-panel
+  .canvas-top-menu-context-option:hover
+  .canvas-top-menu-context-option-status,
+.canvas-top-menu-selection-panel
+  .canvas-top-menu-context-option:focus-visible
+  .canvas-top-menu-context-option-status {
+  color: var(--semantic-dropdown-option-text-hover);
+}
+
+.canvas-top-menu-selection-panel
+  .canvas-top-menu-context-option.is-selected
+  .canvas-top-menu-context-option-status,
+.canvas-top-menu-selection-panel
+  .canvas-top-menu-context-option[aria-selected="true"]
+  .canvas-top-menu-context-option-status,
+.canvas-top-menu-selection-panel
+  .canvas-top-menu-context-option[aria-checked="true"]
+  .canvas-top-menu-context-option-status {
+  color: var(--semantic-dropdown-option-meta-text-selected);
+}
+
+.canvas-top-menu-selection-panel .canvas-top-menu-context-option:disabled:hover,
+.canvas-top-menu-selection-panel .canvas-top-menu-context-option:disabled:focus-visible,
+.canvas-top-menu-selection-panel .canvas-top-menu-context-option[aria-disabled="true"]:hover,
+.canvas-top-menu-selection-panel .canvas-top-menu-context-option[aria-disabled="true"]:focus-visible {
+  background: transparent;
+  color: var(--semantic-dropdown-option-text);
+  box-shadow: none;
+}
+
+.canvas-top-menu-selection-panel
+  .canvas-top-menu-context-option:disabled:hover
+  .canvas-top-menu-context-option-status,
+.canvas-top-menu-selection-panel
+  .canvas-top-menu-context-option:disabled:focus-visible
+  .canvas-top-menu-context-option-status,
+.canvas-top-menu-selection-panel
+  .canvas-top-menu-context-option[aria-disabled="true"]:hover
+  .canvas-top-menu-context-option-status,
+.canvas-top-menu-selection-panel
+  .canvas-top-menu-context-option[aria-disabled="true"]:focus-visible
+  .canvas-top-menu-context-option-status {
+  color: var(--semantic-dropdown-option-meta-text);
+}
+
 .canvas-top-menu-segmented-option {
   border: 0 !important;
   border-radius: var(--seg-radius-sm);
@@ -3936,18 +4015,19 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 
 .canvas-top-menu-searchable-panel .composer-menu-search-input {
   min-height: 32px;
-  border-color: var(--context-menu-border);
+  border-color: var(--semantic-field-border);
   border-radius: max(4px, calc(var(--context-menu-radius) - 2px));
-  background: transparent;
-  color: var(--context-menu-text);
+  background: var(--semantic-field-surface);
+  color: var(--semantic-field-text);
   font-family: var(--font-sans);
   font-size: 13px;
   box-shadow: none;
 }
 
 .canvas-top-menu-searchable-panel .composer-menu-search-input:focus {
-  border-color: var(--context-menu-border);
-  box-shadow: inset 0 0 0 1px var(--context-menu-focus);
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
+  box-shadow: none;
 }
 
 .canvas-top-menu-searchable-panel .composer-menu-options {
@@ -3989,17 +4069,17 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 .canvas-top-menu-quick-field input {
   min-height: 40px;
   padding: 0 12px;
-  border: 1px solid var(--border-subtle);
-  background: var(--seg-panel);
-  color: var(--seg-text-1);
+  border: 1px solid var(--semantic-field-border);
+  background: var(--semantic-field-surface);
+  color: var(--semantic-field-text);
 }
 
 .canvas-top-menu-quick-field textarea {
   min-height: 78px;
   padding: 10px 12px;
-  border: 1px solid var(--border-subtle);
-  background: var(--seg-panel);
-  color: var(--seg-text-1);
+  border: 1px solid var(--semantic-field-border);
+  background: var(--semantic-field-surface);
+  color: var(--semantic-field-text);
   font-family: var(--font-sans);
   font-size: 13px;
   line-height: 1.4;
@@ -4008,7 +4088,14 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 
 .canvas-top-menu-quick-field input::placeholder,
 .canvas-top-menu-quick-field textarea::placeholder {
-  color: var(--seg-text-3);
+  color: var(--semantic-field-placeholder);
+}
+
+.canvas-top-menu-quick-field input:focus-visible,
+.canvas-top-menu-quick-field textarea:focus-visible {
+  outline: none;
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
 }
 
 .canvas-top-menu-quick-actions {
@@ -4337,10 +4424,10 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   display: flex;
   align-items: center;
   gap: 8px;
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--semantic-field-border);
   border-radius: var(--seg-radius-sm);
-  background: var(--seg-panel);
-  color: var(--seg-text-2);
+  background: var(--semantic-field-surface);
+  color: var(--semantic-field-text);
 }
 
 .git-quick-menu-search-field input {
@@ -4349,13 +4436,18 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   border: 0;
   outline: 0;
   background: transparent;
-  color: var(--seg-text-1);
+  color: var(--semantic-field-text);
   font-family: var(--font-sans);
   font-size: 13px;
 }
 
 .git-quick-menu-search-field input::placeholder {
-  color: var(--seg-text-3);
+  color: var(--semantic-field-placeholder);
+}
+
+.git-quick-menu-search-field:focus-within {
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
 }
 
 .git-quick-menu-branch-create-option {
@@ -5288,7 +5380,7 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 }
 
 .window-shell[data-background-mode="custom-html"] .canvas-region-top-menu {
-  --canvas-region-tab-active-bg: var(--surface-profile-panel);
+  --canvas-region-tab-active-bg: var(--surface-profile-tab-active);
   --canvas-region-tab-inactive-bg: transparent;
   --canvas-region-tab-focus: var(--surface-profile-panel-muted);
   background: var(--top-chrome-surface, var(--surface-profile-tab));

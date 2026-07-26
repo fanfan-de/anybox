@@ -54,7 +54,7 @@ export const appearanceTokenCopy = {
     },
     "component-dropdown-select": {
       "label": "ドロップダウンセレクト",
-      "description": "展開されたドロップダウンとセレクトメニュー専用のセマンティックカラー。"
+      "description": "展開されたドロップダウンとセレクトメニューのサーフェスおよびオプション状態専用のセマンティックカラー。"
     },
     "component-question-card": {
       "label": "質問カード",
@@ -76,8 +76,8 @@ export const appearanceTokenCopy = {
       "label": "サイドバーツリー行",
       "description": "左サイドバーの会話、ワークスペース、プロンプト、スキル、MCP、ツール行専用の状態トークン。"
     },
-    "component-settings-list-detail-rows": {
-      "label": "設定リスト詳細行",
+    "component-list-detail-rows": {
+      "label": "リスト詳細行",
       "description": "設定、プラグイン、コネクタ、MCP、および類似のリスト詳細画面専用の行トークン。"
     },
     "component-composer": {
@@ -106,9 +106,13 @@ export const appearanceTokenCopy = {
       "label": "ミュートパネル",
       "description": "セカンダリパネルの塗りと低強調の行。"
     },
-    "surface-sidebar": {
-      "label": "サイドバーサーフェス",
-      "description": "左右のサイドバーの背景。"
+    "surface-left-sidebar": {
+      "label": "左サイドバー背景",
+      "description": "左側のサイドバーの背景。"
+    },
+    "surface-right-sidebar": {
+      "label": "右サイドバー背景",
+      "description": "右側のサイドバーの背景。"
     },
     "surface-sidebar-strong": {
       "label": "サイドバー強調",
@@ -662,9 +666,9 @@ export const appearanceTokenCopy = {
       "label": "先頭アイコン（アクティブ）",
       "description": "左サイドバーのツリー行を選択したときの先頭アイコンの色。"
     },
-    "semantic-settings-list-detail-row-surface-hover": {
+    "semantic-list-detail-row-surface-hover": {
       "label": "行サーフェス（ホバー）",
-      "description": "設定のリスト詳細行のホバー時とフォーカス時の背景。"
+      "description": "リスト詳細行のホバー時とフォーカス時の背景。"
     },
     "semantic-composer-surface": {
       "label": "コンポーザーサーフェス",

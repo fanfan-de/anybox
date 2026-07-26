@@ -327,12 +327,16 @@
 .secondary-button {
   min-height: 38px;
   padding: 0 16px;
-  border: 1px solid var(--seg-border);
-  border-radius: var(--seg-radius-xs);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   cursor: pointer;
   transition:
-    transform 160ms ease,
     background 160ms ease,
+    border-color 160ms ease,
     color 160ms ease;
   box-shadow: none;
 }
@@ -343,23 +347,40 @@
   color: var(--semantic-button-primary-text);
 }
 
-.primary-button:hover,
-.primary-button:focus-visible {
+.primary-button:not(:disabled):hover,
+.primary-button:not(:disabled):focus-visible {
   background: var(--semantic-button-primary-surface-hover);
   border-color: var(--semantic-button-primary-border-hover);
   color: var(--semantic-button-primary-text-hover);
+  outline: none;
+}
+
+.primary-button:disabled {
+  background: var(--semantic-button-primary-disabled-surface);
+  border-color: var(--semantic-button-primary-disabled-border);
+  color: var(--semantic-button-primary-disabled-text);
+  cursor: default;
 }
 
 .secondary-button {
-  background: var(--seg-panel);
-  color: var(--seg-text-2);
+  background: var(--semantic-button-secondary-surface);
+  border-color: var(--semantic-button-secondary-border);
+  color: var(--semantic-button-secondary-text);
 }
 
-.secondary-button:hover,
-.secondary-button:focus-visible {
+.secondary-button:not(:disabled):hover,
+.secondary-button:not(:disabled):focus-visible {
   background: var(--semantic-button-secondary-surface-hover);
   border-color: var(--semantic-button-secondary-border-hover);
   color: var(--semantic-button-secondary-text-hover);
+  outline: none;
+}
+
+.secondary-button:disabled {
+  background: var(--semantic-button-secondary-disabled-surface);
+  border-color: var(--semantic-button-secondary-disabled-border);
+  color: var(--semantic-button-secondary-disabled-text);
+  cursor: default;
 }
 
 .secondary-button.is-danger {
@@ -429,48 +450,4 @@
   border-color: var(--seg-danger-border);
   background: var(--seg-danger-surface);
   color: var(--seg-danger-text);
-}
-
-.primary-button {
-  background: var(--semantic-button-primary-surface);
-  border-color: var(--semantic-button-primary-border);
-  color: var(--semantic-button-primary-text);
-}
-
-.primary-button:hover,
-.primary-button:focus-visible {
-  background: var(--semantic-button-primary-surface-hover);
-  border-color: var(--semantic-button-primary-border-hover);
-  color: var(--semantic-button-primary-text-hover);
-}
-
-.secondary-button {
-  background: var(--seg-panel);
-  color: var(--seg-text-2);
-}
-
-.secondary-button:hover,
-.secondary-button:focus-visible {
-  background: var(--surface-elevated);
-  border-color: var(--seg-border);
-  color: var(--seg-text-1);
-}
-
-.secondary-button.is-danger {
-  border-color: var(--semantic-button-danger-border);
-  background: var(--semantic-button-danger-surface);
-  color: var(--semantic-button-danger-text);
-}
-
-.secondary-button.is-danger:not(:disabled):hover,
-.secondary-button.is-danger:not(:disabled):focus-visible {
-  border-color: var(--semantic-button-danger-border-hover);
-  background: var(--semantic-button-danger-surface-hover);
-  color: var(--semantic-button-danger-text-hover);
-}
-
-.secondary-button.is-danger:disabled {
-  border-color: var(--semantic-button-danger-disabled-border);
-  background: var(--semantic-button-danger-disabled-surface);
-  color: var(--semantic-button-danger-disabled-text);
 }

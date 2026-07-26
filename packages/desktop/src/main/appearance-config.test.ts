@@ -105,26 +105,6 @@ describe("appearance config persistence", () => {
     )
   })
 
-  it("accepts and normalizes renamed detail icon overrides in schema v2 files", async () => {
-    const filePath = path.join(tempDirectory, "appearance-theme.json")
-    const document = {
-      ...createDefaultAppearanceConfigDocument(),
-      overrides: {
-        "semantic-settings-list-detail-icon-text-light": literal("#123456"),
-      },
-    }
-    await fs.writeFile(filePath, `${JSON.stringify(document)}\n`, "utf8")
-
-    const snapshot = await readAppearanceConfigSnapshot()
-
-    expect(snapshot.document.overrides).not.toHaveProperty(
-      "semantic-settings-list-detail-icon-text-light",
-    )
-    expect(appearanceTokenValueToCss(
-      snapshot.document.overrides["semantic-detail-icon-text-light"]!,
-    )).toBe("#123456")
-  })
-
   it("rejects alias cycles before writing", async () => {
     const input = {
       ...createDefaultAppearanceConfigDocument(),

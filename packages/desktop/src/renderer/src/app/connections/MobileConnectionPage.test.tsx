@@ -94,6 +94,7 @@ describe("MobileConnectionPage", () => {
 
     const topMenu = screen.getByLabelText("Mobile top menu")
     expect(within(topMenu).getByRole("tab", { name: /SSH/ })).toHaveAttribute("aria-selected", "true")
+    expect(document.querySelector(".mobile-connection-shell")).toHaveClass("is-ssh")
     expect(screen.getByRole("heading", { name: "New SSH profile" })).toBeInTheDocument()
 
     fireEvent.click(within(topMenu).getByRole("tab", { name: /Phone control/ }))

@@ -54,7 +54,7 @@ export const appearanceTokenCopy = {
     },
     "component-dropdown-select": {
       "label": "드롭다운 선택",
-      "description": "확장된 드롭다운 및 선택 메뉴를 위한 전용 의미 색상"
+      "description": "확장된 드롭다운 및 선택 메뉴 표면과 옵션 상태를 위한 전용 시맨틱 색상입니다."
     },
     "component-question-card": {
       "label": "질문 카드",
@@ -76,8 +76,8 @@ export const appearanceTokenCopy = {
       "label": "사이드바 트리 행",
       "description": "왼쪽 사이드바의 대화, 작업 공간, 프롬프트, 스킬, MCP 및 도구 행을 위한 전용 상태 토큰"
     },
-    "component-settings-list-detail-rows": {
-      "label": "설정 목록 세부 행",
+    "component-list-detail-rows": {
+      "label": "목록-세부 행",
       "description": "설정, 플러그인, 커넥터, MCP 및 유사한 목록-세부 화면을 위한 전용 행 토큰"
     },
     "component-composer": {
@@ -106,9 +106,13 @@ export const appearanceTokenCopy = {
       "label": "뮤트 패널",
       "description": "보조 패널 채움 및 낮은 강조 행."
     },
-    "surface-sidebar": {
-      "label": "사이드바 표면",
-      "description": "좌우 사이드바 배경."
+    "surface-left-sidebar": {
+      "label": "왼쪽 사이드바 배경",
+      "description": "왼쪽 사이드바의 배경."
+    },
+    "surface-right-sidebar": {
+      "label": "오른쪽 사이드바 배경",
+      "description": "오른쪽 사이드바의 배경."
     },
     "surface-sidebar-strong": {
       "label": "사이드바 강조",
@@ -662,9 +666,9 @@ export const appearanceTokenCopy = {
       "label": "선행 아이콘 활성",
       "description": "왼쪽 사이드바에서 선택된 트리 행의 선행 아이콘 색상"
     },
-    "semantic-settings-list-detail-row-surface-hover": {
+    "semantic-list-detail-row-surface-hover": {
       "label": "행 표면 호버",
-      "description": "설정 목록-세부 행의 호버 및 포커스 배경"
+      "description": "목록-세부 행의 호버 및 포커스 배경"
     },
     "semantic-composer-surface": {
       "label": "컴포저 표면",

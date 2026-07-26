@@ -447,20 +447,26 @@ describe("WorkspaceFilesPanel", () => {
     expect(screen.queryByTestId("workspace-file-line-1")).not.toBeInTheDocument()
   })
 
-  it("keeps file reader text on readable panel colors", () => {
+  it("lets the file workspace reveal the right sidebar surface", () => {
     const styles = readRightSidebarStyles()
 
     expect(styles).toMatch(
-      /\.workspace-files-panel\s*\{[^}]*height:\s*100%;[^}]*flex:\s*1 1 auto;[^}]*grid-template-rows:\s*auto minmax\(0,\s*1fr\);[^}]*align-content:\s*stretch;/s,
+      /\.right-sidebar-main-stack\s*\{[^}]*background:\s*transparent;/s,
+    )
+    expect(styles).toMatch(
+      /\.workspace-files-panel\s*\{[^}]*height:\s*100%;[^}]*flex:\s*1 1 auto;[^}]*grid-template-rows:\s*auto minmax\(0,\s*1fr\);[^}]*align-content:\s*stretch;[^}]*background:\s*transparent;/s,
     )
     expect(styles).toMatch(
       /\.right-sidebar-view-host\.is-preview,\s*\.right-sidebar-view-host\.is-files,\s*\.right-sidebar-view-host\.is-changes,\s*\.right-sidebar-view-host\.is-terminal,\s*\.right-sidebar-view-host\.is-message-tree,\s*\.right-sidebar-view-host\.is-side-chat\s*\{[^}]*scrollbar-gutter:\s*auto;[^}]*padding-right:\s*0;/s,
     )
     expect(styles).toMatch(
-      /\.workspace-files-reader\s*\{[^}]*height:\s*100%;[^}]*grid-template-rows:\s*auto minmax\(0,\s*1fr\);/s,
+      /\.workspace-files-reader\s*\{[^}]*height:\s*100%;[^}]*grid-template-rows:\s*auto minmax\(0,\s*1fr\);[^}]*background:\s*transparent;/s,
     )
     expect(styles).toMatch(
-      /\.workspace-files-split\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) 8px var\(--workspace-files-tree-width,\s*clamp\(320px,\s*44%,\s*520px\)\);/s,
+      /\.workspace-files-split\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) 8px var\(--workspace-files-tree-width,\s*clamp\(320px,\s*44%,\s*520px\)\);[^}]*background:\s*transparent;/s,
+    )
+    expect(styles).toMatch(
+      /\.workspace-files-pathbar\s*\{[^}]*border-bottom:\s*1px solid var\(--seg-border\);[^}]*background:\s*transparent;/s,
     )
     expect(styles).toMatch(
       /\.workspace-files-tree-toggle\s*\{[^}]*width:\s*24px;[^}]*margin-left:\s*auto;[^}]*border:\s*0;[^}]*background:\s*transparent;[^}]*display:\s*inline-flex;/s,
@@ -478,13 +484,16 @@ describe("WorkspaceFilesPanel", () => {
       /\.workspace-files-tree-search\s*\{[^}]*height:\s*28px;[^}]*grid-template-columns:\s*16px minmax\(0,\s*1fr\);/s,
     )
     expect(styles).toMatch(
+      /\.workspace-files-tree\s*\{[^}]*grid-template-rows:\s*auto minmax\(0,\s*1fr\);[^}]*background:\s*transparent;/s,
+    )
+    expect(styles).toMatch(
       /\.workspace-files-tree-row\s*\{[^}]*min-height:\s*24px;[^}]*grid-template-columns:\s*14px 18px minmax\(0,\s*1fr\);/s,
     )
     expect(styles).toMatch(
-      /\.workspace-files-markdown-stage\s*\{[^}]*scrollbar-color:\s*var\(--semantic-scrollbar-thumb-surface-hover\) var\(--seg-panel\);/s,
+      /\.workspace-files-markdown-stage\s*\{[^}]*background:\s*transparent;[^}]*scrollbar-color:\s*var\(--semantic-scrollbar-thumb-surface-hover\) transparent;/s,
     )
     expect(styles).toMatch(
-      /\.workspace-files-markdown-stage::-webkit-scrollbar-track\s*\{[^}]*background:\s*var\(--seg-panel\);/s,
+      /\.workspace-files-markdown-stage::-webkit-scrollbar-track\s*\{[^}]*background:\s*transparent;/s,
     )
     expect(styles).not.toContain(".workspace-files-results-dropdown")
     expect(styles).toMatch(

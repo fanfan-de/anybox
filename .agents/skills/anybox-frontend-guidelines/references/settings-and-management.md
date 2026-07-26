@@ -37,8 +37,8 @@
 
 ## 管理型 List + Detail 组件
 
-- list + detail 管理界面只消费运行时 token：page surface、list panel、detail panel、metadata table、info/review row、icon mark、form input 和 action button 都优先使用 `--semantic-settings-list-detail-*`、`--seg-*` 和状态语义 token；确实需要独立语义时再补组件自有的 `--semantic-<scope>-list-detail-*` token；不要硬编码 `#ffffff`、固定灰色、固定品牌色或 `rgba(...)`。
-- list row 的 default、hover/focus、selected/current、disabled 状态必须成组定义。已有 sidebar/tree row 语义匹配时直接复用 `--semantic-sidebar-tree-row-*`；不匹配时先在 `tokens.css` 增加成对 light/dark 的 `--semantic-<scope>-list-detail-row-*-light/dark`，再暴露不带后缀的运行时 token。
+- 跨业务复用的 list + detail 行统一消费组件级运行时 token：行背景和文字使用 `--semantic-list-detail-row-*`，计数使用 `--semantic-list-detail-count-*`，紧凑前置图标使用 `--semantic-detail-icon-*`；page、list panel、detail panel、metadata table、form input 和 action button 继续按各自 surface、field、button 与状态语义选择 token，不要硬编码 `#ffffff`、固定灰色、固定品牌色或 `rgba(...)`。
+- list row 的 default、hover/focus、selected/current、disabled 状态必须成组设计；hover/focus 使用 `--semantic-list-detail-row-surface-hover`，selected/current 使用 `--semantic-list-detail-row-surface-current` 与 `--semantic-list-detail-row-current-text`，不能让 current 退化为 hover。组件 CSS 只消费不带 `-light` / `-dark` 后缀的运行时 token；缺少状态时先在 schema v2 manifest 的通用 `semantic-list-detail-*` 家族补充成对 light/dark token 并运行生成器，不要新增业务前缀或在 `tokens.css` 另建颜色定义。
 - detail surface 使用无嵌套卡片的紧凑结构：主 detail panel 用 `--seg-panel`，次级信息块或 read-only row 用 `--seg-panel-muted`，分隔线和表格边框用 `--seg-border`，正文层级用 `--seg-text-1/2/3`。metadata table 用稳定两列 grid，长值必须 `min-width: 0` 并允许换行或截断。
 - 状态表达使用 `--semantic-success-*`、`--semantic-warning-*`、`--semantic-error-*`、`--semantic-info-*` 和 `--text-tertiary`；dot、badge、helper/error text、invalid border 都不能写固定绿色、黄色、红色、蓝色或灰色。
 - form input、copy/code field、action row 和 secondary/danger action 必须覆盖 default、hover/focus、disabled、error/invalid 状态。focus 用组件自身背景、边框、文字或指示器 token 表达，不使用额外 outline 或 inset ring。

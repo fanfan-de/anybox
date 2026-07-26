@@ -171,6 +171,7 @@ describe("SessionCanvasTopMenu project skills", () => {
     fireEvent.click(screen.getByRole("button", { name: "Select project skills: code-review" }))
 
     const menu = screen.getByRole("dialog", { name: "Project skill selection" })
+    expect(menu).toHaveClass("canvas-top-menu-selection-panel")
     expect(within(menu).getByRole("searchbox", { name: "Search skills" })).toHaveFocus()
 
     const options = within(menu).getAllByRole("option")
@@ -228,6 +229,7 @@ describe("SessionCanvasTopMenu project MCP servers", () => {
     fireEvent.click(screen.getByRole("button", { name: "Select project MCP servers: Filesystem" }))
 
     const menu = screen.getByRole("menu", { name: "Project MCP server selection" })
+    expect(menu).toHaveClass("canvas-top-menu-selection-panel")
     const filesystemOption = within(menu).getByRole("menuitemcheckbox", { name: /Filesystem/ })
     expect(filesystemOption).toHaveAttribute("aria-checked", "true")
     expect(filesystemOption).toHaveAttribute("title", "Access project files.")
@@ -267,6 +269,7 @@ describe("SessionCanvasTopMenu project plugins", () => {
     fireEvent.click(screen.getByRole("button", { name: "Select project plugins: Build Web Apps" }))
 
     const menu = screen.getByRole("menu", { name: "Project plugin selection" })
+    expect(menu).toHaveClass("canvas-top-menu-selection-panel")
     const selectedOption = within(menu).getByRole("menuitemcheckbox", { name: /Build Web Apps/ })
     expect(selectedOption).toHaveAttribute("aria-checked", "true")
     expect(selectedOption).toHaveAttribute("title", "Frontend workflows - 1 MCP, 3 skills")
@@ -611,6 +614,7 @@ describe("SessionCanvasTopMenu tool permission mode", () => {
     fireEvent.click(screen.getByRole("button", { name: "工具权限：默认权限" }))
 
     const menu = screen.getByRole("menu", { name: "工具权限模式选择" })
+    expect(menu).toHaveClass("canvas-top-menu-selection-panel")
     expect(within(menu).getByText("默认权限")).toBeInTheDocument()
     expect(within(menu).getByText("完全访问权限")).toBeInTheDocument()
     expect(within(menu).queryByText("ask 进入审批，allow 直接执行，deny 拒绝。")).not.toBeInTheDocument()

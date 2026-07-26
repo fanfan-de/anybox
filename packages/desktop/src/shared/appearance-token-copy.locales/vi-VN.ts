@@ -54,7 +54,7 @@ export const appearanceTokenCopy = {
     },
     "component-dropdown-select": {
       "label": "Chọn Thả xuống",
-      "description": "Màu ngữ nghĩa chuyên dụng cho menu thả xuống và chọn mở rộng."
+      "description": "Màu ngữ nghĩa chuyên dụng cho bề mặt menu thả xuống và menu chọn khi mở, cùng các trạng thái tùy chọn."
     },
     "component-question-card": {
       "label": "Thẻ Câu hỏi",
@@ -76,8 +76,8 @@ export const appearanceTokenCopy = {
       "label": "Hàng Cây Thanh bên",
       "description": "Token trạng thái chuyên dụng cho các hàng hội thoại, không gian làm việc, prompt, kỹ năng, MCP và công cụ ở thanh bên trái."
     },
-    "component-settings-list-detail-rows": {
-      "label": "Hàng Chi tiết Danh sách Cài đặt",
+    "component-list-detail-rows": {
+      "label": "Hàng Chi tiết Danh sách",
       "description": "Token hàng chuyên dụng cho cài đặt, plugin, connector, MCP và các màn hình danh sách chi tiết tương tự."
     },
     "component-composer": {
@@ -106,9 +106,13 @@ export const appearanceTokenCopy = {
       "label": "Panel Mờ",
       "description": "Nền panel phụ và hàng có độ nhấn thấp."
     },
-    "surface-sidebar": {
-      "label": "Bề mặt Sidebar",
-      "description": "Nền sidebar trái và phải."
+    "surface-left-sidebar": {
+      "label": "Nền Sidebar Trái",
+      "description": "Nền của sidebar trái."
+    },
+    "surface-right-sidebar": {
+      "label": "Nền Sidebar Phải",
+      "description": "Nền của sidebar phải."
     },
     "surface-sidebar-strong": {
       "label": "Sidebar Đậm",
@@ -662,9 +666,9 @@ export const appearanceTokenCopy = {
       "label": "Biểu tượng dẫn khi chọn",
       "description": "Màu biểu tượng dẫn cho hàng cây được chọn ở thanh bên trái."
     },
-    "semantic-settings-list-detail-row-surface-hover": {
+    "semantic-list-detail-row-surface-hover": {
       "label": "Nền hàng khi di chuột",
-      "description": "Nền khi di chuột và focus cho các hàng chi tiết danh sách trong cài đặt."
+      "description": "Nền khi di chuột và focus cho các hàng chi tiết danh sách."
     },
     "semantic-composer-surface": {
       "label": "Nền soạn thảo",

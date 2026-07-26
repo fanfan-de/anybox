@@ -54,7 +54,7 @@ export const appearanceTokenCopy = {
     },
     "component-dropdown-select": {
       "label": "Dropdown-Auswahl",
-      "description": "Dedizierte semantische Farbe für erweiterte Dropdown- und Auswahlmenüs."
+      "description": "Dedizierte semantische Farben für Flächen erweiterter Dropdown- und Auswahlmenüs sowie für Optionszustände."
     },
     "component-question-card": {
       "label": "Fragenkarte",
@@ -76,8 +76,8 @@ export const appearanceTokenCopy = {
       "label": "Seitenleisten-Baumzeilen",
       "description": "Dedizierte Status-Tokens für Unterhaltungs-, Workspace-, Prompt-, Skill-, MCP- und Werkzeugzeilen in der linken Seitenleiste."
     },
-    "component-settings-list-detail-rows": {
-      "label": "Einstellungs-Listendetailzeilen",
+    "component-list-detail-rows": {
+      "label": "Listendetailzeilen",
       "description": "Dedizierte Zeilen-Tokens für Einstellungen, Plugins, Connectors, MCP und ähnliche Listendetail-Bildschirme."
     },
     "component-composer": {
@@ -106,9 +106,13 @@ export const appearanceTokenCopy = {
       "label": "Gedämpftes Panel",
       "description": "Sekundäre Panel-Füllungen und Zeilen mit geringer Betonung."
     },
-    "surface-sidebar": {
-      "label": "Sidebar-Oberfläche",
-      "description": "Hintergründe der linken und rechten Seitenleiste."
+    "surface-left-sidebar": {
+      "label": "Linke Sidebar-Oberfläche",
+      "description": "Hintergrund der linken Seitenleiste."
+    },
+    "surface-right-sidebar": {
+      "label": "Rechte Sidebar-Oberfläche",
+      "description": "Hintergrund der rechten Seitenleiste."
     },
     "surface-sidebar-strong": {
       "label": "Sidebar Stark",
@@ -662,9 +666,9 @@ export const appearanceTokenCopy = {
       "label": "Führendes Symbol Aktiv",
       "description": "Farbe des führenden Symbols für ausgewählte Baumzeilen in der linken Seitenleiste."
     },
-    "semantic-settings-list-detail-row-surface-hover": {
+    "semantic-list-detail-row-surface-hover": {
       "label": "Zeilenhintergrund Hover",
-      "description": "Hover- und Fokus-Hintergrund für Einstellungs-Listendetailzeilen."
+      "description": "Hover- und Fokus-Hintergrund für Listendetailzeilen."
     },
     "semantic-composer-surface": {
       "label": "Composer-Oberfläche",

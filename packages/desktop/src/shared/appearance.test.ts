@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  APPEARANCE_BRAND_DEFINITIONS,
   APPEARANCE_FONT_FAMILIES,
   APPEARANCE_TOKEN_GROUPS,
   APPEARANCE_TOKEN_LAYERS,
@@ -122,6 +123,52 @@ describe("appearance token catalog", () => {
     expect(new Set(groupedTokenNames)).toEqual(new Set(APPEARANCE_TOKEN_NAMES))
   })
 
+  it("registers separate sidebar surfaces and migrates the legacy shared values", () => {
+    const surfaceGroup = APPEARANCE_TOKEN_GROUPS.find(
+      (group) => group.id === "foundation-surfaces",
+    )
+
+    expect(surfaceGroup?.rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "surface-left-sidebar",
+        lightToken: "surface-left-sidebar-light",
+        darkToken: "surface-left-sidebar-dark",
+      }),
+      expect.objectContaining({
+        id: "surface-right-sidebar",
+        lightToken: "surface-right-sidebar-light",
+        darkToken: "surface-right-sidebar-dark",
+      }),
+    ]))
+    expect(surfaceGroup?.rows.map((row) => String(row.id))).not.toContain("surface-sidebar")
+
+    for (const brandName of ["terra", "sage"] as const) {
+      const tokens = APPEARANCE_BRAND_DEFINITIONS[brandName].tokens
+      for (const mode of ["light", "dark"] as const) {
+        const leftValue = tokens[`surface-left-sidebar-${mode}`]
+        const rightValue = tokens[`surface-right-sidebar-${mode}`]
+
+        expect(leftValue.type).toBe("literal")
+        expect(rightValue).toEqual(leftValue)
+      }
+    }
+
+    const document = normalizeAppearanceConfigDocument({
+      overrides: {
+        "surface-sidebar-light": "#111111",
+        "surface-sidebar-dark": "#222222",
+        "surface-right-sidebar-dark": "#333333",
+      },
+    })
+
+    expect(cssTokenMap(document.overrides)).toEqual({
+      "surface-left-sidebar-light": "#111111",
+      "surface-right-sidebar-light": "#111111",
+      "surface-left-sidebar-dark": "#222222",
+      "surface-right-sidebar-dark": "#333333",
+    })
+  })
+
   it("assigns every token group to a controlled abstraction layer", () => {
     const layerSet = new Set(APPEARANCE_TOKEN_LAYERS)
 
@@ -135,7 +182,37 @@ describe("appearance token catalog", () => {
     ]))
   })
 
-  it("registers shared detail icon tokens and migrates settings-scoped names", () => {
+  it("registers complete shared list-detail row surface states", () => {
+    const listDetailGroup = APPEARANCE_TOKEN_GROUPS.find(
+      (group) => group.id === "component-list-detail-rows",
+    )
+
+    expect(listDetailGroup?.rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: "semantic-list-detail-row-surface",
+        lightToken: "semantic-list-detail-row-surface-light",
+        darkToken: "semantic-list-detail-row-surface-dark",
+      }),
+      expect.objectContaining({
+        id: "semantic-list-detail-row-surface-hover",
+      }),
+      expect.objectContaining({
+        id: "semantic-list-detail-row-surface-current",
+      }),
+    ]))
+    expect(APPEARANCE_BRAND_DEFINITIONS.terra.tokens).toMatchObject({
+      "semantic-list-detail-row-surface-light": {
+        type: "alias",
+        token: "surface-shell-light",
+      },
+      "semantic-list-detail-row-surface-dark": {
+        type: "alias",
+        token: "surface-shell-dark",
+      },
+    })
+  })
+
+  it("registers shared detail icon tokens", () => {
     const detailRows: Array<{
       id: string
       lightToken: string
@@ -165,21 +242,6 @@ describe("appearance token catalog", () => {
       }),
     ])
 
-    const document = normalizeAppearanceConfigDocument({
-      version: 2,
-      overrides: {
-        "semantic-settings-list-detail-icon-surface-light": "#111111",
-        "semantic-settings-list-detail-icon-border": "#222222",
-        "semantic-settings-list-detail-icon-text-dark": "#333333",
-      },
-    })
-
-    expect(cssTokenMap(document.overrides)).toEqual({
-      "semantic-detail-icon-surface-light": "#111111",
-      "semantic-detail-icon-border-light": "#222222",
-      "semantic-detail-icon-border-dark": "#222222",
-      "semantic-detail-icon-text-dark": "#333333",
-    })
   })
 
   it("registers composer icon button tokens in the composer group", () => {
@@ -232,7 +294,7 @@ describe("appearance token catalog", () => {
     })
   })
 
-  it("registers a single shell chrome surface token and migrates old split tokens", () => {
+  it("registers shell chrome and selected tab surfaces and migrates old split tokens", () => {
     expect(APPEARANCE_TOKEN_GROUPS.find((group) => group.id === "component-shell-chrome")).toEqual({
       id: "component-shell-chrome",
       layer: "product",
@@ -246,7 +308,25 @@ describe("appearance token catalog", () => {
           lightToken: "semantic-shell-chrome-surface-light",
           darkToken: "semantic-shell-chrome-surface-dark",
         },
+        {
+          id: "semantic-shell-chrome-tab-surface-active",
+          label: "Selected Tab Surface",
+          description: "Background fill for selected tabs in the central workbench and right sidebar.",
+          lightToken: "semantic-shell-chrome-tab-surface-active-light",
+          darkToken: "semantic-shell-chrome-tab-surface-active-dark",
+        },
       ],
+    })
+
+    expect(APPEARANCE_BRAND_DEFINITIONS.terra.tokens).toMatchObject({
+      "semantic-shell-chrome-tab-surface-active-light": {
+        type: "alias",
+        token: "surface-panel-light",
+      },
+      "semantic-shell-chrome-tab-surface-active-dark": {
+        type: "alias",
+        token: "surface-panel-dark",
+      },
     })
 
     const document = normalizeAppearanceConfigDocument({

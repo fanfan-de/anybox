@@ -14,8 +14,10 @@
   --surface-panel-dark: #292524;
   --surface-panel-muted-light: #f7f1ee;
   --surface-panel-muted-dark: #342d2a;
-  --surface-sidebar-light: #f3ece7;
-  --surface-sidebar-dark: #241f1c;
+  --surface-left-sidebar-light: #f3ece7;
+  --surface-left-sidebar-dark: #241f1c;
+  --surface-right-sidebar-light: #f3ece7;
+  --surface-right-sidebar-dark: #241f1c;
   --surface-sidebar-strong-light: #ebe1da;
   --surface-sidebar-strong-dark: #181311;
   --surface-user-bubble-light: #fff1f2;
@@ -129,6 +131,30 @@
   --semantic-icon-button-surface-active-light: color-mix(in srgb, var(--brand-primary-soft) 84%, rgba(0, 0, 0, 0) 16%);
   --semantic-icon-button-surface-active-dark: color-mix(in srgb, var(--brand-primary-soft-dark) 84%, rgba(0, 0, 0, 0) 16%);
 
+  /* Fields */
+  --semantic-field-surface-light: var(--surface-panel-light);
+  --semantic-field-surface-dark: var(--surface-panel-dark);
+  --semantic-field-surface-muted-light: var(--surface-panel-muted-light);
+  --semantic-field-surface-muted-dark: var(--surface-panel-muted-dark);
+  --semantic-field-surface-focus-light: var(--surface-panel-light);
+  --semantic-field-surface-focus-dark: var(--surface-panel-dark);
+  --semantic-field-surface-disabled-light: var(--surface-panel-muted-light);
+  --semantic-field-surface-disabled-dark: var(--surface-panel-muted-dark);
+  --semantic-field-border-light: var(--border-default-light);
+  --semantic-field-border-dark: var(--border-default-dark);
+  --semantic-field-border-focus-light: var(--focus-outline-color-light);
+  --semantic-field-border-focus-dark: var(--focus-outline-color-dark);
+  --semantic-field-border-disabled-light: var(--border-subtle-light);
+  --semantic-field-border-disabled-dark: var(--border-subtle-dark);
+  --semantic-field-border-invalid-light: var(--semantic-error-border-light);
+  --semantic-field-border-invalid-dark: var(--semantic-error-border-dark);
+  --semantic-field-text-light: var(--text-primary-light);
+  --semantic-field-text-dark: var(--text-primary-dark);
+  --semantic-field-text-disabled-light: var(--text-tertiary-light);
+  --semantic-field-text-disabled-dark: var(--text-tertiary-dark);
+  --semantic-field-placeholder-light: var(--text-tertiary-light);
+  --semantic-field-placeholder-dark: var(--text-tertiary-dark);
+
   /* Status / Success */
   --semantic-success-light: #65a30d;
   --semantic-success-dark: #65a30d;
@@ -188,6 +214,8 @@
   /* Shell Chrome */
   --semantic-shell-chrome-surface-light: #f5f2ee;
   --semantic-shell-chrome-surface-dark: #221d1a;
+  --semantic-shell-chrome-tab-surface-active-light: var(--surface-panel-light);
+  --semantic-shell-chrome-tab-surface-active-dark: var(--surface-panel-dark);
 
   /* Terminal */
   --semantic-terminal-surface-light: #ffffff;
@@ -244,6 +272,20 @@
   /* Dropdown Select */
   --semantic-dropdown-menu-surface-light: #ffffff;
   --semantic-dropdown-menu-surface-dark: #302a28;
+  --semantic-dropdown-option-surface-hover-light: var(--surface-panel-muted-light);
+  --semantic-dropdown-option-surface-hover-dark: var(--surface-panel-muted-dark);
+  --semantic-dropdown-option-surface-selected-light: var(--brand-primary-soft);
+  --semantic-dropdown-option-surface-selected-dark: var(--brand-primary-soft-dark);
+  --semantic-dropdown-option-text-light: var(--text-secondary-light);
+  --semantic-dropdown-option-text-dark: var(--text-secondary-dark);
+  --semantic-dropdown-option-text-hover-light: var(--text-primary-light);
+  --semantic-dropdown-option-text-hover-dark: var(--text-primary-dark);
+  --semantic-dropdown-option-text-selected-light: var(--text-primary-light);
+  --semantic-dropdown-option-text-selected-dark: var(--text-primary-dark);
+  --semantic-dropdown-option-meta-text-light: var(--text-primary-light);
+  --semantic-dropdown-option-meta-text-dark: var(--text-primary-dark);
+  --semantic-dropdown-option-meta-text-selected-light: var(--text-primary-light);
+  --semantic-dropdown-option-meta-text-selected-dark: var(--text-primary-dark);
 
   /* Question Card */
   --semantic-question-card-surface-light: var(--surface-panel-light);
@@ -345,27 +387,29 @@
   --semantic-sidebar-tree-row-leading-active-light: var(--brand-primary);
   --semantic-sidebar-tree-row-leading-active-dark: var(--brand-primary-dark);
 
-  /* Settings List Detail Rows */
-  --semantic-settings-list-detail-row-surface-hover-light: color-mix(in srgb, var(--surface-panel-muted-light) 86%, rgba(0, 0, 0, 0) 14%);
-  --semantic-settings-list-detail-row-surface-hover-dark: color-mix(in srgb, var(--surface-panel-muted-dark) 86%, rgba(0, 0, 0, 0) 14%);
-  --semantic-settings-list-detail-row-surface-current-light: color-mix(in srgb, var(--brand-primary-soft) 84%, rgba(0, 0, 0, 0) 16%);
-  --semantic-settings-list-detail-row-surface-current-dark: color-mix(in srgb, var(--brand-primary-soft-dark) 84%, rgba(0, 0, 0, 0) 16%);
-  --semantic-settings-list-detail-row-primary-text-light: var(--text-primary-light);
-  --semantic-settings-list-detail-row-primary-text-dark: var(--text-primary-dark);
-  --semantic-settings-list-detail-row-secondary-text-light: var(--text-tertiary-light);
-  --semantic-settings-list-detail-row-secondary-text-dark: var(--text-tertiary-dark);
-  --semantic-settings-list-detail-row-current-text-light: var(--brand-primary-hover);
-  --semantic-settings-list-detail-row-current-text-dark: var(--brand-primary-hover-dark);
+  /* List Detail Rows */
+  --semantic-list-detail-row-surface-light: var(--surface-shell-light);
+  --semantic-list-detail-row-surface-dark: var(--surface-shell-dark);
+  --semantic-list-detail-row-surface-hover-light: color-mix(in srgb, var(--surface-panel-muted-light) 86%, rgba(0, 0, 0, 0) 14%);
+  --semantic-list-detail-row-surface-hover-dark: color-mix(in srgb, var(--surface-panel-muted-dark) 86%, rgba(0, 0, 0, 0) 14%);
+  --semantic-list-detail-row-surface-current-light: color-mix(in srgb, var(--brand-primary-soft) 84%, rgba(0, 0, 0, 0) 16%);
+  --semantic-list-detail-row-surface-current-dark: color-mix(in srgb, var(--brand-primary-soft-dark) 84%, rgba(0, 0, 0, 0) 16%);
+  --semantic-list-detail-row-primary-text-light: var(--text-primary-light);
+  --semantic-list-detail-row-primary-text-dark: var(--text-primary-dark);
+  --semantic-list-detail-row-secondary-text-light: var(--text-tertiary-light);
+  --semantic-list-detail-row-secondary-text-dark: var(--text-tertiary-dark);
+  --semantic-list-detail-row-current-text-light: var(--brand-primary-hover);
+  --semantic-list-detail-row-current-text-dark: var(--brand-primary-hover-dark);
   --semantic-detail-icon-surface-light: #ffffff;
   --semantic-detail-icon-surface-dark: #292524;
   --semantic-detail-icon-border-light: rgba(41, 37, 36, 0.0656);
   --semantic-detail-icon-border-dark: rgba(231, 229, 228, 0.1476);
   --semantic-detail-icon-text-light: #b9534c;
   --semantic-detail-icon-text-dark: #fca5a5;
-  --semantic-settings-list-detail-count-surface-light: color-mix(in srgb, var(--surface-panel-muted-light) 82%, var(--surface-panel-light) 18%);
-  --semantic-settings-list-detail-count-surface-dark: color-mix(in srgb, var(--surface-panel-muted-dark) 82%, var(--surface-panel-dark) 18%);
-  --semantic-settings-list-detail-count-text-light: var(--text-secondary-light);
-  --semantic-settings-list-detail-count-text-dark: var(--text-secondary-dark);
+  --semantic-list-detail-count-surface-light: color-mix(in srgb, var(--surface-panel-muted-light) 82%, var(--surface-panel-light) 18%);
+  --semantic-list-detail-count-surface-dark: color-mix(in srgb, var(--surface-panel-muted-dark) 82%, var(--surface-panel-dark) 18%);
+  --semantic-list-detail-count-text-light: var(--text-secondary-light);
+  --semantic-list-detail-count-text-dark: var(--text-secondary-dark);
 
   /* Composer */
   --semantic-composer-surface-light: #ffffff;
@@ -543,7 +587,8 @@
   --surface-shell: var(--surface-shell-light);
   --surface-panel: var(--surface-panel-light);
   --surface-panel-muted: var(--surface-panel-muted-light);
-  --surface-sidebar: var(--surface-sidebar-light);
+  --surface-left-sidebar: var(--surface-left-sidebar-light);
+  --surface-right-sidebar: var(--surface-right-sidebar-light);
   --surface-sidebar-strong: var(--surface-sidebar-strong-light);
   --surface-user-bubble: var(--surface-user-bubble-light);
   --surface-trace: var(--surface-trace-light);
@@ -597,6 +642,17 @@
   --semantic-icon-button-text-active: var(--semantic-icon-button-text-active-light);
   --semantic-icon-button-surface-hover: var(--semantic-icon-button-surface-hover-light);
   --semantic-icon-button-surface-active: var(--semantic-icon-button-surface-active-light);
+  --semantic-field-surface: var(--semantic-field-surface-light);
+  --semantic-field-surface-muted: var(--semantic-field-surface-muted-light);
+  --semantic-field-surface-focus: var(--semantic-field-surface-focus-light);
+  --semantic-field-surface-disabled: var(--semantic-field-surface-disabled-light);
+  --semantic-field-border: var(--semantic-field-border-light);
+  --semantic-field-border-focus: var(--semantic-field-border-focus-light);
+  --semantic-field-border-disabled: var(--semantic-field-border-disabled-light);
+  --semantic-field-border-invalid: var(--semantic-field-border-invalid-light);
+  --semantic-field-text: var(--semantic-field-text-light);
+  --semantic-field-text-disabled: var(--semantic-field-text-disabled-light);
+  --semantic-field-placeholder: var(--semantic-field-placeholder-light);
   --semantic-success: var(--semantic-success-light);
   --semantic-success-strong: var(--semantic-success-strong-light);
   --semantic-success-text: var(--semantic-success-text-light);
@@ -622,6 +678,7 @@
   --semantic-info-surface: var(--semantic-info-surface-light);
   --semantic-info-surface-strong: var(--semantic-info-surface-strong-light);
   --semantic-shell-chrome-surface: var(--semantic-shell-chrome-surface-light);
+  --semantic-shell-chrome-tab-surface-active: var(--semantic-shell-chrome-tab-surface-active-light);
   --semantic-terminal-surface: var(--semantic-terminal-surface-light);
   --semantic-popup-panel-surface: var(--semantic-popup-panel-surface-light);
   --semantic-settings-switch-row-surface-focus: var(--semantic-settings-switch-row-surface-focus-light);
@@ -645,6 +702,13 @@
   --semantic-segmented-control-item-meta-text-active: var(--semantic-segmented-control-item-meta-text-active-light);
   --semantic-segmented-control-item-text-disabled: var(--semantic-segmented-control-item-text-disabled-light);
   --semantic-dropdown-menu-surface: var(--semantic-dropdown-menu-surface-light);
+  --semantic-dropdown-option-surface-hover: var(--semantic-dropdown-option-surface-hover-light);
+  --semantic-dropdown-option-surface-selected: var(--semantic-dropdown-option-surface-selected-light);
+  --semantic-dropdown-option-text: var(--semantic-dropdown-option-text-light);
+  --semantic-dropdown-option-text-hover: var(--semantic-dropdown-option-text-hover-light);
+  --semantic-dropdown-option-text-selected: var(--semantic-dropdown-option-text-selected-light);
+  --semantic-dropdown-option-meta-text: var(--semantic-dropdown-option-meta-text-light);
+  --semantic-dropdown-option-meta-text-selected: var(--semantic-dropdown-option-meta-text-selected-light);
   --semantic-question-card-surface: var(--semantic-question-card-surface-light);
   --semantic-proposed-plan-card-surface: var(--semantic-proposed-plan-card-surface-light);
   --semantic-thread-response-text: var(--semantic-thread-response-text-light);
@@ -690,16 +754,17 @@
   --semantic-sidebar-tree-row-surface-hover: var(--semantic-sidebar-tree-row-surface-hover-light);
   --semantic-sidebar-tree-row-surface-active: var(--semantic-sidebar-tree-row-surface-active-light);
   --semantic-sidebar-tree-row-leading-active: var(--semantic-sidebar-tree-row-leading-active-light);
-  --semantic-settings-list-detail-row-surface-hover: var(--semantic-settings-list-detail-row-surface-hover-light);
-  --semantic-settings-list-detail-row-surface-current: var(--semantic-settings-list-detail-row-surface-current-light);
-  --semantic-settings-list-detail-row-primary-text: var(--semantic-settings-list-detail-row-primary-text-light);
-  --semantic-settings-list-detail-row-secondary-text: var(--semantic-settings-list-detail-row-secondary-text-light);
-  --semantic-settings-list-detail-row-current-text: var(--semantic-settings-list-detail-row-current-text-light);
+  --semantic-list-detail-row-surface: var(--semantic-list-detail-row-surface-light);
+  --semantic-list-detail-row-surface-hover: var(--semantic-list-detail-row-surface-hover-light);
+  --semantic-list-detail-row-surface-current: var(--semantic-list-detail-row-surface-current-light);
+  --semantic-list-detail-row-primary-text: var(--semantic-list-detail-row-primary-text-light);
+  --semantic-list-detail-row-secondary-text: var(--semantic-list-detail-row-secondary-text-light);
+  --semantic-list-detail-row-current-text: var(--semantic-list-detail-row-current-text-light);
   --semantic-detail-icon-surface: var(--semantic-detail-icon-surface-light);
   --semantic-detail-icon-border: var(--semantic-detail-icon-border-light);
   --semantic-detail-icon-text: var(--semantic-detail-icon-text-light);
-  --semantic-settings-list-detail-count-surface: var(--semantic-settings-list-detail-count-surface-light);
-  --semantic-settings-list-detail-count-text: var(--semantic-settings-list-detail-count-text-light);
+  --semantic-list-detail-count-surface: var(--semantic-list-detail-count-surface-light);
+  --semantic-list-detail-count-text: var(--semantic-list-detail-count-text-light);
   --semantic-composer-surface: var(--semantic-composer-surface-light);
   --semantic-composer-border: var(--semantic-composer-border-light);
   --semantic-composer-button-surface: var(--semantic-composer-button-surface-light);
@@ -786,8 +851,10 @@
   --surface-panel-dark: #1e293b;
   --surface-panel-muted-light: #f0f7f6;
   --surface-panel-muted-dark: #182536;
-  --surface-sidebar-light: #eef4f3;
-  --surface-sidebar-dark: #162235;
+  --surface-left-sidebar-light: #eef4f3;
+  --surface-left-sidebar-dark: #162235;
+  --surface-right-sidebar-light: #eef4f3;
+  --surface-right-sidebar-dark: #162235;
   --surface-sidebar-strong-light: #e2ece9;
   --surface-sidebar-strong-dark: #111c2c;
   --surface-user-bubble-light: #f0fdfa;
@@ -911,7 +978,7 @@
   --semantic-markdown-code-surface-light: #1e293b;
   --semantic-markdown-code-surface-dark: #0f172a;
 
-  /* Settings List Detail Rows */
+  /* List Detail Rows */
   --semantic-detail-icon-surface-light: #ffffff;
   --semantic-detail-icon-surface-dark: #1e293b;
   --semantic-detail-icon-border-light: rgba(15, 23, 42, 0.0656);
@@ -956,7 +1023,8 @@
     --surface-shell: var(--surface-shell-dark);
     --surface-panel: var(--surface-panel-dark);
     --surface-panel-muted: var(--surface-panel-muted-dark);
-    --surface-sidebar: var(--surface-sidebar-dark);
+    --surface-left-sidebar: var(--surface-left-sidebar-dark);
+    --surface-right-sidebar: var(--surface-right-sidebar-dark);
     --surface-sidebar-strong: var(--surface-sidebar-strong-dark);
     --surface-user-bubble: var(--surface-user-bubble-dark);
     --surface-trace: var(--surface-trace-dark);
@@ -1010,6 +1078,17 @@
     --semantic-icon-button-text-active: var(--semantic-icon-button-text-active-dark);
     --semantic-icon-button-surface-hover: var(--semantic-icon-button-surface-hover-dark);
     --semantic-icon-button-surface-active: var(--semantic-icon-button-surface-active-dark);
+    --semantic-field-surface: var(--semantic-field-surface-dark);
+    --semantic-field-surface-muted: var(--semantic-field-surface-muted-dark);
+    --semantic-field-surface-focus: var(--semantic-field-surface-focus-dark);
+    --semantic-field-surface-disabled: var(--semantic-field-surface-disabled-dark);
+    --semantic-field-border: var(--semantic-field-border-dark);
+    --semantic-field-border-focus: var(--semantic-field-border-focus-dark);
+    --semantic-field-border-disabled: var(--semantic-field-border-disabled-dark);
+    --semantic-field-border-invalid: var(--semantic-field-border-invalid-dark);
+    --semantic-field-text: var(--semantic-field-text-dark);
+    --semantic-field-text-disabled: var(--semantic-field-text-disabled-dark);
+    --semantic-field-placeholder: var(--semantic-field-placeholder-dark);
     --semantic-success: var(--semantic-success-dark);
     --semantic-success-strong: var(--semantic-success-strong-dark);
     --semantic-success-text: var(--semantic-success-text-dark);
@@ -1035,6 +1114,7 @@
     --semantic-info-surface: var(--semantic-info-surface-dark);
     --semantic-info-surface-strong: var(--semantic-info-surface-strong-dark);
     --semantic-shell-chrome-surface: var(--semantic-shell-chrome-surface-dark);
+    --semantic-shell-chrome-tab-surface-active: var(--semantic-shell-chrome-tab-surface-active-dark);
     --semantic-terminal-surface: var(--semantic-terminal-surface-dark);
     --semantic-popup-panel-surface: var(--semantic-popup-panel-surface-dark);
     --semantic-settings-switch-row-surface-focus: var(--semantic-settings-switch-row-surface-focus-dark);
@@ -1058,6 +1138,13 @@
     --semantic-segmented-control-item-meta-text-active: var(--semantic-segmented-control-item-meta-text-active-dark);
     --semantic-segmented-control-item-text-disabled: var(--semantic-segmented-control-item-text-disabled-dark);
     --semantic-dropdown-menu-surface: var(--semantic-dropdown-menu-surface-dark);
+    --semantic-dropdown-option-surface-hover: var(--semantic-dropdown-option-surface-hover-dark);
+    --semantic-dropdown-option-surface-selected: var(--semantic-dropdown-option-surface-selected-dark);
+    --semantic-dropdown-option-text: var(--semantic-dropdown-option-text-dark);
+    --semantic-dropdown-option-text-hover: var(--semantic-dropdown-option-text-hover-dark);
+    --semantic-dropdown-option-text-selected: var(--semantic-dropdown-option-text-selected-dark);
+    --semantic-dropdown-option-meta-text: var(--semantic-dropdown-option-meta-text-dark);
+    --semantic-dropdown-option-meta-text-selected: var(--semantic-dropdown-option-meta-text-selected-dark);
     --semantic-question-card-surface: var(--semantic-question-card-surface-dark);
     --semantic-proposed-plan-card-surface: var(--semantic-proposed-plan-card-surface-dark);
     --semantic-thread-response-text: var(--semantic-thread-response-text-dark);
@@ -1103,16 +1190,17 @@
     --semantic-sidebar-tree-row-surface-hover: var(--semantic-sidebar-tree-row-surface-hover-dark);
     --semantic-sidebar-tree-row-surface-active: var(--semantic-sidebar-tree-row-surface-active-dark);
     --semantic-sidebar-tree-row-leading-active: var(--semantic-sidebar-tree-row-leading-active-dark);
-    --semantic-settings-list-detail-row-surface-hover: var(--semantic-settings-list-detail-row-surface-hover-dark);
-    --semantic-settings-list-detail-row-surface-current: var(--semantic-settings-list-detail-row-surface-current-dark);
-    --semantic-settings-list-detail-row-primary-text: var(--semantic-settings-list-detail-row-primary-text-dark);
-    --semantic-settings-list-detail-row-secondary-text: var(--semantic-settings-list-detail-row-secondary-text-dark);
-    --semantic-settings-list-detail-row-current-text: var(--semantic-settings-list-detail-row-current-text-dark);
+    --semantic-list-detail-row-surface: var(--semantic-list-detail-row-surface-dark);
+    --semantic-list-detail-row-surface-hover: var(--semantic-list-detail-row-surface-hover-dark);
+    --semantic-list-detail-row-surface-current: var(--semantic-list-detail-row-surface-current-dark);
+    --semantic-list-detail-row-primary-text: var(--semantic-list-detail-row-primary-text-dark);
+    --semantic-list-detail-row-secondary-text: var(--semantic-list-detail-row-secondary-text-dark);
+    --semantic-list-detail-row-current-text: var(--semantic-list-detail-row-current-text-dark);
     --semantic-detail-icon-surface: var(--semantic-detail-icon-surface-dark);
     --semantic-detail-icon-border: var(--semantic-detail-icon-border-dark);
     --semantic-detail-icon-text: var(--semantic-detail-icon-text-dark);
-    --semantic-settings-list-detail-count-surface: var(--semantic-settings-list-detail-count-surface-dark);
-    --semantic-settings-list-detail-count-text: var(--semantic-settings-list-detail-count-text-dark);
+    --semantic-list-detail-count-surface: var(--semantic-list-detail-count-surface-dark);
+    --semantic-list-detail-count-text: var(--semantic-list-detail-count-text-dark);
     --semantic-composer-surface: var(--semantic-composer-surface-dark);
     --semantic-composer-border: var(--semantic-composer-border-dark);
     --semantic-composer-button-surface: var(--semantic-composer-button-surface-dark);
@@ -1196,7 +1284,8 @@
   --surface-shell: var(--surface-shell-dark);
   --surface-panel: var(--surface-panel-dark);
   --surface-panel-muted: var(--surface-panel-muted-dark);
-  --surface-sidebar: var(--surface-sidebar-dark);
+  --surface-left-sidebar: var(--surface-left-sidebar-dark);
+  --surface-right-sidebar: var(--surface-right-sidebar-dark);
   --surface-sidebar-strong: var(--surface-sidebar-strong-dark);
   --surface-user-bubble: var(--surface-user-bubble-dark);
   --surface-trace: var(--surface-trace-dark);
@@ -1250,6 +1339,17 @@
   --semantic-icon-button-text-active: var(--semantic-icon-button-text-active-dark);
   --semantic-icon-button-surface-hover: var(--semantic-icon-button-surface-hover-dark);
   --semantic-icon-button-surface-active: var(--semantic-icon-button-surface-active-dark);
+  --semantic-field-surface: var(--semantic-field-surface-dark);
+  --semantic-field-surface-muted: var(--semantic-field-surface-muted-dark);
+  --semantic-field-surface-focus: var(--semantic-field-surface-focus-dark);
+  --semantic-field-surface-disabled: var(--semantic-field-surface-disabled-dark);
+  --semantic-field-border: var(--semantic-field-border-dark);
+  --semantic-field-border-focus: var(--semantic-field-border-focus-dark);
+  --semantic-field-border-disabled: var(--semantic-field-border-disabled-dark);
+  --semantic-field-border-invalid: var(--semantic-field-border-invalid-dark);
+  --semantic-field-text: var(--semantic-field-text-dark);
+  --semantic-field-text-disabled: var(--semantic-field-text-disabled-dark);
+  --semantic-field-placeholder: var(--semantic-field-placeholder-dark);
   --semantic-success: var(--semantic-success-dark);
   --semantic-success-strong: var(--semantic-success-strong-dark);
   --semantic-success-text: var(--semantic-success-text-dark);
@@ -1275,6 +1375,7 @@
   --semantic-info-surface: var(--semantic-info-surface-dark);
   --semantic-info-surface-strong: var(--semantic-info-surface-strong-dark);
   --semantic-shell-chrome-surface: var(--semantic-shell-chrome-surface-dark);
+  --semantic-shell-chrome-tab-surface-active: var(--semantic-shell-chrome-tab-surface-active-dark);
   --semantic-terminal-surface: var(--semantic-terminal-surface-dark);
   --semantic-popup-panel-surface: var(--semantic-popup-panel-surface-dark);
   --semantic-settings-switch-row-surface-focus: var(--semantic-settings-switch-row-surface-focus-dark);
@@ -1298,6 +1399,13 @@
   --semantic-segmented-control-item-meta-text-active: var(--semantic-segmented-control-item-meta-text-active-dark);
   --semantic-segmented-control-item-text-disabled: var(--semantic-segmented-control-item-text-disabled-dark);
   --semantic-dropdown-menu-surface: var(--semantic-dropdown-menu-surface-dark);
+  --semantic-dropdown-option-surface-hover: var(--semantic-dropdown-option-surface-hover-dark);
+  --semantic-dropdown-option-surface-selected: var(--semantic-dropdown-option-surface-selected-dark);
+  --semantic-dropdown-option-text: var(--semantic-dropdown-option-text-dark);
+  --semantic-dropdown-option-text-hover: var(--semantic-dropdown-option-text-hover-dark);
+  --semantic-dropdown-option-text-selected: var(--semantic-dropdown-option-text-selected-dark);
+  --semantic-dropdown-option-meta-text: var(--semantic-dropdown-option-meta-text-dark);
+  --semantic-dropdown-option-meta-text-selected: var(--semantic-dropdown-option-meta-text-selected-dark);
   --semantic-question-card-surface: var(--semantic-question-card-surface-dark);
   --semantic-proposed-plan-card-surface: var(--semantic-proposed-plan-card-surface-dark);
   --semantic-thread-response-text: var(--semantic-thread-response-text-dark);
@@ -1343,16 +1451,17 @@
   --semantic-sidebar-tree-row-surface-hover: var(--semantic-sidebar-tree-row-surface-hover-dark);
   --semantic-sidebar-tree-row-surface-active: var(--semantic-sidebar-tree-row-surface-active-dark);
   --semantic-sidebar-tree-row-leading-active: var(--semantic-sidebar-tree-row-leading-active-dark);
-  --semantic-settings-list-detail-row-surface-hover: var(--semantic-settings-list-detail-row-surface-hover-dark);
-  --semantic-settings-list-detail-row-surface-current: var(--semantic-settings-list-detail-row-surface-current-dark);
-  --semantic-settings-list-detail-row-primary-text: var(--semantic-settings-list-detail-row-primary-text-dark);
-  --semantic-settings-list-detail-row-secondary-text: var(--semantic-settings-list-detail-row-secondary-text-dark);
-  --semantic-settings-list-detail-row-current-text: var(--semantic-settings-list-detail-row-current-text-dark);
+  --semantic-list-detail-row-surface: var(--semantic-list-detail-row-surface-dark);
+  --semantic-list-detail-row-surface-hover: var(--semantic-list-detail-row-surface-hover-dark);
+  --semantic-list-detail-row-surface-current: var(--semantic-list-detail-row-surface-current-dark);
+  --semantic-list-detail-row-primary-text: var(--semantic-list-detail-row-primary-text-dark);
+  --semantic-list-detail-row-secondary-text: var(--semantic-list-detail-row-secondary-text-dark);
+  --semantic-list-detail-row-current-text: var(--semantic-list-detail-row-current-text-dark);
   --semantic-detail-icon-surface: var(--semantic-detail-icon-surface-dark);
   --semantic-detail-icon-border: var(--semantic-detail-icon-border-dark);
   --semantic-detail-icon-text: var(--semantic-detail-icon-text-dark);
-  --semantic-settings-list-detail-count-surface: var(--semantic-settings-list-detail-count-surface-dark);
-  --semantic-settings-list-detail-count-text: var(--semantic-settings-list-detail-count-text-dark);
+  --semantic-list-detail-count-surface: var(--semantic-list-detail-count-surface-dark);
+  --semantic-list-detail-count-text: var(--semantic-list-detail-count-text-dark);
   --semantic-composer-surface: var(--semantic-composer-surface-dark);
   --semantic-composer-border: var(--semantic-composer-border-dark);
   --semantic-composer-button-surface: var(--semantic-composer-button-surface-dark);

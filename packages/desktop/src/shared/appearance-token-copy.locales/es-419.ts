@@ -54,7 +54,7 @@ export const appearanceTokenCopy = {
     },
     "component-dropdown-select": {
       "label": "Desplegable",
-      "description": "Color semántico dedicado para menús desplegables expandidos y de selección."
+      "description": "Colores semánticos dedicados para las superficies de menús desplegables y de selección expandidos, y para los estados de sus opciones."
     },
     "component-question-card": {
       "label": "Tarjeta de Pregunta",
@@ -76,8 +76,8 @@ export const appearanceTokenCopy = {
       "label": "Filas de Árbol en Barra Lateral",
       "description": "Tokens de estado dedicados para filas de conversaciones, espacios de trabajo, prompts, habilidades, MCP y herramientas en la barra lateral izquierda."
     },
-    "component-settings-list-detail-rows": {
-      "label": "Filas de Detalle de Lista de Configuración",
+    "component-list-detail-rows": {
+      "label": "Filas de Lista-Detalle",
       "description": "Tokens de fila dedicados para pantallas de lista-detalle de configuración, plugins, conectores, MCP y similares."
     },
     "component-composer": {
@@ -106,9 +106,13 @@ export const appearanceTokenCopy = {
       "label": "Panel atenuado",
       "description": "Rellenos de panel secundarios y filas de baja importancia."
     },
-    "surface-sidebar": {
-      "label": "Superficie de barra lateral",
-      "description": "Fondos de barra lateral izquierda y derecha."
+    "surface-left-sidebar": {
+      "label": "Superficie de barra lateral izquierda",
+      "description": "Fondo de la barra lateral izquierda."
+    },
+    "surface-right-sidebar": {
+      "label": "Superficie de barra lateral derecha",
+      "description": "Fondo de la barra lateral derecha."
     },
     "surface-sidebar-strong": {
       "label": "Barra lateral fuerte",
@@ -662,9 +666,9 @@ export const appearanceTokenCopy = {
       "label": "Icono principal activo",
       "description": "Color del icono principal de las filas de árbol seleccionadas en la barra lateral izquierda."
     },
-    "semantic-settings-list-detail-row-surface-hover": {
+    "semantic-list-detail-row-surface-hover": {
       "label": "Superficie de fila al pasar el cursor",
-      "description": "Fondo al pasar el cursor y al enfocar para filas de detalle de lista en configuración."
+      "description": "Fondo al pasar el cursor y al enfocar para filas de lista-detalle."
     },
     "semantic-composer-surface": {
       "label": "Superficie del compositor",

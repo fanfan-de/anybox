@@ -361,7 +361,7 @@ export function MobileConnectionPage({
       />
 
       <div className="mobile-connection-page-main">
-        <div className="mobile-connection-shell">
+        <div className={activePanel === "ssh" ? "mobile-connection-shell is-ssh" : "mobile-connection-shell"}>
           {error ? <div className="settings-banner is-error">{error}</div> : null}
 
           <div id="mobile-connection-tab-panel" role="tabpanel" className={`mobile-connection-tab-panel is-${activePanel}`}>

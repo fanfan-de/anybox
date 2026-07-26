@@ -5,7 +5,7 @@
   --top-chrome-tab-height: 34px;
   --top-chrome-icon-button-size: 28px;
   --top-chrome-surface: var(--seg-shell-chrome-surface, var(--seg-shell));
-  --top-chrome-active-surface: var(--seg-shell);
+  --top-chrome-active-surface: var(--semantic-shell-chrome-tab-surface-active);
   --top-chrome-hover-surface: var(--semantic-icon-button-surface-hover);
   --top-chrome-focus-surface: var(--semantic-icon-button-surface-hover);
   --top-chrome-border: var(--seg-border);
@@ -105,12 +105,13 @@ body.is-resizing-sidebar .sidebar-resizer {
 }
 
 .right-sidebar-top-menu {
-  --right-sidebar-tab-bar-bg: var(--top-chrome-surface);
+  --right-sidebar-tab-bar-bg: var(--seg-right-sidebar);
   --right-sidebar-tab-border: var(--top-chrome-border);
   --right-sidebar-tab-divider: var(--top-chrome-divider);
   --right-sidebar-tab-radius: 0px;
-  --right-sidebar-tab-active-bg: var(--top-chrome-active-surface);
+  --right-sidebar-tab-active-bg: var(--semantic-shell-chrome-tab-surface-active);
   --right-sidebar-tab-icon-color: currentColor;
+  background: var(--right-sidebar-tab-bar-bg);
 }
 
 .canvas-region-top-menu .session-tab,

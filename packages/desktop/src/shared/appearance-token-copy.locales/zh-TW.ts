@@ -54,7 +54,7 @@ export const appearanceTokenCopy = {
     },
     "component-dropdown-select": {
       "label": "下拉選取",
-      "description": "展開後的下拉選單和選取器選單的專用語意背景。"
+      "description": "展開後的下拉選單、選取器選單背景與選項狀態的專用語意顏色。"
     },
     "component-question-card": {
       "label": "問題卡片",
@@ -76,8 +76,8 @@ export const appearanceTokenCopy = {
       "label": "側邊欄樹行",
       "description": "左側邊欄中對話、工作區、Prompts、Skills、MCP 和工具行的專用狀態 token。"
     },
-    "component-settings-list-detail-rows": {
-      "label": "設定列表明細行",
+    "component-list-detail-rows": {
+      "label": "列表明細行",
       "description": "設定、外掛程式、連接器、MCP 等列表明細介面的專用行狀態 token。"
     },
     "component-composer": {
@@ -106,9 +106,13 @@ export const appearanceTokenCopy = {
       "label": "弱化面板",
       "description": "次級面板填充和低強調行背景。"
     },
-    "surface-sidebar": {
-      "label": "側邊欄背景",
-      "description": "左側和右側邊欄的背景。"
+    "surface-left-sidebar": {
+      "label": "左側邊欄背景",
+      "description": "左側導覽邊欄的背景。"
+    },
+    "surface-right-sidebar": {
+      "label": "右側邊欄背景",
+      "description": "右側檢查與工具邊欄的背景。"
     },
     "surface-sidebar-strong": {
       "label": "側邊欄強調",
@@ -662,9 +666,9 @@ export const appearanceTokenCopy = {
       "label": "前置圖示啟用色",
       "description": "左側邊欄樹行選中時的前置圖示顏色。"
     },
-    "semantic-settings-list-detail-row-surface-hover": {
+    "semantic-list-detail-row-surface-hover": {
       "label": "行懸停背景",
-      "description": "設定列表明細行懸停和聚焦時的背景。"
+      "description": "列表明細行懸停和聚焦時的背景。"
     },
     "semantic-composer-surface": {
       "label": "輸入框背景",

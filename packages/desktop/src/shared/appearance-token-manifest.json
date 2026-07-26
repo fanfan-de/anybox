@@ -48,12 +48,20 @@
           "runtimeToken": "surface-panel-muted"
         },
         {
-          "id": "surface-sidebar",
-          "label": "Sidebar Surface",
-          "description": "Left and right sidebar backgrounds.",
-          "lightToken": "surface-sidebar-light",
-          "darkToken": "surface-sidebar-dark",
-          "runtimeToken": "surface-sidebar"
+          "id": "surface-left-sidebar",
+          "label": "Left Sidebar Surface",
+          "description": "Background for the left navigation sidebar.",
+          "lightToken": "surface-left-sidebar-light",
+          "darkToken": "surface-left-sidebar-dark",
+          "runtimeToken": "surface-left-sidebar"
+        },
+        {
+          "id": "surface-right-sidebar",
+          "label": "Right Sidebar Surface",
+          "description": "Background for the right inspector and tool sidebar.",
+          "lightToken": "surface-right-sidebar-light",
+          "darkToken": "surface-right-sidebar-dark",
+          "runtimeToken": "surface-right-sidebar"
         },
         {
           "id": "surface-sidebar-strong",
@@ -506,6 +514,102 @@
       ]
     },
     {
+      "id": "component-fields",
+      "layer": "component",
+      "label": "Fields",
+      "description": "Shared semantic colors for text inputs, textareas, select controls, search fields, and editable control shells.",
+      "rows": [
+        {
+          "id": "semantic-field-surface",
+          "label": "Field Surface",
+          "description": "Default fill for editable fields and their control shells.",
+          "lightToken": "semantic-field-surface-light",
+          "darkToken": "semantic-field-surface-dark",
+          "runtimeToken": "semantic-field-surface"
+        },
+        {
+          "id": "semantic-field-surface-muted",
+          "label": "Muted Field Surface",
+          "description": "Lower-emphasis fill for compact or secondary editable fields.",
+          "lightToken": "semantic-field-surface-muted-light",
+          "darkToken": "semantic-field-surface-muted-dark",
+          "runtimeToken": "semantic-field-surface-muted"
+        },
+        {
+          "id": "semantic-field-surface-focus",
+          "label": "Field Focus Surface",
+          "description": "Fill for editable fields while they contain keyboard focus.",
+          "lightToken": "semantic-field-surface-focus-light",
+          "darkToken": "semantic-field-surface-focus-dark",
+          "runtimeToken": "semantic-field-surface-focus"
+        },
+        {
+          "id": "semantic-field-surface-disabled",
+          "label": "Field Disabled Surface",
+          "description": "Fill for disabled editable fields.",
+          "lightToken": "semantic-field-surface-disabled-light",
+          "darkToken": "semantic-field-surface-disabled-dark",
+          "runtimeToken": "semantic-field-surface-disabled"
+        },
+        {
+          "id": "semantic-field-border",
+          "label": "Field Border",
+          "description": "Default border for editable fields.",
+          "lightToken": "semantic-field-border-light",
+          "darkToken": "semantic-field-border-dark",
+          "runtimeToken": "semantic-field-border"
+        },
+        {
+          "id": "semantic-field-border-focus",
+          "label": "Field Focus Border",
+          "description": "Border for editable fields while they contain keyboard focus.",
+          "lightToken": "semantic-field-border-focus-light",
+          "darkToken": "semantic-field-border-focus-dark",
+          "runtimeToken": "semantic-field-border-focus"
+        },
+        {
+          "id": "semantic-field-border-disabled",
+          "label": "Field Disabled Border",
+          "description": "Border for disabled editable fields.",
+          "lightToken": "semantic-field-border-disabled-light",
+          "darkToken": "semantic-field-border-disabled-dark",
+          "runtimeToken": "semantic-field-border-disabled"
+        },
+        {
+          "id": "semantic-field-border-invalid",
+          "label": "Field Invalid Border",
+          "description": "Border for editable fields with invalid content.",
+          "lightToken": "semantic-field-border-invalid-light",
+          "darkToken": "semantic-field-border-invalid-dark",
+          "runtimeToken": "semantic-field-border-invalid"
+        },
+        {
+          "id": "semantic-field-text",
+          "label": "Field Text",
+          "description": "Text color for editable field values.",
+          "lightToken": "semantic-field-text-light",
+          "darkToken": "semantic-field-text-dark",
+          "runtimeToken": "semantic-field-text"
+        },
+        {
+          "id": "semantic-field-text-disabled",
+          "label": "Field Disabled Text",
+          "description": "Text color for disabled editable field values.",
+          "lightToken": "semantic-field-text-disabled-light",
+          "darkToken": "semantic-field-text-disabled-dark",
+          "runtimeToken": "semantic-field-text-disabled"
+        },
+        {
+          "id": "semantic-field-placeholder",
+          "label": "Field Placeholder",
+          "description": "Placeholder text color for editable fields.",
+          "lightToken": "semantic-field-placeholder-light",
+          "darkToken": "semantic-field-placeholder-dark",
+          "runtimeToken": "semantic-field-placeholder"
+        }
+      ]
+    },
+    {
       "id": "status-success",
       "layer": "status",
       "label": "Status / Success",
@@ -742,6 +846,14 @@
           "lightToken": "semantic-shell-chrome-surface-light",
           "darkToken": "semantic-shell-chrome-surface-dark",
           "runtimeToken": "semantic-shell-chrome-surface"
+        },
+        {
+          "id": "semantic-shell-chrome-tab-surface-active",
+          "label": "Selected Tab Surface",
+          "description": "Background fill for selected tabs in the central workbench and right sidebar.",
+          "lightToken": "semantic-shell-chrome-tab-surface-active-light",
+          "darkToken": "semantic-shell-chrome-tab-surface-active-dark",
+          "runtimeToken": "semantic-shell-chrome-tab-surface-active"
         }
       ]
     },
@@ -957,7 +1069,7 @@
       "id": "component-dropdown-select",
       "layer": "component",
       "label": "Dropdown Select",
-      "description": "Dedicated semantic color for expanded dropdown and select menus.",
+      "description": "Dedicated semantic colors for expanded dropdown and select menu surfaces and option states.",
       "rows": [
         {
           "id": "semantic-dropdown-menu-surface",
@@ -966,6 +1078,62 @@
           "lightToken": "semantic-dropdown-menu-surface-light",
           "darkToken": "semantic-dropdown-menu-surface-dark",
           "runtimeToken": "semantic-dropdown-menu-surface"
+        },
+        {
+          "id": "semantic-dropdown-option-surface-hover",
+          "label": "Option Hover Surface",
+          "description": "Background fill for dropdown options while hovered or keyboard-focused.",
+          "lightToken": "semantic-dropdown-option-surface-hover-light",
+          "darkToken": "semantic-dropdown-option-surface-hover-dark",
+          "runtimeToken": "semantic-dropdown-option-surface-hover"
+        },
+        {
+          "id": "semantic-dropdown-option-surface-selected",
+          "label": "Option Selected Surface",
+          "description": "Background fill for the selected dropdown option.",
+          "lightToken": "semantic-dropdown-option-surface-selected-light",
+          "darkToken": "semantic-dropdown-option-surface-selected-dark",
+          "runtimeToken": "semantic-dropdown-option-surface-selected"
+        },
+        {
+          "id": "semantic-dropdown-option-text",
+          "label": "Option Text",
+          "description": "Default text and icon color for dropdown options.",
+          "lightToken": "semantic-dropdown-option-text-light",
+          "darkToken": "semantic-dropdown-option-text-dark",
+          "runtimeToken": "semantic-dropdown-option-text"
+        },
+        {
+          "id": "semantic-dropdown-option-text-hover",
+          "label": "Option Hover Text",
+          "description": "Text and icon color for dropdown options while hovered or keyboard-focused.",
+          "lightToken": "semantic-dropdown-option-text-hover-light",
+          "darkToken": "semantic-dropdown-option-text-hover-dark",
+          "runtimeToken": "semantic-dropdown-option-text-hover"
+        },
+        {
+          "id": "semantic-dropdown-option-text-selected",
+          "label": "Option Selected Text",
+          "description": "Text and icon color for the selected dropdown option.",
+          "lightToken": "semantic-dropdown-option-text-selected-light",
+          "darkToken": "semantic-dropdown-option-text-selected-dark",
+          "runtimeToken": "semantic-dropdown-option-text-selected"
+        },
+        {
+          "id": "semantic-dropdown-option-meta-text",
+          "label": "Option Meta Text",
+          "description": "Supporting count and metadata text color inside dropdown options.",
+          "lightToken": "semantic-dropdown-option-meta-text-light",
+          "darkToken": "semantic-dropdown-option-meta-text-dark",
+          "runtimeToken": "semantic-dropdown-option-meta-text"
+        },
+        {
+          "id": "semantic-dropdown-option-meta-text-selected",
+          "label": "Option Selected Meta Text",
+          "description": "Supporting count and metadata text color inside the selected dropdown option.",
+          "lightToken": "semantic-dropdown-option-meta-text-selected-light",
+          "darkToken": "semantic-dropdown-option-meta-text-selected-dark",
+          "runtimeToken": "semantic-dropdown-option-meta-text-selected"
         }
       ]
     },
@@ -1370,50 +1538,58 @@
       ]
     },
     {
-      "id": "component-settings-list-detail-rows",
+      "id": "component-list-detail-rows",
       "layer": "component",
-      "label": "Settings List Detail Rows",
-      "description": "Dedicated row tokens for settings, plugins, connectors, MCP, and similar list-detail screens.",
+      "label": "List Detail Rows",
+      "description": "Shared row tokens for selectable list-detail interfaces across product areas.",
       "rows": [
         {
-          "id": "semantic-settings-list-detail-row-surface-hover",
+          "id": "semantic-list-detail-row-surface",
+          "label": "Row Surface",
+          "description": "Default background for list-detail rows.",
+          "lightToken": "semantic-list-detail-row-surface-light",
+          "darkToken": "semantic-list-detail-row-surface-dark",
+          "runtimeToken": "semantic-list-detail-row-surface"
+        },
+        {
+          "id": "semantic-list-detail-row-surface-hover",
           "label": "Row Surface Hover",
-          "description": "Hover and focus background for settings list-detail rows.",
-          "lightToken": "semantic-settings-list-detail-row-surface-hover-light",
-          "darkToken": "semantic-settings-list-detail-row-surface-hover-dark",
-          "runtimeToken": "semantic-settings-list-detail-row-surface-hover"
+          "description": "Hover and focus background for list-detail rows.",
+          "lightToken": "semantic-list-detail-row-surface-hover-light",
+          "darkToken": "semantic-list-detail-row-surface-hover-dark",
+          "runtimeToken": "semantic-list-detail-row-surface-hover"
         },
         {
-          "id": "semantic-settings-list-detail-row-surface-current",
-          "label": "Settings List Detail Row Surface Current",
-          "description": "Controls settings list detail row surface current in light and dark appearance modes.",
-          "lightToken": "semantic-settings-list-detail-row-surface-current-light",
-          "darkToken": "semantic-settings-list-detail-row-surface-current-dark",
-          "runtimeToken": "semantic-settings-list-detail-row-surface-current"
+          "id": "semantic-list-detail-row-surface-current",
+          "label": "Row Surface Current",
+          "description": "Current-row background for list-detail interfaces.",
+          "lightToken": "semantic-list-detail-row-surface-current-light",
+          "darkToken": "semantic-list-detail-row-surface-current-dark",
+          "runtimeToken": "semantic-list-detail-row-surface-current"
         },
         {
-          "id": "semantic-settings-list-detail-row-primary-text",
-          "label": "Settings List Detail Row Primary Text",
-          "description": "Controls settings list detail row primary text in light and dark appearance modes.",
-          "lightToken": "semantic-settings-list-detail-row-primary-text-light",
-          "darkToken": "semantic-settings-list-detail-row-primary-text-dark",
-          "runtimeToken": "semantic-settings-list-detail-row-primary-text"
+          "id": "semantic-list-detail-row-primary-text",
+          "label": "Row Primary Text",
+          "description": "Primary text and icon color for list-detail rows.",
+          "lightToken": "semantic-list-detail-row-primary-text-light",
+          "darkToken": "semantic-list-detail-row-primary-text-dark",
+          "runtimeToken": "semantic-list-detail-row-primary-text"
         },
         {
-          "id": "semantic-settings-list-detail-row-secondary-text",
-          "label": "Settings List Detail Row Secondary Text",
-          "description": "Controls settings list detail row secondary text in light and dark appearance modes.",
-          "lightToken": "semantic-settings-list-detail-row-secondary-text-light",
-          "darkToken": "semantic-settings-list-detail-row-secondary-text-dark",
-          "runtimeToken": "semantic-settings-list-detail-row-secondary-text"
+          "id": "semantic-list-detail-row-secondary-text",
+          "label": "Row Secondary Text",
+          "description": "Secondary metadata text color for list-detail rows.",
+          "lightToken": "semantic-list-detail-row-secondary-text-light",
+          "darkToken": "semantic-list-detail-row-secondary-text-dark",
+          "runtimeToken": "semantic-list-detail-row-secondary-text"
         },
         {
-          "id": "semantic-settings-list-detail-row-current-text",
-          "label": "Settings List Detail Row Current Text",
-          "description": "Controls settings list detail row current text in light and dark appearance modes.",
-          "lightToken": "semantic-settings-list-detail-row-current-text-light",
-          "darkToken": "semantic-settings-list-detail-row-current-text-dark",
-          "runtimeToken": "semantic-settings-list-detail-row-current-text"
+          "id": "semantic-list-detail-row-current-text",
+          "label": "Row Current Text",
+          "description": "Text and icon color for the current list-detail row.",
+          "lightToken": "semantic-list-detail-row-current-text-light",
+          "darkToken": "semantic-list-detail-row-current-text-dark",
+          "runtimeToken": "semantic-list-detail-row-current-text"
         },
         {
           "id": "semantic-detail-icon-surface",
@@ -1440,20 +1616,20 @@
           "runtimeToken": "semantic-detail-icon-text"
         },
         {
-          "id": "semantic-settings-list-detail-count-surface",
-          "label": "Settings List Detail Count Surface",
-          "description": "Controls settings list detail count surface in light and dark appearance modes.",
-          "lightToken": "semantic-settings-list-detail-count-surface-light",
-          "darkToken": "semantic-settings-list-detail-count-surface-dark",
-          "runtimeToken": "semantic-settings-list-detail-count-surface"
+          "id": "semantic-list-detail-count-surface",
+          "label": "Count Surface",
+          "description": "Background for compact list-detail count indicators.",
+          "lightToken": "semantic-list-detail-count-surface-light",
+          "darkToken": "semantic-list-detail-count-surface-dark",
+          "runtimeToken": "semantic-list-detail-count-surface"
         },
         {
-          "id": "semantic-settings-list-detail-count-text",
-          "label": "Settings List Detail Count Text",
-          "description": "Controls settings list detail count text in light and dark appearance modes.",
-          "lightToken": "semantic-settings-list-detail-count-text-light",
-          "darkToken": "semantic-settings-list-detail-count-text-dark",
-          "runtimeToken": "semantic-settings-list-detail-count-text"
+          "id": "semantic-list-detail-count-text",
+          "label": "Count Text",
+          "description": "Text color for compact list-detail count indicators.",
+          "lightToken": "semantic-list-detail-count-text-light",
+          "darkToken": "semantic-list-detail-count-text-dark",
+          "runtimeToken": "semantic-list-detail-count-text"
         }
       ]
     },
@@ -2238,7 +2414,7 @@
             "hex": "#342d2a"
           }
         },
-        "surface-sidebar-light": {
+        "surface-left-sidebar-light": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -2251,7 +2427,33 @@
             "hex": "#f3ece7"
           }
         },
-        "surface-sidebar-dark": {
+        "surface-right-sidebar-light": {
+          "type": "literal",
+          "value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.952941,
+              0.92549,
+              0.905882
+            ],
+            "alpha": 1,
+            "hex": "#f3ece7"
+          }
+        },
+        "surface-left-sidebar-dark": {
+          "type": "literal",
+          "value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.141176,
+              0.121569,
+              0.109804
+            ],
+            "alpha": 1,
+            "hex": "#241f1c"
+          }
+        },
+        "surface-right-sidebar-dark": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -3034,6 +3236,94 @@
           "type": "alias",
           "token": "brand-primary-hover-dark"
         },
+        "semantic-field-surface-light": {
+          "type": "alias",
+          "token": "surface-panel-light"
+        },
+        "semantic-field-surface-dark": {
+          "type": "alias",
+          "token": "surface-panel-dark"
+        },
+        "semantic-field-surface-muted-light": {
+          "type": "alias",
+          "token": "surface-panel-muted-light"
+        },
+        "semantic-field-surface-muted-dark": {
+          "type": "alias",
+          "token": "surface-panel-muted-dark"
+        },
+        "semantic-field-surface-focus-light": {
+          "type": "alias",
+          "token": "surface-panel-light"
+        },
+        "semantic-field-surface-focus-dark": {
+          "type": "alias",
+          "token": "surface-panel-dark"
+        },
+        "semantic-field-surface-disabled-light": {
+          "type": "alias",
+          "token": "surface-panel-muted-light"
+        },
+        "semantic-field-surface-disabled-dark": {
+          "type": "alias",
+          "token": "surface-panel-muted-dark"
+        },
+        "semantic-field-border-light": {
+          "type": "alias",
+          "token": "border-default-light"
+        },
+        "semantic-field-border-dark": {
+          "type": "alias",
+          "token": "border-default-dark"
+        },
+        "semantic-field-border-focus-light": {
+          "type": "alias",
+          "token": "focus-outline-color-light"
+        },
+        "semantic-field-border-focus-dark": {
+          "type": "alias",
+          "token": "focus-outline-color-dark"
+        },
+        "semantic-field-border-disabled-light": {
+          "type": "alias",
+          "token": "border-subtle-light"
+        },
+        "semantic-field-border-disabled-dark": {
+          "type": "alias",
+          "token": "border-subtle-dark"
+        },
+        "semantic-field-border-invalid-light": {
+          "type": "alias",
+          "token": "semantic-error-border-light"
+        },
+        "semantic-field-border-invalid-dark": {
+          "type": "alias",
+          "token": "semantic-error-border-dark"
+        },
+        "semantic-field-text-light": {
+          "type": "alias",
+          "token": "text-primary-light"
+        },
+        "semantic-field-text-dark": {
+          "type": "alias",
+          "token": "text-primary-dark"
+        },
+        "semantic-field-text-disabled-light": {
+          "type": "alias",
+          "token": "text-tertiary-light"
+        },
+        "semantic-field-text-disabled-dark": {
+          "type": "alias",
+          "token": "text-tertiary-dark"
+        },
+        "semantic-field-placeholder-light": {
+          "type": "alias",
+          "token": "text-tertiary-light"
+        },
+        "semantic-field-placeholder-dark": {
+          "type": "alias",
+          "token": "text-tertiary-dark"
+        },
         "semantic-success-light": {
           "type": "literal",
           "value": {
@@ -3684,6 +3974,14 @@
             "hex": "#221d1a"
           }
         },
+        "semantic-shell-chrome-tab-surface-active-light": {
+          "type": "alias",
+          "token": "surface-panel-light"
+        },
+        "semantic-shell-chrome-tab-surface-active-dark": {
+          "type": "alias",
+          "token": "surface-panel-dark"
+        },
         "semantic-terminal-surface-light": {
           "type": "literal",
           "value": {
@@ -3855,6 +4153,62 @@
             "alpha": 1,
             "hex": "#302a28"
           }
+        },
+        "semantic-dropdown-option-surface-hover-light": {
+          "type": "alias",
+          "token": "surface-panel-muted-light"
+        },
+        "semantic-dropdown-option-surface-hover-dark": {
+          "type": "alias",
+          "token": "surface-panel-muted-dark"
+        },
+        "semantic-dropdown-option-surface-selected-light": {
+          "type": "alias",
+          "token": "brand-primary-soft"
+        },
+        "semantic-dropdown-option-surface-selected-dark": {
+          "type": "alias",
+          "token": "brand-primary-soft-dark"
+        },
+        "semantic-dropdown-option-text-light": {
+          "type": "alias",
+          "token": "text-secondary-light"
+        },
+        "semantic-dropdown-option-text-dark": {
+          "type": "alias",
+          "token": "text-secondary-dark"
+        },
+        "semantic-dropdown-option-text-hover-light": {
+          "type": "alias",
+          "token": "text-primary-light"
+        },
+        "semantic-dropdown-option-text-hover-dark": {
+          "type": "alias",
+          "token": "text-primary-dark"
+        },
+        "semantic-dropdown-option-text-selected-light": {
+          "type": "alias",
+          "token": "text-primary-light"
+        },
+        "semantic-dropdown-option-text-selected-dark": {
+          "type": "alias",
+          "token": "text-primary-dark"
+        },
+        "semantic-dropdown-option-meta-text-light": {
+          "type": "alias",
+          "token": "text-primary-light"
+        },
+        "semantic-dropdown-option-meta-text-dark": {
+          "type": "alias",
+          "token": "text-primary-dark"
+        },
+        "semantic-dropdown-option-meta-text-selected-light": {
+          "type": "alias",
+          "token": "text-primary-light"
+        },
+        "semantic-dropdown-option-meta-text-selected-dark": {
+          "type": "alias",
+          "token": "text-primary-dark"
         },
         "semantic-question-card-surface-light": {
           "type": "alias",
@@ -4504,27 +4858,35 @@
             "hex": "#342d2a"
           }
         },
-        "semantic-settings-list-detail-row-primary-text-light": {
+        "semantic-list-detail-row-surface-light": {
+          "type": "alias",
+          "token": "surface-shell-light"
+        },
+        "semantic-list-detail-row-surface-dark": {
+          "type": "alias",
+          "token": "surface-shell-dark"
+        },
+        "semantic-list-detail-row-primary-text-light": {
           "type": "alias",
           "token": "text-primary-light"
         },
-        "semantic-settings-list-detail-row-primary-text-dark": {
+        "semantic-list-detail-row-primary-text-dark": {
           "type": "alias",
           "token": "text-primary-dark"
         },
-        "semantic-settings-list-detail-row-secondary-text-light": {
+        "semantic-list-detail-row-secondary-text-light": {
           "type": "alias",
           "token": "text-tertiary-light"
         },
-        "semantic-settings-list-detail-row-secondary-text-dark": {
+        "semantic-list-detail-row-secondary-text-dark": {
           "type": "alias",
           "token": "text-tertiary-dark"
         },
-        "semantic-settings-list-detail-row-current-text-light": {
+        "semantic-list-detail-row-current-text-light": {
           "type": "alias",
           "token": "brand-primary-hover"
         },
-        "semantic-settings-list-detail-row-current-text-dark": {
+        "semantic-list-detail-row-current-text-dark": {
           "type": "alias",
           "token": "brand-primary-hover-dark"
         },
@@ -4606,11 +4968,11 @@
             "hex": "#fca5a5"
           }
         },
-        "semantic-settings-list-detail-count-text-light": {
+        "semantic-list-detail-count-text-light": {
           "type": "alias",
           "token": "text-secondary-light"
         },
-        "semantic-settings-list-detail-count-text-dark": {
+        "semantic-list-detail-count-text-dark": {
           "type": "alias",
           "token": "text-secondary-dark"
         },
@@ -5118,7 +5480,7 @@
             "hex": "#182536"
           }
         },
-        "surface-sidebar-light": {
+        "surface-left-sidebar-light": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -5131,7 +5493,33 @@
             "hex": "#eef4f3"
           }
         },
-        "surface-sidebar-dark": {
+        "surface-right-sidebar-light": {
+          "type": "literal",
+          "value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.933333,
+              0.956863,
+              0.952941
+            ],
+            "alpha": 1,
+            "hex": "#eef4f3"
+          }
+        },
+        "surface-left-sidebar-dark": {
+          "type": "literal",
+          "value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.086275,
+              0.133333,
+              0.207843
+            ],
+            "alpha": 1,
+            "hex": "#162235"
+          }
+        },
+        "surface-right-sidebar-dark": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -6908,7 +7296,20 @@
             "hex": "#e8e8e8"
           }
         },
-        "surface-sidebar-light": {
+        "surface-left-sidebar-light": {
+          "type": "literal",
+          "value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.909804,
+              0.909804,
+              0.909804
+            ],
+            "alpha": 0,
+            "hex": "#e8e8e8"
+          }
+        },
+        "surface-right-sidebar-light": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -8338,7 +8739,7 @@
             "hex": "#ffffff"
           }
         },
-        "semantic-settings-list-detail-row-surface-hover-light": {
+        "semantic-list-detail-row-surface-hover-light": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -8481,7 +8882,20 @@
             "hex": "#342d2a"
           }
         },
-        "surface-sidebar-dark": {
+        "surface-left-sidebar-dark": {
+          "type": "literal",
+          "value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.141176,
+              0.121569,
+              0.109804
+            ],
+            "alpha": 0,
+            "hex": "#241f1c"
+          }
+        },
+        "surface-right-sidebar-dark": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -9489,7 +9903,20 @@
             "hex": "#e8e8e8"
           }
         },
-        "surface-sidebar-light": {
+        "surface-left-sidebar-light": {
+          "type": "literal",
+          "value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.909804,
+              0.909804,
+              0.909804
+            ],
+            "alpha": 0,
+            "hex": "#e8e8e8"
+          }
+        },
+        "surface-right-sidebar-light": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -10919,7 +11346,7 @@
             "hex": "#ffffff"
           }
         },
-        "semantic-settings-list-detail-row-surface-hover-light": {
+        "semantic-list-detail-row-surface-hover-light": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -11062,7 +11489,20 @@
             "hex": "#342d2a"
           }
         },
-        "surface-sidebar-dark": {
+        "surface-left-sidebar-dark": {
+          "type": "literal",
+          "value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.141176,
+              0.121569,
+              0.109804
+            ],
+            "alpha": 0,
+            "hex": "#241f1c"
+          }
+        },
+        "surface-right-sidebar-dark": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -12167,7 +12607,20 @@
             "hex": "#273244"
           }
         },
-        "surface-sidebar-dark": {
+        "surface-left-sidebar-dark": {
+          "type": "literal",
+          "value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.066667,
+              0.094118,
+              0.152941
+            ],
+            "alpha": 1,
+            "hex": "#111827"
+          }
+        },
+        "surface-right-sidebar-dark": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -12525,7 +12978,20 @@
             "hex": "#f4eee6"
           }
         },
-        "surface-sidebar-light": {
+        "surface-left-sidebar-light": {
+          "type": "literal",
+          "value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.94902,
+              0.917647,
+              0.87451
+            ],
+            "alpha": 1,
+            "hex": "#f2eadf"
+          }
+        },
+        "surface-right-sidebar-light": {
           "type": "literal",
           "value": {
             "colorSpace": "srgb",
@@ -14118,7 +14584,7 @@
       ],
       "compatibility": false
     },
-    "semantic-settings-list-detail-row-surface-hover-light": {
+    "semantic-list-detail-row-surface-hover-light": {
       "kind": "blend",
       "colorSpace": "srgb",
       "sources": [
@@ -14148,7 +14614,7 @@
       ],
       "compatibility": false
     },
-    "semantic-settings-list-detail-row-surface-hover-dark": {
+    "semantic-list-detail-row-surface-hover-dark": {
       "kind": "blend",
       "colorSpace": "srgb",
       "sources": [
@@ -14178,7 +14644,7 @@
       ],
       "compatibility": false
     },
-    "semantic-settings-list-detail-row-surface-current-light": {
+    "semantic-list-detail-row-surface-current-light": {
       "kind": "blend",
       "colorSpace": "srgb",
       "sources": [
@@ -14208,7 +14674,7 @@
       ],
       "compatibility": false
     },
-    "semantic-settings-list-detail-row-surface-current-dark": {
+    "semantic-list-detail-row-surface-current-dark": {
       "kind": "blend",
       "colorSpace": "srgb",
       "sources": [
@@ -14238,7 +14704,7 @@
       ],
       "compatibility": false
     },
-    "semantic-settings-list-detail-count-surface-light": {
+    "semantic-list-detail-count-surface-light": {
       "kind": "blend",
       "colorSpace": "srgb",
       "sources": [
@@ -14259,7 +14725,7 @@
       ],
       "compatibility": false
     },
-    "semantic-settings-list-detail-count-surface-dark": {
+    "semantic-list-detail-count-surface-dark": {
       "kind": "blend",
       "colorSpace": "srgb",
       "sources": [
@@ -15286,6 +15752,45 @@
       "background": {
         "light": "surface-panel-light",
         "dark": "surface-panel-dark"
+      },
+      "minimumContrast": 3
+    },
+    {
+      "id": "field-text-on-field-surface",
+      "kind": "text",
+      "foreground": {
+        "light": "semantic-field-text-light",
+        "dark": "semantic-field-text-dark"
+      },
+      "background": {
+        "light": "semantic-field-surface-light",
+        "dark": "semantic-field-surface-dark"
+      },
+      "minimumContrast": 4.5
+    },
+    {
+      "id": "field-text-on-muted-field-surface",
+      "kind": "text",
+      "foreground": {
+        "light": "semantic-field-text-light",
+        "dark": "semantic-field-text-dark"
+      },
+      "background": {
+        "light": "semantic-field-surface-muted-light",
+        "dark": "semantic-field-surface-muted-dark"
+      },
+      "minimumContrast": 4.5
+    },
+    {
+      "id": "field-focus-border-on-field-surface",
+      "kind": "ui",
+      "foreground": {
+        "light": "semantic-field-border-focus-light",
+        "dark": "semantic-field-border-focus-dark"
+      },
+      "background": {
+        "light": "semantic-field-surface-focus-light",
+        "dark": "semantic-field-surface-focus-dark"
       },
       "minimumContrast": 3
     }

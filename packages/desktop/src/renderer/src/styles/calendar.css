@@ -844,21 +844,21 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  border: 1px solid var(--calendar-border);
+  border: 1px solid var(--semantic-field-border);
   border-radius: var(--calendar-radius);
-  background: var(--calendar-control-surface);
+  background: var(--semantic-field-surface);
 }
 
 .calendar-source-search:focus-within {
-  border-color: var(--calendar-focus-border);
-  background: var(--calendar-panel);
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
 }
 
 .calendar-source-search svg {
   width: 14px;
   height: 14px;
   flex: 0 0 auto;
-  color: var(--calendar-text-faint);
+  color: var(--semantic-field-placeholder);
 }
 
 .calendar-source-search input {
@@ -866,7 +866,7 @@
   flex: 1 1 auto;
   border: 0;
   outline: 0;
-  color: var(--calendar-text);
+  color: var(--semantic-field-text);
   background: transparent;
   font: inherit;
   font-size: 13px;
@@ -874,7 +874,7 @@
 }
 
 .calendar-source-search input::placeholder {
-  color: var(--calendar-text-faint);
+  color: var(--semantic-field-placeholder);
 }
 
 .calendar-source-search-clear {
@@ -888,16 +888,16 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--calendar-text-muted);
+  color: var(--semantic-icon-button-text);
   background: transparent;
   cursor: pointer;
 }
 
 .calendar-source-search-clear:hover,
 .calendar-source-search-clear:focus-visible {
-  color: var(--calendar-text);
-  border-color: var(--calendar-control-border-hover);
-  background: var(--calendar-control-surface-hover);
+  color: var(--semantic-icon-button-text-hover);
+  border-color: transparent;
+  background: var(--semantic-icon-button-surface-hover);
   outline: none;
 }
 
@@ -980,9 +980,16 @@
 
 .calendar-project-filter-trigger strong,
 .calendar-project-filter-option strong {
-  color: var(--calendar-text);
   font-size: 12px;
   font-weight: 600;
+}
+
+.calendar-project-filter-trigger strong {
+  color: var(--calendar-text);
+}
+
+.calendar-project-filter-option strong {
+  color: var(--semantic-dropdown-option-meta-text);
 }
 
 .calendar-project-filter-menu {
@@ -996,7 +1003,7 @@
   border: 1px solid var(--calendar-border);
   border-radius: var(--calendar-radius);
   overflow: auto;
-  background: var(--calendar-panel);
+  background: var(--semantic-dropdown-menu-surface);
   box-shadow: var(--shadow-lg);
   scrollbar-width: none;
 }
@@ -1017,7 +1024,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  color: var(--calendar-text-muted);
+  color: var(--semantic-dropdown-option-text);
   background: transparent;
   cursor: pointer;
   font: inherit;
@@ -1027,15 +1034,19 @@
 }
 
 .calendar-project-filter-option:hover,
-.calendar-project-filter-option:focus-visible,
-.calendar-project-filter-option.is-selected {
-  color: var(--calendar-text);
-  background: var(--calendar-control-surface-hover);
+.calendar-project-filter-option:focus-visible {
+  color: var(--semantic-dropdown-option-text-hover);
+  background: var(--semantic-dropdown-option-surface-hover);
   outline: none;
 }
 
 .calendar-project-filter-option.is-selected {
-  background: var(--calendar-control-surface-active);
+  color: var(--semantic-dropdown-option-text-selected);
+  background: var(--semantic-dropdown-option-surface-selected);
+}
+
+.calendar-project-filter-option.is-selected strong {
+  color: var(--semantic-dropdown-option-meta-text-selected);
 }
 
 .calendar-section-heading {

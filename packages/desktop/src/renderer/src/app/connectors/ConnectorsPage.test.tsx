@@ -136,6 +136,15 @@ describe("ConnectorsPage", () => {
     )
   })
 
+  it("styles the OAuth callback URL as a semantic read-only field", () => {
+    expect(settingsStyles).toMatch(
+      /\.connectors-callback-url-card code\s*\{[^}]*border:\s*1px solid var\(--semantic-field-border\);[^}]*background:\s*var\(--semantic-field-surface\);[^}]*color:\s*var\(--semantic-field-text\);/s,
+    )
+    expect(settingsStyles).not.toMatch(
+      /\.connectors-callback-url-card code\s*\{[^}]*(?:--seg-border|--seg-panel|--seg-text)/s,
+    )
+  })
+
   it("renders platform connector status and OAuth actions", () => {
     const onStartConnectorAuthFlow = vi.fn()
     const onDeleteConnectorAuthSession = vi.fn()

@@ -54,7 +54,7 @@ export const appearanceTokenCopy = {
     },
     "component-dropdown-select": {
       "label": "Dropdown Pilih",
-      "description": "Warna semantik khusus untuk menu dropdown dan pilih yang diperluas."
+      "description": "Warna semantik khusus untuk permukaan menu dropdown dan pilih yang diperluas serta status opsinya."
     },
     "component-question-card": {
       "label": "Kartu Pertanyaan",
@@ -76,8 +76,8 @@ export const appearanceTokenCopy = {
       "label": "Baris Pohon Sidebar",
       "description": "Token status khusus untuk baris percakapan, ruang kerja, prompt, keterampilan, MCP, dan alat di sidebar kiri."
     },
-    "component-settings-list-detail-rows": {
-      "label": "Baris Detail Daftar Pengaturan",
+    "component-list-detail-rows": {
+      "label": "Baris Daftar-Detail",
       "description": "Token baris khusus untuk layar daftar-detail seperti pengaturan, plugin, konektor, MCP, dan sejenisnya."
     },
     "component-composer": {
@@ -106,9 +106,13 @@ export const appearanceTokenCopy = {
       "label": "Panel Redup",
       "description": "Isian panel sekunder dan baris dengan penekanan rendah."
     },
-    "surface-sidebar": {
-      "label": "Permukaan Sidebar",
-      "description": "Latar belakang sidebar kiri dan kanan."
+    "surface-left-sidebar": {
+      "label": "Permukaan Sidebar Kiri",
+      "description": "Latar belakang sidebar kiri."
+    },
+    "surface-right-sidebar": {
+      "label": "Permukaan Sidebar Kanan",
+      "description": "Latar belakang sidebar kanan."
     },
     "surface-sidebar-strong": {
       "label": "Sidebar Kuat",
@@ -662,9 +666,9 @@ export const appearanceTokenCopy = {
       "label": "Ikon Utama Aktif",
       "description": "Warna ikon utama untuk baris pohon terpilih di sidebar kiri."
     },
-    "semantic-settings-list-detail-row-surface-hover": {
+    "semantic-list-detail-row-surface-hover": {
       "label": "Permukaan Baris Hover",
-      "description": "Latar belakang hover dan fokus untuk baris detail daftar pengaturan."
+      "description": "Latar belakang hover dan fokus untuk baris daftar-detail."
     },
     "semantic-composer-surface": {
       "label": "Permukaan Komposer",

@@ -40,6 +40,19 @@ manifest 使用 schema v2。公开 token 值只允许两种表达：
 - 兼容旧样式的 `--seg-*`
 - 仅供旧代码过渡的 `--mix-*`（禁止新增消费）
 
+## 组件语义所有权
+
+组件必须服从与自身交互职责对应的完整 semantic token 组合，而不是只挑一个视觉上接近的 token：
+
+- 先按行为、状态模型和 ARIA role 判断组件类型，再选择 manifest 中对应的 component/product token 组。class 名称、所在页面、相邻组件或复用的 shared CSS 不能改变 semantic token 归属。
+- 组件必须消费对应组中所有适用状态，例如 default、hover、focus、active、selected/current、disabled、invalid/error 的 surface、border、text、icon、meta text。组内已经存在专用 token 时，组件不得绕过它直接消费 `--surface-*`、`--text-*`、`--border-*`、`--brand-*`、`--seg-*` 或其他组件的 `--semantic-*` token。
+- 组合组件按子部件分别归属：picker trigger 属于 button/menu-trigger，搜索输入属于 field，展开面板和选项属于 dropdown select；每个子部件只消费自己的状态组合。
+- 可以复用 shared class 的布局、尺寸、排版、圆角、阴影、定位和键盘行为，但不能因此继承错误组件的颜色状态。选择型 listbox 即使复用 context-menu 行结构，也必须覆盖为 dropdown option token；动作菜单不能反向借用 selected option token。
+- 允许区域局部变量作为一对一语义别名，例如 `--project-picker-option-hover: var(--semantic-dropdown-option-surface-hover)`；禁止把局部变量映射到基础色、兼容别名或其他组件组后伪装成本组件语义。manifest 内部由 semantic mode token alias 到基础 token 不受此限制。
+- 对应 semantic 组没有定义的非颜色属性，才可继续使用通用 spacing、radius、shadow、motion 等结构 token；不要为了追求形式上的全组件专用而复制这些基础 token。
+- 新增或扩充 semantic token 组时，必须使用 `rg` 等方式盘点相同交互角色、ARIA role、组件 class、局部变量和旧 token 的全部消费者。所有命中项要么在同一改动中迁移，要么记录有理由、可追踪的例外。
+- 测试必须同时包含正向和负向断言：确认代表性消费者使用完整的对应 token 组合，并确认该组件没有通过基础 token、兼容别名、局部变量或其他组件组回退。
+
 ## 主题规则
 
 - 组件样式使用不带 `-light` / `-dark` 后缀的运行时 token。

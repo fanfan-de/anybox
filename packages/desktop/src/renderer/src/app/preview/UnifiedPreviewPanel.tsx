@@ -4,7 +4,7 @@ import remarkGfm from "remark-gfm"
 import type { DesktopLocalPreviewService } from "../../../../shared/desktop-ipc-contract"
 import { CodeBlockPreview, inferCodeLanguage } from "../code-highlight"
 import type { CodeHighlightTheme } from "../code-theme"
-import { BackIcon, ForwardIcon, OpenExternalIcon, PreviewIcon, ResetIcon, ScreenshotIcon } from "../icons"
+import { BackIcon, ForwardIcon, OpenExternalIcon, PreviewIcon, ResetIcon, ScreenshotIcon, SessionRunningIcon } from "../icons"
 import { useI18n } from "../i18n/I18nProvider"
 import { useToast } from "../toast"
 import type { PreviewInteractionCommitInput, PreviewInteractionPluginID, ResolvedPreviewTarget, WorkspacePreviewState } from "../types"
@@ -195,6 +195,7 @@ function EmptyPreviewState({
   onScanLocalServices: () => void
 }) {
   const { t } = useI18n()
+  const isScanningLocalServices = localServiceStatus === "scanning"
 
   return (
     <div className="preview-canvas-state preview-empty-state unified-preview-empty">
@@ -213,8 +214,15 @@ function EmptyPreviewState({
         ))}
       </div>
       <div className="unified-preview-services">
-        <button type="button" className="secondary-button" onClick={onScanLocalServices}>
-          {localServiceStatus === "scanning" ? t("preview.empty.scanning") : t("preview.empty.detectLocalServers")}
+        <button
+          type="button"
+          className="secondary-button"
+          aria-busy={isScanningLocalServices || undefined}
+          disabled={isScanningLocalServices}
+          onClick={onScanLocalServices}
+        >
+          {isScanningLocalServices ? <SessionRunningIcon className="unified-preview-scan-spinner" aria-hidden="true" /> : null}
+          <span>{isScanningLocalServices ? t("preview.empty.scanning") : t("preview.empty.detectLocalServers")}</span>
         </button>
         {localPreviewServices.length > 0 ? (
           <div className="unified-preview-service-list">

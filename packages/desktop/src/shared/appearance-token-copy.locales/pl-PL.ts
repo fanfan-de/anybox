@@ -54,7 +54,7 @@ export const appearanceTokenCopy = {
     },
     "component-dropdown-select": {
       "label": "Lista rozwijana",
-      "description": "Dedykowany kolor semantyczny dla rozwiniętych list rozwijanych i menu wyboru."
+      "description": "Dedykowane kolory semantyczne dla powierzchni rozwiniętych menu i list wyboru oraz stanów opcji."
     },
     "component-question-card": {
       "label": "Karta pytania",
@@ -76,8 +76,8 @@ export const appearanceTokenCopy = {
       "label": "Wiersze drzewa bocznego",
       "description": "Dedykowane tokeny stanu dla wierszy rozmów, obszarów roboczych, promptów, umiejętności, MCP i narzędzi w lewym panelu bocznym."
     },
-    "component-settings-list-detail-rows": {
-      "label": "Wiersze szczegółów listy ustawień",
+    "component-list-detail-rows": {
+      "label": "Wiersze listy szczegółów",
       "description": "Dedykowane tokeny wierszy dla ustawień, wtyczek, łączników, MCP i podobnych ekranów listy szczegółów."
     },
     "component-composer": {
@@ -106,9 +106,13 @@ export const appearanceTokenCopy = {
       "label": "Przyciemniony panel",
       "description": "Wypełnienia paneli drugorzędnych i wiersze o niskim znaczeniu."
     },
-    "surface-sidebar": {
-      "label": "Powierzchnia panelu bocznego",
-      "description": "Tła lewego i prawego panelu bocznego."
+    "surface-left-sidebar": {
+      "label": "Powierzchnia lewego panelu bocznego",
+      "description": "Tło lewego panelu bocznego."
+    },
+    "surface-right-sidebar": {
+      "label": "Powierzchnia prawego panelu bocznego",
+      "description": "Tło prawego panelu bocznego."
     },
     "surface-sidebar-strong": {
       "label": "Mocny panel boczny",
@@ -662,9 +666,9 @@ export const appearanceTokenCopy = {
       "label": "Ikona prowadząca aktywna",
       "description": "Kolor ikony prowadzącej zaznaczonego wiersza drzewa w lewym panelu bocznym."
     },
-    "semantic-settings-list-detail-row-surface-hover": {
+    "semantic-list-detail-row-surface-hover": {
       "label": "Tło wiersza po najechaniu",
-      "description": "Tło po najechaniu i fokusie dla wierszy listy ustawień."
+      "description": "Tło po najechaniu i fokusie dla wierszy listy szczegółów."
     },
     "semantic-composer-surface": {
       "label": "Powierzchnia kompozytora",

@@ -64,7 +64,8 @@
   --color-surface-shell: var(--surface-shell);
   --color-surface-panel: var(--surface-panel);
   --color-surface-panel-muted: var(--surface-panel-muted);
-  --color-surface-sidebar: var(--surface-sidebar);
+  --color-surface-left-sidebar: var(--surface-left-sidebar);
+  --color-surface-right-sidebar: var(--surface-right-sidebar);
   --color-surface-sidebar-strong: var(--surface-sidebar-strong);
   --color-border-subtle: var(--border-subtle);
   --color-border-default: var(--border-default);
@@ -168,7 +169,8 @@
   --seg-shell: var(--surface-shell);
   --seg-panel: var(--surface-panel);
   --seg-panel-muted: var(--surface-panel-muted);
-  --seg-sidebar: var(--surface-sidebar);
+  --seg-left-sidebar: var(--surface-left-sidebar);
+  --seg-right-sidebar: var(--surface-right-sidebar);
   --seg-sidebar-strong: var(--surface-sidebar-strong);
   --seg-shell-chrome-surface: var(--semantic-shell-chrome-surface);
   --seg-terminal-surface: var(--semantic-terminal-surface);
@@ -215,16 +217,6 @@
   --seg-composer-button-surface-strong: var(--semantic-composer-button-surface-strong);
   --seg-composer-button-text: var(--semantic-composer-button-text);
   --seg-composer-button-text-strong: var(--semantic-composer-button-text-strong);
-  /* Deprecated settings-scoped detail icon names. */
-  --semantic-settings-list-detail-icon-surface-light: var(--semantic-detail-icon-surface-light);
-  --semantic-settings-list-detail-icon-surface-dark: var(--semantic-detail-icon-surface-dark);
-  --semantic-settings-list-detail-icon-border-light: var(--semantic-detail-icon-border-light);
-  --semantic-settings-list-detail-icon-border-dark: var(--semantic-detail-icon-border-dark);
-  --semantic-settings-list-detail-icon-text-light: var(--semantic-detail-icon-text-light);
-  --semantic-settings-list-detail-icon-text-dark: var(--semantic-detail-icon-text-dark);
-  --semantic-settings-list-detail-icon-surface: var(--semantic-detail-icon-surface);
-  --semantic-settings-list-detail-icon-border: var(--semantic-detail-icon-border);
-  --semantic-settings-list-detail-icon-text: var(--semantic-detail-icon-text);
   --seg-radius-xs: var(--radius-control);
   --seg-radius-sm: var(--radius-chip);
   --seg-radius-md: var(--radius-panel);

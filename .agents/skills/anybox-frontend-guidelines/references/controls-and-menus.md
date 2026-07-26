@@ -1,5 +1,22 @@
 # 控件与菜单
 
+## Semantic token 归属速查
+
+组件按交互职责消费对应的完整 token 组合。复用 class 只复用结构，不允许改变以下归属：
+
+| 组件职责 | 必须消费的 token 组 |
+| --- | --- |
+| Primary / secondary / danger button | `--semantic-button-<variant>-*` |
+| Icon-only button | `--semantic-icon-button-*` |
+| Input / textarea / select field / search field | `--semantic-field-*` |
+| Settings switch | `--semantic-settings-switch-*` |
+| Segmented control / view switch | `--semantic-segmented-control-*` |
+| Dropdown / picker / listbox 的展开面板与选项 | `--semantic-dropdown-*` |
+| 通用 list-detail row 及其 count/detail icon | `--semantic-list-detail-*` / `--semantic-detail-icon-*` |
+| 已有独立 product/component 组的业务组件 | manifest 中与该组件同名的完整 `--semantic-<area>-*` 组合 |
+
+组合控件必须拆分子部件判断。例如顶部 picker 的 trigger 使用对应按钮 token，搜索框使用 field token，展开面板、option 和辅助文字使用 dropdown token。不得因为它们共享一个 DOM 容器或 CSS class 就统一套用某一组 token。
+
 ## 按钮
 
 按钮必须先按语义和所在 surface 选择种类，再写样式。不要因为当前页面“看起来需要一个按钮”就新增一次性 `*-button` 视觉规则。
@@ -18,7 +35,7 @@
 - disabled 状态保持布局尺寸，只降低 opacity 和 cursor；禁用按钮不能看起来像可点击 primary。
 - loading 状态保持原尺寸，优先替换 leading icon 为 spinner 或在文字前放 spinner；不要让文案变长导致按钮宽度跳动。
 - focus 使用组件自身的背景、边框、文字或指示器 token 表达，不使用 outline 或 inset ring。
-- 按钮 CSS 只消费不带 `-light` / `-dark` 后缀的运行时 token。缺少合适 token 时，先在 `tokens.css` 增加成对 light/dark semantic token，再暴露运行时 token 给按钮使用。
+- 按钮 CSS 只消费不带 `-light` / `-dark` 后缀的运行时 token。缺少合适 token 时，先在 schema v2 manifest 增加成对 light/dark semantic token，再运行生成器暴露运行时 token 给按钮使用。
 - 按钮必须消费成组按钮语义 token，例如 `--semantic-button-primary-surface`、`--semantic-button-secondary-surface`、`--semantic-button-danger-surface` 及各自的 hover、border、text、disabled token。不要直接把 `--seg-accent`、`--brand-primary-active`、`--semantic-accent-icon-*`、`--semantic-error-*` 这类 accent/status/text/icon token 当作按钮完整状态；它们不覆盖按钮 default/hover/disabled 的完整状态矩阵，在 dark 主题下可能变成低对比或近白按钮。
 - 禁止在按钮规则里硬编码 `#fff`、`#000`、固定灰色、固定粉色、固定紫色、固定品牌色或 `rgba(...)`。
 
@@ -73,7 +90,7 @@
 实现落点：
 
 - 优先复用 `.primary-button`、`.secondary-button`、`.secondary-button.is-danger`、`.top-menu-view-button`、`.canvas-top-menu-button`、`.icon-button` 以及当前 surface 已有的语义按钮 class。
-- 如果需要新增通用按钮能力，优先补 `primitives.css` 和 `tokens.css`，再让区域 class 组合消费；不要在某个页面 CSS 末尾追加覆盖式按钮主题。新增按钮变体时如果项目缺少对应的 `--semantic-button-<variant>-*` token，必须先补 token，再写组件 CSS。
+- 如果需要新增通用按钮能力，优先补 `primitives.css`，再让区域 class 组合消费；不要在某个页面 CSS 末尾追加覆盖式按钮主题。新增按钮变体时如果项目缺少对应的 `--semantic-button-<variant>-*` token，必须先在 manifest 补 token 并运行生成器，再写组件 CSS。
 - 区域内可以有语义 class，例如 `.plugins-detail-install-button`、`.ssh-icon-button`，但它们必须映射到上面的按钮种类和 token，不得拥有独立的一套颜色、边框、圆角和状态。
 - 完成按钮改动后检查 light/dark、hover、focus-visible、active/open、disabled、loading、窄宽度、长中文/英文文案和 icon 对齐。
 
@@ -81,6 +98,15 @@
 
 - input、textarea、contenteditable 保留原生编辑能力。
 - 使用本地已有 focus 模式，优先通过背景、边框、文字或指示器 token 表达。
+- 通用文本输入、textarea、select、搜索框和可编辑控件外壳使用成组字段语义 token：
+  - 默认：`--semantic-field-surface` / `--semantic-field-border` / `--semantic-field-text`
+  - 低强调字段：`--semantic-field-surface-muted`
+  - 聚焦：`--semantic-field-surface-focus` / `--semantic-field-border-focus`
+  - 禁用：`--semantic-field-surface-disabled` / `--semantic-field-border-disabled` / `--semantic-field-text-disabled`
+  - 无效：`--semantic-field-border-invalid`
+  - 占位符：`--semantic-field-placeholder`
+- 不要再用 `--surface-panel`、`--surface-panel-muted`、`--seg-panel`、`--seg-panel-muted` 或按钮 semantic token 表达输入字段状态；组件确有独立语义时可以使用更具体的组件字段 token。
+- 字段 focus 使用自身的 surface 与 border token，不使用 outline 或 box-shadow ring；disabled 和 invalid 状态不能只靠 opacity 表达。
 - provider/model/theme 这类需要统一产品风格的选择器，优先使用 composer/settings 中已有 custom listbox/combobox 模式，不要直接使用原生 `<select>`。
 - search field 保持紧凑，并与附近 row 对齐。
 
@@ -97,7 +123,7 @@
   - track disabled：`var(--semantic-settings-switch-track-surface-disabled)` / `var(--semantic-settings-switch-track-border-disabled)`
   - thumb：`var(--semantic-settings-switch-thumb-surface)`
   - thumb disabled：`var(--semantic-settings-switch-thumb-surface-disabled)`
-- 不要把 `--semantic-button-*`、segmented token、`--seg-accent`、品牌色或状态色直接当作 switch 的完整状态矩阵；缺少区域语义时，先在 `tokens.css` 补成对 light/dark 的 `--semantic-<area>-switch-*-light/dark`，再暴露不带后缀的运行时 token。
+- 不要把 `--semantic-button-*`、segmented token、`--seg-accent`、品牌色或状态色直接当作 switch 的完整状态矩阵；缺少区域语义时，先在 schema v2 manifest 补成对 light/dark 的 `--semantic-<area>-switch-*` token，再运行生成器暴露不带后缀的运行时 token。
 - default、focus-visible、active/on、disabled 状态都要在 light/dark 下可读。focus 使用 row 背景或 track 边框表达，不使用 outline、inset ring 或 box-shadow ring。
 - 尺寸必须稳定：track、thumb、thumb 位移、row 高度都显式定义，hover/focus/active/disabled 不改变尺寸、padding 或布局。
 
@@ -107,13 +133,15 @@
 - 默认视觉采用顶部无外框 tab segment：外层只负责排布，不加边框、底色、投影或包裹胶囊；当前项用 segment 自身的选中底色表达。
 - 优先复用 `top-menu-segment-list` / `top-menu-segment`。外层使用 `inline-flex`、`gap: 12px`、横向溢出隐藏滚动条，并设置 `-webkit-app-region: no-drag`；segment 使用稳定高度和 padding，默认透明背景，避免 hover/active 改变控件尺寸。
 - 使用真实 `<button>`。页面内容分区切换使用 `role="tablist"` / `role="tab"` + `aria-selected` + `tabpanel`；局部二选一模式切换可使用 `role="group"` + `aria-pressed`；状态选择更接近表单值时使用 `radiogroup` / `radio` 语义。
-- segment 默认文字用 `var(--seg-text-2)`，计数或弱信息用 `var(--seg-text-3)`；active/current 文字用 `var(--seg-text-1)`，计数回到 `var(--seg-text-2)`。
-- hover/focus/active 必须使用运行时 token，不要硬编码 `#ffffff`、浅灰、深灰或 `rgba(255, 255, 255, ...)`。优先使用：
-  - hover/focus：`var(--semantic-sidebar-tree-row-surface-hover)`
-  - active/selected：`var(--semantic-sidebar-tree-row-surface-active)`
-  - text：`var(--seg-text-1)` / `var(--seg-text-2)`
-- light/dark 差异必须来自 semantic token 在 `tokens.css` 中的 light/dark 映射；组件规则里不要写 `-light` / `-dark` token，也不要为 segmented 单独加主题分支。
-- 如果现有 sidebar/tree semantic token 与当前区域语义不匹配，先在 `tokens.css` 中新增成对的 `--semantic-<area>-segmented-*-light` / `--semantic-<area>-segmented-*-dark`，再暴露不带后缀的运行时 token 给组件使用。
+- segmented 外层、item 状态和文字必须消费完整的 `--semantic-segmented-control-*` 组合：
+  - 外层：`--semantic-segmented-control-surface` / `--semantic-segmented-control-border`
+  - hover/focus：`--semantic-segmented-control-item-surface-hover` / `--semantic-segmented-control-item-text-hover`
+  - active/selected：`--semantic-segmented-control-item-surface-active` / `--semantic-segmented-control-item-text-active`
+  - 默认文字：`--semantic-segmented-control-item-text`
+  - 辅助信息：`--semantic-segmented-control-item-meta-text` / `--semantic-segmented-control-item-meta-text-active`
+  - disabled：`--semantic-segmented-control-item-text-disabled`
+- 不要用 `--seg-text-*`、sidebar/tree row、button、dropdown 或基础 surface/text token 表达 segmented 状态。light/dark 差异必须来自 manifest 生成的 segmented runtime token；组件规则里不要写 `-light` / `-dark` token，也不要为 segmented 单独加主题分支。
+- 如果通用 segmented 组合无法表达产品组件的状态，先在 schema v2 manifest 新增更具体的成对 component semantic token，再运行生成器；不要借用相邻组件的 token。
 - active segment 不要依赖白底、重阴影、强对比投影或外层胶囊表达选中态；需要分隔时使用 token 边框或组件自身状态。
 - focus 使用背景、边框、文字或指示器 token 表达，不使用 outline 或 inset ring。
 - 完成后同时检查 light/dark：外层底色、active 片、hover/focus 片、文字颜色和 disabled 对比度都必须可读。
@@ -130,6 +158,15 @@
 菜单规则：
 
 - 默认菜单行背景透明，只在 hover、focus、active、selected、highlighted 状态显示 surface。
+- 下拉选择器和 listbox 菜单必须消费完整的 dropdown semantic token：
+  - 面板：`--semantic-dropdown-menu-surface`
+  - 选项悬停/聚焦：`--semantic-dropdown-option-surface-hover` / `--semantic-dropdown-option-text-hover`
+  - 选项选中：`--semantic-dropdown-option-surface-selected` / `--semantic-dropdown-option-text-selected`
+  - 默认选项文字：`--semantic-dropdown-option-text`
+  - 计数和辅助信息：`--semantic-dropdown-option-meta-text` / `--semantic-dropdown-option-meta-text-selected`
+- 可以复用 `.ui-context-menu`、`.composer-menu-panel` 或其他菜单的结构 class，但选择型 option 不得继承 `--context-menu-*`、field、button、segmented、sidebar tree、基础 surface/text 或业务区域 control token。若保留局部变量，它们必须一对一映射到上面的 `--semantic-dropdown-*` token。
+- trigger 仍按 button/menu-trigger 语义处理；只有展开面板、option、option meta 和对应状态属于 dropdown token 组。带搜索的 picker 中，搜索输入继续使用 `--semantic-field-*`，不要用 dropdown option token 绘制输入框。
+- 缺少状态时先在 schema v2 manifest 的 `component-dropdown-select` 组补充成对 light/dark token，再运行生成器。
 - 动作菜单在语义合适时使用 `role="menu"` / `role="menuitem"`。
 - 带搜索输入的 picker，如果普通 menu role 会损害可访问性，使用 dialog/searchbox/listbox 语义。
 - 可能被 scroll/overflow 容器裁剪的菜单使用 portal 或 fixed 定位。

@@ -20,6 +20,8 @@ import {
   FolderOpenIcon,
   MoreIcon,
   ResetIcon,
+  RightSidebarCollapseIcon,
+  RightSidebarExpandIcon,
   SearchIcon,
 } from "../icons"
 import { useI18n } from "../i18n/I18nProvider"
@@ -167,6 +169,7 @@ export function SshConnectionsPage({ searchQuery, onWorkspaceOpened }: SshConnec
   const [entries, setEntries] = useState<AgentSshDirectoryEntry[]>([])
   const [message, setMessage] = useState<SshPageMessage | null>(null)
   const [isBusy, setIsBusy] = useState(false)
+  const [isInspectorOpen, setIsInspectorOpen] = useState(true)
   const loadRequestIDRef = useRef(0)
   const pathInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -214,6 +217,7 @@ export function SshConnectionsPage({ searchQuery, onWorkspaceOpened }: SshConnec
 
   function startNewProfile() {
     loadRequestIDRef.current += 1
+    setIsInspectorOpen(true)
     setDraft(EMPTY_DRAFT)
     setActiveProfileID(null)
     setCurrentPath("/")
@@ -532,7 +536,6 @@ export function SshConnectionsPage({ searchQuery, onWorkspaceOpened }: SshConnec
               </span>
               <span className="ssh-directory-copy">
                 <strong>{entry.name}</strong>
-                <small>{entry.path}</small>
               </span>
               <span className="ssh-directory-meta">{getEntryMeta(entry)}</span>
             </button>
@@ -582,186 +585,221 @@ export function SshConnectionsPage({ searchQuery, onWorkspaceOpened }: SshConnec
         </div>
       </aside>
 
-      <main className="ssh-detail-panel">
-        <header className="ssh-detail-hero">
-          <div>
-            <h2>{draft.id ? draft.name || t("ssh.detail.untitled") : t("ssh.detail.newProfile")}</h2>
-          </div>
-          <div className="ssh-detail-status" title={activeProfile ? `${activeProfile.username}@${activeProfile.host}` : undefined}>
-            {activeProfile ? `${activeProfile.username}@${activeProfile.host}` : t("ssh.detail.notSaved")}
-          </div>
-        </header>
-
+      <main className={isInspectorOpen ? "ssh-detail-panel" : "ssh-detail-panel is-inspector-closed"}>
         {message ? (
           <div className={`ssh-message is-${message.tone}`} role={message.tone === "error" ? "alert" : "status"}>
             {message.text}
           </div>
         ) : null}
 
-        <section className="ssh-card" aria-label={t("ssh.form.aria")}>
-          <div className="ssh-card-header">
-            <div>
-              <h3>{t("ssh.form.title")}</h3>
+        <div className="ssh-workspace">
+          <section
+            className={activeProfile ? "ssh-card ssh-browser-card" : "ssh-card ssh-browser-card is-disabled"}
+            aria-label={t("ssh.browser.aria")}
+            onKeyDown={handleBrowserKeyDown}
+          >
+            <div className="ssh-card-header ssh-browser-header">
+              <div>
+                <h3>{t("ssh.browser.title")}</h3>
+              </div>
+              <div className="ssh-browser-open-target">
+                {activeProfile ? <span title={workspaceTargetPath}>{t("ssh.browser.target", { path: workspaceTargetPath })}</span> : null}
+                {!isInspectorOpen ? (
+                  <button
+                    className="ssh-icon-button"
+                    type="button"
+                    aria-label={t("ssh.form.title")}
+                    aria-controls="ssh-connection-inspector"
+                    aria-expanded="false"
+                    title={t("ssh.form.title")}
+                    onClick={() => setIsInspectorOpen(true)}
+                  >
+                    <RightSidebarExpandIcon />
+                  </button>
+                ) : null}
+                <button className="primary-button" type="button" disabled={isBusy || !activeProfile} onClick={() => void openWorkspace()}>
+                  {t("ssh.browser.openWorkspace")}
+                </button>
+              </div>
             </div>
-          </div>
 
-          <div className="ssh-form-grid">
-            <label className="ssh-field">
-              <span>{t("ssh.form.name")}</span>
-              <input value={draft.name} placeholder={t("ssh.form.namePlaceholder")} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
-            </label>
-            <label className="ssh-field">
-              <span>{t("ssh.form.host")}</span>
-              <input value={draft.host} placeholder="203.0.113.10" onChange={(event) => setDraft({ ...draft, host: event.target.value })} />
-            </label>
-            <label className="ssh-field">
-              <span>{t("ssh.form.port")}</span>
-              <input value={draft.port} inputMode="numeric" onChange={(event) => setDraft({ ...draft, port: event.target.value })} />
-            </label>
-            <label className="ssh-field">
-              <span>{t("ssh.form.username")}</span>
-              <input value={draft.username} placeholder="ubuntu" onChange={(event) => setDraft({ ...draft, username: event.target.value })} />
-            </label>
-            <label className="ssh-field is-wide">
-              <span>{t("ssh.form.privateKeyPath")}</span>
-              <input
-                value={draft.privateKeyPath}
-                placeholder="C:\\Users\\you\\.ssh\\id_rsa"
-                onChange={(event) => setDraft({ ...draft, privateKeyPath: event.target.value })}
-              />
-            </label>
-            <label className="ssh-field">
-              <span>{t("ssh.form.defaultRemotePath")}</span>
-              <input
-                value={draft.defaultRemotePath}
-                placeholder="/home/ubuntu/app"
-                onChange={(event) => setDraft({ ...draft, defaultRemotePath: event.target.value })}
-              />
-            </label>
-            <label className="ssh-field">
-              <span>{t("ssh.form.passphrase")}</span>
-              <input
-                type="password"
-                value={draft.passphrase}
-                placeholder={activeProfile?.hasPassphrase ? t("ssh.form.passphraseSavedPlaceholder") : t("ssh.form.passphraseOptional")}
-                onChange={(event) => setDraft({ ...draft, passphrase: event.target.value })}
-              />
-            </label>
-          </div>
-
-          <div className="ssh-action-row">
-            <button className="primary-button" type="button" disabled={isBusy} onClick={() => void saveProfile()}>
-              {t("ssh.actions.saveProfile")}
-            </button>
-            <button className="secondary-button" type="button" disabled={isBusy || !draft.id} onClick={() => void testProfile()}>
-              {t("ssh.actions.testConnection")}
-            </button>
-            <button className="secondary-button is-danger" type="button" disabled={isBusy || !draft.id} onClick={() => void deleteProfile()}>
-              {t("app.delete")}
-            </button>
-          </div>
-        </section>
-
-        <section
-          className={activeProfile ? "ssh-card ssh-browser-card" : "ssh-card ssh-browser-card is-disabled"}
-          aria-label={t("ssh.browser.aria")}
-          onKeyDown={handleBrowserKeyDown}
-        >
-          <div className="ssh-card-header">
-            <div>
-              <h3>{t("ssh.browser.title")}</h3>
-            </div>
-            <div className="ssh-browser-open-target">
-              <button className="primary-button" type="button" disabled={isBusy || !activeProfile} onClick={() => void openWorkspace()}>
-                {t("ssh.browser.openWorkspace")}
-              </button>
-              {activeProfile ? <span title={workspaceTargetPath}>{t("ssh.browser.target", { path: workspaceTargetPath })}</span> : null}
-            </div>
-          </div>
-
-          <div className="ssh-path-toolbar">
-            <button
-              className="ssh-icon-button"
-              type="button"
-              aria-label={t("ssh.browser.up")}
-              title={t("ssh.browser.up")}
-              disabled={!activeProfile || currentPath === "/"}
-              onClick={() => void loadDirectory(parentPath(currentPath))}
-            >
-              <ArrowUpIcon />
-            </button>
-            <div className="ssh-path-main">
-              {activeProfile ? (
-                isEditingPath ? (
-                  <form className="ssh-path-edit-form" onSubmit={handlePathSubmit}>
-                    <input
-                      ref={pathInputRef}
-                      aria-label={t("ssh.browser.pathInputLabel")}
-                      value={pathDraft}
-                      onChange={(event) => setPathDraft(event.target.value)}
-                      onKeyDown={handlePathInputKeyDown}
-                    />
-                    <button className="secondary-button" type="submit">
-                      {t("ssh.browser.go")}
-                    </button>
-                  </form>
-                ) : (
-                  <nav className="ssh-path-breadcrumbs" aria-label={t("ssh.browser.breadcrumbs")}>
-                    {pathCrumbs.map((crumb, index) => (
-                      <span key={crumb.path} className="ssh-path-crumb-wrap">
-                        {index > 0 ? <ChevronRightIcon /> : null}
-                        <button type="button" title={crumb.path} onClick={() => void loadDirectory(crumb.path)}>
-                          {crumb.label}
+            <div className="ssh-browser-toolbar">
+              <div className="ssh-path-toolbar">
+                <button
+                  className="ssh-icon-button"
+                  type="button"
+                  aria-label={t("ssh.browser.up")}
+                  title={t("ssh.browser.up")}
+                  disabled={!activeProfile || currentPath === "/"}
+                  onClick={() => void loadDirectory(parentPath(currentPath))}
+                >
+                  <ArrowUpIcon />
+                </button>
+                <div className="ssh-path-main">
+                  {activeProfile ? (
+                    isEditingPath ? (
+                      <form className="ssh-path-edit-form" onSubmit={handlePathSubmit}>
+                        <input
+                          ref={pathInputRef}
+                          aria-label={t("ssh.browser.pathInputLabel")}
+                          value={pathDraft}
+                          onChange={(event) => setPathDraft(event.target.value)}
+                          onKeyDown={handlePathInputKeyDown}
+                        />
+                        <button className="secondary-button" type="submit">
+                          {t("ssh.browser.go")}
                         </button>
-                      </span>
-                    ))}
-                  </nav>
-                )
-              ) : (
-                <span className="ssh-path-placeholder">{t("ssh.browser.noProfileCopy")}</span>
-              )}
+                      </form>
+                    ) : (
+                      <nav className="ssh-path-breadcrumbs" aria-label={t("ssh.browser.breadcrumbs")}>
+                        {pathCrumbs.map((crumb, index) => (
+                          <span key={crumb.path} className="ssh-path-crumb-wrap">
+                            {index > 0 ? <ChevronRightIcon /> : null}
+                            <button type="button" title={crumb.path} onClick={() => void loadDirectory(crumb.path)}>
+                              {crumb.label}
+                            </button>
+                          </span>
+                        ))}
+                      </nav>
+                    )
+                  ) : (
+                    <span className="ssh-path-placeholder">{t("ssh.browser.noProfileCopy")}</span>
+                  )}
+                </div>
+                <div className="ssh-path-actions">
+                  <button
+                    className="ssh-icon-button"
+                    type="button"
+                    aria-label={t("ssh.browser.editPath")}
+                    title={t("ssh.browser.editPath")}
+                    disabled={!activeProfile}
+                    onClick={startPathEditing}
+                  >
+                    <EditIcon />
+                  </button>
+                  <button
+                    className="ssh-icon-button"
+                    type="button"
+                    aria-label={t("app.refresh")}
+                    title={t("app.refresh")}
+                    disabled={!activeProfile}
+                    onClick={() => void loadDirectory(currentPath)}
+                  >
+                    <ResetIcon />
+                  </button>
+                </div>
+              </div>
+
+              <label className="ssh-directory-filter">
+                <SearchIcon />
+                <input
+                  aria-label={t("ssh.browser.searchLabel")}
+                  type="search"
+                  value={directoryFilter}
+                  placeholder={t("ssh.browser.searchPlaceholder")}
+                  disabled={!activeProfile}
+                  onChange={(event) => setDirectoryFilter(event.target.value)}
+                />
+              </label>
             </div>
-            <div className="ssh-path-actions">
+
+            <div className="ssh-directory-browser">
+              {isBusy ? <span className="ssh-browser-loading" role="status">{t("ssh.browser.loading")}</span> : null}
+              {renderDirectoryContent()}
+            </div>
+          </section>
+
+          <section
+            id="ssh-connection-inspector"
+            className="ssh-card ssh-form-card"
+            aria-label={t("ssh.form.aria")}
+            hidden={!isInspectorOpen}
+          >
+            <div className="ssh-inspector-header">
+              <div className="ssh-inspector-heading">
+                <h2>{draft.id ? draft.name || t("ssh.detail.untitled") : t("ssh.detail.newProfile")}</h2>
+                <div className="ssh-detail-status" title={activeProfile ? `${activeProfile.username}@${activeProfile.host}` : undefined}>
+                  {activeProfile ? `${activeProfile.username}@${activeProfile.host}` : t("ssh.detail.notSaved")}
+                </div>
+              </div>
               <button
                 className="ssh-icon-button"
                 type="button"
-                aria-label={t("ssh.browser.editPath")}
-                title={t("ssh.browser.editPath")}
-                disabled={!activeProfile}
-                onClick={startPathEditing}
+                aria-label={`${t("app.close")} ${t("ssh.form.title")}`}
+                aria-controls="ssh-connection-inspector"
+                aria-expanded="true"
+                title={`${t("app.close")} ${t("ssh.form.title")}`}
+                onClick={() => setIsInspectorOpen(false)}
               >
-                <EditIcon />
-              </button>
-              <button
-                className="ssh-icon-button"
-                type="button"
-                aria-label={t("app.refresh")}
-                title={t("app.refresh")}
-                disabled={!activeProfile}
-                onClick={() => void loadDirectory(currentPath)}
-              >
-                <ResetIcon />
+                <RightSidebarCollapseIcon />
               </button>
             </div>
-          </div>
 
-          <label className="ssh-directory-filter">
-            <SearchIcon />
-            <input
-              aria-label={t("ssh.browser.searchLabel")}
-              type="search"
-              value={directoryFilter}
-              placeholder={t("ssh.browser.searchPlaceholder")}
-              disabled={!activeProfile}
-              onChange={(event) => setDirectoryFilter(event.target.value)}
-            />
-          </label>
+            <div className="ssh-card-header ssh-form-section-header">
+              <div>
+                <h3>{t("ssh.form.title")}</h3>
+              </div>
+            </div>
 
-          <div className="ssh-directory-browser">
-            {isBusy ? <span className="ssh-browser-loading" role="status">{t("ssh.browser.loading")}</span> : null}
-            {renderDirectoryContent()}
-          </div>
-        </section>
+            <div className="ssh-form-grid">
+              <label className="ssh-field is-wide">
+                <span>{t("ssh.form.name")}</span>
+                <input value={draft.name} placeholder={t("ssh.form.namePlaceholder")} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
+              </label>
+              <label className="ssh-field">
+                <span>{t("ssh.form.host")}</span>
+                <input value={draft.host} placeholder="203.0.113.10" onChange={(event) => setDraft({ ...draft, host: event.target.value })} />
+              </label>
+              <label className="ssh-field is-port">
+                <span>{t("ssh.form.port")}</span>
+                <input value={draft.port} inputMode="numeric" onChange={(event) => setDraft({ ...draft, port: event.target.value })} />
+              </label>
+              <label className="ssh-field is-wide">
+                <span>{t("ssh.form.username")}</span>
+                <input value={draft.username} placeholder="ubuntu" onChange={(event) => setDraft({ ...draft, username: event.target.value })} />
+              </label>
+              <label className="ssh-field is-wide">
+                <span>{t("ssh.form.privateKeyPath")}</span>
+                <input
+                  value={draft.privateKeyPath}
+                  placeholder="C:\\Users\\you\\.ssh\\id_rsa"
+                  onChange={(event) => setDraft({ ...draft, privateKeyPath: event.target.value })}
+                />
+              </label>
+              <label className="ssh-field is-wide">
+                <span>{t("ssh.form.defaultRemotePath")}</span>
+                <input
+                  value={draft.defaultRemotePath}
+                  placeholder="/home/ubuntu/app"
+                  onChange={(event) => setDraft({ ...draft, defaultRemotePath: event.target.value })}
+                />
+              </label>
+              <label className="ssh-field is-wide">
+                <span>{t("ssh.form.passphrase")}</span>
+                <input
+                  type="password"
+                  value={draft.passphrase}
+                  placeholder={activeProfile?.hasPassphrase ? t("ssh.form.passphraseSavedPlaceholder") : t("ssh.form.passphraseOptional")}
+                  onChange={(event) => setDraft({ ...draft, passphrase: event.target.value })}
+                />
+              </label>
+            </div>
+
+            <div className="ssh-action-row">
+              <button className="secondary-button is-danger" type="button" disabled={isBusy || !draft.id} onClick={() => void deleteProfile()}>
+                {t("app.delete")}
+              </button>
+              <div className="ssh-action-primary-group">
+                <button className="secondary-button" type="button" disabled={isBusy || !draft.id} onClick={() => void testProfile()}>
+                  {t("ssh.actions.testConnection")}
+                </button>
+                <button className="primary-button" type="button" disabled={isBusy} onClick={() => void saveProfile()}>
+                  {t("ssh.actions.saveProfile")}
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
       </main>
     </section>
   )

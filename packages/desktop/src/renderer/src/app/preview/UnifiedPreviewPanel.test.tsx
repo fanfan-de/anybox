@@ -107,7 +107,10 @@ describe("UnifiedPreviewPanel", () => {
     expect(screen.getByText("agent://artifact/id")).toBeInTheDocument()
     expect(screen.getByText(/或当前工作区中的文件路径。/)).toBeInTheDocument()
     expect(screen.getByRole("group", { name: "快速预览目标" })).toBeInTheDocument()
-    expect(await screen.findByRole("button", { name: "扫描中..." })).toBeInTheDocument()
+    const scanButton = await screen.findByRole("button", { name: "扫描中..." })
+    expect(scanButton).toBeDisabled()
+    expect(scanButton).toHaveAttribute("aria-busy", "true")
+    expect(scanButton.querySelector(".unified-preview-scan-spinner")).toBeInTheDocument()
   })
 
   it("reads and renders markdown artifact previews", async () => {

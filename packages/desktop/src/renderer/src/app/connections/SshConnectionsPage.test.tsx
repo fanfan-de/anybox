@@ -280,6 +280,24 @@ describe("SshConnectionsPage remote browser", () => {
     }))
   })
 
+  it("collapses and restores the connection inspector without losing the draft", async () => {
+    installDesktopMock()
+
+    renderPage()
+    await screen.findByRole("button", { name: /Production/ })
+
+    const inspector = document.getElementById("ssh-connection-inspector")
+    expect(inspector).not.toBeNull()
+    expect(inspector).not.toHaveAttribute("hidden")
+
+    fireEvent.click(screen.getByRole("button", { name: "Close Connection" }))
+    expect(inspector).toHaveAttribute("hidden")
+
+    fireEvent.click(screen.getByRole("button", { name: "Connection" }))
+    expect(inspector).not.toHaveAttribute("hidden")
+    expect(screen.getByDisplayValue(PROFILE.host)).toBeInTheDocument()
+  })
+
   it("ignores stale directory responses when navigation requests race", async () => {
     const slow = deferred<AgentSshDirectoryListing>()
     const fast = deferred<AgentSshDirectoryListing>()

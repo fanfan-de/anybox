@@ -7,9 +7,11 @@
   --surface-profile-panel-muted: var(--surface-panel-muted);
   --surface-profile-content: var(--surface-panel);
   --surface-profile-content-muted: var(--surface-panel-muted);
-  --surface-profile-sidebar: var(--surface-sidebar);
+  --surface-profile-left-sidebar: var(--surface-left-sidebar);
+  --surface-profile-right-sidebar: var(--surface-right-sidebar);
   --surface-profile-sidebar-strong: var(--surface-sidebar-strong);
   --surface-profile-tab: var(--semantic-shell-chrome-surface);
+  --surface-profile-tab-active: var(--semantic-shell-chrome-tab-surface-active);
   --surface-profile-left-top-menu: var(--semantic-shell-chrome-surface);
   --surface-profile-right-top-menu: var(--semantic-shell-chrome-surface);
   --surface-profile-composer: var(--semantic-composer-surface);
@@ -19,7 +21,7 @@
   --surface-profile-popup-panel: var(--semantic-popup-panel-surface);
   --surface-profile-popup-panel-nav: var(--semantic-popup-panel-surface);
   --top-chrome-surface: var(--surface-profile-tab);
-  --top-chrome-active-surface: var(--surface-profile-shell);
+  --top-chrome-active-surface: var(--surface-profile-tab-active);
   background: transparent;
 }
 
@@ -40,27 +42,35 @@
   background: var(--surface-profile-left-top-menu);
 }
 
-.window-shell.is-windows[data-background-mode="default"] .activity-rail.is-right .activity-rail-top-menu,
-.window-shell.is-windows[data-background-mode="default"] .right-sidebar-top-menu {
+.window-shell.is-windows[data-background-mode="default"] .activity-rail.is-right .activity-rail-top-menu {
   background: var(--surface-profile-right-top-menu);
 }
 
+.window-shell.is-windows[data-background-mode="default"] .right-sidebar-top-menu {
+  --right-sidebar-tab-bar-bg: var(--surface-profile-right-sidebar);
+  --right-sidebar-tab-active-bg: var(--surface-profile-tab-active);
+  background: var(--right-sidebar-tab-bar-bg);
+}
+
 .window-shell.is-windows[data-background-mode="default"] .sidebar {
-  background: var(--surface-profile-sidebar);
+  background: var(--surface-profile-left-sidebar);
 }
 
 .window-shell.is-windows[data-background-mode="default"] .sidebar.is-right,
 .window-shell.is-windows[data-background-mode="default"] .right-sidebar-launcher {
-  background: var(--surface-profile-sidebar);
+  background: var(--surface-profile-right-sidebar);
 }
 
 .window-shell.is-windows[data-background-mode="default"] .sidebar-view-host,
 .window-shell.is-windows[data-background-mode="default"] .right-sidebar-view-host,
-.window-shell.is-windows[data-background-mode="default"] .right-sidebar-main-stack,
 .window-shell.is-windows[data-background-mode="default"] .thread-shell,
 .window-shell.is-windows[data-background-mode="default"] .thread-column,
 .window-shell.is-windows[data-background-mode="default"] .workbench-pane-stage,
 .window-shell.is-windows[data-background-mode="default"] .workbench-pane-live-region {
+  background: transparent;
+}
+
+.window-shell.is-windows[data-background-mode="default"] .right-sidebar-main-stack {
   background: transparent;
 }
 
@@ -83,13 +93,13 @@
   --dv-background-color: transparent;
   --dv-group-view-background-color: transparent;
   --dv-tabs-and-actions-container-background-color: var(--surface-profile-tab);
-  --dv-activegroup-visiblepanel-tab-background-color: var(--surface-profile-shell);
+  --dv-activegroup-visiblepanel-tab-background-color: var(--surface-profile-tab-active);
   --dv-inactivegroup-visiblepanel-tab-background-color: var(--surface-profile-tab);
 }
 
 .window-shell.is-windows[data-background-mode="default"] .dockview-theme-anybox .dv-tabs-and-actions-container {
   --dockview-tab-bar-bg: var(--surface-profile-tab);
-  --dockview-tab-active-bg: var(--surface-profile-shell);
+  --dockview-tab-active-bg: var(--surface-profile-tab-active);
   --dockview-tab-hover-bg: var(--surface-profile-panel-muted);
 }
 
@@ -112,17 +122,6 @@
 .window-shell.is-windows[data-background-mode="default"] .right-sidebar-launcher-card:disabled {
   border-color: var(--semantic-button-secondary-disabled-border);
   background: var(--surface-profile-button-secondary-disabled);
-}
-
-.window-shell.is-windows[data-background-mode="default"] .workspace-files-panel,
-.window-shell.is-windows[data-background-mode="default"] .workspace-files-split,
-.window-shell.is-windows[data-background-mode="default"] .workspace-files-reader,
-.window-shell.is-windows[data-background-mode="default"] .workspace-files-tree,
-.window-shell.is-windows[data-background-mode="default"] .workspace-files-panel-header,
-.window-shell.is-windows[data-background-mode="default"] .workspace-files-pathbar,
-.window-shell.is-windows[data-background-mode="default"] .workspace-files-code,
-.window-shell.is-windows[data-background-mode="default"] .workspace-files-markdown-stage {
-  background: var(--surface-profile-content);
 }
 
 .window-shell.is-windows[data-background-mode="default"] .workspace-files-view-toggle,

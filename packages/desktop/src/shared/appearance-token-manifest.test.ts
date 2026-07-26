@@ -20,6 +20,9 @@ const generatedCss = readFileSync(
   "utf8",
 )
 const manualTokensCss = readFileSync(resolve(stylesRoot, "tokens.css"), "utf8")
+const baseCss = readFileSync(resolve(stylesRoot, "base.css"), "utf8")
+const calendarCss = readFileSync(resolve(stylesRoot, "calendar.css"), "utf8")
+const rightSidebarCss = readFileSync(resolve(stylesRoot, "right-sidebar.css"), "utf8")
 const manifest = JSON.parse(
   readFileSync(
     resolve(packageRoot, "src/shared/appearance-token-manifest.json"),
@@ -175,6 +178,131 @@ describe("appearance token manifest", () => {
         expect(darkAliasMatches).toHaveLength(2)
       }
     }
+  })
+
+  it("exposes complete field semantics and uses them for editable fields", () => {
+    const fieldGroup = APPEARANCE_TOKEN_GROUPS.find((group) => group.id === "component-fields")
+
+    expect(fieldGroup?.rows.map((row) => row.id)).toEqual([
+      "semantic-field-surface",
+      "semantic-field-surface-muted",
+      "semantic-field-surface-focus",
+      "semantic-field-surface-disabled",
+      "semantic-field-border",
+      "semantic-field-border-focus",
+      "semantic-field-border-disabled",
+      "semantic-field-border-invalid",
+      "semantic-field-text",
+      "semantic-field-text-disabled",
+      "semantic-field-placeholder",
+    ])
+    expect(generatedCss).toMatch(
+      /--semantic-field-surface-light:\s*var\(--surface-panel-light\);/,
+    )
+    expect(generatedCss).toMatch(
+      /--semantic-field-surface:\s*var\(--semantic-field-surface-dark\);/,
+    )
+    expect(baseCss).toMatch(
+      /\.search-field input\s*\{[^}]*border:\s*1px solid var\(--semantic-field-border\);[^}]*background:\s*var\(--semantic-field-surface\);[^}]*color:\s*var\(--semantic-field-text\);/s,
+    )
+    expect(rightSidebarCss).toMatch(
+      /\.preview-toolbar-address\s*\{[^}]*border:\s*1px solid var\(--semantic-field-border\);[^}]*background:\s*var\(--semantic-field-surface\);/s,
+    )
+    expect(rightSidebarCss).not.toMatch(
+      /\.preview-toolbar-address\s*\{[^}]*background:\s*var\(--seg-panel\);/s,
+    )
+    expect(calendarCss).toMatch(
+      /\.calendar-source-search\s*\{[^}]*border:\s*1px solid var\(--semantic-field-border\);[^}]*background:\s*var\(--semantic-field-surface\);/s,
+    )
+    expect(calendarCss).toMatch(
+      /\.calendar-source-search:focus-within\s*\{[^}]*border-color:\s*var\(--semantic-field-border-focus\);[^}]*background:\s*var\(--semantic-field-surface-focus\);/s,
+    )
+    expect(calendarCss).toMatch(
+      /\.calendar-source-search input\s*\{[^}]*color:\s*var\(--semantic-field-text\);[^}]*background:\s*transparent;/s,
+    )
+    expect(calendarCss).toMatch(
+      /\.calendar-source-search input::placeholder\s*\{[^}]*color:\s*var\(--semantic-field-placeholder\);/s,
+    )
+  })
+
+  it("exposes complete dropdown option semantics and uses them for the calendar project filter", () => {
+    const dropdownGroup = APPEARANCE_TOKEN_GROUPS.find(
+      (group) => group.id === "component-dropdown-select",
+    )
+
+    expect(dropdownGroup?.rows.map((row) => row.id)).toEqual([
+      "semantic-dropdown-menu-surface",
+      "semantic-dropdown-option-surface-hover",
+      "semantic-dropdown-option-surface-selected",
+      "semantic-dropdown-option-text",
+      "semantic-dropdown-option-text-hover",
+      "semantic-dropdown-option-text-selected",
+      "semantic-dropdown-option-meta-text",
+      "semantic-dropdown-option-meta-text-selected",
+    ])
+    expect(generatedCss).toMatch(
+      /--semantic-dropdown-option-surface-hover-light:\s*var\(--surface-panel-muted-light\);/,
+    )
+    expect(generatedCss).toMatch(
+      /--semantic-dropdown-option-surface-selected-dark:\s*var\(--brand-primary-soft-dark\);/,
+    )
+    expect(calendarCss).toMatch(
+      /\.calendar-project-filter-menu\s*\{[^}]*background:\s*var\(--semantic-dropdown-menu-surface\);/s,
+    )
+    expect(calendarCss).toMatch(
+      /\.calendar-project-filter-option\s*\{[^}]*color:\s*var\(--semantic-dropdown-option-text\);[^}]*background:\s*transparent;/s,
+    )
+    expect(calendarCss).toMatch(
+      /\.calendar-project-filter-option:hover,\s*\.calendar-project-filter-option:focus-visible\s*\{[^}]*color:\s*var\(--semantic-dropdown-option-text-hover\);[^}]*background:\s*var\(--semantic-dropdown-option-surface-hover\);/s,
+    )
+    expect(calendarCss).toMatch(
+      /\.calendar-project-filter-option\.is-selected\s*\{[^}]*color:\s*var\(--semantic-dropdown-option-text-selected\);[^}]*background:\s*var\(--semantic-dropdown-option-surface-selected\);/s,
+    )
+    expect(calendarCss).toMatch(
+      /\.calendar-project-filter-option\.is-selected strong\s*\{[^}]*color:\s*var\(--semantic-dropdown-option-meta-text-selected\);/s,
+    )
+
+    const dropdownStyles = calendarCss.slice(
+      calendarCss.indexOf(".calendar-project-filter-menu"),
+      calendarCss.indexOf(".calendar-section-heading"),
+    )
+    expect(dropdownStyles).not.toContain("--calendar-control-")
+    expect(dropdownStyles).not.toContain("--calendar-panel")
+  })
+
+  it("keeps editable field fills off generic panel and shell tokens", () => {
+    const violations: string[] = []
+    const editableElement = /(^|[\s,>+~])(?:input|textarea|select)(?=$|[\s,.:#\[\]>+~])/
+    const genericSurface =
+      /var\(\s*--(?:seg-(?:panel(?:-muted)?|shell)|surface-(?:panel(?:-muted)?|elevated|shell)|color-surface-panel)/
+
+    for (const fileName of readdirSync(stylesRoot)) {
+      if (
+        !fileName.endsWith(".css") ||
+        fileName === "tokens.css" ||
+        fileName === "appearance-tokens.generated.css"
+      ) {
+        continue
+      }
+
+      const source = readFileSync(resolve(stylesRoot, fileName), "utf8")
+      const root = postcss.parse(source, { from: fileName })
+      root.walkRules((rule) => {
+        const selector = rule.selector.replace(/\s+/g, " ")
+        if (!editableElement.test(selector)) return
+        if (selector.includes(".provider-radio-option input")) return
+        if (selector.includes(".settings-theme-config-preview textarea")) return
+
+        rule.walkDecls(/^background(?:-color)?$/, (declaration) => {
+          if (!genericSurface.test(declaration.value)) return
+          violations.push(
+            `${fileName}:${declaration.source?.start?.line ?? 0} ${selector} -> ${declaration.value}`,
+          )
+        })
+      })
+    }
+
+    expect(violations).toEqual([])
   })
 
   it("keeps manifest-owned declarations out of the manual compatibility token file", () => {

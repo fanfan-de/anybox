@@ -252,9 +252,9 @@ body.is-dragging-settings-page {
 }
 
 .settings-nav-item.is-active {
-  background: var(--semantic-settings-list-detail-row-surface-current);
+  background: var(--semantic-list-detail-row-surface-current);
   border-color: var(--focus-outline-color);
-  color: var(--semantic-settings-list-detail-row-current-text);
+  color: var(--semantic-list-detail-row-current-text);
 }
 
 .settings-nav-item:disabled {
@@ -286,8 +286,8 @@ body.is-dragging-settings-page {
   padding: 10px 12px;
   border: 1px solid transparent;
   border-radius: 12px;
-  background: transparent;
-  color: var(--semantic-settings-list-detail-row-secondary-text);
+  background: var(--semantic-list-detail-row-surface);
+  color: var(--semantic-list-detail-row-secondary-text);
   text-align: left;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -302,8 +302,8 @@ body.is-dragging-settings-page {
 
 .settings-primary-nav-item:hover {
   border-color: var(--border-default);
-  background: var(--semantic-settings-list-detail-row-surface-hover);
-  color: var(--semantic-settings-list-detail-row-primary-text);
+  background: var(--semantic-list-detail-row-surface-hover);
+  color: var(--semantic-list-detail-row-primary-text);
 }
 
 .settings-primary-nav-item:focus-visible {
@@ -316,8 +316,8 @@ body.is-dragging-settings-page {
 
 .settings-primary-nav-item.is-active {
   border-color: transparent;
-  background: var(--semantic-settings-list-detail-row-surface-current);
-  color: var(--semantic-settings-list-detail-row-current-text);
+  background: var(--semantic-list-detail-row-surface-current);
+  color: var(--semantic-list-detail-row-current-text);
 }
 
 .settings-primary-nav-item:disabled {
@@ -364,7 +364,7 @@ body.is-dragging-settings-page {
 .settings-primary-nav-item:focus-visible .settings-primary-nav-icon,
 .settings-primary-nav-item.is-active .settings-primary-nav-icon {
   opacity: 1;
-  color: var(--semantic-settings-list-detail-row-current-text);
+  color: var(--semantic-list-detail-row-current-text);
 }
 
 .settings-page-content,
@@ -886,9 +886,9 @@ body.is-dragging-settings-page {
 .settings-field textarea {
   min-height: 44px;
   padding: 0 12px;
-  border: 1px solid var(--border-subtle);
-  background: var(--seg-panel);
-  color: var(--seg-text-1);
+  border: 1px solid var(--semantic-field-border);
+  background: var(--semantic-field-surface);
+  color: var(--semantic-field-text);
 }
 
 .settings-field textarea {
@@ -1036,15 +1036,15 @@ body.is-dragging-settings-page {
 .provider-model-picker-provider:hover,
 .provider-model-picker-provider:focus-visible {
   border-color: var(--seg-border);
-  background: var(--semantic-settings-list-detail-row-surface-hover);
+  background: var(--semantic-list-detail-row-surface-hover);
   color: var(--seg-text-1);
   outline: none;
 }
 
 .provider-model-picker-provider.is-active {
   border-color: var(--focus-outline-color);
-  background: var(--semantic-settings-list-detail-row-surface-current);
-  color: var(--semantic-settings-list-detail-row-current-text);
+  background: var(--semantic-list-detail-row-surface-current);
+  color: var(--semantic-list-detail-row-current-text);
 }
 
 .provider-model-picker-model {
@@ -1068,15 +1068,15 @@ body.is-dragging-settings-page {
 .provider-model-picker-model:hover,
 .provider-model-picker-model:focus-visible {
   border-color: var(--seg-border);
-  background: var(--semantic-settings-list-detail-row-surface-hover);
+  background: var(--semantic-list-detail-row-surface-hover);
   color: var(--seg-text-1);
   outline: none;
 }
 
 .provider-model-picker-model[aria-selected="true"] {
   border-color: var(--focus-outline-color);
-  background: var(--semantic-settings-list-detail-row-surface-current);
-  color: var(--semantic-settings-list-detail-row-current-text);
+  background: var(--semantic-list-detail-row-surface-current);
+  color: var(--semantic-list-detail-row-current-text);
 }
 
 .provider-model-picker-provider-name,
@@ -1153,7 +1153,7 @@ body.is-dragging-settings-page {
 
 .mcp-tool-policy-toggle:hover .mcp-tool-policy-title,
 .mcp-tool-policy-toggle:focus-visible .mcp-tool-policy-title {
-  color: var(--semantic-settings-list-detail-row-current-text);
+  color: var(--semantic-list-detail-row-current-text);
 }
 
 .mcp-tool-policy-toggle:focus-visible {
@@ -1247,7 +1247,7 @@ body.is-dragging-settings-page {
 
 .settings-field input::placeholder,
 .settings-field textarea::placeholder {
-  color: var(--text-tertiary);
+  color: var(--semantic-field-placeholder);
 }
 
 .settings-checkbox-field {
@@ -1965,9 +1965,9 @@ body.is-dragging-settings-page {
   gap: 8px;
   min-height: 40px;
   padding: 0 10px;
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--semantic-field-border);
   border-radius: var(--seg-radius-xs);
-  background: var(--surface-panel);
+  background: var(--semantic-field-surface);
 }
 
 .mcp-servers-search-row svg {
@@ -1991,12 +1991,13 @@ body.is-dragging-settings-page {
 }
 
 .mcp-servers-search-row input::placeholder {
-  color: var(--seg-text-3);
+  color: var(--semantic-field-placeholder);
 }
 
 .mcp-servers-search-row:focus-within {
-  border-color: var(--focus-outline-color);
-  box-shadow: 0 0 0 3px var(--focus-outline-color);
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
+  box-shadow: none;
 }
 
 .mcp-servers-search-row button {
@@ -2016,7 +2017,7 @@ body.is-dragging-settings-page {
 
 .mcp-servers-search-row button:hover,
 .mcp-servers-search-row button:focus-visible {
-  background: var(--semantic-settings-list-detail-row-surface-hover);
+  background: var(--semantic-list-detail-row-surface-hover);
   color: var(--seg-text-1);
   outline: none;
 }
@@ -2705,7 +2706,7 @@ body.is-dragging-settings-page {
 .mcp-server-sidebar-status {
   width: 8px;
   height: 8px;
-  background: var(--semantic-settings-list-detail-row-secondary-text);
+  background: var(--semantic-list-detail-row-secondary-text);
 }
 
 .mcp-servers-new-button {
@@ -2716,7 +2717,7 @@ body.is-dragging-settings-page {
   border-color: transparent;
   border-radius: 8px;
   background: transparent;
-  color: var(--semantic-settings-list-detail-row-primary-text);
+  color: var(--semantic-list-detail-row-primary-text);
   box-shadow: none;
 }
 
@@ -2741,8 +2742,8 @@ body.is-dragging-settings-page {
 .global-skills-new-button.mcp-servers-new-button.is-open,
 .global-skills-new-button.mcp-servers-new-button.is-active {
   border-color: transparent;
-  background: var(--semantic-settings-list-detail-row-surface-current);
-  color: var(--semantic-settings-list-detail-row-current-text);
+  background: var(--semantic-list-detail-row-surface-current);
+  color: var(--semantic-list-detail-row-current-text);
   box-shadow: none;
   outline: none;
   transform: none;
@@ -2880,16 +2881,16 @@ body.is-dragging-settings-page {
 .mcp-editor-section select {
   min-height: 34px;
   padding: 0 10px;
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--semantic-field-border);
   border-radius: 8px;
-  background: var(--seg-panel);
-  color: var(--seg-text-1);
+  background: var(--semantic-field-surface);
+  color: var(--semantic-field-text);
   font-size: 14px;
 }
 
 .mcp-config-grid .settings-field input::placeholder,
 .mcp-editor-section input::placeholder {
-  color: var(--seg-text-3);
+  color: var(--semantic-field-placeholder);
 }
 
 .mcp-config-grid .settings-checkbox-field input {
@@ -2979,7 +2980,7 @@ body.is-dragging-settings-page {
 .mcp-editor-add-button:hover,
 .mcp-editor-add-button:focus-visible {
   border-color: transparent;
-  background: var(--semantic-settings-list-detail-row-surface-hover);
+  background: var(--semantic-list-detail-row-surface-hover);
   color: var(--seg-text-1);
 }
 
@@ -3039,7 +3040,7 @@ body.is-dragging-settings-page {
 .mcp-tool-policy-card:hover,
 .mcp-tool-policy-card:focus-within,
 .mcp-tool-policy-card.is-expanded {
-  background: var(--semantic-settings-list-detail-row-surface-hover);
+  background: var(--semantic-list-detail-row-surface-hover);
 }
 
 .mcp-tool-policy-title {
@@ -3050,7 +3051,7 @@ body.is-dragging-settings-page {
 
 .mcp-tool-policy-toggle:hover .mcp-tool-policy-title,
 .mcp-tool-policy-toggle:focus-visible .mcp-tool-policy-title {
-  color: var(--semantic-settings-list-detail-row-current-text);
+  color: var(--semantic-list-detail-row-current-text);
 }
 
 .mcp-tool-policy-heading code,
@@ -3060,11 +3061,17 @@ body.is-dragging-settings-page {
 
 .mcp-tool-policy-select select {
   min-height: 34px;
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--semantic-field-border);
   border-radius: 8px;
-  background: var(--seg-panel);
-  color: var(--seg-text-1);
+  background: var(--semantic-field-surface);
+  color: var(--semantic-field-text);
   font-size: 14px;
+}
+
+.mcp-tool-policy-select select:focus-visible {
+  outline: none;
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
 }
 
 .mcp-tool-policy-details {
@@ -3187,12 +3194,12 @@ body.is-dragging-settings-page {
 .settings-service-item:hover {
   transform: translateY(-1px);
   border-color: var(--focus-outline-color);
-  background: var(--semantic-settings-list-detail-row-surface-hover);
-  color: var(--semantic-settings-list-detail-row-primary-text);
+  background: var(--semantic-list-detail-row-surface-hover);
+  color: var(--semantic-list-detail-row-primary-text);
 }
 
 .settings-service-item.is-active {
-  background: var(--semantic-settings-list-detail-row-surface-current);
+  background: var(--semantic-list-detail-row-surface-current);
   border-color: var(--focus-outline-color);
 }
 
@@ -4755,13 +4762,13 @@ body.is-dragging-settings-page {
 .settings-theme-library-item:focus-visible {
   outline: none;
   border-color: var(--seg-border);
-  background: var(--semantic-settings-list-detail-row-surface-hover);
+  background: var(--semantic-list-detail-row-surface-hover);
 }
 
 .settings-theme-library-item.is-selected,
 .settings-theme-library-item.is-active {
   border-color: var(--seg-accent);
-  background: var(--semantic-settings-list-detail-row-surface-current);
+  background: var(--semantic-list-detail-row-surface-current);
 }
 
 .settings-theme-library-item-copy {
@@ -4914,16 +4921,16 @@ body.is-dragging-settings-page {
   min-width: 0;
   height: 34px;
   padding: 0 10px;
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--semantic-field-border);
   border-radius: var(--seg-radius-sm);
-  background: var(--surface-shell);
-  color: var(--seg-text-1);
+  background: var(--semantic-field-surface);
+  color: var(--semantic-field-text);
 }
 
 .settings-theme-library-save input:focus-visible {
   outline: none;
-  border-color: var(--seg-accent);
-  background: var(--seg-panel);
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
 }
 
 @media (max-width: 760px) {
@@ -4974,10 +4981,10 @@ body.is-dragging-settings-page {
   width: 100%;
   min-height: 180px;
   padding: 14px;
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--semantic-field-border);
   border-radius: var(--seg-radius-sm);
-  background: var(--surface-shell);
-  color: var(--seg-text-1);
+  background: var(--semantic-field-surface);
+  color: var(--semantic-field-text);
   font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.55;
@@ -4986,8 +4993,8 @@ body.is-dragging-settings-page {
 
 .settings-html-background-editor textarea:focus-visible {
   outline: none;
-  border-color: var(--focus-outline-color);
-  background: var(--surface-panel-muted);
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
 }
 
 .settings-html-background-controls {
@@ -6015,10 +6022,10 @@ body.is-dragging-settings-page {
 .settings-field select,
 .settings-field textarea,
 .git-branch-create-field input {
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--semantic-field-border);
   border-radius: var(--seg-radius-xs);
-  background: var(--seg-panel-muted);
-  color: var(--seg-text-1);
+  background: var(--semantic-field-surface-muted);
+  color: var(--semantic-field-text);
   box-shadow: none;
 }
 
@@ -6027,9 +6034,27 @@ body.is-dragging-settings-page {
 .settings-field select:focus-visible,
 .settings-field textarea:focus-visible,
 .git-branch-create-field input:focus-visible {
-  border-color: var(--focus-outline-color);
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
   box-shadow: none;
   outline: none;
+}
+
+.settings-field input:disabled,
+.settings-field select:disabled,
+.settings-field textarea:disabled,
+.git-branch-create-field input:disabled {
+  border-color: var(--semantic-field-border-disabled);
+  background: var(--semantic-field-surface-disabled);
+  color: var(--semantic-field-text-disabled);
+  cursor: default;
+}
+
+.settings-field input[aria-invalid="true"],
+.settings-field select[aria-invalid="true"],
+.settings-field textarea[aria-invalid="true"],
+.git-branch-create-field input[aria-invalid="true"] {
+  border-color: var(--semantic-field-border-invalid);
 }
 
 .right-sidebar-change-type.is-renamed,
@@ -6235,7 +6260,7 @@ body.is-dragging-settings-page {
 .canvas-top-menu-selector-panel,
 .canvas-top-menu-quick-panel {
   border-radius: var(--semantic-dropdown-menu-radius, var(--seg-radius-md));
-  background: var(--seg-dropdown-menu-surface);
+  background: var(--semantic-dropdown-menu-surface);
   box-shadow: var(--shadow-md);
 }
 
@@ -6284,20 +6309,20 @@ body.is-dragging-settings-page {
 }
 
 .settings-primary-nav-item {
-  color: var(--semantic-settings-list-detail-row-primary-text);
+  color: var(--semantic-list-detail-row-primary-text);
 }
 
 .settings-primary-nav-item:hover,
 .settings-primary-nav-item:focus-visible {
   border-color: transparent;
-  background: var(--semantic-settings-list-detail-row-surface-hover);
-  color: var(--semantic-settings-list-detail-row-primary-text);
+  background: var(--semantic-list-detail-row-surface-hover);
+  color: var(--semantic-list-detail-row-primary-text);
 }
 
 .settings-primary-nav-item.is-active {
   border-color: transparent;
-  background: var(--semantic-settings-list-detail-row-surface-current);
-  color: var(--semantic-settings-list-detail-row-current-text);
+  background: var(--semantic-list-detail-row-surface-current);
+  color: var(--semantic-list-detail-row-current-text);
 }
 
 .settings-banner,
@@ -6374,7 +6399,7 @@ body.is-dragging-settings-page {
   border-radius: var(--seg-radius-sm);
   overflow: hidden;
   background: var(--seg-panel);
-  color: var(--seg-text-1);
+  color: var(--semantic-field-text);
 }
 
 .environment-settings-list {
@@ -6391,14 +6416,15 @@ body.is-dragging-settings-page {
   display: flex;
   align-items: center;
   gap: 7px;
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--semantic-field-border);
   border-radius: var(--seg-radius-xs);
-  background: var(--seg-panel);
-  color: var(--seg-text-3);
+  background: var(--semantic-field-surface);
+  color: var(--semantic-field-placeholder);
 }
 
 .environment-settings-search:focus-within {
-  border-color: var(--focus-outline-color);
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
 }
 
 .environment-settings-search svg {
@@ -6413,7 +6439,7 @@ body.is-dragging-settings-page {
   border: 0;
   outline: 0;
   background: transparent;
-  color: var(--seg-text-1);
+  color: var(--semantic-field-text);
   font: inherit;
   font-size: 12px;
 }
@@ -6441,15 +6467,15 @@ body.is-dragging-settings-page {
 .environment-location-row:focus-visible {
   border-color: transparent;
   outline: none;
-  background: var(--semantic-settings-list-detail-row-surface-hover);
-  color: var(--semantic-settings-list-detail-row-primary-text);
+  background: var(--semantic-list-detail-row-surface-hover);
+  color: var(--semantic-list-detail-row-primary-text);
 }
 
 .environment-location-row.is-active {
   border-color: transparent;
   outline: none;
-  background: var(--semantic-settings-list-detail-row-surface-current);
-  color: var(--semantic-settings-list-detail-row-current-text);
+  background: var(--semantic-list-detail-row-surface-current);
+  color: var(--semantic-list-detail-row-current-text);
 }
 
 .environment-location-name {
@@ -6750,11 +6776,11 @@ body.is-dragging-settings-page {
 .environment-field textarea {
   width: 100%;
   min-width: 0;
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--semantic-field-border);
   border-radius: var(--seg-radius-xs);
   outline: 0;
-  background: var(--seg-panel-muted);
-  color: var(--seg-text-1);
+  background: var(--semantic-field-surface-muted);
+  color: var(--semantic-field-text);
   font: inherit;
   font-size: 12px;
 }
@@ -6774,11 +6800,15 @@ body.is-dragging-settings-page {
 
 .environment-field input:focus-visible,
 .environment-field textarea:focus-visible {
-  border-color: var(--focus-outline-color);
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
 }
 
 .environment-field input:disabled,
 .environment-field textarea:disabled {
+  border-color: var(--semantic-field-border-disabled);
+  background: var(--semantic-field-surface-disabled);
+  color: var(--semantic-field-text-disabled);
   opacity: 0.72;
   cursor: default;
 }
@@ -7210,7 +7240,7 @@ body.is-dragging-settings-page {
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-toggle-card:focus-visible,
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-toggle-card.is-active {
   border-color: transparent;
-  background: var(--semantic-settings-list-detail-row-surface-hover);
+  background: var(--semantic-list-detail-row-surface-hover);
   box-shadow: none;
   transform: none;
 }
@@ -7276,10 +7306,10 @@ body.is-dragging-settings-page {
   --settings-select-surface: var(--semantic-dropdown-menu-surface, var(--seg-dropdown-menu-surface));
   --settings-select-border: var(--seg-border);
   --settings-select-text: var(--seg-text-1);
-  --settings-select-hover-surface: var(--semantic-settings-list-detail-row-surface-hover);
-  --settings-select-hover-text: var(--semantic-settings-list-detail-row-primary-text);
-  --settings-select-selected-surface: var(--semantic-settings-list-detail-row-surface-current);
-  --settings-select-selected-text: var(--semantic-settings-list-detail-row-current-text);
+  --settings-select-hover-surface: var(--semantic-list-detail-row-surface-hover);
+  --settings-select-hover-text: var(--semantic-list-detail-row-primary-text);
+  --settings-select-selected-surface: var(--semantic-list-detail-row-surface-current);
+  --settings-select-selected-text: var(--semantic-list-detail-row-current-text);
   --settings-select-radius: var(--semantic-dropdown-menu-radius, var(--seg-radius-md));
   --settings-select-item-radius: var(--seg-radius-sm);
   --settings-select-focus-border: var(--focus-outline-color);
@@ -7577,7 +7607,7 @@ body.is-dragging-settings-page {
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-toggle-card:focus-visible,
 .settings-page-main:not(.is-services):not(.prompt-presets-page-main) .settings-toggle-card.is-active {
   border-color: transparent;
-  background: var(--semantic-settings-list-detail-row-surface-hover);
+  background: var(--semantic-list-detail-row-surface-hover);
   box-shadow: none;
   transform: none;
 }
@@ -8216,20 +8246,20 @@ body.is-dragging-settings-page {
   min-width: 0;
   min-height: 38px;
   overflow: hidden;
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--semantic-field-border);
   border-radius: var(--seg-radius-xs);
-  background: var(--seg-panel-muted);
+  background: var(--semantic-field-surface-muted);
   display: grid;
   grid-template-columns: 38px minmax(0, 1fr);
 }
 
 .settings-recharge-amount-input:focus-within {
-  border-color: var(--semantic-button-secondary-border-hover);
-  background: var(--seg-panel);
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
 }
 
 .settings-recharge-amount-input > span {
-  border-right: 1px solid var(--seg-border);
+  border-right: 1px solid var(--semantic-field-border);
   color: var(--seg-text-2);
   display: grid;
   place-items: center;
@@ -8242,13 +8272,13 @@ body.is-dragging-settings-page {
   border: 0;
   outline: none;
   background: transparent;
-  color: var(--seg-text-1);
+  color: var(--semantic-field-text);
   font: inherit;
   font-size: 13px;
 }
 
 .settings-recharge-amount-input input:disabled {
-  color: var(--semantic-button-secondary-disabled-text);
+  color: var(--semantic-field-text-disabled);
   cursor: default;
 }
 
@@ -9036,9 +9066,9 @@ body.is-dragging-settings-page {
   width: min(360px, 100%);
   min-height: 30px;
   padding: 0 9px;
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--semantic-field-border);
   border-radius: 8px;
-  background: var(--seg-panel-muted);
+  background: var(--semantic-field-surface-muted);
   color: var(--seg-text-2);
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -9061,14 +9091,19 @@ body.is-dragging-settings-page {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--seg-text-1);
+  color: var(--semantic-field-text);
   font: inherit;
   font-size: 13px;
   outline: none;
 }
 
 .connections-search-control input::placeholder {
-  color: var(--seg-text-3);
+  color: var(--semantic-field-placeholder);
+}
+
+.connections-search-control:focus-within {
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
 }
 
 .connections-search-control button {
@@ -9199,6 +9234,10 @@ body.is-dragging-settings-page {
   gap: 20px;
 }
 
+.mobile-connection-shell.is-ssh {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
 .mobile-connection-segment-list {
   min-width: 0;
   max-width: 100%;
@@ -9226,6 +9265,8 @@ body.is-dragging-settings-page {
 
 .mobile-connection-tab-panel.is-ssh {
   min-height: 0;
+  height: 100%;
+  grid-row: 2;
 }
 
 .mobile-connection-panel,
@@ -9416,7 +9457,7 @@ body.is-dragging-settings-page {
 
 .mobile-connection-sidebar-header h2 {
   margin: 0;
-  color: var(--semantic-settings-list-detail-row-primary-text);
+  color: var(--semantic-list-detail-row-primary-text);
   font-size: 15px;
   font-weight: 680;
   line-height: 1.2;
@@ -9427,8 +9468,8 @@ body.is-dragging-settings-page {
   min-width: 20px;
   height: 20px;
   border-radius: 999px;
-  background: var(--semantic-settings-list-detail-count-surface);
-  color: var(--semantic-settings-list-detail-count-text);
+  background: var(--semantic-list-detail-count-surface);
+  color: var(--semantic-list-detail-count-text);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -9608,7 +9649,7 @@ body.is-dragging-settings-page {
 .mobile-connection-url-row:hover,
 .mobile-connection-url-row:focus-visible {
   border-color: var(--focus-outline-color);
-  background: var(--semantic-settings-list-detail-row-surface-hover);
+  background: var(--semantic-list-detail-row-surface-hover);
   outline: none;
 }
 
@@ -9734,8 +9775,8 @@ body.is-dragging-settings-page {
 
 .mobile-connection-ssh-panel {
   min-width: 0;
-  min-height: 640px;
-  height: min(760px, calc(100vh - 150px));
+  min-height: 0;
+  height: 100%;
   overflow: hidden;
 }
 
@@ -9769,6 +9810,15 @@ body.is-dragging-settings-page {
     padding: 18px;
   }
 
+  .mobile-connection-shell.is-ssh {
+    height: auto;
+    grid-template-rows: auto auto;
+  }
+
+  .mobile-connection-tab-panel.is-ssh {
+    height: auto;
+  }
+
   .mobile-connection-workbench,
   .mobile-connection-pairing-body,
   .mobile-connection-technical-grid {
@@ -9798,11 +9848,11 @@ body.is-dragging-settings-page {
   height: 100%;
   box-sizing: border-box;
   display: grid;
-  grid-template-columns: minmax(252px, 304px) minmax(0, 1fr);
-  gap: 18px;
-  padding: 18px 22px 24px;
+  grid-template-columns: minmax(220px, 248px) minmax(0, 1fr);
   overflow: hidden;
-  background: var(--seg-shell);
+  border: 1px solid var(--seg-border);
+  border-radius: var(--radius-panel);
+  background: var(--seg-panel);
   color: var(--seg-text-1);
 }
 
@@ -9817,6 +9867,9 @@ body.is-dragging-settings-page {
 .ssh-profile-sidebar {
   min-width: 0;
   min-height: 0;
+  padding: 12px 10px;
+  border-right: 1px solid var(--seg-border);
+  background: var(--seg-panel);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 10px;
@@ -9824,7 +9877,7 @@ body.is-dragging-settings-page {
 
 .ssh-sidebar-header,
 .ssh-card-header,
-.ssh-detail-hero,
+.ssh-inspector-header,
 .ssh-path-toolbar,
 .ssh-action-row {
   min-width: 0;
@@ -9835,7 +9888,7 @@ body.is-dragging-settings-page {
 }
 
 .ssh-sidebar-header h2,
-.ssh-detail-hero h2,
+.ssh-inspector-header h2,
 .ssh-card-header h3 {
   margin: 0;
   color: var(--seg-text-1);
@@ -9848,8 +9901,8 @@ body.is-dragging-settings-page {
   line-height: 1.2;
 }
 
-.ssh-detail-hero h2 {
-  font-size: 19px;
+.ssh-inspector-header h2 {
+  font-size: 15px;
   font-weight: 680;
   line-height: 1.2;
 }
@@ -9910,13 +9963,13 @@ body.is-dragging-settings-page {
 .ssh-directory-row:hover,
 .ssh-directory-row:focus-visible {
   border-color: var(--focus-outline-color);
-  background: var(--semantic-settings-list-detail-row-surface-hover);
+  background: var(--semantic-list-detail-row-surface-hover);
   outline: none;
 }
 
 .ssh-profile-card.is-active {
   border-color: transparent;
-  background: var(--semantic-settings-list-detail-row-surface-current);
+  background: var(--semantic-list-detail-row-surface-current);
 }
 
 .ssh-profile-card-main {
@@ -9931,7 +9984,7 @@ body.is-dragging-settings-page {
   min-width: 0;
   flex: 0 1 auto;
   overflow: hidden;
-  color: var(--semantic-settings-list-detail-row-primary-text);
+  color: var(--semantic-list-detail-row-primary-text);
   font-size: 14px;
   font-weight: 650;
   line-height: 1.25;
@@ -9940,12 +9993,11 @@ body.is-dragging-settings-page {
 }
 
 .ssh-profile-card-main span,
-.ssh-profile-card-path,
-.ssh-directory-row small {
+.ssh-profile-card-path {
   min-width: 0;
   flex: 1 1 auto;
   overflow: hidden;
-  color: var(--semantic-settings-list-detail-row-secondary-text);
+  color: var(--semantic-list-detail-row-secondary-text);
   font-size: 12px;
   line-height: 1.35;
   text-overflow: ellipsis;
@@ -9962,26 +10014,41 @@ body.is-dragging-settings-page {
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(340px, 400px) minmax(0, 1fr);
-  align-content: start;
-  align-items: start;
-  gap: 12px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  scrollbar-gutter: stable;
-  padding-right: 6px;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  background: var(--seg-panel);
 }
 
-.ssh-detail-hero {
-  grid-column: 1 / -1;
-  flex: 0 0 auto;
-  padding: 0 0 2px;
-  align-items: center;
+.ssh-workspace {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  grid-row: 2;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 360px);
+  overflow: hidden;
+}
+
+.ssh-detail-panel.is-inspector-closed .ssh-workspace {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.ssh-inspector-heading {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.ssh-inspector-heading h2 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ssh-detail-status {
-  max-width: 260px;
-  min-height: 24px;
+  max-width: 100%;
+  min-height: 16px;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -9996,7 +10063,8 @@ body.is-dragging-settings-page {
 }
 
 .ssh-message {
-  grid-column: 1 / -1;
+  grid-row: 1;
+  margin: 10px 12px 0;
   padding: 10px 12px;
   border: 1px solid var(--seg-border);
   border-radius: 8px;
@@ -10021,8 +10089,8 @@ body.is-dragging-settings-page {
 .ssh-card {
   min-width: 0;
   padding: 14px;
-  border: 1px solid var(--seg-border);
-  border-radius: var(--radius-panel);
+  border: 0;
+  border-radius: 0;
   background: var(--seg-panel);
   display: grid;
   gap: 14px;
@@ -10032,11 +10100,33 @@ body.is-dragging-settings-page {
   opacity: 0.72;
 }
 
+.ssh-form-card {
+  min-height: 0;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  border-left: 1px solid var(--seg-border);
+  overflow: hidden;
+}
+
+.ssh-form-card[hidden] {
+  display: none;
+}
+
+.ssh-form-section-header {
+  padding-top: 12px;
+  border-top: 1px solid var(--seg-divider);
+}
+
 .ssh-form-grid {
   min-width: 0;
+  min-height: 0;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) 80px;
+  align-content: start;
+  gap: 12px 10px;
+  padding-right: 4px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
 }
 
 .ssh-field {
@@ -10062,27 +10152,36 @@ body.is-dragging-settings-page {
   height: 34px;
   box-sizing: border-box;
   padding: 0 11px;
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--semantic-field-border);
   border-radius: 6px;
-  background: var(--seg-panel);
-  color: var(--seg-text-1);
+  background: var(--semantic-field-surface);
+  color: var(--semantic-field-text);
   font: inherit;
   font-size: 13px;
   outline: none;
 }
 
 .ssh-field input:focus {
-  border-color: var(--focus-outline-color);
-  background: var(--surface-panel-muted);
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
 }
 
 .ssh-field input::placeholder {
-  color: var(--seg-text-3);
+  color: var(--semantic-field-placeholder);
 }
 
 .ssh-action-row {
-  justify-content: flex-end;
+  padding-top: 12px;
+  border-top: 1px solid var(--seg-divider);
   flex-wrap: wrap;
+}
+
+.ssh-action-primary-group {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .ssh-connections-page .primary-button,
@@ -10157,8 +10256,14 @@ body.is-dragging-settings-page {
 }
 
 .ssh-browser-card {
-  min-height: 260px;
+  min-height: 0;
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 12px;
+  overflow: hidden;
+}
+
+.ssh-browser-header {
+  min-height: 32px;
 }
 
 .ssh-browser-open-target {
@@ -10170,7 +10275,7 @@ body.is-dragging-settings-page {
 }
 
 .ssh-browser-open-target span {
-  max-width: 240px;
+  max-width: min(320px, 32vw);
   min-width: 0;
   overflow: hidden;
   color: var(--seg-text-3);
@@ -10178,6 +10283,14 @@ body.is-dragging-settings-page {
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ssh-browser-toolbar {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(190px, 260px);
+  align-items: center;
+  gap: 8px;
 }
 
 .ssh-path-toolbar {
@@ -10297,7 +10410,7 @@ body.is-dragging-settings-page {
 .ssh-path-crumb-wrap button:hover,
 .ssh-path-crumb-wrap button:focus-visible {
   border-color: var(--seg-border);
-  background: var(--semantic-settings-list-detail-row-surface-hover);
+  background: var(--semantic-list-detail-row-surface-hover);
   outline: none;
 }
 
@@ -10313,10 +10426,10 @@ body.is-dragging-settings-page {
   min-width: 0;
   height: 28px;
   padding: 0 9px;
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--semantic-field-border);
   border-radius: 6px;
-  background: var(--seg-panel);
-  color: var(--seg-text-1);
+  background: var(--semantic-field-surface);
+  color: var(--semantic-field-text);
   font: inherit;
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   font-size: 12px;
@@ -10324,8 +10437,8 @@ body.is-dragging-settings-page {
 }
 
 .ssh-path-edit-form input:focus {
-  border-color: var(--focus-outline-color);
-  background: var(--surface-panel-muted);
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
 }
 
 .ssh-path-actions {
@@ -10337,11 +10450,11 @@ body.is-dragging-settings-page {
 
 .ssh-directory-filter {
   min-width: 0;
-  min-height: 34px;
+  min-height: 38px;
   padding: 0 10px;
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--semantic-field-border);
   border-radius: 6px;
-  background: var(--seg-panel);
+  background: var(--semantic-field-surface);
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
@@ -10362,26 +10475,27 @@ body.is-dragging-settings-page {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--seg-text-1);
+  color: var(--semantic-field-text);
   font: inherit;
   font-size: 13px;
   outline: none;
 }
 
 .ssh-directory-filter input::placeholder {
-  color: var(--seg-text-3);
+  color: var(--semantic-field-placeholder);
 }
 
 .ssh-directory-filter:focus-within {
-  border-color: var(--focus-outline-color);
-  background: var(--surface-panel-muted);
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
 }
 
 .ssh-directory-browser {
   position: relative;
   min-width: 0;
-  min-height: 180px;
+  min-height: 0;
   display: grid;
+  overflow: hidden;
 }
 
 .ssh-browser-loading {
@@ -10400,17 +10514,18 @@ body.is-dragging-settings-page {
 }
 
 .ssh-directory-list {
-  max-height: 360px;
+  height: 100%;
+  max-height: none;
   gap: 2px;
   padding-right: 4px;
 }
 
 .ssh-directory-row {
-  grid-template-columns: 26px minmax(0, 1fr) minmax(86px, auto);
+  grid-template-columns: 24px minmax(0, 1fr) minmax(86px, auto);
   align-items: center;
   gap: 8px;
-  min-height: 34px;
-  padding: 4px 8px;
+  min-height: 32px;
+  padding: 3px 8px;
   border-color: transparent;
   border-radius: 6px;
   background: transparent;
@@ -10420,15 +10535,15 @@ body.is-dragging-settings-page {
 .ssh-directory-row:hover,
 .ssh-directory-row:focus-visible {
   border-color: transparent;
-  background: var(--semantic-settings-list-detail-row-surface-hover);
+  background: var(--semantic-list-detail-row-surface-hover);
 }
 
 .ssh-directory-row.is-selected,
 .ssh-directory-row.is-selected:hover,
 .ssh-directory-row.is-selected:focus-visible {
   border-color: transparent;
-  background: var(--semantic-settings-list-detail-row-surface-current);
-  color: var(--semantic-settings-list-detail-row-current-text);
+  background: var(--semantic-list-detail-row-surface-current);
+  color: var(--semantic-list-detail-row-current-text);
 }
 
 .ssh-directory-row.is-unavailable {
@@ -10441,7 +10556,7 @@ body.is-dragging-settings-page {
   height: 24px;
   border-radius: 6px;
   background: transparent;
-  color: var(--semantic-settings-list-detail-row-secondary-text);
+  color: var(--semantic-list-detail-row-secondary-text);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -10462,14 +10577,19 @@ body.is-dragging-settings-page {
 
 .ssh-directory-copy {
   min-width: 0;
-  display: grid;
-  gap: 1px;
+  overflow: hidden;
+  display: block;
+}
+
+.ssh-directory-copy strong {
+  display: block;
+  width: 100%;
 }
 
 .ssh-directory-meta {
   min-width: 0;
   overflow: hidden;
-  color: var(--semantic-settings-list-detail-row-secondary-text);
+  color: var(--semantic-list-detail-row-secondary-text);
   font-size: 11px;
   line-height: 1.2;
   text-align: right;
@@ -10489,6 +10609,10 @@ body.is-dragging-settings-page {
   gap: 6px;
 }
 
+.ssh-directory-browser > .ssh-empty-state {
+  height: 100%;
+}
+
 .ssh-empty-state strong {
   color: var(--seg-text-1);
   font-size: 14px;
@@ -10500,50 +10624,87 @@ body.is-dragging-settings-page {
   margin-top: 4px;
 }
 
-@media (max-width: 920px) {
+@media (max-width: 1180px) {
   .ssh-connections-page {
-    grid-template-columns: minmax(0, 1fr);
-    overflow-y: auto;
+    grid-template-columns: minmax(200px, 220px) minmax(0, 1fr);
   }
 
-  .ssh-profile-sidebar {
-    min-height: 220px;
+  .ssh-workspace {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 320px);
+  }
+
+  .ssh-browser-toolbar {
+    grid-template-columns: minmax(0, 1fr) minmax(180px, 220px);
+  }
+
+  .ssh-form-card {
+    padding: 12px;
+  }
+
+  .ssh-form-grid {
+    grid-template-columns: minmax(0, 1fr) 72px;
   }
 }
 
-@media (max-width: 1180px) {
-  .ssh-detail-panel {
+@media (max-width: 920px) {
+  .ssh-connections-page {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(140px, 170px) minmax(0, 1fr);
+  }
+
+  .ssh-profile-sidebar {
+    min-height: 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--seg-border);
+  }
+}
+
+@media (max-width: 760px) {
+  .ssh-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ssh-form-card {
+    position: absolute;
+    inset: 0 0 0 auto;
+    z-index: 2;
+    width: min(360px, calc(100% - 48px));
+    box-sizing: border-box;
+    border-left: 1px solid var(--seg-border);
+    box-shadow: var(--shadow-md);
+  }
+
+  .ssh-browser-toolbar {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
 @media (max-width: 680px) {
   .ssh-connections-page {
-    padding: 16px;
+    min-height: 720px;
+    grid-template-rows: minmax(140px, 160px) minmax(540px, 1fr);
   }
 
-  .ssh-form-grid {
-    grid-template-columns: minmax(0, 1fr);
+  .ssh-form-card {
+    width: 100%;
   }
 
-  .ssh-detail-hero,
-  .ssh-card-header {
-    align-items: stretch;
-    flex-direction: column;
+  .ssh-browser-card {
+    padding: 12px;
   }
 
   .ssh-path-toolbar {
     grid-template-columns: 28px minmax(0, 1fr) auto;
   }
 
-  .ssh-detail-status,
-  .ssh-browser-open-target,
-  .ssh-path-actions {
+  .ssh-browser-open-target {
     width: 100%;
+    flex-wrap: wrap;
   }
 
-  .ssh-browser-open-target {
-    justify-items: stretch;
+  .ssh-browser-header {
+    align-items: flex-start;
+    flex-wrap: wrap;
   }
 
   .ssh-browser-open-target span {
@@ -10551,7 +10712,7 @@ body.is-dragging-settings-page {
   }
 
   .ssh-directory-row {
-    grid-template-columns: 26px minmax(0, 1fr);
+    grid-template-columns: 24px minmax(0, 1fr);
   }
 
   .ssh-directory-meta {
@@ -10610,7 +10771,7 @@ body.is-dragging-settings-page {
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
-  color: var(--semantic-settings-list-detail-row-primary-text);
+  color: var(--semantic-list-detail-row-primary-text);
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
@@ -10622,24 +10783,24 @@ body.is-dragging-settings-page {
 .connectors-list-row:hover,
 .connectors-list-row:focus-visible {
   border-color: transparent;
-  background: var(--semantic-settings-list-detail-row-surface-hover);
-  color: var(--semantic-settings-list-detail-row-primary-text);
+  background: var(--semantic-list-detail-row-surface-hover);
+  color: var(--semantic-list-detail-row-primary-text);
   outline: none;
 }
 
 .connectors-list-row.is-active {
   border-color: transparent;
-  background: var(--semantic-settings-list-detail-row-surface-hover);
-  color: var(--semantic-settings-list-detail-row-primary-text);
+  background: var(--semantic-list-detail-row-surface-hover);
+  color: var(--semantic-list-detail-row-primary-text);
 }
 
 .connectors-list-row:hover .connectors-list-copy strong,
 .connectors-list-row:focus-visible .connectors-list-copy strong {
-  color: var(--semantic-settings-list-detail-row-primary-text);
+  color: var(--semantic-list-detail-row-primary-text);
 }
 
 .connectors-list-row.is-active .connectors-list-copy strong {
-  color: var(--semantic-settings-list-detail-row-primary-text);
+  color: var(--semantic-list-detail-row-primary-text);
 }
 
 .connectors-list-copy {
@@ -10656,13 +10817,13 @@ body.is-dragging-settings-page {
 }
 
 .connectors-list-copy strong {
-  color: var(--semantic-settings-list-detail-row-primary-text);
+  color: var(--semantic-list-detail-row-primary-text);
   font-size: 15px;
   font-weight: 690;
 }
 
 .connectors-list-copy span {
-  color: var(--semantic-settings-list-detail-row-secondary-text);
+  color: var(--semantic-list-detail-row-secondary-text);
   font-size: 12px;
   font-weight: 560;
 }
@@ -10693,7 +10854,7 @@ body.is-dragging-settings-page {
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: var(--semantic-settings-list-detail-row-secondary-text);
+  background: var(--semantic-list-detail-row-secondary-text);
 }
 
 .connectors-status-dot.is-connected,
@@ -11111,10 +11272,10 @@ body.is-dragging-settings-page {
 .connectors-callback-url-card code {
   min-width: 0;
   padding: 6px 8px;
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--semantic-field-border);
   border-radius: 6px;
-  background: var(--seg-panel);
-  color: var(--seg-text-1);
+  background: var(--semantic-field-surface);
+  color: var(--semantic-field-text);
   font-size: 13px;
   line-height: 1.3;
   white-space: nowrap;
@@ -11383,10 +11544,10 @@ body.is-dragging-settings-page {
   min-height: 36px;
   width: 100%;
   min-width: 0;
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--semantic-field-border);
   border-radius: 8px;
-  background: var(--seg-panel);
-  color: var(--seg-text-1);
+  background: var(--semantic-field-surface);
+  color: var(--semantic-field-text);
   padding: 0 10px;
   font: inherit;
   font-size: 13px;
@@ -11394,8 +11555,8 @@ body.is-dragging-settings-page {
 }
 
 .plugins-config-field input:focus {
-  border-color: var(--focus-outline-color);
-  background: var(--seg-panel-muted);
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
   outline: none;
 }
 
@@ -11506,7 +11667,7 @@ body.is-dragging-settings-page {
   min-height: 28px;
   border: 1px solid transparent;
   border-radius: 8px;
-  background: var(--semantic-settings-list-detail-row-surface-hover);
+  background: var(--semantic-list-detail-row-surface-hover);
   color: var(--seg-text-1);
   display: inline-flex;
   align-items: center;
@@ -11559,7 +11720,7 @@ body.is-dragging-settings-page {
 .plugins-top-menu-icon-button:focus-visible,
 .plugins-top-menu-try-button:hover,
 .plugins-top-menu-try-button:focus-visible {
-  background: var(--semantic-settings-list-detail-row-surface-current);
+  background: var(--semantic-list-detail-row-surface-current);
   color: var(--seg-text-1);
   outline: none;
 }
@@ -11586,7 +11747,7 @@ body.is-dragging-settings-page {
 
 .plugins-page-main {
   --plugins-market-surface-hover: var(--seg-shell);
-  --plugins-market-surface-active: var(--semantic-settings-list-detail-row-surface-current);
+  --plugins-market-surface-active: var(--semantic-list-detail-row-surface-current);
   --plugins-market-icon-surface: var(--semantic-plugin-market-icon-surface);
   --plugins-market-icon-border: var(--semantic-plugin-market-icon-border);
   --plugins-market-icon-text: var(--semantic-plugin-market-icon-text);
@@ -11611,7 +11772,7 @@ body.is-dragging-settings-page {
   --plugins-market-action-text-hover: var(--text-on-dark);
   --plugins-market-focus: var(--focus-outline-color);
   --plugins-detail-card-surface: var(--seg-panel-muted);
-  --plugins-detail-card-surface-hover: var(--semantic-settings-list-detail-row-surface-hover);
+  --plugins-detail-card-surface-hover: var(--semantic-list-detail-row-surface-hover);
   --plugins-detail-card-surface-nested: var(--surface-panel-muted);
   --plugins-detail-control-surface: var(--seg-panel);
   --plugins-detail-control-surface-muted: var(--seg-panel-muted);
@@ -11760,7 +11921,7 @@ body.is-dragging-settings-page {
 
 .plugins-installed-sidebar-header h2 {
   margin: 0;
-  color: var(--semantic-settings-list-detail-row-primary-text);
+  color: var(--semantic-list-detail-row-primary-text);
   font-size: 15px;
   font-weight: 680;
   line-height: 1.2;
@@ -11771,8 +11932,8 @@ body.is-dragging-settings-page {
   min-width: 20px;
   height: 20px;
   border-radius: 999px;
-  background: var(--semantic-settings-list-detail-count-surface);
-  color: var(--semantic-settings-list-detail-count-text);
+  background: var(--semantic-list-detail-count-surface);
+  color: var(--semantic-list-detail-count-text);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -11800,8 +11961,8 @@ body.is-dragging-settings-page {
   padding: 7px 10px;
   border: 1px solid transparent;
   border-radius: 8px;
-  background: transparent;
-  color: var(--semantic-settings-list-detail-row-primary-text);
+  background: var(--semantic-list-detail-row-surface);
+  color: var(--semantic-list-detail-row-primary-text);
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
@@ -11814,22 +11975,22 @@ body.is-dragging-settings-page {
 .plugins-installed-item:hover,
 .plugins-installed-item:focus-visible {
   border-color: transparent;
-  background: var(--semantic-settings-list-detail-row-surface-hover);
+  background: var(--semantic-list-detail-row-surface-hover);
   outline: none;
 }
 
 .plugins-installed-item.is-active {
   border-color: transparent;
-  background: var(--semantic-settings-list-detail-row-surface-hover);
+  background: var(--semantic-list-detail-row-surface-current);
 }
 
 .plugins-installed-item:hover .plugins-installed-copy strong,
 .plugins-installed-item:focus-visible .plugins-installed-copy strong {
-  color: var(--semantic-settings-list-detail-row-primary-text);
+  color: var(--semantic-list-detail-row-primary-text);
 }
 
 .plugins-installed-item.is-active .plugins-installed-copy strong {
-  color: var(--semantic-settings-list-detail-row-primary-text);
+  color: var(--semantic-list-detail-row-current-text);
 }
 
 .plugins-installed-list .plugins-installed-item .plugins-icon-mark {
@@ -11865,7 +12026,7 @@ body.is-dragging-settings-page {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  color: var(--semantic-settings-list-detail-row-primary-text);
+  color: var(--semantic-list-detail-row-primary-text);
   font-size: 15px;
   font-weight: 690;
   line-height: 1.15;
@@ -11875,7 +12036,7 @@ body.is-dragging-settings-page {
 
 .plugins-installed-version {
   flex: 0 0 auto;
-  color: var(--semantic-settings-list-detail-row-secondary-text);
+  color: var(--semantic-list-detail-row-secondary-text);
   font-size: 12px;
   font-weight: 520;
   line-height: 1.15;
@@ -11883,7 +12044,7 @@ body.is-dragging-settings-page {
 
 .plugins-installed-state,
 .plugins-installed-empty {
-  color: var(--semantic-settings-list-detail-row-secondary-text);
+  color: var(--semantic-list-detail-row-secondary-text);
   font-size: 12px;
   line-height: 1.35;
 }
@@ -11904,7 +12065,7 @@ body.is-dragging-settings-page {
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: var(--semantic-settings-list-detail-row-secondary-text);
+  background: var(--semantic-list-detail-row-secondary-text);
 }
 
 .plugins-installed-status-dot.is-enabled {
@@ -12156,10 +12317,10 @@ body.is-dragging-settings-page {
   min-width: 0;
   height: 38px;
   padding: 0 11px;
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--semantic-field-border);
   border-radius: 8px;
-  background: var(--seg-shell);
-  color: var(--seg-text-1);
+  background: var(--semantic-field-surface);
+  color: var(--semantic-field-text);
   font: inherit;
   font-size: 13px;
   font-weight: 500;
@@ -12168,17 +12329,19 @@ body.is-dragging-settings-page {
 }
 
 .plugins-import-url-field input:focus {
-  border-color: var(--semantic-button-secondary-border-hover);
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
   outline: none;
 }
 
 .plugins-import-url-field input:disabled {
-  color: var(--semantic-button-secondary-disabled-text);
-  background: var(--semantic-button-secondary-disabled-surface);
+  border-color: var(--semantic-field-border-disabled);
+  color: var(--semantic-field-text-disabled);
+  background: var(--semantic-field-surface-disabled);
 }
 
 .plugins-import-url-field input::placeholder {
-  color: var(--seg-text-3);
+  color: var(--semantic-field-placeholder);
 }
 
 .plugins-import-url-error {
@@ -12486,7 +12649,7 @@ body.is-dragging-settings-page {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--semantic-settings-list-detail-row-primary-text);
+  color: var(--semantic-list-detail-row-primary-text);
   display: grid;
   grid-template-columns: 14px 16px minmax(0, 1fr);
   align-items: center;
@@ -12498,14 +12661,14 @@ body.is-dragging-settings-page {
 
 .plugins-skill-tree-row:hover,
 .plugins-skill-tree-row:focus-visible {
-  background: var(--semantic-settings-list-detail-row-surface-hover);
-  color: var(--semantic-settings-list-detail-row-primary-text);
+  background: var(--semantic-list-detail-row-surface-hover);
+  color: var(--semantic-list-detail-row-primary-text);
   outline: none;
 }
 
 .plugins-skill-tree-row.is-selected {
-  background: var(--semantic-settings-list-detail-row-surface-current);
-  color: var(--semantic-settings-list-detail-row-current-text);
+  background: var(--semantic-list-detail-row-surface-current);
+  color: var(--semantic-list-detail-row-current-text);
 }
 
 .plugins-skill-tree-chevron,
@@ -13323,7 +13486,7 @@ body.is-dragging-settings-page {
   min-width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: var(--semantic-settings-list-detail-row-secondary-text);
+  background: var(--semantic-list-detail-row-secondary-text);
   justify-self: center;
 }
 
@@ -13561,18 +13724,18 @@ body.is-dragging-settings-page {
 .plugins-connector-key-field input {
   min-height: 34px;
   width: 100%;
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--semantic-field-border);
   border-radius: 8px;
-  background: var(--seg-panel);
-  color: var(--seg-text-1);
+  background: var(--semantic-field-surface);
+  color: var(--semantic-field-text);
   padding: 0 10px;
   font: inherit;
   font-size: 13px;
 }
 
 .plugins-connector-key-field input:focus {
-  border-color: var(--focus-outline-color);
-  background: var(--seg-panel-muted);
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
   outline: none;
 }
 
@@ -13867,21 +14030,21 @@ body.is-dragging-settings-page {
   padding: 8px 10px;
   border: 0;
   border-radius: 6px;
-  color: var(--semantic-settings-list-detail-row-primary-text);
+  color: var(--semantic-list-detail-row-primary-text);
   gap: 10px;
 }
 
 .settings-primary-nav-item:hover,
 .settings-primary-nav-item:focus-visible {
   border-color: transparent;
-  background: var(--semantic-settings-list-detail-row-surface-hover);
-  color: var(--semantic-settings-list-detail-row-primary-text);
+  background: var(--semantic-list-detail-row-surface-hover);
+  color: var(--semantic-list-detail-row-primary-text);
 }
 
 .settings-primary-nav-item.is-active {
   border-color: transparent;
-  background: var(--semantic-settings-list-detail-row-surface-current);
-  color: var(--semantic-settings-list-detail-row-current-text);
+  background: var(--semantic-list-detail-row-surface-current);
+  color: var(--semantic-list-detail-row-current-text);
 }
 
 .settings-primary-nav-item:hover .settings-primary-nav-icon,
@@ -13890,7 +14053,7 @@ body.is-dragging-settings-page {
 }
 
 .settings-primary-nav-item.is-active .settings-primary-nav-icon {
-  color: var(--semantic-settings-list-detail-row-current-text);
+  color: var(--semantic-list-detail-row-current-text);
 }
 
 .settings-primary-nav-label {
@@ -13972,9 +14135,9 @@ body.is-dragging-settings-page {
   min-width: 0;
   min-height: 38px;
   padding: 0 10px;
-  border: 1px solid var(--seg-border);
+  border: 1px solid var(--semantic-field-border);
   border-radius: 6px;
-  background: var(--seg-panel-muted);
+  background: var(--semantic-field-surface-muted);
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
@@ -13995,19 +14158,20 @@ body.is-dragging-settings-page {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--seg-text-1);
+  color: var(--semantic-field-text);
   font: inherit;
   font-size: 13px;
   outline: none;
 }
 
 .settings-provider-search-control input::placeholder {
-  color: var(--seg-text-3);
+  color: var(--semantic-field-placeholder);
 }
 
 .settings-provider-search-control:focus-within {
-  border-color: var(--focus-outline-color);
-  box-shadow: 0 0 0 3px var(--brand-primary-soft-active);
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
+  box-shadow: none;
 }
 
 .settings-provider-search-row .secondary-button,
@@ -14144,7 +14308,7 @@ body.is-dragging-settings-page {
   border-color: transparent;
   border-radius: 6px;
   background: transparent;
-  color: var(--semantic-settings-list-detail-row-primary-text);
+  color: var(--semantic-list-detail-row-primary-text);
   gap: 4px;
   transform: none;
 }
@@ -14152,15 +14316,15 @@ body.is-dragging-settings-page {
 .settings-page-main.is-services .settings-service-item:hover,
 .settings-page-main.is-services .settings-service-item:focus-visible {
   border-color: transparent;
-  background: var(--semantic-settings-list-detail-row-surface-hover);
-  color: var(--semantic-settings-list-detail-row-primary-text);
+  background: var(--semantic-list-detail-row-surface-hover);
+  color: var(--semantic-list-detail-row-primary-text);
   transform: none;
 }
 
 .settings-page-main.is-services .settings-service-item.is-active {
   border-color: transparent;
-  background: var(--semantic-settings-list-detail-row-surface-current);
-  color: var(--semantic-settings-list-detail-row-current-text);
+  background: var(--semantic-list-detail-row-surface-current);
+  color: var(--semantic-list-detail-row-current-text);
 }
 
 .settings-page-main.is-services .settings-service-item-title {
@@ -14326,16 +14490,17 @@ body.is-dragging-settings-page {
   width: 100%;
   min-height: 36px;
   padding: 0 10px;
-  border-color: var(--seg-border);
+  border-color: var(--semantic-field-border);
   border-style: solid;
   border-width: 1px;
   border-radius: 6px;
-  background: var(--seg-panel-muted);
-  color: var(--seg-text-1);
+  background: var(--semantic-field-surface-muted);
+  color: var(--semantic-field-text);
 }
 
 .provider-key-input-wrap select:focus-visible {
-  border-color: var(--brand-primary-active);
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
   outline: none;
 }
 

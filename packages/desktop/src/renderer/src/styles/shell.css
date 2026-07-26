@@ -59,9 +59,11 @@
   --surface-profile-panel-muted: var(--surface-panel-muted);
   --surface-profile-content: var(--surface-panel);
   --surface-profile-content-muted: var(--surface-panel-muted);
-  --surface-profile-sidebar: var(--surface-sidebar);
+  --surface-profile-left-sidebar: var(--surface-left-sidebar);
+  --surface-profile-right-sidebar: var(--surface-right-sidebar);
   --surface-profile-sidebar-strong: var(--surface-sidebar-strong);
   --surface-profile-tab: var(--semantic-shell-chrome-surface);
+  --surface-profile-tab-active: var(--semantic-shell-chrome-tab-surface-active);
   --surface-profile-left-top-menu: var(--semantic-shell-chrome-surface);
   --surface-profile-right-top-menu: var(--semantic-shell-chrome-surface);
   --surface-profile-composer: var(--semantic-composer-surface);
@@ -113,7 +115,7 @@
 
 .window-shell[data-background-mode="custom-html"] {
   --top-chrome-surface: var(--surface-profile-tab);
-  --top-chrome-active-surface: var(--surface-profile-shell);
+  --top-chrome-active-surface: var(--surface-profile-tab-active);
   background: var(--surface-app);
 }
 

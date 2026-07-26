@@ -54,7 +54,7 @@ export const appearanceTokenCopy = {
     },
     "component-dropdown-select": {
       "label": "Seleção Suspensa",
-      "description": "Cor semântica dedicada para menus suspensos e de seleção expandidos."
+      "description": "Cores semânticas dedicadas às superfícies de menus suspensos e de seleção expandidos e aos estados das opções."
     },
     "component-question-card": {
       "label": "Cartão de Pergunta",
@@ -76,8 +76,8 @@ export const appearanceTokenCopy = {
       "label": "Linhas da Árvore da Barra Lateral",
       "description": "Tokens de estado dedicados para linhas de conversas, workspaces, prompts, habilidades, MCP e ferramentas na barra lateral esquerda."
     },
-    "component-settings-list-detail-rows": {
-      "label": "Linhas de Detalhe da Lista de Configurações",
+    "component-list-detail-rows": {
+      "label": "Linhas de Lista-Detalhe",
       "description": "Tokens de linha dedicados para telas de lista-detalhe de configurações, plugins, conectores, MCP e similares."
     },
     "component-composer": {
@@ -106,9 +106,13 @@ export const appearanceTokenCopy = {
       "label": "Painel Suave",
       "description": "Preenchimentos secundários de painéis e linhas de baixo destaque."
     },
-    "surface-sidebar": {
-      "label": "Superfície da Barra Lateral",
-      "description": "Fundos das barras laterais esquerda e direita."
+    "surface-left-sidebar": {
+      "label": "Superfície da Barra Lateral Esquerda",
+      "description": "Fundo da barra lateral esquerda."
+    },
+    "surface-right-sidebar": {
+      "label": "Superfície da Barra Lateral Direita",
+      "description": "Fundo da barra lateral direita."
     },
     "surface-sidebar-strong": {
       "label": "Barra Lateral Forte",
@@ -662,9 +666,9 @@ export const appearanceTokenCopy = {
       "label": "Ícone Principal Ativo",
       "description": "Cor do ícone principal das linhas de árvore selecionadas na barra lateral esquerda."
     },
-    "semantic-settings-list-detail-row-surface-hover": {
+    "semantic-list-detail-row-surface-hover": {
       "label": "Superfície da Linha ao Passar o Mouse",
-      "description": "Fundo ao passar o mouse e ao focar para linhas de detalhes da lista de configurações."
+      "description": "Fundo ao passar o mouse e ao focar para linhas de lista-detalhe."
     },
     "semantic-composer-surface": {
       "label": "Superfície do Compositor",

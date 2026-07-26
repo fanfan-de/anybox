@@ -147,7 +147,7 @@ semantic-management-*
 semantic-plugin-market-*
 ```
 
-**建议**：Settings、Providers、Plugins、Connectors、MCP、Global Skills 等管理型界面，共享角色应逐步使用 `semantic-management-*`，避免继续扩展过窄的 `semantic-settings-list-detail-*`。
+**建议**：Settings、Providers、Plugins、Connectors、MCP、Global Skills 等区域中，结构和交互一致的 list-detail 行应共享组件级 `semantic-list-detail-*`；只有确实属于管理域、且不适用于其他产品区域的角色才使用 `semantic-management-*`。
 
 ### 4.4 Component Semantic token
 
@@ -156,6 +156,7 @@ Component semantic token 描述一个控件或组件家族的属性和状态：
 ```text
 semantic-settings-switch-track-surface-active
 semantic-segmented-control-item-text-disabled
+semantic-list-detail-row-surface-current
 semantic-plugin-market-tag-surface
 semantic-composer-icon-button-text-hover
 ```

@@ -54,15 +54,31 @@ select optgroup {
 .search-field input {
   min-height: 48px;
   padding: 0 14px;
-  border: 1px solid var(--color-border-default);
+  border: 1px solid var(--semantic-field-border);
   border-radius: var(--ui-radius-xs);
-  background: var(--color-surface-panel);
-  color: var(--color-text-primary);
+  background: var(--semantic-field-surface);
+  color: var(--semantic-field-text);
 }
 
 .search-field input::placeholder,
 textarea::placeholder {
-  color: var(--color-text-tertiary);
+  color: var(--semantic-field-placeholder);
+}
+
+.search-field input:focus-visible {
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
+}
+
+.search-field input:disabled {
+  border-color: var(--semantic-field-border-disabled);
+  background: var(--semantic-field-surface-disabled);
+  color: var(--semantic-field-text-disabled);
+  cursor: default;
+}
+
+.search-field input[aria-invalid="true"] {
+  border-color: var(--semantic-field-border-invalid);
 }
 
 body.is-resizing-terminal-panel,

@@ -54,7 +54,7 @@ export const appearanceTokenCopy = {
     },
     "component-dropdown-select": {
       "label": "Liste déroulante",
-      "description": "Couleur sémantique dédiée pour les menus déroulants et de sélection."
+      "description": "Couleurs sémantiques dédiées aux surfaces des menus déroulants et de sélection ouverts, ainsi qu’aux états de leurs options."
     },
     "component-question-card": {
       "label": "Carte de question",
@@ -76,8 +76,8 @@ export const appearanceTokenCopy = {
       "label": "Lignes d'arborescence de la barre latérale",
       "description": "Jetons d'état dédiés aux lignes de conversations, espaces de travail, prompts, compétences, MCP et outils de la barre latérale gauche."
     },
-    "component-settings-list-detail-rows": {
-      "label": "Lignes de détail de la liste des paramètres",
+    "component-list-detail-rows": {
+      "label": "Lignes de liste-détail",
       "description": "Jetons de ligne dédiés pour les paramètres, plugins, connecteurs, MCP et écrans similaires liste-détail."
     },
     "component-composer": {
@@ -106,9 +106,13 @@ export const appearanceTokenCopy = {
       "label": "Panneau atténué",
       "description": "Remplissages de panneaux secondaires et lignes de faible importance."
     },
-    "surface-sidebar": {
-      "label": "Surface de la barre latérale",
-      "description": "Arrière-plans des barres latérales gauche et droite."
+    "surface-left-sidebar": {
+      "label": "Surface de la barre latérale gauche",
+      "description": "Arrière-plan de la barre latérale gauche."
+    },
+    "surface-right-sidebar": {
+      "label": "Surface de la barre latérale droite",
+      "description": "Arrière-plan de la barre latérale droite."
     },
     "surface-sidebar-strong": {
       "label": "Barre latérale forte",
@@ -662,9 +666,9 @@ export const appearanceTokenCopy = {
       "label": "Icône principale active",
       "description": "Couleur de l'icône principale des lignes d'arbre sélectionnées dans la barre latérale gauche."
     },
-    "semantic-settings-list-detail-row-surface-hover": {
+    "semantic-list-detail-row-surface-hover": {
       "label": "Surface de ligne au survol",
-      "description": "Arrière-plan au survol et au focus pour les lignes de détail de liste des paramètres."
+      "description": "Arrière-plan au survol et au focus pour les lignes de liste-détail."
     },
     "semantic-composer-surface": {
       "label": "Surface du compositeur",

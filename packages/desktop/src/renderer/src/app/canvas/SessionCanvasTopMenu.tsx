@@ -140,7 +140,7 @@ function ToolPermissionModeMenuButton({
         <div
           ref={menuRef}
           id="canvas-top-menu-permission-menu"
-          className="canvas-top-menu-selector-panel canvas-top-menu-action-selector-panel canvas-top-menu-context-panel canvas-top-menu-permission-panel"
+          className="canvas-top-menu-selector-panel canvas-top-menu-action-selector-panel canvas-top-menu-context-panel canvas-top-menu-selection-panel canvas-top-menu-permission-panel"
           role="menu"
           aria-label="工具权限模式选择"
         >
@@ -232,7 +232,7 @@ function ProjectMcpMenuButton({
         <div
           ref={menuRef}
           id="canvas-top-menu-mcp-menu"
-          className="canvas-top-menu-selector-panel canvas-top-menu-action-selector-panel canvas-top-menu-context-panel canvas-top-menu-mcp-panel"
+          className="canvas-top-menu-selector-panel canvas-top-menu-action-selector-panel canvas-top-menu-context-panel canvas-top-menu-selection-panel canvas-top-menu-mcp-panel"
           role="menu"
           aria-label="Project MCP server selection"
         >
@@ -355,7 +355,7 @@ function ProjectPluginsMenuButton({
         <div
           ref={menuRef}
           id="canvas-top-menu-plugin-menu"
-          className="canvas-top-menu-selector-panel canvas-top-menu-action-selector-panel canvas-top-menu-context-panel canvas-top-menu-plugin-panel"
+          className="canvas-top-menu-selector-panel canvas-top-menu-action-selector-panel canvas-top-menu-context-panel canvas-top-menu-selection-panel canvas-top-menu-plugin-panel"
           role="menu"
           aria-label="Project plugin selection"
         >
@@ -465,7 +465,7 @@ function ProjectSkillsMenuButton({
         <div
           ref={menuRef}
           id="canvas-top-menu-skill-menu"
-          className="canvas-top-menu-selector-panel canvas-top-menu-action-selector-panel canvas-top-menu-context-panel canvas-top-menu-searchable-panel canvas-top-menu-skill-selector-panel"
+          className="canvas-top-menu-selector-panel canvas-top-menu-action-selector-panel canvas-top-menu-context-panel canvas-top-menu-selection-panel canvas-top-menu-searchable-panel canvas-top-menu-skill-selector-panel"
           role="dialog"
           aria-label="Project skill selection"
         >

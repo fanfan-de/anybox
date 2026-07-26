@@ -2400,18 +2400,18 @@ describe("SettingsPage built-in tools", () => {
     expect(screen.queryByText("App Background")).not.toBeInTheDocument()
 
     fireEvent.change(searchBox, {
-      target: { value: "semantic-settings-list-detail-row-surface-hover" },
+      target: { value: "semantic-list-detail-row-surface-hover" },
     })
 
-    expect(screen.getByText("Settings List Detail Rows")).toBeInTheDocument()
-    expect(screen.getByTitle(/^semantic-settings-list-detail-row-surface-hover \//)).toBeInTheDocument()
+    expect(screen.getByText("List Detail Rows")).toBeInTheDocument()
+    expect(screen.getByTitle(/^semantic-list-detail-row-surface-hover \//)).toBeInTheDocument()
     expect(screen.queryByText("App Background")).not.toBeInTheDocument()
 
     fireEvent.change(searchBox, {
       target: { value: "semantic-detail-icon-text" },
     })
 
-    expect(screen.getByText("Settings List Detail Rows")).toBeInTheDocument()
+    expect(screen.getByText("List Detail Rows")).toBeInTheDocument()
     expect(screen.getByText("Detail Icon Text")).toBeInTheDocument()
     expect(screen.getByTitle(/^semantic-detail-icon-text \//)).toBeInTheDocument()
     expect(screen.queryByText("App Background")).not.toBeInTheDocument()
@@ -2607,6 +2607,7 @@ describe("SettingsPage built-in tools", () => {
     expect(screen.queryByRole("combobox", { name: "强调主题" })).not.toBeInTheDocument()
     expect(screen.queryByRole("combobox", { name: "代码主题" })).not.toBeInTheDocument()
     expect(screen.getByRole("combobox", { name: "界面字体" })).toBeInTheDocument()
+    expect(screen.getByText("行默认背景")).toBeInTheDocument()
     expect(screen.queryByText("选择亮色、暗色或跟随系统的配色方案。")).not.toBeInTheDocument()
     expect(screen.queryByText(/Choose the font used across the desktop interface/i)).not.toBeInTheDocument()
   })

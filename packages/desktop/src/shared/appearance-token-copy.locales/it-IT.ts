@@ -54,7 +54,7 @@ export const appearanceTokenCopy = {
     },
     "component-dropdown-select": {
       "label": "Menu a Discesa",
-      "description": "Colore semantico dedicato per menu a discesa e selettori espansi."
+      "description": "Colori semantici dedicati alle superfici dei menu a discesa e di selezione espansi e agli stati delle opzioni."
     },
     "component-question-card": {
       "label": "Scheda Domanda",
@@ -76,8 +76,8 @@ export const appearanceTokenCopy = {
       "label": "Righe Albero Sidebar",
       "description": "Token di stato dedicati per le righe di conversazioni, aree di lavoro, prompt, competenze, MCP e strumenti nella barra laterale sinistra."
     },
-    "component-settings-list-detail-rows": {
-      "label": "Righe Dettaglio Elenco Impostazioni",
+    "component-list-detail-rows": {
+      "label": "Righe Elenco-Dettaglio",
       "description": "Token di riga dedicati per impostazioni, plugin, connettori, MCP e schermate simili elenco-dettaglio."
     },
     "component-composer": {
@@ -106,9 +106,13 @@ export const appearanceTokenCopy = {
       "label": "Pannello Attenuato",
       "description": "Riempimenti secondari dei pannelli e righe a bassa enfasi."
     },
-    "surface-sidebar": {
-      "label": "Superficie Barra Laterale",
-      "description": "Sfondi delle barre laterali sinistra e destra."
+    "surface-left-sidebar": {
+      "label": "Superficie Barra Laterale Sinistra",
+      "description": "Sfondo della barra laterale sinistra."
+    },
+    "surface-right-sidebar": {
+      "label": "Superficie Barra Laterale Destra",
+      "description": "Sfondo della barra laterale destra."
     },
     "surface-sidebar-strong": {
       "label": "Barra Laterale Forte",
@@ -662,9 +666,9 @@ export const appearanceTokenCopy = {
       "label": "Icona principale attiva",
       "description": "Colore dell'icona principale per le righe dell'albero selezionate nella barra laterale sinistra."
     },
-    "semantic-settings-list-detail-row-surface-hover": {
+    "semantic-list-detail-row-surface-hover": {
       "label": "Superficie riga al passaggio",
-      "description": "Sfondo al passaggio e al focus per le righe di dettaglio elenco nelle impostazioni."
+      "description": "Sfondo al passaggio e al focus per le righe elenco-dettaglio."
     },
     "semantic-composer-surface": {
       "label": "Superficie Composer",

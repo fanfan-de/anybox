@@ -54,7 +54,7 @@ export const appearanceTokenCopy = {
     },
     "component-dropdown-select": {
       "label": "Açılır Seçim",
-      "description": "Genişletilmiş açılır menüler ve seçim menüleri için özel anlamsal renk."
+      "description": "Genişletilmiş açılır menü ve seçim menüsü yüzeyleri ile seçenek durumları için özel anlamsal renkler."
     },
     "component-question-card": {
       "label": "Soru Kartı",
@@ -76,8 +76,8 @@ export const appearanceTokenCopy = {
       "label": "Kenar Çubuğu Ağaç Satırları",
       "description": "Sol kenar çubuğundaki konuşma, çalışma alanı, istem, beceri, MCP ve araç satırları için özel durum tokenları."
     },
-    "component-settings-list-detail-rows": {
-      "label": "Ayarlar Liste Detay Satırları",
+    "component-list-detail-rows": {
+      "label": "Liste Detay Satırları",
       "description": "Ayarlar, eklentiler, bağlayıcılar, MCP ve benzer liste-detay ekranları için özel satır tokenları."
     },
     "component-composer": {
@@ -106,9 +106,13 @@ export const appearanceTokenCopy = {
       "label": "Sönük Panel",
       "description": "İkincil panel dolguları ve düşük vurgulu satırlar."
     },
-    "surface-sidebar": {
-      "label": "Kenar Çubuğu Yüzeyi",
-      "description": "Sol ve sağ kenar çubuğu arka planları."
+    "surface-left-sidebar": {
+      "label": "Sol Kenar Çubuğu Yüzeyi",
+      "description": "Sol kenar çubuğu arka planı."
+    },
+    "surface-right-sidebar": {
+      "label": "Sağ Kenar Çubuğu Yüzeyi",
+      "description": "Sağ kenar çubuğu arka planı."
     },
     "surface-sidebar-strong": {
       "label": "Kenar Çubuğu Güçlü",
@@ -662,9 +666,9 @@ export const appearanceTokenCopy = {
       "label": "Öncü Simge Aktif",
       "description": "Sol kenar çubuğundaki seçili ağaç satırlarının öncü simge rengi."
     },
-    "semantic-settings-list-detail-row-surface-hover": {
+    "semantic-list-detail-row-surface-hover": {
       "label": "Satır Yüzeyi Üzerine Gelme",
-      "description": "Ayarlar liste-detay satırları için üzerine gelme ve odak arka planı."
+      "description": "Liste-detay satırları için üzerine gelme ve odak arka planı."
     },
     "semantic-composer-surface": {
       "label": "Besteci Yüzeyi",

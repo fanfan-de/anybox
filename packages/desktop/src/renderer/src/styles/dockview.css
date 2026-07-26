@@ -29,7 +29,7 @@
   --dv-background-color: transparent;
   --dv-group-view-background-color: transparent;
   --dv-tabs-and-actions-container-background-color: var(--seg-shell-chrome-surface);
-  --dv-activegroup-visiblepanel-tab-background-color: var(--seg-shell);
+  --dv-activegroup-visiblepanel-tab-background-color: var(--semantic-shell-chrome-tab-surface-active);
   --dv-activegroup-visiblepanel-tab-color: var(--seg-text);
   --dv-inactivegroup-visiblepanel-tab-background-color: var(--seg-shell-chrome-surface);
   --dv-inactivegroup-visiblepanel-tab-color: var(--seg-text-muted);
@@ -49,7 +49,7 @@
   --dv-background-color: transparent;
   --dv-group-view-background-color: transparent;
   --dv-tabs-and-actions-container-background-color: var(--surface-profile-tab);
-  --dv-activegroup-visiblepanel-tab-background-color: var(--surface-profile-shell);
+  --dv-activegroup-visiblepanel-tab-background-color: var(--surface-profile-tab-active);
   --dv-inactivegroup-visiblepanel-tab-background-color: var(--surface-profile-tab);
 }
 
@@ -127,7 +127,7 @@ html[data-dv-containment~="view"] .dockview-theme-anybox .dv-split-view-containe
   --dockview-tab-border: var(--seg-border);
   --dockview-tab-divider: var(--seg-divider);
   --dockview-tab-radius: 0px;
-  --dockview-tab-active-bg: var(--seg-shell);
+  --dockview-tab-active-bg: var(--semantic-shell-chrome-tab-surface-active);
   --dockview-tab-hover-bg: var(--surface-panel-muted);
   --dockview-tab-focus-accent: var(--focus-outline-color);
   --dockview-tab-icon-color: var(--semantic-accent-icon);
@@ -145,7 +145,7 @@ html[data-dv-containment~="view"] .dockview-theme-anybox .dv-split-view-containe
 
 .window-shell[data-background-mode="custom-html"] .dockview-theme-anybox .dv-tabs-and-actions-container {
   --dockview-tab-bar-bg: var(--surface-profile-tab);
-  --dockview-tab-active-bg: var(--surface-profile-shell);
+  --dockview-tab-active-bg: var(--surface-profile-tab-active);
   --dockview-tab-hover-bg: var(--surface-profile-panel-muted);
 }
 
