@@ -6,7 +6,6 @@ import {
   APPEARANCE_TOKEN_NAMES,
   normalizeAppearanceCodeThemePreference,
   normalizeAppearanceConfigDocument,
-  normalizeAppearanceHtmlBackgroundConfig,
   validateAppearanceConfigDocumentStructure,
   type AppearanceTokenMap,
   type AppearanceTokenName,
@@ -323,9 +322,6 @@ function normalizeImportedThemeMetadata(
     codeThemePreference: normalizeAppearanceCodeThemePreference(
       theme.codeThemePreference,
     ),
-    htmlBackgroundConfig: normalizeAppearanceHtmlBackgroundConfig(
-      theme.htmlBackgroundConfig,
-    ),
   }
 }
 
@@ -437,7 +433,6 @@ export function parseAppearanceDtcgJson(
       brandTheme: metadata.brandTheme,
       fontFamily: metadata.fontFamily,
       codeThemePreference: metadata.codeThemePreference,
-      htmlBackgroundConfig: metadata.htmlBackgroundConfig,
       overrides,
       foreignDtcg: cloneJsonRecord(input),
     },
@@ -467,7 +462,6 @@ function readThemeExtensionMetadata(theme: AppearanceTheme) {
     brandTheme: theme.brandTheme,
     fontFamily: theme.fontFamily,
     codeThemePreference: theme.codeThemePreference,
-    htmlBackgroundConfig: theme.htmlBackgroundConfig,
   }
 }
 

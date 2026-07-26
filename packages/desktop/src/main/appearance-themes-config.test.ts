@@ -78,7 +78,6 @@ describe("appearance theme library persistence", () => {
           brandTheme: "terra",
           fontFamily: "default",
           codeThemePreference: "auto",
-          htmlBackgroundConfig: {},
           overrides: {
             "surface-app-light": "#123456",
           },
@@ -134,16 +133,6 @@ describe("appearance theme library persistence", () => {
       brandTheme: "sage",
       fontFamily: "default",
       codeThemePreference: "dracula",
-      htmlBackgroundConfig: {
-        blurPx: 4,
-        dim: 0.2,
-        enabled: true,
-        html: "<main>background</main>",
-        opacity: 0.8,
-        paused: false,
-        renderMode: "static",
-        surfaceOpacity: 0.72,
-      },
       overrides: {
         "surface-panel-dark": colorLiteral("#111111"),
       },
@@ -155,10 +144,6 @@ describe("appearance theme library persistence", () => {
       source: "user",
       readonly: false,
       codeThemePreference: "dracula",
-      htmlBackgroundConfig: {
-        enabled: true,
-        html: "<main>background</main>",
-      },
       overrides: {
         "surface-panel-dark": colorLiteral("#111111"),
       },
@@ -203,16 +188,6 @@ describe("appearance theme library persistence", () => {
       brandTheme: "sage",
       fontFamily: "default",
       codeThemePreference: "auto",
-      htmlBackgroundConfig: {
-        blurPx: 0,
-        dim: 0.18,
-        enabled: false,
-        html: "",
-        opacity: 0.78,
-        paused: false,
-        renderMode: "static",
-        surfaceOpacity: 0.68,
-      },
       overrides: {},
     })
 
@@ -234,16 +209,6 @@ describe("appearance theme library persistence", () => {
       brandTheme: "terra",
       fontFamily: "default",
       codeThemePreference: "auto",
-      htmlBackgroundConfig: {
-        blurPx: 0,
-        dim: 0.18,
-        enabled: false,
-        html: "",
-        opacity: 0.78,
-        paused: false,
-        renderMode: "static",
-        surfaceOpacity: 0.68,
-      },
       overrides: {},
     })
     await saveAppearanceTheme({
@@ -253,16 +218,6 @@ describe("appearance theme library persistence", () => {
       brandTheme: "sage",
       fontFamily: "default",
       codeThemePreference: "auto",
-      htmlBackgroundConfig: {
-        blurPx: 0,
-        dim: 0.18,
-        enabled: false,
-        html: "",
-        opacity: 0.78,
-        paused: false,
-        renderMode: "static",
-        surfaceOpacity: 0.68,
-      },
       overrides: {
         "surface-panel-dark": colorLiteral("#111111"),
       },
@@ -312,16 +267,6 @@ describe("appearance theme library persistence", () => {
       brandTheme: "terra",
       fontFamily: "default",
       codeThemePreference: "auto",
-      htmlBackgroundConfig: {
-        blurPx: 0,
-        dim: 0.18,
-        enabled: false,
-        html: "",
-        opacity: 0.78,
-        paused: false,
-        renderMode: "static",
-        surfaceOpacity: 0.68,
-      },
       overrides: {},
     })
 

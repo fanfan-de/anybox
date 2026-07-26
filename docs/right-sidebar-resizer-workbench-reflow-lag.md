@@ -242,7 +242,7 @@ minmax(0, 1fr) var(--right-sidebar-resizer-width) var(--right-sidebar-display-wi
 - 尝试将右侧栏从主 grid 中剥离，Workbench 通过 `right` / `inset` 或明确 width 跟随变化。
 - 对比 grid var 更新、inline style width 更新、container wrapper width 更新三种方式的 trace。
 
-风险：布局结构改动可能影响标题栏、窗口控制区域、右侧栏 collapse、响应式和 custom HTML background，需要覆盖回归测试。
+风险：布局结构改动可能影响标题栏、窗口控制区域、右侧栏 collapse 和响应式行为，需要覆盖回归测试。
 
 ### 5. 对 Workbench 内部做临时 resize mode
 

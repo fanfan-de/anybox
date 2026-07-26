@@ -6,7 +6,6 @@ import { parseAppearanceColorLiteral } from "../../../../shared/appearance-color
 import type { AppearanceTheme } from "../../../../shared/appearance-themes"
 import type { DesktopAppUpdateState, DesktopStorageUsageSnapshot } from "../../../../shared/desktop-ipc-contract"
 import { I18nProvider } from "../i18n/I18nProvider"
-import { DEFAULT_HTML_BACKGROUND_CONFIG } from "../html-background/html-background-config"
 import { DEFAULT_ASSISTANT_TRACE_VISIBILITY, type McpServerDraftState } from "../types"
 import { ToastProvider } from "../toast"
 import { SettingsPage } from "./SettingsPage"
@@ -96,7 +95,6 @@ function createAppearanceTheme(overrides: Partial<AppearanceTheme> = {}): Appear
     brandTheme: "terra",
     fontFamily: "default",
     codeThemePreference: "auto",
-    htmlBackgroundConfig: DEFAULT_HTML_BACKGROUND_CONFIG,
     overrides: {},
     foreignDtcg: {},
     ...overrides,
@@ -136,7 +134,6 @@ function createSettingsPageProps(
     cinemaWorkflowCatalogError: null,
     colorMode: "system",
     fontFamily: "default",
-    htmlBackgroundConfig: DEFAULT_HTML_BACKGROUND_CONFIG,
     deletingArchivedSessionID: null,
     deletingMcpServerID: null,
     deletingProviderID: null,
@@ -183,7 +180,6 @@ function createSettingsPageProps(
     onClose: vi.fn(),
     onColorModeChange: vi.fn(),
     onFontFamilyChange: vi.fn(),
-    onHtmlBackgroundConfigChange: vi.fn(),
     onDebugLineColorsChange: vi.fn(),
     onDebugUiRegionsChange: vi.fn(),
     onMobileConnectionAdvancedInfoChange: vi.fn(),
@@ -2321,66 +2317,6 @@ describe("SettingsPage built-in tools", () => {
       name: "Contrast warnings (1)",
     })).toBeInTheDocument()
     expect(screen.getByText("Imported 2 Anybox tokens.")).toBeInTheDocument()
-  })
-
-  it("edits the static HTML background settings from appearance", () => {
-    const onHtmlBackgroundConfigChange = vi.fn()
-
-    const { rerender } = render(
-      <SettingsPage
-        {...createSettingsPageProps({
-          onHtmlBackgroundConfigChange,
-        })}
-      />,
-    )
-
-    fireEvent.click(screen.getByRole("button", { name: "Appearance" }))
-
-    const enableButton = screen.getByRole("switch", { name: "Enable HTML background" })
-    expect(enableButton).toBeDisabled()
-
-    fireEvent.change(screen.getByLabelText("HTML source"), {
-      target: {
-        value: "<main>Custom background</main>",
-      },
-    })
-
-    expect(onHtmlBackgroundConfigChange).toHaveBeenCalledWith(expect.objectContaining({
-      enabled: false,
-      html: "<main>Custom background</main>",
-    }))
-
-    rerender(
-      <SettingsPage
-        {...createSettingsPageProps({
-          htmlBackgroundConfig: {
-            blurPx: 0,
-            dim: 0.18,
-            enabled: false,
-            html: "<main>Custom background</main>",
-            opacity: 0.78,
-            paused: false,
-            renderMode: "static",
-            surfaceOpacity: 0.68,
-          },
-          onHtmlBackgroundConfigChange,
-        })}
-      />,
-    )
-
-    fireEvent.click(screen.getByRole("switch", { name: "Enable HTML background" }))
-    expect(onHtmlBackgroundConfigChange).toHaveBeenCalledWith(expect.objectContaining({
-      enabled: true,
-      html: "<main>Custom background</main>",
-    }))
-
-    expect(screen.queryByRole("slider", { name: /Surface opacity/ })).not.toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole("switch", { name: "Dynamic script background" }))
-
-    expect(onHtmlBackgroundConfigChange).toHaveBeenCalledWith(expect.objectContaining({
-      renderMode: "dynamic",
-    }))
   })
 
   it("filters appearance theme tokens by semantic token name", () => {

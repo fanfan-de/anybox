@@ -80,45 +80,6 @@
   isolation: isolate;
 }
 
-.html-background-layer {
-  --html-background-blur: 0px;
-  --html-background-dim: 0.18;
-  --html-background-opacity: 0.78;
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-  pointer-events: none;
-  background: var(--surface-app);
-}
-
-.html-background-frame {
-  position: absolute;
-  inset: calc(var(--html-background-blur) * -2);
-  width: calc(100% + (var(--html-background-blur) * 4));
-  height: calc(100% + (var(--html-background-blur) * 4));
-  border: 0;
-  opacity: var(--html-background-opacity);
-  filter: blur(var(--html-background-blur));
-  pointer-events: none;
-}
-
-.html-background-scrim {
-  position: absolute;
-  inset: 0;
-  background: var(--semantic-html-background-scrim);
-  opacity: var(--html-background-dim);
-  pointer-events: none;
-}
-
-.window-shell[data-background-mode="custom-html"] {
-  --top-chrome-surface: var(--surface-profile-tab);
-  --top-chrome-active-surface: var(--surface-profile-tab-active);
-  background: var(--surface-app);
-}
-
 .window-controls {
   display: inline-flex;
   align-items: center;
@@ -226,18 +187,6 @@
   box-shadow: none;
 }
 
-.window-shell[data-background-mode="custom-html"] .app-shell {
-  background: transparent;
-}
-
-.window-shell[data-background-mode="custom-html"] .activity-rail {
-  background: var(--surface-profile-sidebar-strong);
-}
-
-.window-shell[data-background-mode="custom-html"] .activity-rail-top-menu {
-  background: var(--surface-profile-left-top-menu);
-}
-
 .app-loading-screen,
 .session-popout-shell,
 .session-popout-app {
@@ -312,10 +261,6 @@
 
 .activity-rail.is-right .activity-rail-top-menu {
   background: var(--seg-shell-chrome-surface);
-}
-
-.window-shell[data-background-mode="custom-html"] .activity-rail.is-right .activity-rail-top-menu {
-  background: var(--surface-profile-right-top-menu);
 }
 
 .activity-rail .sidebar-toggle-button.is-rail {

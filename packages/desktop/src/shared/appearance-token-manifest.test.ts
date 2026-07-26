@@ -12,6 +12,7 @@ import {
   DEFAULT_APPEARANCE_THEME_ID,
 } from "./appearance-tokens.generated"
 import { createDefaultAppearanceConfigDocument } from "./appearance"
+import { resolveAppearanceTokenColors } from "./appearance-color"
 
 const packageRoot = process.cwd()
 const stylesRoot = resolve(packageRoot, "src/renderer/src/styles")
@@ -22,6 +23,7 @@ const generatedCss = readFileSync(
 const manualTokensCss = readFileSync(resolve(stylesRoot, "tokens.css"), "utf8")
 const baseCss = readFileSync(resolve(stylesRoot, "base.css"), "utf8")
 const calendarCss = readFileSync(resolve(stylesRoot, "calendar.css"), "utf8")
+const composerCss = readFileSync(resolve(stylesRoot, "composer.css"), "utf8")
 const rightSidebarCss = readFileSync(resolve(stylesRoot, "right-sidebar.css"), "utf8")
 const settingsCss = readFileSync(resolve(stylesRoot, "settings.css"), "utf8")
 const manifest = JSON.parse(
@@ -224,6 +226,7 @@ describe("appearance token manifest", () => {
       "semantic-field-border-disabled",
       "semantic-field-border-invalid",
       "semantic-field-text",
+      "semantic-field-caret",
       "semantic-field-text-disabled",
       "semantic-field-placeholder",
     ])
@@ -233,6 +236,29 @@ describe("appearance token manifest", () => {
     expect(generatedCss).toMatch(
       /--semantic-field-surface:\s*var\(--semantic-field-surface-dark\);/,
     )
+    expect(generatedCss).toMatch(
+      /--semantic-field-caret-light:\s*var\(--semantic-field-text-light\);/,
+    )
+    expect(generatedCss).toMatch(
+      /--semantic-field-caret:\s*var\(--semantic-field-caret-dark\);/,
+    )
+    expect(baseCss).toMatch(
+      /input,\s*textarea\s*\{[^}]*caret-color:\s*var\(--semantic-field-caret\);/s,
+    )
+    expect(composerCss).toMatch(
+      /\.composer-editor-input\s*\{[^}]*caret-color:\s*var\(--semantic-field-caret\);/s,
+    )
+    expect(composerCss).not.toMatch(
+      /\.composer-editor-input\s*\{[^}]*caret-color:\s*var\(--(?:seg-accent|brand-accent-active)\);/s,
+    )
+    for (const theme of BUILT_IN_APPEARANCE_THEME_DEFINITIONS) {
+      const colors = resolveAppearanceTokenColors({
+        brandTheme: theme.brandTheme,
+        overrides: { ...theme.overrides },
+      })
+      expect(colors["semantic-field-caret-light"].alpha ?? 1).toBeGreaterThan(0)
+      expect(colors["semantic-field-caret-dark"].alpha ?? 1).toBeGreaterThan(0)
+    }
     expect(baseCss).toMatch(
       /\.search-field input\s*\{[^}]*border:\s*1px solid var\(--semantic-field-border\);[^}]*background:\s*var\(--semantic-field-surface\);[^}]*color:\s*var\(--semantic-field-text\);/s,
     )

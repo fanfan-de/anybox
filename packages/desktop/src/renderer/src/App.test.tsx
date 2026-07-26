@@ -896,16 +896,6 @@ describe("App", () => {
             brandTheme: "terra",
             fontFamily: "default",
             codeThemePreference: "auto",
-            htmlBackgroundConfig: {
-              blurPx: 0,
-              dim: 0.18,
-              enabled: false,
-              html: "",
-              opacity: 0.78,
-              paused: false,
-              renderMode: "static",
-              surfaceOpacity: 0.68,
-            },
             overrides: {},
           },
           {
@@ -919,16 +909,6 @@ describe("App", () => {
             brandTheme: "sage",
             fontFamily: "default",
             codeThemePreference: "auto",
-            htmlBackgroundConfig: {
-              blurPx: 0,
-              dim: 0.18,
-              enabled: false,
-              html: "",
-              opacity: 0.78,
-              paused: false,
-              renderMode: "static",
-              surfaceOpacity: 0.68,
-            },
             overrides: {},
           },
         ],
@@ -944,16 +924,6 @@ describe("App", () => {
             brandTheme: "terra",
             fontFamily: "default",
             codeThemePreference: "auto",
-            htmlBackgroundConfig: {
-              blurPx: 0,
-              dim: 0.18,
-              enabled: false,
-              html: "",
-              opacity: 0.78,
-              paused: false,
-              renderMode: "static",
-              surfaceOpacity: 0.68,
-            },
             overrides: {},
           },
           {
@@ -967,16 +937,6 @@ describe("App", () => {
             brandTheme: "sage",
             fontFamily: "default",
             codeThemePreference: "auto",
-            htmlBackgroundConfig: {
-              blurPx: 0,
-              dim: 0.18,
-              enabled: false,
-              html: "",
-              opacity: 0.78,
-              paused: false,
-              renderMode: "static",
-              surfaceOpacity: 0.68,
-            },
             overrides: {},
           },
         ],
@@ -1042,16 +1002,6 @@ describe("App", () => {
           brandTheme: themeID === "built-in:sage-slate" ? "sage" : "terra",
           fontFamily: "default",
           codeThemePreference: "auto",
-          htmlBackgroundConfig: {
-            blurPx: 0,
-            dim: 0.18,
-            enabled: false,
-            html: "",
-            opacity: 0.78,
-            paused: false,
-            renderMode: "static",
-            surfaceOpacity: 0.68,
-          },
           overrides: {},
         }
         return {
@@ -1082,16 +1032,6 @@ describe("App", () => {
           brandTheme: "terra",
           fontFamily: "default",
           codeThemePreference: "auto",
-          htmlBackgroundConfig: {
-            blurPx: 0,
-            dim: 0.18,
-            enabled: false,
-            html: "",
-            opacity: 0.78,
-            paused: false,
-            renderMode: "static",
-            surfaceOpacity: 0.68,
-          },
           overrides: {},
         }
         return {
@@ -10705,42 +10645,15 @@ describe("App", () => {
     )
   })
 
-  it("sets the default background mode without runtime surface opacity", () => {
+  it("renders the Windows shell with token-driven surface defaults", () => {
     const { container } = render(<App />)
     const windowShell = container.querySelector(".window-shell") as HTMLElement | null
 
     expect(windowShell).not.toBeNull()
-    expect(windowShell).toHaveAttribute("data-background-mode", "default")
     expect(windowShell).not.toHaveAttribute("data-surface-profile")
     expect(windowShell).toHaveClass("is-windows")
-    expect(windowShell).not.toHaveClass("has-html-background")
     expect(windowShell!.style.getPropertyValue("--surface-profile-opacity")).toBe("")
     expect(windowShell!.style.getPropertyValue("--surface-profile-content-opacity")).toBe("")
-    expect(container.querySelector(".html-background-layer")).toBeNull()
-  })
-
-  it("sets the custom HTML background mode without runtime surface opacity", () => {
-    window.localStorage.setItem("desktop.htmlBackground.v1", JSON.stringify({
-      blurPx: 0,
-      dim: 0.18,
-      enabled: true,
-      html: "<main>Custom background</main>",
-      opacity: 0.78,
-      paused: false,
-      renderMode: "static",
-      surfaceOpacity: 0.72,
-    }))
-
-    const { container } = render(<App />)
-    const windowShell = container.querySelector(".window-shell") as HTMLElement | null
-
-    expect(windowShell).not.toBeNull()
-    expect(windowShell).toHaveAttribute("data-background-mode", "custom-html")
-    expect(windowShell).not.toHaveAttribute("data-surface-profile")
-    expect(windowShell).toHaveClass("has-html-background")
-    expect(windowShell!.style.getPropertyValue("--surface-profile-opacity")).toBe("")
-    expect(windowShell!.style.getPropertyValue("--surface-profile-content-opacity")).toBe("")
-    expect(container.querySelector(".html-background-layer")).not.toBeNull()
   })
 
   it("toggles debug region colors from developer mode settings", async () => {
@@ -15243,6 +15156,34 @@ describe("App", () => {
     )
   })
 
+  it("routes right-sidebar launcher card borders through secondary button semantic tokens", () => {
+    const stylesRoot = resolve(process.cwd(), "src/renderer/src/styles")
+    const rightSidebarStyles = readFileSync(resolve(stylesRoot, "right-sidebar.css"), "utf8")
+    const windowsTransparentStyles = readFileSync(resolve(stylesRoot, "windows-transparent.css"), "utf8")
+    const launcherCardRules = Array.from(
+      rightSidebarStyles.matchAll(/[^{}]*\.right-sidebar-launcher-card[^{}]*\{[^{}]*\}/g),
+      (match) => match[0],
+    ).join("\n")
+    const windowsLauncherCardRules = Array.from(
+      windowsTransparentStyles.matchAll(/[^{}]*\.right-sidebar-launcher-card[^{}]*\{[^{}]*\}/g),
+      (match) => match[0],
+    ).join("\n")
+
+    expect(launcherCardRules).toMatch(
+      /\.right-sidebar-launcher-card\s*\{[^}]*border:\s*1px solid var\(--semantic-button-secondary-border\);/s,
+    )
+    expect(launcherCardRules).toMatch(
+      /\.right-sidebar-launcher-card:hover,\s*\.right-sidebar-launcher-card:focus-visible\s*\{[^}]*border-color:\s*var\(--semantic-button-secondary-border-hover\);/s,
+    )
+    expect(launcherCardRules).toMatch(
+      /\.right-sidebar-launcher-card:disabled\s*\{[^}]*border-color:\s*var\(--semantic-button-secondary-disabled-border\);/s,
+    )
+    expect(launcherCardRules).not.toMatch(
+      /(?:border|border-color|box-shadow):[^;}]*(?:var\(--border-default\)|var\(--focus-outline-color\)|var\(--seg-panel\))/,
+    )
+    expect(windowsLauncherCardRules).not.toMatch(/(?:^|[;{])\s*border(?:-color)?\s*:/)
+  })
+
   it("routes left and right sidebar backgrounds through independent tokens", () => {
     expect(styles).toMatch(/--seg-left-sidebar:\s*var\(--surface-left-sidebar\);/)
     expect(styles).toMatch(/--seg-right-sidebar:\s*var\(--surface-right-sidebar\);/)
@@ -15256,12 +15197,6 @@ describe("App", () => {
     )
     expect(styles).toMatch(
       /\.sidebar\.is-right\s*\{[^}]*background:\s*var\(--seg-right-sidebar\);/s,
-    )
-    expect(styles).toMatch(
-      /\.window-shell\[data-background-mode="custom-html"\]\s+\.sidebar\s*\{[^}]*background:\s*var\(--surface-profile-left-sidebar\);/s,
-    )
-    expect(styles).toMatch(
-      /\.window-shell\[data-background-mode="custom-html"\]\s+\.sidebar\.is-right\s*\{[^}]*background:\s*var\(--surface-profile-right-sidebar\);/s,
     )
     expect(styles).toMatch(
       /\.right-sidebar-launcher\s*\{[^}]*background:\s*var\(--seg-right-sidebar\);/s,
@@ -15280,116 +15215,58 @@ describe("App", () => {
     )
   })
 
-  it("maps custom HTML backgrounds through token-driven surface profile tokens", () => {
-    expect(styles).not.toMatch(/\.window-shell\.has-html-background/)
-    expect(styles).not.toMatch(/--html-background-.*surface/)
-    expect(styles).not.toMatch(/data-surface-profile/)
-    expect(styles).not.toMatch(/--surface-profile-opacity/)
-    expect(styles).not.toMatch(/--surface-profile-content-opacity/)
-    expect(styles).toMatch(
-      /\.window-shell\s*\{[^}]*--surface-profile-shell:\s*var\(--surface-shell\);[^}]*--surface-profile-left-sidebar:\s*var\(--surface-left-sidebar\);[^}]*--surface-profile-right-sidebar:\s*var\(--surface-right-sidebar\);[^}]*--surface-profile-tab:\s*var\(--semantic-shell-chrome-surface\);[^}]*--surface-profile-tab-active:\s*var\(--semantic-shell-chrome-tab-surface-active\);[^}]*--surface-profile-composer:\s*var\(--semantic-composer-surface\);/s,
-    )
-    expect(styles).toMatch(/--semantic-html-background-scrim-light:\s*var\(--surface-app-light\);/s)
-    expect(styles).toMatch(/--semantic-html-background-scrim-dark:\s*var\(--surface-app-dark\);/s)
-    expect(styles).toMatch(/\.window-shell\s*\{[^}]*background:\s*var\(--surface-app\);/s)
-    expect(styles).toMatch(/\.html-background-layer\s*\{[^}]*background:\s*var\(--surface-app\);/s)
-    expect(styles).toMatch(/\.app-shell\s*\{[^}]*background:\s*var\(--surface-app\);/s)
-    expect(styles).toMatch(
-      /\.window-shell\[data-background-mode="custom-html"\]\s*\{[^}]*--top-chrome-surface:\s*var\(--surface-profile-tab\);[^}]*--top-chrome-active-surface:\s*var\(--surface-profile-tab-active\);[^}]*background:\s*var\(--surface-app\);/s,
-    )
-    expect(styles).toMatch(
-      /\.window-shell\[data-background-mode="custom-html"\]\s+\.right-sidebar-top-menu\s*\{[^}]*--right-sidebar-tab-bar-bg:\s*var\(--surface-profile-right-sidebar\);[^}]*--right-sidebar-tab-active-bg:\s*var\(--surface-profile-tab-active\);[^}]*background:\s*var\(--right-sidebar-tab-bar-bg\);/s,
-    )
-    expect(styles).toMatch(
-      /\.window-shell\[data-background-mode="custom-html"\]\s+\.app-shell\s*\{[^}]*background:\s*transparent;/s,
-    )
-    expect(styles).toMatch(
-      /\.window-shell\[data-background-mode="custom-html"\]\s+\.canvas\.is-workbench\s*\{[^}]*background:\s*var\(--surface-profile-shell\);/s,
-    )
-    expect(styles).toMatch(
-      /\.window-shell\[data-background-mode="custom-html"\]\s+\.activity-rail\s*\{[^}]*background:\s*var\(--surface-profile-sidebar-strong\);/s,
-    )
-    expect(styles).toMatch(
-      /\.window-shell\[data-background-mode="custom-html"\]\s+\.dockview-theme-anybox\s*\{[^}]*--dv-background-color:\s*transparent;[^}]*--dv-group-view-background-color:\s*transparent;[^}]*--dv-tabs-and-actions-container-background-color:\s*var\(--surface-profile-tab\);[^}]*--dv-activegroup-visiblepanel-tab-background-color:\s*var\(--surface-profile-tab-active\);/s,
-    )
-    expect(styles).toMatch(
-      /\.window-shell\[data-background-mode="custom-html"\]\s+\.dockview-workbench-panes\s*\{[^}]*background:\s*transparent;/s,
-    )
-    expect(styles).toMatch(
-      /\.window-shell\[data-background-mode="custom-html"\]\s+\.dockview-theme-anybox \.dv-view,[\s\S]*?\.window-shell\[data-background-mode="custom-html"\]\s+\.dockview-theme-anybox \.dv-content-container\s*\{[^}]*background:\s*transparent;/s,
-    )
-    expect(styles).toMatch(
-      /\.window-shell\[data-background-mode="custom-html"\]\s+\.composer,\s*\.window-shell\[data-background-mode="custom-html"\]\s+\.inline-side-chat-thread \.composer\s*\{[^}]*background:\s*var\(--surface-profile-composer\);/s,
-    )
-    expect(styles).toMatch(
-      /\.window-shell\[data-background-mode="custom-html"\]\s+\.right-sidebar-view-host\s*\{[^}]*background:\s*transparent;/s,
-    )
-    expect(styles).toMatch(
-      /\.window-shell\[data-background-mode="custom-html"\]\s+\.right-sidebar-main-stack\s*\{[^}]*background:\s*transparent;/s,
-    )
-    expect(styles).toMatch(
-      /\.composer-menu-panel\s*\{[^}]*background:\s*var\(--seg-dropdown-menu-surface\);/s,
-    )
-    expect(styles).toMatch(
-      /\.settings-page-overlay,\s*\.provider-connect-overlay,\s*\.git-branch-create-overlay\s*\{[^}]*background:\s*var\(--surface-overlay\);/s,
-    )
-  })
-
   it("wires Windows desktop backgrounds through token-driven surface profiles", () => {
     expect(styles).toMatch(/body\s*\{[^}]*background:\s*transparent;/s)
     expect(readFileSync(resolve(process.cwd(), "src/renderer/src/styles/index.css"), "utf8")).toMatch(
       /@import "\.\/top-chrome\.css";\s*@import "\.\/windows-transparent\.css";\s*@import "\.\/debug\.css";/s,
     )
     expect(styles).toMatch(
-      /\.window-shell\.is-windows\[data-background-mode="default"\],[\s\S]*?\.session-popout-shell\.is-windows\s*\{[^}]*--surface-profile-shell:\s*var\(--surface-shell\);[^}]*--surface-profile-content:\s*var\(--surface-panel\);[^}]*--surface-profile-left-sidebar:\s*var\(--surface-left-sidebar\);[^}]*--surface-profile-right-sidebar:\s*var\(--surface-right-sidebar\);[^}]*--surface-profile-tab-active:\s*var\(--semantic-shell-chrome-tab-surface-active\);[^}]*--surface-profile-composer:\s*var\(--semantic-composer-surface\);[^}]*--surface-profile-popup-panel:\s*var\(--semantic-popup-panel-surface\);[^}]*--surface-profile-popup-panel-nav:\s*var\(--semantic-popup-panel-surface\);[^}]*background:\s*transparent;/s,
+      /\.window-shell\.is-windows,[\s\S]*?\.session-popout-shell\.is-windows\s*\{[^}]*--surface-profile-shell:\s*var\(--surface-shell\);[^}]*--surface-profile-content:\s*var\(--surface-panel\);[^}]*--surface-profile-left-sidebar:\s*var\(--surface-left-sidebar\);[^}]*--surface-profile-right-sidebar:\s*var\(--surface-right-sidebar\);[^}]*--surface-profile-tab-active:\s*var\(--semantic-shell-chrome-tab-surface-active\);[^}]*--surface-profile-composer:\s*var\(--semantic-composer-surface\);[^}]*--surface-profile-popup-panel:\s*var\(--semantic-popup-panel-surface\);[^}]*--surface-profile-popup-panel-nav:\s*var\(--semantic-popup-panel-surface\);[^}]*background:\s*transparent;/s,
     )
     expect(styles).toMatch(
-      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.app-shell\s*\{[^}]*background:\s*var\(--surface-app\);/s,
+      /\.window-shell\.is-windows\s+\.app-shell\s*\{[^}]*background:\s*var\(--surface-app\);/s,
     )
     expect(styles).toMatch(
       /\.session-popout-shell\.is-windows\s+\.session-popout-app\s*\{[^}]*background:\s*var\(--surface-profile-shell\);/s,
     )
     expect(styles).toMatch(
-      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.sidebar\s*\{[^}]*background:\s*var\(--surface-profile-left-sidebar\);/s,
+      /\.window-shell\.is-windows\s+\.sidebar\s*\{[^}]*background:\s*var\(--surface-profile-left-sidebar\);/s,
     )
     expect(styles).toMatch(
-      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.canvas\.is-workbench\s*\{[^}]*background:\s*var\(--surface-profile-shell\);/s,
+      /\.window-shell\.is-windows\s+\.canvas\.is-workbench\s*\{[^}]*background:\s*var\(--surface-profile-shell\);/s,
     )
     expect(styles).toMatch(
-      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.canvas-region-top-menu\s*\{[^}]*background:\s*var\(--top-chrome-surface,\s*var\(--surface-profile-tab\)\);/s,
+      /\.window-shell\.is-windows\s+\.canvas-region-top-menu\s*\{[^}]*background:\s*var\(--top-chrome-surface,\s*var\(--surface-profile-tab\)\);/s,
     )
     expect(styles).toMatch(
-      /\.window-shell\[data-background-mode="custom-html"\]\s+\.canvas-region-top-menu\s*\{[^}]*background:\s*var\(--top-chrome-surface,\s*var\(--surface-profile-tab\)\);/s,
+      /\.window-shell\.is-windows\s+\.dockview-workbench-panes,[\s\S]*?\.window-shell\.is-windows\s+\.dockview-theme-anybox \.dv-content-container\s*\{[^}]*background:\s*transparent;/s,
     )
     expect(styles).toMatch(
-      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.dockview-workbench-panes,[\s\S]*?\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.dockview-theme-anybox \.dv-content-container\s*\{[^}]*background:\s*transparent;/s,
+      /\.window-shell\.is-windows\s+\.dockview-theme-anybox\s*\{[^}]*--dv-background-color:\s*transparent;[^}]*--dv-group-view-background-color:\s*transparent;[^}]*--dv-tabs-and-actions-container-background-color:\s*var\(--surface-profile-tab\);[^}]*--dv-activegroup-visiblepanel-tab-background-color:\s*var\(--surface-profile-tab-active\);/s,
     )
     expect(styles).toMatch(
-      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.dockview-theme-anybox\s*\{[^}]*--dv-background-color:\s*transparent;[^}]*--dv-group-view-background-color:\s*transparent;[^}]*--dv-tabs-and-actions-container-background-color:\s*var\(--surface-profile-tab\);[^}]*--dv-activegroup-visiblepanel-tab-background-color:\s*var\(--surface-profile-tab-active\);/s,
+      /\.window-shell\.is-windows\s+\.composer,[\s\S]*?\.window-shell\.is-windows\s+\.inline-side-chat-thread \.composer\s*\{[^}]*background:\s*var\(--surface-profile-composer\);/s,
     )
     expect(styles).toMatch(
-      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.composer,[\s\S]*?\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.inline-side-chat-thread \.composer\s*\{[^}]*background:\s*var\(--surface-profile-composer\);/s,
+      /\.window-shell\.is-windows\s+\.right-sidebar-launcher\s*\{[^}]*background:\s*var\(--surface-profile-right-sidebar\);/s,
     )
     expect(styles).toMatch(
-      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.right-sidebar-launcher\s*\{[^}]*background:\s*var\(--surface-profile-right-sidebar\);/s,
+      /\.window-shell\.is-windows\s+\.right-sidebar-launcher-card\s*\{[^}]*background:\s*var\(--surface-profile-button-secondary\);/s,
     )
     expect(styles).toMatch(
-      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.right-sidebar-launcher-card\s*\{[^}]*background:\s*var\(--surface-profile-button-secondary\);/s,
+      /\.window-shell\.is-windows\s+\.right-sidebar-top-menu\s*\{[^}]*--right-sidebar-tab-bar-bg:\s*var\(--surface-profile-right-sidebar\);[^}]*--right-sidebar-tab-active-bg:\s*var\(--surface-profile-tab-active\);[^}]*background:\s*var\(--right-sidebar-tab-bar-bg\);/s,
     )
     expect(styles).toMatch(
-      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.right-sidebar-top-menu\s*\{[^}]*--right-sidebar-tab-bar-bg:\s*var\(--surface-profile-right-sidebar\);[^}]*--right-sidebar-tab-active-bg:\s*var\(--surface-profile-tab-active\);[^}]*background:\s*var\(--right-sidebar-tab-bar-bg\);/s,
+      /\.window-shell\.is-windows\s+\.sidebar-view-host,[\s\S]*?\.window-shell\.is-windows\s+\.right-sidebar-view-host,[\s\S]*?\.window-shell\.is-windows\s+\.workbench-pane-live-region\s*\{[^}]*background:\s*transparent;/s,
     )
     expect(styles).toMatch(
-      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.sidebar-view-host,[\s\S]*?\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.right-sidebar-view-host,[\s\S]*?\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.workbench-pane-live-region\s*\{[^}]*background:\s*transparent;/s,
+      /\.window-shell\.is-windows\s+\.right-sidebar-main-stack\s*\{[^}]*background:\s*transparent;/s,
     )
     expect(styles).toMatch(
-      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.right-sidebar-main-stack\s*\{[^}]*background:\s*transparent;/s,
+      /\.window-shell\.is-windows\s+\.settings-page\s*\{[^}]*background:\s*var\(--surface-profile-popup-panel\);/s,
     )
     expect(styles).toMatch(
-      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.settings-page\s*\{[^}]*background:\s*var\(--surface-profile-popup-panel\);/s,
-    )
-    expect(styles).toMatch(
-      /\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.settings-page-nav,\s*\.window-shell\.is-windows\[data-background-mode="default"\]\s+\.settings-page-primary-nav\s*\{[^}]*background:\s*var\(--surface-profile-popup-panel-nav\);/s,
+      /\.window-shell\.is-windows\s+\.settings-page-nav,\s*\.window-shell\.is-windows\s+\.settings-page-primary-nav\s*\{[^}]*background:\s*var\(--surface-profile-popup-panel-nav\);/s,
     )
   })
 

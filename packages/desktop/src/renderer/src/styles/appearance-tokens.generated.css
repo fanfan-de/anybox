@@ -150,6 +150,8 @@
   --semantic-field-border-invalid-dark: var(--semantic-error-border-dark);
   --semantic-field-text-light: var(--text-primary-light);
   --semantic-field-text-dark: var(--text-primary-dark);
+  --semantic-field-caret-light: var(--semantic-field-text-light);
+  --semantic-field-caret-dark: var(--semantic-field-text-dark);
   --semantic-field-text-disabled-light: var(--text-tertiary-light);
   --semantic-field-text-disabled-dark: var(--text-tertiary-dark);
   --semantic-field-placeholder-light: var(--text-tertiary-light);
@@ -449,10 +451,6 @@
   --ui-panel-subtle-light: rgba(247, 241, 238, 0.88);
   --ui-panel-subtle-dark: rgba(52, 45, 42, 0.92);
 
-  /* HTML Background */
-  --semantic-html-background-scrim-light: var(--surface-app-light);
-  --semantic-html-background-scrim-dark: var(--surface-app-dark);
-
   /* Settings Page */
   --semantic-settings-page-surface-light: var(--semantic-popup-panel-surface-light);
   --semantic-settings-page-surface-dark: var(--semantic-popup-panel-surface-dark);
@@ -655,6 +653,7 @@
   --semantic-field-border-disabled: var(--semantic-field-border-disabled-light);
   --semantic-field-border-invalid: var(--semantic-field-border-invalid-light);
   --semantic-field-text: var(--semantic-field-text-light);
+  --semantic-field-caret: var(--semantic-field-caret-light);
   --semantic-field-text-disabled: var(--semantic-field-text-disabled-light);
   --semantic-field-placeholder: var(--semantic-field-placeholder-light);
   --semantic-success: var(--semantic-success-light);
@@ -786,7 +785,6 @@
   --semantic-scrollbar-thumb-surface-hover: var(--semantic-scrollbar-thumb-surface-hover-light);
   --ui-panel: var(--ui-panel-light);
   --ui-panel-subtle: var(--ui-panel-subtle-light);
-  --semantic-html-background-scrim: var(--semantic-html-background-scrim-light);
   --semantic-settings-page-surface: var(--semantic-settings-page-surface-light);
   --semantic-sidebar-inline-edit-surface: var(--semantic-sidebar-inline-edit-surface-light);
   --semantic-sidebar-inline-edit-border: var(--semantic-sidebar-inline-edit-border-light);
@@ -1093,6 +1091,7 @@
     --semantic-field-border-disabled: var(--semantic-field-border-disabled-dark);
     --semantic-field-border-invalid: var(--semantic-field-border-invalid-dark);
     --semantic-field-text: var(--semantic-field-text-dark);
+    --semantic-field-caret: var(--semantic-field-caret-dark);
     --semantic-field-text-disabled: var(--semantic-field-text-disabled-dark);
     --semantic-field-placeholder: var(--semantic-field-placeholder-dark);
     --semantic-success: var(--semantic-success-dark);
@@ -1224,7 +1223,6 @@
     --semantic-scrollbar-thumb-surface-hover: var(--semantic-scrollbar-thumb-surface-hover-dark);
     --ui-panel: var(--ui-panel-dark);
     --ui-panel-subtle: var(--ui-panel-subtle-dark);
-    --semantic-html-background-scrim: var(--semantic-html-background-scrim-dark);
     --semantic-settings-page-surface: var(--semantic-settings-page-surface-dark);
     --semantic-sidebar-inline-edit-surface: var(--semantic-sidebar-inline-edit-surface-dark);
     --semantic-sidebar-inline-edit-border: var(--semantic-sidebar-inline-edit-border-dark);
@@ -1356,6 +1354,7 @@
   --semantic-field-border-disabled: var(--semantic-field-border-disabled-dark);
   --semantic-field-border-invalid: var(--semantic-field-border-invalid-dark);
   --semantic-field-text: var(--semantic-field-text-dark);
+  --semantic-field-caret: var(--semantic-field-caret-dark);
   --semantic-field-text-disabled: var(--semantic-field-text-disabled-dark);
   --semantic-field-placeholder: var(--semantic-field-placeholder-dark);
   --semantic-success: var(--semantic-success-dark);
@@ -1487,7 +1486,6 @@
   --semantic-scrollbar-thumb-surface-hover: var(--semantic-scrollbar-thumb-surface-hover-dark);
   --ui-panel: var(--ui-panel-dark);
   --ui-panel-subtle: var(--ui-panel-subtle-dark);
-  --semantic-html-background-scrim: var(--semantic-html-background-scrim-dark);
   --semantic-settings-page-surface: var(--semantic-settings-page-surface-dark);
   --semantic-sidebar-inline-edit-surface: var(--semantic-sidebar-inline-edit-surface-dark);
   --semantic-sidebar-inline-edit-border: var(--semantic-sidebar-inline-edit-border-dark);

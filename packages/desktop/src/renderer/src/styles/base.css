@@ -36,6 +36,11 @@ button {
   border: 0;
 }
 
+input,
+textarea {
+  caret-color: var(--semantic-field-caret);
+}
+
 button:not(:disabled) {
   cursor: pointer;
 }

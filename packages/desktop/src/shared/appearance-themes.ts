@@ -5,13 +5,11 @@ import {
 import {
   normalizeAppearanceCodeThemePreference,
   normalizeAppearanceConfigDocument,
-  normalizeAppearanceHtmlBackgroundConfig,
   validateAppearanceConfigDocumentStructure,
   type AppearanceBrandTheme,
   type AppearanceCodeThemePreference,
   type AppearanceColorMode,
   type AppearanceFontFamily,
-  type AppearanceHtmlBackgroundConfig,
   type AppearanceTokenMap,
 } from "./appearance"
 
@@ -30,7 +28,6 @@ export interface AppearanceTheme {
   brandTheme: AppearanceBrandTheme
   fontFamily: AppearanceFontFamily
   codeThemePreference: AppearanceCodeThemePreference
-  htmlBackgroundConfig: AppearanceHtmlBackgroundConfig
   overrides: AppearanceTokenMap
   foreignDtcg: Record<string, unknown>
 }
@@ -63,7 +60,6 @@ export interface AppearanceThemeSaveInput {
   brandTheme: AppearanceBrandTheme
   fontFamily: AppearanceFontFamily
   codeThemePreference: AppearanceCodeThemePreference
-  htmlBackgroundConfig: AppearanceHtmlBackgroundConfig
   overrides: AppearanceTokenMap
   foreignDtcg?: Record<string, unknown>
 }
@@ -95,7 +91,6 @@ export const BUILT_IN_APPEARANCE_THEME_PRESETS = BUILT_IN_APPEARANCE_THEME_DEFIN
     readonly: true as const,
     createdAt: 0,
     updatedAt: 0,
-    htmlBackgroundConfig: { ...theme.htmlBackgroundConfig },
     overrides: { ...theme.overrides },
     foreignDtcg: {},
   }),
@@ -145,7 +140,6 @@ function normalizeThemeCore(record: Record<string, unknown>) {
     brandTheme: document.brandTheme,
     fontFamily: document.fontFamily,
     codeThemePreference: normalizeAppearanceCodeThemePreference(record.codeThemePreference),
-    htmlBackgroundConfig: normalizeAppearanceHtmlBackgroundConfig(record.htmlBackgroundConfig),
     overrides: document.overrides,
     foreignDtcg: document.foreignDtcg,
   }
@@ -247,13 +241,6 @@ export function validateAppearanceThemeSaveInputStructure(input: unknown): strin
   ) {
     errors.push("Appearance theme codeThemePreference is unsupported.")
   }
-  if (
-    !record.htmlBackgroundConfig ||
-    typeof record.htmlBackgroundConfig !== "object" ||
-    Array.isArray(record.htmlBackgroundConfig)
-  ) {
-    errors.push("Appearance theme htmlBackgroundConfig must be an object.")
-  }
   return errors
 }
 
@@ -329,13 +316,6 @@ export function validateAppearanceThemeDocumentStructure(input: unknown): string
     ) {
       errors.push(`Theme ${index + 1}: codeThemePreference is unsupported.`)
     }
-    if (
-      !themeRecord.htmlBackgroundConfig ||
-      typeof themeRecord.htmlBackgroundConfig !== "object" ||
-      Array.isArray(themeRecord.htmlBackgroundConfig)
-    ) {
-      errors.push(`Theme ${index + 1}: htmlBackgroundConfig must be an object.`)
-    }
   }
   return errors
 }
@@ -388,13 +368,11 @@ export function createAppearanceThemeLibrarySnapshot(input: {
   const themes = [
     ...BUILT_IN_APPEARANCE_THEME_PRESETS.map((theme) => ({
       ...theme,
-      htmlBackgroundConfig: { ...theme.htmlBackgroundConfig },
       overrides: { ...theme.overrides },
       foreignDtcg: structuredClone(theme.foreignDtcg),
     })),
     ...document.userThemes.map((theme) => ({
       ...theme,
-      htmlBackgroundConfig: { ...theme.htmlBackgroundConfig },
       overrides: { ...theme.overrides },
       foreignDtcg: structuredClone(theme.foreignDtcg),
     })),
@@ -410,14 +388,12 @@ export function createAppearanceThemeLibrarySnapshot(input: {
       activeThemeID,
       userThemes: document.userThemes.map((theme) => ({
         ...theme,
-        htmlBackgroundConfig: { ...theme.htmlBackgroundConfig },
         overrides: { ...theme.overrides },
         foreignDtcg: structuredClone(theme.foreignDtcg),
       })),
     },
     builtInThemes: BUILT_IN_APPEARANCE_THEME_PRESETS.map((theme) => ({
       ...theme,
-      htmlBackgroundConfig: { ...theme.htmlBackgroundConfig },
       overrides: { ...theme.overrides },
       foreignDtcg: structuredClone(theme.foreignDtcg),
     })),

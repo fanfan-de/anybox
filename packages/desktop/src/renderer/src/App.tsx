@@ -11,8 +11,6 @@ import { RightSidebar } from "./app/sidebar/RightSidebar"
 import { Sidebar } from "./app/sidebar/Sidebar"
 import { SidebarResizer } from "./app/sidebar/SidebarResizer"
 import { NativeMacWindowControlsSlot, WindowChrome } from "./app/chrome/WindowChrome"
-import { HtmlBackgroundLayer } from "./app/html-background/HtmlBackgroundLayer"
-import { resolveHtmlBackgroundAppearance } from "./app/html-background/html-background-config"
 import { TerminalAreaHost } from "./app/terminal/TerminalAreaHost"
 import {
   useWorkspaceStoreSelector,
@@ -767,26 +765,17 @@ function AppearanceWindowApp() {
     handleAppearanceTokenReset,
     handleColorModeChange,
     handleFontFamilyChange,
-    handleHtmlBackgroundConfigChange,
-    htmlBackgroundConfig,
   } = useAppearanceState()
   const { handleWindowAction, isWindowMaximized } = useStandaloneWindowControls()
   const platform = typeof window === "undefined" ? "Desktop" : window.desktop?.platform ?? "Desktop"
   const isWindows = platform === "win32"
-  const htmlBackgroundAppearance = resolveHtmlBackgroundAppearance(htmlBackgroundConfig)
-  const hasHtmlBackground = htmlBackgroundAppearance.hasHtmlBackground
   const windowShellClassName = [
     "window-shell",
     "appearance-window-shell",
-    hasHtmlBackground ? "has-html-background" : "",
     isWindows ? "is-windows" : "",
   ].filter(Boolean).join(" ")
   return (
-    <div
-      className={windowShellClassName}
-      data-background-mode={htmlBackgroundAppearance.backgroundMode}
-    >
-      <HtmlBackgroundLayer config={htmlBackgroundConfig} />
+    <div className={windowShellClassName}>
       <main className="appearance-window-app-shell">
         <header className="appearance-window-header">
           <div className="appearance-window-title">
@@ -810,7 +799,6 @@ function AppearanceWindowApp() {
               appearanceTokenValues={appearanceTokenValues}
               colorMode={colorMode}
               fontFamily={fontFamily}
-              htmlBackgroundConfig={htmlBackgroundConfig}
               onAppearancePaletteReset={handleAppearancePaletteReset}
               onAppearanceThemeApply={handleAppearanceThemeApply}
               onAppearanceThemeDelete={handleAppearanceThemeDelete}
@@ -823,7 +811,6 @@ function AppearanceWindowApp() {
               onAppearanceTokenReset={handleAppearanceTokenReset}
               onColorModeChange={handleColorModeChange}
               onFontFamilyChange={handleFontFamilyChange}
-              onHtmlBackgroundConfigChange={handleHtmlBackgroundConfigChange}
             />
           </Suspense>
         </section>
@@ -1215,8 +1202,6 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     colorMode,
     handleColorModeChange,
     handleFontFamilyChange,
-    handleHtmlBackgroundConfigChange,
-    htmlBackgroundConfig,
     isActivityRailVisible,
     isAgentDebugTraceEnabled,
     isDebugLineColorsEnabled,
@@ -2596,11 +2581,8 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
 
   const isMacOS = platform === "darwin"
   const isWindows = platform === "win32"
-  const htmlBackgroundAppearance = resolveHtmlBackgroundAppearance(htmlBackgroundConfig)
-  const hasHtmlBackground = htmlBackgroundAppearance.hasHtmlBackground
   const windowShellClassName = [
     "window-shell",
-    hasHtmlBackground ? "has-html-background" : "",
     isMacOS ? "is-macos" : "",
     isWindows ? "is-windows" : "",
     isDebugLineColorsEnabled ? "debug-line-colors" : "",
@@ -2696,11 +2678,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
   return (
     <WorkspaceStoreProvider store={workspaceStore}>
       <ThreadLinkRoutingProvider openInAnybox={handleOpenThreadLinkInAnybox}>
-        <div
-          className={windowShellClassName}
-          data-background-mode={htmlBackgroundAppearance.backgroundMode}
-        >
-        <HtmlBackgroundLayer config={htmlBackgroundConfig} />
+        <div className={windowShellClassName}>
         <main ref={appShellRef} className={appShellClassName} style={effectiveAppShellStyle}>
         {isActivityRailVisible ? (
           <ActivityRail
@@ -3439,7 +3417,6 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               assistantTraceVisibility={assistantTraceVisibility}
               colorMode={colorMode}
               fontFamily={fontFamily}
-              htmlBackgroundConfig={htmlBackgroundConfig}
               isActivityRailVisible={isActivityRailVisible}
               isAgentDebugTraceEnabled={isAgentDebugTraceEnabled}
               isDebugLineColorsEnabled={isDebugLineColorsEnabled}
@@ -3481,7 +3458,6 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               selectionDraft={selectionDraft}
               onColorModeChange={handleColorModeChange}
               onFontFamilyChange={handleFontFamilyChange}
-              onHtmlBackgroundConfigChange={handleHtmlBackgroundConfigChange}
               onActivityRailVisibilityChange={handleActivityRailVisibilityChange}
               onAppearancePaletteReset={handleAppearancePaletteReset}
               onAppearanceThemeApply={handleAppearanceThemeApply}

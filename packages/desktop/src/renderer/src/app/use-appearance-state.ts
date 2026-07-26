@@ -41,12 +41,6 @@ import {
   type CodeThemePreference,
   type ResolvedColorMode,
 } from "./code-theme"
-import {
-  HTML_BACKGROUND_STORAGE_KEY,
-  readHtmlBackgroundConfigPreference,
-  serializeHtmlBackgroundConfig,
-  type HtmlBackgroundConfig,
-} from "./html-background/html-background-config"
 import type { BrandTheme, ColorMode } from "./types"
 
 const COLOR_MODE_STORAGE_KEY = "desktop.colorMode"
@@ -181,7 +175,6 @@ function getAppearanceRuntimeSignature(input: {
   codeThemePreference: CodeThemePreference
   colorMode: ColorMode
   fontFamily: AppearanceFontFamily
-  htmlBackgroundConfig: HtmlBackgroundConfig
   overrides: AppearanceTokenMap
   foreignDtcg: Record<string, unknown>
 }) {
@@ -194,7 +187,6 @@ function getAppearanceStateSignature(state: AppearanceRuntimeState) {
     codeThemePreference: state.codeThemePreference,
     colorMode: state.document.colorMode,
     fontFamily: state.document.fontFamily,
-    htmlBackgroundConfig: state.htmlBackgroundConfig,
     overrides: state.document.overrides,
     foreignDtcg: state.document.foreignDtcg,
   })
@@ -206,7 +198,6 @@ export function useAppearanceState() {
   const [isSystemDarkMode, setIsSystemDarkMode] = useState(readSystemDarkModePreference)
   const [brandTheme, setBrandTheme] = useState<BrandTheme>(readBrandThemePreference)
   const [fontFamily, setFontFamily] = useState<AppearanceFontFamily>(readFontFamilyPreference)
-  const [htmlBackgroundConfig, setHtmlBackgroundConfig] = useState<HtmlBackgroundConfig>(readHtmlBackgroundConfigPreference)
   const [appearanceOverrides, setAppearanceOverrides] = useState<AppearanceTokenMap>({})
   const [appearanceForeignDtcg, setAppearanceForeignDtcg] = useState<Record<string, unknown>>({})
   const [appearanceTokenValues, setAppearanceTokenValues] =
@@ -243,7 +234,6 @@ export function useAppearanceState() {
     codeThemePreference,
     colorMode,
     fontFamily,
-    htmlBackgroundConfig,
     overrides: appearanceOverrides,
     foreignDtcg: appearanceForeignDtcg,
   })
@@ -269,7 +259,6 @@ export function useAppearanceState() {
     return {
       document: nextDocument,
       codeThemePreference,
-      htmlBackgroundConfig,
     }
   }
 
@@ -350,7 +339,6 @@ export function useAppearanceState() {
       setAppearanceOverrides(normalizedState.document.overrides)
       setAppearanceForeignDtcg(normalizedState.document.foreignDtcg)
       setCodeThemePreference(normalizedState.codeThemePreference)
-      setHtmlBackgroundConfig(normalizedState.htmlBackgroundConfig)
       setAppearanceConfigError(null)
     })
 
@@ -362,7 +350,6 @@ export function useAppearanceState() {
     codeThemePreference,
     colorMode,
     fontFamily,
-    htmlBackgroundConfig,
   ])
 
   useEffect(() => {
@@ -427,14 +414,6 @@ export function useAppearanceState() {
       return
     }
   }, [fontFamily])
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(HTML_BACKGROUND_STORAGE_KEY, serializeHtmlBackgroundConfig(htmlBackgroundConfig))
-    } catch {
-      return
-    }
-  }, [htmlBackgroundConfig])
 
   useEffect(() => {
     applyAppearanceOverrides(document.documentElement, appearanceOverrides)
@@ -567,10 +546,6 @@ export function useAppearanceState() {
     setAppearanceConfigError(null)
   }
 
-  function handleHtmlBackgroundConfigChange(nextConfig: HtmlBackgroundConfig) {
-    setHtmlBackgroundConfig(nextConfig)
-  }
-
   function createAppearanceThemeSaveInput(name: string): AppearanceThemeSaveInput {
     return {
       name,
@@ -579,7 +554,6 @@ export function useAppearanceState() {
       brandTheme,
       fontFamily,
       codeThemePreference,
-      htmlBackgroundConfig,
       overrides: appearanceOverrides,
       foreignDtcg: appearanceForeignDtcg,
     }
@@ -590,7 +564,6 @@ export function useAppearanceState() {
     setBrandTheme(theme.brandTheme)
     setFontFamily(theme.fontFamily)
     setCodeThemePreference(theme.codeThemePreference)
-    setHtmlBackgroundConfig({ ...theme.htmlBackgroundConfig })
     setAppearanceOverrides({ ...theme.overrides })
     setAppearanceForeignDtcg(structuredClone(theme.foreignDtcg))
   }
@@ -800,8 +773,6 @@ export function useAppearanceState() {
     handleCodeThemeChange: setCodeThemePreference,
     handleColorModeChange: setColorMode,
     handleFontFamilyChange: setFontFamily,
-    handleHtmlBackgroundConfigChange,
-    htmlBackgroundConfig,
     resolvedColorMode,
     resolvedCodeTheme,
   }

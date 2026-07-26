@@ -43,16 +43,6 @@ describe("appearance theme library", () => {
           brandTheme: "sage",
           fontFamily: "microsoft-yahei",
           codeThemePreference: "dracula",
-          htmlBackgroundConfig: {
-            blurPx: 99,
-            dim: -1,
-            enabled: true,
-            html: "<main>background</main>",
-            opacity: 2,
-            paused: true,
-            renderMode: "dynamic",
-            surfaceOpacity: 0,
-          },
           overrides: {
             "surface-app-light": " #123456 ",
             unknown: "#ffffff",
@@ -78,16 +68,6 @@ describe("appearance theme library", () => {
           brandTheme: "sage",
           fontFamily: "microsoft-yahei",
           codeThemePreference: "dracula",
-          htmlBackgroundConfig: {
-            blurPx: 24,
-            dim: 0,
-            enabled: true,
-            html: "<main>background</main>",
-            opacity: 1,
-            paused: true,
-            renderMode: "dynamic",
-            surfaceOpacity: 0.36,
-          },
           overrides: {
             "surface-app-light": colorLiteral("#123456"),
           },
@@ -115,7 +95,6 @@ describe("appearance theme library", () => {
           brandTheme: "terra",
           fontFamily: "default",
           codeThemePreference: "auto",
-          htmlBackgroundConfig: {},
           overrides: {},
         },
       ],
@@ -139,10 +118,6 @@ describe("appearance theme library", () => {
       brandTheme: "sage",
       fontFamily: "pingfang",
       codeThemePreference: "nord",
-      htmlBackgroundConfig: {
-        enabled: true,
-        html: "<style>body{background:red}</style>",
-      },
       overrides: {
         "surface-panel-dark": colorLiteral("#111111"),
       },
@@ -160,10 +135,6 @@ describe("appearance theme library", () => {
       brandTheme: "sage",
       fontFamily: "pingfang",
       codeThemePreference: "nord",
-      htmlBackgroundConfig: {
-        enabled: true,
-        html: "<style>body{background:red}</style>",
-      },
       overrides: {
         "surface-panel-dark": colorLiteral("#111111"),
       },

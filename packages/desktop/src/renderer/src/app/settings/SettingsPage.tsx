@@ -110,10 +110,6 @@ import {
   type AppUpdateStatus,
 } from "../update/UpdateDialog"
 import { APP_LOCALES, APP_LOCALE_METADATA, type AppLocale } from "../../../../shared/locale"
-import {
-  DEFAULT_HTML_BACKGROUND_CONFIG,
-  type HtmlBackgroundConfig,
-} from "../html-background/html-background-config"
 import { SettingsSelect } from "./SettingsSelect"
 import { EnvironmentsSettingsPage } from "./EnvironmentsSettingsPage"
 import {
@@ -1612,7 +1608,6 @@ interface AppearanceSettingsPanelProps {
   appearanceTokenValues: Record<AppearanceTokenName, string>
   colorMode: ColorMode
   fontFamily: AppearanceFontFamily
-  htmlBackgroundConfig: HtmlBackgroundConfig
   isActivityRailVisible?: boolean
   showShellLayoutSettings?: boolean
   onActivityRailVisibilityChange?: (value: boolean) => void
@@ -1628,7 +1623,6 @@ interface AppearanceSettingsPanelProps {
   onAppearanceTokenReset: (tokenName: AppearanceTokenName) => void
   onColorModeChange: (mode: ColorMode) => void
   onFontFamilyChange: (fontFamily: AppearanceFontFamily) => void
-  onHtmlBackgroundConfigChange: (config: HtmlBackgroundConfig) => void
   onOpenAppearanceWindow?: () => void
 }
 
@@ -1645,7 +1639,6 @@ export function AppearanceSettingsPanel({
   appearanceTokenValues,
   colorMode,
   fontFamily,
-  htmlBackgroundConfig,
   isActivityRailVisible = true,
   showShellLayoutSettings = false,
   onActivityRailVisibilityChange,
@@ -1661,7 +1654,6 @@ export function AppearanceSettingsPanel({
   onAppearanceTokenReset,
   onColorModeChange,
   onFontFamilyChange,
-  onHtmlBackgroundConfigChange,
   onOpenAppearanceWindow,
 }: AppearanceSettingsPanelProps) {
   const { t } = useI18n()
@@ -1671,14 +1663,6 @@ export function AppearanceSettingsPanel({
     { value: "system", label: t("settings.appearance.system") },
   ]
   const hasCustomAppearanceOverrides = Object.keys(appearanceOverrides).length > 0
-  const hasHtmlBackgroundSource = htmlBackgroundConfig.html.trim().length > 0
-
-  function updateHtmlBackgroundConfig(patch: Partial<HtmlBackgroundConfig>) {
-    onHtmlBackgroundConfigChange({
-      ...htmlBackgroundConfig,
-      ...patch,
-    })
-  }
 
   return (
     <div className="settings-appearance-layout">
@@ -1725,149 +1709,6 @@ export function AppearanceSettingsPanel({
               />
             </span>
           </div>
-        </div>
-      </section>
-
-      <section className="settings-panel settings-html-background-panel">
-        <div className="settings-section-header">
-          <div>
-            <span className="label">{t("settings.appearance.htmlBackgroundLabel")}</span>
-            <h3>{t("settings.appearance.htmlBackgroundTitle")}</h3>
-          </div>
-          <p>{t("settings.appearance.htmlBackgroundCopy")}</p>
-        </div>
-
-        <button
-          className={htmlBackgroundConfig.enabled ? "settings-toggle-card is-active" : "settings-toggle-card"}
-          role="switch"
-          aria-checked={htmlBackgroundConfig.enabled}
-          aria-label={t("settings.appearance.htmlBackgroundEnable")}
-          type="button"
-          disabled={!hasHtmlBackgroundSource}
-          onClick={() => updateHtmlBackgroundConfig({ enabled: !htmlBackgroundConfig.enabled })}
-        >
-          <span className="settings-toggle-copy">
-            <strong className="settings-toggle-title">
-              <span>{t("settings.appearance.htmlBackgroundEnable")}</span>
-            </strong>
-            <small>
-              {hasHtmlBackgroundSource
-                ? t("settings.appearance.htmlBackgroundEnableCopy")
-                : t("settings.appearance.htmlBackgroundEmptyCopy")}
-            </small>
-          </span>
-          <span className="settings-toggle-control" aria-hidden="true">
-            <span className="settings-toggle-thumb" />
-          </span>
-        </button>
-
-        <label className="settings-html-background-editor">
-          <span className="label">{t("settings.appearance.htmlBackgroundHtmlLabel")}</span>
-          <textarea
-            aria-label={t("settings.appearance.htmlBackgroundHtmlLabel")}
-            spellCheck={false}
-            value={htmlBackgroundConfig.html}
-            placeholder={t("settings.appearance.htmlBackgroundPlaceholder")}
-            onChange={(event: ChangeEvent<HTMLTextAreaElement>) => updateHtmlBackgroundConfig({
-              enabled: event.target.value.trim().length > 0 ? htmlBackgroundConfig.enabled : false,
-              html: event.target.value,
-            })}
-          />
-        </label>
-
-        <button
-          className={htmlBackgroundConfig.renderMode === "dynamic" ? "settings-toggle-card is-active" : "settings-toggle-card"}
-          role="switch"
-          aria-checked={htmlBackgroundConfig.renderMode === "dynamic"}
-          aria-label={t("settings.appearance.htmlBackgroundDynamicMode")}
-          type="button"
-          disabled={!hasHtmlBackgroundSource}
-          onClick={() => updateHtmlBackgroundConfig({
-            renderMode: htmlBackgroundConfig.renderMode === "dynamic" ? "static" : "dynamic",
-          })}
-        >
-          <span className="settings-toggle-copy">
-            <strong className="settings-toggle-title">{t("settings.appearance.htmlBackgroundDynamicMode")}</strong>
-            <small>{t("settings.appearance.htmlBackgroundDynamicModeCopy")}</small>
-          </span>
-          <span className="settings-toggle-control" aria-hidden="true">
-            <span className="settings-toggle-thumb" />
-          </span>
-        </button>
-
-        <div className="settings-html-background-controls" aria-label={t("settings.appearance.htmlBackgroundVisualControls")}>
-          <label className="settings-html-background-range">
-            <span>{t("settings.appearance.htmlBackgroundOpacity")}</span>
-            <input
-              type="range"
-              min="0.08"
-              max="1"
-              step="0.02"
-              value={htmlBackgroundConfig.opacity}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => updateHtmlBackgroundConfig({ opacity: Number(event.target.value) })}
-            />
-            <output>{Math.round(htmlBackgroundConfig.opacity * 100)}%</output>
-          </label>
-
-          <label className="settings-html-background-range">
-            <span>{t("settings.appearance.htmlBackgroundBlur")}</span>
-            <input
-              type="range"
-              min="0"
-              max="24"
-              step="1"
-              value={htmlBackgroundConfig.blurPx}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => updateHtmlBackgroundConfig({ blurPx: Number(event.target.value) })}
-            />
-            <output>{Math.round(htmlBackgroundConfig.blurPx)}px</output>
-          </label>
-
-          <label className="settings-html-background-range">
-            <span>{t("settings.appearance.htmlBackgroundDim")}</span>
-            <input
-              type="range"
-              min="0"
-              max="0.86"
-              step="0.02"
-              value={htmlBackgroundConfig.dim}
-              onChange={(event: ChangeEvent<HTMLInputElement>) => updateHtmlBackgroundConfig({ dim: Number(event.target.value) })}
-            />
-            <output>{Math.round(htmlBackgroundConfig.dim * 100)}%</output>
-          </label>
-        </div>
-
-        <button
-          className={htmlBackgroundConfig.paused ? "settings-toggle-card is-active" : "settings-toggle-card"}
-          role="switch"
-          aria-checked={htmlBackgroundConfig.paused}
-          aria-label={t("settings.appearance.htmlBackgroundPauseMotion")}
-          type="button"
-          disabled={!hasHtmlBackgroundSource}
-          onClick={() => updateHtmlBackgroundConfig({ paused: !htmlBackgroundConfig.paused })}
-        >
-          <span className="settings-toggle-copy">
-            <strong className="settings-toggle-title">{t("settings.appearance.htmlBackgroundPauseMotion")}</strong>
-            <small>{t("settings.appearance.htmlBackgroundPauseMotionCopy")}</small>
-          </span>
-          <span className="settings-toggle-control" aria-hidden="true">
-            <span className="settings-toggle-thumb" />
-          </span>
-        </button>
-
-        <div className="settings-actions-row settings-html-background-actions">
-          <span className="settings-helper-text">
-            {htmlBackgroundConfig.renderMode === "dynamic"
-              ? t("settings.appearance.htmlBackgroundDynamicSafetyCopy")
-              : t("settings.appearance.htmlBackgroundSafetyCopy")}
-          </span>
-          <button
-            className="secondary-button"
-            type="button"
-            disabled={!hasHtmlBackgroundSource && !htmlBackgroundConfig.enabled}
-            onClick={() => onHtmlBackgroundConfigChange({ ...DEFAULT_HTML_BACKGROUND_CONFIG })}
-          >
-            {t("settings.appearance.htmlBackgroundReset")}
-          </button>
         </div>
       </section>
 
@@ -2740,7 +2581,6 @@ interface SettingsPageProps {
   deletingProviderID: string | null
   colorMode: ColorMode
   fontFamily: AppearanceFontFamily
-  htmlBackgroundConfig: HtmlBackgroundConfig
   isActivityRailVisible: boolean
   isAgentDebugTraceEnabled: boolean
   isDebugLineColorsEnabled: boolean
@@ -2782,7 +2622,6 @@ interface SettingsPageProps {
   selectionDraft: ProjectModelSelection
   onColorModeChange: (mode: ColorMode) => void
   onFontFamilyChange: (fontFamily: AppearanceFontFamily) => void
-  onHtmlBackgroundConfigChange: (config: HtmlBackgroundConfig) => void
   onActivityRailVisibilityChange: (value: boolean) => void
   onAppearancePaletteReset: () => void
   onAppearanceThemeApply?: (themeID: string) => void | Promise<void>
@@ -2883,7 +2722,6 @@ export function SettingsPage({
   deletingProviderID,
   colorMode,
   fontFamily,
-  htmlBackgroundConfig,
   isActivityRailVisible,
   isAgentDebugTraceEnabled,
   isDebugLineColorsEnabled,
@@ -2924,7 +2762,6 @@ export function SettingsPage({
   selectionDraft,
   onColorModeChange,
   onFontFamilyChange,
-  onHtmlBackgroundConfigChange,
   onActivityRailVisibilityChange,
   onAppearancePaletteReset,
   onAppearanceThemeApply,
@@ -4248,7 +4085,6 @@ export function SettingsPage({
                   appearanceTokenValues={appearanceTokenValues}
                   colorMode={colorMode}
                   fontFamily={fontFamily}
-                  htmlBackgroundConfig={htmlBackgroundConfig}
                   isActivityRailVisible={isActivityRailVisible}
                   showShellLayoutSettings
                   onActivityRailVisibilityChange={onActivityRailVisibilityChange}
@@ -4264,7 +4100,6 @@ export function SettingsPage({
                   onAppearanceTokenReset={onAppearanceTokenReset}
                   onColorModeChange={onColorModeChange}
                   onFontFamilyChange={onFontFamilyChange}
-                  onHtmlBackgroundConfigChange={onHtmlBackgroundConfigChange}
                   onOpenAppearanceWindow={() => void openAppearanceWindow()}
                 />
               ) : activeSection === "environments" ? (

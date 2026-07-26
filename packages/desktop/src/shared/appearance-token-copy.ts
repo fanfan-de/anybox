@@ -398,6 +398,10 @@ const zhCNTokenRowCopy = {
     label: "输入字段文字",
     description: "可编辑字段值的文字颜色。",
   },
+  "semantic-field-caret": {
+    label: "输入字段光标",
+    description: "可编辑字段中的文本插入光标颜色。",
+  },
   "semantic-field-text-disabled": {
     label: "输入字段禁用文字",
     description: "可编辑字段禁用时的文字颜色。",

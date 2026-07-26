@@ -1155,7 +1155,7 @@
   white-space: pre-wrap;
   word-break: break-word;
   outline: none;
-  caret-color: var(--seg-accent);
+  caret-color: var(--semantic-field-caret);
 }
 
 .composer-editor-shell {
@@ -2282,11 +2282,6 @@
   box-shadow: none;
 }
 
-.window-shell[data-background-mode="custom-html"] .composer,
-.window-shell[data-background-mode="custom-html"] .inline-side-chat-thread .composer {
-  background: var(--surface-profile-composer);
-}
-
 .composer-utility-chip,
 .composer-utility-git-branch-button,
 .composer-utility-permission-toggle,
@@ -2336,7 +2331,6 @@
 
 .composer-editor-input {
   color: var(--seg-text-1);
-  caret-color: var(--brand-accent-active);
 }
 
 .composer-editor-placeholder {

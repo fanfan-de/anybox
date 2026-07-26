@@ -1,6 +1,6 @@
 /* Imported late so Windows desktop transparency is not covered by shared shell/theme overrides. */
 
-.window-shell.is-windows[data-background-mode="default"],
+.window-shell.is-windows,
 .session-popout-shell.is-windows {
   --surface-profile-shell: var(--surface-shell);
   --surface-profile-panel: var(--surface-panel);
@@ -25,7 +25,7 @@
   background: transparent;
 }
 
-.window-shell.is-windows[data-background-mode="default"] .app-shell {
+.window-shell.is-windows .app-shell {
   background: var(--surface-app);
 }
 
@@ -33,63 +33,63 @@
   background: var(--surface-profile-shell);
 }
 
-.window-shell.is-windows[data-background-mode="default"] .activity-rail {
+.window-shell.is-windows .activity-rail {
   background: var(--surface-profile-sidebar-strong);
 }
 
-.window-shell.is-windows[data-background-mode="default"] .activity-rail-top-menu,
-.window-shell.is-windows[data-background-mode="default"] .left-sidebar-top-menu {
+.window-shell.is-windows .activity-rail-top-menu,
+.window-shell.is-windows .left-sidebar-top-menu {
   background: var(--surface-profile-left-top-menu);
 }
 
-.window-shell.is-windows[data-background-mode="default"] .activity-rail.is-right .activity-rail-top-menu {
+.window-shell.is-windows .activity-rail.is-right .activity-rail-top-menu {
   background: var(--surface-profile-right-top-menu);
 }
 
-.window-shell.is-windows[data-background-mode="default"] .right-sidebar-top-menu {
+.window-shell.is-windows .right-sidebar-top-menu {
   --right-sidebar-tab-bar-bg: var(--surface-profile-right-sidebar);
   --right-sidebar-tab-active-bg: var(--surface-profile-tab-active);
   background: var(--right-sidebar-tab-bar-bg);
 }
 
-.window-shell.is-windows[data-background-mode="default"] .sidebar {
+.window-shell.is-windows .sidebar {
   background: var(--surface-profile-left-sidebar);
 }
 
-.window-shell.is-windows[data-background-mode="default"] .sidebar.is-right,
-.window-shell.is-windows[data-background-mode="default"] .right-sidebar-launcher {
+.window-shell.is-windows .sidebar.is-right,
+.window-shell.is-windows .right-sidebar-launcher {
   background: var(--surface-profile-right-sidebar);
 }
 
-.window-shell.is-windows[data-background-mode="default"] .sidebar-view-host,
-.window-shell.is-windows[data-background-mode="default"] .right-sidebar-view-host,
-.window-shell.is-windows[data-background-mode="default"] .thread-shell,
-.window-shell.is-windows[data-background-mode="default"] .thread-column,
-.window-shell.is-windows[data-background-mode="default"] .workbench-pane-stage,
-.window-shell.is-windows[data-background-mode="default"] .workbench-pane-live-region {
+.window-shell.is-windows .sidebar-view-host,
+.window-shell.is-windows .right-sidebar-view-host,
+.window-shell.is-windows .thread-shell,
+.window-shell.is-windows .thread-column,
+.window-shell.is-windows .workbench-pane-stage,
+.window-shell.is-windows .workbench-pane-live-region {
   background: transparent;
 }
 
-.window-shell.is-windows[data-background-mode="default"] .right-sidebar-main-stack {
+.window-shell.is-windows .right-sidebar-main-stack {
   background: transparent;
 }
 
-.window-shell.is-windows[data-background-mode="default"] .canvas.is-workbench {
+.window-shell.is-windows .canvas.is-workbench {
   background: var(--surface-profile-shell);
 }
 
-.window-shell.is-windows[data-background-mode="default"] .canvas-region-top-menu {
+.window-shell.is-windows .canvas-region-top-menu {
   background: var(--top-chrome-surface, var(--surface-profile-tab));
 }
 
-.window-shell.is-windows[data-background-mode="default"] .dockview-workbench-panes,
-.window-shell.is-windows[data-background-mode="default"] .dockview-theme-anybox .dv-view,
-.window-shell.is-windows[data-background-mode="default"] .dockview-theme-anybox .dv-groupview,
-.window-shell.is-windows[data-background-mode="default"] .dockview-theme-anybox .dv-content-container {
+.window-shell.is-windows .dockview-workbench-panes,
+.window-shell.is-windows .dockview-theme-anybox .dv-view,
+.window-shell.is-windows .dockview-theme-anybox .dv-groupview,
+.window-shell.is-windows .dockview-theme-anybox .dv-content-container {
   background: transparent;
 }
 
-.window-shell.is-windows[data-background-mode="default"] .dockview-theme-anybox {
+.window-shell.is-windows .dockview-theme-anybox {
   --dv-background-color: transparent;
   --dv-group-view-background-color: transparent;
   --dv-tabs-and-actions-container-background-color: var(--surface-profile-tab);
@@ -97,44 +97,41 @@
   --dv-inactivegroup-visiblepanel-tab-background-color: var(--surface-profile-tab);
 }
 
-.window-shell.is-windows[data-background-mode="default"] .dockview-theme-anybox .dv-tabs-and-actions-container {
+.window-shell.is-windows .dockview-theme-anybox .dv-tabs-and-actions-container {
   --dockview-tab-bar-bg: var(--surface-profile-tab);
   --dockview-tab-active-bg: var(--surface-profile-tab-active);
   --dockview-tab-hover-bg: var(--surface-profile-panel-muted);
 }
 
-.window-shell.is-windows[data-background-mode="default"] .composer,
-.window-shell.is-windows[data-background-mode="default"] .inline-side-chat-thread .composer {
+.window-shell.is-windows .composer,
+.window-shell.is-windows .inline-side-chat-thread .composer {
   background: var(--surface-profile-composer);
 }
 
-.window-shell.is-windows[data-background-mode="default"] .right-sidebar-launcher-card {
-  border-color: var(--border-default);
+.window-shell.is-windows .right-sidebar-launcher-card {
   background: var(--surface-profile-button-secondary);
 }
 
-.window-shell.is-windows[data-background-mode="default"] .right-sidebar-launcher-card:hover,
-.window-shell.is-windows[data-background-mode="default"] .right-sidebar-launcher-card:focus-visible {
-  border-color: var(--focus-outline-color);
+.window-shell.is-windows .right-sidebar-launcher-card:hover,
+.window-shell.is-windows .right-sidebar-launcher-card:focus-visible {
   background: var(--surface-profile-button-secondary-hover);
 }
 
-.window-shell.is-windows[data-background-mode="default"] .right-sidebar-launcher-card:disabled {
-  border-color: var(--semantic-button-secondary-disabled-border);
+.window-shell.is-windows .right-sidebar-launcher-card:disabled {
   background: var(--surface-profile-button-secondary-disabled);
 }
 
-.window-shell.is-windows[data-background-mode="default"] .workspace-files-view-toggle,
-.window-shell.is-windows[data-background-mode="default"] .workspace-files-image-toolbar,
-.window-shell.is-windows[data-background-mode="default"] .workspace-files-tree-search {
+.window-shell.is-windows .workspace-files-view-toggle,
+.window-shell.is-windows .workspace-files-image-toolbar,
+.window-shell.is-windows .workspace-files-tree-search {
   background: var(--surface-profile-content-muted);
 }
 
-.window-shell.is-windows[data-background-mode="default"] .settings-page {
+.window-shell.is-windows .settings-page {
   background: var(--surface-profile-popup-panel);
 }
 
-.window-shell.is-windows[data-background-mode="default"] .settings-page-nav,
-.window-shell.is-windows[data-background-mode="default"] .settings-page-primary-nav {
+.window-shell.is-windows .settings-page-nav,
+.window-shell.is-windows .settings-page-primary-nav {
   background: var(--surface-profile-popup-panel-nav);
 }

@@ -6,7 +6,6 @@ import {
   APPEARANCE_TOKEN_LAYERS,
   APPEARANCE_TOKEN_NAMES,
   DEFAULT_APPEARANCE_CODE_THEME_PREFERENCE,
-  DEFAULT_APPEARANCE_HTML_BACKGROUND_CONFIG,
   createDefaultAppearanceConfigDocument,
   createDefaultAppearanceRuntimeState,
   normalizeAppearanceConfigDocument,
@@ -58,16 +57,6 @@ describe("appearance runtime state", () => {
         updatedAt: 42,
       },
       codeThemePreference: "dracula",
-      htmlBackgroundConfig: {
-        blurPx: 99,
-        dim: -1,
-        enabled: true,
-        html: "<div>background</div>",
-        opacity: 2,
-        paused: true,
-        renderMode: "dynamic",
-        surfaceOpacity: 0,
-      },
     })
 
     expect(state.document).toMatchObject({
@@ -82,16 +71,6 @@ describe("appearance runtime state", () => {
     })
     expect(state.document).not.toHaveProperty("resolvedTokens")
     expect(state.codeThemePreference).toBe("dracula")
-    expect(state.htmlBackgroundConfig).toEqual({
-      blurPx: 24,
-      dim: 0,
-      enabled: true,
-      html: "<div>background</div>",
-      opacity: 1,
-      paused: true,
-      renderMode: "dynamic",
-      surfaceOpacity: 0.36,
-    })
   })
 
   it("falls back for invalid cross-window appearance runtime payloads", () => {
@@ -108,7 +87,6 @@ describe("appearance runtime state", () => {
     expect(normalizeAppearanceRuntimeState({ codeThemePreference: 1 })).toEqual({
       document: createDefaultAppearanceConfigDocument(),
       codeThemePreference: DEFAULT_APPEARANCE_CODE_THEME_PREFERENCE,
-      htmlBackgroundConfig: DEFAULT_APPEARANCE_HTML_BACKGROUND_CONFIG,
     })
   })
 })

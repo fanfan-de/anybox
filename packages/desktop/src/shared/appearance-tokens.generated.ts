@@ -191,6 +191,8 @@ export const APPEARANCE_TOKEN_NAMES = [
   "semantic-field-border-invalid-dark",
   "semantic-field-text-light",
   "semantic-field-text-dark",
+  "semantic-field-caret-light",
+  "semantic-field-caret-dark",
   "semantic-field-text-disabled-light",
   "semantic-field-text-disabled-dark",
   "semantic-field-placeholder-light",
@@ -453,8 +455,6 @@ export const APPEARANCE_TOKEN_NAMES = [
   "ui-panel-dark",
   "ui-panel-subtle-light",
   "ui-panel-subtle-dark",
-  "semantic-html-background-scrim-light",
-  "semantic-html-background-scrim-dark",
   "semantic-settings-page-surface-light",
   "semantic-settings-page-surface-dark",
   "semantic-sidebar-inline-edit-surface-light",
@@ -1139,6 +1139,13 @@ export const APPEARANCE_TOKEN_GROUPS = [
         "description": "Text color for editable field values.",
         "lightToken": "semantic-field-text-light",
         "darkToken": "semantic-field-text-dark"
+      },
+      {
+        "id": "semantic-field-caret",
+        "label": "Field Caret",
+        "description": "Text insertion caret color for editable field values.",
+        "lightToken": "semantic-field-caret-light",
+        "darkToken": "semantic-field-caret-dark"
       },
       {
         "id": "semantic-field-text-disabled",
@@ -2204,21 +2211,6 @@ export const APPEARANCE_TOKEN_GROUPS = [
     ]
   },
   {
-    "id": "product-html-background",
-    "layer": "product",
-    "label": "HTML Background",
-    "description": "Semantic colors used when a custom HTML desktop background is active.",
-    "rows": [
-      {
-        "id": "semantic-html-background-scrim",
-        "label": "Html Background Scrim",
-        "description": "Controls html background scrim in light and dark appearance modes.",
-        "lightToken": "semantic-html-background-scrim-light",
-        "darkToken": "semantic-html-background-scrim-dark"
-      }
-    ]
-  },
-  {
     "id": "component-settings-page",
     "layer": "component",
     "label": "Settings Page",
@@ -2750,6 +2742,7 @@ export const APPEARANCE_TOKEN_RUNTIME_MAP = {
   "semantic-field-border-disabled": "semantic-field-border-disabled",
   "semantic-field-border-invalid": "semantic-field-border-invalid",
   "semantic-field-text": "semantic-field-text",
+  "semantic-field-caret": "semantic-field-caret",
   "semantic-field-text-disabled": "semantic-field-text-disabled",
   "semantic-field-placeholder": "semantic-field-placeholder",
   "semantic-success": "semantic-success",
@@ -2881,7 +2874,6 @@ export const APPEARANCE_TOKEN_RUNTIME_MAP = {
   "semantic-scrollbar-thumb-surface-hover": "semantic-scrollbar-thumb-surface-hover",
   "ui-panel": "ui-panel",
   "ui-panel-subtle": "ui-panel-subtle",
-  "semantic-html-background-scrim": "semantic-html-background-scrim",
   "semantic-settings-page-surface": "semantic-settings-page-surface",
   "semantic-sidebar-inline-edit-surface": "semantic-sidebar-inline-edit-surface",
   "semantic-sidebar-inline-edit-border": "semantic-sidebar-inline-edit-border",
@@ -3981,6 +3973,14 @@ export const APPEARANCE_BRAND_DEFINITIONS = {
       "semantic-field-text-dark": {
         "type": "alias",
         "token": "text-primary-dark"
+      },
+      "semantic-field-caret-light": {
+        "type": "alias",
+        "token": "semantic-field-text-light"
+      },
+      "semantic-field-caret-dark": {
+        "type": "alias",
+        "token": "semantic-field-text-dark"
       },
       "semantic-field-text-disabled-light": {
         "type": "alias",
@@ -5657,14 +5657,6 @@ export const APPEARANCE_BRAND_DEFINITIONS = {
       "semantic-list-detail-count-text-dark": {
         "type": "alias",
         "token": "text-secondary-dark"
-      },
-      "semantic-html-background-scrim-light": {
-        "type": "alias",
-        "token": "surface-app-light"
-      },
-      "semantic-html-background-scrim-dark": {
-        "type": "alias",
-        "token": "surface-app-dark"
       },
       "semantic-settings-page-surface-light": {
         "type": "alias",
@@ -10378,16 +10370,6 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
     "brandTheme": "terra",
     "fontFamily": "default",
     "codeThemePreference": "auto",
-    "htmlBackgroundConfig": {
-      "blurPx": 0,
-      "dim": 0.18,
-      "enabled": false,
-      "html": "",
-      "opacity": 0.78,
-      "paused": false,
-      "renderMode": "static",
-      "surfaceOpacity": 0.68
-    },
     "overrides": {
       "surface-app-light": {
         "type": "literal",
@@ -12985,16 +12967,6 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
     "brandTheme": "terra",
     "fontFamily": "default",
     "codeThemePreference": "auto",
-    "htmlBackgroundConfig": {
-      "blurPx": 0,
-      "dim": 0.18,
-      "enabled": false,
-      "html": "",
-      "opacity": 0.78,
-      "paused": false,
-      "renderMode": "static",
-      "surfaceOpacity": 0.68
-    },
     "overrides": {
       "surface-app-light": {
         "type": "literal",
@@ -15670,16 +15642,6 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
     "brandTheme": "sage",
     "fontFamily": "default",
     "codeThemePreference": "auto",
-    "htmlBackgroundConfig": {
-      "blurPx": 0,
-      "dim": 0.18,
-      "enabled": false,
-      "html": "",
-      "opacity": 0.78,
-      "paused": false,
-      "renderMode": "static",
-      "surfaceOpacity": 0.68
-    },
     "overrides": {}
   },
   {
@@ -15689,16 +15651,6 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
     "brandTheme": "sage",
     "fontFamily": "default",
     "codeThemePreference": "nord",
-    "htmlBackgroundConfig": {
-      "blurPx": 0,
-      "dim": 0.18,
-      "enabled": false,
-      "html": "",
-      "opacity": 0.78,
-      "paused": false,
-      "renderMode": "static",
-      "surfaceOpacity": 0.68
-    },
     "overrides": {
       "surface-app-dark": {
         "type": "literal",
@@ -16060,16 +16012,6 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
     "brandTheme": "terra",
     "fontFamily": "default",
     "codeThemePreference": "github-light",
-    "htmlBackgroundConfig": {
-      "blurPx": 0,
-      "dim": 0.18,
-      "enabled": false,
-      "html": "",
-      "opacity": 0.78,
-      "paused": false,
-      "renderMode": "static",
-      "surfaceOpacity": 0.68
-    },
     "overrides": {
       "surface-app-light": {
         "type": "literal",
@@ -16510,7 +16452,7 @@ export const DEFAULT_APPEARANCE_THEME_DEFINITION =
 export const APPEARANCE_TOKEN_TEST_DATA = {
   "schemaVersion": 2,
   "dtcgVersion": "2025.10",
-  "groupCount": 30,
+  "groupCount": 29,
   "pairCount": 259,
   "modeTokenCount": 518,
   "runtimeTokenCount": 259,
@@ -16655,6 +16597,8 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
     "semantic-field-border-invalid-dark",
     "semantic-field-text-light",
     "semantic-field-text-dark",
+    "semantic-field-caret-light",
+    "semantic-field-caret-dark",
     "semantic-field-text-disabled-light",
     "semantic-field-text-disabled-dark",
     "semantic-field-placeholder-light",
@@ -16917,8 +16861,6 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
     "ui-panel-dark",
     "ui-panel-subtle-light",
     "ui-panel-subtle-dark",
-    "semantic-html-background-scrim-light",
-    "semantic-html-background-scrim-dark",
     "semantic-settings-page-surface-light",
     "semantic-settings-page-surface-dark",
     "semantic-sidebar-inline-edit-surface-light",
@@ -17107,6 +17049,7 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
     "semantic-field-border-disabled",
     "semantic-field-border-invalid",
     "semantic-field-text",
+    "semantic-field-caret",
     "semantic-field-text-disabled",
     "semantic-field-placeholder",
     "semantic-success",
@@ -17238,7 +17181,6 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
     "semantic-scrollbar-thumb-surface-hover",
     "ui-panel",
     "ui-panel-subtle",
-    "semantic-html-background-scrim",
     "semantic-settings-page-surface",
     "semantic-sidebar-inline-edit-surface",
     "semantic-sidebar-inline-edit-border",

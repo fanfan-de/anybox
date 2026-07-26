@@ -92,14 +92,6 @@
   container-type: inline-size;
 }
 
-.window-shell[data-background-mode="custom-html"] .sidebar {
-  background: var(--surface-profile-left-sidebar);
-}
-
-.window-shell[data-background-mode="custom-html"] .sidebar.is-right {
-  background: var(--surface-profile-right-sidebar);
-}
-
 .sidebar-resizer {
   --sidebar-resizer-top-surface: var(--seg-shell-chrome-surface);
   grid-column: 3;
@@ -194,10 +186,6 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   height: 1px;
   background: var(--border-subtle);
   pointer-events: none;
-}
-
-.window-shell[data-background-mode="custom-html"] .left-sidebar-top-menu {
-  background: var(--surface-profile-left-top-menu);
 }
 
 .left-sidebar-top-menu .shell-top-menu-content,

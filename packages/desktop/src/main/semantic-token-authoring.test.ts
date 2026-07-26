@@ -67,7 +67,6 @@ function manifestDocument() {
         brandTheme: "terra",
         fontFamily: "default",
         codeThemePreference: "auto",
-        htmlBackgroundConfig: {},
         overrides: {},
       },
     ],

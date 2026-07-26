@@ -592,6 +592,14 @@
           "runtimeToken": "semantic-field-text"
         },
         {
+          "id": "semantic-field-caret",
+          "label": "Field Caret",
+          "description": "Text insertion caret color for editable field values.",
+          "lightToken": "semantic-field-caret-light",
+          "darkToken": "semantic-field-caret-dark",
+          "runtimeToken": "semantic-field-caret"
+        },
+        {
           "id": "semantic-field-text-disabled",
           "label": "Field Disabled Text",
           "description": "Text color for disabled editable field values.",
@@ -1782,22 +1790,6 @@
           "lightToken": "ui-panel-subtle-light",
           "darkToken": "ui-panel-subtle-dark",
           "runtimeToken": "ui-panel-subtle"
-        }
-      ]
-    },
-    {
-      "id": "product-html-background",
-      "layer": "product",
-      "label": "HTML Background",
-      "description": "Semantic colors used when a custom HTML desktop background is active.",
-      "rows": [
-        {
-          "id": "semantic-html-background-scrim",
-          "label": "Html Background Scrim",
-          "description": "Controls html background scrim in light and dark appearance modes.",
-          "lightToken": "semantic-html-background-scrim-light",
-          "darkToken": "semantic-html-background-scrim-dark",
-          "runtimeToken": "semantic-html-background-scrim"
         }
       ]
     },
@@ -3323,6 +3315,14 @@
         "semantic-field-text-dark": {
           "type": "alias",
           "token": "text-primary-dark"
+        },
+        "semantic-field-caret-light": {
+          "type": "alias",
+          "token": "semantic-field-text-light"
+        },
+        "semantic-field-caret-dark": {
+          "type": "alias",
+          "token": "semantic-field-text-dark"
         },
         "semantic-field-text-disabled-light": {
           "type": "alias",
@@ -4999,14 +4999,6 @@
         "semantic-list-detail-count-text-dark": {
           "type": "alias",
           "token": "text-secondary-dark"
-        },
-        "semantic-html-background-scrim-light": {
-          "type": "alias",
-          "token": "surface-app-light"
-        },
-        "semantic-html-background-scrim-dark": {
-          "type": "alias",
-          "token": "surface-app-dark"
         },
         "semantic-settings-page-surface-light": {
           "type": "alias",
@@ -7265,16 +7257,6 @@
       "brandTheme": "terra",
       "fontFamily": "default",
       "codeThemePreference": "auto",
-      "htmlBackgroundConfig": {
-        "blurPx": 0,
-        "dim": 0.18,
-        "enabled": false,
-        "html": "",
-        "opacity": 0.78,
-        "paused": false,
-        "renderMode": "static",
-        "surfaceOpacity": 0.68
-      },
       "overrides": {
         "surface-app-light": {
           "type": "literal",
@@ -9872,16 +9854,6 @@
       "brandTheme": "terra",
       "fontFamily": "default",
       "codeThemePreference": "auto",
-      "htmlBackgroundConfig": {
-        "blurPx": 0,
-        "dim": 0.18,
-        "enabled": false,
-        "html": "",
-        "opacity": 0.78,
-        "paused": false,
-        "renderMode": "static",
-        "surfaceOpacity": 0.68
-      },
       "overrides": {
         "surface-app-light": {
           "type": "literal",
@@ -12557,16 +12529,6 @@
       "brandTheme": "sage",
       "fontFamily": "default",
       "codeThemePreference": "auto",
-      "htmlBackgroundConfig": {
-        "blurPx": 0,
-        "dim": 0.18,
-        "enabled": false,
-        "html": "",
-        "opacity": 0.78,
-        "paused": false,
-        "renderMode": "static",
-        "surfaceOpacity": 0.68
-      },
       "overrides": {}
     },
     {
@@ -12576,16 +12538,6 @@
       "brandTheme": "sage",
       "fontFamily": "default",
       "codeThemePreference": "nord",
-      "htmlBackgroundConfig": {
-        "blurPx": 0,
-        "dim": 0.18,
-        "enabled": false,
-        "html": "",
-        "opacity": 0.78,
-        "paused": false,
-        "renderMode": "static",
-        "surfaceOpacity": 0.68
-      },
       "overrides": {
         "surface-app-dark": {
           "type": "literal",
@@ -12947,16 +12899,6 @@
       "brandTheme": "terra",
       "fontFamily": "default",
       "codeThemePreference": "github-light",
-      "htmlBackgroundConfig": {
-        "blurPx": 0,
-        "dim": 0.18,
-        "enabled": false,
-        "html": "",
-        "opacity": 0.78,
-        "paused": false,
-        "renderMode": "static",
-        "surfaceOpacity": 0.68
-      },
       "overrides": {
         "surface-app-light": {
           "type": "literal",

@@ -67,36 +67,6 @@ export type AppearanceCodeThemePreference =
   | typeof DEFAULT_APPEARANCE_CODE_THEME_PREFERENCE
   | AppearanceCodeHighlightTheme
 
-export type AppearanceHtmlBackgroundRenderMode = "dynamic" | "static"
-export type AppearanceDesktopBackgroundMode = "default" | "custom-html"
-
-export interface AppearanceHtmlBackgroundConfig {
-  blurPx: number
-  dim: number
-  enabled: boolean
-  html: string
-  opacity: number
-  paused: boolean
-  renderMode: AppearanceHtmlBackgroundRenderMode
-  surfaceOpacity: number
-}
-
-export interface AppearanceHtmlBackgroundState {
-  backgroundMode: AppearanceDesktopBackgroundMode
-  hasHtmlBackground: boolean
-}
-
-export const DEFAULT_APPEARANCE_HTML_BACKGROUND_CONFIG: AppearanceHtmlBackgroundConfig = {
-  blurPx: 0,
-  dim: 0.18,
-  enabled: false,
-  html: "",
-  opacity: 0.78,
-  paused: false,
-  renderMode: "static",
-  surfaceOpacity: 0.68,
-}
-
 export interface AppearanceConfigDocument {
   version: 2
   brandTheme: AppearanceBrandTheme
@@ -116,7 +86,6 @@ export interface AppearanceConfigSnapshot {
 export interface AppearanceRuntimeState {
   document: AppearanceConfigDocument
   codeThemePreference: AppearanceCodeThemePreference
-  htmlBackgroundConfig: AppearanceHtmlBackgroundConfig
 }
 
 const APPEARANCE_TOKEN_NAME_SET = new Set<string>(APPEARANCE_TOKEN_NAMES)
@@ -893,12 +862,6 @@ export function normalizeAppearanceConfigDocument(input: unknown): AppearanceCon
 }
 
 const APPEARANCE_CODE_HIGHLIGHT_THEME_SET = new Set<string>(APPEARANCE_CODE_HIGHLIGHT_THEMES)
-const MAX_APPEARANCE_HTML_BACKGROUND_HTML_LENGTH = 220_000
-const LEGACY_LOW_VISIBILITY_HTML_BACKGROUND_DEFAULTS = {
-  dim: 0.34,
-  opacity: 0.64,
-  surfaceOpacity: 0.82,
-}
 
 export function isAppearanceCodeHighlightTheme(value: string | null | undefined): value is AppearanceCodeHighlightTheme {
   return Boolean(value && APPEARANCE_CODE_HIGHLIGHT_THEME_SET.has(value))
@@ -916,73 +879,12 @@ export function normalizeAppearanceCodeThemePreference(value: unknown): Appearan
   return DEFAULT_APPEARANCE_CODE_THEME_PREFERENCE
 }
 
-function clampAppearanceNumber(value: unknown, min: number, max: number, fallback: number) {
-  const numberValue = typeof value === "number" ? value : Number(value)
-  if (!Number.isFinite(numberValue)) return fallback
-  return Math.min(max, Math.max(min, numberValue))
-}
-
-export function normalizeAppearanceHtmlBackgroundConfig(value: unknown): AppearanceHtmlBackgroundConfig {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return { ...DEFAULT_APPEARANCE_HTML_BACKGROUND_CONFIG }
-  }
-
-  const record = value as Record<string, unknown>
-  const rawHtml = typeof record.html === "string" ? record.html : ""
-  const html = rawHtml.length > MAX_APPEARANCE_HTML_BACKGROUND_HTML_LENGTH
-    ? rawHtml.slice(0, MAX_APPEARANCE_HTML_BACKGROUND_HTML_LENGTH)
-    : rawHtml
-  const usesLegacyLowVisibilityDefaults =
-    record.dim === LEGACY_LOW_VISIBILITY_HTML_BACKGROUND_DEFAULTS.dim &&
-    record.opacity === LEGACY_LOW_VISIBILITY_HTML_BACKGROUND_DEFAULTS.opacity &&
-    record.surfaceOpacity === LEGACY_LOW_VISIBILITY_HTML_BACKGROUND_DEFAULTS.surfaceOpacity
-
-  return {
-    blurPx: clampAppearanceNumber(
-      record.blurPx,
-      0,
-      24,
-      DEFAULT_APPEARANCE_HTML_BACKGROUND_CONFIG.blurPx,
-    ),
-    dim: usesLegacyLowVisibilityDefaults
-      ? DEFAULT_APPEARANCE_HTML_BACKGROUND_CONFIG.dim
-      : clampAppearanceNumber(record.dim, 0, 0.86, DEFAULT_APPEARANCE_HTML_BACKGROUND_CONFIG.dim),
-    enabled: typeof record.enabled === "boolean" ? record.enabled : DEFAULT_APPEARANCE_HTML_BACKGROUND_CONFIG.enabled,
-    html,
-    opacity: usesLegacyLowVisibilityDefaults
-      ? DEFAULT_APPEARANCE_HTML_BACKGROUND_CONFIG.opacity
-      : clampAppearanceNumber(record.opacity, 0.08, 1, DEFAULT_APPEARANCE_HTML_BACKGROUND_CONFIG.opacity),
-    paused: typeof record.paused === "boolean" ? record.paused : DEFAULT_APPEARANCE_HTML_BACKGROUND_CONFIG.paused,
-    renderMode: record.renderMode === "dynamic" ? "dynamic" : DEFAULT_APPEARANCE_HTML_BACKGROUND_CONFIG.renderMode,
-    surfaceOpacity: usesLegacyLowVisibilityDefaults
-      ? DEFAULT_APPEARANCE_HTML_BACKGROUND_CONFIG.surfaceOpacity
-      : clampAppearanceNumber(
-        record.surfaceOpacity,
-        0.36,
-        1,
-        DEFAULT_APPEARANCE_HTML_BACKGROUND_CONFIG.surfaceOpacity,
-      ),
-  }
-}
-
-export function resolveAppearanceHtmlBackgroundState(
-  config: AppearanceHtmlBackgroundConfig,
-): AppearanceHtmlBackgroundState {
-  const hasHtmlBackground = config.enabled && config.html.trim().length > 0
-
-  return {
-    backgroundMode: hasHtmlBackground ? "custom-html" : "default",
-    hasHtmlBackground,
-  }
-}
-
 export function createDefaultAppearanceRuntimeState(
   document: AppearanceConfigDocument = createDefaultAppearanceConfigDocument(),
 ): AppearanceRuntimeState {
   return {
     document: normalizeAppearanceConfigDocument(document),
     codeThemePreference: DEFAULT_APPEARANCE_CODE_THEME_PREFERENCE,
-    htmlBackgroundConfig: { ...DEFAULT_APPEARANCE_HTML_BACKGROUND_CONFIG },
   }
 }
 
@@ -1000,9 +902,6 @@ export function normalizeAppearanceRuntimeState(
     document: normalizeAppearanceConfigDocument(record.document ?? fallback.document),
     codeThemePreference: normalizeAppearanceCodeThemePreference(
       record.codeThemePreference ?? fallback.codeThemePreference,
-    ),
-    htmlBackgroundConfig: normalizeAppearanceHtmlBackgroundConfig(
-      record.htmlBackgroundConfig ?? fallback.htmlBackgroundConfig,
     ),
   }
 }

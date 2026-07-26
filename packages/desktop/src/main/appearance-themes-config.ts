@@ -241,7 +241,6 @@ export function createAppearanceThemeSaveInputFromTheme(
     brandTheme: theme.brandTheme,
     fontFamily: theme.fontFamily,
     codeThemePreference: theme.codeThemePreference,
-    htmlBackgroundConfig: { ...theme.htmlBackgroundConfig },
     overrides: { ...theme.overrides },
     foreignDtcg: structuredClone(theme.foreignDtcg),
   }
