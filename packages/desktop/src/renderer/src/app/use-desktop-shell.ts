@@ -26,6 +26,7 @@ import {
 const ACTIVITY_RAIL_VISIBILITY_STORAGE_KEY = "desktop.activityRailVisible"
 const DEBUG_UI_REGIONS_STORAGE_KEY = "desktop.debugUiRegions"
 const DEBUG_LINE_COLORS_STORAGE_KEY = "desktop.debugLineColors"
+const SEMANTIC_TOKEN_INSPECTOR_STORAGE_KEY = "desktop.semanticTokenInspector"
 const MOBILE_CONNECTION_ADVANCED_INFO_STORAGE_KEY = "desktop.mobileConnectionAdvancedInfo"
 const AGENT_DEBUG_TRACE_STORAGE_KEY = "desktop.agentDebugTrace"
 const ASSISTANT_TRACE_VISIBILITY_STORAGE_KEY = "desktop.assistantTraceVisibility.v1"
@@ -78,6 +79,10 @@ function readDebugUiRegionsPreference() {
 
 function readDebugLineColorsPreference() {
   return readBooleanPreference(DEBUG_LINE_COLORS_STORAGE_KEY, false)
+}
+
+function readSemanticTokenInspectorPreference() {
+  return readBooleanPreference(SEMANTIC_TOKEN_INSPECTOR_STORAGE_KEY, false)
 }
 
 function readMobileConnectionAdvancedInfoPreference() {
@@ -161,16 +166,20 @@ export function useDesktopShell() {
     handleAppearanceThemeSaveCurrent,
     handleAppearanceTokenChange,
     handleAppearanceTokenReset,
+    handleSemanticTokenAuthoringCommitted,
     handleBrandThemeChange,
     handleCodeThemeChange,
     handleColorModeChange,
     handleFontFamilyChange,
     handleHtmlBackgroundConfigChange,
     htmlBackgroundConfig,
+    resolvedColorMode,
     resolvedCodeTheme,
   } = appearanceState
   const [isDebugUiRegionsEnabled, setIsDebugUiRegionsEnabled] = useState(readDebugUiRegionsPreference)
   const [isDebugLineColorsEnabled, setIsDebugLineColorsEnabled] = useState(readDebugLineColorsPreference)
+  const [isSemanticTokenInspectorEnabled, setIsSemanticTokenInspectorEnabled] =
+    useState(readSemanticTokenInspectorPreference)
   const [isMobileConnectionAdvancedInfoEnabled, setIsMobileConnectionAdvancedInfoEnabled] = useState(readMobileConnectionAdvancedInfoPreference)
   const [assistantTraceVisibility, setAssistantTraceVisibility] = useState(readAssistantTraceVisibilityPreference)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
@@ -412,6 +421,17 @@ export function useDesktopShell() {
       return
     }
   }, [isDebugLineColorsEnabled])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        SEMANTIC_TOKEN_INSPECTOR_STORAGE_KEY,
+        String(isSemanticTokenInspectorEnabled),
+      )
+    } catch {
+      return
+    }
+  }, [isSemanticTokenInspectorEnabled])
 
   useEffect(() => {
     try {
@@ -732,6 +752,10 @@ export function useDesktopShell() {
     setIsDebugLineColorsEnabled(nextEnabled)
   }
 
+  function handleSemanticTokenInspectorChange(nextEnabled: boolean) {
+    setIsSemanticTokenInspectorEnabled(nextEnabled)
+  }
+
   function handleMobileConnectionAdvancedInfoChange(nextEnabled: boolean) {
     setIsMobileConnectionAdvancedInfoEnabled(nextEnabled)
   }
@@ -814,10 +838,12 @@ export function useDesktopShell() {
     handleAppearanceThemeSaveCurrent,
     handleAppearanceTokenChange,
     handleAppearanceTokenReset,
+    handleSemanticTokenAuthoringCommitted,
     handleAssistantTraceVisibilityChange,
     handleAgentDebugTraceChange,
     handleDebugLineColorsChange,
     handleDebugUiRegionsChange,
+    handleSemanticTokenInspectorChange,
     handleMobileConnectionAdvancedInfoChange,
     handleSidebarResizerKeyDown,
     handleSidebarResizerPointerDown,
@@ -830,6 +856,7 @@ export function useDesktopShell() {
     isAgentDebugTraceEnabled,
     isDebugLineColorsEnabled,
     isDebugUiRegionsEnabled,
+    isSemanticTokenInspectorEnabled,
     isMobileConnectionAdvancedInfoEnabled,
     htmlBackgroundConfig,
     isSidebarCollapsed,
@@ -841,6 +868,7 @@ export function useDesktopShell() {
     rightSidebarWidthBounds,
     rightSidebarWidth,
     resolvedCodeTheme,
+    resolvedColorMode,
     sidebarWidthBounds,
     sidebarWidth,
     windowControlsRef,

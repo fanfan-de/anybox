@@ -32,6 +32,7 @@
 - provider/model 列表是操作库存，应可搜索、可扫描、紧凑。
 - 状态优先用 dot/icon/color；状态接近且容易混淆时再加文字。
 - plugin 和 connector 详情页可以有更丰富媒体，但控件和元信息仍遵守桌面紧凑规则。
+- plugin marketplace 的占位图标底板、边框、文字、item border、state、tag 和 status 必须分别消费 `--semantic-plugin-market-*` runtime token；真实图片 Logo 保持资产原色且容器不绘制主题底色，图片缺失或加载失败才回退到中性字形/首字母占位；插件清单中的品牌色不得通过 `color-mix()` 派生这些组件颜色。
 - global skills 编辑界面优先保证文档编辑、metadata 可读性和文件操作可预测。
 
 ## 管理型 List + Detail 组件

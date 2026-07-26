@@ -136,10 +136,10 @@
 }
 
 .empty-state {
-  background: #ffffff;
+  background: var(--surface-panel);
   border-radius: 0;
   padding: 14px;
-  color: #66788c;
+  color: var(--text-secondary);
 }
 
 .brand-card h1 {
@@ -155,7 +155,7 @@
 .mode-switch {
   padding: 4px;
   border-radius: 0;
-  background: #e8edf2;
+  background: var(--surface-panel-muted);
 }
 
 .mode-pill {
@@ -163,7 +163,7 @@
   min-height: 38px;
   border-radius: 0;
   background: transparent;
-  color: #66788c;
+  color: var(--text-secondary);
   cursor: pointer;
   transition:
     background 180ms ease,
@@ -172,8 +172,8 @@
 }
 
 .mode-pill.is-active {
-  background: #ffffff;
-  color: #17232f;
+  background: var(--surface-elevated);
+  color: var(--text-primary);
 }
 
 .workspace-list {
@@ -218,8 +218,8 @@
 }
 
 .session-card.is-active {
-  background: #e8f2fb;
-  border-color: rgba(84, 144, 204, 0.62);
+  background: var(--brand-primary-soft-active);
+  border-color: var(--focus-outline-color);
 }
 
 .session-card p {
@@ -227,7 +227,7 @@
 }
 
 .session-card small {
-  color: #7e8fa2;
+  color: var(--text-tertiary);
 }
 
 .status-dot {
@@ -238,19 +238,19 @@
   min-height: 22px;
   padding: 0 8px;
   border-radius: 0;
-  background: rgba(28, 114, 194, 0.1);
+  background: var(--semantic-info-surface);
 }
 
 .status-live {
-  color: #1669af;
+  color: var(--semantic-info-text);
 }
 
 .status-review {
-  color: #5e6f82;
+  color: var(--text-secondary);
 }
 
 .status-ready {
-  color: #2a8357;
+  color: var(--semantic-success-text);
 }
 
 .permission-risk-chip,
@@ -259,26 +259,26 @@
   padding: 0 10px;
   display: inline-flex;
   align-items: center;
-  border: 1px solid rgba(166, 186, 208, 0.42);
-  background: #f4f8fc;
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-panel-muted);
   font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
   font-size: 11px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #4b6074;
+  color: var(--text-secondary);
 }
 
 .permission-risk-chip.is-low {
-  color: #2a8357;
+  color: var(--semantic-success-text);
 }
 
 .permission-risk-chip.is-medium {
-  color: #8c5a0a;
+  color: var(--semantic-warning-text);
 }
 
 .permission-risk-chip.is-high,
 .permission-risk-chip.is-critical {
-  color: #b14537;
+  color: var(--semantic-error-text);
 }
 
 .session-workflow-badge {
@@ -304,18 +304,18 @@
 }
 
 .session-workflow-badge.is-planning {
-  background: rgba(180, 92, 32, 0.12);
-  color: #9a4d12;
+  background: var(--semantic-warning-surface);
+  color: var(--semantic-warning-text);
 }
 
 .session-workflow-badge.is-pending {
-  background: rgba(162, 92, 18, 0.14);
-  color: #87500f;
+  background: var(--semantic-warning-surface-strong);
+  color: var(--semantic-warning-text);
 }
 
 .session-workflow-badge.is-approved {
-  background: rgba(26, 117, 88, 0.14);
-  color: #1f6c52;
+  background: var(--semantic-success-surface);
+  color: var(--semantic-success-text);
 }
 
 .permission-scope-switch {
@@ -338,15 +338,16 @@
 }
 
 .primary-button {
-  background: #e8edf7;
-  border-color: #b7c4da;
-  color: #2d436c;
+  background: var(--semantic-button-primary-surface);
+  border-color: var(--semantic-button-primary-border);
+  color: var(--semantic-button-primary-text);
 }
 
 .primary-button:hover,
 .primary-button:focus-visible {
-  background: #dfe7f5;
-  color: #203453;
+  background: var(--semantic-button-primary-surface-hover);
+  border-color: var(--semantic-button-primary-border-hover);
+  color: var(--semantic-button-primary-text-hover);
 }
 
 .secondary-button {
@@ -356,8 +357,9 @@
 
 .secondary-button:hover,
 .secondary-button:focus-visible {
-  background: #ffffff;
-  color: var(--seg-text-1);
+  background: var(--semantic-button-secondary-surface-hover);
+  border-color: var(--semantic-button-secondary-border-hover);
+  color: var(--semantic-button-secondary-text-hover);
 }
 
 .secondary-button.is-danger {
@@ -430,16 +432,16 @@
 }
 
 .primary-button {
-  background: var(--mix-seg-accent-soft-72-seg-panel-28);
-  border-color: var(--mix-seg-accent-28-seg-border-72);
-  color: var(--seg-accent-strong);
+  background: var(--semantic-button-primary-surface);
+  border-color: var(--semantic-button-primary-border);
+  color: var(--semantic-button-primary-text);
 }
 
 .primary-button:hover,
 .primary-button:focus-visible {
-  background: var(--mix-seg-accent-soft-84-seg-panel-16);
-  border-color: var(--mix-seg-accent-42-seg-border-58);
-  color: var(--seg-text-1);
+  background: var(--semantic-button-primary-surface-hover);
+  border-color: var(--semantic-button-primary-border-hover);
+  color: var(--semantic-button-primary-text-hover);
 }
 
 .secondary-button {

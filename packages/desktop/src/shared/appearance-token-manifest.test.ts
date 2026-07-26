@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync } from "node:fs"
 import { resolve } from "node:path"
+import postcss from "postcss"
 import { describe, expect, it } from "vitest"
 import {
   APPEARANCE_TOKEN_GROUPS,
@@ -47,14 +48,12 @@ const manifest = JSON.parse(
     value?: { colorSpace?: string }
   }> }>
   compatibility: {
+    legacyMixPairCount: number
     legacyDirectMixUsageCount: number
     legacyDirectColorMixUsageCount: number
+    allowedDirectMixConsumers: string[]
   }
 }
-// This header is rendered on an intentionally fixed dark code surface in both app modes.
-const fixedModeConsumerAllowlist = new Set([
-  "right-sidebar.css: --text-secondary-dark",
-])
 
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
@@ -106,6 +105,27 @@ describe("appearance token manifest", () => {
       expect(derivation.sources.every((source) =>
         source.value.type === "literal" || source.value.type === "alias"
       )).toBe(true)
+    }
+  })
+
+  it("keeps detail icon colors independent from panel, brand, and blend tokens", () => {
+    const detailIconModeTokens = [
+      "semantic-detail-icon-surface-light",
+      "semantic-detail-icon-surface-dark",
+      "semantic-detail-icon-border-light",
+      "semantic-detail-icon-border-dark",
+      "semantic-detail-icon-text-light",
+      "semantic-detail-icon-text-dark",
+    ]
+
+    for (const tokenName of detailIconModeTokens) {
+      expect(manifest.brands.terra.tokens[tokenName]?.type).toBe("literal")
+      expect(manifest.brands.sage.tokens[tokenName]?.type).toBe("literal")
+      expect(manifest.derivations[tokenName]).toBeUndefined()
+      for (const theme of manifest.themes) {
+        const override = theme.overrides[tokenName]
+        if (override) expect(override.type).toBe("literal")
+      }
     }
   })
 
@@ -186,11 +206,88 @@ describe("appearance token manifest", () => {
       for (const match of source.matchAll(/var\(\s*--([a-zA-Z0-9_-]+)/g)) {
         if (modeTokenNames.has(match[1])) {
           const violation = `${fileName}: --${match[1]}`
-          if (!fixedModeConsumerAllowlist.has(violation)) {
-            violations.push(violation)
-          }
+          violations.push(violation)
         }
       }
+    }
+
+    expect(violations).toEqual([])
+  })
+
+  it("forbids runtime color mixing in component styles", () => {
+    const violations: string[] = []
+
+    expect(manifest.compatibility.legacyDirectColorMixUsageCount).toBe(0)
+    for (const fileName of readdirSync(stylesRoot)) {
+      if (
+        !fileName.endsWith(".css") ||
+        fileName === "tokens.css" ||
+        fileName === "appearance-tokens.generated.css"
+      ) {
+        continue
+      }
+
+      const source = readFileSync(resolve(stylesRoot, fileName), "utf8")
+      const count = Array.from(source.matchAll(/color-mix\s*\(/g)).length
+      if (count > 0) violations.push(`${fileName}: ${count}`)
+    }
+
+    expect(violations).toEqual([])
+  })
+
+  it("keeps legacy mix compatibility closed after the component migration", () => {
+    const violations: string[] = []
+
+    expect(manifest.compatibility).toMatchObject({
+      legacyMixPairCount: 0,
+      legacyDirectMixUsageCount: 0,
+      legacyDirectColorMixUsageCount: 0,
+      allowedDirectMixConsumers: [],
+    })
+    expect(
+      Object.keys(manifest.derivations).filter((name) => name.startsWith("mix-")),
+    ).toEqual([])
+
+    for (const fileName of readdirSync(stylesRoot)) {
+      if (
+        !fileName.endsWith(".css") ||
+        fileName === "appearance-tokens.generated.css"
+      ) {
+        continue
+      }
+
+      const source = readFileSync(resolve(stylesRoot, fileName), "utf8")
+      const count = Array.from(source.matchAll(/var\(\s*--mix-/g)).length
+      if (count > 0) violations.push(`${fileName}: ${count}`)
+    }
+
+    expect(violations).toEqual([])
+  })
+
+  it("forbids hardcoded colors in theme-aware component styles", () => {
+    const violations: string[] = []
+    const colorLiteral =
+      /#[0-9a-f]{3,8}\b|rgba?\([^)]*\)|hsla?\([^)]*\)/gi
+
+    for (const fileName of readdirSync(stylesRoot)) {
+      if (
+        !fileName.endsWith(".css") ||
+        fileName === "tokens.css" ||
+        fileName === "debug.css" ||
+        fileName === "appearance-tokens.generated.css"
+      ) {
+        continue
+      }
+
+      const source = readFileSync(resolve(stylesRoot, fileName), "utf8")
+      const root = postcss.parse(source, { from: fileName })
+      root.walkDecls((declaration) => {
+        const matches = Array.from(declaration.value.matchAll(colorLiteral))
+        if (matches.length === 0) return
+        violations.push(
+          `${fileName}:${declaration.source?.start?.line ?? 0} ${declaration.prop}: ${declaration.value}`,
+        )
+      })
     }
 
     expect(violations).toEqual([])

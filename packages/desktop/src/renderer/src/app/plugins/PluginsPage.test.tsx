@@ -484,6 +484,44 @@ describe("PluginsPage", () => {
     expect(onPluginSelect).toHaveBeenCalledWith("filesystem")
   })
 
+  it("keeps image logos unpainted and falls back to neutral initials when an image fails", () => {
+    const chromeIcon = "data:image/svg+xml;base64,PHN2Zy8+"
+
+    render(
+      <PluginsPage
+        {...createProps({
+          installedPlugins: [
+            createInstalledPlugin(),
+            createInstalledPlugin({
+              pluginID: "chrome",
+            }),
+          ],
+          pluginCatalog: [
+            createPlugin(),
+            createPlugin({
+              id: "chrome",
+              name: "Chrome",
+              iconUrl: chromeIcon,
+            }),
+          ],
+        })}
+      />,
+    )
+
+    const installedSidebar = screen.getByRole("complementary", { name: "Installed plugins" })
+    const initials = installedSidebar.querySelector(".plugins-icon-initials")
+    const logoImage = installedSidebar.querySelector(`img[src="${chromeIcon}"]`)
+
+    expect(initials?.closest(".plugins-icon-mark")).toHaveClass("is-placeholder")
+    expect(logoImage?.closest(".plugins-icon-mark")).toHaveClass("is-logo-image")
+    expect(logoImage?.closest(".plugins-icon-mark")).not.toHaveClass("is-placeholder")
+
+    fireEvent.error(logoImage!)
+
+    expect(installedSidebar.querySelector(`img[src="${chromeIcon}"]`)).toBeNull()
+    expect(within(installedSidebar).getByText("CH").closest(".plugins-icon-mark")).toHaveClass("is-placeholder")
+  })
+
   it("opens installed plugin local files from the sidebar context menu", async () => {
     const getStoragePaths = vi.fn().mockResolvedValue({
       installedPlugins: "C:\\Users\\tester\\AppData\\Roaming\\Anybox\\agent\\data\\plugins\\installed",

@@ -93,3 +93,1527 @@
 .window-shell.debug-ui-regions .settings-page-main {
   background: var(--debug-region-settings-page);
 }
+
+/* Semantic Token Inspector is intentionally isolated from product theme tokens.
+   It must remain readable while those tokens are being diagnosed. */
+
+.semantic-token-inspector-overlay {
+  --debug-token-inspector-surface: #111827;
+  --debug-token-inspector-surface-raised: #1f2937;
+  --debug-token-inspector-surface-muted: #273449;
+  --debug-token-inspector-border: #52647f;
+  --debug-token-inspector-border-strong: #67e8f9;
+  --debug-token-inspector-text: #f8fafc;
+  --debug-token-inspector-text-muted: #b8c4d6;
+  --debug-token-inspector-pass: #4ade80;
+  --debug-token-inspector-warning: #facc15;
+  --debug-token-inspector-error: #fb7185;
+  --debug-token-inspector-info: #60a5fa;
+  --debug-token-inspector-error-soft: rgba(251, 113, 133, 0.12);
+  --debug-token-inspector-info-soft: rgba(96, 165, 250, 0.12);
+  --debug-token-inspector-unknown: #c4b5fd;
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  pointer-events: none;
+  color: var(--debug-token-inspector-text);
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  font-size: 12px;
+  line-height: 1.35;
+  -webkit-app-region: no-drag;
+}
+
+.semantic-token-inspector-live {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.semantic-token-inspector-overlay button {
+  outline: none;
+}
+
+.semantic-token-inspector-status {
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 1px solid var(--debug-token-inspector-border-strong);
+  border-radius: 7px;
+  background: var(--debug-token-inspector-surface);
+  color: var(--debug-token-inspector-text);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  transform: translateX(-50%);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.semantic-token-inspector-status:hover,
+.semantic-token-inspector-status:focus-visible {
+  border-color: var(--debug-token-inspector-text);
+  background: var(--debug-token-inspector-surface-raised);
+}
+
+.semantic-token-inspector-status svg {
+  width: 14px;
+  height: 14px;
+}
+
+.semantic-token-inspector-status kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--debug-token-inspector-border);
+  border-radius: 4px;
+  background: var(--debug-token-inspector-surface-muted);
+  color: var(--debug-token-inspector-text-muted);
+  font: inherit;
+  font-size: 10px;
+}
+
+.semantic-token-inspector-status kbd.is-armed {
+  border-color: var(--debug-token-inspector-border-strong);
+  color: var(--debug-token-inspector-text);
+}
+
+.semantic-token-inspector-highlight {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.semantic-token-inspector-highlight polygon {
+  fill: rgba(34, 211, 238, 0.12);
+  stroke: var(--debug-token-inspector-border-strong);
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+}
+
+.semantic-token-inspector-card,
+.semantic-token-inspector-empty-card {
+  position: fixed;
+  box-sizing: border-box;
+  max-width: calc(100vw - 16px);
+  border: 1px solid var(--debug-token-inspector-border);
+  border-radius: 8px;
+  background: var(--debug-token-inspector-surface);
+  color: var(--debug-token-inspector-text);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.38);
+}
+
+.semantic-token-inspector-card {
+  padding: 10px;
+}
+
+.semantic-token-inspector-card:not(.is-pinned) {
+  pointer-events: auto;
+}
+
+.semantic-token-inspector-card.is-pinned {
+  display: flex;
+  flex-direction: column;
+  height: min(88vh, 760px);
+  max-height: calc(100vh - 16px);
+  padding: 0;
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.semantic-token-inspector-empty-card {
+  width: 280px !important;
+  padding: 9px 11px;
+  color: var(--debug-token-inspector-text-muted);
+  pointer-events: none;
+}
+
+.semantic-token-inspector-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.semantic-token-inspector-card.is-pinned > .semantic-token-inspector-card-header {
+  flex: none;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--debug-token-inspector-border);
+}
+
+.semantic-token-inspector-card-header > div:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.semantic-token-inspector-card-header .label,
+.semantic-token-inspector-token-chain > .label {
+  color: var(--debug-token-inspector-text-muted);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.semantic-token-inspector-card-header strong {
+  overflow: hidden;
+  color: var(--debug-token-inspector-text);
+  font-family: "IBM Plex Mono", Consolas, monospace;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.semantic-token-inspector-card-actions {
+  display: flex;
+  flex: none;
+  gap: 4px;
+}
+
+.semantic-token-inspector-icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  border: 1px solid var(--debug-token-inspector-border);
+  border-radius: 5px;
+  background: var(--debug-token-inspector-surface-muted);
+  color: var(--debug-token-inspector-text);
+  cursor: pointer;
+}
+
+.semantic-token-inspector-icon-button:hover,
+.semantic-token-inspector-icon-button:focus-visible {
+  border-color: var(--debug-token-inspector-border-strong);
+  background: var(--debug-token-inspector-surface-raised);
+}
+
+.semantic-token-inspector-icon-button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.semantic-token-inspector-hover-list {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.semantic-token-inspector-property-summary {
+  display: grid;
+  grid-template-columns: 13px minmax(90px, auto) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 5px 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: var(--debug-token-inspector-surface-raised);
+  color: var(--debug-token-inspector-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.semantic-token-inspector-property-summary:hover,
+.semantic-token-inspector-property-summary:focus-visible {
+  border-color: var(--debug-token-inspector-border-strong);
+  outline: none;
+}
+
+.semantic-token-inspector-property-summary code {
+  overflow: hidden;
+  color: var(--debug-token-inspector-text-muted);
+  font-family: "IBM Plex Mono", Consolas, monospace;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.semantic-token-inspector-property-name {
+  font-weight: 600;
+}
+
+.semantic-token-inspector-swatch {
+  width: 11px;
+  height: 11px;
+  border: 1px solid var(--debug-token-inspector-border);
+  border-radius: 3px;
+  background-image:
+    linear-gradient(45deg, #64748b 25%, transparent 25%),
+    linear-gradient(-45deg, #64748b 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #64748b 75%),
+    linear-gradient(-45deg, transparent 75%, #64748b 75%);
+  background-position: 0 0, 0 5px, 5px -5px, -5px 0;
+  background-size: 10px 10px;
+}
+
+.semantic-token-inspector-severity {
+  display: inline-flex;
+  align-items: center;
+  min-height: 17px;
+  padding: 0 5px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.semantic-token-inspector-severity.is-pass {
+  color: var(--debug-token-inspector-pass);
+}
+
+.semantic-token-inspector-severity.is-warning {
+  color: var(--debug-token-inspector-warning);
+}
+
+.semantic-token-inspector-severity.is-error {
+  color: var(--debug-token-inspector-error);
+}
+
+.semantic-token-inspector-severity.is-info {
+  color: var(--debug-token-inspector-info);
+}
+
+.semantic-token-inspector-severity.is-unknown {
+  color: var(--debug-token-inspector-unknown);
+}
+
+.semantic-token-inspector-more,
+.semantic-token-inspector-hint {
+  display: block;
+  margin-top: 6px;
+  color: var(--debug-token-inspector-text-muted);
+  font-size: 10px;
+}
+
+.semantic-token-inspector-hint {
+  margin-bottom: 0;
+}
+
+.semantic-token-inspector-hover-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.semantic-token-inspector-hover-footer .semantic-token-inspector-hint {
+  min-width: 0;
+  margin-top: 0;
+}
+
+.semantic-token-inspector-pin-button {
+  flex: none;
+  min-height: 24px;
+  padding: 3px 8px;
+  border: 1px solid var(--debug-token-inspector-border);
+  border-radius: 5px;
+  background: var(--debug-token-inspector-surface-muted);
+  color: var(--debug-token-inspector-text);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.semantic-token-inspector-pin-button:hover,
+.semantic-token-inspector-pin-button:focus-visible {
+  border-color: var(--debug-token-inspector-border-strong);
+  background: var(--debug-token-inspector-surface-raised);
+}
+
+.semantic-token-inspector-target-context {
+  flex: none;
+  border-bottom: 1px solid var(--debug-token-inspector-border);
+  background: var(--debug-token-inspector-surface-raised);
+}
+
+.semantic-token-inspector-target-context > summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto 12px;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 7px 14px;
+  color: var(--debug-token-inspector-text-muted);
+  font-size: 11px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.semantic-token-inspector-target-context > summary::-webkit-details-marker {
+  display: none;
+}
+
+.semantic-token-inspector-target-context > summary::after {
+  content: "›";
+  color: var(--debug-token-inspector-text-muted);
+  font-size: 16px;
+  line-height: 1;
+  transform: rotate(90deg);
+  transition: transform 120ms ease;
+}
+
+.semantic-token-inspector-target-context[open] > summary::after {
+  transform: rotate(-90deg);
+}
+
+.semantic-token-inspector-target-context > summary:hover,
+.semantic-token-inspector-target-context > summary:focus-visible {
+  background: var(--debug-token-inspector-surface-muted);
+  color: var(--debug-token-inspector-text);
+  outline: none;
+}
+
+.semantic-token-inspector-target-context > summary code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--debug-token-inspector-text);
+  font-family: "IBM Plex Mono", Consolas, monospace;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.semantic-token-inspector-target-context > summary small {
+  white-space: nowrap;
+}
+
+.semantic-token-inspector-breadcrumbs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 14px 10px;
+  overflow-x: auto;
+  border-top: 1px solid var(--debug-token-inspector-border);
+  background: var(--debug-token-inspector-surface);
+  scrollbar-width: thin;
+}
+
+.semantic-token-inspector-breadcrumbs button {
+  flex: none;
+  max-width: 190px;
+  min-height: 28px;
+  padding: 4px 8px;
+  overflow: hidden;
+  border: 1px solid var(--debug-token-inspector-border);
+  border-radius: 4px;
+  background: var(--debug-token-inspector-surface);
+  color: var(--debug-token-inspector-text-muted);
+  font-family: "IBM Plex Mono", Consolas, monospace;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.semantic-token-inspector-breadcrumbs button:hover,
+.semantic-token-inspector-breadcrumbs button:focus-visible,
+.semantic-token-inspector-breadcrumbs button.is-current {
+  border-color: var(--debug-token-inspector-border-strong);
+  background: var(--debug-token-inspector-info-soft);
+  color: var(--debug-token-inspector-text);
+}
+
+.semantic-token-inspector-property-list {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  gap: 8px;
+  max-height: none;
+  padding: 9px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.semantic-token-inspector-property {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--debug-token-inspector-border);
+  border-left-width: 3px;
+  border-radius: 6px;
+  background: var(--debug-token-inspector-surface-raised);
+}
+
+.semantic-token-inspector-property.is-pass {
+  border-left-color: var(--debug-token-inspector-pass);
+}
+
+.semantic-token-inspector-property.is-warning {
+  border-left-color: var(--debug-token-inspector-warning);
+}
+
+.semantic-token-inspector-property.is-error {
+  border-left-color: var(--debug-token-inspector-error);
+}
+
+.semantic-token-inspector-property.is-info {
+  border-left-color: var(--debug-token-inspector-info);
+}
+
+.semantic-token-inspector-property.is-unknown {
+  border-left-color: var(--debug-token-inspector-unknown);
+}
+
+.semantic-token-inspector-property > header {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 7px;
+}
+
+.semantic-token-inspector-property > header strong {
+  min-width: 0;
+}
+
+.semantic-token-inspector-summary {
+  margin: 0;
+  color: var(--debug-token-inspector-text-muted);
+}
+
+.semantic-token-inspector-property dl {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+}
+
+.semantic-token-inspector-property dl > div {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 7px;
+  min-width: 0;
+}
+
+.semantic-token-inspector-property dt {
+  color: var(--debug-token-inspector-text-muted);
+}
+
+.semantic-token-inspector-property dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.semantic-token-inspector-property code,
+.semantic-token-inspector-candidates code {
+  font-family: "IBM Plex Mono", Consolas, monospace;
+  font-size: 10px;
+}
+
+.semantic-token-inspector-copy-field {
+  max-width: 100%;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  color: var(--debug-token-inspector-text);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: copy;
+}
+
+.semantic-token-inspector-copy-field:hover,
+.semantic-token-inspector-copy-field:focus-visible {
+  color: var(--debug-token-inspector-border-strong);
+}
+
+.semantic-token-inspector-token-chain {
+  display: grid;
+  gap: 3px;
+}
+
+.semantic-token-inspector-token {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-left: calc(var(--semantic-token-depth, 0) * 12px);
+  padding: 4px 6px;
+  border: 1px solid var(--debug-token-inspector-border);
+  border-radius: 4px;
+  background: var(--debug-token-inspector-surface);
+  color: var(--debug-token-inspector-text);
+  text-align: left;
+  cursor: copy;
+}
+
+.semantic-token-inspector-token:hover,
+.semantic-token-inspector-token:focus-visible {
+  border-color: var(--debug-token-inspector-border-strong);
+  background: var(--debug-token-inspector-surface-muted);
+}
+
+.semantic-token-inspector-token code,
+.semantic-token-inspector-token span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.semantic-token-inspector-token span {
+  max-width: 150px;
+  color: var(--debug-token-inspector-text-muted);
+  font-size: 9px;
+}
+
+.semantic-token-inspector-token em {
+  color: var(--debug-token-inspector-warning);
+  font-size: 9px;
+  font-style: normal;
+}
+
+.semantic-token-inspector-candidates {
+  color: var(--debug-token-inspector-text-muted);
+}
+
+.semantic-token-inspector-candidates code {
+  display: block;
+  padding-top: 3px;
+  overflow-wrap: anywhere;
+}
+
+.semantic-token-inspector-warnings {
+  margin: 0;
+  padding: 7px 8px 7px 24px;
+  border: 1px solid var(--debug-token-inspector-warning);
+  border-radius: 5px;
+  color: var(--debug-token-inspector-warning);
+}
+
+.semantic-token-inspector-empty {
+  margin: 0;
+  padding: 12px;
+  color: var(--debug-token-inspector-text-muted);
+  text-align: center;
+}
+
+.semantic-token-inspector-tabs {
+  display: flex;
+  flex: none;
+  gap: 4px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--debug-token-inspector-border);
+  background: var(--debug-token-inspector-surface);
+}
+
+.semantic-token-inspector-tabs button {
+  min-width: 88px;
+  min-height: 38px;
+  padding: 7px 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--debug-token-inspector-text-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.semantic-token-inspector-tabs button:hover,
+.semantic-token-inspector-tabs button:focus-visible,
+.semantic-token-inspector-tabs button.is-active {
+  border-bottom-color: var(--debug-token-inspector-border-strong);
+  color: var(--debug-token-inspector-text);
+  outline: none;
+}
+
+.semantic-token-authoring-session-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--debug-token-inspector-border);
+  background: var(--debug-token-inspector-info-soft);
+  color: var(--debug-token-inspector-text);
+  font-size: 11px;
+}
+
+.semantic-token-authoring-session-bar > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.semantic-token-authoring-session-bar button,
+.semantic-token-authoring-text-button,
+.semantic-token-current-color button {
+  min-height: 28px;
+  padding: 4px 9px;
+  border: 1px solid var(--debug-token-inspector-border);
+  border-radius: 4px;
+  background: var(--debug-token-inspector-surface);
+  color: var(--debug-token-inspector-text);
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.semantic-token-authoring-session-bar button:hover:not(:disabled),
+.semantic-token-authoring-session-bar button:focus-visible,
+.semantic-token-authoring-text-button:hover,
+.semantic-token-authoring-text-button:focus-visible,
+.semantic-token-current-color button:hover,
+.semantic-token-current-color button:focus-visible {
+  border-color: var(--debug-token-inspector-border-strong);
+  outline: none;
+}
+
+.semantic-token-authoring-session-bar button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.semantic-token-authoring-session-bar button.is-danger {
+  color: var(--debug-token-inspector-error);
+}
+
+.semantic-token-style-editor {
+  --seg-border: var(--debug-token-inspector-border);
+  --seg-text-1: var(--debug-token-inspector-text);
+  --seg-text-2: var(--debug-token-inspector-text);
+  --seg-text-3: var(--debug-token-inspector-text-muted);
+  --seg-panel: var(--debug-token-inspector-surface-raised);
+  --settings-theme-token-code-bg: var(--debug-token-inspector-surface);
+  --surface-elevated: var(--debug-token-inspector-text);
+  --shadow-md: 0 16px 40px rgba(0, 0, 0, 0.48);
+  display: grid;
+  flex: 1;
+  grid-template-columns: 224px minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+  background: var(--debug-token-inspector-surface);
+}
+
+.semantic-token-style-sidebar,
+.semantic-token-style-detail {
+  min-width: 0;
+  min-height: 0;
+}
+
+.semantic-token-style-sidebar {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--debug-token-inspector-border);
+  background: var(--debug-token-inspector-surface-raised);
+}
+
+.semantic-token-style-sidebar > header {
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 55px;
+  padding: 10px 11px;
+  border-bottom: 1px solid var(--debug-token-inspector-border);
+}
+
+.semantic-token-style-sidebar > header > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.semantic-token-style-sidebar > header strong {
+  font-size: 12px;
+}
+
+.semantic-token-style-sidebar > header span,
+.semantic-token-style-sidebar > header small {
+  color: var(--debug-token-inspector-text-muted);
+  font-size: 10px;
+}
+
+.semantic-token-style-sidebar > header small {
+  flex: none;
+  white-space: nowrap;
+}
+
+.semantic-token-style-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px 14px;
+  overflow: auto;
+  background: var(--debug-token-inspector-surface);
+  scrollbar-gutter: stable;
+}
+
+.semantic-token-style-detail::-webkit-scrollbar,
+.semantic-token-channel-list::-webkit-scrollbar,
+.semantic-token-picker-listbox::-webkit-scrollbar,
+.semantic-token-inspector-breadcrumbs::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+.semantic-token-style-detail::-webkit-scrollbar-thumb,
+.semantic-token-channel-list::-webkit-scrollbar-thumb,
+.semantic-token-picker-listbox::-webkit-scrollbar-thumb,
+.semantic-token-inspector-breadcrumbs::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--debug-token-inspector-border);
+  background-clip: padding-box;
+}
+
+.semantic-token-authoring-source-theme,
+.semantic-token-authoring-readonly,
+.semantic-token-authoring-preview-note {
+  margin: 0;
+  padding: 7px 8px;
+  border: 1px solid var(--debug-token-inspector-border);
+  border-radius: 5px;
+  background: var(--debug-token-inspector-surface-raised);
+  color: var(--debug-token-inspector-text-muted);
+  font-size: 11px;
+}
+
+.semantic-token-authoring-source-theme {
+  display: grid;
+  flex: none;
+  gap: 6px;
+  padding: 0 0 11px;
+  border: 0;
+  border-bottom: 1px solid var(--debug-token-inspector-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.semantic-token-authoring-source-theme label,
+.semantic-token-authoring-rule-select {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.semantic-token-authoring-source-theme select {
+  width: min(190px, 55%);
+}
+
+.semantic-token-authoring-source-theme p {
+  margin: 0;
+}
+
+.semantic-token-authoring-source-theme select,
+.semantic-token-authoring-rule-select select,
+.semantic-token-authoring-form input,
+.semantic-token-authoring-form select,
+.semantic-token-authoring-form textarea,
+.semantic-token-picker-search input {
+  min-width: 0;
+  min-height: 32px;
+  padding: 5px 8px;
+  border: 1px solid var(--debug-token-inspector-border);
+  border-radius: 4px;
+  background: var(--debug-token-inspector-surface);
+  color: var(--debug-token-inspector-text);
+  font: inherit;
+}
+
+.semantic-token-authoring-source-theme select:focus-visible,
+.semantic-token-authoring-rule-select select:focus-visible,
+.semantic-token-authoring-form input:focus-visible,
+.semantic-token-authoring-form select:focus-visible,
+.semantic-token-authoring-form textarea:focus-visible,
+.semantic-token-picker-search input:focus-visible {
+  border-color: var(--debug-token-inspector-border-strong);
+  outline: none;
+}
+
+.semantic-token-channel-list {
+  display: grid;
+  align-content: start;
+  flex: 1;
+  gap: 4px;
+  margin: 0;
+  padding: 7px;
+  overflow: auto;
+  list-style: none;
+  scrollbar-gutter: stable;
+}
+
+.semantic-token-channel-list > li {
+  min-width: 0;
+}
+
+.semantic-token-channel-row {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 13px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 3px 7px;
+  min-width: 0;
+  min-height: 52px;
+  padding: 7px 8px;
+  border: 1px solid var(--debug-token-inspector-border);
+  border-radius: 5px;
+  background: var(--debug-token-inspector-surface);
+  color: var(--debug-token-inspector-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.semantic-token-channel-row:hover,
+.semantic-token-channel-row:focus-visible,
+.semantic-token-channel-row.is-selected {
+  border-color: var(--debug-token-inspector-border-strong);
+  background: var(--debug-token-inspector-info-soft);
+  outline: none;
+}
+
+.semantic-token-channel-row.is-inactive {
+  color: var(--debug-token-inspector-text-muted);
+}
+
+.semantic-token-channel-row.is-inactive .semantic-token-inspector-swatch {
+  opacity: 0.58;
+}
+
+.semantic-token-channel-copy {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.semantic-token-channel-copy strong {
+  font-size: 11px;
+}
+
+.semantic-token-channel-copy small,
+.semantic-token-channel-row code {
+  overflow: hidden;
+  color: var(--debug-token-inspector-text-muted);
+  font-size: 9.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.semantic-token-channel-row code {
+  grid-column: 2 / -1;
+  width: 100%;
+  font-family: "IBM Plex Mono", Consolas, monospace;
+}
+
+.semantic-token-channel-status,
+.semantic-token-channel-state {
+  min-height: 18px;
+  padding: 1px 6px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  color: var(--debug-token-inspector-text-muted);
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.semantic-token-channel-status.is-visible {
+  color: var(--debug-token-inspector-pass);
+}
+
+.semantic-token-channel-status.is-unknown {
+  color: var(--debug-token-inspector-warning);
+}
+
+.semantic-token-channel-editor {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 0;
+}
+
+.semantic-token-channel-editor > header,
+.semantic-token-authoring-color-editor > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.semantic-token-channel-editor > header > div,
+.semantic-token-authoring-color-editor > header > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.semantic-token-channel-editor > header {
+  align-items: flex-start;
+  padding-bottom: 11px;
+  border-bottom: 1px solid var(--debug-token-inspector-border);
+}
+
+.semantic-token-channel-editor > header small {
+  color: var(--debug-token-inspector-text-muted);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.semantic-token-channel-editor > header strong {
+  font-size: 15px;
+}
+
+.semantic-token-channel-editor > header span,
+.semantic-token-authoring-color-editor > header span,
+.semantic-token-channel-editor > p {
+  margin: 0;
+  color: var(--debug-token-inspector-text-muted);
+  font-size: 10px;
+}
+
+.semantic-token-channel-editor-state {
+  display: grid !important;
+  justify-items: end;
+  max-width: min(50%, 260px);
+  gap: 6px !important;
+}
+
+.semantic-token-channel-editor-state code {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--debug-token-inspector-text-muted);
+  font: 10px/1.3 "IBM Plex Mono", Consolas, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.semantic-token-current-color {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 7px;
+  border-left: 3px solid var(--debug-token-inspector-info);
+  border-radius: 4px;
+  background: var(--debug-token-inspector-info-soft);
+  color: var(--debug-token-inspector-text);
+  font-size: 11px;
+}
+
+.semantic-token-current-color small {
+  grid-column: 1 / -1;
+  color: var(--debug-token-inspector-text-muted);
+}
+
+.semantic-token-authoring-rule-select {
+  color: var(--debug-token-inspector-text-muted);
+  font-size: 10px;
+}
+
+.semantic-token-authoring-rule-select select {
+  flex: 1;
+}
+
+.semantic-token-picker {
+  display: grid;
+  gap: 8px;
+}
+
+.semantic-token-picker-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.semantic-token-picker-heading > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.semantic-token-picker-heading strong {
+  font-size: 12px;
+}
+
+.semantic-token-picker-heading span,
+.semantic-token-picker-heading small {
+  color: var(--debug-token-inspector-text-muted);
+  font-size: 10px;
+}
+
+.semantic-token-picker-heading small {
+  flex: none;
+  white-space: nowrap;
+}
+
+.semantic-token-picker-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
+.semantic-token-picker-search button,
+.semantic-token-authoring-modal footer button,
+.semantic-token-authoring-review footer button {
+  min-height: 32px;
+  padding: 5px 10px;
+  border: 1px solid var(--debug-token-inspector-border);
+  border-radius: 4px;
+  background: var(--debug-token-inspector-surface);
+  color: var(--debug-token-inspector-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.semantic-token-picker-search button:hover,
+.semantic-token-picker-search button:focus-visible,
+.semantic-token-authoring-modal footer button:hover:not(:disabled),
+.semantic-token-authoring-modal footer button:focus-visible,
+.semantic-token-authoring-review footer button:hover:not(:disabled),
+.semantic-token-authoring-review footer button:focus-visible {
+  border-color: var(--debug-token-inspector-border-strong);
+  outline: none;
+}
+
+.semantic-token-picker-listbox {
+  max-height: 310px;
+  overflow: auto;
+  border: 1px solid var(--debug-token-inspector-border);
+  border-radius: 5px;
+  background: var(--debug-token-inspector-surface);
+  scrollbar-gutter: stable;
+}
+
+.semantic-token-picker-group > header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--debug-token-inspector-border);
+  background: var(--debug-token-inspector-surface-muted);
+  color: var(--debug-token-inspector-text-muted);
+  font-size: 10px;
+}
+
+.semantic-token-picker-group > button {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) minmax(120px, auto);
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-width: 0;
+  min-height: 52px;
+  padding: 7px 9px;
+  border: 0;
+  border-bottom: 1px solid var(--debug-token-inspector-border);
+  background: transparent;
+  color: var(--debug-token-inspector-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.semantic-token-picker-group > button:hover,
+.semantic-token-picker-group > button:focus-visible,
+.semantic-token-picker-group > button.is-active,
+.semantic-token-picker-group > button.is-selected {
+  background: var(--debug-token-inspector-info-soft);
+  outline: none;
+}
+
+.semantic-token-picker-group > button > span:nth-child(2) {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.semantic-token-picker-group > button small,
+.semantic-token-picker-group > button code {
+  overflow: hidden;
+  color: var(--debug-token-inspector-text-muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.semantic-token-picker-group > button code {
+  font-family: "IBM Plex Mono", Consolas, monospace;
+}
+
+.semantic-token-picker-swatches {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 32px;
+  height: 24px;
+  overflow: hidden;
+  border: 1px solid var(--debug-token-inspector-border);
+  border-radius: 3px;
+}
+
+.semantic-token-picker-swatches i {
+  display: block;
+}
+
+.semantic-token-authoring-color-editor {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--debug-token-inspector-border);
+}
+
+.semantic-token-authoring-color-row {
+  display: grid;
+  grid-template-columns: 34px 34px minmax(120px, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.semantic-token-authoring-color-row > .mode {
+  color: var(--debug-token-inspector-text-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.semantic-token-style-editor .settings-theme-color-input {
+  width: 100%;
+  color: var(--debug-token-inspector-text);
+}
+
+.semantic-token-style-editor .settings-theme-color-popover {
+  z-index: 140;
+}
+
+.semantic-token-authoring-error {
+  max-height: 110px;
+  margin: 0;
+  padding: 7px;
+  overflow: auto;
+  border: 1px solid var(--debug-token-inspector-error);
+  border-radius: 5px;
+  background: var(--debug-token-inspector-error-soft);
+  color: var(--debug-token-inspector-error);
+  font: 9px/1.45 "IBM Plex Mono", Consolas, monospace;
+  white-space: pre-wrap;
+}
+
+.semantic-token-authoring-modal-backdrop {
+  position: fixed;
+  z-index: 2147483647;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(2, 6, 23, 0.68);
+  pointer-events: auto;
+}
+
+.semantic-token-authoring-modal,
+.semantic-token-authoring-review {
+  display: grid;
+  width: min(640px, calc(100vw - 32px));
+  max-height: min(820px, calc(100vh - 32px));
+  overflow: hidden;
+  border: 1px solid var(--debug-token-inspector-border-strong);
+  border-radius: 8px;
+  background: var(--debug-token-inspector-surface);
+  color: var(--debug-token-inspector-text);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.62);
+}
+
+.semantic-token-authoring-modal > header,
+.semantic-token-authoring-review > header,
+.semantic-token-authoring-modal > footer,
+.semantic-token-authoring-review > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--debug-token-inspector-border);
+}
+
+.semantic-token-authoring-modal > footer,
+.semantic-token-authoring-review > footer {
+  justify-content: flex-end;
+  border-top: 1px solid var(--debug-token-inspector-border);
+  border-bottom: 0;
+}
+
+.semantic-token-authoring-modal > header > div,
+.semantic-token-authoring-review > header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.semantic-token-authoring-modal > header span,
+.semantic-token-authoring-review > header span {
+  color: var(--debug-token-inspector-text-muted);
+  font-size: 9px;
+}
+
+.semantic-token-authoring-modal > header button,
+.semantic-token-authoring-review > header button {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--debug-token-inspector-border);
+  border-radius: 4px;
+  background: var(--debug-token-inspector-surface-raised);
+  color: var(--debug-token-inspector-text);
+  cursor: pointer;
+}
+
+.semantic-token-authoring-modal footer button.is-primary,
+.semantic-token-authoring-review footer button.is-primary {
+  border-color: var(--debug-token-inspector-border-strong);
+  background: var(--debug-token-inspector-info-soft);
+}
+
+.semantic-token-authoring-modal footer button:disabled,
+.semantic-token-authoring-review footer button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.semantic-token-authoring-form,
+.semantic-token-authoring-review-body {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  overflow: auto;
+}
+
+.semantic-token-authoring-form > label,
+.semantic-token-authoring-new-group label {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  color: var(--debug-token-inspector-text-muted);
+  font-size: 10px;
+}
+
+.semantic-token-authoring-form > label code {
+  grid-column: 2;
+  color: var(--debug-token-inspector-text-muted);
+  font-size: 9px;
+}
+
+.semantic-token-authoring-form textarea {
+  min-height: 58px;
+  resize: vertical;
+}
+
+.semantic-token-authoring-form .is-error {
+  margin: -5px 0 0 128px;
+  color: var(--debug-token-inspector-error);
+  font-size: 9px;
+}
+
+.semantic-token-authoring-new-group {
+  display: grid;
+  gap: 7px;
+  padding: 8px;
+  border: 1px solid var(--debug-token-inspector-border);
+  border-radius: 5px;
+  background: var(--debug-token-inspector-surface-raised);
+}
+
+.semantic-token-authoring-new-colors {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.semantic-token-authoring-new-colors > label {
+  display: grid;
+  gap: 4px;
+  color: var(--debug-token-inspector-text-muted);
+  font-size: 10px;
+}
+
+.semantic-token-authoring-new-colors .color-control {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 6px;
+}
+
+.semantic-token-authoring-pairing {
+  margin: 0;
+  color: var(--debug-token-inspector-text-muted);
+  font-size: 9px;
+}
+
+.semantic-token-authoring-review {
+  width: min(860px, calc(100vw - 32px));
+}
+
+.semantic-token-authoring-review-body section {
+  display: grid;
+  gap: 5px;
+}
+
+.semantic-token-authoring-review-body h3 {
+  margin: 0;
+  color: var(--debug-token-inspector-text-muted);
+  font-size: 10px;
+}
+
+.review-operation {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.8fr) minmax(0, 1fr);
+  gap: 8px;
+  padding: 6px 7px;
+  border: 1px solid var(--debug-token-inspector-border);
+  border-radius: 4px;
+  background: var(--debug-token-inspector-surface-raised);
+  font-size: 9px;
+}
+
+.review-operation code,
+.review-operation span {
+  overflow-wrap: anywhere;
+}
+
+.semantic-token-authoring-diff {
+  border: 1px solid var(--debug-token-inspector-border);
+  border-radius: 4px;
+  background: var(--debug-token-inspector-surface-raised);
+}
+
+.semantic-token-authoring-diff summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 7px;
+  cursor: pointer;
+}
+
+.semantic-token-authoring-diff pre {
+  max-height: 260px;
+  margin: 0;
+  padding: 8px;
+  overflow: auto;
+  border-top: 1px solid var(--debug-token-inspector-border);
+  background: var(--debug-token-inspector-surface);
+  color: var(--debug-token-inspector-text-muted);
+  font: 9px/1.4 "IBM Plex Mono", Consolas, monospace;
+  white-space: pre;
+}
+
+@media (max-width: 560px) {
+  .semantic-token-inspector-card.is-pinned {
+    left: 8px !important;
+    width: calc(100vw - 16px) !important;
+  }
+
+  .semantic-token-inspector-status kbd {
+    display: none;
+  }
+
+  .semantic-token-style-editor {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(150px, 34%) minmax(0, 1fr);
+  }
+
+  .semantic-token-style-sidebar {
+    border-right: 0;
+    border-bottom: 1px solid var(--debug-token-inspector-border);
+  }
+
+  .semantic-token-channel-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .semantic-token-style-detail {
+    padding: 10px 11px 12px;
+  }
+
+  .semantic-token-channel-row {
+    grid-template-columns: 13px minmax(90px, 1fr) auto;
+  }
+
+  .semantic-token-channel-row > code {
+    display: none;
+  }
+
+  .semantic-token-authoring-session-bar,
+  .semantic-token-authoring-source-theme label,
+  .semantic-token-authoring-rule-select {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .semantic-token-authoring-session-bar > div {
+    justify-content: flex-start;
+  }
+
+  .semantic-token-authoring-color-row {
+    grid-template-columns: 34px 34px minmax(0, 1fr);
+  }
+
+  .semantic-token-authoring-color-row .semantic-token-authoring-text-button {
+    grid-column: 2 / -1;
+  }
+
+  .semantic-token-authoring-form > label,
+  .semantic-token-authoring-new-group label {
+    grid-template-columns: 1fr;
+  }
+
+  .semantic-token-authoring-form > label code {
+    grid-column: 1;
+  }
+
+  .semantic-token-authoring-form .is-error {
+    margin-left: 0;
+  }
+
+  .semantic-token-authoring-new-colors {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 420px) {
+  .semantic-token-channel-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .semantic-token-inspector-target-context > summary {
+    grid-template-columns: auto minmax(0, 1fr) 12px;
+  }
+
+  .semantic-token-inspector-target-context > summary small {
+    display: none;
+  }
+
+  .semantic-token-picker-group > button {
+    grid-template-columns: 32px minmax(0, 1fr);
+  }
+
+  .semantic-token-picker-group > button code {
+    grid-column: 2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .semantic-token-inspector-target-context > summary::after {
+    transition: none;
+  }
+}

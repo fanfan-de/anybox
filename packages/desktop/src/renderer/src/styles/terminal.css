@@ -8,8 +8,8 @@
   grid-template-rows: auto auto minmax(0, 1fr);
   margin: 0;
   border: 0;
-  border-top: 1px solid rgba(138, 164, 189, 0.28);
-  background: #f5f7fa;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--semantic-terminal-surface);
   box-shadow: none;
   overflow: hidden;
   contain: layout paint;
@@ -37,7 +37,7 @@
   height: 10px;
   cursor: row-resize;
   box-sizing: border-box;
-  border-bottom: 1px solid var(--mix-seg-border-82-transparent-18);
+  border-bottom: 1px solid var(--border-subtle);
   background: var(--seg-shell);
 }
 
@@ -49,7 +49,7 @@
   width: 64px;
   height: 2px;
   transform: translateX(-50%);
-  background: rgba(116, 143, 169, 0.34);
+  background: var(--border-default);
 }
 
 .terminal-panel-resizer.is-active::after,
@@ -142,8 +142,8 @@
 .terminal-shell-picker-trigger:hover,
 .terminal-shell-picker-trigger:focus-visible,
 .terminal-shell-picker-select.is-open .terminal-shell-picker-trigger {
-  background: var(--mix-seg-accent-soft-72-seg-panel-28);
-  color: var(--seg-accent-strong);
+  background: var(--brand-primary-soft-active);
+  color: var(--text-primary);
   box-shadow: none;
 }
 
@@ -173,7 +173,7 @@
   border-radius: var(--semantic-dropdown-menu-radius, var(--seg-radius-md));
   background: var(--seg-dropdown-menu-surface);
   color: var(--seg-text-1);
-  box-shadow: 0 14px 34px rgba(46, 81, 118, 0.12);
+  box-shadow: var(--shadow-md);
   outline: none;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -225,8 +225,8 @@
 }
 
 .terminal-shell-picker-option.is-selected {
-  background: var(--mix-seg-accent-soft-72-seg-panel-28);
-  color: var(--seg-accent-strong);
+  background: var(--brand-primary-soft-active);
+  color: var(--text-primary);
 }
 
 .terminal-panel-toggle-button {
@@ -239,7 +239,7 @@
   border: 0;
   background: transparent;
   box-shadow: none;
-  color: #5a6e81;
+  color: var(--semantic-icon-button-text);
   flex-shrink: 0;
 }
 
@@ -247,7 +247,7 @@
 .terminal-panel-toggle-button:focus-visible,
 .terminal-panel-toggle-button.is-active {
   border: 0;
-  background: var(--mix-seg-accent-soft-72-transparent-28);
+  background: var(--semantic-icon-button-surface-hover);
   box-shadow: none;
 }
 
@@ -257,14 +257,14 @@
   height: var(--section-toolbar-control-size);
   min-height: var(--section-toolbar-control-size);
   border-radius: 8px;
-  color: #5a6e81;
+  color: var(--semantic-icon-button-text);
 }
 
 .activity-rail-bottom .terminal-panel-toggle-button:hover,
 .activity-rail-bottom .terminal-panel-toggle-button:focus-visible,
 .activity-rail-bottom .terminal-panel-toggle-button.is-active {
-  background: rgba(84, 96, 109, 0.14);
-  color: #22303d;
+  background: var(--semantic-icon-button-surface-hover);
+  color: var(--semantic-icon-button-text-hover);
 }
 
 .activity-rail-bottom .terminal-panel-toggle-button:focus-visible {
@@ -280,7 +280,7 @@
   gap: 2px;
   border: 0;
   background: transparent;
-  color: #55697d;
+  color: var(--text-secondary);
 }
 
 .terminal-tab.is-active {
@@ -320,7 +320,7 @@
   justify-content: center;
   border: 0;
   background: transparent;
-  color: #5a6e81;
+  color: var(--semantic-icon-button-text);
   cursor: pointer;
   transition:
     background 160ms ease,
@@ -335,8 +335,8 @@
 .terminal-tab-close:focus-visible,
 .terminal-panel-create:hover,
 .terminal-panel-create:focus-visible {
-  color: #1d2a35;
-  background: var(--mix-seg-accent-soft-72-transparent-28);
+  color: var(--semantic-icon-button-text-hover);
+  background: var(--semantic-icon-button-surface-hover);
 }
 
 .terminal-panel-create:disabled {
@@ -367,7 +367,7 @@
 
 .terminal-view-error {
   margin: 0;
-  color: #b13a3a;
+  color: var(--semantic-error-text);
   line-height: 1.5;
 }
 
@@ -407,7 +407,7 @@
   place-items: center;
   gap: 12px;
   padding: 24px;
-  color: #55697d;
+  color: var(--text-secondary);
 }
 
 .terminal-empty-state p {
@@ -426,7 +426,7 @@
 }
 
 .terminal-tabs-list::-webkit-scrollbar-thumb {
-  background: rgba(121, 145, 168, 0.34);
+  background: var(--semantic-scrollbar-thumb-surface);
 }
 
 .sidebar-resizer::before,
@@ -467,8 +467,8 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before,
 .sidebar-toggle-button.is-sidebar,
 .sidebar-settings,
 .row-action {
-  background: rgba(255, 255, 255, 0.3);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.24);
+  background: var(--semantic-icon-button-surface-hover);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
 }
 
 .sidebar-toggle-button.is-rail:hover,
@@ -485,11 +485,11 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before,
 .activity-rail-bottom .terminal-panel-toggle-button:hover,
 .activity-rail-bottom .terminal-panel-toggle-button:focus-visible,
 .activity-rail-bottom .terminal-panel-toggle-button.is-active {
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--semantic-icon-button-surface-active);
   color: var(--ui-text-1);
   box-shadow:
-    inset 0 0 0 1px rgba(29, 41, 57, 0.06),
-    0 8px 16px rgba(24, 34, 48, 0.06);
+    inset 0 0 0 1px var(--border-subtle),
+    var(--shadow-sm);
 }
 
 .composer-utility-chip,
@@ -530,21 +530,22 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before,
 
 .top-menu-view-button:hover,
 .top-menu-view-button:focus-visible {
-  border-color: var(--mix-ui-accent-strong-18-transparent-82);
-  background: var(--mix-ui-accent-strong-14-transparent-86);
-  color: var(--ui-accent-strong);
+  border-color: var(--focus-outline-color);
+  background: var(--semantic-icon-button-surface-hover);
+  color: var(--semantic-icon-button-text-hover);
   box-shadow: none;
 }
 
 /* Sage / Teal & Slate theme overrides */
 
 .terminal-panel {
-  border-top-color: var(--mix-seg-border-82-transparent-18);
-  background: var(--mix-seg-shell-92-seg-panel-8);
+  border-top-color: var(--border-subtle);
+  background: var(--surface-shell);
 }
 
 .terminal-panel-resizer::after {
-  background: var(--mix-seg-text-3-34-transparent-66);
+  background: var(--text-tertiary);
+  opacity: 0.34;
 }
 
 .terminal-tabs {
@@ -570,8 +571,8 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before,
 .activity-rail-bottom .terminal-panel-toggle-button:hover,
 .activity-rail-bottom .terminal-panel-toggle-button:focus-visible,
 .activity-rail-bottom .terminal-panel-toggle-button.is-active {
-  background: var(--mix-seg-accent-soft-72-seg-panel-28);
-  color: var(--seg-accent-strong);
+  background: var(--semantic-icon-button-surface-active);
+  color: var(--semantic-icon-button-text-active);
   border-color: transparent;
   box-shadow: none;
 }
@@ -582,8 +583,8 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before,
 }
 
 .terminal-tab.is-active {
-  background: var(--mix-surface-code-16-seg-panel-84);
-  color: var(--seg-text-1);
+  background: var(--surface-panel);
+  color: var(--text-primary);
 }
 
 .terminal-view-error {
@@ -601,13 +602,13 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before,
 }
 
 .terminal-tabs-list::-webkit-scrollbar-thumb {
-  background: var(--mix-brand-accent-active-28-rgba-148-163-184-0-28-72);
+  background: var(--semantic-scrollbar-thumb-surface);
 }
 
 .right-sidebar-main-stack .terminal-panel {
   flex: 0 0 auto;
   margin: 0;
-  border-top: 1px solid var(--mix-seg-border-82-transparent-18);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .right-sidebar-view-host.is-terminal .terminal-panel {

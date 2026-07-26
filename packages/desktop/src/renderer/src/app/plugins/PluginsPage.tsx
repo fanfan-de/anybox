@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type MouseEvent, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 import {
   BackIcon,
@@ -118,10 +118,6 @@ const CATEGORY_LABEL_KEYS: Record<PluginCategory | "All", TranslationKey> = {
 }
 
 const FEATURED_PLUGIN_LIMIT = 3
-
-type PluginVisualStyle = CSSProperties & {
-  "--plugins-brand-color"?: string
-}
 
 function runtimeTitle(runtime: PluginRuntimeTemplate) {
   if (runtime.transport === "stdio") {
@@ -377,11 +373,6 @@ function pluginBrandColor(plugin: PluginCatalogItem) {
   return color && /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(color) ? color : undefined
 }
 
-function pluginBrandStyle(plugin: PluginCatalogItem): PluginVisualStyle | undefined {
-  const color = pluginBrandColor(plugin)
-  return color ? { "--plugins-brand-color": color } : undefined
-}
-
 function pluginCapabilityCount(plugin: PluginCatalogItem) {
   return (
     plugin.mcpServers.length
@@ -513,13 +504,19 @@ function isImageIcon(icon: string) {
 
 function PluginMark({ plugin }: { plugin: PluginCatalogItem }) {
   const icon = pluginImageURL(plugin, "icon") ?? plugin.icon?.trim()
+  const [failedImageIcon, setFailedImageIcon] = useState<string | null>(null)
+  const imageIcon = icon && isImageIcon(icon) && icon !== failedImageIcon ? icon : null
+  const glyph = icon && !isImageIcon(icon) && icon.length <= 4 ? icon : null
 
   return (
-    <span className={`plugins-icon-mark ${categoryClassName(plugin.category)}`} aria-hidden="true">
-      {icon && isImageIcon(icon) ? (
-        <img src={icon} alt="" />
-      ) : icon && icon.length <= 4 ? (
-        <span className="plugins-icon-glyph">{icon}</span>
+    <span
+      className={`plugins-icon-mark ${categoryClassName(plugin.category)} ${imageIcon ? "is-logo-image" : "is-placeholder"}`}
+      aria-hidden="true"
+    >
+      {imageIcon ? (
+        <img src={imageIcon} alt="" onError={() => setFailedImageIcon(imageIcon)} />
+      ) : glyph ? (
+        <span className="plugins-icon-glyph">{glyph}</span>
       ) : (
         <span className="plugins-icon-initials">{pluginInitials(plugin.name)}</span>
       )}
@@ -603,7 +600,6 @@ function PluginMarketItem({
   return (
     <div
       className={isActive ? "plugins-market-item is-active" : "plugins-market-item"}
-      style={pluginBrandStyle(plugin)}
     >
       <button
         className="plugins-market-item-main"
@@ -917,7 +913,7 @@ function InstalledPluginsSidebar({
                     {plugin ? (
                       <PluginMark plugin={plugin} />
                     ) : (
-                      <span className="plugins-icon-mark is-installed-placeholder" aria-hidden="true">
+                      <span className="plugins-icon-mark is-placeholder is-installed-placeholder" aria-hidden="true">
                         <PluginIcon />
                       </span>
                     )}

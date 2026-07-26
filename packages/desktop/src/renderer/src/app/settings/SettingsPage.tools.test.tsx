@@ -2408,6 +2408,15 @@ describe("SettingsPage built-in tools", () => {
     expect(screen.queryByText("App Background")).not.toBeInTheDocument()
 
     fireEvent.change(searchBox, {
+      target: { value: "semantic-detail-icon-text" },
+    })
+
+    expect(screen.getByText("Settings List Detail Rows")).toBeInTheDocument()
+    expect(screen.getByText("Detail Icon Text")).toBeInTheDocument()
+    expect(screen.getByTitle(/^semantic-detail-icon-text \//)).toBeInTheDocument()
+    expect(screen.queryByText("App Background")).not.toBeInTheDocument()
+
+    fireEvent.change(searchBox, {
       target: { value: "semantic-settings-switch-track-surface" },
     })
 

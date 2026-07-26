@@ -22,7 +22,7 @@
   .sidebar {
     grid-column: 1 / -1;
     grid-row: 2;
-    border-top: 1px solid #e2e9f2;
+  border-top: 1px solid var(--border-subtle);
     border-right: 0;
   }
 
@@ -46,7 +46,7 @@
 
   .panel-toolbar {
     padding: 0;
-    border-bottom: 1px solid rgba(138, 164, 189, 0.36);
+  border-bottom: 1px solid var(--border-default);
   }
 
   .workbench-panes {
@@ -75,7 +75,7 @@
   .settings-page-nav,
   .settings-page-primary-nav {
     border-right: 0;
-    border-bottom: 1px solid rgba(138, 164, 189, 0.26);
+  border-bottom: 1px solid var(--border-subtle);
   }
 
   .provider-row,
@@ -372,7 +372,6 @@
 
   .settings-field-grid,
   .settings-font-family-group,
-  .settings-theme-palette-group,
   .mcp-tool-policy-card,
   .permission-request-grid,
   .permission-request-grid-compact,

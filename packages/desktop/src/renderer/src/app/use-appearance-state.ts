@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
+  APPEARANCE_TOKEN_GROUPS,
+  isAppearanceTokenName,
   isAppearanceFontFamily,
   normalizeAppearanceConfigDocument,
   normalizeAppearanceRuntimeState,
@@ -8,6 +10,7 @@ import {
   type AppearanceRuntimeState,
   type AppearanceTokenMap,
   type AppearanceTokenName,
+  type AppearanceTokenValue,
 } from "../../../shared/appearance"
 import {
   evaluateAppearanceContrastWarnings,
@@ -27,6 +30,10 @@ import {
   type AppearanceThemeLibrarySnapshot,
   type AppearanceThemeSaveInput,
 } from "../../../shared/appearance-themes"
+import type {
+  SemanticTokenAuthoringDraft,
+  SemanticTokenThemeValueEdit,
+} from "../../../shared/semantic-token-authoring"
 import { applyAppearanceOverrides } from "./appearance-theme"
 import {
   normalizeCodeThemePreference,
@@ -47,6 +54,62 @@ const CODE_THEME_STORAGE_KEY = "desktop.codeTheme"
 const BRAND_THEME_STORAGE_KEY = "desktop.brandTheme"
 const FONT_FAMILY_STORAGE_KEY = "desktop.fontFamily"
 const APPEARANCE_CONFIG_SAVE_DEBOUNCE_MS = 160
+
+const SEMANTIC_RUNTIME_MODE_TOKENS = new Map(
+  APPEARANCE_TOKEN_GROUPS.flatMap((group) =>
+    group.rows.map((row) => {
+      const runtimeToken = "runtimeToken" in row ? row.runtimeToken : row.id
+      return [
+        runtimeToken,
+        { light: row.lightToken, dark: row.darkToken },
+      ] as const
+    }),
+  ),
+)
+
+function authoringModeToken(
+  edit: SemanticTokenThemeValueEdit,
+  createdRuntimeTokens: ReadonlySet<string>,
+) {
+  const existing = SEMANTIC_RUNTIME_MODE_TOKENS.get(edit.runtimeToken)
+  if (existing) return existing[edit.mode]
+  return createdRuntimeTokens.has(edit.runtimeToken)
+    ? `${edit.runtimeToken}-${edit.mode}`
+    : null
+}
+
+export function applySemanticAuthoringDraftToOverrides(
+  current: AppearanceTokenMap,
+  draft: SemanticTokenAuthoringDraft,
+  includeNewTokens: boolean,
+) {
+  const next = { ...current } as Record<string, AppearanceTokenValue>
+  const createdRuntimeTokens = new Set(
+    draft.operations
+      .filter((operation) => operation.kind === "token-creation")
+      .map((operation) => operation.runtimeToken),
+  )
+  for (const operation of draft.operations) {
+    if (operation.kind === "token-creation") {
+      if (!includeNewTokens) continue
+      const light = parseAppearanceColorLiteral(operation.light.value)
+      const dark = parseAppearanceColorLiteral(operation.dark.value)
+      if (light) next[`${operation.runtimeToken}-light`] = light
+      if (dark) next[`${operation.runtimeToken}-dark`] = dark
+      continue
+    }
+    if (operation.kind !== "theme-token-value-edit") continue
+    const modeToken = authoringModeToken(operation, createdRuntimeTokens)
+    if (!modeToken || (!includeNewTokens && !isAppearanceTokenName(modeToken))) continue
+    if (operation.action === "reset") {
+      delete next[modeToken]
+      continue
+    }
+    const value = parseAppearanceColorLiteral(operation.value ?? "")
+    if (value) next[modeToken] = value
+  }
+  return next as AppearanceTokenMap
+}
 
 const DEFAULT_APPEARANCE_TOKEN_VALUES = resolveAppearanceTokenCssValues({
   brandTheme: "terra",
@@ -451,6 +514,59 @@ export function useAppearanceState() {
     setAppearanceOverrides({})
   }
 
+  function handleSemanticTokenAuthoringCommitted(draft: SemanticTokenAuthoringDraft) {
+    setAppearanceThemeSnapshot((current) => {
+      const updateTheme = <Theme extends AppearanceTheme>(theme: Theme): Theme =>
+        theme.id === draft.sourceThemeID
+          ? {
+              ...theme,
+              overrides: applySemanticAuthoringDraftToOverrides(
+                theme.overrides,
+                draft,
+                true,
+              ),
+            }
+          : theme
+      return {
+        ...current,
+        builtInThemes: current.builtInThemes.map(updateTheme),
+        themes: current.themes.map(updateTheme),
+      }
+    })
+
+    if (appearanceThemeSnapshot.activeThemeID !== draft.sourceThemeID) return
+    const createdRuntimeTokens = new Set(
+      draft.operations
+        .filter((operation) => operation.kind === "token-creation")
+        .map((operation) => operation.runtimeToken),
+    )
+    for (const operation of draft.operations) {
+      if (operation.kind === "token-creation") {
+        document.documentElement.style.setProperty(
+          `--${operation.runtimeToken}-light`,
+          operation.light.value,
+        )
+        document.documentElement.style.setProperty(
+          `--${operation.runtimeToken}-dark`,
+          operation.dark.value,
+        )
+        continue
+      }
+      if (operation.kind !== "theme-token-value-edit") continue
+      const modeToken = authoringModeToken(operation, createdRuntimeTokens)
+      if (!modeToken) continue
+      if (operation.action === "reset") {
+        document.documentElement.style.removeProperty(`--${modeToken}`)
+      } else if (operation.value) {
+        document.documentElement.style.setProperty(`--${modeToken}`, operation.value)
+      }
+    }
+    setAppearanceOverrides((current) =>
+      applySemanticAuthoringDraftToOverrides(current, draft, false),
+    )
+    setAppearanceConfigError(null)
+  }
+
   function handleHtmlBackgroundConfigChange(nextConfig: HtmlBackgroundConfig) {
     setHtmlBackgroundConfig(nextConfig)
   }
@@ -679,12 +795,14 @@ export function useAppearanceState() {
     handleAppearanceThemeSaveCurrent,
     handleAppearanceTokenChange,
     handleAppearanceTokenReset,
+    handleSemanticTokenAuthoringCommitted,
     handleBrandThemeChange: setBrandTheme,
     handleCodeThemeChange: setCodeThemePreference,
     handleColorModeChange: setColorMode,
     handleFontFamilyChange: setFontFamily,
     handleHtmlBackgroundConfigChange,
     htmlBackgroundConfig,
+    resolvedColorMode,
     resolvedCodeTheme,
   }
 }

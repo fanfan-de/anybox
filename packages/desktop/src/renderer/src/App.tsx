@@ -45,6 +45,7 @@ import { useDesktopShell } from "./app/use-desktop-shell"
 import { useGlobalSkills } from "./app/use-global-skills"
 import { useSettingsPage } from "./app/use-settings-page"
 import { ToastProvider, useToast } from "./app/toast"
+import { SemanticTokenInspectorOverlay } from "./app/debug/SemanticTokenInspectorOverlay"
 import { createEmptyComposerDraftState } from "./app/composer/draft-state"
 import type { BuiltinToolKindKey } from "./app/tools/BuiltinToolsPage"
 import { findSession, isGitWorkspaceProject, isSideChatSession, sameWorkspaceDirectory } from "./app/workspace"
@@ -1197,10 +1198,12 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     handleAppearanceThemeSaveCurrent,
     handleAppearanceTokenChange,
     handleAppearanceTokenReset,
+    handleSemanticTokenAuthoringCommitted,
     handleAssistantTraceVisibilityChange,
     handleAgentDebugTraceChange,
     handleDebugLineColorsChange,
     handleDebugUiRegionsChange,
+    handleSemanticTokenInspectorChange,
     handleMobileConnectionAdvancedInfoChange,
     handleRightSidebarResizerKeyDown,
     handleRightSidebarResizerPointerDown,
@@ -1218,6 +1221,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     isAgentDebugTraceEnabled,
     isDebugLineColorsEnabled,
     isDebugUiRegionsEnabled,
+    isSemanticTokenInspectorEnabled,
     isMobileConnectionAdvancedInfoEnabled,
     isRightSidebarCollapsed,
     isRightSidebarResizing,
@@ -1228,6 +1232,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     rightSidebarWidthBounds,
     rightSidebarWidth,
     resolvedCodeTheme,
+    resolvedColorMode,
     sidebarWidthBounds,
     sidebarWidth,
     windowControlsRef,
@@ -3440,6 +3445,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               isAgentDebugTraceEnabled={isAgentDebugTraceEnabled}
               isDebugLineColorsEnabled={isDebugLineColorsEnabled}
               isDebugUiRegionsEnabled={isDebugUiRegionsEnabled}
+              isSemanticTokenInspectorEnabled={isSemanticTokenInspectorEnabled}
               isMobileConnectionAdvancedInfoEnabled={isMobileConnectionAdvancedInfoEnabled}
               isDeletingAllArchivedSessions={isDeletingAllArchivedSessions}
               isLoading={isLoading}
@@ -3492,6 +3498,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               onAgentDebugTraceChange={handleAgentDebugTraceChange}
               onDebugLineColorsChange={handleDebugLineColorsChange}
               onDebugUiRegionsChange={handleDebugUiRegionsChange}
+              onSemanticTokenInspectorChange={handleSemanticTokenInspectorChange}
               onMobileConnectionAdvancedInfoChange={handleMobileConnectionAdvancedInfoChange}
               onAutomaticUpdatesToggle={() => void handleAutomaticUpdatesToggle()}
               onCheckForUpdates={() => void handleCheckForUpdates()}
@@ -3548,6 +3555,14 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
           />
         ) : null}
         </main>
+        <SemanticTokenInspectorOverlay
+          enabled={isSemanticTokenInspectorEnabled}
+          resolvedColorMode={resolvedColorMode}
+          onEnabledChange={handleSemanticTokenInspectorChange}
+          appearanceThemes={appearanceThemes}
+          activeAppearanceThemeID={activeAppearanceThemeID}
+          onAuthoringCommitted={handleSemanticTokenAuthoringCommitted}
+        />
         </div>
       </ThreadLinkRoutingProvider>
     </WorkspaceStoreProvider>

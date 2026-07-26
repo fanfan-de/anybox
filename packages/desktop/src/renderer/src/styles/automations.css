@@ -10,13 +10,13 @@
   --automations-top-surface: var(--seg-shell-chrome-surface, var(--surface-shell));
   --automations-surface: var(--surface-panel);
   --automations-surface-subtle: var(--surface-panel-muted);
-  --automations-panel-surface: var(--mix-seg-panel-muted-72-seg-panel-28, var(--surface-app));
+  --automations-panel-surface: var(--surface-panel);
   --automations-panel-inset: var(--surface-app, var(--surface-panel));
   --automations-elevated: var(--surface-elevated, var(--surface-panel));
   --automations-dropdown-surface: var(--semantic-dropdown-menu-surface, var(--surface-elevated));
-  --automations-overlay: var(--surface-overlay, rgba(41, 37, 36, 0.16));
-  --automations-surface-hover: var(--mix-seg-panel-muted-86-transparent-14, var(--surface-panel-muted));
-  --automations-border: var(--mix-seg-border-82-transparent-18, var(--border-default));
+  --automations-overlay: var(--surface-overlay);
+  --automations-surface-hover: var(--surface-panel-muted);
+  --automations-border: var(--border-default);
   --automations-border-subtle: var(--border-subtle);
   --automations-text: var(--text-primary);
   --automations-text-muted: var(--text-secondary);
@@ -216,14 +216,14 @@
 }
 
 .automations-page .primary-button {
-  background: var(--mix-seg-accent-soft-72-seg-panel-28);
-  color: var(--automations-accent-hover);
+  background: var(--semantic-button-primary-surface);
+  color: var(--semantic-button-primary-text);
 }
 
 .automations-page .primary-button:hover,
 .automations-page .primary-button:focus-visible {
-  background: var(--mix-seg-accent-soft-84-seg-panel-16);
-  color: var(--automations-text);
+  background: var(--semantic-button-primary-surface-hover);
+  color: var(--semantic-button-primary-text-hover);
 }
 
 .automations-page .automations-run-now-button {
@@ -324,7 +324,7 @@
   align-content: start;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
-  scrollbar-color: rgba(138, 138, 138, 0.46) transparent;
+  scrollbar-color: var(--semantic-scrollbar-thumb-surface) transparent;
 }
 
 .automations-index-list::-webkit-scrollbar,
@@ -347,7 +347,7 @@
 .automations-template-browser-grid::-webkit-scrollbar-thumb {
   border: 3px solid transparent;
   border-radius: 999px;
-  background: rgba(138, 138, 138, 0.46);
+  background: var(--semantic-scrollbar-thumb-surface);
   background-clip: padding-box;
 }
 
@@ -1389,8 +1389,8 @@
 }
 
 .automations-page .automations-create-button:disabled {
-  background: var(--mix-seg-accent-soft-72-seg-panel-28, var(--automations-surface-hover));
-  color: var(--automations-text-faint);
+  background: var(--semantic-button-primary-disabled-surface);
+  color: var(--semantic-button-primary-disabled-text);
   cursor: not-allowed;
   opacity: 0.72;
 }
@@ -1419,15 +1419,15 @@
 }
 
 .automations-create-menu.automation-detail-menu-portal {
-  --automations-dropdown-surface: var(--semantic-dropdown-menu-surface, var(--surface-elevated, var(--surface-panel, #ffffff)));
-  --automations-border: var(--mix-seg-border-82-transparent-18, var(--border-default, rgba(17, 24, 39, 0.12)));
-  --automations-border-subtle: var(--border-subtle, rgba(17, 24, 39, 0.08));
-  --automations-surface-hover: var(--mix-seg-panel-muted-86-transparent-14, var(--surface-panel-muted, rgba(17, 24, 39, 0.06)));
-  --automations-text: var(--text-primary, #1f2937);
-  --automations-text-muted: var(--text-secondary, #6b7280);
-  --automations-text-faint: var(--text-tertiary, #9ca3af);
+  --automations-dropdown-surface: var(--semantic-dropdown-menu-surface);
+  --automations-border: var(--border-default);
+  --automations-border-subtle: var(--border-subtle);
+  --automations-surface-hover: var(--surface-panel-muted);
+  --automations-text: var(--text-primary);
+  --automations-text-muted: var(--text-secondary);
+  --automations-text-faint: var(--text-tertiary);
   --automations-radius-control: var(--radius-control, 7px);
-  --automations-shadow-popover: var(--shadow-md, 0 14px 34px rgba(17, 24, 39, 0.14));
+  --automations-shadow-popover: var(--shadow-md);
   position: fixed;
   right: auto;
   bottom: auto;
@@ -1551,7 +1551,7 @@
   gap: 10px;
   background: var(--automations-panel-surface);
   scrollbar-width: thin;
-  scrollbar-color: rgba(138, 138, 138, 0.46) transparent;
+  scrollbar-color: var(--semantic-scrollbar-thumb-surface) transparent;
 }
 
 .automations-template-card {
@@ -1578,8 +1578,8 @@
 .automations-template-card:hover,
 .automations-template-card:focus-visible,
 .automations-template-card.is-selected {
-  border-color: var(--mix-seg-accent-28-seg-border-72, var(--automations-border));
-  background: var(--mix-seg-accent-soft-72-seg-panel-28, var(--automations-surface-hover));
+  border-color: var(--focus-outline-color);
+  background: var(--brand-primary-soft-active);
 }
 
 .automations-template-card:focus-visible {

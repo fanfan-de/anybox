@@ -6,8 +6,8 @@
   --top-chrome-icon-button-size: 28px;
   --top-chrome-surface: var(--seg-shell-chrome-surface, var(--seg-shell));
   --top-chrome-active-surface: var(--seg-shell);
-  --top-chrome-hover-surface: color-mix(in srgb, var(--seg-text-2) 24%, transparent);
-  --top-chrome-focus-surface: color-mix(in srgb, var(--seg-text-2) 24%, transparent);
+  --top-chrome-hover-surface: var(--semantic-icon-button-surface-hover);
+  --top-chrome-focus-surface: var(--semantic-icon-button-surface-hover);
   --top-chrome-border: var(--seg-border);
   --top-chrome-divider: var(--seg-divider);
   --top-chrome-icon: var(--semantic-icon-button-text);

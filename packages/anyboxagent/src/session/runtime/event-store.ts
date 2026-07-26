@@ -26,6 +26,7 @@ const FAST_PATH_EVENT_ID_CACHE_LIMIT = 5_000
 const appliedEventIDs = new Set<string>()
 const appliedEventIDOrder: string[] = []
 const sessionScopeSequences = new Map<string, number>()
+const turnScopeSequences = new Map<string, number>()
 let traceInsertFailureForTest = false
 let traceInsertFailures = 0
 let lastTraceInsertFailureAt: number | undefined
@@ -34,6 +35,7 @@ function resetGenerationState() {
   appliedEventIDs.clear()
   appliedEventIDOrder.length = 0
   sessionScopeSequences.clear()
+  turnScopeSequences.clear()
 }
 
 export function ensureEventStoreTables() {
@@ -257,6 +259,30 @@ export function appendSessionEvent<TType extends RuntimeEvent.RuntimeEventType>(
   const factory = RuntimeEvent.createRuntimeEventFactory({
     sessionID,
     turnID: null,
+    initialSeq: nextSequence - 1,
+  })
+  return appendAndProject(factory.next(type, payload))
+}
+
+export function appendTurnEvent<TType extends RuntimeEvent.RuntimeEventType>(
+  sessionID: string,
+  turnID: string,
+  type: TType,
+  payload: RuntimeEvent.RuntimeEventPayloadByType[TType],
+) {
+  ensureEventStoreTables()
+  const row = db.db.prepare(`
+    SELECT COALESCE(MAX("seq"), 0) AS "seq"
+    FROM "session_events"
+    WHERE "sessionID" = ? AND "turnID" = ?
+  `).get(sessionID, turnID) as { seq?: number } | null
+  const storedSequence = row?.seq ?? 0
+  const scopeKey = `${sessionID}\u0000${turnID}`
+  const nextSequence = Math.max(turnScopeSequences.get(scopeKey) ?? storedSequence, storedSequence) + 1
+  turnScopeSequences.set(scopeKey, nextSequence)
+  const factory = RuntimeEvent.createRuntimeEventFactory({
+    sessionID,
+    turnID,
     initialSeq: nextSequence - 1,
   })
   return appendAndProject(factory.next(type, payload))

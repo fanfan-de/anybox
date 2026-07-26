@@ -8,7 +8,7 @@
   /* The canvas owns the full shell fill so alpha surfaces are composed only once. */
   background: transparent;
   contain: size layout paint;
-  --dv-drag-over-background-color: var(--mix-seg-accent-16-transparent-84);
+  --dv-drag-over-background-color: var(--brand-primary-soft-active);
   --dv-drag-over-border-color: var(--seg-accent);
   --dv-drag-over-border: 1px solid var(--seg-accent);
 }
@@ -36,7 +36,7 @@
   --dv-tab-divider-color: var(--seg-divider);
   --dv-separator-border: var(--seg-border);
   --dv-paneview-active-outline-color: var(--seg-accent);
-  --dv-drag-over-background-color: var(--mix-seg-accent-16-transparent-84);
+  --dv-drag-over-background-color: var(--brand-primary-soft-active);
   --dv-drag-over-border-color: var(--seg-accent);
   --dv-drag-over-border: 1px solid var(--seg-accent);
   --dv-active-sash-color: var(--seg-accent);
@@ -89,7 +89,7 @@
   background-color: var(--dv-drag-over-background-color);
   box-shadow:
     inset 0 0 0 1px var(--seg-accent),
-    0 0 0 1px var(--mix-seg-accent-24-transparent-76);
+    0 0 0 1px var(--focus-outline-color);
 }
 
 .dockview-workbench-panes .dv-drop-target-container .dv-drop-target-anchor.dv-drop-target-content {
@@ -128,8 +128,8 @@ html[data-dv-containment~="view"] .dockview-theme-anybox .dv-split-view-containe
   --dockview-tab-divider: var(--seg-divider);
   --dockview-tab-radius: 0px;
   --dockview-tab-active-bg: var(--seg-shell);
-  --dockview-tab-hover-bg: var(--mix-seg-panel-66-seg-panel-muted-34);
-  --dockview-tab-focus-accent: color-mix(in srgb, var(--dockview-tab-divider) 56%, var(--seg-text-2) 44%);
+  --dockview-tab-hover-bg: var(--surface-panel-muted);
+  --dockview-tab-focus-accent: var(--focus-outline-color);
   --dockview-tab-icon-color: var(--semantic-accent-icon);
   --dockview-tab-icon-hover-color: var(--semantic-accent-icon-hover);
   position: relative;
@@ -425,7 +425,7 @@ html[data-dv-containment~="view"] .dockview-theme-anybox .dv-split-view-containe
 .dockview-theme-anybox .dockview-workbench-header-actions .sidebar-toggle-button.is-top-menu:hover,
 .dockview-theme-anybox .dockview-workbench-header-actions .sidebar-toggle-button.is-top-menu:focus-visible,
 .dockview-theme-anybox .dockview-workbench-header-actions .canvas-region-top-menu-add-button:focus-visible {
-  background: var(--top-chrome-hover-surface, var(--mix-seg-text-2-12-transparent-88));
+  background: var(--top-chrome-hover-surface, var(--semantic-icon-button-surface-hover));
   border-color: transparent;
   color: var(--top-chrome-icon-hover, var(--dockview-tab-icon-hover-color));
 }

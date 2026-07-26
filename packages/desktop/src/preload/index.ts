@@ -85,6 +85,7 @@ import type {
   SkillGitInstallPreview,
   SkillGitInstallResult,
   SkillInfo,
+  SemanticTokenInspectorEvent,
   ToolPermissionModePayload,
   WindowAction,
   MobileBridgeDesktopEvent,
@@ -108,6 +109,7 @@ import {
   DESKTOP_ENVIRONMENT_EVENT_CHANNEL,
   DESKTOP_MOBILE_BRIDGE_EVENT_CHANNEL,
   DESKTOP_PTY_EVENT_CHANNEL,
+  DESKTOP_SEMANTIC_TOKEN_INSPECTOR_EVENT_CHANNEL,
   DESKTOP_WORKBENCH_STATE_EVENT_CHANNEL,
   DESKTOP_WINDOW_STATE_EVENT_CHANNEL,
   DESKTOP_WORKSPACE_FILE_CHANGE_EVENT_CHANNEL,
@@ -153,6 +155,22 @@ try {
         chrome: string
         node: string
       }>,
+    startSemanticTokenInspector: () =>
+      invokeDesktop("desktop:start-semantic-token-inspector"),
+    inspectSemanticTokenAtPoint: (
+      input: DesktopIpcInput<"desktop:inspect-semantic-token-at-point">,
+    ) => invokeDesktop("desktop:inspect-semantic-token-at-point", input),
+    stopSemanticTokenInspector: () =>
+      invokeDesktop("desktop:stop-semantic-token-inspector"),
+    prepareSemanticTokenAuthoringCommit: (
+      input: DesktopIpcInput<"desktop:prepare-semantic-token-authoring-commit">,
+    ) => invokeDesktop("desktop:prepare-semantic-token-authoring-commit", input),
+    commitSemanticTokenAuthoringCommit: (
+      input: DesktopIpcInput<"desktop:commit-semantic-token-authoring-commit">,
+    ) => invokeDesktop("desktop:commit-semantic-token-authoring-commit", input),
+    discardSemanticTokenAuthoringCommit: (
+      input: DesktopIpcInput<"desktop:discard-semantic-token-authoring-commit">,
+    ) => invokeDesktop("desktop:discard-semantic-token-authoring-commit", input),
     getAppUpdateSettings: () =>
       invokeDesktop("desktop:get-app-update-settings") as Promise<DesktopAppUpdateSettings>,
     getAppUpdateState: () =>
@@ -1174,6 +1192,20 @@ try {
 
       return () => {
         ipcRenderer.removeListener(DESKTOP_APPEARANCE_STATE_EVENT_CHANNEL, wrappedListener)
+      }
+    },
+    onSemanticTokenInspectorEvent: (listener: (event: SemanticTokenInspectorEvent) => void) => {
+      const wrappedListener = (
+        _event: Electron.IpcRendererEvent,
+        inspectorEvent: SemanticTokenInspectorEvent,
+      ) => {
+        listener(inspectorEvent)
+      }
+
+      ipcRenderer.on(DESKTOP_SEMANTIC_TOKEN_INSPECTOR_EVENT_CHANNEL, wrappedListener)
+
+      return () => {
+        ipcRenderer.removeListener(DESKTOP_SEMANTIC_TOKEN_INSPECTOR_EVENT_CHANNEL, wrappedListener)
       }
     },
   } satisfies DesktopPreloadApi)

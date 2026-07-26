@@ -22,10 +22,10 @@
 .sidebar-toggle-button.is-top-menu,
 .session-tab,
 .canvas-top-menu-button {
-  border: 1px solid rgba(166, 186, 208, 0.42);
-  background: rgba(255, 255, 255, 0.9);
-  color: #4a5d70;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--semantic-segmented-control-border);
+  background: var(--semantic-segmented-control-surface);
+  color: var(--semantic-segmented-control-item-text);
+  box-shadow: inset 0 1px 0 var(--border-subtle);
 }
 
 .sidebar-action,
@@ -57,7 +57,7 @@
 .canvas-top-menu-button:hover,
 .canvas-top-menu-button:focus-visible,
 .canvas-top-menu-button.is-active {
-  color: #1d2a35;
+  color: var(--semantic-segmented-control-item-text-hover);
 }
 
 .sidebar-toggle-button.is-top-menu:hover,
@@ -65,17 +65,17 @@
 .session-tab:focus-visible,
 .canvas-top-menu-button:hover,
 .canvas-top-menu-button:focus-visible {
-  background: #ffffff;
-  border-color: rgba(111, 153, 194, 0.72);
-  box-shadow: 0 8px 18px rgba(53, 79, 106, 0.08);
+  background: var(--semantic-segmented-control-item-surface-hover);
+  border-color: var(--focus-outline-color);
+  box-shadow: var(--shadow-sm);
 }
 
 .session-tab.is-active,
 .canvas-top-menu-button.is-active {
-  background: #e7f2fb;
-  border-color: rgba(95, 146, 194, 0.7);
-  color: #1a3d5e;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  background: var(--semantic-segmented-control-item-surface-active);
+  border-color: var(--semantic-segmented-control-border);
+  color: var(--semantic-segmented-control-item-text-active);
+  box-shadow: inset 0 1px 0 var(--border-subtle);
 }
 
 .sidebar-action:hover,
@@ -177,7 +177,7 @@
   display: inline-flex;
   align-items: center;
   padding: 0 9px;
-  border: 1px solid rgba(166, 186, 208, 0.62);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
   background: var(--seg-panel-muted);
   color: var(--seg-text-2);
@@ -436,7 +436,7 @@
   padding: 0;
   border: 0;
   background: transparent;
-  color: #6b7d90;
+  color: var(--semantic-icon-button-text);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -445,7 +445,7 @@
 
 .session-tab-close:focus-visible {
   background: transparent;
-  color: #22303d;
+  color: var(--semantic-icon-button-text-hover);
   outline: none;
 }
 
@@ -472,7 +472,7 @@
   position: relative;
   overflow: hidden;
   padding: 0 var(--canvas-inline-padding) 20px;
-  background: #ffffff;
+  background: var(--surface-panel);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto auto;
   gap: 14px;
@@ -2542,8 +2542,8 @@
 
 .global-skills-install-button.is-open {
   border-color: var(--seg-accent);
-  background: var(--mix-ui-accent-strong-14-transparent-86);
-  color: var(--ui-accent-strong);
+  background: var(--semantic-icon-button-surface-hover);
+  color: var(--semantic-icon-button-text-hover);
 }
 
 .global-skills-install-menu {
@@ -2556,7 +2556,7 @@
   border: 1px solid var(--seg-border);
   border-radius: var(--seg-radius-xs);
   background: var(--seg-dropdown-menu-surface);
-  box-shadow: 0 12px 28px rgba(17, 24, 39, 0.14);
+  box-shadow: var(--shadow-md);
   display: grid;
   gap: 2px;
 }
@@ -2655,7 +2655,7 @@
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(20, 28, 38, 0.32);
+  background: var(--surface-overlay);
 }
 
 .global-skills-git-install-modal {
@@ -2667,7 +2667,7 @@
   border: 1px solid var(--seg-border);
   border-radius: var(--seg-radius-sm);
   background: var(--seg-panel);
-  box-shadow: 0 18px 50px rgba(17, 24, 39, 0.2);
+  box-shadow: var(--shadow-lg);
   display: grid;
   gap: 18px;
 }
@@ -2755,7 +2755,8 @@
 
 .global-skills-git-install-input:focus,
 .global-skills-target-select:focus-visible {
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+  border-color: var(--focus-outline-color);
+  box-shadow: none;
 }
 
 .global-skills-git-install-help,
@@ -2789,15 +2790,15 @@
 }
 
 .global-skills-git-install-message.is-error {
-  border: 1px solid rgba(185, 28, 28, 0.24);
-  background: rgba(254, 242, 242, 0.9);
-  color: #991b1b;
+  border: 1px solid var(--semantic-error-border);
+  background: var(--semantic-error-surface);
+  color: var(--semantic-error-text);
 }
 
 .global-skills-git-install-message.is-success {
-  border: 1px solid rgba(21, 128, 61, 0.24);
-  background: rgba(240, 253, 244, 0.9);
-  color: #166534;
+  border: 1px solid var(--semantic-success-border);
+  background: var(--semantic-success-surface);
+  color: var(--semantic-success-text);
 }
 
 .global-skills-git-install-preview-meta {
@@ -2822,7 +2823,7 @@
   padding: 12px;
   border: 1px solid var(--seg-border);
   border-radius: var(--seg-radius-xs);
-  background: rgba(255, 255, 255, 0.62);
+  background: var(--surface-panel-muted);
 }
 
 .global-skills-git-install-skill.is-disabled {
@@ -2840,7 +2841,7 @@
 }
 
 .global-skills-git-install-skill em {
-  color: #991b1b;
+  color: var(--semantic-error-text);
   font-style: normal;
 }
 
@@ -3009,7 +3010,7 @@
 .workbench-pane-resizer::before {
   content: "";
   position: absolute;
-  background: rgba(138, 164, 189, 0.5);
+  background: var(--border-default);
   transition:
     background 160ms ease,
     box-shadow 160ms ease;
@@ -3035,7 +3036,7 @@
 .workbench-pane-resizer:focus-visible::before,
 body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   background: var(--seg-accent);
-  box-shadow: 0 0 0 3px var(--mix-seg-accent-14-transparent-86);
+  box-shadow: 0 0 0 3px var(--focus-outline-color);
 }
 
 .session-tab.is-dragging {
@@ -3147,17 +3148,17 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 }
 
 .pane-drop-preview-current {
-  background: rgba(248, 251, 255, 0.82);
+  background: var(--surface-panel-muted);
   box-shadow:
-    0 10px 24px rgba(15, 23, 42, 0.06),
-    inset 0 0 0 1px rgba(168, 194, 210, 0.42);
+    var(--shadow-sm),
+    inset 0 0 0 1px var(--border-subtle);
 }
 
 .pane-drop-preview-incoming {
-  background: rgba(221, 236, 245, 0.94);
+  background: var(--brand-primary-soft-strong-active);
   box-shadow:
-    0 16px 36px rgba(135, 167, 186, 0.18),
-    inset 0 0 0 1px rgba(157, 187, 204, 0.58);
+    var(--shadow-md),
+    inset 0 0 0 1px var(--focus-outline-color);
 }
 
 .workbench-panes.has-multiple .session-canvas-top-menu {
@@ -3167,10 +3168,10 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 
 .canvas-region-top-menu {
   --canvas-region-tab-border: var(--seg-border);
-  --canvas-region-tab-divider: rgba(32, 41, 54, 0.08);
+  --canvas-region-tab-divider: var(--border-subtle);
   --canvas-region-tab-active-bg: var(--seg-panel);
-  --canvas-region-tab-inactive-bg: var(--mix-seg-shell-82-eef2f7-18);
-  --canvas-region-tab-focus: var(--mix-seg-shell-56-ffffff-44);
+  --canvas-region-tab-inactive-bg: var(--semantic-shell-chrome-surface);
+  --canvas-region-tab-focus: var(--semantic-icon-button-surface-hover);
   --canvas-region-tab-cap-radius: 8px;
   --canvas-region-tab-height: 32px;
   position: relative;
@@ -3255,7 +3256,7 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 }
 
 .canvas-region-top-menu-tabs::-webkit-scrollbar-thumb {
-  background: rgba(121, 145, 168, 0.34);
+  background: var(--semantic-scrollbar-thumb-surface);
 }
 
 .canvas-region-top-menu-empty {
@@ -3367,7 +3368,7 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 }
 
 .canvas-region-top-menu .session-tab-close:focus-visible {
-  background: rgba(84, 96, 109, 0.08);
+  background: var(--semantic-icon-button-surface-hover);
   color: var(--seg-text-1);
 }
 
@@ -3458,8 +3459,8 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 
 .canvas-region-top-menu .sidebar-toggle-button.is-top-menu:hover {
   transform: none;
-  background: rgba(84, 96, 109, 0.08);
-  border-color: rgba(32, 41, 54, 0.08);
+  background: var(--semantic-icon-button-surface-hover);
+  border-color: var(--border-subtle);
   box-shadow: none;
   color: var(--seg-text-1);
 }
@@ -3467,8 +3468,8 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 .canvas-region-top-menu .sidebar-toggle-button.is-top-menu:focus-visible,
 .canvas-region-top-menu-add-button:focus-visible {
   transform: none;
-  background: rgba(84, 96, 109, 0.08);
-  border-color: rgba(32, 41, 54, 0.08);
+  background: var(--semantic-icon-button-surface-hover);
+  border-color: var(--border-subtle);
   box-shadow: none;
   color: var(--seg-text-1);
   outline: var(--focus-outline-width) solid var(--focus-outline-color);
@@ -3528,15 +3529,15 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 
 .session-canvas-top-menu .canvas-top-menu-button:hover,
 .session-canvas-top-menu .canvas-top-menu-button.is-active {
-  background: rgba(84, 96, 109, 0.08);
-  border-color: rgba(32, 41, 54, 0.08);
+  background: var(--semantic-icon-button-surface-hover);
+  border-color: var(--border-subtle);
   box-shadow: none;
   color: var(--seg-text-1);
 }
 
 .session-canvas-top-menu .canvas-top-menu-button:focus-visible {
-  background: rgba(84, 96, 109, 0.08);
-  border-color: rgba(32, 41, 54, 0.08);
+  background: var(--semantic-icon-button-surface-hover);
+  border-color: var(--border-subtle);
   box-shadow: none;
   color: var(--seg-text-1);
   outline: var(--focus-outline-width) solid var(--focus-outline-color);
@@ -3596,8 +3597,8 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 }
 
 .external-editor-toolbar-icon-fallback {
-  background: #eef3f8;
-  color: #35506a;
+  background: var(--surface-panel-muted);
+  color: var(--text-secondary);
   font-size: 7px;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -3645,10 +3646,10 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   padding: 14px;
   display: grid;
   gap: 12px;
-  background: var(--seg-dropdown-menu-surface);
-  border: 1px solid rgba(147, 171, 195, 0.52);
+  background: var(--semantic-dropdown-menu-surface);
+  border: 1px solid var(--border-default);
   border-radius: var(--semantic-dropdown-menu-radius, var(--seg-radius-md));
-  box-shadow: 0 18px 36px rgba(36, 59, 82, 0.14);
+  box-shadow: var(--shadow-md);
 }
 
 .canvas-top-menu-selector-panel {
@@ -3663,10 +3664,10 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   padding: 8px;
   display: grid;
   gap: 4px;
-  border: 1px solid rgba(166, 186, 208, 0.42);
+  border: 1px solid var(--border-default);
   border-radius: var(--semantic-dropdown-menu-radius, var(--seg-radius-md));
-  background: var(--seg-dropdown-menu-surface);
-  box-shadow: 0 14px 34px rgba(46, 81, 118, 0.12);
+  background: var(--semantic-dropdown-menu-surface);
+  box-shadow: var(--shadow-md);
   -webkit-app-region: no-drag;
 }
 
@@ -3676,16 +3677,16 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 }
 
 .canvas-top-menu-context-panel {
-  --context-menu-surface: var(--semantic-dropdown-menu-surface, var(--seg-dropdown-menu-surface, var(--surface-elevated, #ffffff)));
-  --context-menu-border: var(--seg-border, var(--border-default, rgba(17, 24, 39, 0.12)));
-  --context-menu-text: var(--seg-text-1, var(--text-primary, #1f2937));
-  --context-menu-muted: var(--seg-text-2, var(--text-secondary, #6b7280));
+  --context-menu-surface: var(--semantic-dropdown-menu-surface);
+  --context-menu-border: var(--border-default);
+  --context-menu-text: var(--text-primary);
+  --context-menu-muted: var(--text-secondary);
   --context-menu-hover: var(--surface-panel-muted);
   --context-menu-hover-text: var(--text-primary);
   --context-menu-radius: var(--semantic-dropdown-menu-radius, var(--seg-radius-md, calc(var(--seg-radius-xs, 6px) + 2px)));
-  --context-menu-focus: var(--focus-outline-color, rgba(212, 107, 99, 0.32));
-  --context-menu-shadow: var(--ui-shadow-md, var(--shadow-md, 0 14px 34px rgba(17, 24, 39, 0.14)));
-  --context-menu-scrollbar-thumb: var(--mix-seg-text-3-54-transparent-46, var(--context-menu-muted));
+  --context-menu-focus: var(--focus-outline-color);
+  --context-menu-shadow: var(--shadow-md);
+  --context-menu-scrollbar-thumb: var(--semantic-scrollbar-thumb-surface-hover);
   --context-menu-scrollbar-track: var(--context-menu-surface);
 
   min-width: 184px;
@@ -3988,7 +3989,7 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 .canvas-top-menu-quick-field input {
   min-height: 40px;
   padding: 0 12px;
-  border: 1px solid var(--mix-seg-border-96-transparent-4);
+  border: 1px solid var(--border-subtle);
   background: var(--seg-panel);
   color: var(--seg-text-1);
 }
@@ -3996,7 +3997,7 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 .canvas-top-menu-quick-field textarea {
   min-height: 78px;
   padding: 10px 12px;
-  border: 1px solid var(--mix-seg-border-96-transparent-4);
+  border: 1px solid var(--border-subtle);
   background: var(--seg-panel);
   color: var(--seg-text-1);
   font-family: var(--font-sans);
@@ -4066,17 +4067,17 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 .canvas-top-menu-quick-status {
   min-height: 18px;
   margin: 0;
-  color: #617589;
+  color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.5;
 }
 
 .canvas-top-menu-quick-status.is-success {
-  color: #1f6b3d;
+  color: var(--semantic-success-text);
 }
 
 .canvas-top-menu-quick-status.is-error {
-  color: #b13a3a;
+  color: var(--semantic-error-text);
 }
 
 .git-quick-menu-panel {
@@ -4186,11 +4187,11 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 }
 
 .git-quick-menu-diff-stats .is-add {
-  color: #23884f;
+  color: var(--semantic-success-text);
 }
 
 .git-quick-menu-diff-stats .is-remove {
-  color: #c13d3d;
+  color: var(--semantic-error-text);
 }
 
 .git-quick-menu-diff-loading {
@@ -4209,10 +4210,10 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   display: grid;
   gap: 8px;
   overflow: hidden;
-  border: 1px solid rgba(147, 171, 195, 0.52);
+  border: 1px solid var(--border-default);
   border-radius: var(--semantic-dropdown-menu-radius, var(--seg-radius-md));
   background: var(--seg-dropdown-menu-surface);
-  box-shadow: 0 18px 36px rgba(36, 59, 82, 0.14);
+  box-shadow: var(--shadow-md);
 }
 
 .git-quick-menu-subpanel-header {
@@ -4390,7 +4391,7 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   border: 1px solid var(--seg-dropdown-menu-surface);
   border-radius: 999px;
   background: var(--ui-accent-strong);
-  color: #ffffff;
+  color: var(--text-on-dark);
   font-size: 10px;
   font-weight: 700;
   line-height: 1;
@@ -4489,7 +4490,7 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 
 .task-progress-menu-divider {
   height: 1px;
-  background: rgba(128, 148, 168, 0.2);
+  background: var(--border-subtle);
 }
 
 .task-progress-menu-empty {
@@ -4497,9 +4498,9 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   padding: 12px 10px;
   display: grid;
   gap: 4px;
-  border: 1px dashed rgba(128, 148, 168, 0.28);
+  border: 1px dashed var(--border-default);
   border-radius: var(--seg-radius-sm);
-  background: rgba(128, 148, 168, 0.06);
+  background: var(--surface-panel-muted);
 }
 
 .task-progress-menu-empty strong {
@@ -4625,7 +4626,7 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 
 .session-info-subagent-row:hover,
 .session-info-subagent-row:focus-visible {
-  background: rgba(128, 148, 168, 0.12);
+  background: var(--semantic-icon-button-surface-hover);
   color: var(--seg-text-1);
 }
 
@@ -5127,9 +5128,9 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   justify-items: stretch;
   border: 1px solid var(--seg-border);
   border-radius: var(--seg-radius-md);
-  background: var(--mix-seg-panel-muted-88-seg-panel-12);
+  background: var(--surface-panel-muted);
   color: var(--seg-text-1);
-  box-shadow: 0 16px 34px rgba(46, 81, 118, 0.07);
+  box-shadow: var(--shadow-sm);
   box-sizing: border-box;
 }
 
@@ -5303,7 +5304,7 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 .sidebar-toggle-button.is-top-menu,
 .canvas-top-menu-button {
   border: 1px solid var(--seg-border);
-  background: var(--mix-seg-panel-92-transparent-8);
+  background: var(--surface-panel);
   color: var(--seg-text-2);
   box-shadow: none;
 }
@@ -5344,7 +5345,7 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 .canvas-region-top-menu {
   --canvas-region-tab-border: var(--seg-border);
   --canvas-region-tab-divider: var(--seg-divider);
-  --canvas-region-tab-inactive-bg: var(--mix-seg-shell-84-seg-panel-muted-16);
+  --canvas-region-tab-inactive-bg: var(--semantic-shell-chrome-surface);
   --canvas-region-tab-focus: var(--semantic-icon-button-surface-hover);
 }
 
@@ -5359,17 +5360,17 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 }
 
 .pane-drop-preview-current {
-  background: var(--mix-seg-panel-88-white-12);
+  background: var(--surface-panel);
   box-shadow:
-    0 10px 24px rgba(15, 23, 42, 0.06),
-    inset 0 0 0 1px var(--mix-seg-border-74-transparent-26);
+    var(--shadow-sm),
+    inset 0 0 0 1px var(--border-default);
 }
 
 .pane-drop-preview-incoming {
-  background: var(--mix-brand-accent-active-12-seg-panel-88);
+  background: var(--brand-primary-soft-active);
   box-shadow:
-    0 16px 36px rgba(15, 23, 42, 0.08),
-    inset 0 0 0 1px var(--mix-brand-accent-active-26-seg-border-74);
+    var(--shadow-md),
+    inset 0 0 0 1px var(--focus-outline-color);
 }
 
 .create-session-select-trigger {
@@ -5388,7 +5389,7 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 
 .window-control:hover,
 .window-control:focus-visible {
-  background: var(--mix-seg-text-2-12-transparent-88);
-  color: var(--seg-text-1);
+  background: var(--semantic-icon-button-surface-hover);
+  color: var(--semantic-icon-button-text-hover);
   transform: none;
 }

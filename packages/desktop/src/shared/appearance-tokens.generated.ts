@@ -297,6 +297,22 @@ export const APPEARANCE_TOKEN_NAMES = [
   "semantic-thread-user-message-diff-row-surface-focus-dark",
   "semantic-thread-user-message-diff-preview-surface-light",
   "semantic-thread-user-message-diff-preview-surface-dark",
+  "semantic-media-viewer-backdrop-light",
+  "semantic-media-viewer-backdrop-dark",
+  "semantic-media-viewer-surface-light",
+  "semantic-media-viewer-surface-dark",
+  "semantic-media-viewer-surface-muted-light",
+  "semantic-media-viewer-surface-muted-dark",
+  "semantic-media-viewer-surface-hover-light",
+  "semantic-media-viewer-surface-hover-dark",
+  "semantic-media-viewer-surface-active-light",
+  "semantic-media-viewer-surface-active-dark",
+  "semantic-media-viewer-border-light",
+  "semantic-media-viewer-border-dark",
+  "semantic-media-viewer-border-strong-light",
+  "semantic-media-viewer-border-strong-dark",
+  "semantic-media-viewer-text-light",
+  "semantic-media-viewer-text-dark",
   "semantic-markdown-text-light",
   "semantic-markdown-text-dark",
   "semantic-markdown-muted-text-light",
@@ -351,12 +367,12 @@ export const APPEARANCE_TOKEN_NAMES = [
   "semantic-settings-list-detail-row-secondary-text-dark",
   "semantic-settings-list-detail-row-current-text-light",
   "semantic-settings-list-detail-row-current-text-dark",
-  "semantic-settings-list-detail-icon-surface-light",
-  "semantic-settings-list-detail-icon-surface-dark",
-  "semantic-settings-list-detail-icon-border-light",
-  "semantic-settings-list-detail-icon-border-dark",
-  "semantic-settings-list-detail-icon-text-light",
-  "semantic-settings-list-detail-icon-text-dark",
+  "semantic-detail-icon-surface-light",
+  "semantic-detail-icon-surface-dark",
+  "semantic-detail-icon-border-light",
+  "semantic-detail-icon-border-dark",
+  "semantic-detail-icon-text-light",
+  "semantic-detail-icon-text-dark",
   "semantic-settings-list-detail-count-surface-light",
   "semantic-settings-list-detail-count-surface-dark",
   "semantic-settings-list-detail-count-text-light",
@@ -385,6 +401,10 @@ export const APPEARANCE_TOKEN_NAMES = [
   "focus-outline-color-dark",
   "selection-background-light",
   "selection-background-dark",
+  "semantic-scrollbar-thumb-surface-light",
+  "semantic-scrollbar-thumb-surface-dark",
+  "semantic-scrollbar-thumb-surface-hover-light",
+  "semantic-scrollbar-thumb-surface-hover-dark",
   "ui-panel-light",
   "ui-panel-dark",
   "ui-panel-subtle-light",
@@ -473,6 +493,32 @@ export const APPEARANCE_TOKEN_NAMES = [
   "semantic-settings-slot-card-list-action-border-current-dark",
   "semantic-settings-slot-card-list-action-border-disabled-light",
   "semantic-settings-slot-card-list-action-border-disabled-dark",
+  "semantic-workspace-files-code-row-surface-hover-light",
+  "semantic-workspace-files-code-row-surface-hover-dark",
+  "semantic-workspace-files-code-row-surface-current-light",
+  "semantic-workspace-files-code-row-surface-current-dark",
+  "semantic-plugin-market-icon-surface-light",
+  "semantic-plugin-market-icon-surface-dark",
+  "semantic-plugin-market-icon-border-light",
+  "semantic-plugin-market-icon-border-dark",
+  "semantic-plugin-market-icon-text-light",
+  "semantic-plugin-market-icon-text-dark",
+  "semantic-plugin-market-item-border-hover-light",
+  "semantic-plugin-market-item-border-hover-dark",
+  "semantic-plugin-market-item-border-current-light",
+  "semantic-plugin-market-item-border-current-dark",
+  "semantic-plugin-market-title-text-active-light",
+  "semantic-plugin-market-title-text-active-dark",
+  "semantic-plugin-market-state-surface-light",
+  "semantic-plugin-market-state-surface-dark",
+  "semantic-plugin-market-state-text-light",
+  "semantic-plugin-market-state-text-dark",
+  "semantic-plugin-market-tag-surface-light",
+  "semantic-plugin-market-tag-surface-dark",
+  "semantic-plugin-market-tag-text-light",
+  "semantic-plugin-market-tag-text-dark",
+  "semantic-plugin-market-status-text-light",
+  "semantic-plugin-market-status-text-dark",
   "settings-theme-token-bg-light",
   "settings-theme-token-bg-dark",
   "settings-theme-token-custom-bg-light",
@@ -1422,7 +1468,7 @@ export const APPEARANCE_TOKEN_GROUPS = [
     "id": "component-thread-view",
     "layer": "product",
     "label": "Thread View",
-    "description": "Dedicated semantic colors for thread text, panel surfaces, and user-message diff cards.",
+    "description": "Dedicated semantic colors for thread text, panel surfaces, user-message diff cards, and the full-screen media viewer.",
     "rows": [
       {
         "id": "semantic-thread-response-text",
@@ -1514,6 +1560,62 @@ export const APPEARANCE_TOKEN_GROUPS = [
         "description": "Background fill for embedded user-message diff previews.",
         "lightToken": "semantic-thread-user-message-diff-preview-surface-light",
         "darkToken": "semantic-thread-user-message-diff-preview-surface-dark"
+      },
+      {
+        "id": "semantic-media-viewer-backdrop",
+        "label": "Media Viewer Backdrop",
+        "description": "Strong page backdrop behind the full-screen media viewer.",
+        "lightToken": "semantic-media-viewer-backdrop-light",
+        "darkToken": "semantic-media-viewer-backdrop-dark"
+      },
+      {
+        "id": "semantic-media-viewer-surface",
+        "label": "Media Viewer Surface",
+        "description": "Always-dark primary surface for the full-screen media viewer.",
+        "lightToken": "semantic-media-viewer-surface-light",
+        "darkToken": "semantic-media-viewer-surface-dark"
+      },
+      {
+        "id": "semantic-media-viewer-surface-muted",
+        "label": "Media Viewer Muted Surface",
+        "description": "Secondary surface for the media viewport and inactive controls.",
+        "lightToken": "semantic-media-viewer-surface-muted-light",
+        "darkToken": "semantic-media-viewer-surface-muted-dark"
+      },
+      {
+        "id": "semantic-media-viewer-surface-hover",
+        "label": "Media Viewer Hover Surface",
+        "description": "Hover and keyboard-focus fill for media viewer controls.",
+        "lightToken": "semantic-media-viewer-surface-hover-light",
+        "darkToken": "semantic-media-viewer-surface-hover-dark"
+      },
+      {
+        "id": "semantic-media-viewer-surface-active",
+        "label": "Media Viewer Active Surface",
+        "description": "Selected-state fill for media viewer controls.",
+        "lightToken": "semantic-media-viewer-surface-active-light",
+        "darkToken": "semantic-media-viewer-surface-active-dark"
+      },
+      {
+        "id": "semantic-media-viewer-border",
+        "label": "Media Viewer Border",
+        "description": "Default border for media viewer panels, controls, and viewport.",
+        "lightToken": "semantic-media-viewer-border-light",
+        "darkToken": "semantic-media-viewer-border-dark"
+      },
+      {
+        "id": "semantic-media-viewer-border-strong",
+        "label": "Media Viewer Strong Border",
+        "description": "Hover, focus, and selected-state border for media viewer controls.",
+        "lightToken": "semantic-media-viewer-border-strong-light",
+        "darkToken": "semantic-media-viewer-border-strong-dark"
+      },
+      {
+        "id": "semantic-media-viewer-text",
+        "label": "Media Viewer Text",
+        "description": "Text and icon color rendered on the always-dark media viewer.",
+        "lightToken": "semantic-media-viewer-text-light",
+        "darkToken": "semantic-media-viewer-text-dark"
       }
     ]
   },
@@ -1729,25 +1831,25 @@ export const APPEARANCE_TOKEN_GROUPS = [
         "darkToken": "semantic-settings-list-detail-row-current-text-dark"
       },
       {
-        "id": "semantic-settings-list-detail-icon-surface",
-        "label": "Settings List Detail Icon Surface",
-        "description": "Controls settings list detail icon surface in light and dark appearance modes.",
-        "lightToken": "semantic-settings-list-detail-icon-surface-light",
-        "darkToken": "semantic-settings-list-detail-icon-surface-dark"
+        "id": "semantic-detail-icon-surface",
+        "label": "Detail Icon Surface",
+        "description": "Independent surface for compact leading and detail icons across list-detail interfaces.",
+        "lightToken": "semantic-detail-icon-surface-light",
+        "darkToken": "semantic-detail-icon-surface-dark"
       },
       {
-        "id": "semantic-settings-list-detail-icon-border",
-        "label": "Settings List Detail Icon Border",
-        "description": "Controls settings list detail icon border in light and dark appearance modes.",
-        "lightToken": "semantic-settings-list-detail-icon-border-light",
-        "darkToken": "semantic-settings-list-detail-icon-border-dark"
+        "id": "semantic-detail-icon-border",
+        "label": "Detail Icon Border",
+        "description": "Independent border for compact leading and detail icons across list-detail interfaces.",
+        "lightToken": "semantic-detail-icon-border-light",
+        "darkToken": "semantic-detail-icon-border-dark"
       },
       {
-        "id": "semantic-settings-list-detail-icon-text",
-        "label": "Settings List Detail Icon Text",
-        "description": "Controls settings list detail icon text in light and dark appearance modes.",
-        "lightToken": "semantic-settings-list-detail-icon-text-light",
-        "darkToken": "semantic-settings-list-detail-icon-text-dark"
+        "id": "semantic-detail-icon-text",
+        "label": "Detail Icon Text",
+        "description": "Independent foreground for compact leading and detail icons across list-detail interfaces.",
+        "lightToken": "semantic-detail-icon-text-light",
+        "darkToken": "semantic-detail-icon-text-dark"
       },
       {
         "id": "semantic-settings-list-detail-count-surface",
@@ -1862,6 +1964,20 @@ export const APPEARANCE_TOKEN_GROUPS = [
         "description": "Text selection and lightweight selection fill.",
         "lightToken": "selection-background-light",
         "darkToken": "selection-background-dark"
+      },
+      {
+        "id": "semantic-scrollbar-thumb-surface",
+        "label": "Scrollbar Thumb",
+        "description": "Default thumb fill for application-owned scroll containers.",
+        "lightToken": "semantic-scrollbar-thumb-surface-light",
+        "darkToken": "semantic-scrollbar-thumb-surface-dark"
+      },
+      {
+        "id": "semantic-scrollbar-thumb-surface-hover",
+        "label": "Scrollbar Thumb Hover",
+        "description": "Hover and focus thumb fill for application-owned scroll containers.",
+        "lightToken": "semantic-scrollbar-thumb-surface-hover-light",
+        "darkToken": "semantic-scrollbar-thumb-surface-hover-dark"
       },
       {
         "id": "ui-panel",
@@ -2206,6 +2322,113 @@ export const APPEARANCE_TOKEN_GROUPS = [
     ]
   },
   {
+    "id": "component-workspace-files",
+    "layer": "product",
+    "label": "Workspace Files",
+    "description": "Dedicated semantic colors for source previews and workspace file interactions.",
+    "rows": [
+      {
+        "id": "semantic-workspace-files-code-row-surface-hover",
+        "label": "Code Row Hover Surface",
+        "description": "Background for hovered code rows in workspace file previews.",
+        "lightToken": "semantic-workspace-files-code-row-surface-hover-light",
+        "darkToken": "semantic-workspace-files-code-row-surface-hover-dark"
+      },
+      {
+        "id": "semantic-workspace-files-code-row-surface-current",
+        "label": "Code Row Current Surface",
+        "description": "Background for selected code rows in workspace file previews.",
+        "lightToken": "semantic-workspace-files-code-row-surface-current-light",
+        "darkToken": "semantic-workspace-files-code-row-surface-current-dark"
+      }
+    ]
+  },
+  {
+    "id": "component-plugin-marketplace",
+    "layer": "component",
+    "label": "Plugin Marketplace",
+    "description": "Independent semantic colors for plugin icons, rows, states, tags, and status indicators.",
+    "rows": [
+      {
+        "id": "semantic-plugin-market-icon-surface",
+        "label": "Plugin Placeholder Surface",
+        "description": "Neutral surface for generated plugin glyph and initials placeholders; image logos remain unpainted.",
+        "lightToken": "semantic-plugin-market-icon-surface-light",
+        "darkToken": "semantic-plugin-market-icon-surface-dark"
+      },
+      {
+        "id": "semantic-plugin-market-icon-border",
+        "label": "Plugin Placeholder Border",
+        "description": "Neutral border for generated plugin glyph and initials placeholders.",
+        "lightToken": "semantic-plugin-market-icon-border-light",
+        "darkToken": "semantic-plugin-market-icon-border-dark"
+      },
+      {
+        "id": "semantic-plugin-market-icon-text",
+        "label": "Plugin Placeholder Text",
+        "description": "Neutral foreground for generated plugin glyph and initials placeholders.",
+        "lightToken": "semantic-plugin-market-icon-text-light",
+        "darkToken": "semantic-plugin-market-icon-text-dark"
+      },
+      {
+        "id": "semantic-plugin-market-item-border-hover",
+        "label": "Plugin Item Hover Border",
+        "description": "Border color for hovered and keyboard-focused plugin rows.",
+        "lightToken": "semantic-plugin-market-item-border-hover-light",
+        "darkToken": "semantic-plugin-market-item-border-hover-dark"
+      },
+      {
+        "id": "semantic-plugin-market-item-border-current",
+        "label": "Plugin Item Current Border",
+        "description": "Inner border color for the current plugin row.",
+        "lightToken": "semantic-plugin-market-item-border-current-light",
+        "darkToken": "semantic-plugin-market-item-border-current-dark"
+      },
+      {
+        "id": "semantic-plugin-market-title-text-active",
+        "label": "Plugin Active Title",
+        "description": "Title color for hovered, focused, and current plugin rows.",
+        "lightToken": "semantic-plugin-market-title-text-active-light",
+        "darkToken": "semantic-plugin-market-title-text-active-dark"
+      },
+      {
+        "id": "semantic-plugin-market-state-surface",
+        "label": "Plugin State Surface",
+        "description": "Surface for installed and availability state labels.",
+        "lightToken": "semantic-plugin-market-state-surface-light",
+        "darkToken": "semantic-plugin-market-state-surface-dark"
+      },
+      {
+        "id": "semantic-plugin-market-state-text",
+        "label": "Plugin State Text",
+        "description": "Text color for installed and availability state labels.",
+        "lightToken": "semantic-plugin-market-state-text-light",
+        "darkToken": "semantic-plugin-market-state-text-dark"
+      },
+      {
+        "id": "semantic-plugin-market-tag-surface",
+        "label": "Plugin Tag Surface",
+        "description": "Dedicated background for plugin keyword tags.",
+        "lightToken": "semantic-plugin-market-tag-surface-light",
+        "darkToken": "semantic-plugin-market-tag-surface-dark"
+      },
+      {
+        "id": "semantic-plugin-market-tag-text",
+        "label": "Plugin Tag Text",
+        "description": "Dedicated text color for plugin keyword tags.",
+        "lightToken": "semantic-plugin-market-tag-text-light",
+        "darkToken": "semantic-plugin-market-tag-text-dark"
+      },
+      {
+        "id": "semantic-plugin-market-status-text",
+        "label": "Plugin Status Text",
+        "description": "Color for plugin row status icons and compact status copy.",
+        "lightToken": "semantic-plugin-market-status-text-light",
+        "darkToken": "semantic-plugin-market-status-text-dark"
+      }
+    ]
+  },
+  {
     "id": "component-appearance-editor",
     "layer": "component",
     "label": "Appearance Editor",
@@ -2365,6 +2588,14 @@ export const APPEARANCE_TOKEN_RUNTIME_MAP = {
   "semantic-thread-user-message-diff-row-surface-hover": "semantic-thread-user-message-diff-row-surface-hover",
   "semantic-thread-user-message-diff-row-surface-focus": "semantic-thread-user-message-diff-row-surface-focus",
   "semantic-thread-user-message-diff-preview-surface": "semantic-thread-user-message-diff-preview-surface",
+  "semantic-media-viewer-backdrop": "semantic-media-viewer-backdrop",
+  "semantic-media-viewer-surface": "semantic-media-viewer-surface",
+  "semantic-media-viewer-surface-muted": "semantic-media-viewer-surface-muted",
+  "semantic-media-viewer-surface-hover": "semantic-media-viewer-surface-hover",
+  "semantic-media-viewer-surface-active": "semantic-media-viewer-surface-active",
+  "semantic-media-viewer-border": "semantic-media-viewer-border",
+  "semantic-media-viewer-border-strong": "semantic-media-viewer-border-strong",
+  "semantic-media-viewer-text": "semantic-media-viewer-text",
   "semantic-markdown-text": "semantic-markdown-text",
   "semantic-markdown-muted-text": "semantic-markdown-muted-text",
   "semantic-markdown-strong-text": "semantic-markdown-strong-text",
@@ -2392,9 +2623,9 @@ export const APPEARANCE_TOKEN_RUNTIME_MAP = {
   "semantic-settings-list-detail-row-primary-text": "semantic-settings-list-detail-row-primary-text",
   "semantic-settings-list-detail-row-secondary-text": "semantic-settings-list-detail-row-secondary-text",
   "semantic-settings-list-detail-row-current-text": "semantic-settings-list-detail-row-current-text",
-  "semantic-settings-list-detail-icon-surface": "semantic-settings-list-detail-icon-surface",
-  "semantic-settings-list-detail-icon-border": "semantic-settings-list-detail-icon-border",
-  "semantic-settings-list-detail-icon-text": "semantic-settings-list-detail-icon-text",
+  "semantic-detail-icon-surface": "semantic-detail-icon-surface",
+  "semantic-detail-icon-border": "semantic-detail-icon-border",
+  "semantic-detail-icon-text": "semantic-detail-icon-text",
   "semantic-settings-list-detail-count-surface": "semantic-settings-list-detail-count-surface",
   "semantic-settings-list-detail-count-text": "semantic-settings-list-detail-count-text",
   "semantic-composer-surface": "semantic-composer-surface",
@@ -2409,6 +2640,8 @@ export const APPEARANCE_TOKEN_RUNTIME_MAP = {
   "semantic-composer-icon-button-text-hover": "semantic-composer-icon-button-text-hover",
   "focus-outline-color": "focus-outline-color",
   "selection-background": "selection-background",
+  "semantic-scrollbar-thumb-surface": "semantic-scrollbar-thumb-surface",
+  "semantic-scrollbar-thumb-surface-hover": "semantic-scrollbar-thumb-surface-hover",
   "ui-panel": "ui-panel",
   "ui-panel-subtle": "ui-panel-subtle",
   "semantic-html-background-scrim": "semantic-html-background-scrim",
@@ -2453,6 +2686,19 @@ export const APPEARANCE_TOKEN_RUNTIME_MAP = {
   "semantic-settings-slot-card-list-action-border-focus": "semantic-settings-slot-card-list-action-border-focus",
   "semantic-settings-slot-card-list-action-border-current": "semantic-settings-slot-card-list-action-border-current",
   "semantic-settings-slot-card-list-action-border-disabled": "semantic-settings-slot-card-list-action-border-disabled",
+  "semantic-workspace-files-code-row-surface-hover": "semantic-workspace-files-code-row-surface-hover",
+  "semantic-workspace-files-code-row-surface-current": "semantic-workspace-files-code-row-surface-current",
+  "semantic-plugin-market-icon-surface": "semantic-plugin-market-icon-surface",
+  "semantic-plugin-market-icon-border": "semantic-plugin-market-icon-border",
+  "semantic-plugin-market-icon-text": "semantic-plugin-market-icon-text",
+  "semantic-plugin-market-item-border-hover": "semantic-plugin-market-item-border-hover",
+  "semantic-plugin-market-item-border-current": "semantic-plugin-market-item-border-current",
+  "semantic-plugin-market-title-text-active": "semantic-plugin-market-title-text-active",
+  "semantic-plugin-market-state-surface": "semantic-plugin-market-state-surface",
+  "semantic-plugin-market-state-text": "semantic-plugin-market-state-text",
+  "semantic-plugin-market-tag-surface": "semantic-plugin-market-tag-surface",
+  "semantic-plugin-market-tag-text": "semantic-plugin-market-tag-text",
+  "semantic-plugin-market-status-text": "semantic-plugin-market-status-text",
   "settings-theme-token-bg": "settings-theme-token-bg",
   "settings-theme-token-custom-bg": "settings-theme-token-custom-bg",
   "settings-theme-token-custom-border": "settings-theme-token-custom-border",
@@ -4382,6 +4628,79 @@ export const APPEARANCE_BRAND_DEFINITIONS = {
         "type": "alias",
         "token": "semantic-thread-panel-surface-muted-dark"
       },
+      "semantic-media-viewer-backdrop-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.039216,
+            0.066667,
+            0.105882
+          ],
+          "alpha": 0.82,
+          "hex": "#0a111b"
+        }
+      },
+      "semantic-media-viewer-backdrop-dark": {
+        "type": "alias",
+        "token": "semantic-media-viewer-backdrop-light"
+      },
+      "semantic-media-viewer-surface-light": {
+        "type": "alias",
+        "token": "surface-code-strong-dark"
+      },
+      "semantic-media-viewer-surface-dark": {
+        "type": "alias",
+        "token": "surface-code-strong-dark"
+      },
+      "semantic-media-viewer-surface-muted-light": {
+        "type": "alias",
+        "token": "surface-code-dark"
+      },
+      "semantic-media-viewer-surface-muted-dark": {
+        "type": "alias",
+        "token": "surface-code-dark"
+      },
+      "semantic-media-viewer-surface-hover-light": {
+        "type": "alias",
+        "token": "surface-code-dark"
+      },
+      "semantic-media-viewer-surface-hover-dark": {
+        "type": "alias",
+        "token": "surface-code-dark"
+      },
+      "semantic-media-viewer-surface-active-light": {
+        "type": "alias",
+        "token": "brand-primary-soft-strong-dark"
+      },
+      "semantic-media-viewer-surface-active-dark": {
+        "type": "alias",
+        "token": "brand-primary-soft-strong-dark"
+      },
+      "semantic-media-viewer-border-light": {
+        "type": "alias",
+        "token": "border-default-dark"
+      },
+      "semantic-media-viewer-border-dark": {
+        "type": "alias",
+        "token": "border-default-dark"
+      },
+      "semantic-media-viewer-border-strong-light": {
+        "type": "alias",
+        "token": "focus-outline-color-dark"
+      },
+      "semantic-media-viewer-border-strong-dark": {
+        "type": "alias",
+        "token": "focus-outline-color-dark"
+      },
+      "semantic-media-viewer-text-light": {
+        "type": "alias",
+        "token": "text-on-dark-light"
+      },
+      "semantic-media-viewer-text-dark": {
+        "type": "alias",
+        "token": "text-on-dark-dark"
+      },
       "semantic-markdown-text-light": {
         "type": "alias",
         "token": "text-primary-light"
@@ -4821,21 +5140,83 @@ export const APPEARANCE_BRAND_DEFINITIONS = {
         "type": "alias",
         "token": "brand-primary-hover-dark"
       },
-      "semantic-settings-list-detail-icon-surface-light": {
-        "type": "alias",
-        "token": "surface-panel-light"
+      "semantic-detail-icon-surface-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 1,
+          "hex": "#ffffff"
+        }
       },
-      "semantic-settings-list-detail-icon-surface-dark": {
-        "type": "alias",
-        "token": "surface-panel-dark"
+      "semantic-detail-icon-surface-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.160784,
+            0.145098,
+            0.141176
+          ],
+          "alpha": 1,
+          "hex": "#292524"
+        }
       },
-      "semantic-settings-list-detail-icon-text-light": {
-        "type": "alias",
-        "token": "brand-primary-hover"
+      "semantic-detail-icon-border-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.160784,
+            0.145098,
+            0.141176
+          ],
+          "alpha": 0.0656,
+          "hex": "#292524"
+        }
       },
-      "semantic-settings-list-detail-icon-text-dark": {
-        "type": "alias",
-        "token": "brand-primary-hover-dark"
+      "semantic-detail-icon-border-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.905882,
+            0.898039,
+            0.894118
+          ],
+          "alpha": 0.1476,
+          "hex": "#e7e5e4"
+        }
+      },
+      "semantic-detail-icon-text-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.72549,
+            0.32549,
+            0.298039
+          ],
+          "alpha": 1,
+          "hex": "#b9534c"
+        }
+      },
+      "semantic-detail-icon-text-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.988235,
+            0.647059,
+            0.647059
+          ],
+          "alpha": 1,
+          "hex": "#fca5a5"
+        }
       },
       "semantic-settings-list-detail-count-text-light": {
         "type": "alias",
@@ -5044,6 +5425,110 @@ export const APPEARANCE_BRAND_DEFINITIONS = {
       "semantic-settings-slot-card-list-action-text-disabled-dark": {
         "type": "alias",
         "token": "text-tertiary-dark"
+      },
+      "semantic-workspace-files-code-row-surface-hover-light": {
+        "type": "alias",
+        "token": "surface-panel-muted-light"
+      },
+      "semantic-workspace-files-code-row-surface-hover-dark": {
+        "type": "alias",
+        "token": "surface-panel-muted-dark"
+      },
+      "semantic-workspace-files-code-row-surface-current-light": {
+        "type": "alias",
+        "token": "brand-primary-soft-strong"
+      },
+      "semantic-workspace-files-code-row-surface-current-dark": {
+        "type": "alias",
+        "token": "brand-primary-soft-strong-dark"
+      },
+      "semantic-plugin-market-icon-surface-light": {
+        "type": "alias",
+        "token": "surface-shell-light"
+      },
+      "semantic-plugin-market-icon-surface-dark": {
+        "type": "alias",
+        "token": "surface-shell-dark"
+      },
+      "semantic-plugin-market-icon-border-light": {
+        "type": "alias",
+        "token": "border-default-light"
+      },
+      "semantic-plugin-market-icon-border-dark": {
+        "type": "alias",
+        "token": "border-default-dark"
+      },
+      "semantic-plugin-market-icon-text-light": {
+        "type": "alias",
+        "token": "text-primary-light"
+      },
+      "semantic-plugin-market-icon-text-dark": {
+        "type": "alias",
+        "token": "text-primary-dark"
+      },
+      "semantic-plugin-market-item-border-hover-light": {
+        "type": "alias",
+        "token": "border-default-light"
+      },
+      "semantic-plugin-market-item-border-hover-dark": {
+        "type": "alias",
+        "token": "border-default-dark"
+      },
+      "semantic-plugin-market-item-border-current-light": {
+        "type": "alias",
+        "token": "brand-primary"
+      },
+      "semantic-plugin-market-item-border-current-dark": {
+        "type": "alias",
+        "token": "brand-primary-dark"
+      },
+      "semantic-plugin-market-title-text-active-light": {
+        "type": "alias",
+        "token": "brand-primary-hover"
+      },
+      "semantic-plugin-market-title-text-active-dark": {
+        "type": "alias",
+        "token": "brand-primary-hover-dark"
+      },
+      "semantic-plugin-market-state-surface-light": {
+        "type": "alias",
+        "token": "brand-primary-soft"
+      },
+      "semantic-plugin-market-state-surface-dark": {
+        "type": "alias",
+        "token": "brand-primary-soft-dark"
+      },
+      "semantic-plugin-market-state-text-light": {
+        "type": "alias",
+        "token": "brand-primary"
+      },
+      "semantic-plugin-market-state-text-dark": {
+        "type": "alias",
+        "token": "brand-primary-dark"
+      },
+      "semantic-plugin-market-tag-surface-light": {
+        "type": "alias",
+        "token": "surface-shell-light"
+      },
+      "semantic-plugin-market-tag-surface-dark": {
+        "type": "alias",
+        "token": "surface-shell-dark"
+      },
+      "semantic-plugin-market-tag-text-light": {
+        "type": "alias",
+        "token": "text-secondary-light"
+      },
+      "semantic-plugin-market-tag-text-dark": {
+        "type": "alias",
+        "token": "text-secondary-dark"
+      },
+      "semantic-plugin-market-status-text-light": {
+        "type": "alias",
+        "token": "brand-primary"
+      },
+      "semantic-plugin-market-status-text-dark": {
+        "type": "alias",
+        "token": "brand-primary-dark"
       },
       "settings-theme-token-bg-light": {
         "type": "literal",
@@ -5636,6 +6121,84 @@ export const APPEARANCE_BRAND_DEFINITIONS = {
         }
       },
       "brand-primary-hover-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.176471,
+            0.831373,
+            0.74902
+          ],
+          "alpha": 1,
+          "hex": "#2dd4bf"
+        }
+      },
+      "semantic-detail-icon-surface-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 1,
+          "hex": "#ffffff"
+        }
+      },
+      "semantic-detail-icon-surface-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.117647,
+            0.160784,
+            0.231373
+          ],
+          "alpha": 1,
+          "hex": "#1e293b"
+        }
+      },
+      "semantic-detail-icon-border-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.058824,
+            0.090196,
+            0.164706
+          ],
+          "alpha": 0.0656,
+          "hex": "#0f172a"
+        }
+      },
+      "semantic-detail-icon-border-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.580392,
+            0.639216,
+            0.721569
+          ],
+          "alpha": 0.1476,
+          "hex": "#94a3b8"
+        }
+      },
+      "semantic-detail-icon-text-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.066667,
+            0.368627,
+            0.34902
+          ],
+          "alpha": 1,
+          "hex": "#115e59"
+        }
+      },
+      "semantic-detail-icon-text-dark": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -6889,4632 +7452,6 @@ export const APPEARANCE_BRAND_DEFINITIONS = {
 
 export const APPEARANCE_TOKEN_DERIVATIONS =
   {
-  "mix-brand-accent-active-12-seg-panel-88-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-accent-highlight-dark"
-        },
-        "weight": 12
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-dark"
-        },
-        "weight": 88
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-brand-accent-active-12-seg-panel-88-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-accent-highlight"
-        },
-        "weight": 12
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-light"
-        },
-        "weight": 88
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-brand-accent-active-12-transparent-88-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-accent-highlight-dark"
-        },
-        "weight": 12
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 88
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-brand-accent-active-12-transparent-88-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-accent-highlight"
-        },
-        "weight": 12
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 88
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-brand-accent-active-16-transparent-84-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-accent-highlight-dark"
-        },
-        "weight": 16
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 84
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-brand-accent-active-16-transparent-84-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-accent-highlight"
-        },
-        "weight": 16
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 84
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-brand-accent-active-20-transparent-80-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-accent-highlight-dark"
-        },
-        "weight": 20
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 80
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-brand-accent-active-20-transparent-80-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-accent-highlight"
-        },
-        "weight": 20
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 80
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-brand-accent-active-24-seg-border-76-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-accent-highlight-dark"
-        },
-        "weight": 24
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-dark"
-        },
-        "weight": 76
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-brand-accent-active-24-seg-border-76-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-accent-highlight"
-        },
-        "weight": 24
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-light"
-        },
-        "weight": 76
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-brand-accent-active-26-seg-border-74-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-accent-highlight-dark"
-        },
-        "weight": 26
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-dark"
-        },
-        "weight": 74
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-brand-accent-active-26-seg-border-74-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-accent-highlight"
-        },
-        "weight": 26
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-light"
-        },
-        "weight": 74
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-brand-accent-active-28-rgba-148-163-184-0-28-72-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-accent-highlight-dark"
-        },
-        "weight": 28
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0.580392,
-              0.639216,
-              0.721569
-            ],
-            "alpha": 0.28,
-            "hex": "#94a3b8"
-          }
-        },
-        "weight": 72
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-brand-accent-active-28-rgba-148-163-184-0-28-72-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-accent-highlight"
-        },
-        "weight": 28
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0.580392,
-              0.639216,
-              0.721569
-            ],
-            "alpha": 0.28,
-            "hex": "#94a3b8"
-          }
-        },
-        "weight": 72
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-brand-accent-active-48-transparent-52-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-accent-highlight-dark"
-        },
-        "weight": 48
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 52
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-brand-accent-active-48-transparent-52-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-accent-highlight"
-        },
-        "weight": 48
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 52
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-12-transparent-88-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-dark"
-        },
-        "weight": 12
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 88
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-12-transparent-88-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary"
-        },
-        "weight": 12
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 88
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-14-seg-border-86-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-dark"
-        },
-        "weight": 14
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-dark"
-        },
-        "weight": 86
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-14-seg-border-86-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary"
-        },
-        "weight": 14
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-light"
-        },
-        "weight": 86
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-14-transparent-86-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-dark"
-        },
-        "weight": 14
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 86
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-14-transparent-86-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary"
-        },
-        "weight": 14
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 86
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-16-transparent-84-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-dark"
-        },
-        "weight": 16
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 84
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-16-transparent-84-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary"
-        },
-        "weight": 16
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 84
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-22-seg-border-78-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-dark"
-        },
-        "weight": 22
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-dark"
-        },
-        "weight": 78
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-22-seg-border-78-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary"
-        },
-        "weight": 22
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-light"
-        },
-        "weight": 78
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-24-seg-border-76-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-dark"
-        },
-        "weight": 24
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-dark"
-        },
-        "weight": 76
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-24-seg-border-76-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary"
-        },
-        "weight": 24
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-light"
-        },
-        "weight": 76
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-24-transparent-76-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-dark"
-        },
-        "weight": 24
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 76
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-24-transparent-76-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary"
-        },
-        "weight": 24
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 76
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-26-seg-border-74-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-dark"
-        },
-        "weight": 26
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-dark"
-        },
-        "weight": 74
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-26-seg-border-74-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary"
-        },
-        "weight": 26
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-light"
-        },
-        "weight": 74
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-28-seg-border-72-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-dark"
-        },
-        "weight": 28
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-dark"
-        },
-        "weight": 72
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-28-seg-border-72-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary"
-        },
-        "weight": 28
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-light"
-        },
-        "weight": 72
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-32-seg-border-68-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-dark"
-        },
-        "weight": 32
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-dark"
-        },
-        "weight": 68
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-32-seg-border-68-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary"
-        },
-        "weight": 32
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-light"
-        },
-        "weight": 68
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-34-seg-border-66-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-dark"
-        },
-        "weight": 34
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-dark"
-        },
-        "weight": 66
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-34-seg-border-66-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary"
-        },
-        "weight": 34
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-light"
-        },
-        "weight": 66
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-36-seg-border-64-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-dark"
-        },
-        "weight": 36
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-dark"
-        },
-        "weight": 64
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-36-seg-border-64-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary"
-        },
-        "weight": 36
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-light"
-        },
-        "weight": 64
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-40-seg-border-60-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-dark"
-        },
-        "weight": 40
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-dark"
-        },
-        "weight": 60
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-40-seg-border-60-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary"
-        },
-        "weight": 40
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-light"
-        },
-        "weight": 60
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-42-seg-border-58-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-dark"
-        },
-        "weight": 42
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-dark"
-        },
-        "weight": 58
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-42-seg-border-58-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary"
-        },
-        "weight": 42
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-light"
-        },
-        "weight": 58
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-48-seg-border-52-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-dark"
-        },
-        "weight": 48
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-dark"
-        },
-        "weight": 52
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-48-seg-border-52-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary"
-        },
-        "weight": 48
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-light"
-        },
-        "weight": 52
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-72-transparent-28-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-dark"
-        },
-        "weight": 72
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 28
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-72-transparent-28-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary"
-        },
-        "weight": 72
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 28
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-soft-42-seg-shell-58-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-soft-dark"
-        },
-        "weight": 42
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-shell-dark"
-        },
-        "weight": 58
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-soft-42-seg-shell-58-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-soft"
-        },
-        "weight": 42
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-shell-light"
-        },
-        "weight": 58
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-soft-68-seg-panel-32-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-soft-dark"
-        },
-        "weight": 68
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-dark"
-        },
-        "weight": 32
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-soft-68-seg-panel-32-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-soft"
-        },
-        "weight": 68
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-light"
-        },
-        "weight": 32
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-soft-70-seg-panel-30-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-soft-dark"
-        },
-        "weight": 70
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-dark"
-        },
-        "weight": 30
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-soft-70-seg-panel-30-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-soft"
-        },
-        "weight": 70
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-light"
-        },
-        "weight": 30
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-soft-72-seg-panel-28-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-soft-dark"
-        },
-        "weight": 72
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-dark"
-        },
-        "weight": 28
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-soft-72-seg-panel-28-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-soft"
-        },
-        "weight": 72
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-light"
-        },
-        "weight": 28
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-soft-72-surface-trace-28-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-soft-dark"
-        },
-        "weight": 72
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-trace-dark"
-        },
-        "weight": 28
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-soft-72-surface-trace-28-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-soft"
-        },
-        "weight": 72
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-trace-light"
-        },
-        "weight": 28
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-soft-72-transparent-28-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-soft-dark"
-        },
-        "weight": 72
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 28
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-soft-72-transparent-28-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-soft"
-        },
-        "weight": 72
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 28
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-soft-74-seg-panel-26-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-soft-dark"
-        },
-        "weight": 74
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-dark"
-        },
-        "weight": 26
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-soft-74-seg-panel-26-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-soft"
-        },
-        "weight": 74
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-light"
-        },
-        "weight": 26
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-soft-76-seg-panel-24-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-soft-dark"
-        },
-        "weight": 76
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-dark"
-        },
-        "weight": 24
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-soft-76-seg-panel-24-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-soft"
-        },
-        "weight": 76
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-light"
-        },
-        "weight": 24
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-soft-78-seg-panel-22-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-soft-dark"
-        },
-        "weight": 78
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-dark"
-        },
-        "weight": 22
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-soft-78-seg-panel-22-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-soft"
-        },
-        "weight": 78
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-light"
-        },
-        "weight": 22
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-soft-80-seg-panel-20-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-soft-dark"
-        },
-        "weight": 80
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-dark"
-        },
-        "weight": 20
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-soft-80-seg-panel-20-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-soft"
-        },
-        "weight": 80
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-light"
-        },
-        "weight": 20
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-soft-82-transparent-18-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-soft-dark"
-        },
-        "weight": 82
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 18
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-soft-82-transparent-18-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-soft"
-        },
-        "weight": 82
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 18
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-soft-84-seg-panel-16-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-soft-dark"
-        },
-        "weight": 84
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-dark"
-        },
-        "weight": 16
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-soft-84-seg-panel-16-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-soft"
-        },
-        "weight": 84
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-light"
-        },
-        "weight": 16
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-soft-84-transparent-16-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-soft-dark"
-        },
-        "weight": 84
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 16
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-soft-84-transparent-16-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-soft"
-        },
-        "weight": 84
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 16
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-strong-88-white-12-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-hover-dark"
-        },
-        "weight": 88
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              1,
-              1,
-              1
-            ],
-            "alpha": 1,
-            "hex": "#ffffff"
-          }
-        },
-        "weight": 12
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-strong-88-white-12-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-hover"
-        },
-        "weight": 88
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              1,
-              1,
-              1
-            ],
-            "alpha": 1,
-            "hex": "#ffffff"
-          }
-        },
-        "weight": 12
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-border-72-seg-panel-28-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-dark"
-        },
-        "weight": 72
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-dark"
-        },
-        "weight": 28
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-border-72-seg-panel-28-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-light"
-        },
-        "weight": 72
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-light"
-        },
-        "weight": 28
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-border-74-transparent-26-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-dark"
-        },
-        "weight": 74
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 26
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-border-74-transparent-26-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-light"
-        },
-        "weight": 74
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 26
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-border-76-transparent-24-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-dark"
-        },
-        "weight": 76
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 24
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-border-76-transparent-24-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-light"
-        },
-        "weight": 76
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 24
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-border-82-transparent-18-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-dark"
-        },
-        "weight": 82
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 18
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-border-82-transparent-18-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-light"
-        },
-        "weight": 82
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 18
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-border-82-white-18-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-dark"
-        },
-        "weight": 82
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              1,
-              1,
-              1
-            ],
-            "alpha": 1,
-            "hex": "#ffffff"
-          }
-        },
-        "weight": 18
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-border-82-white-18-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-light"
-        },
-        "weight": 82
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              1,
-              1,
-              1
-            ],
-            "alpha": 1,
-            "hex": "#ffffff"
-          }
-        },
-        "weight": 18
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-border-84-transparent-16-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-dark"
-        },
-        "weight": 84
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 16
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-border-84-transparent-16-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-light"
-        },
-        "weight": 84
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 16
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-border-86-seg-accent-soft-14-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-dark"
-        },
-        "weight": 86
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-soft-dark"
-        },
-        "weight": 14
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-border-86-seg-accent-soft-14-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-light"
-        },
-        "weight": 86
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-soft"
-        },
-        "weight": 14
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-border-88-white-12-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-dark"
-        },
-        "weight": 88
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              1,
-              1,
-              1
-            ],
-            "alpha": 1,
-            "hex": "#ffffff"
-          }
-        },
-        "weight": 12
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-border-88-white-12-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-light"
-        },
-        "weight": 88
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              1,
-              1,
-              1
-            ],
-            "alpha": 1,
-            "hex": "#ffffff"
-          }
-        },
-        "weight": 12
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-border-90-transparent-10-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-dark"
-        },
-        "weight": 90
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 10
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-border-90-transparent-10-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-light"
-        },
-        "weight": 90
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 10
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-border-96-transparent-4-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-dark"
-        },
-        "weight": 96
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 4
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-border-96-transparent-4-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-light"
-        },
-        "weight": 96
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 4
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-danger-10-transparent-90-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "semantic-error-dark"
-        },
-        "weight": 10
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 90
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-danger-10-transparent-90-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "semantic-error-light"
-        },
-        "weight": 10
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 90
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-danger-72-text-on-dark-28-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "semantic-error-dark"
-        },
-        "weight": 72
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "text-on-dark-dark"
-        },
-        "weight": 28
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-danger-72-text-on-dark-28-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "semantic-error-light"
-        },
-        "weight": 72
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "text-on-dark-light"
-        },
-        "weight": 28
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-danger-78-seg-text-1-22-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "semantic-error-dark"
-        },
-        "weight": 78
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "text-primary-dark"
-        },
-        "weight": 22
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-danger-78-seg-text-1-22-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "semantic-error-light"
-        },
-        "weight": 78
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "text-primary-light"
-        },
-        "weight": 22
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-danger-8-seg-panel-92-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "semantic-error-dark"
-        },
-        "weight": 8
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-dark"
-        },
-        "weight": 92
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-danger-8-seg-panel-92-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "semantic-error-light"
-        },
-        "weight": 8
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-light"
-        },
-        "weight": 92
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-danger-9-transparent-91-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "semantic-error-dark"
-        },
-        "weight": 9
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 91
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-danger-9-transparent-91-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "semantic-error-light"
-        },
-        "weight": 9
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 91
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-divider-80-transparent-20-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-subtle-dark"
-        },
-        "weight": 80
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 20
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-divider-80-transparent-20-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-subtle-light"
-        },
-        "weight": 80
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 20
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-panel-66-seg-panel-muted-34-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-dark"
-        },
-        "weight": 66
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-muted-dark"
-        },
-        "weight": 34
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-panel-66-seg-panel-muted-34-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-light"
-        },
-        "weight": 66
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-muted-light"
-        },
-        "weight": 34
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-panel-72-seg-panel-muted-28-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-dark"
-        },
-        "weight": 72
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-muted-dark"
-        },
-        "weight": 28
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-panel-72-seg-panel-muted-28-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-light"
-        },
-        "weight": 72
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-muted-light"
-        },
-        "weight": 28
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-panel-76-seg-panel-muted-24-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-dark"
-        },
-        "weight": 76
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-muted-dark"
-        },
-        "weight": 24
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-panel-76-seg-panel-muted-24-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-light"
-        },
-        "weight": 76
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-muted-light"
-        },
-        "weight": 24
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-panel-88-white-12-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-dark"
-        },
-        "weight": 88
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              1,
-              1,
-              1
-            ],
-            "alpha": 1,
-            "hex": "#ffffff"
-          }
-        },
-        "weight": 12
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-panel-88-white-12-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-light"
-        },
-        "weight": 88
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              1,
-              1,
-              1
-            ],
-            "alpha": 1,
-            "hex": "#ffffff"
-          }
-        },
-        "weight": 12
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-panel-92-transparent-8-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-dark"
-        },
-        "weight": 92
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 8
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-panel-92-transparent-8-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-light"
-        },
-        "weight": 92
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 8
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-panel-muted-72-seg-panel-28-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-muted-dark"
-        },
-        "weight": 72
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-dark"
-        },
-        "weight": 28
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-panel-muted-72-seg-panel-28-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-muted-light"
-        },
-        "weight": 72
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-light"
-        },
-        "weight": 28
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-panel-muted-74-seg-panel-26-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-muted-dark"
-        },
-        "weight": 74
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-dark"
-        },
-        "weight": 26
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-panel-muted-74-seg-panel-26-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-muted-light"
-        },
-        "weight": 74
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-light"
-        },
-        "weight": 26
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-panel-muted-78-seg-panel-22-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-muted-dark"
-        },
-        "weight": 78
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-dark"
-        },
-        "weight": 22
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-panel-muted-78-seg-panel-22-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-muted-light"
-        },
-        "weight": 78
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-light"
-        },
-        "weight": 22
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-panel-muted-82-seg-panel-18-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-muted-dark"
-        },
-        "weight": 82
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-dark"
-        },
-        "weight": 18
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-panel-muted-82-seg-panel-18-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-muted-light"
-        },
-        "weight": 82
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-light"
-        },
-        "weight": 18
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-panel-muted-86-transparent-14-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-muted-dark"
-        },
-        "weight": 86
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 14
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-panel-muted-86-transparent-14-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-muted-light"
-        },
-        "weight": 86
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 14
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-panel-muted-88-seg-panel-12-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-muted-dark"
-        },
-        "weight": 88
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-dark"
-        },
-        "weight": 12
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-panel-muted-88-seg-panel-12-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-muted-light"
-        },
-        "weight": 88
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-light"
-        },
-        "weight": 12
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-panel-muted-92-seg-accent-soft-8-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-muted-dark"
-        },
-        "weight": 92
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-soft-dark"
-        },
-        "weight": 8
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-panel-muted-92-seg-accent-soft-8-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-muted-light"
-        },
-        "weight": 92
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-soft"
-        },
-        "weight": 8
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-shell-56-ffffff-44-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-shell-dark"
-        },
-        "weight": 56
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              1,
-              1,
-              1
-            ],
-            "alpha": 1,
-            "hex": "#ffffff"
-          }
-        },
-        "weight": 44
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-shell-56-ffffff-44-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-shell-light"
-        },
-        "weight": 56
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              1,
-              1,
-              1
-            ],
-            "alpha": 1,
-            "hex": "#ffffff"
-          }
-        },
-        "weight": 44
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-shell-62-ffffff-38-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-shell-dark"
-        },
-        "weight": 62
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              1,
-              1,
-              1
-            ],
-            "alpha": 1,
-            "hex": "#ffffff"
-          }
-        },
-        "weight": 38
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-shell-62-ffffff-38-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-shell-light"
-        },
-        "weight": 62
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              1,
-              1,
-              1
-            ],
-            "alpha": 1,
-            "hex": "#ffffff"
-          }
-        },
-        "weight": 38
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-shell-82-eef2f7-18-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-shell-dark"
-        },
-        "weight": 82
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0.933333,
-              0.94902,
-              0.968627
-            ],
-            "alpha": 1,
-            "hex": "#eef2f7"
-          }
-        },
-        "weight": 18
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-shell-82-eef2f7-18-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-shell-light"
-        },
-        "weight": 82
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0.933333,
-              0.94902,
-              0.968627
-            ],
-            "alpha": 1,
-            "hex": "#eef2f7"
-          }
-        },
-        "weight": 18
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-shell-84-seg-panel-muted-16-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-shell-dark"
-        },
-        "weight": 84
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-muted-dark"
-        },
-        "weight": 16
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-shell-84-seg-panel-muted-16-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-shell-light"
-        },
-        "weight": 84
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-muted-light"
-        },
-        "weight": 16
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-shell-88-seg-panel-12-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-shell-dark"
-        },
-        "weight": 88
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-dark"
-        },
-        "weight": 12
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-shell-88-seg-panel-12-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-shell-light"
-        },
-        "weight": 88
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-light"
-        },
-        "weight": 12
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-shell-92-ffffff-8-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-shell-dark"
-        },
-        "weight": 92
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              1,
-              1,
-              1
-            ],
-            "alpha": 1,
-            "hex": "#ffffff"
-          }
-        },
-        "weight": 8
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-shell-92-ffffff-8-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-shell-light"
-        },
-        "weight": 92
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              1,
-              1,
-              1
-            ],
-            "alpha": 1,
-            "hex": "#ffffff"
-          }
-        },
-        "weight": 8
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-shell-92-seg-panel-8-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-shell-dark"
-        },
-        "weight": 92
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-dark"
-        },
-        "weight": 8
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-shell-92-seg-panel-8-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-shell-light"
-        },
-        "weight": 92
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-light"
-        },
-        "weight": 8
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-success-10-transparent-90-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "semantic-success-dark"
-        },
-        "weight": 10
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 90
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-success-10-transparent-90-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "semantic-success-light"
-        },
-        "weight": 10
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 90
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-success-72-text-on-dark-28-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "semantic-success-dark"
-        },
-        "weight": 72
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "text-on-dark-dark"
-        },
-        "weight": 28
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-success-72-text-on-dark-28-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "semantic-success-light"
-        },
-        "weight": 72
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "text-on-dark-light"
-        },
-        "weight": 28
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-success-78-seg-text-1-22-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "semantic-success-dark"
-        },
-        "weight": 78
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "text-primary-dark"
-        },
-        "weight": 22
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-success-78-seg-text-1-22-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "semantic-success-light"
-        },
-        "weight": 78
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "text-primary-light"
-        },
-        "weight": 22
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-success-9-transparent-91-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "semantic-success-dark"
-        },
-        "weight": 9
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 91
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-success-9-transparent-91-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "semantic-success-light"
-        },
-        "weight": 9
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 91
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-text-1-5-transparent-95-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "text-primary-dark"
-        },
-        "weight": 5
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 95
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-text-1-5-transparent-95-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "text-primary-light"
-        },
-        "weight": 5
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 95
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-text-2-12-transparent-88-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "text-secondary-dark"
-        },
-        "weight": 12
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 88
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-text-2-12-transparent-88-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "text-secondary-light"
-        },
-        "weight": 12
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 88
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-text-3-34-transparent-66-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "text-tertiary-dark"
-        },
-        "weight": 34
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 66
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-text-3-34-transparent-66-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "text-tertiary-light"
-        },
-        "weight": 34
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 66
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-text-3-54-transparent-46-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "text-tertiary-dark"
-        },
-        "weight": 54
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 46
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-text-3-54-transparent-46-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "text-tertiary-light"
-        },
-        "weight": 54
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 46
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-warning-surface-84-surface-trace-16-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "semantic-warning-surface-dark"
-        },
-        "weight": 84
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-trace-dark"
-        },
-        "weight": 16
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-warning-surface-84-surface-trace-16-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "semantic-warning-surface-light"
-        },
-        "weight": 84
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-trace-light"
-        },
-        "weight": 16
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-surface-code-16-seg-panel-84-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-code-dark"
-        },
-        "weight": 16
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-dark"
-        },
-        "weight": 84
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-surface-code-16-seg-panel-84-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-code-light"
-        },
-        "weight": 16
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-light"
-        },
-        "weight": 84
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-surface-code-34-seg-border-66-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-code-dark"
-        },
-        "weight": 34
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-dark"
-        },
-        "weight": 66
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-surface-code-34-seg-border-66-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-code-light"
-        },
-        "weight": 34
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-light"
-        },
-        "weight": 66
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-surface-code-48-seg-border-52-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-code-dark"
-        },
-        "weight": 48
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-dark"
-        },
-        "weight": 52
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-surface-code-48-seg-border-52-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-code-light"
-        },
-        "weight": 48
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-light"
-        },
-        "weight": 52
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-surface-code-86-surface-code-strong-14-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-code-dark"
-        },
-        "weight": 86
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-code-strong-dark"
-        },
-        "weight": 14
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-surface-code-86-surface-code-strong-14-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-code-light"
-        },
-        "weight": 86
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-code-strong-light"
-        },
-        "weight": 14
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-surface-code-88-surface-code-strong-12-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-code-dark"
-        },
-        "weight": 88
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-code-strong-dark"
-        },
-        "weight": 12
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-surface-code-88-surface-code-strong-12-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-code-light"
-        },
-        "weight": 88
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-code-strong-light"
-        },
-        "weight": 12
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-surface-elevated-88-seg-panel-12-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-elevated-dark"
-        },
-        "weight": 88
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-dark"
-        },
-        "weight": 12
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-surface-elevated-88-seg-panel-12-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-elevated-light"
-        },
-        "weight": 88
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-light"
-        },
-        "weight": 12
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-surface-trace-84-seg-panel-16-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-trace-dark"
-        },
-        "weight": 84
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-dark"
-        },
-        "weight": 16
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-surface-trace-84-seg-panel-16-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-trace-light"
-        },
-        "weight": 84
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-light"
-        },
-        "weight": 16
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-surface-trace-88-seg-panel-12-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-trace-dark"
-        },
-        "weight": 88
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-dark"
-        },
-        "weight": 12
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-surface-trace-88-seg-panel-12-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-trace-light"
-        },
-        "weight": 88
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-light"
-        },
-        "weight": 12
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-surface-user-bubble-68-seg-panel-32-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-user-bubble-dark"
-        },
-        "weight": 68
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-dark"
-        },
-        "weight": 32
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-surface-user-bubble-68-seg-panel-32-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-user-bubble-light"
-        },
-        "weight": 68
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "surface-panel-light"
-        },
-        "weight": 32
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-ui-accent-strong-14-transparent-86-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-hover-dark"
-        },
-        "weight": 14
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 86
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-ui-accent-strong-14-transparent-86-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-hover"
-        },
-        "weight": 14
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 86
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-ui-accent-strong-18-transparent-82-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-hover-dark"
-        },
-        "weight": 18
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 82
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-ui-accent-strong-18-transparent-82-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-hover"
-        },
-        "weight": 18
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 82
-      }
-    ],
-    "compatibility": true
-  },
   "semantic-button-secondary-surface-hover-light": {
     "kind": "blend",
     "colorSpace": "srgb",
@@ -12859,66 +8796,6 @@ export const APPEARANCE_TOKEN_DERIVATIONS =
     ],
     "compatibility": false
   },
-  "semantic-settings-list-detail-icon-border-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-light"
-        },
-        "weight": 82
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 18
-      }
-    ],
-    "compatibility": false
-  },
-  "semantic-settings-list-detail-icon-border-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-dark"
-        },
-        "weight": 82
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 18
-      }
-    ],
-    "compatibility": false
-  },
   "semantic-settings-list-detail-count-surface-light": {
     "kind": "blend",
     "colorSpace": "srgb",
@@ -13783,109 +9660,7 @@ export const APPEARANCE_TOKEN_DERIVATIONS =
     ],
     "compatibility": false
   },
-  "mix-seg-accent-44-seg-border-56-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary"
-        },
-        "weight": 44
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-light"
-        },
-        "weight": 56
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-accent-44-seg-border-56-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "brand-primary-dark"
-        },
-        "weight": 44
-      },
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-dark"
-        },
-        "weight": 56
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-border-80-transparent-20-light": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-light"
-        },
-        "weight": 80
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 20
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-border-80-transparent-20-dark": {
-    "kind": "blend",
-    "colorSpace": "srgb",
-    "sources": [
-      {
-        "value": {
-          "type": "alias",
-          "token": "border-default-dark"
-        },
-        "weight": 80
-      },
-      {
-        "value": {
-          "type": "literal",
-          "value": {
-            "colorSpace": "srgb",
-            "components": [
-              0,
-              0,
-              0
-            ],
-            "alpha": 0,
-            "hex": "#000000"
-          }
-        },
-        "weight": 20
-      }
-    ],
-    "compatibility": true
-  },
-  "mix-seg-text-3-10-transparent-90-light": {
+  "semantic-scrollbar-thumb-surface-light": {
     "kind": "blend",
     "colorSpace": "srgb",
     "sources": [
@@ -13894,7 +9669,7 @@ export const APPEARANCE_TOKEN_DERIVATIONS =
           "type": "alias",
           "token": "text-tertiary-light"
         },
-        "weight": 10
+        "weight": 34
       },
       {
         "value": {
@@ -13910,12 +9685,12 @@ export const APPEARANCE_TOKEN_DERIVATIONS =
             "hex": "#000000"
           }
         },
-        "weight": 90
+        "weight": 66
       }
     ],
-    "compatibility": true
+    "compatibility": false
   },
-  "mix-seg-text-3-10-transparent-90-dark": {
+  "semantic-scrollbar-thumb-surface-dark": {
     "kind": "blend",
     "colorSpace": "srgb",
     "sources": [
@@ -13924,7 +9699,7 @@ export const APPEARANCE_TOKEN_DERIVATIONS =
           "type": "alias",
           "token": "text-tertiary-dark"
         },
-        "weight": 10
+        "weight": 34
       },
       {
         "value": {
@@ -13940,10 +9715,70 @@ export const APPEARANCE_TOKEN_DERIVATIONS =
             "hex": "#000000"
           }
         },
-        "weight": 90
+        "weight": 66
       }
     ],
-    "compatibility": true
+    "compatibility": false
+  },
+  "semantic-scrollbar-thumb-surface-hover-light": {
+    "kind": "blend",
+    "colorSpace": "srgb",
+    "sources": [
+      {
+        "value": {
+          "type": "alias",
+          "token": "text-tertiary-light"
+        },
+        "weight": 54
+      },
+      {
+        "value": {
+          "type": "literal",
+          "value": {
+            "colorSpace": "srgb",
+            "components": [
+              0,
+              0,
+              0
+            ],
+            "alpha": 0,
+            "hex": "#000000"
+          }
+        },
+        "weight": 46
+      }
+    ],
+    "compatibility": false
+  },
+  "semantic-scrollbar-thumb-surface-hover-dark": {
+    "kind": "blend",
+    "colorSpace": "srgb",
+    "sources": [
+      {
+        "value": {
+          "type": "alias",
+          "token": "text-tertiary-dark"
+        },
+        "weight": 54
+      },
+      {
+        "value": {
+          "type": "literal",
+          "value": {
+            "colorSpace": "srgb",
+            "components": [
+              0,
+              0,
+              0
+            ],
+            "alpha": 0,
+            "hex": "#000000"
+          }
+        },
+        "weight": 46
+      }
+    ],
+    "compatibility": false
   }
 } as const satisfies Record<string, AppearanceTokenDerivation>
 
@@ -14022,90 +9857,10 @@ export const APPEARANCE_TOKEN_COMPATIBILITY = {
     "ui-",
     "mix-"
   ],
-  "legacyMixPairCount": 96,
-  "legacyDirectMixUsageCount": 322,
-  "legacyDirectColorMixUsageCount": 24,
-  "allowedDirectMixConsumers": [
-    "mix-brand-accent-active-12-seg-panel-88",
-    "mix-brand-accent-active-26-seg-border-74",
-    "mix-brand-accent-active-28-rgba-148-163-184-0-28-72",
-    "mix-seg-accent-12-transparent-88",
-    "mix-seg-accent-14-seg-border-86",
-    "mix-seg-accent-14-transparent-86",
-    "mix-seg-accent-16-transparent-84",
-    "mix-seg-accent-22-seg-border-78",
-    "mix-seg-accent-24-seg-border-76",
-    "mix-seg-accent-24-transparent-76",
-    "mix-seg-accent-28-seg-border-72",
-    "mix-seg-accent-32-seg-border-68",
-    "mix-seg-accent-34-seg-border-66",
-    "mix-seg-accent-36-seg-border-64",
-    "mix-seg-accent-40-seg-border-60",
-    "mix-seg-accent-42-seg-border-58",
-    "mix-seg-accent-44-seg-border-56",
-    "mix-seg-accent-48-seg-border-52",
-    "mix-seg-accent-soft-68-seg-panel-32",
-    "mix-seg-accent-soft-70-seg-panel-30",
-    "mix-seg-accent-soft-72-seg-panel-28",
-    "mix-seg-accent-soft-72-surface-trace-28",
-    "mix-seg-accent-soft-72-transparent-28",
-    "mix-seg-accent-soft-74-seg-panel-26",
-    "mix-seg-accent-soft-76-seg-panel-24",
-    "mix-seg-accent-soft-78-seg-panel-22",
-    "mix-seg-accent-soft-80-seg-panel-20",
-    "mix-seg-accent-soft-82-transparent-18",
-    "mix-seg-accent-soft-84-seg-panel-16",
-    "mix-seg-accent-soft-84-transparent-16",
-    "mix-seg-border-72-seg-panel-28",
-    "mix-seg-border-74-transparent-26",
-    "mix-seg-border-76-transparent-24",
-    "mix-seg-border-80-transparent-20",
-    "mix-seg-border-82-transparent-18",
-    "mix-seg-border-84-transparent-16",
-    "mix-seg-border-88-white-12",
-    "mix-seg-border-90-transparent-10",
-    "mix-seg-border-96-transparent-4",
-    "mix-seg-danger-10-transparent-90",
-    "mix-seg-danger-72-text-on-dark-28",
-    "mix-seg-danger-78-seg-text-1-22",
-    "mix-seg-danger-8-seg-panel-92",
-    "mix-seg-danger-9-transparent-91",
-    "mix-seg-panel-66-seg-panel-muted-34",
-    "mix-seg-panel-72-seg-panel-muted-28",
-    "mix-seg-panel-76-seg-panel-muted-24",
-    "mix-seg-panel-88-white-12",
-    "mix-seg-panel-92-transparent-8",
-    "mix-seg-panel-muted-72-seg-panel-28",
-    "mix-seg-panel-muted-74-seg-panel-26",
-    "mix-seg-panel-muted-78-seg-panel-22",
-    "mix-seg-panel-muted-82-seg-panel-18",
-    "mix-seg-panel-muted-86-transparent-14",
-    "mix-seg-panel-muted-88-seg-panel-12",
-    "mix-seg-shell-56-ffffff-44",
-    "mix-seg-shell-82-eef2f7-18",
-    "mix-seg-shell-84-seg-panel-muted-16",
-    "mix-seg-shell-88-seg-panel-12",
-    "mix-seg-shell-92-seg-panel-8",
-    "mix-seg-success-10-transparent-90",
-    "mix-seg-success-72-text-on-dark-28",
-    "mix-seg-success-78-seg-text-1-22",
-    "mix-seg-success-9-transparent-91",
-    "mix-seg-text-1-5-transparent-95",
-    "mix-seg-text-2-12-transparent-88",
-    "mix-seg-text-3-10-transparent-90",
-    "mix-seg-text-3-34-transparent-66",
-    "mix-seg-text-3-54-transparent-46",
-    "mix-seg-warning-surface-84-surface-trace-16",
-    "mix-surface-code-16-seg-panel-84",
-    "mix-surface-code-34-seg-border-66",
-    "mix-surface-code-88-surface-code-strong-12",
-    "mix-surface-elevated-88-seg-panel-12",
-    "mix-surface-trace-84-seg-panel-16",
-    "mix-surface-trace-88-seg-panel-12",
-    "mix-surface-user-bubble-68-seg-panel-32",
-    "mix-ui-accent-strong-14-transparent-86",
-    "mix-ui-accent-strong-18-transparent-82"
-  ]
+  "legacyMixPairCount": 0,
+  "legacyDirectMixUsageCount": 0,
+  "legacyDirectColorMixUsageCount": 0,
+  "allowedDirectMixConsumers": []
 } as const
 
 export const DEFAULT_APPEARANCE_THEME_ID = "built-in:classic" as const
@@ -15622,6 +11377,84 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           ],
           "alpha": 0.86,
           "hex": "#c4c4c4"
+        }
+      },
+      "semantic-detail-icon-surface-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.94902,
+            0.94902,
+            0.94902
+          ],
+          "alpha": 1,
+          "hex": "#f2f2f2"
+        }
+      },
+      "semantic-detail-icon-surface-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 0,
+          "hex": "#000000"
+        }
+      },
+      "semantic-detail-icon-border-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 0.0902,
+          "hex": "#000000"
+        }
+      },
+      "semantic-detail-icon-border-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.905882,
+            0.898039,
+            0.894118
+          ],
+          "alpha": 0.2378,
+          "hex": "#e7e5e4"
+        }
+      },
+      "semantic-detail-icon-text-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 1,
+          "hex": "#000000"
+        }
+      },
+      "semantic-detail-icon-text-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 1,
+          "hex": "#ffffff"
         }
       },
       "surface-app-dark": {
@@ -18127,6 +13960,84 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#c4c4c4"
         }
       },
+      "semantic-detail-icon-surface-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.94902,
+            0.94902,
+            0.94902
+          ],
+          "alpha": 0,
+          "hex": "#f2f2f2"
+        }
+      },
+      "semantic-detail-icon-surface-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 0,
+          "hex": "#000000"
+        }
+      },
+      "semantic-detail-icon-border-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 0,
+          "hex": "#000000"
+        }
+      },
+      "semantic-detail-icon-border-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.905882,
+            0.898039,
+            0.894118
+          ],
+          "alpha": 0.2378,
+          "hex": "#e7e5e4"
+        }
+      },
+      "semantic-detail-icon-text-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 1,
+          "hex": "#000000"
+        }
+      },
+      "semantic-detail-icon-text-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 1,
+          "hex": "#ffffff"
+        }
+      },
       "surface-app-dark": {
         "type": "literal",
         "value": {
@@ -19414,6 +15325,32 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#7dd3fc"
         }
       },
+      "semantic-detail-icon-surface-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.121569,
+            0.160784,
+            0.215686
+          ],
+          "alpha": 1,
+          "hex": "#1f2937"
+        }
+      },
+      "semantic-detail-icon-text-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.490196,
+            0.827451,
+            0.988235
+          ],
+          "alpha": 1,
+          "hex": "#7dd3fc"
+        }
+      },
       "brand-accent-highlight-dark": {
         "type": "literal",
         "value": {
@@ -19772,6 +15709,84 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#9f633e"
         }
       },
+      "semantic-detail-icon-surface-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            0.992157,
+            0.976471
+          ],
+          "alpha": 1,
+          "hex": "#fffdf9"
+        }
+      },
+      "semantic-detail-icon-surface-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.160784,
+            0.145098,
+            0.141176
+          ],
+          "alpha": 1,
+          "hex": "#292524"
+        }
+      },
+      "semantic-detail-icon-border-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.141176,
+            0.121569,
+            0.109804
+          ],
+          "alpha": 0.0984,
+          "hex": "#241f1c"
+        }
+      },
+      "semantic-detail-icon-border-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.905882,
+            0.898039,
+            0.894118
+          ],
+          "alpha": 0.1476,
+          "hex": "#e7e5e4"
+        }
+      },
+      "semantic-detail-icon-text-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.623529,
+            0.388235,
+            0.243137
+          ],
+          "alpha": 1,
+          "hex": "#9f633e"
+        }
+      },
+      "semantic-detail-icon-text-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.988235,
+            0.647059,
+            0.647059
+          ],
+          "alpha": 1,
+          "hex": "#fca5a5"
+        }
+      },
       "brand-accent-highlight": {
         "type": "literal",
         "value": {
@@ -19912,13 +15927,13 @@ export const DEFAULT_APPEARANCE_THEME_DEFINITION =
 export const APPEARANCE_TOKEN_TEST_DATA = {
   "schemaVersion": 2,
   "dtcgVersion": "2025.10",
-  "groupCount": 27,
-  "pairCount": 213,
-  "modeTokenCount": 426,
-  "runtimeTokenCount": 213,
-  "derivationCount": 282,
-  "canonicalDerivationCount": 90,
-  "legacyMixPairCount": 96,
+  "groupCount": 29,
+  "pairCount": 236,
+  "modeTokenCount": 472,
+  "runtimeTokenCount": 236,
+  "derivationCount": 92,
+  "canonicalDerivationCount": 92,
+  "legacyMixPairCount": 0,
   "contractCount": 5,
   "modeTokens": [
     "surface-app-light",
@@ -20163,6 +16178,22 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
     "semantic-thread-user-message-diff-row-surface-focus-dark",
     "semantic-thread-user-message-diff-preview-surface-light",
     "semantic-thread-user-message-diff-preview-surface-dark",
+    "semantic-media-viewer-backdrop-light",
+    "semantic-media-viewer-backdrop-dark",
+    "semantic-media-viewer-surface-light",
+    "semantic-media-viewer-surface-dark",
+    "semantic-media-viewer-surface-muted-light",
+    "semantic-media-viewer-surface-muted-dark",
+    "semantic-media-viewer-surface-hover-light",
+    "semantic-media-viewer-surface-hover-dark",
+    "semantic-media-viewer-surface-active-light",
+    "semantic-media-viewer-surface-active-dark",
+    "semantic-media-viewer-border-light",
+    "semantic-media-viewer-border-dark",
+    "semantic-media-viewer-border-strong-light",
+    "semantic-media-viewer-border-strong-dark",
+    "semantic-media-viewer-text-light",
+    "semantic-media-viewer-text-dark",
     "semantic-markdown-text-light",
     "semantic-markdown-text-dark",
     "semantic-markdown-muted-text-light",
@@ -20217,12 +16248,12 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
     "semantic-settings-list-detail-row-secondary-text-dark",
     "semantic-settings-list-detail-row-current-text-light",
     "semantic-settings-list-detail-row-current-text-dark",
-    "semantic-settings-list-detail-icon-surface-light",
-    "semantic-settings-list-detail-icon-surface-dark",
-    "semantic-settings-list-detail-icon-border-light",
-    "semantic-settings-list-detail-icon-border-dark",
-    "semantic-settings-list-detail-icon-text-light",
-    "semantic-settings-list-detail-icon-text-dark",
+    "semantic-detail-icon-surface-light",
+    "semantic-detail-icon-surface-dark",
+    "semantic-detail-icon-border-light",
+    "semantic-detail-icon-border-dark",
+    "semantic-detail-icon-text-light",
+    "semantic-detail-icon-text-dark",
     "semantic-settings-list-detail-count-surface-light",
     "semantic-settings-list-detail-count-surface-dark",
     "semantic-settings-list-detail-count-text-light",
@@ -20251,6 +16282,10 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
     "focus-outline-color-dark",
     "selection-background-light",
     "selection-background-dark",
+    "semantic-scrollbar-thumb-surface-light",
+    "semantic-scrollbar-thumb-surface-dark",
+    "semantic-scrollbar-thumb-surface-hover-light",
+    "semantic-scrollbar-thumb-surface-hover-dark",
     "ui-panel-light",
     "ui-panel-dark",
     "ui-panel-subtle-light",
@@ -20339,6 +16374,32 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
     "semantic-settings-slot-card-list-action-border-current-dark",
     "semantic-settings-slot-card-list-action-border-disabled-light",
     "semantic-settings-slot-card-list-action-border-disabled-dark",
+    "semantic-workspace-files-code-row-surface-hover-light",
+    "semantic-workspace-files-code-row-surface-hover-dark",
+    "semantic-workspace-files-code-row-surface-current-light",
+    "semantic-workspace-files-code-row-surface-current-dark",
+    "semantic-plugin-market-icon-surface-light",
+    "semantic-plugin-market-icon-surface-dark",
+    "semantic-plugin-market-icon-border-light",
+    "semantic-plugin-market-icon-border-dark",
+    "semantic-plugin-market-icon-text-light",
+    "semantic-plugin-market-icon-text-dark",
+    "semantic-plugin-market-item-border-hover-light",
+    "semantic-plugin-market-item-border-hover-dark",
+    "semantic-plugin-market-item-border-current-light",
+    "semantic-plugin-market-item-border-current-dark",
+    "semantic-plugin-market-title-text-active-light",
+    "semantic-plugin-market-title-text-active-dark",
+    "semantic-plugin-market-state-surface-light",
+    "semantic-plugin-market-state-surface-dark",
+    "semantic-plugin-market-state-text-light",
+    "semantic-plugin-market-state-text-dark",
+    "semantic-plugin-market-tag-surface-light",
+    "semantic-plugin-market-tag-surface-dark",
+    "semantic-plugin-market-tag-text-light",
+    "semantic-plugin-market-tag-text-dark",
+    "semantic-plugin-market-status-text-light",
+    "semantic-plugin-market-status-text-dark",
     "settings-theme-token-bg-light",
     "settings-theme-token-bg-dark",
     "settings-theme-token-custom-bg-light",
@@ -20470,6 +16531,14 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
     "semantic-thread-user-message-diff-row-surface-hover",
     "semantic-thread-user-message-diff-row-surface-focus",
     "semantic-thread-user-message-diff-preview-surface",
+    "semantic-media-viewer-backdrop",
+    "semantic-media-viewer-surface",
+    "semantic-media-viewer-surface-muted",
+    "semantic-media-viewer-surface-hover",
+    "semantic-media-viewer-surface-active",
+    "semantic-media-viewer-border",
+    "semantic-media-viewer-border-strong",
+    "semantic-media-viewer-text",
     "semantic-markdown-text",
     "semantic-markdown-muted-text",
     "semantic-markdown-strong-text",
@@ -20497,9 +16566,9 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
     "semantic-settings-list-detail-row-primary-text",
     "semantic-settings-list-detail-row-secondary-text",
     "semantic-settings-list-detail-row-current-text",
-    "semantic-settings-list-detail-icon-surface",
-    "semantic-settings-list-detail-icon-border",
-    "semantic-settings-list-detail-icon-text",
+    "semantic-detail-icon-surface",
+    "semantic-detail-icon-border",
+    "semantic-detail-icon-text",
     "semantic-settings-list-detail-count-surface",
     "semantic-settings-list-detail-count-text",
     "semantic-composer-surface",
@@ -20514,6 +16583,8 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
     "semantic-composer-icon-button-text-hover",
     "focus-outline-color",
     "selection-background",
+    "semantic-scrollbar-thumb-surface",
+    "semantic-scrollbar-thumb-surface-hover",
     "ui-panel",
     "ui-panel-subtle",
     "semantic-html-background-scrim",
@@ -20558,120 +16629,36 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
     "semantic-settings-slot-card-list-action-border-focus",
     "semantic-settings-slot-card-list-action-border-current",
     "semantic-settings-slot-card-list-action-border-disabled",
+    "semantic-workspace-files-code-row-surface-hover",
+    "semantic-workspace-files-code-row-surface-current",
+    "semantic-plugin-market-icon-surface",
+    "semantic-plugin-market-icon-border",
+    "semantic-plugin-market-icon-text",
+    "semantic-plugin-market-item-border-hover",
+    "semantic-plugin-market-item-border-current",
+    "semantic-plugin-market-title-text-active",
+    "semantic-plugin-market-state-surface",
+    "semantic-plugin-market-state-text",
+    "semantic-plugin-market-tag-surface",
+    "semantic-plugin-market-tag-text",
+    "semantic-plugin-market-status-text",
     "settings-theme-token-bg",
     "settings-theme-token-custom-bg",
     "settings-theme-token-custom-border",
     "settings-theme-token-code-bg"
   ],
-  "legacyMixRuntimeTokens": [
-    "mix-brand-accent-active-12-seg-panel-88",
-    "mix-brand-accent-active-12-transparent-88",
-    "mix-brand-accent-active-16-transparent-84",
-    "mix-brand-accent-active-20-transparent-80",
-    "mix-brand-accent-active-24-seg-border-76",
-    "mix-brand-accent-active-26-seg-border-74",
-    "mix-brand-accent-active-28-rgba-148-163-184-0-28-72",
-    "mix-brand-accent-active-48-transparent-52",
-    "mix-seg-accent-12-transparent-88",
-    "mix-seg-accent-14-seg-border-86",
-    "mix-seg-accent-14-transparent-86",
-    "mix-seg-accent-16-transparent-84",
-    "mix-seg-accent-22-seg-border-78",
-    "mix-seg-accent-24-seg-border-76",
-    "mix-seg-accent-24-transparent-76",
-    "mix-seg-accent-26-seg-border-74",
-    "mix-seg-accent-28-seg-border-72",
-    "mix-seg-accent-32-seg-border-68",
-    "mix-seg-accent-34-seg-border-66",
-    "mix-seg-accent-36-seg-border-64",
-    "mix-seg-accent-40-seg-border-60",
-    "mix-seg-accent-42-seg-border-58",
-    "mix-seg-accent-48-seg-border-52",
-    "mix-seg-accent-72-transparent-28",
-    "mix-seg-accent-soft-42-seg-shell-58",
-    "mix-seg-accent-soft-68-seg-panel-32",
-    "mix-seg-accent-soft-70-seg-panel-30",
-    "mix-seg-accent-soft-72-seg-panel-28",
-    "mix-seg-accent-soft-72-surface-trace-28",
-    "mix-seg-accent-soft-72-transparent-28",
-    "mix-seg-accent-soft-74-seg-panel-26",
-    "mix-seg-accent-soft-76-seg-panel-24",
-    "mix-seg-accent-soft-78-seg-panel-22",
-    "mix-seg-accent-soft-80-seg-panel-20",
-    "mix-seg-accent-soft-82-transparent-18",
-    "mix-seg-accent-soft-84-seg-panel-16",
-    "mix-seg-accent-soft-84-transparent-16",
-    "mix-seg-accent-strong-88-white-12",
-    "mix-seg-border-72-seg-panel-28",
-    "mix-seg-border-74-transparent-26",
-    "mix-seg-border-76-transparent-24",
-    "mix-seg-border-82-transparent-18",
-    "mix-seg-border-82-white-18",
-    "mix-seg-border-84-transparent-16",
-    "mix-seg-border-86-seg-accent-soft-14",
-    "mix-seg-border-88-white-12",
-    "mix-seg-border-90-transparent-10",
-    "mix-seg-border-96-transparent-4",
-    "mix-seg-danger-10-transparent-90",
-    "mix-seg-danger-72-text-on-dark-28",
-    "mix-seg-danger-78-seg-text-1-22",
-    "mix-seg-danger-8-seg-panel-92",
-    "mix-seg-danger-9-transparent-91",
-    "mix-seg-divider-80-transparent-20",
-    "mix-seg-panel-66-seg-panel-muted-34",
-    "mix-seg-panel-72-seg-panel-muted-28",
-    "mix-seg-panel-76-seg-panel-muted-24",
-    "mix-seg-panel-88-white-12",
-    "mix-seg-panel-92-transparent-8",
-    "mix-seg-panel-muted-72-seg-panel-28",
-    "mix-seg-panel-muted-74-seg-panel-26",
-    "mix-seg-panel-muted-78-seg-panel-22",
-    "mix-seg-panel-muted-82-seg-panel-18",
-    "mix-seg-panel-muted-86-transparent-14",
-    "mix-seg-panel-muted-88-seg-panel-12",
-    "mix-seg-panel-muted-92-seg-accent-soft-8",
-    "mix-seg-shell-56-ffffff-44",
-    "mix-seg-shell-62-ffffff-38",
-    "mix-seg-shell-82-eef2f7-18",
-    "mix-seg-shell-84-seg-panel-muted-16",
-    "mix-seg-shell-88-seg-panel-12",
-    "mix-seg-shell-92-ffffff-8",
-    "mix-seg-shell-92-seg-panel-8",
-    "mix-seg-success-10-transparent-90",
-    "mix-seg-success-72-text-on-dark-28",
-    "mix-seg-success-78-seg-text-1-22",
-    "mix-seg-success-9-transparent-91",
-    "mix-seg-text-1-5-transparent-95",
-    "mix-seg-text-2-12-transparent-88",
-    "mix-seg-text-3-34-transparent-66",
-    "mix-seg-text-3-54-transparent-46",
-    "mix-seg-warning-surface-84-surface-trace-16",
-    "mix-surface-code-16-seg-panel-84",
-    "mix-surface-code-34-seg-border-66",
-    "mix-surface-code-48-seg-border-52",
-    "mix-surface-code-86-surface-code-strong-14",
-    "mix-surface-code-88-surface-code-strong-12",
-    "mix-surface-elevated-88-seg-panel-12",
-    "mix-surface-trace-84-seg-panel-16",
-    "mix-surface-trace-88-seg-panel-12",
-    "mix-surface-user-bubble-68-seg-panel-32",
-    "mix-ui-accent-strong-14-transparent-86",
-    "mix-ui-accent-strong-18-transparent-82",
-    "mix-seg-accent-44-seg-border-56",
-    "mix-seg-border-80-transparent-20",
-    "mix-seg-text-3-10-transparent-90"
-  ],
+  "legacyMixRuntimeTokens": [],
   "brandTokenCounts": {
-    "terra": 336,
-    "sage": 133
+    "terra": 380,
+    "sage": 139
   },
   "brandValueTypes": {
     "terra": {
-      "literal": 145,
-      "alias": 191
+      "literal": 152,
+      "alias": 228
     },
     "sage": {
-      "literal": 133,
+      "literal": 139,
       "alias": 0
     }
   },

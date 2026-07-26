@@ -5,6 +5,7 @@ import { getProcessEnvValue } from "#env/compat.ts"
 import * as Connector from "#connector/connector.ts"
 import * as BuiltinMcp from "#mcp/builtin.ts"
 import * as Plugin from "#plugin/plugin.ts"
+import * as Prompt from "#session/core/prompt.ts"
 
 const log = Log.create({ service: "server-bootstrap" })
 
@@ -29,6 +30,17 @@ await Log.init({
 })
 
 log.info("server-logging-ready", Log.status())
+
+try {
+  const recovered = Prompt.reconcileInterruptedTurns({
+    reason: "shutdown",
+  })
+  if (recovered.cancelled > 0) {
+    log.warn("interrupted-session-turns-recovered", recovered)
+  }
+} catch (error) {
+  log.error("interrupted-session-turn-recovery-failed", { error })
+}
 
 try {
   await BuiltinMcp.syncBuiltinMcpRuntimeBindings()

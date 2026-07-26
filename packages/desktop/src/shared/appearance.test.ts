@@ -135,6 +135,53 @@ describe("appearance token catalog", () => {
     ]))
   })
 
+  it("registers shared detail icon tokens and migrates settings-scoped names", () => {
+    const detailRows: Array<{
+      id: string
+      lightToken: string
+      darkToken: string
+    }> = []
+    for (const group of APPEARANCE_TOKEN_GROUPS) {
+      for (const row of group.rows) {
+        if (row.id.startsWith("semantic-detail-icon-")) detailRows.push(row)
+      }
+    }
+
+    expect(detailRows).toEqual([
+      expect.objectContaining({
+        id: "semantic-detail-icon-surface",
+        lightToken: "semantic-detail-icon-surface-light",
+        darkToken: "semantic-detail-icon-surface-dark",
+      }),
+      expect.objectContaining({
+        id: "semantic-detail-icon-border",
+        lightToken: "semantic-detail-icon-border-light",
+        darkToken: "semantic-detail-icon-border-dark",
+      }),
+      expect.objectContaining({
+        id: "semantic-detail-icon-text",
+        lightToken: "semantic-detail-icon-text-light",
+        darkToken: "semantic-detail-icon-text-dark",
+      }),
+    ])
+
+    const document = normalizeAppearanceConfigDocument({
+      version: 2,
+      overrides: {
+        "semantic-settings-list-detail-icon-surface-light": "#111111",
+        "semantic-settings-list-detail-icon-border": "#222222",
+        "semantic-settings-list-detail-icon-text-dark": "#333333",
+      },
+    })
+
+    expect(cssTokenMap(document.overrides)).toEqual({
+      "semantic-detail-icon-surface-light": "#111111",
+      "semantic-detail-icon-border-light": "#222222",
+      "semantic-detail-icon-border-dark": "#222222",
+      "semantic-detail-icon-text-dark": "#333333",
+    })
+  })
+
   it("registers composer icon button tokens in the composer group", () => {
     const composerGroup = APPEARANCE_TOKEN_GROUPS.find((group) => group.id === "component-composer")
 
@@ -639,8 +686,8 @@ describe("appearance thread view tokens", () => {
       id: "component-thread-view",
       layer: "product",
       label: "Thread View",
-      description: "Dedicated semantic colors for thread text, panel surfaces, and user-message diff cards.",
-      rows: [
+      description: "Dedicated semantic colors for thread text, panel surfaces, user-message diff cards, and the full-screen media viewer.",
+      rows: expect.arrayContaining([
         {
           id: "semantic-thread-response-text",
           label: "Response Text",
@@ -732,7 +779,63 @@ describe("appearance thread view tokens", () => {
           lightToken: "semantic-thread-user-message-diff-preview-surface-light",
           darkToken: "semantic-thread-user-message-diff-preview-surface-dark",
         },
-      ],
+        {
+          id: "semantic-media-viewer-backdrop",
+          label: "Media Viewer Backdrop",
+          description: "Strong page backdrop behind the full-screen media viewer.",
+          lightToken: "semantic-media-viewer-backdrop-light",
+          darkToken: "semantic-media-viewer-backdrop-dark",
+        },
+        {
+          id: "semantic-media-viewer-surface",
+          label: "Media Viewer Surface",
+          description: "Always-dark primary surface for the full-screen media viewer.",
+          lightToken: "semantic-media-viewer-surface-light",
+          darkToken: "semantic-media-viewer-surface-dark",
+        },
+        {
+          id: "semantic-media-viewer-surface-muted",
+          label: "Media Viewer Muted Surface",
+          description: "Secondary surface for the media viewport and inactive controls.",
+          lightToken: "semantic-media-viewer-surface-muted-light",
+          darkToken: "semantic-media-viewer-surface-muted-dark",
+        },
+        {
+          id: "semantic-media-viewer-surface-hover",
+          label: "Media Viewer Hover Surface",
+          description: "Hover and keyboard-focus fill for media viewer controls.",
+          lightToken: "semantic-media-viewer-surface-hover-light",
+          darkToken: "semantic-media-viewer-surface-hover-dark",
+        },
+        {
+          id: "semantic-media-viewer-surface-active",
+          label: "Media Viewer Active Surface",
+          description: "Selected-state fill for media viewer controls.",
+          lightToken: "semantic-media-viewer-surface-active-light",
+          darkToken: "semantic-media-viewer-surface-active-dark",
+        },
+        {
+          id: "semantic-media-viewer-border",
+          label: "Media Viewer Border",
+          description: "Default border for media viewer panels, controls, and viewport.",
+          lightToken: "semantic-media-viewer-border-light",
+          darkToken: "semantic-media-viewer-border-dark",
+        },
+        {
+          id: "semantic-media-viewer-border-strong",
+          label: "Media Viewer Strong Border",
+          description: "Hover, focus, and selected-state border for media viewer controls.",
+          lightToken: "semantic-media-viewer-border-strong-light",
+          darkToken: "semantic-media-viewer-border-strong-dark",
+        },
+        {
+          id: "semantic-media-viewer-text",
+          label: "Media Viewer Text",
+          description: "Text and icon color rendered on the always-dark media viewer.",
+          lightToken: "semantic-media-viewer-text-light",
+          darkToken: "semantic-media-viewer-text-dark",
+        },
+      ]),
     })
   })
 

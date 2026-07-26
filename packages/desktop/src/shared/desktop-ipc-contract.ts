@@ -144,6 +144,22 @@ import type {
   PermissionResolveInput,
   PermissionResolveResult,
 } from "./permission"
+import {
+  SEMANTIC_TOKEN_INSPECTOR_EVENT_CHANNEL,
+  type SemanticTokenInspectorEvent,
+  type SemanticTokenInspectorInspectInput,
+  type SemanticTokenInspectorInspectResult,
+  type SemanticTokenInspectorStartResult,
+  type SemanticTokenInspectorStopResult,
+} from "./semantic-token-inspector"
+import type {
+  CommitSemanticTokenAuthoringCommitInput,
+  CommitSemanticTokenAuthoringCommitResult,
+  DiscardSemanticTokenAuthoringCommitInput,
+  DiscardSemanticTokenAuthoringCommitResult,
+  PrepareSemanticTokenAuthoringCommitInput,
+  PrepareSemanticTokenAuthoringCommitResult,
+} from "./semantic-token-authoring"
 
 export const DESKTOP_AGENT_SESSION_EVENT_CHANNEL = "desktop:agent-session-event"
 export const DESKTOP_AUTOMATION_EVENT_CHANNEL = "desktop:automation-event"
@@ -155,6 +171,41 @@ export const DESKTOP_WINDOW_STATE_EVENT_CHANNEL = "desktop:window-state-changed"
 export const DESKTOP_WORKBENCH_STATE_EVENT_CHANNEL = "desktop:workbench-state-changed"
 export const DESKTOP_APP_UPDATE_STATE_EVENT_CHANNEL = "desktop:app-update-state-changed"
 export const DESKTOP_APPEARANCE_STATE_EVENT_CHANNEL = "desktop:appearance-state-changed"
+export const DESKTOP_SEMANTIC_TOKEN_INSPECTOR_EVENT_CHANNEL = SEMANTIC_TOKEN_INSPECTOR_EVENT_CHANNEL
+
+export type {
+  SemanticTokenInspection,
+  SemanticTokenInspectorBreadcrumb,
+  SemanticTokenInspectorConfidence,
+  SemanticTokenInspectorDiagnosis,
+  SemanticTokenInspectorEvent,
+  SemanticTokenInspectorInspectInput,
+  SemanticTokenInspectorInspectResult,
+  SemanticTokenInspectorPropertyResult,
+  SemanticTokenInspectorResolvedColorMode,
+  SemanticTokenInspectorSeverity,
+  SemanticTokenInspectorStartResult,
+  SemanticTokenInspectorStopResult,
+  SemanticTokenInspectorTarget,
+  SemanticTokenInspectorTokenNode,
+} from "./semantic-token-inspector"
+export type {
+  CommitSemanticTokenAuthoringCommitInput,
+  CommitSemanticTokenAuthoringCommitResult,
+  DiscardSemanticTokenAuthoringCommitInput,
+  DiscardSemanticTokenAuthoringCommitResult,
+  PrepareSemanticTokenAuthoringCommitInput,
+  PrepareSemanticTokenAuthoringCommitResult,
+  SemanticTokenAuthoringCapability,
+  SemanticTokenAuthoringDraft,
+  SemanticTokenAuthoringOperation,
+  SemanticTokenAuthoringReviewFile,
+  SemanticTokenAuthoringReviewSummary,
+  SemanticTokenBindingEdit,
+  SemanticTokenColorChannelResult,
+  SemanticTokenCreation,
+  SemanticTokenThemeValueEdit,
+} from "./semantic-token-authoring"
 
 export interface DesktopPluginCatalogInput {
   freshness?: "cached" | "fresh"
@@ -1210,6 +1261,30 @@ export interface DesktopIpcContract {
   "desktop:get-info": {
     input: void
     output: DesktopInfo
+  }
+  "desktop:start-semantic-token-inspector": {
+    input: void
+    output: SemanticTokenInspectorStartResult
+  }
+  "desktop:inspect-semantic-token-at-point": {
+    input: SemanticTokenInspectorInspectInput
+    output: SemanticTokenInspectorInspectResult
+  }
+  "desktop:stop-semantic-token-inspector": {
+    input: void
+    output: SemanticTokenInspectorStopResult
+  }
+  "desktop:prepare-semantic-token-authoring-commit": {
+    input: PrepareSemanticTokenAuthoringCommitInput
+    output: PrepareSemanticTokenAuthoringCommitResult
+  }
+  "desktop:commit-semantic-token-authoring-commit": {
+    input: CommitSemanticTokenAuthoringCommitInput
+    output: CommitSemanticTokenAuthoringCommitResult
+  }
+  "desktop:discard-semantic-token-authoring-commit": {
+    input: DiscardSemanticTokenAuthoringCommitInput
+    output: DiscardSemanticTokenAuthoringCommitResult
   }
   "desktop:get-app-update-settings": {
     input: void
@@ -2457,6 +2532,7 @@ export interface DesktopIpcEventPayloads {
   [DESKTOP_WINDOW_STATE_EVENT_CHANNEL]: DesktopWindowState
   [DESKTOP_WORKBENCH_STATE_EVENT_CHANNEL]: WorkbenchStateEvent
   [DESKTOP_APPEARANCE_STATE_EVENT_CHANNEL]: AppearanceRuntimeState
+  [DESKTOP_SEMANTIC_TOKEN_INSPECTOR_EVENT_CHANNEL]: SemanticTokenInspectorEvent
 }
 
 export type DesktopIpcChannel = keyof DesktopIpcContract
@@ -2489,6 +2565,25 @@ export interface DesktopApiBase {
 
 export interface DesktopApiMethods {
   getInfo(): Promise<DesktopIpcOutput<"desktop:get-info">>
+  startSemanticTokenInspector(): Promise<DesktopIpcOutput<"desktop:start-semantic-token-inspector">>
+  inspectSemanticTokenAtPoint(
+    input: DesktopIpcInput<"desktop:inspect-semantic-token-at-point">,
+  ): Promise<DesktopIpcOutput<"desktop:inspect-semantic-token-at-point">>
+  stopSemanticTokenInspector(): Promise<DesktopIpcOutput<"desktop:stop-semantic-token-inspector">>
+  prepareSemanticTokenAuthoringCommit(
+    input: DesktopIpcInput<"desktop:prepare-semantic-token-authoring-commit">,
+  ): Promise<DesktopIpcOutput<"desktop:prepare-semantic-token-authoring-commit">>
+  commitSemanticTokenAuthoringCommit(
+    input: DesktopIpcInput<"desktop:commit-semantic-token-authoring-commit">,
+  ): Promise<DesktopIpcOutput<"desktop:commit-semantic-token-authoring-commit">>
+  discardSemanticTokenAuthoringCommit(
+    input: DesktopIpcInput<"desktop:discard-semantic-token-authoring-commit">,
+  ): Promise<DesktopIpcOutput<"desktop:discard-semantic-token-authoring-commit">>
+  onSemanticTokenInspectorEvent(
+    listener: (
+      event: DesktopIpcEventPayload<typeof DESKTOP_SEMANTIC_TOKEN_INSPECTOR_EVENT_CHANNEL>
+    ) => void,
+  ): () => void
   getAppUpdateSettings(): Promise<DesktopIpcOutput<"desktop:get-app-update-settings">>
   getAppUpdateState(): Promise<DesktopIpcOutput<"desktop:get-app-update-state">>
   setAutomaticUpdatesEnabled(

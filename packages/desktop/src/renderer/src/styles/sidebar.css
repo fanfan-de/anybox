@@ -10,7 +10,7 @@
   align-items: center;
   justify-content: center;
   border: 0;
-  color: #5a6e81;
+  color: var(--semantic-icon-button-text);
   background: transparent;
   pointer-events: auto;
   cursor: pointer;
@@ -128,7 +128,7 @@
   bottom: 0;
   left: 50%;
   width: 1px;
-  background: #d4dde8;
+  background: var(--border-default);
   transform: translateX(-50%);
   transition:
     background 160ms ease,
@@ -157,7 +157,7 @@
 .sidebar-resizer.is-active::before,
 body.is-resizing-sidebar .sidebar-resizer::before {
   background: var(--seg-accent);
-  box-shadow: 0 0 0 3px var(--mix-seg-accent-14-transparent-86);
+  box-shadow: 0 0 0 3px var(--focus-outline-color);
 }
 
 .sidebar-resizer:focus-visible {
@@ -192,7 +192,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   right: 0;
   bottom: 0;
   height: 1px;
-  background: var(--mix-seg-border-76-transparent-24);
+  background: var(--border-subtle);
   pointer-events: none;
 }
 
@@ -261,7 +261,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   width: 34px;
   height: 34px;
   background: transparent;
-  color: #5a6e81;
+  color: var(--semantic-icon-button-text);
   box-shadow: none;
 }
 
@@ -274,7 +274,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
 .row-action {
   width: 30px;
   height: 30px;
-  color: #617181;
+  color: var(--semantic-icon-button-text);
   background: transparent;
 }
 
@@ -284,8 +284,8 @@ body.is-resizing-sidebar .sidebar-resizer::before {
 .sidebar-toggle-button.is-sidebar.is-active,
 .sidebar-settings:hover,
 .row-action:hover {
-  color: #1d2a35;
-  background: var(--mix-seg-accent-soft-72-transparent-28);
+  color: var(--semantic-icon-button-text-hover);
+  background: var(--semantic-icon-button-surface-hover);
   box-shadow: none;
 }
 
@@ -324,7 +324,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
 
 .conversation-entry-block {
   padding-bottom: 8px;
-  border-bottom: 1px solid rgba(127, 140, 153, 0.16);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .session-row-shell {
@@ -529,17 +529,17 @@ body.is-resizing-sidebar .sidebar-resizer::before {
 }
 
 .ui-context-menu {
-  --context-menu-surface: var(--semantic-dropdown-menu-surface, var(--seg-dropdown-menu-surface, var(--surface-elevated, #ffffff)));
-  --context-menu-border: var(--seg-border, var(--border-default, rgba(17, 24, 39, 0.12)));
-  --context-menu-text: var(--seg-text-1, var(--text-primary, #1f2937));
-  --context-menu-muted: var(--seg-text-2, var(--text-secondary, #6b7280));
+  --context-menu-surface: var(--semantic-dropdown-menu-surface);
+  --context-menu-border: var(--border-default);
+  --context-menu-text: var(--text-primary);
+  --context-menu-muted: var(--text-secondary);
   --context-menu-hover: var(--surface-panel-muted);
   --context-menu-hover-text: var(--text-primary);
-  --context-menu-danger-text: var(--semantic-error-text, var(--seg-danger-text, #b42318));
-  --context-menu-danger-hover: var(--semantic-error-surface, var(--seg-danger-surface, rgba(180, 35, 24, 0.08)));
+  --context-menu-danger-text: var(--semantic-error-text);
+  --context-menu-danger-hover: var(--semantic-error-surface);
   --context-menu-radius: var(--semantic-dropdown-menu-radius, var(--seg-radius-md, calc(var(--seg-radius-xs, 6px) + 2px)));
-  --context-menu-focus: var(--focus-outline-color, rgba(212, 107, 99, 0.32));
-  --context-menu-shadow: var(--ui-shadow-md, var(--shadow-md, 0 14px 34px rgba(17, 24, 39, 0.14)));
+  --context-menu-focus: var(--focus-outline-color);
+  --context-menu-shadow: var(--shadow-md);
 
   position: fixed;
   z-index: 1000;
@@ -658,7 +658,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   display: grid;
   place-items: center;
   padding: 18px;
-  background: var(--surface-overlay, rgba(12, 10, 9, 0.42));
+  background: var(--surface-overlay);
 }
 
 .project-worktree-create-dialog {
@@ -666,11 +666,11 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   display: grid;
   gap: 12px;
   padding: 18px 20px 16px;
-  border: 1px solid var(--seg-border, rgba(255, 255, 255, 0.12));
-  border-radius: var(--radius-overlay, 12px);
-  background: var(--surface-elevated, var(--seg-panel, #ffffff));
-  color: var(--seg-text-1, #1f2937);
-  box-shadow: var(--ui-shadow-lg, 0 24px 58px rgba(0, 0, 0, 0.28));
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-overlay);
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-lg);
 }
 
 .project-worktree-create-header {
@@ -690,7 +690,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
 
 .project-worktree-create-header p {
   margin: 6px 0 0;
-  color: var(--seg-text-2, #6b7280);
+  color: var(--text-secondary);
   font-size: 16px;
   line-height: 1.55;
 }
@@ -704,7 +704,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--seg-text-2, #6b7280);
+  color: var(--text-secondary);
 }
 
 .project-worktree-create-close:hover,
@@ -745,7 +745,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
 
 .project-worktree-create-error {
   margin: 0;
-  color: var(--semantic-error-text, #b42318);
+  color: var(--semantic-error-text);
   font-size: 12px;
   line-height: 1.45;
 }
@@ -849,7 +849,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
 }
 
 .project-worktree-environment select:focus-visible {
-  border-color: var(--mix-seg-accent-42-seg-border-58);
+  border-color: var(--focus-outline-color);
 }
 
 .project-worktree-environment-options label {
@@ -978,7 +978,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   height: 7px;
   border-radius: 999px;
   background: currentColor;
-  box-shadow: 0 0 0 3px var(--mix-seg-success-10-transparent-90);
+  box-shadow: 0 0 0 3px var(--semantic-success-border);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1102,7 +1102,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
 }
 
 .sidebar-path-copy small {
-  color: #718599;
+  color: var(--text-tertiary);
   font-size: 11px;
   line-height: 1.4;
   word-break: break-all;
@@ -1110,9 +1110,9 @@ body.is-resizing-sidebar .sidebar-resizer::before {
 
 .skills-tree-root {
   --skills-tree-scrollbar-size: 10px;
-  --skills-tree-scrollbar-thumb: var(--mix-seg-text-3-34-transparent-66);
-  --skills-tree-scrollbar-thumb-hover: var(--mix-seg-text-3-54-transparent-46);
-  --skills-tree-scrollbar-thumb-active: var(--seg-text-3);
+  --skills-tree-scrollbar-thumb: var(--semantic-scrollbar-thumb-surface);
+  --skills-tree-scrollbar-thumb-hover: var(--semantic-scrollbar-thumb-surface-hover);
+  --skills-tree-scrollbar-thumb-active: var(--text-tertiary);
   --skills-tree-scrollbar-track: transparent;
   min-height: 0;
   display: grid;
@@ -1206,8 +1206,8 @@ body.is-resizing-sidebar .sidebar-resizer::before {
 }
 
 .skills-tree-search-row:focus-within {
-  border-color: var(--mix-seg-accent-42-seg-border-58);
-  box-shadow: 0 0 0 3px var(--mix-seg-accent-12-transparent-88);
+  border-color: var(--focus-outline-color);
+  box-shadow: none;
 }
 
 .skills-tree-search-row button {
@@ -1262,18 +1262,18 @@ body.is-resizing-sidebar .sidebar-resizer::before {
 .skills-create-actions button {
   min-height: 32px;
   padding: 0 12px;
-  border: 1px solid rgba(166, 186, 208, 0.5);
+  border: 1px solid var(--semantic-button-secondary-border);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.94);
-  color: #20303e;
+  background: var(--semantic-button-secondary-surface);
+  color: var(--semantic-button-secondary-text);
   font-size: 12px;
   font-weight: 600;
 }
 
 .skills-create-actions button[type="submit"] {
-  border-color: var(--mix-seg-accent-34-seg-border-66);
-  background: var(--mix-seg-accent-soft-82-transparent-18);
-  color: var(--seg-accent-strong);
+  border-color: var(--semantic-button-primary-border);
+  background: var(--semantic-button-primary-surface);
+  color: var(--semantic-button-primary-text);
 }
 
 .skills-create-actions button:disabled {
@@ -1283,7 +1283,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
 
 .skills-tree-empty {
   margin: 0;
-  color: #5f7488;
+  color: var(--text-secondary);
   line-height: 1.5;
 }
 
@@ -1563,7 +1563,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   flex: 0 0 auto;
   margin-left: auto;
   padding: 1px 5px;
-  border: 1px solid rgba(166, 186, 208, 0.52);
+  border: 1px solid var(--border-default);
   border-radius: 5px;
   color: var(--seg-text-3);
   font-size: 10px;

@@ -80,15 +80,15 @@
 }
 
 .tools-banner.is-success {
-  border-color: rgba(78, 146, 102, 0.36);
-  color: #245c3a;
-  background: #f4fbf6;
+  border-color: var(--semantic-success-border);
+  color: var(--semantic-success-text);
+  background: var(--semantic-success-surface);
 }
 
 .tools-banner.is-error {
-  border-color: rgba(197, 97, 78, 0.3);
-  color: #8f3127;
-  background: #fff6f3;
+  border-color: var(--semantic-error-border);
+  color: var(--semantic-error-text);
+  background: var(--semantic-error-surface);
 }
 
 .tools-banner-text {
@@ -127,7 +127,7 @@
 
 .tools-banner-dismiss:hover,
 .tools-banner-dismiss:focus-visible {
-  background: rgba(255, 255, 255, 0.62);
+  background: var(--semantic-icon-button-surface-hover);
   opacity: 1;
 }
 
@@ -224,14 +224,14 @@
 
 .tools-category-item:hover {
   transform: translateY(-1px);
-  border-color: rgba(95, 146, 194, 0.6);
-  background: #ffffff;
+  border-color: var(--focus-outline-color);
+  background: var(--surface-elevated);
   color: var(--seg-text-1);
 }
 
 .tools-category-item.is-active {
-  background: #e7f2fb;
-  border-color: rgba(95, 146, 194, 0.7);
+  background: var(--brand-primary-soft-active);
+  border-color: var(--focus-outline-color);
 }
 
 .tools-category-item-header,
@@ -320,7 +320,7 @@
   justify-content: space-between;
   gap: 18px;
   padding-bottom: 16px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .tools-detail-header p {
@@ -361,17 +361,17 @@
 }
 
 .tools-toggle-card:hover {
-  border-color: var(--mix-seg-accent-34-seg-border-66);
+  border-color: var(--focus-outline-color);
 }
 
 .tools-toggle-card:focus-visible {
-  border-color: var(--mix-seg-accent-42-seg-border-58);
+  border-color: var(--focus-outline-color);
   outline: none;
 }
 
 .tools-toggle-card.is-active {
-  border-color: var(--mix-seg-accent-32-seg-border-68);
-  background: var(--mix-seg-accent-soft-74-seg-panel-26);
+  border-color: var(--focus-outline-color);
+  background: var(--brand-primary-soft-active);
 }
 
 .tools-card {
@@ -414,8 +414,9 @@
 
 .tools-card-expander:focus-visible,
 .tools-card-toggle-button:focus-visible {
-  outline: 2px solid var(--mix-seg-accent-42-seg-border-58);
-  outline-offset: 3px;
+  outline: none;
+  border-color: var(--focus-outline-color);
+  background: var(--semantic-icon-button-surface-hover);
 }
 
 .tools-card-expander-icon {
@@ -448,7 +449,7 @@
 .tools-card-id {
   flex: 1 1 auto;
   min-width: 0;
-  color: #728197;
+  color: var(--text-tertiary);
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace);
   font-size: 12px;
   overflow: hidden;
@@ -500,7 +501,7 @@
   height: 28px;
   border: 1px solid var(--seg-border);
   border-radius: 999px;
-  background: var(--mix-seg-border-72-seg-panel-28);
+  background: var(--border-default);
 }
 
 .tools-toggle-thumb {
@@ -543,7 +544,7 @@
   padding: 8px 10px;
   border: 1px solid var(--seg-border);
   border-radius: var(--seg-radius-sm);
-  background: var(--mix-seg-panel-72-seg-panel-muted-28);
+  background: var(--surface-panel-muted);
 }
 
 .tools-card-detail-item.is-description {
@@ -595,7 +596,7 @@
   overflow: auto;
   border: 1px solid var(--seg-border);
   border-radius: var(--seg-radius-sm);
-  background: var(--seg-code-bg, var(--mix-seg-panel-72-seg-panel-muted-28));
+  background: var(--seg-code-bg, var(--surface-panel-muted));
   color: var(--seg-text-1);
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace);
   font-size: 12px;
@@ -615,7 +616,7 @@
   padding: 0 10px;
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-pill);
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--surface-elevated);
   color: var(--ui-text-2);
   box-shadow: none;
   display: inline-flex;
@@ -627,15 +628,15 @@
 }
 
 .tools-badge.is-highlight {
-  border-color: rgba(95, 146, 194, 0.7);
-  background: rgba(29, 110, 255, 0.12);
+  border-color: var(--semantic-info-border);
+  background: var(--semantic-info-surface);
   color: var(--ui-accent-strong);
 }
 
 .tools-badge.is-warning {
-  border-color: rgba(184, 134, 11, 0.35);
-  background: #fff7df;
-  color: #8a5a00;
+  border-color: var(--semantic-warning-border);
+  background: var(--semantic-warning-surface);
+  color: var(--semantic-warning-text);
 }
 
 @media (max-width: 1280px) {
@@ -688,17 +689,17 @@
 /* Obsidian-style built-in tools page */
 
 .builtin-tools-page {
-  --tools-obs-bg: var(--surface-panel);
-  --tools-obs-surface: #fafafa;
-  --tools-obs-surface-hover: #f4f4f4;
-  --tools-obs-border: #dedede;
-  --tools-obs-border-subtle: #e8e8e8;
-  --tools-obs-text: #1f1f1f;
-  --tools-obs-text-muted: #666666;
-  --tools-obs-text-faint: #8a8a8a;
-  --tools-obs-accent: #8f63e9;
-  --tools-obs-accent-hover: #7c4fe8;
-  --tools-obs-accent-soft: rgba(143, 99, 233, 0.1);
+  --tools-obs-bg: var(--surface-shell);
+  --tools-obs-surface: var(--surface-panel);
+  --tools-obs-surface-hover: var(--surface-panel-muted);
+  --tools-obs-border: var(--border-default);
+  --tools-obs-border-subtle: var(--border-subtle);
+  --tools-obs-text: var(--text-primary);
+  --tools-obs-text-muted: var(--text-secondary);
+  --tools-obs-text-faint: var(--text-tertiary);
+  --tools-obs-accent: var(--brand-primary-active);
+  --tools-obs-accent-hover: var(--brand-primary-strong);
+  --tools-obs-accent-soft: var(--brand-primary-soft-active);
   background: var(--tools-obs-bg);
 }
 
@@ -800,29 +801,29 @@
 }
 
 .builtin-tools-page .tools-detail-actions .primary-button {
-  border-color: rgba(143, 99, 233, 0.42);
-  background: var(--tools-obs-accent);
-  color: #ffffff;
+  border-color: var(--semantic-button-primary-border);
+  background: var(--semantic-button-primary-surface);
+  color: var(--semantic-button-primary-text);
 }
 
 .builtin-tools-page .tools-detail-actions .primary-button:hover,
 .builtin-tools-page .tools-detail-actions .primary-button:focus-visible {
-  border-color: rgba(124, 79, 224, 0.54);
-  background: var(--tools-obs-accent-hover);
-  color: #ffffff;
+  border-color: var(--semantic-button-primary-border-hover);
+  background: var(--semantic-button-primary-surface-hover);
+  color: var(--semantic-button-primary-text-hover);
 }
 
 .builtin-tools-page .tools-detail-actions .secondary-button {
-  border-color: var(--tools-obs-border);
-  background: #ffffff;
-  color: #555555;
+  border-color: var(--semantic-button-secondary-border);
+  background: var(--semantic-button-secondary-surface);
+  color: var(--semantic-button-secondary-text);
 }
 
 .builtin-tools-page .tools-detail-actions .secondary-button:hover,
 .builtin-tools-page .tools-detail-actions .secondary-button:focus-visible {
-  border-color: #d0d0d0;
-  background: #f8f8f8;
-  color: var(--tools-obs-text);
+  border-color: var(--semantic-button-secondary-border-hover);
+  background: var(--semantic-button-secondary-surface-hover);
+  color: var(--semantic-button-secondary-text-hover);
 }
 
 .builtin-tools-page .tools-card-list {
@@ -905,7 +906,7 @@
   padding: 0 8px;
   border-color: var(--tools-obs-border);
   border-radius: 5px;
-  background: #ffffff;
+  background: var(--surface-elevated);
   color: var(--tools-obs-text-muted);
   font-family: var(--font-sans);
   font-size: 11px;
@@ -915,15 +916,15 @@
 }
 
 .builtin-tools-page .tools-badge.is-highlight {
-  border-color: rgba(143, 99, 233, 0.24);
+  border-color: var(--semantic-info-border);
   background: var(--tools-obs-accent-soft);
-  color: #6f45ca;
+  color: var(--brand-primary-strong);
 }
 
 .builtin-tools-page .tools-badge.is-warning {
-  border-color: rgba(184, 134, 11, 0.28);
-  background: #fff8e8;
-  color: #8a5a00;
+  border-color: var(--semantic-warning-border);
+  background: var(--semantic-warning-surface);
+  color: var(--semantic-warning-text);
 }
 
 .builtin-tools-page .tools-card-toggle-button {
@@ -934,8 +935,8 @@
 .builtin-tools-page .tools-toggle-control {
   width: 40px;
   height: 24px;
-  border-color: #dcdcdc;
-  background: #eeeeee;
+  border-color: var(--semantic-settings-switch-track-border);
+  background: var(--semantic-settings-switch-track-surface);
 }
 
 .builtin-tools-page .tools-toggle-thumb {
@@ -943,7 +944,7 @@
   left: 2px;
   width: 18px;
   height: 18px;
-  background: #ffffff;
+  background: var(--semantic-settings-switch-thumb-surface);
 }
 
 .builtin-tools-page .tools-toggle-card.is-active .tools-toggle-control {
@@ -967,7 +968,7 @@
 .builtin-tools-page .tools-card-input-schema pre {
   border-color: var(--tools-obs-border-subtle);
   border-radius: 6px;
-  background: #ffffff;
+  background: var(--surface-elevated);
 }
 
 .builtin-tools-page .tools-card-detail-grid dt,
@@ -988,14 +989,14 @@
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: #555555;
+  color: var(--text-secondary);
   transform: none;
 }
 
 .builtin-tools-page .tools-category-item:hover,
 .builtin-tools-page .tools-category-item:focus-visible {
   border-color: transparent;
-  background: #f2f2f2;
+  background: var(--surface-panel-muted);
   color: var(--tools-obs-text);
   transform: none;
   outline: none;
@@ -1003,17 +1004,17 @@
 
 .builtin-tools-page .tools-category-item.is-active {
   border-color: transparent;
-  background: #e9e9e9;
+  background: var(--semantic-sidebar-tree-row-surface-active);
   color: var(--tools-obs-text);
 }
 
 .sidebar-view-tools .tools-badge {
   min-height: 20px;
   padding: 0 7px;
-  border-color: #dedede;
+  border-color: var(--border-default);
   border-radius: 999px;
-  background: #ffffff;
-  color: #666666;
+  background: var(--surface-elevated);
+  color: var(--text-secondary);
   font-family: var(--font-sans);
   font-size: 10px;
   font-weight: 600;
@@ -1049,17 +1050,6 @@
     flex-wrap: wrap;
     justify-content: flex-start;
   }
-}
-
-:root[data-theme="dark"] .builtin-tools-page {
-  --tools-obs-surface: var(--seg-panel);
-  --tools-obs-surface-hover: var(--seg-panel-muted);
-  --tools-obs-border: var(--seg-border);
-  --tools-obs-border-subtle: var(--mix-seg-border-76-transparent-24);
-  --tools-obs-text: var(--seg-text-1);
-  --tools-obs-text-muted: var(--seg-text-2);
-  --tools-obs-text-faint: var(--seg-text-3);
-  --tools-obs-accent-soft: rgba(143, 99, 233, 0.16);
 }
 
 :root[data-theme="dark"] .builtin-tools-page .tools-detail-actions .secondary-button,

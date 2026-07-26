@@ -28,6 +28,8 @@ await import("./index")
 describe("desktop preload bridge", () => {
   beforeEach(() => {
     electronMock.invoke.mockReset()
+    electronMock.on.mockClear()
+    electronMock.removeListener.mockClear()
   })
 
   it("exposes local preview service detection", async () => {
@@ -59,6 +61,87 @@ describe("desktop preload bridge", () => {
 
     await expect(electronMock.exposedDesktopApi?.getStorageUsage()).resolves.toEqual(snapshot)
     expect(electronMock.invoke).toHaveBeenCalledWith("desktop:get-storage-usage")
+  })
+
+  it("exposes the bounded semantic token inspector bridge and detach events", async () => {
+    const api = electronMock.exposedDesktopApi as Record<string, (...args: unknown[]) => unknown>
+    const input = {
+      x: 20,
+      y: 30,
+      ancestorDepth: 0,
+      requestID: 4,
+      resolvedColorMode: "light",
+    }
+    electronMock.invoke
+      .mockResolvedValueOnce({ status: "active" })
+      .mockResolvedValueOnce({ status: "ok", requestID: 4, inspection: { target: {}, properties: [], warnings: [] } })
+      .mockResolvedValueOnce({ status: "inactive" })
+
+    await expect(api.startSemanticTokenInspector()).resolves.toEqual({ status: "active" })
+    await expect(api.inspectSemanticTokenAtPoint(input)).resolves.toMatchObject({ status: "ok", requestID: 4 })
+    await expect(api.stopSemanticTokenInspector()).resolves.toEqual({ status: "inactive" })
+
+    expect(electronMock.invoke).toHaveBeenNthCalledWith(1, "desktop:start-semantic-token-inspector")
+    expect(electronMock.invoke).toHaveBeenNthCalledWith(2, "desktop:inspect-semantic-token-at-point", input)
+    expect(electronMock.invoke).toHaveBeenNthCalledWith(3, "desktop:stop-semantic-token-inspector")
+
+    const prepareInput = {
+      sessionID: "authoring-session",
+      draft: {
+        version: 1,
+        sourceThemeID: "built-in:classic",
+        operations: [],
+      },
+    }
+    const transactionInput = { transactionID: "transaction-1" }
+    electronMock.invoke
+      .mockResolvedValueOnce({ status: "prepared", transactionID: "transaction-1" })
+      .mockResolvedValueOnce({ status: "committed", files: [] })
+      .mockResolvedValueOnce({ status: "discarded" })
+
+    await api.prepareSemanticTokenAuthoringCommit(prepareInput)
+    await api.commitSemanticTokenAuthoringCommit(transactionInput)
+    await api.discardSemanticTokenAuthoringCommit(transactionInput)
+
+    expect(electronMock.invoke).toHaveBeenNthCalledWith(
+      4,
+      "desktop:prepare-semantic-token-authoring-commit",
+      prepareInput,
+    )
+    expect(electronMock.invoke).toHaveBeenNthCalledWith(
+      5,
+      "desktop:commit-semantic-token-authoring-commit",
+      transactionInput,
+    )
+    expect(electronMock.invoke).toHaveBeenNthCalledWith(
+      6,
+      "desktop:discard-semantic-token-authoring-commit",
+      transactionInput,
+    )
+
+    const listener = vi.fn()
+    const unsubscribe = api.onSemanticTokenInspectorEvent(listener) as () => void
+    const [, wrappedListener] = electronMock.on.mock.calls.at(-1) ?? []
+    expect(electronMock.on).toHaveBeenLastCalledWith(
+      "desktop:semantic-token-inspector-event",
+      expect.any(Function),
+    )
+    ;(wrappedListener as (...args: unknown[]) => void)({}, {
+      type: "detached",
+      reason: "devtools-opened",
+      message: "DevTools opened.",
+    })
+    expect(listener).toHaveBeenCalledWith({
+      type: "detached",
+      reason: "devtools-opened",
+      message: "DevTools opened.",
+    })
+
+    unsubscribe()
+    expect(electronMock.removeListener).toHaveBeenCalledWith(
+      "desktop:semantic-token-inspector-event",
+      wrappedListener,
+    )
   })
 
   it("exposes image saving to a selected folder", async () => {

@@ -99,13 +99,13 @@
 }
 
 .window-shell.is-windows[data-background-mode="default"] .right-sidebar-launcher-card {
-  border-color: var(--mix-seg-border-82-transparent-18);
+  border-color: var(--border-default);
   background: var(--surface-profile-button-secondary);
 }
 
 .window-shell.is-windows[data-background-mode="default"] .right-sidebar-launcher-card:hover,
 .window-shell.is-windows[data-background-mode="default"] .right-sidebar-launcher-card:focus-visible {
-  border-color: var(--mix-seg-border-84-transparent-16);
+  border-color: var(--focus-outline-color);
   background: var(--surface-profile-button-secondary-hover);
 }
 

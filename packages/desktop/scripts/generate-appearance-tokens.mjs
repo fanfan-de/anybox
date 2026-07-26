@@ -390,6 +390,9 @@ function validateManifest(manifest) {
       fail(`compatibility.${field} must be a non-negative integer.`)
     }
   }
+  if (manifest.compatibility.legacyDirectColorMixUsageCount !== 0) {
+    fail("compatibility.legacyDirectColorMixUsageCount must remain 0.")
+  }
   assertUnique(
     manifest.compatibility.allowedDirectMixConsumers,
     "allowed direct mix consumers",
@@ -872,14 +875,11 @@ async function validateGeneratedBoundary(manifest, data, manualTokensSource) {
       } to ${directMixUsageCount}. Migrate removed usages to semantic tokens; do not add new usages.`,
     )
   }
-  if (
-    directColorMixUsageCount !==
-    manifest.compatibility.legacyDirectColorMixUsageCount
-  ) {
+  if (directColorMixUsageCount !== 0) {
     fail(
-      `legacy direct color-mix() usage count changed from ${
-        manifest.compatibility.legacyDirectColorMixUsageCount
-      } to ${directColorMixUsageCount}. Keep dynamic exceptions explicit and move theme derivations into the manifest.`,
+      `component CSS contains ${directColorMixUsageCount} direct color-mix() call${
+        directColorMixUsageCount === 1 ? "" : "s"
+      }. Use an explicit runtime semantic token instead.`,
     )
   }
 }

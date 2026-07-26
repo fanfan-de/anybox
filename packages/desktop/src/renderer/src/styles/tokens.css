@@ -28,6 +28,25 @@
   --motion-slow: 220ms;
   --motion-xslow: 320ms;
   --ease-standard: ease;
+  /* Fixed rendering primitives: these encode alpha masks, color-model endpoints,
+     media letterboxing, and QR contrast. They are intentionally not theme colors. */
+  --functional-absolute-black: #000000;
+  --functional-absolute-white: #ffffff;
+  --functional-mask-opaque: var(--functional-absolute-black);
+  --functional-color-model-black: var(--functional-absolute-black);
+  --functional-color-model-white: var(--functional-absolute-white);
+  --functional-media-letterbox-surface: var(--functional-absolute-black);
+  --functional-qr-surface: var(--functional-absolute-white);
+  --functional-hue-spectrum: linear-gradient(
+    to right,
+    hsl(0 100% 50%),
+    hsl(60 100% 50%),
+    hsl(120 100% 50%),
+    hsl(180 100% 50%),
+    hsl(240 100% 50%),
+    hsl(300 100% 50%),
+    hsl(360 100% 50%)
+  );
   --shadow-sm-light: 0 14px 30px rgba(41, 37, 36, 0.06);
   --shadow-md-light: 0 20px 46px rgba(41, 37, 36, 0.08);
   --shadow-lg-light: 0 28px 68px rgba(41, 37, 36, 0.12);
@@ -196,6 +215,16 @@
   --seg-composer-button-surface-strong: var(--semantic-composer-button-surface-strong);
   --seg-composer-button-text: var(--semantic-composer-button-text);
   --seg-composer-button-text-strong: var(--semantic-composer-button-text-strong);
+  /* Deprecated settings-scoped detail icon names. */
+  --semantic-settings-list-detail-icon-surface-light: var(--semantic-detail-icon-surface-light);
+  --semantic-settings-list-detail-icon-surface-dark: var(--semantic-detail-icon-surface-dark);
+  --semantic-settings-list-detail-icon-border-light: var(--semantic-detail-icon-border-light);
+  --semantic-settings-list-detail-icon-border-dark: var(--semantic-detail-icon-border-dark);
+  --semantic-settings-list-detail-icon-text-light: var(--semantic-detail-icon-text-light);
+  --semantic-settings-list-detail-icon-text-dark: var(--semantic-detail-icon-text-dark);
+  --semantic-settings-list-detail-icon-surface: var(--semantic-detail-icon-surface);
+  --semantic-settings-list-detail-icon-border: var(--semantic-detail-icon-border);
+  --semantic-settings-list-detail-icon-text: var(--semantic-detail-icon-text);
   --seg-radius-xs: var(--radius-control);
   --seg-radius-sm: var(--radius-chip);
   --seg-radius-md: var(--radius-panel);

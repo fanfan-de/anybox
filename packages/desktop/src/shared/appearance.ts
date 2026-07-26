@@ -123,6 +123,24 @@ const APPEARANCE_TOKEN_NAME_SET = new Set<string>(APPEARANCE_TOKEN_NAMES)
 const APPEARANCE_FONT_FAMILY_SET = new Set<string>(APPEARANCE_FONT_FAMILIES)
 
 const LEGACY_APPEARANCE_TOKEN_MIGRATIONS: Record<string, readonly AppearanceTokenName[]> = {
+  "semantic-settings-list-detail-icon-surface": [
+    "semantic-detail-icon-surface-light",
+    "semantic-detail-icon-surface-dark",
+  ],
+  "semantic-settings-list-detail-icon-surface-light": ["semantic-detail-icon-surface-light"],
+  "semantic-settings-list-detail-icon-surface-dark": ["semantic-detail-icon-surface-dark"],
+  "semantic-settings-list-detail-icon-border": [
+    "semantic-detail-icon-border-light",
+    "semantic-detail-icon-border-dark",
+  ],
+  "semantic-settings-list-detail-icon-border-light": ["semantic-detail-icon-border-light"],
+  "semantic-settings-list-detail-icon-border-dark": ["semantic-detail-icon-border-dark"],
+  "semantic-settings-list-detail-icon-text": [
+    "semantic-detail-icon-text-light",
+    "semantic-detail-icon-text-dark",
+  ],
+  "semantic-settings-list-detail-icon-text-light": ["semantic-detail-icon-text-light"],
+  "semantic-settings-list-detail-icon-text-dark": ["semantic-detail-icon-text-dark"],
   "semantic-accent-icon": ["semantic-accent-icon-light", "semantic-accent-icon-dark"],
   "semantic-accent-icon-hover": ["semantic-accent-icon-hover-light", "semantic-accent-icon-hover-dark"],
   "semantic-accent-icon-active": ["semantic-accent-icon-active-light", "semantic-accent-icon-active-dark"],
@@ -756,7 +774,7 @@ export function validateAppearanceConfigDocumentStructure(
   for (const [tokenName, value] of Object.entries(record.overrides)) {
     const isKnownName = isAppearanceTokenName(tokenName)
     const isLegacyName = Boolean(LEGACY_APPEARANCE_TOKEN_MIGRATIONS[tokenName])
-    if (!isKnownName && !(record.version !== 2 && isLegacyName)) {
+    if (!isKnownName && !isLegacyName) {
       errors.push(`Unknown appearance token "--${tokenName}".`)
       continue
     }

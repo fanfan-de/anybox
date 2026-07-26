@@ -822,6 +822,15 @@ describe("App", () => {
         chrome: "130.0.0",
         electron: "39.0.0",
       }),
+      startSemanticTokenInspector: vi.fn().mockResolvedValue({ status: "active" }),
+      inspectSemanticTokenAtPoint: vi.fn().mockResolvedValue({
+        status: "unavailable",
+        requestID: 0,
+        reason: "target-not-found",
+        message: "No target.",
+      }),
+      stopSemanticTokenInspector: vi.fn().mockResolvedValue({ status: "inactive" }),
+      onSemanticTokenInspectorEvent: vi.fn().mockReturnValue(() => undefined),
       getAppUpdateState: vi.fn().mockResolvedValue(createAppUpdateState()),
       setAutomaticUpdatesEnabled: vi.fn().mockImplementation(
         ({ enabled }: { enabled: boolean }) => Promise.resolve({
@@ -10763,6 +10772,36 @@ describe("App", () => {
     expect(window.localStorage.getItem("desktop.debugLineColors")).toBe("false")
   })
 
+  it("starts and stops Semantic Token Inspector from developer mode settings", async () => {
+    render(<App />)
+
+    fireEvent.click(screen.getByRole("button", { name: "Open settings" }))
+    await screen.findByRole("dialog", { name: "Settings" })
+    fireEvent.click(screen.getByRole("button", { name: /^Developer Mode/ }))
+    expandSettingsDisclosure(/Debug Overlays/)
+
+    const inspectorSwitch = screen.getByRole("switch", { name: "Enable Semantic Token Inspector" })
+    expect(inspectorSwitch).toHaveAttribute("aria-checked", "false")
+
+    fireEvent.click(inspectorSwitch)
+
+    expect(inspectorSwitch).toHaveAttribute("aria-checked", "true")
+    expect(window.localStorage.getItem("desktop.semanticTokenInspector")).toBe("true")
+    await waitFor(() => {
+      expect(window.desktop?.startSemanticTokenInspector).toHaveBeenCalledTimes(1)
+      expect(screen.getByTitle("Exit Semantic Token Inspector")).toBeInTheDocument()
+      expect(document.querySelector(".semantic-token-inspector-overlay.is-active")).toBeInTheDocument()
+    })
+
+    fireEvent.keyDown(document.body, { key: "Escape" })
+
+    await waitFor(() => {
+      expect(inspectorSwitch).toHaveAttribute("aria-checked", "false")
+      expect(window.localStorage.getItem("desktop.semanticTokenInspector")).toBe("false")
+      expect(window.desktop?.stopSemanticTokenInspector).toHaveBeenCalledTimes(1)
+    })
+  })
+
   it("toggles trace debug metadata from developer mode settings", async () => {
     render(<App />)
 
@@ -14648,7 +14687,7 @@ describe("App", () => {
     )
   })
 
-  it("keeps preview comment hover highlight visibly blue across theme overrides", () => {
+  it("keeps preview comment hover highlight connected to the active theme", () => {
     const hoverHighlightBlocks = Array.from(
       styles.matchAll(/\.preview-hover-highlight\s*\{([^}]*)\}/g),
       (match) => match[1],
@@ -14656,9 +14695,9 @@ describe("App", () => {
     expect(hoverHighlightBlocks.length).toBeGreaterThan(0)
     const finalHoverHighlightBlock = hoverHighlightBlocks[hoverHighlightBlocks.length - 1] ?? ""
 
-    expect(finalHoverHighlightBlock).toContain("border-color: #0a84ff;")
-    expect(finalHoverHighlightBlock).toContain("background: rgba(10, 132, 255, 0.18);")
-    expect(finalHoverHighlightBlock).not.toContain("border-color: var(--seg-accent)")
+    expect(finalHoverHighlightBlock).toContain("border-color: var(--focus-outline-color);")
+    expect(finalHoverHighlightBlock).toContain("background: var(--brand-primary-soft-active);")
+    expect(finalHoverHighlightBlock).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(/i)
   })
 
   it("keeps the canvas tabs separate from the session top menu", () => {
@@ -14684,8 +14723,8 @@ describe("App", () => {
     expect(styles).toMatch(/\.dockview-theme-anybox\s+\.dv-content-container,[\s\S]*?\.dockview-theme-anybox\s+\.workbench-pane-live-region\s*\{[^}]*-webkit-app-region:\s*no-drag;/s)
     expect(styles).toMatch(/\.dockview-theme-anybox\s+\.workbench-pane\s+button,[\s\S]*?\.dockview-theme-anybox\s+\.workbench-pane\s+\[contenteditable="true"\]\s*\{[^}]*-webkit-app-region:\s*no-drag;/s)
     expect(styles).toMatch(/\.dockview-theme-anybox\s+\.workbench-pane-live-region\.is-dockview-managed\s*\{[^}]*grid-template-rows:\s*auto minmax\(0,\s*1fr\) auto auto;/s)
-    expect(styles).toMatch(/\.dockview-workbench-panes\s*\{[^}]*--dv-drag-over-background-color:\s*var\(--mix-seg-accent-16-transparent-84\);[^}]*--dv-drag-over-border-color:\s*var\(--seg-accent\);[^}]*--dv-drag-over-border:\s*1px solid var\(--seg-accent\);/s)
-    expect(styles).toMatch(/\.dockview-theme-anybox\s*\{[^}]*--dv-drag-over-background-color:\s*var\(--mix-seg-accent-16-transparent-84\);[^}]*--dv-drag-over-border-color:\s*var\(--seg-accent\);[^}]*--dv-drag-over-border:\s*1px solid var\(--seg-accent\);/s)
+    expect(styles).toMatch(/\.dockview-workbench-panes\s*\{[^}]*--dv-drag-over-background-color:\s*var\(--brand-primary-soft-active\);[^}]*--dv-drag-over-border-color:\s*var\(--seg-accent\);[^}]*--dv-drag-over-border:\s*1px solid var\(--seg-accent\);/s)
+    expect(styles).toMatch(/\.dockview-theme-anybox\s*\{[^}]*--dv-drag-over-background-color:\s*var\(--brand-primary-soft-active\);[^}]*--dv-drag-over-border-color:\s*var\(--seg-accent\);[^}]*--dv-drag-over-border:\s*1px solid var\(--seg-accent\);/s)
     expect(styles).toMatch(/\.dockview-workbench-panes\s+\.dv-drop-target-container\s*\{[^}]*--dv-transition-duration:\s*var\(--motion-base\);[^}]*-webkit-app-region:\s*no-drag;/s)
     expect(styles).toMatch(/\.dockview-workbench-panes\s+\.dv-drop-target > \.dv-drop-target-dropzone\s*\{[^}]*-webkit-app-region:\s*no-drag;/s)
     expect(styles).toMatch(/\.dockview-workbench-panes\s+\.dv-drop-target > \.dv-drop-target-dropzone > \.dv-drop-target-selection,\s*\.dockview-workbench-panes\s+\.dv-drop-target-container \.dv-drop-target-anchor\s*\{[^}]*background-color:\s*var\(--dv-drag-over-background-color\);[^}]*box-shadow:/s)
@@ -14718,7 +14757,7 @@ describe("App", () => {
     expect(styles).toMatch(
       /\.dockview-theme-anybox\s+\.dv-tabs-and-actions-container\s*\{[^}]*--dockview-tab-bar-bg:\s*var\(--seg-shell-chrome-surface\);[^}]*--dockview-tab-active-bg:\s*var\(--seg-shell\);[^}]*background:\s*var\(--dockview-tab-bar-bg\);[^}]*-webkit-app-region:\s*drag;/s,
     )
-    expect(styles).toMatch(/--dockview-tab-hover-bg:\s*var\(--mix-seg-panel-66-seg-panel-muted-34\);/s)
+    expect(styles).toMatch(/--dockview-tab-hover-bg:\s*var\(--surface-panel-muted\);/s)
     expect(styles).toMatch(
       /\.dockview-theme-anybox\s+\.dv-tabs-and-actions-container::after\s*\{[^}]*bottom:\s*0;[^}]*height:\s*1px;[^}]*background:\s*var\(--dockview-tab-border\);/s,
     )
@@ -14742,8 +14781,8 @@ describe("App", () => {
     expect(styles).toMatch(/\.pane-drop-preview\.is-left\s*\{[^}]*--pane-drop-preview-sheen-x:\s*18%;[^}]*--pane-drop-preview-sheen-y:\s*50%;/s)
     expect(styles).toMatch(/\.pane-drop-preview\.is-top\s*\{[^}]*--pane-drop-preview-sheen-x:\s*50%;[^}]*--pane-drop-preview-sheen-y:\s*18%;/s)
     expect(styles).toMatch(/\.pane-drop-preview-current,\s*\.pane-drop-preview-incoming\s*\{[^}]*position:\s*absolute;[^}]*transition:[^}]*top var\(--pane-drop-preview-motion-duration\) var\(--pane-drop-preview-motion-curve\)[^}]*left var\(--pane-drop-preview-motion-duration\) var\(--pane-drop-preview-motion-curve\)[^}]*width var\(--pane-drop-preview-motion-duration\) var\(--pane-drop-preview-motion-curve\)[^}]*height var\(--pane-drop-preview-motion-duration\) var\(--pane-drop-preview-motion-curve\)/s)
-    expect(styles).toMatch(/\.pane-drop-preview-incoming\s*\{[^}]*background:\s*var\(--mix-brand-accent-active-12-seg-panel-88\);/s)
-    expect(styles).toMatch(/\.pane-drop-preview-current\s*\{[^}]*background:\s*var\(--mix-seg-panel-88-white-12\);/s)
+    expect(styles).toMatch(/\.pane-drop-preview-incoming\s*\{[^}]*background:\s*var\(--brand-primary-soft-strong-active\);/s)
+    expect(styles).toMatch(/\.pane-drop-preview-current\s*\{[^}]*background:\s*var\(--surface-panel-muted\);/s)
     expect(styles).toMatch(/\.canvas-top-menu-git-trigger svg\s*\{[^}]*width:\s*var\(--section-toolbar-aux-icon-size\);[^}]*height:\s*var\(--section-toolbar-aux-icon-size\);[^}]*stroke-width:\s*2;/s)
     expect(styles).toMatch(
       /\.top-menu-view-button:hover,\s*\.top-menu-view-button:focus-visible,[\s\S]*?\{[^}]*background:\s*var\(--semantic-icon-button-surface-hover\);[^}]*color:\s*var\(--semantic-icon-button-text-hover\);/s,
@@ -14795,9 +14834,9 @@ describe("App", () => {
     expect(styles).not.toMatch(
       /\.left-sidebar-top-menu\s+\.sidebar-toggle-button\.is-top-menu\.is-active,\s*\.right-sidebar-top-menu\s+\.sidebar-toggle-button\.is-top-menu\.is-active\s*\{[^}]*color:\s*var\(--semantic-accent-icon-active\);/s,
     )
-    expect(styles).toMatch(/--canvas-region-tab-inactive-bg:\s*var\(--mix-seg-shell-84-seg-panel-muted-16\);/s)
+    expect(styles).toMatch(/--canvas-region-tab-inactive-bg:\s*var\(--semantic-shell-chrome-surface\);/s)
     expect(styles).toMatch(/--canvas-region-tab-focus:\s*var\(--semantic-icon-button-surface-hover\);/s)
-    expect(styles).toMatch(/--dockview-tab-focus-accent:\s*color-mix\(in srgb,\s*var\(--dockview-tab-divider\) 56%,\s*var\(--seg-text-2\) 44%\);/s)
+    expect(styles).toMatch(/--dockview-tab-focus-accent:\s*var\(--focus-outline-color\);/s)
     expect(styles).toMatch(/\.dockview-theme-anybox\s+\.dv-tab\s*\{[^}]*position:\s*relative;[^}]*margin:\s*0 0 -1px;[^}]*background:\s*transparent;[^}]*overflow:\s*hidden;/s)
     expect(styles).toMatch(
       /\.dockview-theme-anybox\s+\.dv-groupview\.dv-active-group > \.dv-tabs-and-actions-container \.dv-tabs-container > \.dv-tab\.dv-active-tab,[\s\S]*?\.dv-tab\.dv-active-tab\s*\{[^}]*background:\s*var\(--dockview-tab-active-bg\);[^}]*box-shadow:\s*inset 0 1px 0 var\(--dockview-tab-border\),\s*inset 0 -1px 0 var\(--dockview-tab-border\);/s,
@@ -14838,7 +14877,7 @@ describe("App", () => {
     )
     expect(styles).toMatch(/\.dockview-theme-anybox\s+\.dockview-workbench-tab-content\s*\{[^}]*height:\s*100%;[^}]*padding:\s*0 8px 0 12px;/s)
     expect(styles).not.toMatch(/session-tab-active-curve/)
-    expect(styles).toMatch(/--right-sidebar-tab-focus-accent:\s*color-mix\(in srgb,\s*var\(--right-sidebar-tab-divider\) 56%,\s*var\(--seg-text-2\) 44%\);/s)
+    expect(styles).toMatch(/--right-sidebar-tab-focus-accent:\s*var\(--focus-outline-color\);/s)
     expect(styles).toMatch(
       /\.right-sidebar-tab\.is-active\s*\{[^}]*box-shadow:\s*inset 0 1px 0 var\(--right-sidebar-tab-border\),\s*inset 0 -1px 0 var\(--right-sidebar-tab-border\);/s,
     )
@@ -14948,7 +14987,7 @@ describe("App", () => {
     expect(styles).toMatch(/\.left-sidebar-top-menu\s*\{[^}]*background:\s*var\(--seg-shell-chrome-surface\);/s)
     expect(styles).toMatch(/\.activity-rail\s*\{[^}]*padding:\s*0 0 14px;/s)
     expect(styles).toMatch(/\.activity-rail-top-menu\s*\{[^}]*min-height:\s*var\(--section-toolbar-height\);[^}]*background:\s*var\(--seg-shell-chrome-surface\);/s)
-    expect(styles).toMatch(/\.activity-rail-top-menu::after\s*\{[^}]*bottom:\s*0;[^}]*height:\s*1px;[^}]*background:\s*var\(--mix-seg-border-76-transparent-24\);/s)
+    expect(styles).toMatch(/\.activity-rail-top-menu::after\s*\{[^}]*bottom:\s*0;[^}]*height:\s*1px;[^}]*background:\s*var\(--border-subtle\);/s)
     expect(styles).toMatch(/\.right-sidebar-top-menu\s*\{[^}]*--right-sidebar-tab-bar-bg:\s*var\(--seg-shell-chrome-surface\);[^}]*background:\s*var\(--right-sidebar-tab-bar-bg\);/s)
     expect(styles).toMatch(/--semantic-composer-surface-light:\s*#ffffff;/i)
     expect(styles).toMatch(/--semantic-composer-border-light:\s*var\(--border-default-light\);/s)
@@ -15027,7 +15066,7 @@ describe("App", () => {
       /\.create-session-card:has\(\.create-session-select-panel\)\s+\.create-session-tip\s*\{[^}]*visibility:\s*hidden;/s,
     )
     expect(styles).toMatch(
-      /\.canvas-top-menu-selector-panel\s*\{[^}]*top:\s*calc\(100%\s*\+\s*8px\);[^}]*background:\s*var\(--seg-dropdown-menu-surface\);/s,
+      /\.canvas-top-menu-selector-panel\s*\{[^}]*top:\s*calc\(100%\s*\+\s*8px\);[^}]*background:\s*var\(--semantic-dropdown-menu-surface\);/s,
     )
     expect(styles).toMatch(
       /select option,\s*select optgroup\s*\{[^}]*background:\s*var\(--seg-dropdown-menu-surface\);/s,
@@ -15199,7 +15238,7 @@ describe("App", () => {
   })
 
   it("styles assistant messages as three stacked panels with call separators", () => {
-    expect(styles).toMatch(/\.permission-request-card\s*\{[^}]*border-left-color:\s*var\(--seg-warning-strong\);[^}]*background:\s*var\(--mix-seg-warning-surface-84-surface-trace-16\);/s)
+    expect(styles).toMatch(/\.permission-request-card\s*\{[^}]*border-left-color:\s*var\(--seg-warning-strong\);[^}]*background:\s*var\(--semantic-warning-surface\);/s)
     expect(styles).toMatch(/\.ask-user-question-card\s*\{[^}]*border:\s*0;[^}]*background:\s*var\(--semantic-question-card-surface\);/s)
     expect(styles).toMatch(/\.assistant-section\.is-response\s+\.ask-user-question-card\s*\{[^}]*border:\s*0;[^}]*background:\s*var\(--semantic-question-card-surface\);/s)
     expect(styles).toMatch(/\.proposed-plan-card\s*\{[^}]*background:\s*var\(--semantic-proposed-plan-card-surface\);/s)
@@ -15231,7 +15270,7 @@ describe("App", () => {
     expect(styles).not.toMatch(/\.assistant-response-side-chat:not\(\.is-persistent\) \.assistant-response-actions/)
     expect(styles).not.toMatch(/\.assistant-shell:hover \.assistant-response-side-chat \.assistant-response-actions/)
     expect(styles).toMatch(
-      /\.trace-item-collapsed-line\s*\{[^}]*--trace-collapsed-fade-width:\s*clamp\(104px,\s*28%,\s*160px\);[^}]*text-overflow:\s*clip;[^}]*white-space:\s*nowrap;[^}]*-webkit-mask-image:\s*linear-gradient\(to right,\s*#000 0,\s*#000 calc\(100% - var\(--trace-collapsed-fade-width\)\),\s*transparent 100%\);[^}]*mask-image:\s*linear-gradient\(to right,\s*#000 0,\s*#000 calc\(100% - var\(--trace-collapsed-fade-width\)\),\s*transparent 100%\);/s,
+      /\.trace-item-collapsed-line\s*\{[^}]*--trace-collapsed-fade-width:\s*clamp\(104px,\s*28%,\s*160px\);[^}]*text-overflow:\s*clip;[^}]*white-space:\s*nowrap;[^}]*-webkit-mask-image:\s*linear-gradient\(to right,\s*var\(--functional-mask-opaque\) 0,\s*var\(--functional-mask-opaque\) calc\(100% - var\(--trace-collapsed-fade-width\)\),\s*transparent 100%\);[^}]*mask-image:\s*linear-gradient\(to right,\s*var\(--functional-mask-opaque\) 0,\s*var\(--functional-mask-opaque\) calc\(100% - var\(--trace-collapsed-fade-width\)\),\s*transparent 100%\);/s,
     )
     expect(styles).not.toMatch(/\.trace-item-collapsed-line::after/)
     expect(styles).toMatch(/\.trace-item-toggle\s*\{[^}]*background:\s*transparent;[^}]*text-align:\s*left;[^}]*cursor:\s*pointer;/s)
@@ -15261,7 +15300,7 @@ describe("App", () => {
 
   it("keeps skills tree scrollbars themed in light mode", () => {
     expect(styles).toMatch(
-      /\.skills-tree-root\s*\{[^}]*--skills-tree-scrollbar-size:\s*10px;[^}]*--skills-tree-scrollbar-thumb:\s*var\(--mix-seg-text-3-34-transparent-66\);[^}]*--skills-tree-scrollbar-thumb-hover:\s*var\(--mix-seg-text-3-54-transparent-46\);[^}]*--skills-tree-scrollbar-thumb-active:\s*var\(--seg-text-3\);[^}]*--skills-tree-scrollbar-track:\s*transparent;/s,
+      /\.skills-tree-root\s*\{[^}]*--skills-tree-scrollbar-size:\s*10px;[^}]*--skills-tree-scrollbar-thumb:\s*var\(--semantic-scrollbar-thumb-surface\);[^}]*--skills-tree-scrollbar-thumb-hover:\s*var\(--semantic-scrollbar-thumb-surface-hover\);[^}]*--skills-tree-scrollbar-thumb-active:\s*var\(--text-tertiary\);[^}]*--skills-tree-scrollbar-track:\s*transparent;/s,
     )
     expect(styles).toMatch(
       /\.skills-tree-root\s*\{[^}]*overflow:\s*auto;[^}]*scrollbar-gutter:\s*stable;[^}]*scrollbar-width:\s*thin;[^}]*scrollbar-color:\s*var\(--skills-tree-scrollbar-thumb\) var\(--skills-tree-scrollbar-track\);/s,
@@ -15282,7 +15321,7 @@ describe("App", () => {
 
   it("keeps plugins marketplace scrollbars themed", () => {
     expect(styles).toMatch(
-      /\.plugins-marketplace-content,\s*\.plugins-installed-list\s*\{[^}]*--plugins-scrollbar-size:\s*10px;[^}]*--plugins-scrollbar-thumb:\s*var\(--mix-seg-text-3-34-transparent-66\);[^}]*--plugins-scrollbar-thumb-hover:\s*var\(--mix-seg-text-3-54-transparent-46\);[^}]*--plugins-scrollbar-thumb-active:\s*var\(--seg-text-3\);[^}]*--plugins-scrollbar-track:\s*transparent;[^}]*scrollbar-width:\s*thin;[^}]*scrollbar-color:\s*var\(--plugins-scrollbar-thumb\) var\(--plugins-scrollbar-track\);/s,
+      /\.plugins-marketplace-content,\s*\.plugins-installed-list\s*\{[^}]*--plugins-scrollbar-size:\s*10px;[^}]*--plugins-scrollbar-thumb:\s*var\(--semantic-scrollbar-thumb-surface\);[^}]*--plugins-scrollbar-thumb-hover:\s*var\(--semantic-scrollbar-thumb-surface-hover\);[^}]*--plugins-scrollbar-thumb-active:\s*var\(--text-tertiary\);[^}]*--plugins-scrollbar-track:\s*transparent;[^}]*scrollbar-width:\s*thin;[^}]*scrollbar-color:\s*var\(--plugins-scrollbar-thumb\) var\(--plugins-scrollbar-track\);/s,
     )
     expect(styles).toMatch(
       /\.plugins-marketplace-content::-webkit-scrollbar,\s*\.plugins-installed-list::-webkit-scrollbar\s*\{[^}]*width:\s*var\(--plugins-scrollbar-size\);[^}]*height:\s*var\(--plugins-scrollbar-size\);/s,
@@ -15298,12 +15337,18 @@ describe("App", () => {
     )
   })
 
+  it("wires plugin detail tags through plugin marketplace tokens", () => {
+    expect(styles).toMatch(
+      /\.plugins-tag-row \.settings-badge\s*\{[^}]*background:\s*var\(--semantic-plugin-market-tag-surface\);[^}]*color:\s*var\(--semantic-plugin-market-tag-text\);/s,
+    )
+  })
+
   it("keeps calendar scrollbars aligned with the shared UI kit", () => {
     expect(styles).toMatch(
       /\.calendar-quick-add-dialog\s*\{[^}]*background:\s*var\(--semantic-popup-panel-surface\);/s,
     )
     expect(styles).toMatch(
-      /\.calendar-page\s*\{[^}]*--calendar-scrollbar-size:\s*10px;[^}]*--calendar-scrollbar-thumb:\s*var\(--mix-seg-text-3-34-transparent-66\);[^}]*--calendar-scrollbar-thumb-hover:\s*var\(--mix-seg-text-3-54-transparent-46\);[^}]*--calendar-scrollbar-thumb-active:\s*var\(--seg-text-3\);[^}]*--calendar-scrollbar-track:\s*transparent;/s,
+      /\.calendar-page\s*\{[^}]*--calendar-scrollbar-size:\s*10px;[^}]*--calendar-scrollbar-thumb:\s*var\(--semantic-scrollbar-thumb-surface\);[^}]*--calendar-scrollbar-thumb-hover:\s*var\(--semantic-scrollbar-thumb-surface-hover\);[^}]*--calendar-scrollbar-thumb-active:\s*var\(--text-tertiary\);[^}]*--calendar-scrollbar-track:\s*transparent;/s,
     )
     expect(styles).toMatch(
       /\.calendar-sources-panel,\s*\.calendar-detail-panel,\s*\.calendar-quick-add-overlay,\s*\.calendar-quick-add-dialog,\s*\.calendar-time-grid-wrap,\s*\.calendar-month-view,\s*\.calendar-month-day-items,\s*\.calendar-schedule-view\s*\{[^}]*scrollbar-width:\s*thin;[^}]*scrollbar-color:\s*var\(--calendar-scrollbar-thumb\) var\(--calendar-scrollbar-track\);/s,
@@ -15377,7 +15422,7 @@ describe("App", () => {
     expect(styles).toMatch(/\.settings-page-main\.is-services\s*\{[^}]*overflow:\s*hidden;/s)
     expect(styles).toMatch(/\.settings-page-content,\s*\.settings-page-main\s*\{[^}]*scrollbar-gutter:\s*stable both-edges;/s)
     expect(styles).toMatch(
-      /\.settings-page\s*\{[^}]*--settings-scrollbar-size:\s*10px;[^}]*--settings-scrollbar-thumb:\s*var\(--mix-seg-text-3-34-transparent-66\);[^}]*--settings-scrollbar-thumb-hover:\s*var\(--mix-seg-text-3-54-transparent-46\);[^}]*--settings-scrollbar-thumb-active:\s*var\(--seg-text-3\);[^}]*--settings-scrollbar-track:\s*transparent;/s,
+      /\.settings-page\s*\{[^}]*--settings-scrollbar-size:\s*10px;[^}]*--settings-scrollbar-thumb:\s*var\(--semantic-scrollbar-thumb-surface\);[^}]*--settings-scrollbar-thumb-hover:\s*var\(--semantic-scrollbar-thumb-surface-hover\);[^}]*--settings-scrollbar-thumb-active:\s*var\(--text-tertiary\);[^}]*--settings-scrollbar-track:\s*transparent;/s,
     )
     expect(styles).toMatch(
       /\.settings-page-overlay,\s*\.settings-page-nav,\s*\.settings-page-primary-nav,\s*\.settings-page-content,\s*\.settings-page-main,\s*\.settings-service-list,\s*\.settings-service-detail-panel\s*\{[^}]*scrollbar-width:\s*thin;[^}]*scrollbar-color:\s*var\(--settings-scrollbar-thumb\)\s+var\(--settings-scrollbar-track\);/s,
@@ -15424,7 +15469,7 @@ describe("App", () => {
   })
 
   it("keeps built-in tools as an open section instead of a framed panel", () => {
-    expect(styles).toMatch(/\.builtin-tools-page\s*\{[^}]*--tools-obs-bg:\s*var\(--surface-panel\);/s)
+    expect(styles).toMatch(/\.builtin-tools-page\s*\{[^}]*--tools-obs-bg:\s*var\(--surface-shell\);/s)
     expect(styles).not.toMatch(/:root\[data-theme="dark"\]\s+\.builtin-tools-page\s*\{[^}]*--tools-obs-bg:/s)
     expect(styles).toMatch(/\.builtin-tools-page\s+\.tools-panel\s*\{[^}]*padding:\s*0;[^}]*border:\s*0;[^}]*border-radius:\s*0;[^}]*background:\s*transparent;/s)
     expect(styles).toMatch(/\.builtin-tools-page\s+\.tools-detail-header\s*\{[^}]*padding-top:\s*18px;[^}]*border-top:\s*1px solid var\(--tools-obs-border\);[^}]*border-bottom:\s*1px solid var\(--tools-obs-border\);/s)

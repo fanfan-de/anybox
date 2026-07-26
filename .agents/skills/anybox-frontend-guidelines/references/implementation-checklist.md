@@ -17,6 +17,7 @@
 - 保留 `focus-visible`、键盘行为、disabled 状态和 aria label。
 - 按钮必须检查 default、hover、disabled 在 light/dark 下都来自成组 `--semantic-button-<variant>-*` token，不能直接消费 accent、status、icon 或 text token。
 - 新增颜色只能进入 manifest 的公开 `literal`/`alias`；确需双来源联动时使用内部 derivation，组件不得新增 `--mix-*` 依赖。
+- 组件 CSS 中 `color-mix()` 必须保持为 0；动态品牌色、代码高亮色和 `currentColor` 也不得作为例外。
 - 必要时让 popover 脱离裁剪容器。
 
 ## 视觉 QA

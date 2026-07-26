@@ -59,6 +59,7 @@ import {
   DESKTOP_APPEARANCE_STATE_EVENT_CHANNEL,
   DESKTOP_AUTOMATION_EVENT_CHANNEL,
   DESKTOP_ENVIRONMENT_EVENT_CHANNEL,
+  DESKTOP_SEMANTIC_TOKEN_INSPECTOR_EVENT_CHANNEL,
 } from "../shared/desktop-ipc-contract"
 import { AgentAPIError, getAgentConfig, readAgentSSEStream, requestAgentJSON, resolveAgentURL } from "./agent-client"
 import { AgentCompletionNotificationManager } from "./agent-completion-notification"
@@ -98,6 +99,7 @@ import {
   setRendererMemoryDiagnosticsRecord,
 } from "./renderer-memory-diagnostics-store"
 import { safeError, safeWarn } from "./safe-console"
+import { SemanticTokenInspectorSessionManager } from "./semantic-token-inspector"
 import { sendWebContentsSafely } from "./safe-web-contents-send"
 import {
   checkForAppUpdates,
@@ -3705,10 +3707,41 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
   })
   const ptyProxyManager = new PtyProxyManager()
   const workspaceWatchManager = new WorkspaceWatchManager()
+  const semanticTokenInspectorManager = new SemanticTokenInspectorSessionManager((target, event) => {
+    sendDesktopIpcEvent(target, DESKTOP_SEMANTIC_TOKEN_INSPECTOR_EVENT_CHANNEL, event)
+  }, {
+    packageRoot: app.getAppPath(),
+    packaged: app.isPackaged,
+  })
   const externalEditorMenuResolvedIconCache = new Map<string, NativeImage | undefined>()
   const externalEditorMenuIconLoadCache = new Map<string, Promise<NativeImage | undefined>>()
   let cachedAvailableExternalEditors: ReturnType<typeof listAvailableExternalEditors> | null = null
   let lastAppearanceRuntimeState = createDefaultAppearanceRuntimeState()
+
+  handleDesktopIpc(
+    "desktop:start-semantic-token-inspector",
+    (event) => semanticTokenInspectorManager.start(event.sender),
+  )
+  handleDesktopIpc(
+    "desktop:inspect-semantic-token-at-point",
+    (event, input) => semanticTokenInspectorManager.inspect(event.sender, input),
+  )
+  handleDesktopIpc(
+    "desktop:stop-semantic-token-inspector",
+    (event) => semanticTokenInspectorManager.stop(event.sender),
+  )
+  handleDesktopIpc(
+    "desktop:prepare-semantic-token-authoring-commit",
+    (event, input) => semanticTokenInspectorManager.prepareAuthoringCommit(event.sender, input),
+  )
+  handleDesktopIpc(
+    "desktop:commit-semantic-token-authoring-commit",
+    (event, input) => semanticTokenInspectorManager.commitAuthoringCommit(event.sender, input),
+  )
+  handleDesktopIpc(
+    "desktop:discard-semantic-token-authoring-commit",
+    (event, input) => semanticTokenInspectorManager.discardAuthoringCommit(event.sender, input),
+  )
 
   function broadcastAppearanceRuntimeState(state: AppearanceRuntimeState, exceptSender?: WebContents) {
     const normalizedState = normalizeAppearanceRuntimeState(state, lastAppearanceRuntimeState)

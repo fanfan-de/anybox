@@ -44,6 +44,8 @@ const DEFAULT_PROMPT_LOOP_LIMIT = Number.POSITIVE_INFINITY
 const HARD_PROMPT_LOOP_LIMIT = Flag.ANYBOX_EXPERIMENTAL_AGENT_LOOP_LIMIT
 const DANGLING_TOOL_CALL_ERROR =
     "Recovered dangling tool call from an earlier interrupted run before resuming."
+const INTERRUPTED_TURN_DETAIL =
+    "The agent process ended before this turn could finish. The interrupted turn was recovered as cancelled."
 const MODEL_CALL_PATCH_MAX_PATCH_BYTES = 128 * 1024
 const MODEL_CALL_PATCH_MAX_FILES = 200
 const MODEL_CALL_PATCH_MAX_TOTAL_PATCH_BYTES = 512 * 1024
@@ -437,6 +439,120 @@ function emitQueuedTurnCancelled(input: {
     }))
 }
 
+function cancelInterruptedToolPart(
+    part: Message.ToolPart,
+    turn: Session.TurnInfo,
+    endedAt: number,
+    detail: string,
+) {
+    if (
+        part.state.status !== "pending" &&
+        part.state.status !== "running" &&
+        part.state.status !== "waiting-approval"
+    ) {
+        return null
+    }
+
+    const metadata = "metadata" in part.state ? part.state.metadata : undefined
+    return Message.ToolPart.parse({
+        ...part,
+        state: {
+            status: "cancelled",
+            input: part.state.input,
+            raw: part.state.raw,
+            reason: detail,
+            ...(metadata ? { metadata } : {}),
+            time: {
+                start: "time" in part.state ? part.state.time.start : turn.createdAt,
+                end: endedAt,
+            },
+        },
+    })
+}
+
+function reconcileInterruptedTurn(
+    turn: Session.TurnInfo,
+    options?: {
+        detail?: string
+        reason?: RuntimeEvent.RuntimeEventPayloadByType["turn.cancelled"]["reason"]
+    },
+) {
+    const current = Session.DataBaseRead("turns", turn.id) as Session.TurnInfo | null
+    if (!current || current.status !== "running") return false
+    if (Orchestrator.activeTurn(current.sessionID) || RunningState.info(current.sessionID)) return false
+
+    const endedAt = Date.now()
+    const detail = options?.detail ?? INTERRUPTED_TURN_DETAIL
+    let turnMessages: Message.WithParts[] = []
+    try {
+        turnMessages = Message.listAllWithParts(current.sessionID)
+            .filter((message) => message.info.turnID === current.id)
+    } catch (error) {
+        log.warn("failed to load interrupted turn messages during recovery", {
+            sessionID: current.sessionID,
+            turnID: current.id,
+            error: error instanceof Error ? error.message : String(error),
+        })
+    }
+
+    const latestAssistant = turnMessages
+        .filter((message): message is Message.WithParts & { info: Message.Assistant } =>
+            message.info.role === "assistant",
+        )
+        .at(-1)
+    const message = latestAssistant
+        ? Message.Assistant.parse({
+            ...latestAssistant.info,
+            completed: latestAssistant.info.completed ?? endedAt,
+            finishReason: latestAssistant.info.finishReason ?? "cancelled",
+        })
+        : undefined
+    const parts = turnMessages.flatMap((entry) =>
+        entry.parts.flatMap((part) => {
+            if (part.type !== "tool") return []
+            const cancelled = cancelInterruptedToolPart(part, current, endedAt, detail)
+            return cancelled ? [cancelled] : []
+        }),
+    )
+
+    EventStore.appendTurnEvent(current.sessionID, current.id, "turn.cancelled", {
+        reason: options?.reason ?? "unknown",
+        detail,
+        ...(message ? { message } : {}),
+        ...(parts.length > 0 ? { parts } : {}),
+    })
+    log.warn("reconciled interrupted turn without an active runtime", {
+        sessionID: current.sessionID,
+        turnID: current.id,
+        cancelledToolCount: parts.length,
+    })
+    return true
+}
+
+export function reconcileInterruptedTurns(options?: {
+    detail?: string
+    reason?: RuntimeEvent.RuntimeEventPayloadByType["turn.cancelled"]["reason"]
+}) {
+    const turnIDs: string[] = []
+    for (const turn of Session.listRunningTurns()) {
+        try {
+            if (reconcileInterruptedTurn(turn, options)) {
+                turnIDs.push(turn.id)
+            }
+        } catch (error) {
+            log.error("failed to reconcile interrupted turn", {
+                sessionID: turn.sessionID,
+                turnID: turn.id,
+                error: error instanceof Error ? error.message : String(error),
+            })
+        }
+    }
+    return {
+        cancelled: turnIDs.length,
+        turnIDs,
+    }
+}
+
 function finishPromptTurnFromResult(
     turn: Orchestrator.TurnContext,
     result: RunLoopResult,
@@ -517,7 +633,20 @@ export function cancelSession(sessionID: string, options?: { cancelQueued?: bool
             reason: options?.reason ?? "user",
         })
     }
-    return result
+    let interruptedTurnCancelled = false
+    if (!turn && !result.cancelled) {
+        for (const candidate of Session.listTurns(sessionID)) {
+            if (candidate.status !== "running") continue
+            interruptedTurnCancelled = reconcileInterruptedTurn(candidate, {
+                reason: options?.reason ?? "user",
+                detail: "The turn no longer had an active runtime and was recovered as cancelled.",
+            }) || interruptedTurnCancelled
+        }
+    }
+    return {
+        ...result,
+        cancelled: result.cancelled || interruptedTurnCancelled,
+    }
 }
 
 export function cancel(sessionID: string) {

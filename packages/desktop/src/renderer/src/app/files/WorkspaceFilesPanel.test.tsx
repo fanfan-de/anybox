@@ -481,7 +481,7 @@ describe("WorkspaceFilesPanel", () => {
       /\.workspace-files-tree-row\s*\{[^}]*min-height:\s*24px;[^}]*grid-template-columns:\s*14px 18px minmax\(0,\s*1fr\);/s,
     )
     expect(styles).toMatch(
-      /\.workspace-files-markdown-stage\s*\{[^}]*scrollbar-color:\s*var\(--mix-seg-text-3-54-transparent-46\) var\(--seg-panel\);/s,
+      /\.workspace-files-markdown-stage\s*\{[^}]*scrollbar-color:\s*var\(--semantic-scrollbar-thumb-surface-hover\) var\(--seg-panel\);/s,
     )
     expect(styles).toMatch(
       /\.workspace-files-markdown-stage::-webkit-scrollbar-track\s*\{[^}]*background:\s*var\(--seg-panel\);/s,
@@ -491,19 +491,19 @@ describe("WorkspaceFilesPanel", () => {
       /\.workspace-files-code\s*\{[^}]*background:\s*var\(--code-highlight-bg,\s*var\(--seg-panel\)\);[^}]*color:\s*var\(--code-highlight-fg,\s*var\(--seg-text-1\)\);/s,
     )
     expect(styles).toMatch(
-      /\.workspace-files-code\s*\{[^}]*scrollbar-color:\s*var\(--right-sidebar-scrollbar-thumb,\s*var\(--mix-seg-text-3-34-transparent-66\)\) transparent;[^}]*scrollbar-width:\s*thin;/s,
+      /\.workspace-files-code\s*\{[^}]*scrollbar-color:\s*var\(--right-sidebar-scrollbar-thumb\) transparent;[^}]*scrollbar-width:\s*thin;/s,
     )
     expect(styles).toMatch(
       /\.workspace-files-code-spacer\s*\{[^}]*pointer-events:\s*none;/s,
     )
     expect(styles).toMatch(
-      /\.workspace-files-tree-scroll\s*\{[^}]*scrollbar-color:\s*var\(--right-sidebar-scrollbar-thumb,\s*var\(--mix-seg-text-3-34-transparent-66\)\) transparent;[^}]*scrollbar-width:\s*thin;/s,
+      /\.workspace-files-tree-scroll\s*\{[^}]*scrollbar-color:\s*var\(--right-sidebar-scrollbar-thumb\) transparent;[^}]*scrollbar-width:\s*thin;/s,
     )
     expect(styles).toMatch(
       /\.workspace-files-code::-webkit-scrollbar-track,\s*\.workspace-files-tree-scroll::-webkit-scrollbar-track\s*\{[^}]*background:\s*transparent;/s,
     )
     expect(styles).toMatch(
-      /\.workspace-files-code::-webkit-scrollbar-thumb,\s*\.workspace-files-tree-scroll::-webkit-scrollbar-thumb\s*\{[^}]*border:\s*3px solid transparent;[^}]*border-radius:\s*999px;[^}]*background:\s*var\(--right-sidebar-scrollbar-thumb,\s*var\(--mix-seg-text-3-34-transparent-66\)\);[^}]*background-clip:\s*content-box;/s,
+      /\.workspace-files-code::-webkit-scrollbar-thumb,\s*\.workspace-files-tree-scroll::-webkit-scrollbar-thumb\s*\{[^}]*border:\s*3px solid transparent;[^}]*border-radius:\s*999px;[^}]*background:\s*var\(--right-sidebar-scrollbar-thumb\);[^}]*background-clip:\s*content-box;/s,
     )
     expect(styles).toMatch(
       /\.workspace-files-line-content,\s*\.workspace-files-line-content code\s*\{[^}]*color:\s*var\(--code-highlight-fg,\s*var\(--seg-text-1\)\);/s,

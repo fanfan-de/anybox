@@ -51,7 +51,7 @@ manifest 使用 schema v2。公开 token 值只允许两种表达：
 - 新增语义 token 前先查找已有 `--semantic-*`、`--surface-*`、`--text-*`、`--border-*` 是否已能表达同一含义；确实缺失时再向 manifest 补充成对 light/dark 值。
 - 新组件 CSS 禁止直接消费 `--mix-*`。现存直接消费由 manifest 兼容白名单冻结，应该在相关区域重构时逐步替换成具名 semantic token。
 - 只有当一个颜色必须随两个基础 token 联动，且 literal/alias 都无法正确表达时，才新增内部 derivation；优先让组件消费具名 semantic runtime token，而不是 derivation 名称。
-- 组件中的直接 `color-mix()` 也是冻结存量。只有依赖插件品牌色、代码高亮色或 `currentColor` 等运行期局部值、无法进入全局 manifest 的场景才可作为显式例外；主题色派生必须进入 manifest。
+- 组件 CSS 禁止直接使用 `color-mix()`，不为插件品牌色、代码高亮色、`currentColor` 或其他运行期局部值保留例外。需要不同颜色角色时，先定义明确的 light/dark semantic token，再由组件消费不带模式后缀的 runtime token。插件品牌色只能作为原始品牌色、图标资产或颜色样本展示，不能参与组件背景、边框、文字或状态色的运行时混合。
 - 按钮状态必须使用按钮语义 token。每个按钮变体都需要成组定义 surface、hover surface、border、hover border、text、hover text、disabled surface、disabled border、disabled text，命名使用 `--semantic-button-<variant>-*`。不要用 `--seg-accent`、品牌 accent token 或 status token 代替按钮 token，因为这些 token 可能面向文字、图标或状态提示，不保证按钮 default/hover/disabled 在 dark 主题下的对比度。
 - 主题相关 UI 修改完成后必须检查 light 和 dark 两种主题，尤其是 active、hover、focus、disabled、selected、empty/error 状态，避免某个状态仍露出白底或低对比文本。
 

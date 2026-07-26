@@ -897,6 +897,17 @@ function listTurns(sessionID: string): TurnInfo[] {
   return loadSessionTurns(sessionID)
 }
 
+function listRunningTurns(): TurnInfo[] {
+  ensureSessionTables()
+  return db.findManyWithSchema("turns", TurnInfo, {
+    where: [{ column: "status", value: "running" }],
+    orderBy: [
+      { column: "createdAt", direction: "ASC" },
+      { column: "id", direction: "ASC" },
+    ],
+  })
+}
+
 function buildSideChatTitle(anchorPreview: string) {
   const preview = anchorPreview.trim()
   if (!preview) return DEFAULT_SIDE_CHAT_TITLE
@@ -1467,6 +1478,7 @@ export {
   listArchivedSessions,
   listArchivedSessionSummaries,
   listByProject,
+  listRunningTurns,
   listSideChats,
   listTurns,
   DEFAULT_SESSION_TITLE,

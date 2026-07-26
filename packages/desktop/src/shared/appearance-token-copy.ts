@@ -103,6 +103,14 @@ const zhCNTokenGroupCopy = {
     label: "设置列表明细行",
     description: "设置、插件、连接器、MCP 等列表明细界面的专用行状态 token。",
   },
+  "component-workspace-files": {
+    label: "工作区文件",
+    description: "源码预览和工作区文件交互的独立语义颜色。",
+  },
+  "component-plugin-marketplace": {
+    label: "插件市场",
+    description: "插件图标、列表项、状态、标签和状态指示器的独立语义颜色。",
+  },
   "component-composer": {
     label: "输入框",
     description: "任务输入区域和内部控制按钮的专用语义颜色。",
@@ -689,6 +697,70 @@ const zhCNTokenRowCopy = {
   "semantic-settings-list-detail-row-surface-hover": {
     label: "行悬停背景",
     description: "设置列表明细行悬停和聚焦时的背景。",
+  },
+  "semantic-detail-icon-surface": {
+    label: "明细图标背景",
+    description: "列表明细界面中紧凑前置图标和功能图标的通用背景。",
+  },
+  "semantic-detail-icon-border": {
+    label: "明细图标边框",
+    description: "列表明细界面中紧凑前置图标和功能图标的通用边框。",
+  },
+  "semantic-detail-icon-text": {
+    label: "明细图标前景",
+    description: "列表明细界面中紧凑前置图标和功能图标的通用前景色。",
+  },
+  "semantic-workspace-files-code-row-surface-hover": {
+    label: "代码行悬停背景",
+    description: "工作区文件预览中代码行悬停时的背景。",
+  },
+  "semantic-workspace-files-code-row-surface-current": {
+    label: "代码行选中背景",
+    description: "工作区文件预览中选中代码行的背景。",
+  },
+  "semantic-plugin-market-icon-surface": {
+    label: "插件占位图标背景",
+    description: "字形和首字母占位图标的中性背景；真实 Logo 图片不绘制底色。",
+  },
+  "semantic-plugin-market-icon-border": {
+    label: "插件占位图标边框",
+    description: "字形和首字母占位图标的中性边框。",
+  },
+  "semantic-plugin-market-icon-text": {
+    label: "插件占位图标文字",
+    description: "字形和首字母占位图标的中性前景色。",
+  },
+  "semantic-plugin-market-item-border-hover": {
+    label: "插件项悬停边框",
+    description: "插件列表项悬停和键盘聚焦时的边框颜色。",
+  },
+  "semantic-plugin-market-item-border-current": {
+    label: "插件项当前边框",
+    description: "当前插件列表项的内侧边框颜色。",
+  },
+  "semantic-plugin-market-title-text-active": {
+    label: "插件标题激活色",
+    description: "插件列表项悬停、聚焦和选中时的标题颜色。",
+  },
+  "semantic-plugin-market-state-surface": {
+    label: "插件状态背景",
+    description: "已安装和可用性状态标签的背景。",
+  },
+  "semantic-plugin-market-state-text": {
+    label: "插件状态文字",
+    description: "已安装和可用性状态标签的文字颜色。",
+  },
+  "semantic-plugin-market-tag-surface": {
+    label: "插件标签背景",
+    description: "插件关键词标签的独立背景。",
+  },
+  "semantic-plugin-market-tag-text": {
+    label: "插件标签文字",
+    description: "插件关键词标签的独立文字颜色。",
+  },
+  "semantic-plugin-market-status-text": {
+    label: "插件状态图标",
+    description: "插件行尾状态图标和紧凑状态文字的颜色。",
   },
   "semantic-composer-surface": {
     label: "输入框背景",
