@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1920, height=1080">
+    <title>Box Cat Logo Reveal</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        margin: 0;
+        overflow: hidden;
+        background: #080908;
+      }
+
+      #stage {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+      }
+
+      #box-cat-reveal-host {
+        position: absolute;
+        inset: 0;
+        width: 1920px;
+        height: 1080px;
+      }
+    </style>
+  </head>
+  <body>
+    <div data-hf-id="hf-igjk" id="stage" data-composition-id="main" data-start="0" data-duration="4.2" data-fps="30" data-width="1920" data-height="1080">
+      <div data-hf-id="hf-ccwe" id="box-cat-reveal-host" class="clip" data-composition-id="box-cat-logo-reveal" data-composition-src="compositions/index.html" data-start="0" data-duration="4.2" data-track-index="1" data-width="1920" data-height="1080"></div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const mainTimeline = gsap.timeline({ paused: true });
+      window.__timelines.main = mainTimeline;
+      mainTimeline.seek(0);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,159 @@
+{
+  "category": "logo-reveal",
+  "duration_s": 4.2,
+  "fps": 30,
+  "canvas": {
+    "w": 1920,
+    "h": 1080,
+    "aspect": "16:9"
+  },
+  "style": "克制、精确而略带俏皮的单色点阵 Logo Reveal。暖近黑画布上，规则点阵先组装纸盒，再让猫探出、眨眼并补全尾巴，最后无缝锁定到用户提供的原始白色 PNG。",
+  "palette": [
+    "#080908",
+    "#111311",
+    "#F4F4EF",
+    "#FFFFFF",
+    "#858A84",
+    "#030403"
+  ],
+  "font": "IBM Plex Mono",
+  "beats": [
+    6,
+    15,
+    41,
+    65,
+    74,
+    79,
+    92,
+    101
+  ],
+  "export": "mp4",
+  "asset_needs": [
+    {
+      "role": "hero",
+      "kind": "logo",
+      "source": ".media/images/logo_001.png",
+      "treatment": "none"
+    }
+  ],
+  "shot_brief": "0.18 秒后背景点阵苏醒；Logo 透明度遮罩内的点先从下向上建立纸盒，再以轻微弹性让猫从盒中探出并眨眼一次。约 2.6 秒时，激活方向改变为沿右侧向下补全尾巴，形成唯一一次节奏中断。随后点阵收束，原始 PNG 完整覆盖并静止定格到结尾。",
+  "block": "logo-outro",
+  "customize": {
+    "reuse": "保留 logo-outro 的单镜头组装、局部辉光和最终锁定结构。",
+    "replace": [
+      "删除模板中的示例 SVG 图形",
+      "删除 tagline 和 URL",
+      "删除模板品牌配色与远程字体",
+      "将时长改为 4.2 秒"
+    ],
+    "hand_authored_gaps": [
+      "用原 PNG alpha 遮罩生成规则点阵层",
+      "用同一 PNG 的裁切副本分别表现盒体、左右盒盖、猫和尾巴",
+      "用两个背景色遮罩完成一次眨眼",
+      "用原始 PNG 完成最终无损锁定"
+    ]
+  },
+  "content": {
+    "logo": ".media/images/logo_001.png",
+    "tagline": null,
+    "url": null,
+    "hero_frame": {
+      "canvas": {
+        "x": 0,
+        "y": 0,
+        "w": 1920,
+        "h": 1080
+      },
+      "logo_image_box": {
+        "x": 448,
+        "y": 28,
+        "w": 1024,
+        "h": 1024
+      },
+      "source_alpha_bbox": {
+        "x": 203,
+        "y": 203,
+        "w": 619,
+        "h": 633
+      },
+      "title_safe_margin": {
+        "x": 160,
+        "y": 96
+      }
+    },
+    "selectors": {
+      "scene": "#logo-scene",
+      "ambient_grid": "#ambient-grid",
+      "localized_glow": "#logo-glow",
+      "dot_box": "#dot-box",
+      "dot_cat": "#dot-cat",
+      "dot_tail": "#dot-tail",
+      "box_base": "#piece-box-base",
+      "left_flap": "#piece-flap-left",
+      "right_flap": "#piece-flap-right",
+      "cat": "#piece-cat",
+      "tail": "#piece-tail",
+      "left_eye_mask": "#eye-mask-left",
+      "right_eye_mask": "#eye-mask-right",
+      "clean_logo": "#logo-clean"
+    },
+    "phases": [
+      {
+        "id": "wake-grid",
+        "start_s": 0.18,
+        "end_s": 0.55,
+        "motion": "ambient grid fades and scales from 0.985 to 1 with expo.out; a localized glow begins behind the hero"
+      },
+      {
+        "id": "build-box",
+        "start_s": 0.45,
+        "end_s": 1.38,
+        "motion": "bottom-up clip reveal on the box-only dot mask; clean box base settles from y=34; left and right flap crops rotate inward with different durations"
+      },
+      {
+        "id": "cat-rise",
+        "start_s": 1.16,
+        "end_s": 2.26,
+        "motion": "cat-only dot mask reveals upward; clean cat crop rises from y=86 and scale=0.96 with back.out(1.35), then settles; the eyes blink once from 2.16 to 2.34"
+      },
+      {
+        "id": "complete-tail",
+        "start_s": 2.46,
+        "end_s": 3.12,
+        "motion": "tail-only dot mask reveals from right to left, then the clean tail crop rotates 7 degrees into place with circ.out"
+      },
+      {
+        "id": "clean-lock",
+        "start_s": 3.04,
+        "end_s": 3.38,
+        "motion": "dot proxies contract to 0.82 and fade while the unmodified PNG fades from 0 to 1 at scale 1; one soft glow pulse resolves behind it"
+      },
+      {
+        "id": "final-hold",
+        "start_s": 3.38,
+        "end_s": 4.2,
+        "motion": "complete original PNG stays fully visible and still; background grid performs one finite low-amplitude breath; no fade to black"
+      }
+    ],
+    "technical": {
+      "dot_size_px": 6,
+      "dot_pitch_px": 22,
+      "dot_color": "#F4F4EF",
+      "final_logo_color": "preserve source pixels",
+      "mask_source": ".media/images/logo_001.png",
+      "ordering": "coordinate-based deterministic delays only",
+      "randomness": "none",
+      "runtime": "one paused GSAP timeline, synchronous construction",
+      "final_hold_s": 0.82
+    },
+    "proof_times_s": [
+      0.18,
+      0.75,
+      1.55,
+      2.25,
+      2.82,
+      3.42,
+      4.15
+    ]
+  }
+}

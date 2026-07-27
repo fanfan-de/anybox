@@ -1,0 +1,462 @@
+<template id="box-cat-logo-reveal-template">
+  <div data-hf-id="hf-qgl2" id="box-cat-logo-reveal-root" data-composition-id="box-cat-logo-reveal" data-start="0" data-duration="4.2" data-fps="30" data-width="1920" data-height="1080">
+    <div data-hf-id="hf-dt0e" id="logo-scene" class="clip" data-start="0" data-duration="4.2" data-track-index="0">
+      <div data-hf-id="hf-l0r9" id="scene-background" data-layout-ignore="true"></div>
+      <div data-hf-id="hf-mojx" id="ambient-grid" data-layout-ignore="true"></div>
+      <div data-hf-id="hf-ubt9" id="logo-glow" data-layout-ignore="true"></div>
+      <div data-hf-id="hf-zjvl" id="halo-ring" data-layout-ignore="true"></div>
+
+      <div data-hf-id="hf-dw7m" id="logo-stage" class="logo-stage">
+        <div data-hf-id="hf-87lk" id="dot-box" class="logo-layer dot-mask"></div>
+        <div data-hf-id="hf-412j" id="dot-cat" class="logo-layer dot-mask"></div>
+        <div data-hf-id="hf-wr7z" id="dot-tail" class="logo-layer dot-mask"></div>
+
+        <div data-hf-id="hf-dp3h" id="piece-box-base" class="logo-layer logo-piece"></div>
+        <div data-hf-id="hf-63rv" id="piece-flap-left" class="logo-layer logo-piece"></div>
+        <div data-hf-id="hf-9rmu" id="piece-flap-right" class="logo-layer logo-piece"></div>
+        <div data-hf-id="hf-3sty" id="piece-cat" class="logo-layer logo-piece"></div>
+        <div data-hf-id="hf-yos0" id="piece-tail" class="logo-layer logo-piece"></div>
+
+        <span data-hf-id="hf-cpl0" id="eye-mask-left" class="eye-mask" data-layout-ignore="true"></span>
+        <span data-hf-id="hf-jpq3" id="eye-mask-right" class="eye-mask" data-layout-ignore="true"></span>
+
+        <img data-hf-id="hf-e6pm" id="logo-clean" class="logo-layer" src=".media/images/logo_001.png" alt="盒子猫 Logo" crossorigin="anonymous" data-layout-allow-overflow="true">
+
+        <div data-hf-id="hf-0xzi" id="scan-line" data-layout-ignore="true"></div>
+      </div>
+    </div>
+
+    <style>
+      #box-cat-logo-reveal-root {
+        --bg: #080908;
+        --bg-raised: #111311;
+        --dot: #f4f4ef;
+        --logo-white: #ffffff;
+        --grid-dot: #858a84;
+        --shadow: #030403;
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        color: var(--dot);
+      }
+
+      #box-cat-logo-reveal-root *,
+      #box-cat-logo-reveal-root *::before,
+      #box-cat-logo-reveal-root *::after {
+        box-sizing: border-box;
+      }
+
+      #box-cat-logo-reveal-root #logo-scene {
+        position: absolute;
+        inset: 0;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+      }
+
+      #box-cat-logo-reveal-root #scene-background {
+        position: absolute;
+        inset: 0;
+        background: var(--bg);
+        z-index: 0;
+      }
+
+      #box-cat-logo-reveal-root #ambient-grid {
+        position: absolute;
+        inset: -24px;
+        background-image: radial-gradient(
+          circle,
+          rgba(133, 138, 132, 0.54) 0 1.45px,
+          transparent 1.7px
+        );
+        background-size: 24px 24px;
+        opacity: 0;
+        transform-origin: 50% 50%;
+        will-change: transform, opacity;
+        z-index: 1;
+      }
+
+      #box-cat-logo-reveal-root #logo-glow {
+        position: absolute;
+        left: 620px;
+        top: 190px;
+        width: 680px;
+        height: 680px;
+        border-radius: 50%;
+        background: radial-gradient(
+          circle,
+          rgba(244, 244, 239, 0.2) 0%,
+          rgba(244, 244, 239, 0.08) 32%,
+          rgba(17, 19, 17, 0) 72%
+        );
+        opacity: 0;
+        transform-origin: 50% 50%;
+        will-change: transform, opacity;
+        z-index: 2;
+      }
+
+      #box-cat-logo-reveal-root #halo-ring {
+        position: absolute;
+        left: 585px;
+        top: 165px;
+        width: 750px;
+        height: 750px;
+        border: 2px solid rgba(244, 244, 239, 0.16);
+        border-radius: 50%;
+        opacity: 0;
+        transform-origin: 50% 50%;
+        will-change: transform, opacity;
+        z-index: 3;
+      }
+
+      #box-cat-logo-reveal-root .logo-stage {
+        position: absolute;
+        left: 448px;
+        top: 28px;
+        width: 1024px;
+        height: 1024px;
+        overflow: hidden;
+        transform-origin: 50% 50%;
+        z-index: 5;
+      }
+
+      #box-cat-logo-reveal-root .logo-layer {
+        position: absolute;
+        inset: 0;
+        display: block;
+        width: 1024px;
+        height: 1024px;
+        object-fit: contain;
+        transform-origin: 50% 50%;
+        will-change: transform, opacity, clip-path;
+      }
+
+      #box-cat-logo-reveal-root .dot-mask {
+        background-image: radial-gradient(
+          circle,
+          var(--dot) 0 5.8px,
+          transparent 6.2px
+        );
+        background-position: 7px 7px;
+        background-size: 22px 22px;
+        -webkit-mask-image: url(".media/images/logo_001.png");
+        -webkit-mask-position: center;
+        -webkit-mask-repeat: no-repeat;
+        -webkit-mask-size: 1024px 1024px;
+        mask-image: url(".media/images/logo_001.png");
+        mask-position: center;
+        mask-repeat: no-repeat;
+        mask-size: 1024px 1024px;
+        opacity: 0;
+        z-index: 7;
+      }
+
+      #box-cat-logo-reveal-root #dot-box {
+        clip-path: polygon(15% 38%, 85% 38%, 85% 88%, 15% 88%);
+      }
+
+      #box-cat-logo-reveal-root #dot-cat {
+        clip-path: polygon(31% 16%, 60% 16%, 60% 62%, 31% 62%);
+        z-index: 8;
+      }
+
+      #box-cat-logo-reveal-root #dot-tail {
+        clip-path: polygon(54% 29%, 77% 29%, 78% 59%, 54% 59%);
+        z-index: 9;
+      }
+
+      #box-cat-logo-reveal-root .logo-piece {
+        background-image: url(".media/images/logo_001.png");
+        background-position: center;
+        background-repeat: no-repeat;
+        background-size: 1024px 1024px;
+        opacity: 0;
+        z-index: 11;
+      }
+
+      #box-cat-logo-reveal-root #piece-box-base {
+        clip-path: polygon(14% 45%, 86% 45%, 86% 87%, 14% 87%);
+      }
+
+      #box-cat-logo-reveal-root #piece-flap-left {
+        clip-path: polygon(16% 34%, 49% 43%, 48% 69%, 16% 59%);
+        transform-origin: 42% 49%;
+        z-index: 12;
+      }
+
+      #box-cat-logo-reveal-root #piece-flap-right {
+        clip-path: polygon(51% 43%, 85% 34%, 85% 59%, 52% 69%);
+        transform-origin: 58% 49%;
+        z-index: 12;
+      }
+
+      #box-cat-logo-reveal-root #piece-cat {
+        clip-path: polygon(31% 16%, 60% 16%, 60% 62%, 31% 62%);
+        transform-origin: 50% 52%;
+        z-index: 13;
+      }
+
+      #box-cat-logo-reveal-root #piece-tail {
+        clip-path: polygon(54% 29%, 77% 29%, 78% 59%, 54% 59%);
+        transform-origin: 59% 47%;
+        z-index: 14;
+      }
+
+      #box-cat-logo-reveal-root .eye-mask {
+        position: absolute;
+        top: 304px;
+        width: 28px;
+        height: 26px;
+        border-radius: 50%;
+        background: var(--bg);
+        opacity: 0;
+        transform: scaleY(0);
+        transform-origin: 50% 50%;
+        will-change: transform, opacity;
+        z-index: 16;
+      }
+
+      #box-cat-logo-reveal-root #eye-mask-left {
+        left: 442px;
+      }
+
+      #box-cat-logo-reveal-root #eye-mask-right {
+        left: 520px;
+      }
+
+      #box-cat-logo-reveal-root #logo-clean {
+        opacity: 0;
+        z-index: 20;
+      }
+
+      #box-cat-logo-reveal-root #scan-line {
+        position: absolute;
+        left: 188px;
+        top: 630px;
+        width: 648px;
+        height: 2px;
+        background: rgba(244, 244, 239, 0.84);
+        box-shadow:
+          0 0 12px rgba(244, 244, 239, 0.48),
+          0 0 42px rgba(244, 244, 239, 0.24);
+        opacity: 0;
+        will-change: transform, opacity;
+        z-index: 24;
+      }
+    </style>
+
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script>
+      (() => {
+        const tl = gsap.timeline({ paused: true });
+
+        const grid = "#box-cat-logo-reveal-root #ambient-grid";
+        const glow = "#box-cat-logo-reveal-root #logo-glow";
+        const ring = "#box-cat-logo-reveal-root #halo-ring";
+        const dotBox = "#box-cat-logo-reveal-root #dot-box";
+        const dotCat = "#box-cat-logo-reveal-root #dot-cat";
+        const dotTail = "#box-cat-logo-reveal-root #dot-tail";
+        const boxBase = "#box-cat-logo-reveal-root #piece-box-base";
+        const leftFlap = "#box-cat-logo-reveal-root #piece-flap-left";
+        const rightFlap = "#box-cat-logo-reveal-root #piece-flap-right";
+        const cat = "#box-cat-logo-reveal-root #piece-cat";
+        const tail = "#box-cat-logo-reveal-root #piece-tail";
+        const eyeMasks = [
+          "#box-cat-logo-reveal-root #eye-mask-left",
+          "#box-cat-logo-reveal-root #eye-mask-right",
+        ];
+        const cleanLogo = "#box-cat-logo-reveal-root #logo-clean";
+        const scanLine = "#box-cat-logo-reveal-root #scan-line";
+        const proxyLayers = [dotBox, dotCat, dotTail];
+        const cleanPieces = [boxBase, leftFlap, rightFlap, cat, tail];
+
+        tl.addLabel("wake-grid", 0.18);
+        tl.fromTo(
+          grid,
+          { opacity: 0, scale: 0.985 },
+          { opacity: 0.18, scale: 1, duration: 0.37, ease: "expo.out" },
+          "wake-grid",
+        );
+        tl.fromTo(
+          glow,
+          { opacity: 0, scale: 0.76 },
+          { opacity: 0.16, scale: 1, duration: 0.8, ease: "sine.out" },
+          0.25,
+        );
+        tl.fromTo(
+          ring,
+          { opacity: 0, scale: 0.9, rotation: -3 },
+          { opacity: 0.1, scale: 1, rotation: 0, duration: 0.72, ease: "power3.out" },
+          0.28,
+        );
+
+        tl.addLabel("build-box", 0.45);
+        tl.fromTo(
+          dotBox,
+          { opacity: 0, scaleY: 0.05, y: 120, transformOrigin: "50% 84%" },
+          {
+            opacity: 1,
+            scaleY: 1,
+            y: 0,
+            duration: 0.93,
+            ease: "power4.out",
+          },
+          "build-box",
+        );
+        tl.fromTo(
+          scanLine,
+          { y: 370 },
+          { y: -520, duration: 0.93, ease: "power2.inOut" },
+          "build-box",
+        );
+        tl.fromTo(
+          scanLine,
+          { opacity: 0 },
+          { opacity: 0.78, duration: 0.18, ease: "power1.out" },
+          "build-box",
+        );
+        tl.to(scanLine, { opacity: 0, duration: 0.22, ease: "power1.in" }, 1.16);
+        tl.fromTo(
+          boxBase,
+          { opacity: 0, y: 34, scale: 0.985 },
+          { opacity: 1, y: 0, scale: 1, duration: 0.4, ease: "circ.out" },
+          0.98,
+        );
+        tl.fromTo(
+          leftFlap,
+          { opacity: 0, x: -10, y: 18, rotation: 15 },
+          {
+            opacity: 1,
+            x: 0,
+            y: 0,
+            rotation: 0,
+            duration: 0.36,
+            ease: "back.out(1.35)",
+          },
+          1.02,
+        );
+        tl.fromTo(
+          rightFlap,
+          { opacity: 0, x: 12, y: 22, rotation: -17 },
+          {
+            opacity: 1,
+            x: 0,
+            y: 0,
+            rotation: 0,
+            duration: 0.3,
+            ease: "expo.out",
+          },
+          1.08,
+        );
+
+        tl.addLabel("cat-rise", 1.16);
+        tl.fromTo(
+          dotCat,
+          { opacity: 0, scaleY: 0.06, y: 68, transformOrigin: "50% 61%" },
+          {
+            opacity: 1,
+            scaleY: 1,
+            y: 0,
+            duration: 0.72,
+            ease: "power3.out",
+          },
+          "cat-rise",
+        );
+        tl.fromTo(
+          "#box-cat-logo-reveal-root #piece-cat",
+          { opacity: 0, y: 86, scale: 0.96 },
+          {
+            opacity: 1,
+            y: 0,
+            scale: 1,
+            duration: 0.76,
+            ease: "back.out(1.35)",
+          },
+          1.32,
+        );
+
+        tl.addLabel("blink", 2.16);
+        eyeMasks.forEach((eyeMask) => {
+          tl.fromTo(
+            eyeMask,
+            { opacity: 1, scaleY: 0 },
+            { opacity: 1, scaleY: 1, duration: 0.08, ease: "power3.in" },
+            "blink",
+          );
+          tl.to(eyeMask, { scaleY: 0, duration: 0.1, ease: "power3.out" }, 2.24);
+        });
+
+        tl.addLabel("complete-tail", 2.46);
+        tl.fromTo(
+          dotTail,
+          { opacity: 0, scaleX: 0.05, x: 60, transformOrigin: "76% 50%" },
+          {
+            opacity: 1,
+            scaleX: 1,
+            x: 0,
+            duration: 0.5,
+            ease: "power4.out",
+          },
+          "complete-tail",
+        );
+        tl.fromTo(
+          tail,
+          { opacity: 0, x: 14, rotation: 7 },
+          { opacity: 1, x: 0, rotation: 0, duration: 0.44, ease: "circ.out" },
+          2.62,
+        );
+
+        tl.addLabel("clean-lock", 3.04);
+        tl.fromTo(
+          cleanLogo,
+          { opacity: 0, scale: 1.015 },
+          { opacity: 1, scale: 1, duration: 0.34, ease: "expo.out" },
+          "clean-lock",
+        );
+        proxyLayers.forEach((proxyLayer) => {
+          tl.to(
+            proxyLayer,
+            { opacity: 0, scale: 0.82, duration: 0.28, ease: "power3.in" },
+            "clean-lock",
+          );
+        });
+        cleanPieces.forEach((cleanPiece) => {
+          tl.to(cleanPiece, { opacity: 0, duration: 0.2, ease: "power2.in" }, "clean-lock");
+        });
+        eyeMasks.forEach((eyeMask) => {
+          tl.to(eyeMask, { opacity: 0, duration: 0.12, ease: "sine.in" }, "clean-lock");
+        });
+        tl.to(
+          glow,
+          { opacity: 0.24, scale: 1.08, duration: 0.17, ease: "power2.out" },
+          "clean-lock",
+        );
+        tl.to(glow, { opacity: 0.12, scale: 1, duration: 0.33, ease: "sine.inOut" }, 3.21);
+        tl.to(
+          ring,
+          { opacity: 0.07, scale: 1.02, duration: 0.34, ease: "power1.inOut" },
+          "clean-lock",
+        );
+
+        tl.addLabel("final-hold", 3.38);
+        tl.to(
+          grid,
+          {
+            opacity: 0.22,
+            scale: 1.006,
+            duration: 0.41,
+            yoyo: true,
+            repeat: 1,
+            ease: "sine.inOut",
+          },
+          "final-hold",
+        );
+
+        window.__timelines = window.__timelines || {};
+        window.__timelines["box-cat-logo-reveal"] = tl;
+        tl.seek(0);
+      })();
+    </script>
+  </div>
+</template>

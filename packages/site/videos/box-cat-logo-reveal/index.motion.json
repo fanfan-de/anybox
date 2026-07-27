@@ -1,0 +1,39 @@
+{
+  "duration": 4.2,
+  "maxStaticSec": 0.95,
+  "assertions": [
+    {
+      "kind": "appearsBy",
+      "selector": "#dot-box",
+      "bySec": 1
+    },
+    {
+      "kind": "before",
+      "a": "#dot-box",
+      "b": "#piece-cat"
+    },
+    {
+      "kind": "before",
+      "a": "#piece-cat",
+      "b": "#piece-tail"
+    },
+    {
+      "kind": "before",
+      "a": "#piece-tail",
+      "b": "#logo-clean"
+    },
+    {
+      "kind": "appearsBy",
+      "selector": "#logo-clean",
+      "bySec": 3.38
+    },
+    {
+      "kind": "staysInFrame",
+      "selector": "#logo-stage"
+    },
+    {
+      "kind": "keepsMoving",
+      "withinSelector": "#logo-scene"
+    }
+  ]
+}
