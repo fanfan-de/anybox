@@ -226,11 +226,11 @@ function providerSourceLabel(provider: ProviderCatalogItem) {
   return "Catalog"
 }
 
-function getProviderSourceLabel(provider: ProviderCatalogItem, t: SettingsTranslate) {
+function getProviderInventorySourceLabel(provider: ProviderCatalogItem, t: SettingsTranslate) {
+  if (provider.source === "api") return null
   if (provider.source === "config") return t("settings.provider.sourceSavedConfig")
   if (provider.source === "env") return t("settings.provider.sourceEnvironment")
-  if (provider.source === "custom") return t("settings.provider.sourceCustom")
-  return t("settings.provider.sourceCatalog")
+  return t("settings.provider.sourceCustom")
 }
 
 function getAppearanceTokenLayerLabel(layer: AppearanceTokenLayer, t: SettingsTranslate) {
@@ -4819,12 +4819,16 @@ export function SettingsPage({
                               if (item.kind === "model") {
                                 const provider = item.provider
                                 const connectionLabel = getProviderConnectionLabel(provider, t)
-                                const sourceLabel = getProviderSourceLabel(provider, t)
+                                const sourceLabel = getProviderInventorySourceLabel(provider, t)
 
                                 return (
                                   <button
                                     key={item.key}
-                                    className={isActive ? "settings-service-item is-active" : "settings-service-item"}
+                                    className={
+                                      isActive
+                                        ? "settings-service-item settings-provider-item is-active"
+                                        : "settings-service-item settings-provider-item"
+                                    }
                                     aria-label={`${provider.name} ${connectionLabel}`}
                                     aria-pressed={isActive}
                                     onClick={() => {
@@ -4850,11 +4854,11 @@ export function SettingsPage({
                                         {item.connected ? <ConnectedStatusIcon /> : <DisconnectedStatusIcon />}
                                       </span>
                                     </div>
-                                    <span className="settings-service-item-copy">
-                                      {provider.source !== "api" ? sourceLabel : t("settings.provider.sourceCatalog")}
-                                    </span>
-                                    {capabilityTags.length > 0 ? (
-                                      <span className="settings-service-item-tags" aria-hidden="true">
+                                    {sourceLabel || capabilityTags.length > 0 ? (
+                                      <span className="settings-provider-item-meta" aria-hidden="true">
+                                        {sourceLabel ? (
+                                          <span className="settings-service-item-copy" title={sourceLabel}>{sourceLabel}</span>
+                                        ) : null}
                                         {capabilityTags.map((tag) => (
                                           <span key={`${item.key}-${tag}`} className="settings-badge">{tag}</span>
                                         ))}
@@ -4867,11 +4871,16 @@ export function SettingsPage({
                               const provider = item.provider
                               const connectionLabel = getCinemaVideoProviderStatusText(provider, t)
                               const modelSummary = getCinemaVideoProviderModelSummary(provider)
+                              const cinemaMetaLabel = `${getCinemaVideoProviderKindLabel(provider.manifest.kind)} · ${modelSummary}`
 
                               return (
                                 <button
                                   key={item.key}
-                                  className={isActive ? "settings-service-item is-active" : "settings-service-item"}
+                                  className={
+                                    isActive
+                                      ? "settings-service-item settings-provider-item is-active"
+                                      : "settings-service-item settings-provider-item"
+                                  }
                                   aria-label={`${provider.manifest.name} ${connectionLabel}`}
                                   aria-pressed={isActive}
                                   onClick={() => {
@@ -4899,11 +4908,11 @@ export function SettingsPage({
                                       {item.connected ? <ConnectedStatusIcon /> : <DisconnectedStatusIcon />}
                                     </span>
                                   </div>
-                                  <span className="settings-service-item-copy">
-                                    {getCinemaVideoProviderKindLabel(provider.manifest.kind)} · {modelSummary}
-                                  </span>
-                                  {capabilityTags.length > 0 ? (
-                                    <span className="settings-service-item-tags" aria-hidden="true">
+                                  {cinemaMetaLabel || capabilityTags.length > 0 ? (
+                                    <span className="settings-provider-item-meta" aria-hidden="true">
+                                      <span className="settings-service-item-copy" title={cinemaMetaLabel}>
+                                        {cinemaMetaLabel}
+                                      </span>
                                       {capabilityTags.map((tag) => (
                                         <span key={`${item.key}-${tag}`} className="settings-badge">{tag}</span>
                                       ))}

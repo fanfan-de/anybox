@@ -3561,13 +3561,6 @@ body.is-dragging-settings-page {
   line-height: 1.55;
 }
 
-.settings-service-item-tags {
-  min-width: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
 .settings-prompt-list,
 .settings-prompt-group,
 .settings-prompt-group-list {
@@ -14330,6 +14323,10 @@ body.is-dragging-settings-page {
   gap: 6px;
 }
 
+.settings-page-main.is-services .settings-provider-list-panel .settings-service-list {
+  gap: 3px;
+}
+
 .settings-page-main.is-services .settings-service-detail-panel {
   overflow-y: auto;
   overflow-x: hidden;
@@ -14418,6 +14415,55 @@ body.is-dragging-settings-page {
   color: var(--seg-text-3);
   font-size: 13px;
   line-height: 1.35;
+}
+
+.settings-page-main.is-services .settings-provider-item {
+  min-height: 52px;
+  padding: 8px 10px;
+  gap: 4px;
+}
+
+.settings-page-main.is-services .settings-provider-item .settings-service-item-header {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-page-main.is-services .settings-provider-item .settings-service-item-title {
+  gap: 8px;
+}
+
+.settings-page-main.is-services .settings-provider-item-meta {
+  min-width: 0;
+  padding-left: 32px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+}
+
+.settings-page-main.is-services .settings-provider-item-meta .settings-service-item-copy {
+  min-width: 0;
+  padding-left: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: var(--semantic-list-detail-row-secondary-text);
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-page-main.is-services .settings-provider-item.is-active .settings-service-item-copy {
+  color: var(--semantic-list-detail-row-current-text);
+  opacity: 0.72;
+}
+
+.settings-page-main.is-services .settings-provider-item-meta > .settings-badge {
+  min-height: 22px;
+  padding: 0 7px;
+  flex: 0 0 auto;
+  font-size: 10px;
+  letter-spacing: 0.03em;
 }
 
 .settings-page-main.is-services .provider-logo {

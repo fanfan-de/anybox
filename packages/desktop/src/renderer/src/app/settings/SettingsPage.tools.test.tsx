@@ -668,6 +668,53 @@ describe("SettingsPage built-in tools", () => {
     expect(within(providerFilters).getByRole("radio", { name: "Connected" })).toBeInTheDocument()
   })
 
+  it("keeps provider source and capability metadata on one compact row", () => {
+    const catalogProvider = {
+      ...createProvider("catalog-provider", "Catalog Provider"),
+      source: "api" as const,
+    }
+    const environmentProvider = {
+      ...createProvider("environment-provider", "Environment Provider"),
+      source: "env" as const,
+    }
+
+    render(
+      <SettingsPage
+        {...createSettingsPageProps({
+          catalog: [catalogProvider, environmentProvider],
+          modelCatalog: [
+            createModelCatalogItem("catalog-provider", "catalog-model", "Catalog Model", "Catalog Provider"),
+            createModelCatalogItem(
+              "environment-provider",
+              "environment-model",
+              "Environment Model",
+              "Environment Provider",
+            ),
+          ],
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Provider" }))
+
+    const providerList = screen.getByRole("list", { name: "Provider list" })
+    const catalogButton = within(providerList).getByRole("button", { name: /Catalog Provider.*Connected/ })
+    const environmentButton = within(providerList).getByRole("button", { name: /Environment Provider.*Connected/ })
+    const catalogMeta = catalogButton.querySelector(".settings-provider-item-meta")
+    const environmentMeta = environmentButton.querySelector(".settings-provider-item-meta")
+
+    expect(catalogButton).toHaveClass("settings-provider-item")
+    expect(within(catalogButton).queryByText("Built-in provider")).not.toBeInTheDocument()
+    expect(catalogMeta).not.toBeNull()
+    expect(catalogMeta?.querySelector(".settings-service-item-copy")).toBeNull()
+    expect(within(catalogMeta as HTMLElement).getByText("Text")).toBeInTheDocument()
+
+    expect(environmentMeta).not.toBeNull()
+    expect(within(environmentMeta as HTMLElement).getByText("Environment")).toHaveClass("settings-service-item-copy")
+    expect(within(environmentMeta as HTMLElement).getByText("Text")).toHaveClass("settings-badge")
+    expect(environmentButton.querySelectorAll(".settings-provider-item-meta")).toHaveLength(1)
+  })
+
   it("shows catalog models for an unconfigured provider as read-only", async () => {
     const provider = {
       ...createProvider("anyapi", "AnyAPI"),
