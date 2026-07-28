@@ -375,6 +375,7 @@ function createProps(overrides: Partial<WorkbenchShellProps> = {}): WorkbenchShe
     onFocusPane: vi.fn(),
     onForkFromMessage: vi.fn(),
     onInspectFileInSidebar: vi.fn(),
+    onInspectMessageInSidebar: vi.fn(),
     onLayoutChange: vi.fn(),
     onLocalFileLinkOpen: vi.fn(),
     onOpenCreateSessionTab: vi.fn(),

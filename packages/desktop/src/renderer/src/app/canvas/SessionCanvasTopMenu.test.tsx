@@ -140,6 +140,40 @@ beforeEach(() => {
   setDesktopApi({})
 })
 
+describe("SessionCanvasTopMenu session view mode", () => {
+  it("renders an explicit linear and branch switch without changing sessions", () => {
+    const onSessionViewModeChange = vi.fn()
+    renderTopMenu({
+      sessionViewMode: "linear",
+      onSessionViewModeChange,
+    })
+
+    const viewTabs = screen.getByRole("tablist", { name: "Session view" })
+    expect(within(viewTabs).getByRole("tab", { name: "Linear" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    )
+    expect(within(viewTabs).getByRole("tab", { name: "Branches" })).toHaveAttribute(
+      "aria-selected",
+      "false",
+    )
+
+    fireEvent.click(within(viewTabs).getByRole("tab", { name: "Branches" }))
+    expect(onSessionViewModeChange).toHaveBeenCalledWith("branch")
+
+    fireEvent.keyDown(within(viewTabs).getByRole("tab", { name: "Linear" }), {
+      key: "ArrowRight",
+    })
+    expect(onSessionViewModeChange).toHaveBeenLastCalledWith("branch")
+    expect(within(viewTabs).getByRole("tab", { name: "Branches" })).toHaveFocus()
+  })
+
+  it("does not expose the view switch when the parent has not opted in", () => {
+    renderTopMenu()
+    expect(screen.queryByRole("tablist", { name: "Session view" })).not.toBeInTheDocument()
+  })
+})
+
 describe("SessionCanvasTopMenu project skills", () => {
   const skillOptions = [
     {

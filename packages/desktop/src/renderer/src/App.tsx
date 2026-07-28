@@ -1100,6 +1100,7 @@ function SessionPopoutApp({ workbenchContext }: { workbenchContext: WorkbenchWin
             onFocusPane={handlePaneFocus}
             onForkFromMessage={handleForkFromMessage}
             onInspectFileInSidebar={() => undefined}
+            onInspectMessageInSidebar={() => undefined}
             onLayoutChange={setDockviewLayout}
             onArtifactLinkOpen={handleArtifactLinkOpen}
             onLocalFileLinkOpen={handleLocalFileLinkOpen}
@@ -2186,7 +2187,18 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
         : rightSidebarSideChatPanelState.turns,
     }
   }, [liveRightSidebarSideChatMessages, liveRightSidebarSideChatTurns, rightSidebarSideChatPanelState])
-  const rightSidebarThreadLinkContext = liveRightSidebarSideChatPanelState
+  const rightSidebarMessageInspectorSelection = activeRightSidebarTab?.kind === "message-inspector"
+    ? findSession(workspaces, activeRightSidebarTab.sessionID)
+    : null
+  const rightSidebarThreadLinkContext = liveRightSidebarSideChatPanelState ?? (
+    rightSidebarMessageInspectorSelection?.session && rightSidebarMessageInspectorSelection.workspace
+      ? {
+          session: rightSidebarMessageInspectorSelection.session,
+          workspaceDirectory: rightSidebarMessageInspectorSelection.workspace.directory,
+          workspaceID: rightSidebarMessageInspectorSelection.workspace.id,
+        }
+      : null
+  )
 
   function handleOpenRightSidebarFilesTab() {
     openOrFocusRightSidebarTab({
@@ -2355,6 +2367,29 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     }
     handlePaneFocus(paneID)
     handleActiveSessionDiffFileSelect(file, sessionID)
+  }
+
+  function handleInspectMessageInSidebar(messageID: string, sessionID: string, paneID: string) {
+    const normalizedMessageID = messageID.trim()
+    const normalizedSessionID = sessionID.trim()
+    if (!normalizedMessageID || !normalizedSessionID) return
+
+    if (isRightSidebarCollapsed) {
+      handleRightSidebarToggle()
+    }
+    handlePaneFocus(paneID)
+
+    const tabID = openOrFocusRightSidebarTab({
+      kind: "message-inspector",
+      messageID: normalizedMessageID,
+      sessionID: normalizedSessionID,
+      title: t("branchView.detailTitle"),
+    })
+    updateRightSidebarTab(tabID, {
+      messageID: normalizedMessageID,
+      sessionID: normalizedSessionID,
+      title: t("branchView.detailTitle"),
+    })
   }
 
   async function handleMessageDiffReview(_files: string[], sessionID: string | null, paneID: string) {
@@ -3208,6 +3243,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                 onDetachSessionPanel={handleDetachSessionPanel}
                 onFocusPane={handlePaneFocus}
                 onInspectFileInSidebar={handleInspectFileInSidebar}
+                onInspectMessageInSidebar={handleInspectMessageInSidebar}
                 onCommandsReady={handleWorkbenchDockviewCommandsReady}
                 onLayoutChange={setDockviewLayout}
                 onArtifactLinkOpen={handleArtifactLinkOpen}

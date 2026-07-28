@@ -1,7 +1,7 @@
 import { memo, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type MouseEvent } from "react"
 import type { DesktopIpcOutput } from "../../../../shared/desktop-ipc-contract"
 import { CreateSessionCanvas, getCreateSessionProjectWorkspaces } from "../canvas/CreateSessionCanvas"
-import { SessionCanvasTopMenu } from "../canvas/SessionCanvasTopMenu"
+import { SessionCanvasTopMenu, type SessionViewMode } from "../canvas/SessionCanvasTopMenu"
 import { Composer } from "../composer/Composer"
 import { ComposerConcurrentInputDrawer } from "../composer/ComposerConcurrentInputDrawer"
 import { appendTextToComposerDraftState } from "../composer/draft-state"
@@ -27,6 +27,7 @@ import type {
 } from "../types"
 import { useProjectComposer } from "../use-project-composer"
 import { isSideChatSession } from "../workspace"
+import { BranchThreadView, type BranchThreadViewSnapshot } from "../thread/BranchThreadView"
 import { ThreadView, type ThreadNavigationRequest, type ThreadScrollSnapshot } from "../thread/ThreadView"
 import { deriveActiveMessages } from "../thread-turn-state"
 import type { WorkbenchPaneState } from "../agent-workspace/workspace-derived-state"
@@ -53,12 +54,21 @@ function ComposerBranchParentNotice({
   messagePreview?: string
   onClear: () => void
 }) {
+  const { t } = useI18n()
+
   return (
     <div className="composer-branch-parent-notice" role="status">
-      <span className="composer-branch-parent-label">Continuing from</span>
-      <span className="composer-branch-parent-preview">{messagePreview || "selected message"}</span>
-      <button className="composer-branch-parent-clear" type="button" onClick={onClear}>
-        Clear
+      <span className="composer-branch-parent-label">{t("branchView.composerParent.label")}</span>
+      <span className="composer-branch-parent-preview">
+        {messagePreview || t("branchView.composerParent.fallback")}
+      </span>
+      <button
+        className="composer-branch-parent-clear"
+        type="button"
+        aria-label={t("branchView.composerParent.clearAria")}
+        onClick={onClear}
+      >
+        {t("branchView.composerParent.clear")}
       </button>
     </div>
   )
@@ -352,6 +362,7 @@ export interface WorkbenchPaneSurfaceProps {
   onCreateSessionWorkspaceChange: (workspaceID: string, createSessionTabID?: string | null) => void
   onOpenProjectFolder: () => void | Promise<void>
   onInspectFileInSidebar: (file: string | null, sessionID: string | null, paneID: string) => void
+  onInspectMessageInSidebar: (messageID: string, sessionID: string, paneID: string) => void
   onArtifactLinkOpen?: (input: {
     paneID: string
     sessionID: string | null
@@ -509,6 +520,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
   onCreateSessionWorkspaceChange,
   onOpenProjectFolder,
   onInspectFileInSidebar,
+  onInspectMessageInSidebar,
   onArtifactLinkOpen,
   onLocalFileLinkOpen,
   onOpenSideChat,
@@ -536,8 +548,16 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
   const { t } = useI18n()
   const threadColumnRef = useRef<HTMLDivElement | null>(null)
   const bagOperationVersionRef = useRef(0)
+  const branchViewSnapshotsRef = useRef<Record<string, BranchThreadViewSnapshot>>({})
   const [bagDialogState, setBagDialogState] = useState<SessionBagDialogState | null>(null)
   const [bagDescription, setBagDescription] = useState("")
+  const [sessionViewModeByTabKey, setSessionViewModeByTabKey] = useState<Record<string, SessionViewMode>>({})
+  const sessionViewStateKey = pane.tabKey ?? pane.sessionID ?? pane.id
+  const readOnlySideChat = isSideChatSession(pane.activeSession)
+  const sessionViewMode = readOnlySideChat
+    ? "linear"
+    : sessionViewModeByTabKey[sessionViewStateKey] ?? "linear"
+  const branchViewSnapshotKey = `${sessionViewStateKey}:${pane.sessionID ?? "none"}`
   const { activeMessages, activeTurns } = useWorkbenchPaneConversationSnapshot(
     conversationStore,
     pane.sessionID,
@@ -570,7 +590,6 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
     sessionModelSelection: pane.activeSession?.modelSelection,
     sessionID: pane.sessionID,
   })
-  const readOnlySideChat = isSideChatSession(pane.activeSession)
   const showGitControls = pane.isActivePanel && !readOnlySideChat
   const mainSessionBagSessionID = !readOnlySideChat && pane.activeSession && pane.sessionID ? pane.sessionID : null
   const pendingSubmissionInputs = useMemo(
@@ -734,6 +753,13 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
         <div className="workbench-pane-live-region is-dockview-managed">
             <SessionCanvasTopMenu
               activeSession={pane.activeSession}
+              sessionViewMode={sessionViewMode}
+              onSessionViewModeChange={(mode) => {
+                setSessionViewModeByTabKey((current) => ({
+                  ...current,
+                  [sessionViewStateKey]: mode,
+                }))
+              }}
               sessionTasks={pane.activeSessionTasks ?? pane.activeSessionRuntimeDebug?.tasks ?? null}
               gitProjectID={pane.projectID}
               gitDirectory={pane.workspace?.directory ?? null}
@@ -853,6 +879,23 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
             </div>
           ) : (
             <>
+              {sessionViewMode === "branch" ? (
+                <BranchThreadView
+                  initialSnapshot={branchViewSnapshotsRef.current[branchViewSnapshotKey] ?? null}
+                  isSessionRunning={pane.isSending || pane.isInterruptible}
+                  messageTree={pane.messageTree}
+                  onInspectMessage={(messageID) => {
+                    if (!pane.sessionID) return
+                    onInspectMessageInSidebar(messageID, pane.sessionID, pane.id)
+                    if (pane.tabKey) {
+                      onForkFromMessage(messageID, { tabKey: pane.tabKey })
+                    }
+                  }}
+                  onSnapshotChange={(snapshot) => {
+                    branchViewSnapshotsRef.current[branchViewSnapshotKey] = snapshot
+                  }}
+                />
+              ) : (
                 <ThreadView
                   activeSession={pane.activeSession}
                   activeSessionDiff={pane.activeSessionDiff}
@@ -940,6 +983,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                   }
                   onPermissionRequestResponse={onPermissionRequestResponse}
                 />
+              )}
               <div className="composer-stack">
                 <ComposerConcurrentInputDrawer
                   canSteer={Boolean(pane.activeSession)}

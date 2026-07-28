@@ -41,6 +41,7 @@ import type {
 } from "../types"
 import type { MarkdownArtifactLinkTarget, MarkdownLocalFileLinkTarget } from "../thread-markdown"
 import { SessionMessageTreePanel } from "./SessionMessageTreePanel"
+import { SessionMessageInspectorPanel } from "./SessionMessageInspectorPanel"
 
 interface RightSidebarSideChatPanelState {
   activeProjectID: string | null
@@ -167,7 +168,10 @@ interface RightSidebarProps {
   windowControls?: ReactNode
 }
 
-type RightSidebarLauncherTabKind = Exclude<RightSidebarTab["kind"], "side-chat">
+type RightSidebarLauncherTabKind = Exclude<
+  RightSidebarTab["kind"],
+  "side-chat" | "message-inspector"
+>
 
 interface LauncherCard {
   disabled?: boolean
@@ -211,6 +215,8 @@ function getTabIcon(kind: RightSidebarTab["kind"]) {
       return <TerminalIcon />
     case "message-tree":
       return <SessionTreeIcon />
+    case "message-inspector":
+      return <SideChatIcon />
     case "side-chat":
       return <SideChatIcon />
   }
@@ -230,6 +236,8 @@ function getViewHostClassName(tab: RightSidebarTab | null, isLauncherVisible: bo
       return "right-sidebar-view-host is-terminal"
     case "message-tree":
       return "right-sidebar-view-host is-message-tree"
+    case "message-inspector":
+      return "right-sidebar-view-host is-message-inspector"
     case "side-chat":
       return "right-sidebar-view-host is-side-chat"
   }
@@ -355,6 +363,12 @@ export function RightSidebar({
       setIsLauncherVisible(false)
     }
   }, [rightSidebar.activeTabID])
+
+  useEffect(() => {
+    if (activeTab?.kind === "message-inspector") {
+      setIsLauncherVisible(false)
+    }
+  }, [activeTab])
 
   function handleActivateTab(tabID: string) {
     setIsLauncherVisible(false)
@@ -493,6 +507,15 @@ export function RightSidebar({
           />
         )
       }
+      case "message-inspector":
+        return (
+          <SessionMessageInspectorPanel
+            messageID={activeTab.messageID}
+            messageTree={messageTreeBySession[activeTab.sessionID] ?? null}
+            onArtifactLinkOpen={onArtifactLinkOpen}
+            onLocalFileLinkOpen={onLocalFileLinkOpen}
+          />
+        )
       case "side-chat":
         if (!sideChatPanelState || sideChatPanelState.activeTabID !== activeTab.id) {
           return (

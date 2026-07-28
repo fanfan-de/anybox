@@ -59,6 +59,8 @@ function getTabTargetKey(input: RightSidebarOpenTabInput) {
       ].join(":")
     case "message-tree":
       return ["message-tree", normalizeTargetSegment(input.sessionID)].join(":")
+    case "message-inspector":
+      return "message-inspector"
   }
 }
 
@@ -121,6 +123,13 @@ function createRightSidebarTab(input: RightSidebarOpenTabInput, index: number): 
       return {
         ...base,
         kind: "message-tree",
+        sessionID: input.sessionID,
+      }
+    case "message-inspector":
+      return {
+        ...base,
+        kind: "message-inspector",
+        messageID: input.messageID,
         sessionID: input.sessionID,
       }
   }
@@ -201,6 +210,14 @@ function applyTabUpdate(tab: RightSidebarTab, update: RightSidebarTabUpdate): Ri
         ...tab,
         title,
         targetKey,
+        sessionID: update.sessionID ?? tab.sessionID,
+      }
+    case "message-inspector":
+      return {
+        ...tab,
+        title,
+        targetKey,
+        messageID: update.messageID ?? tab.messageID,
         sessionID: update.sessionID ?? tab.sessionID,
       }
   }

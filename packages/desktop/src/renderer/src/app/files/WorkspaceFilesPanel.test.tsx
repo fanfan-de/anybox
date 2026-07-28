@@ -457,7 +457,7 @@ describe("WorkspaceFilesPanel", () => {
       /\.workspace-files-panel\s*\{[^}]*height:\s*100%;[^}]*flex:\s*1 1 auto;[^}]*grid-template-rows:\s*auto minmax\(0,\s*1fr\);[^}]*align-content:\s*stretch;[^}]*background:\s*transparent;/s,
     )
     expect(styles).toMatch(
-      /\.right-sidebar-view-host\.is-preview,\s*\.right-sidebar-view-host\.is-files,\s*\.right-sidebar-view-host\.is-changes,\s*\.right-sidebar-view-host\.is-terminal,\s*\.right-sidebar-view-host\.is-message-tree,\s*\.right-sidebar-view-host\.is-side-chat\s*\{[^}]*scrollbar-gutter:\s*auto;[^}]*padding-right:\s*0;/s,
+      /\.right-sidebar-view-host\.is-preview,\s*\.right-sidebar-view-host\.is-files,\s*\.right-sidebar-view-host\.is-changes,\s*\.right-sidebar-view-host\.is-terminal,\s*\.right-sidebar-view-host\.is-message-tree,\s*\.right-sidebar-view-host\.is-message-inspector,\s*\.right-sidebar-view-host\.is-side-chat\s*\{[^}]*scrollbar-gutter:\s*auto;[^}]*padding-right:\s*0;/s,
     )
     expect(styles).toMatch(
       /\.workspace-files-reader\s*\{[^}]*height:\s*100%;[^}]*grid-template-rows:\s*auto minmax\(0,\s*1fr\);[^}]*background:\s*transparent;/s,

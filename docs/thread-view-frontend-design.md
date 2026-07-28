@@ -1,6 +1,6 @@
 # Thread View 前端设计说明
 
-更新日期：2026-07-16
+更新日期：2026-07-28
 
 ## 1. 文档定位
 
@@ -9,6 +9,10 @@
 主要实现文件：
 
 - `packages/desktop/src/renderer/src/app/thread/ThreadView.tsx`
+- `packages/desktop/src/renderer/src/app/thread/BranchThreadView.tsx`
+- `packages/desktop/src/renderer/src/app/thread/branch-thread-layout.ts`
+- `packages/desktop/src/renderer/src/app/sidebar/SessionMessageInspectorPanel.tsx`
+- `packages/desktop/src/renderer/src/app/sidebar/RightSidebar.tsx`
 - `packages/desktop/src/renderer/src/app/thread/use-thread-projection.ts`
 - `packages/desktop/src/renderer/src/app/thread/thread-execution-groups.ts`
 - `packages/desktop/src/renderer/src/app/thread/thread-presentation-store.ts`
@@ -30,6 +34,8 @@
 - `packages/desktop/src/renderer/src/app/thread/thread-presentation-store.test.ts`
 - `packages/desktop/src/renderer/src/app/thread/use-thread-scroll-controller.test.ts`
 - `packages/desktop/src/renderer/src/styles/thread.css`
+- `packages/desktop/src/renderer/src/styles/branch-thread.css`
+- `packages/desktop/src/renderer/src/styles/right-sidebar.css`
 - `packages/desktop/src/renderer/src/app/workbench/WorkbenchPaneSurface.tsx`
 - `packages/desktop/src/renderer/src/styles/workbench.css`
 - `packages/desktop/src/renderer/src/styles/composer.css`
@@ -38,6 +44,10 @@
 相关测试：
 
 - `packages/desktop/src/renderer/src/app/thread/ThreadView.test.tsx`
+- `packages/desktop/src/renderer/src/app/thread/BranchThreadView.test.tsx`
+- `packages/desktop/src/renderer/src/app/thread/branch-thread-layout.test.ts`
+- `packages/desktop/src/renderer/src/app/sidebar/SessionMessageInspectorPanel.test.tsx`
+- `packages/desktop/src/renderer/src/app/sidebar/RightSidebar.test.tsx`
 - `packages/desktop/src/renderer/src/app/thread/thread-display-rows.test.ts`
 - `packages/desktop/src/renderer/src/app/thread/SizeAwareStreamingMarkdown.test.tsx`
 - `packages/desktop/src/renderer/src/app/thread/CompletedThreadMarkdown.test.tsx`
@@ -68,14 +78,15 @@ Thread view 不是普通聊天窗口，而是 agent 工作台里的执行记录�
 
 ## 3. 工作台嵌入关系
 
-`ThreadView` 由 `WorkbenchPaneSurface` 渲染在 pane 的主体区域。代码层级是：
+`WorkbenchPaneSurface` 在 pane 主体区域选择线性或分支投影。代码层级是：
 
 ```text
 section.workbench-pane  # Dockview panel 的内容根
 └─ div.workbench-pane-stage  # pane 内容舞台
    └─ div.workbench-pane-live-region.is-dockview-managed  # pane 内实际渲染区
       ├─ SessionCanvasTopMenu  # 当前 session 的工具条
-      ├─ ThreadView  # 主阅读与执行记录区
+      ├─ Linear: ThreadView  # active path 的完整阅读与执行记录区
+      ├─ Branch: BranchThreadView  # 完整历史的轻量地图
       └─ div.composer-stack  # 底部输入区栈
          ├─ ComposerPendingSteerDrawer  # 已提交但不打断运行的补充输入
          ├─ Composer  # 主输入框
@@ -91,13 +102,30 @@ Dockview 的 tab/header chrome 位于 `WorkbenchPaneSurface` 外部，不属于 
 ```text
 PaneTabBar
 SessionCanvasTopMenu
-ThreadView
+ThreadView | BranchThreadView
 ComposerTaskProgress
 Composer
 ComposerUtilityBar
 ```
 
-`workbench-pane-live-region` 使用 CSS grid 管理这些区域，其中 thread 占据 `minmax(0, 1fr)` 主滚动区，composer 固定在底部。`ThreadView` 内部的 `thread-column` 是独立滚动容器。
+`workbench-pane-live-region` 使用 CSS grid 管理这些区域，其中当前 session view 占据 `minmax(0, 1fr)` 主阅读区，composer 固定在底部。`ThreadView` 内部的 `thread-column` 是独立滚动容器；`BranchThreadView` 使用整个主阅读区承载可平移、缩放的分支地图，节点详情交给 Right Sidebar。
+
+### Linear / Branch 视图边界
+
+`SessionCanvasTopMenu` 在普通 session 中显示 `Linear / Branch` tab。当前实现是一个可回退的 Branch 首版：
+
+- `sessionViewMode` 属于当前 workbench tab 的 renderer 内存状态，不写回 session，也不调用后端。
+- Linear 继续消费 active history 的 canonical `ThreadTurn[]`，保留 streaming、trace、权限交互、bottom-lock 和虚拟列表。
+- Branch 消费 `view: "all"` 派生的 `SessionMessageTree`，`buildBranchThreadLayout()` 只计算节点坐标和 active-path edge；节点只渲染 role、状态和短摘要。
+- 单击 Branch 节点改变 `BranchThreadView` 内的 `inspectedMessageID`，同时打开或更新 Right Sidebar 中唯一的上下文页签 `message-inspector`；右侧栏若已折叠会自动展开。同一次选择还通过既有 `onForkFromMessage` 链路，把该节点写入当前 workbench tab 的 `composerParentMessageID`。
+- `message-inspector` 以 `sessionID + messageID` 为目标。选中 assistant 时显示其最近的父级 user message 与该 assistant；选中 user 时默认显示 active-path 上的直接 assistant 回复，有多个直接回复时允许只在详情内切换查看。
+- inspect 不会调用 branch select，也不会立即修改持久化的 `activeMessageID`。它只设置 renderer 内存中的 Composer 续写锚点；右侧栏的“当前”与“正在查看”标记继续区分 session 分支头和瞬时查看目标。
+- `SessionMessageInspectorPanel` 只挂载当前一组 user/assistant Markdown；不会在每个地图节点内挂载完整 `ThreadView`，也不会在中央地图旁保留第二个详情区。
+- 当前 `SessionMessageTree` 只保留 user message 与每个 backend turn 的最终 assistant 文本，且单节点正文有长度上限。因此首版详情不宣称能重放历史 trace、tool、permission 或 file changes；这些能力需要后续保留可索引的全历史 turn projection。
+- Branch 的 `pan / zoom / inspected / keyboard focus` snapshot 以 `tab + session` 为 key 保存在 pane 组件内存中，切回 Linear 再返回时恢复；它不持久化到 session 或磁盘。
+- Composer 仍是两种视图共同的 sibling。Branch 节点选择会显示 `ComposerBranchParentNotice`；下一次非并发发送把所选 message ID 作为 `parentMessageID` 交给既有发送服务，成功提交后清除该 tab 的显式 parent。新消息由后端按该 parent 建立分支，其他历史分支保持不变。
+
+Right Sidebar 的现有 Message Tree 暂时保留，作为迁移期导航器；中央 Branch 视图不复用其“点击节点即切换 active branch”的行为。`message-inspector` 是由 Branch 节点点击打开的上下文页签，不出现在 Right Sidebar 的通用新增页签 launcher 中；再次点击其他节点会复用并更新同一个页签。
 
 截图中的蓝色大块不是正常主题色，也不是 semantic token。它来自 debug region 模式：
 

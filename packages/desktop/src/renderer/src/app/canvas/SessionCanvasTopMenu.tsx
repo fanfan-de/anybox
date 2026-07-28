@@ -1,7 +1,8 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react"
 import { ExternalEditorMenuButton } from "../external-editor/ExternalEditorMenuButton"
 import { GitQuickMenuButton } from "../git/GitQuickMenuButton"
 import { CheckIcon, ChevronDownIcon, CopyIcon, DownloadIcon, FolderIcon, InfoIcon, SessionRunningIcon, SessionTreeIcon } from "../icons"
+import { useI18n } from "../i18n/I18nProvider"
 import { ShellTopMenu, SideChatBadge, writeTextToClipboard } from "../shared-ui"
 import type {
   ComposerMcpOption,
@@ -37,12 +38,16 @@ const TOOL_PERMISSION_MODE_OPTIONS: Array<{
 const SESSION_INFO_PANEL_WIDTH = 320
 const SESSION_INFO_PANEL_THREAD_MARGIN = 16
 
+export type SessionViewMode = "linear" | "branch"
+
 function getToolPermissionModeLabel(mode: ToolPermissionMode) {
   return TOOL_PERMISSION_MODE_OPTIONS.find((option) => option.value === mode)?.label ?? "默认权限"
 }
 
 interface SessionCanvasTopMenuProps {
   activeSession: SessionSummary | null
+  sessionViewMode?: SessionViewMode
+  onSessionViewModeChange?: (mode: SessionViewMode) => void
   sessionTasks?: SessionTaskListView | null
   gitProjectID: string | null
   gitDirectory: string | null
@@ -1070,6 +1075,8 @@ function SessionTraceExportMenuButton({
 
 export function SessionCanvasTopMenu({
   activeSession,
+  sessionViewMode,
+  onSessionViewModeChange,
   sessionTasks,
   gitProjectID,
   gitDirectory,
@@ -1093,8 +1100,29 @@ export function SessionCanvasTopMenu({
   selectedSkillLabel,
   onSkillToggle,
 }: SessionCanvasTopMenuProps) {
+  const { t } = useI18n()
   const readOnlySideChat = isSideChatSession(activeSession)
   const sessionTitle = activeSession?.title ?? ""
+  const showSessionViewModeSwitch = Boolean(
+    activeSession &&
+    !readOnlySideChat &&
+    sessionViewMode &&
+    onSessionViewModeChange,
+  )
+
+  function handleSessionViewModeKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>) {
+    let nextMode: SessionViewMode | null = null
+    if (event.key === "ArrowLeft" || event.key === "Home") nextMode = "linear"
+    if (event.key === "ArrowRight" || event.key === "End") nextMode = "branch"
+    if (!nextMode) return
+
+    event.preventDefault()
+    onSessionViewModeChange?.(nextMode)
+    const nextTab = event.currentTarget.parentElement?.querySelector<HTMLButtonElement>(
+      `[data-session-view-mode="${nextMode}"]`,
+    )
+    nextTab?.focus()
+  }
 
   return (
     <ShellTopMenu
@@ -1102,9 +1130,41 @@ export function SessionCanvasTopMenu({
       as="div"
       className="session-canvas-top-menu"
       contentClassName="panel-toolbar-copy session-canvas-top-menu-copy"
-      content={sessionTitle || readOnlySideChat ? (
+      content={sessionTitle || readOnlySideChat || showSessionViewModeSwitch ? (
         <div className="session-canvas-top-menu-copy-main">
           {sessionTitle ? <span className="label" title={sessionTitle}>{sessionTitle}</span> : null}
+          {showSessionViewModeSwitch ? (
+            <nav
+              className="top-menu-segment-list session-view-mode-tabs"
+              role="tablist"
+              aria-label={t("branchView.modeAria")}
+            >
+              <button
+                type="button"
+                role="tab"
+                className={sessionViewMode === "linear" ? "top-menu-segment is-active" : "top-menu-segment"}
+                aria-selected={sessionViewMode === "linear"}
+                data-session-view-mode="linear"
+                tabIndex={sessionViewMode === "linear" ? 0 : -1}
+                onClick={() => onSessionViewModeChange?.("linear")}
+                onKeyDown={handleSessionViewModeKeyDown}
+              >
+                {t("branchView.mode.linear")}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                className={sessionViewMode === "branch" ? "top-menu-segment is-active" : "top-menu-segment"}
+                aria-selected={sessionViewMode === "branch"}
+                data-session-view-mode="branch"
+                tabIndex={sessionViewMode === "branch" ? 0 : -1}
+                onClick={() => onSessionViewModeChange?.("branch")}
+                onKeyDown={handleSessionViewModeKeyDown}
+              >
+                {t("branchView.mode.branch")}
+              </button>
+            </nav>
+          ) : null}
           {readOnlySideChat ? (
             <div className="session-canvas-top-menu-copy-status">
               {readOnlySideChat ? <SideChatBadge /> : null}

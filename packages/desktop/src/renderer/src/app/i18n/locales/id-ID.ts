@@ -4,6 +4,7 @@ import { skillLibraryTranslations } from "../skill-library-translations"
 import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
 import { environmentEnUS } from "../environment-translations"
 import { cinemaWorkflowTranslations } from "../cinema-workflow-translations"
+import { branchViewTranslations } from "../branch-view-translations"
 
 export const idID = {
   "app.loading": "Memuat",
@@ -1425,4 +1426,5 @@ export const idID = {
   ...pluginOwnershipTranslations.enUS,
   ...environmentEnUS,
   ...cinemaWorkflowTranslations.enUS,
+  ...branchViewTranslations.enUS,
 } as const satisfies Record<TranslationKey, string>

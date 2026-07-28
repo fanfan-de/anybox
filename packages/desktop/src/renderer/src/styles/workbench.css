@@ -3422,6 +3422,7 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 }
 
 .session-canvas-top-menu-copy .label {
+  flex: 0 1 auto;
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
@@ -3434,6 +3435,18 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   letter-spacing: 0.01em;
   text-transform: none;
   color: var(--text-primary);
+}
+
+.session-view-mode-tabs {
+  flex: 0 0 auto;
+  gap: 2px;
+}
+
+.session-view-mode-tabs > .top-menu-segment {
+  min-height: 26px;
+  padding: 0 8px;
+  border-radius: var(--radius-control);
+  font-size: 11px;
 }
 
 .session-canvas-top-menu-copy-status {

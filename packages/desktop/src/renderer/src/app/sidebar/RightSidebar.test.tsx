@@ -77,6 +77,18 @@ function createMessageTreeTab(): RightSidebarTab {
   }
 }
 
+function createMessageInspectorTab(messageID = "assistant-2"): RightSidebarTab {
+  return {
+    id: "message-inspector-tab",
+    kind: "message-inspector",
+    title: "Conversation",
+    targetKey: "message-inspector",
+    createdAt: 4,
+    messageID,
+    sessionID: "session-1",
+  }
+}
+
 function createMessageTree(input?: {
   activeMessageID?: string
   activePathMessageIDs?: string[]
@@ -936,6 +948,24 @@ describe("RightSidebar", () => {
     expect(childNodeTop - activeNodeTop).toBeCloseTo(expandedNodeHeight + 36, 5)
     expect(activeNode.querySelector(".session-message-tree-response-card-body-wrap")).not.toBeNull()
     expect(screen.getByText(/Final line stays reachable/)).toBeInTheDocument()
+  })
+
+  it("renders a message inspector tab with the paired user prompt and assistant response", () => {
+    renderRightSidebar({
+      messageTreeBySession: {
+        "session-1": createMessageTree(),
+      },
+      rightSidebar: {
+        activeTabID: "message-inspector-tab",
+        tabs: [createMessageInspectorTab()],
+      },
+    })
+
+    expect(screen.getByRole("tab", { name: /Conversation/ })).toHaveAttribute("aria-selected", "true")
+    expect(screen.getByRole("heading", { name: "Alternative answer" })).toBeInTheDocument()
+    expect(screen.getByText("Root prompt")).toBeInTheDocument()
+    expect(screen.getByText("This is the second complete response content.")).toBeInTheDocument()
+    expect(document.querySelector(".right-sidebar-view-host")).toHaveClass("is-message-inspector")
   })
 
   it("shrinks expanded response cards when the content does not need the maximum width", () => {

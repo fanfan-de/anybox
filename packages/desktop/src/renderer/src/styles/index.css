@@ -9,6 +9,7 @@
 @import "./workbench.css";
 @import "./dockview.css";
 @import "./thread.css";
+@import "./branch-thread.css";
 @import "./composer.css";
 @import "./right-sidebar.css";
 @import "./terminal.css";

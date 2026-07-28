@@ -605,6 +605,7 @@ export interface WorkbenchShellProps {
   onDockBack?: (panelID?: string) => void
   onFocusPane: (paneID: string) => void
   onInspectFileInSidebar: (file: string | null, sessionID: string | null, paneID: string) => void
+  onInspectMessageInSidebar: WorkbenchPaneSurfaceProps["onInspectMessageInSidebar"]
   onCommandsReady: (commands: WorkbenchDockviewCommands | null) => void
   onLayoutChange: (layout: SerializedDockview | null) => void
   onArtifactLinkOpen?: (input: {
@@ -1305,6 +1306,7 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
         onCreateSessionWorkspaceChange={props.onCreateSessionWorkspaceChange}
         onOpenProjectFolder={props.onOpenProjectFolder}
         onInspectFileInSidebar={props.onInspectFileInSidebar}
+        onInspectMessageInSidebar={props.onInspectMessageInSidebar}
         onArtifactLinkOpen={props.onArtifactLinkOpen}
         onLocalFileLinkOpen={props.onLocalFileLinkOpen}
         onOpenSideChat={props.onOpenSideChat}

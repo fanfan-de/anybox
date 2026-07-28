@@ -4,6 +4,7 @@ import { skillLibraryTranslations } from "../skill-library-translations"
 import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
 import { environmentZhCN } from "../environment-translations"
 import { cinemaWorkflowTranslations } from "../cinema-workflow-translations"
+import { branchViewTranslations } from "../branch-view-translations"
 
 export const zhTW = {
   "app.loading": "載入中",
@@ -1425,4 +1426,5 @@ export const zhTW = {
   ...pluginOwnershipTranslations.zhTW,
   ...environmentZhCN,
   ...cinemaWorkflowTranslations.zhTW,
+  ...branchViewTranslations.zhTW,
 } as const satisfies Record<TranslationKey, string>

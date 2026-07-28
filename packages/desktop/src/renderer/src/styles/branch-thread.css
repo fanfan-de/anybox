@@ -1,0 +1,294 @@
+.branch-thread-view {
+  container-name: branch-thread-view;
+  container-type: inline-size;
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  contain: layout paint;
+}
+
+.branch-thread-toolbar {
+  min-width: 0;
+  min-height: 38px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 4px var(--pane-content-gutter);
+  border-bottom: 1px solid var(--semantic-thread-divider);
+}
+
+.branch-thread-toolbar-copy,
+.branch-thread-toolbar-actions,
+.branch-thread-node-heading,
+.branch-thread-node-role,
+.branch-thread-node-current {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.branch-thread-toolbar-copy {
+  gap: 8px;
+  overflow: hidden;
+}
+
+.branch-thread-toolbar-copy strong {
+  flex: 0 0 auto;
+  color: var(--semantic-list-detail-row-primary-text);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.branch-thread-toolbar-copy > span:not(.branch-thread-continue-hint) {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--semantic-list-detail-row-secondary-text);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.branch-thread-continue-hint {
+  flex: 0 0 auto;
+  min-height: 20px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 7px;
+  border: 1px solid var(--semantic-thread-divider);
+  border-radius: var(--radius-chip);
+  color: var(--semantic-list-detail-row-secondary-text);
+  font-size: 10px;
+  font-weight: 620;
+}
+
+.branch-thread-toolbar-actions {
+  gap: 4px;
+}
+
+.branch-thread-tool-button {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  border-radius: var(--radius-control);
+}
+
+.branch-thread-tool-button:focus-visible {
+  outline: none;
+}
+
+.branch-thread-zoom-value {
+  width: 42px;
+  color: var(--semantic-list-detail-row-secondary-text);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.branch-thread-workspace {
+  min-width: 0;
+  min-height: 0;
+  display: block;
+  overflow: hidden;
+}
+
+.branch-thread-canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--semantic-thread-panel-surface-muted);
+  cursor: grab;
+  touch-action: none;
+}
+
+.branch-thread-canvas.is-panning {
+  cursor: grabbing;
+}
+
+.branch-thread-graph {
+  position: absolute;
+  inset: 0 auto auto 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.branch-thread-edges {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.branch-thread-edge {
+  fill: none;
+  stroke: var(--semantic-thread-divider);
+  stroke-linecap: round;
+  stroke-width: 1.25;
+  vector-effect: non-scaling-stroke;
+}
+
+.branch-thread-edge.is-active-path {
+  stroke: var(--semantic-list-detail-row-current-text);
+  stroke-width: 2;
+}
+
+.branch-thread-node {
+  position: absolute;
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 7px;
+  padding: 9px 10px;
+  overflow: hidden;
+  border: 1px solid var(--semantic-thread-divider);
+  border-radius: var(--radius-panel);
+  background: var(--semantic-list-detail-row-surface);
+  color: var(--semantic-list-detail-row-primary-text);
+  box-shadow: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.branch-thread-node:hover,
+.branch-thread-node:focus-visible {
+  border-color: var(--semantic-accent-icon-hover);
+  background: var(--semantic-list-detail-row-surface-hover);
+  color: var(--semantic-list-detail-row-primary-text);
+  outline: none;
+}
+
+.branch-thread-node.is-active-path {
+  border-color: var(--semantic-list-detail-row-current-text);
+}
+
+.branch-thread-node.is-inspected {
+  border-color: var(--semantic-accent-icon-hover);
+  background: var(--semantic-list-detail-row-surface-current);
+  color: var(--semantic-list-detail-row-current-text);
+}
+
+.branch-thread-node-heading {
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.branch-thread-node-role {
+  gap: 6px;
+  overflow: hidden;
+  color: var(--semantic-list-detail-row-secondary-text);
+  font-size: 10px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.branch-thread-node-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border: 1px solid var(--semantic-thread-divider);
+  border-radius: 50%;
+  background: var(--semantic-list-detail-row-surface);
+}
+
+.branch-thread-node.is-user .branch-thread-node-dot {
+  background: var(--semantic-list-detail-row-secondary-text);
+}
+
+.branch-thread-node.is-active-path .branch-thread-node-dot,
+.branch-thread-node.is-active .branch-thread-node-dot {
+  border-color: var(--semantic-list-detail-row-current-text);
+  background: var(--semantic-list-detail-row-current-text);
+}
+
+.branch-thread-node-current {
+  flex: 0 0 auto;
+  gap: 4px;
+  color: var(--semantic-list-detail-row-current-text);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.branch-thread-node-current svg {
+  width: 11px;
+  height: 11px;
+  animation: branch-thread-spin 1.2s linear infinite;
+}
+
+.branch-thread-node-preview {
+  min-width: 0;
+  display: -webkit-box;
+  overflow: hidden;
+  color: inherit;
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.branch-thread-view.is-empty {
+  place-items: center;
+}
+
+.branch-thread-empty {
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  padding: 24px;
+  color: var(--semantic-list-detail-row-secondary-text);
+  text-align: center;
+}
+
+.branch-thread-empty svg {
+  width: 22px;
+  height: 22px;
+}
+
+.branch-thread-empty strong {
+  color: var(--semantic-list-detail-row-primary-text);
+  font-size: 13px;
+}
+
+.branch-thread-empty span {
+  font-size: 12px;
+}
+
+.branch-thread-view + .composer-stack {
+  padding-top: 12px;
+}
+
+@keyframes branch-thread-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@container branch-thread-view (max-width: 720px) {
+  .branch-thread-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+
+  .branch-thread-toolbar-actions {
+    justify-content: flex-start;
+  }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .branch-thread-node-current svg {
+    animation: none;
+  }
+}

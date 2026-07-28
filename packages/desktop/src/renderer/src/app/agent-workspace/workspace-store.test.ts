@@ -159,6 +159,34 @@ describe("workspace store", () => {
     expect(store.getState().sessions.rightSidebar.activeTabID).toBeNull()
   })
 
+  it("reuses one contextual message inspector tab and updates its inspected message", () => {
+    const store = createTestStore()
+
+    const firstTabID = store.getState().sessionsActions.openOrFocusRightSidebarTab({
+      kind: "message-inspector",
+      messageID: "message-1",
+      sessionID: "session-1",
+      title: "Conversation",
+    })
+    const focusedTabID = store.getState().sessionsActions.openOrFocusRightSidebarTab({
+      kind: "message-inspector",
+      messageID: "message-2",
+      sessionID: "session-2",
+      title: "Conversation",
+    })
+    store.getState().sessionsActions.updateRightSidebarTab(focusedTabID, {
+      messageID: "message-2",
+      sessionID: "session-2",
+    })
+
+    expect(focusedTabID).toBe(firstTabID)
+    expect(store.getState().sessions.rightSidebar.tabs).toHaveLength(1)
+    const inspectorTab = store.getState().sessions.rightSidebar.tabs[0]
+    expect(inspectorTab?.kind).toBe("message-inspector")
+    expect(inspectorTab?.kind === "message-inspector" ? inspectorTab.messageID : null).toBe("message-2")
+    expect(inspectorTab?.kind === "message-inspector" ? inspectorTab.sessionID : null).toBe("session-2")
+  })
+
   it("starts without seed workspaces while the desktop workspace loader is available", () => {
     const store = createWorkspaceStore({
       hasFolderWorkspaceLoader: true,

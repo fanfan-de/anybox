@@ -438,8 +438,9 @@
 
         <p class="one-line">
           <strong>一句话：</strong>
-          运行事件写入 <code>ConversationStore</code>，pane 订阅当前 session 的 <code>activeMessages</code>，
-          <code>ThreadView</code> 投影成 <code>ThreadDisplayRow[]</code>，最后按 <code>row.kind</code> 渲染成屏幕 UI。
+          pane 先按 tab 内的 <code>sessionViewMode</code> 选择投影：Linear 从 <code>ConversationStore</code>
+          读取 active turns 并投影为 <code>ThreadDisplayRow[]</code>；Branch 从全历史
+          <code>SessionMessageTree</code> 计算轻量图布局，节点 inspect 通过上下文页签把配对的 user / assistant 内容投影到 Right Sidebar。
         </p>
 
         <nav class="toc" aria-label="阅读导航">
@@ -511,7 +512,7 @@
               <div class="step-number">3</div>
               <div class="step-body">
                 <div class="step-title">
-                  <h3>WorkbenchPaneSurface 组装 ThreadView 输入</h3>
+                  <h3>WorkbenchPaneSurface 选择 session 投影并组装输入</h3>
                   <span class="tag" data-tone="pane">pane</span>
                 </div>
                 <div class="io-grid">
@@ -521,11 +522,11 @@
                   </div>
                   <div class="io">
                     <b>处理</b>
-                    <p>从同一 turns snapshot 派生 messages，再合并 activeSession、messageTree、diff、permission、side chat、handlers。</p>
+                    <p><code>sessionViewMode</code> 按 workbench tab 保留；从同一 turns snapshot 派生 messages，并同时接收全历史 <code>messageTree</code>。</p>
                   </div>
                   <div class="io">
                     <b>输出</b>
-                    <p>完整的 <code>ThreadViewProps</code>。</p>
+                    <p>Linear 输出完整 <code>ThreadViewProps</code>；Branch 输出 <code>SessionMessageTree</code>、camera/inspect snapshot 和 <code>onInspectMessage</code> 回调。</p>
                   </div>
                 </div>
               </div>
@@ -535,7 +536,7 @@
               <div class="step-number">4</div>
               <div class="step-body">
                 <div class="step-title">
-                  <h3>ThreadView 决定是否渲染真实内容</h3>
+                  <h3>Linear ThreadView 决定是否渲染真实内容</h3>
                   <span class="tag" data-tone="pane">visibility</span>
                 </div>
                 <div class="io-grid">
@@ -545,11 +546,11 @@
                   </div>
                   <div class="io">
                     <b>处理</b>
-                    <p>非 active panel 走 <code>InactiveThreadView</code>；可见时进入 <code>VisibleThreadView</code>。</p>
+                    <p>Linear 中非 active panel 走 <code>InactiveThreadView</code>，可见时进入 <code>VisibleThreadView</code>。Branch 不进入 linear row projection，而是调用 <code>buildBranchThreadLayout()</code>。</p>
                   </div>
                   <div class="io">
                     <b>输出</b>
-                    <p>可见 pane 才进入完整投影和 row 渲染。</p>
+                    <p>Linear 进入完整 row 渲染；Branch 只渲染全图摘要节点。节点点击打开或更新 Right Sidebar 的唯一 <code>message-inspector</code> 页签，并把同一 message ID 写入当前 tab 的 <code>composerParentMessageID</code>；点击本身不改变 active branch，下一次发送才以该节点为 parent 创建分支。</p>
                   </div>
                 </div>
               </div>

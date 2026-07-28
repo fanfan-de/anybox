@@ -1693,6 +1693,107 @@ describe("App", () => {
     expect(screen.queryByRole("button", { name: "Clear draft" })).not.toBeInTheDocument()
   })
 
+  it("opens the paired conversation and continues the composer from an inspected branch node", async () => {
+    const branchHistory = [
+      {
+        info: {
+          id: "branch-user-1",
+          sessionID: "session-chat-1",
+          role: "user",
+          created: 100,
+          parentMessageID: null,
+        },
+        parts: [{ id: "branch-user-part-1", type: "text", text: "Inspect this prompt" }],
+      },
+      {
+        info: {
+          id: "branch-assistant-1",
+          sessionID: "session-chat-1",
+          role: "assistant",
+          created: 101,
+          parentMessageID: "branch-user-1",
+        },
+        parts: [{ id: "branch-assistant-part-1", type: "text", text: "Inspect this complete answer" }],
+      },
+    ]
+    window.desktop!.getAgentHealth = vi.fn().mockResolvedValue({
+      ok: true,
+      baseURL: "http://127.0.0.1:4096",
+    })
+    window.desktop!.listFolderWorkspaces = vi.fn().mockResolvedValue([
+      {
+        id: "C:\\Projects\\Project 2\\app",
+        directory: "C:\\Projects\\Project 2\\app",
+        name: "app",
+        created: 1,
+        updated: 2,
+        project: {
+          id: "project-2",
+          name: "Project 2",
+          worktree: "C:\\Projects\\Project 2",
+        },
+        sessions: [
+          {
+            id: "session-chat-1",
+            projectID: "project-2",
+            directory: "C:\\Projects\\Project 2\\app",
+            title: "Chat 1",
+            created: 1,
+            updated: 2,
+          },
+        ],
+      },
+    ])
+    window.desktop!.agentSession!.subscribe = vi.fn().mockResolvedValue({
+      backendSessionID: "session-chat-1",
+    })
+    window.desktop!.agentSession!.loadHistory = vi.fn().mockResolvedValue(branchHistory)
+    window.desktop!.updateSessionActiveMessage = vi.fn()
+
+    render(<App />)
+
+    await waitFor(() => {
+      expect(window.desktop!.agentSession!.loadHistory).toHaveBeenCalledWith({
+        backendSessionID: "session-chat-1",
+        view: "all",
+      })
+    })
+    const viewTabs = await screen.findByRole("tablist", { name: "Session view" })
+    fireEvent.click(within(viewTabs).getByRole("tab", { name: "Branches" }))
+    const branchView = await screen.findByRole("region", { name: "Session branch map" })
+    const assistantNode = await within(branchView).findByRole("treeitem", { name: /Inspect this complete answer/ })
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse right sidebar" }))
+    expect(screen.queryByRole("complementary", { name: "Inspector sidebar" })).not.toBeInTheDocument()
+
+    fireEvent.click(assistantNode)
+
+    const inspector = await screen.findByRole("complementary", { name: "Inspector sidebar" })
+    expect(within(inspector).getByRole("tab", { name: "Conversation" })).toHaveAttribute("aria-selected", "true")
+    expect(within(inspector).getByText("Inspect this prompt")).toBeInTheDocument()
+    expect(within(inspector).getAllByText("Inspect this complete answer")).not.toHaveLength(0)
+    expect(assistantNode).toHaveAttribute("aria-selected", "true")
+    expect(screen.getByText("Continuing from")).toBeInTheDocument()
+    expect(window.desktop!.updateSessionActiveMessage).not.toHaveBeenCalled()
+
+    setComposerDraftValue(
+      screen.getByRole("textbox", { name: "Task draft" }),
+      "Continue from the selected answer",
+    )
+    fireEvent.click(getComposerSendButton())
+
+    await waitFor(() => {
+      expect(window.desktop!.agentSession!.sendTurn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          backendSessionID: "session-chat-1",
+          parentMessageID: "branch-assistant-1",
+          text: "Continue from the selected answer",
+        }),
+      )
+      expect(screen.queryByText("Continuing from")).not.toBeInTheDocument()
+    })
+  })
+
   it("renders a native macOS window controls slot instead of custom window buttons", () => {
     window.desktop = {
       ...window.desktop!,
