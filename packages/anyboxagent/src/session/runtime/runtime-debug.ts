@@ -158,6 +158,7 @@ export type SessionRuntimeDebugSnapshot = {
     reason?: string
   }
   runner: SessionRunner.SessionRunnerSnapshot | null
+  executions: SessionRunner.SessionRunnerSnapshot[]
   runnerLimits: ReturnType<typeof SessionRunner.runtimeLimitsSnapshot>
   activeTurnID: string | null
   turn: RuntimeTurnSummary | null
@@ -1089,6 +1090,9 @@ export function getSessionRuntimeDebugSnapshot(input: {
   const session = Session.DataBaseRead("sessions", input.sessionID) as Session.SessionInfo | null
   const running = RunningState.info(input.sessionID)
   const runner = SessionRunner.info(input.sessionID)
+  const executions = SessionRunner.snapshot().filter(
+    (execution) => execution.sessionID === input.sessionID,
+  )
   const activeTurn = Orchestrator.activeTurn(input.sessionID)
   const events = input.recentOnly
     ? EventStore.listRecentSessionEvents({
@@ -1160,6 +1164,7 @@ export function getSessionRuntimeDebugSnapshot(input: {
       reason: undefined,
     },
     runner,
+    executions,
     runnerLimits: SessionRunner.runtimeLimitsSnapshot(),
     activeTurnID: activeTurn?.turnID ?? null,
     turn: latestTurn,

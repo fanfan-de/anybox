@@ -49,7 +49,7 @@ export const SpawnSubagentTool = Tool.define(
           skills: parameters.skills,
         }, {
           onStarted: (subtask) => {
-            Orchestrator.activeTurn(ctx.sessionID)?.emit("subagent.created", {
+            Orchestrator.activeTurn(ctx.sessionID, ctx.turnID)?.emit("subagent.created", {
               taskID: subtask.id,
               childSessionID: subtask.childSessionID,
               title: subtask.title,

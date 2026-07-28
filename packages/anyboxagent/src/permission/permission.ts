@@ -123,6 +123,7 @@ type ToolDescriptor = {
 
 export type EvaluationInput = {
   sessionID: string
+  turnID?: string
   messageID: string
   toolCallID?: string
   projectID: string
@@ -440,7 +441,7 @@ function emitOrPersistPermissionEvent(
   request: Request,
   part: Message.PermissionPart,
 ) {
-  const active = Orchestrator.activeTurn(request.sessionID)
+  const active = Orchestrator.activeTurn(request.sessionID, request.turnID)
   if (active && active.turnID === request.turnID) {
     active.emit(type, { request, part })
     return
@@ -642,7 +643,7 @@ export async function requestInProcessPermission(
     return { decision: "allow-once", grantID }
   }
 
-  const active = Orchestrator.activeTurn(context.sessionID)
+  const active = Orchestrator.activeTurn(context.sessionID, context.turnID)
   if (!active || active.turnID !== context.turnID) {
     throw new Error("The in-process permission request no longer belongs to an active turn.")
   }
@@ -960,11 +961,20 @@ export async function evaluate(input: EvaluationInput): Promise<EvaluationResult
   }
   const workflow = Session.normalizeWorkflowState(session?.workflow)
   const risk = maxRisk(deriveRisk(input, derived.paths), intent?.risk ?? "low")
+  const turn = input.turnID
+    ? Session.DataBaseRead("turns", input.turnID) as Session.TurnInfo | null
+    : null
 
-  if (session?.policy?.toolPolicy === "read-only" && input.tool.readOnly !== true) {
+  if (
+    (turn?.threadTargetKind === "detached-branch" || session?.policy?.toolPolicy === "read-only") &&
+    input.tool.readOnly !== true
+  ) {
     const result: EvaluationResult = {
       action: "deny",
-      reason: "This session is read-only and blocks tools with side effects.",
+      reason:
+        turn?.threadTargetKind === "detached-branch"
+          ? "Branch Chat is read-only and blocks tools with side effects."
+          : "This session is read-only and blocks tools with side effects.",
       risk: risk === "low" ? "medium" : risk,
       derived,
     }
@@ -1166,6 +1176,7 @@ function readAssistantMessage(messageID: string) {
 
 function openPermissionTurn(input: {
   sessionID: string
+  sourceTurnID?: string
   agent?: string
   model?: {
     providerID: string
@@ -1174,7 +1185,7 @@ function openPermissionTurn(input: {
   userMessageID?: string
   turn?: Orchestrator.TurnContext
 }) {
-  const active = input.turn ?? Orchestrator.activeTurn(input.sessionID)
+  const active = input.turn
   if (active) {
     return {
       turn: active,
@@ -1182,9 +1193,15 @@ function openPermissionTurn(input: {
     }
   }
 
+  const sourceTurn = input.sourceTurnID
+    ? Session.DataBaseRead("turns", input.sourceTurnID) as Session.TurnInfo | null
+    : null
   return {
     turn: Orchestrator.startTurn({
       sessionID: input.sessionID,
+      executionID: sourceTurn?.executionID,
+      targetKind: sourceTurn?.threadTargetKind,
+      initialParentMessageID: sourceTurn?.initialParentMessageID,
       userMessageID: input.userMessageID,
       agent: input.agent,
       model: input.model,
@@ -1237,7 +1254,7 @@ export async function registerApprovalRequest(input: {
   const runtimeContext: Tool.Context = {
     sessionID: input.assistant.sessionID,
     turnID: input.turn?.turnID
-      ?? Orchestrator.activeTurn(input.assistant.sessionID)?.turnID
+      ?? Orchestrator.activeTurn(input.assistant.sessionID, input.assistant.turnID)?.turnID
       ?? input.toolPart.state.approvalID,
     messageID: input.assistant.id,
     cwd: input.assistant.path.cwd,
@@ -1258,6 +1275,7 @@ export async function registerApprovalRequest(input: {
 
   const decision = await evaluate({
     sessionID: input.assistant.sessionID,
+    turnID: runtimeContext.turnID,
     messageID: input.assistant.id,
     toolCallID: input.toolPart.callID,
     projectID: Instance.project.id,
@@ -1314,7 +1332,7 @@ export async function registerApprovalRequest(input: {
     risk: decision.risk,
     status: "pending",
     turnID: input.turn?.turnID
-      ?? Orchestrator.activeTurn(input.assistant.sessionID)?.turnID,
+      ?? Orchestrator.activeTurn(input.assistant.sessionID, input.assistant.turnID)?.turnID,
     continuation: "tool-retry",
     input: input.toolPart.state.input,
     resource: {
@@ -1342,6 +1360,7 @@ export async function registerApprovalRequest(input: {
 
   const handle = openPermissionTurn({
     sessionID: record.sessionID,
+    sourceTurnID: record.turnID,
     userMessageID: input.assistant.parentID || undefined,
     agent: input.assistant.agent,
     model: assistantModelRef(input.assistant),
@@ -1484,6 +1503,15 @@ async function completeApprovedRequest(
       const toolInfo = await ToolRegistry.get(request.tool)
       if (!toolInfo) {
         throw new Error(`Tool '${request.tool}' is not registered.`)
+      }
+      const sourceTurn = request.turnID
+        ? Session.DataBaseRead("turns", request.turnID) as Session.TurnInfo | null
+        : null
+      if (
+        sourceTurn?.threadTargetKind === "detached-branch" &&
+        toolInfo.capabilities?.readOnly !== true
+      ) {
+        throw new Error("Branch Chat is read-only and blocks tools with side effects.")
       }
 
       const agentInfo = (await Agent.get(request.agent)) ?? Agent.planAgent
@@ -1715,6 +1743,7 @@ export async function resolveRequest(id: string, resolution: Schema.RequestResol
   const assistant = readAssistantMessage(next.messageID)
   const handle = openPermissionTurn({
     sessionID: next.sessionID,
+    sourceTurnID: next.turnID,
     userMessageID: assistant?.parentID || undefined,
     agent: assistant?.agent ?? next.agent,
     model: assistant ? assistantModelRef(assistant) : undefined,

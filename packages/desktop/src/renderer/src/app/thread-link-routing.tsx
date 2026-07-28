@@ -186,6 +186,21 @@ export function ThreadExternalLink({ children, className, href, title }: ThreadE
   }
 
   function handleContextMenu(event: MouseEvent<HTMLAnchorElement>) {
+    const selection = window.getSelection()
+    if (selection && !selection.isCollapsed && selection.toString().trim()) {
+      for (let index = 0; index < selection.rangeCount; index += 1) {
+        const range = selection.getRangeAt(index)
+        try {
+          if (range.intersectsNode(event.currentTarget)) {
+            // Let ThreadView own selected-text actions, including Branch Chat.
+            return
+          }
+        } catch {
+          // Ignore detached ranges and fall back to the link context menu.
+        }
+      }
+    }
+
     event.preventDefault()
     event.stopPropagation()
     setContextMenu({ href, x: event.clientX, y: event.clientY })

@@ -1,9 +1,13 @@
-import { fireEvent, render, screen } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import type { ComponentProps } from "react"
 import { describe, expect, it, vi } from "vitest"
+import type { AgentSessionBridgeEvent } from "../agent-session/client"
 import {
   type RightSidebarState,
   type RightSidebarTab,
+  type SessionRuntimeDebugSnapshot,
   type WorkspaceGroup,
+  DEFAULT_ASSISTANT_TRACE_VISIBILITY,
 } from "../types"
 import { DEFAULT_WORKSPACE_FILE_REVIEW_STATE, DEFAULT_WORKSPACE_PREVIEW_STATE } from "../agent-workspace/review-preview-state"
 import { I18nProvider } from "../i18n/I18nProvider"
@@ -88,6 +92,23 @@ function createMessageInspectorTab(messageID = "assistant-2"): RightSidebarTab {
   }
 }
 
+function createBranchChatTab(): Extract<RightSidebarTab, { kind: "branch-thread" }> {
+  return {
+    id: "branch-chat-tab",
+    kind: "branch-thread",
+    title: "Branch Chat",
+    targetKey: "branch-thread:session-1:assistant-anchor",
+    createdAt: 5,
+    sessionID: "session-1",
+    originMessageID: "assistant-anchor",
+    headMessageID: "assistant-anchor",
+    executionID: "branch-chat-tab",
+    anchorStrategy: "selected",
+    phase: "draft",
+    initialQuotes: [],
+  }
+}
+
 function createMessageTree(input?: {
   activeMessageID?: string
   activePathMessageIDs?: string[]
@@ -140,6 +161,93 @@ function createMessageTree(input?: {
       },
     },
     rootMessageIDs: ["user-1"],
+    sessionID: "session-1",
+  }
+}
+
+function createBranchChatTree(): SessionMessageTree {
+  return {
+    activeMessageID: "assistant-main",
+    activePathMessageIDs: [
+      "user-root",
+      "assistant-anchor",
+      "user-main",
+      "assistant-main",
+    ],
+    branchOptionsByParentID: {},
+    childIDsByParentID: {
+      "__root__": ["user-root"],
+      "user-root": ["assistant-anchor"],
+      "assistant-anchor": ["user-main", "user-branch"],
+      "user-main": ["assistant-main"],
+      "user-branch": ["assistant-branch"],
+    },
+    nodesByID: {
+      "user-root": {
+        content: "Root prompt",
+        id: "user-root",
+        sessionID: "session-1",
+        role: "user",
+        created: 1,
+        parentMessageID: null,
+        preview: "Root prompt",
+      },
+      "assistant-anchor": {
+        content: "Shared answer",
+        id: "assistant-anchor",
+        sessionID: "session-1",
+        role: "assistant",
+        created: 2,
+        completed: 2,
+        isCompletedResponse: true,
+        parentMessageID: "user-root",
+        preview: "Shared answer",
+        turnStatus: "completed",
+      },
+      "user-main": {
+        content: "Continue main",
+        id: "user-main",
+        sessionID: "session-1",
+        role: "user",
+        created: 3,
+        parentMessageID: "assistant-anchor",
+        preview: "Continue main",
+      },
+      "assistant-main": {
+        content: "Main result",
+        id: "assistant-main",
+        sessionID: "session-1",
+        role: "assistant",
+        created: 4,
+        completed: 4,
+        isCompletedResponse: true,
+        parentMessageID: "user-main",
+        preview: "Main result",
+        turnStatus: "completed",
+      },
+      "user-branch": {
+        content: "Explore branch",
+        id: "user-branch",
+        sessionID: "session-1",
+        role: "user",
+        created: 5,
+        parentMessageID: "assistant-anchor",
+        preview: "Explore branch",
+      },
+      "assistant-branch": {
+        content: "Branch result",
+        id: "assistant-branch",
+        sessionID: "session-1",
+        role: "assistant",
+        created: 6,
+        completed: 6,
+        isCompletedResponse: true,
+        parentMessageID: "user-branch",
+        preview: "Branch result",
+        turnStatus: "completed",
+      },
+    },
+    rootMessageIDs: ["user-root"],
     sessionID: "session-1",
   }
 }
@@ -315,8 +423,9 @@ function readMessageTreeNodeScreenAnchor(node: Element) {
   }
 }
 
-function renderRightSidebar(input: {
+type RenderRightSidebarInput = {
   activeSession?: WorkspaceGroup["sessions"][number] | null
+  activeSessionRuntimeDebug?: SessionRuntimeDebugSnapshot | null
   canOpenReview?: boolean
   canOpenTerminal?: boolean
   messageTreeBySession?: Record<string, SessionMessageTree>
@@ -329,13 +438,21 @@ function renderRightSidebar(input: {
   onOpenMessageTreeTab?: () => void
   onOpenReviewTab?: () => void
   onOpenTerminalTab?: () => void
+  onOpenBranchChat?: ComponentProps<typeof RightSidebar>["onOpenBranchChat"]
+  onLocateBranchAnchor?: ComponentProps<typeof RightSidebar>["onLocateBranchAnchor"]
   onMessageTreeNodeSelect?: (sessionID: string, messageID: string) => void
+  onUpdateTab?: ComponentProps<typeof RightSidebar>["onUpdateTab"]
+  threadPaneContext?: ComponentProps<typeof RightSidebar>["threadPaneContext"]
   withI18n?: boolean
-}) {
+}
+
+function createRightSidebarUI(input: RenderRightSidebarInput) {
   const ui = (
     <ToastProvider>
       <RightSidebar
+        assistantTraceVisibility={DEFAULT_ASSISTANT_TRACE_VISIBILITY}
         activeSession={input.activeSession === undefined ? workspace.sessions[0] ?? null : input.activeSession}
+        activeSessionRuntimeDebug={input.activeSessionRuntimeDebug}
         activeSessionDirectory={workspace.directory}
         activeWorkspaceFileScopeDirectory={workspace.directory}
         activeWorkspaceFileScopeName={workspace.name}
@@ -344,6 +461,7 @@ function renderRightSidebar(input: {
         canOpenTerminal={input.canOpenTerminal ?? true}
         codeTheme="github-light"
         rightSidebar={input.rightSidebar}
+        threadPaneContext={input.threadPaneContext}
         selectedDiffFileBySession={{}}
         sessionDiffBySession={{}}
         sessionDiffStateBySession={{}}
@@ -351,6 +469,7 @@ function renderRightSidebar(input: {
         workspaces={input.workspaces ?? [workspace]}
         onActivateTab={input.onActivateTab ?? vi.fn()}
         onCloseTab={input.onCloseTab ?? vi.fn()}
+        onUpdateTab={input.onUpdateTab ?? vi.fn()}
         onArtifactLinkOpen={vi.fn()}
         onDiffFileRestore={vi.fn()}
         onDiffFileSelect={vi.fn()}
@@ -360,6 +479,8 @@ function renderRightSidebar(input: {
         onOpenMessageTreeTab={input.onOpenMessageTreeTab ?? vi.fn()}
         onOpenReviewTab={input.onOpenReviewTab ?? vi.fn()}
         onOpenTerminalTab={input.onOpenTerminalTab ?? vi.fn()}
+        onOpenBranchChat={input.onOpenBranchChat ?? vi.fn()}
+        onLocateBranchAnchor={input.onLocateBranchAnchor}
         onMessageTreeNodeSelect={input.onMessageTreeNodeSelect ?? vi.fn()}
         onPreviewActiveInteractionChange={vi.fn()}
         onPreviewBack={vi.fn()}
@@ -384,7 +505,11 @@ function renderRightSidebar(input: {
     </ToastProvider>
   )
 
-  return render(input.withI18n ? <I18nProvider>{ui}</I18nProvider> : ui)
+  return input.withI18n ? <I18nProvider>{ui}</I18nProvider> : ui
+}
+
+function renderRightSidebar(input: RenderRightSidebarInput) {
+  return render(createRightSidebarUI(input))
 }
 
 describe("RightSidebar", () => {
@@ -410,6 +535,82 @@ describe("RightSidebar", () => {
     expect(onOpenMessageTreeTab).toHaveBeenCalledTimes(1)
     expect(screen.getByRole("button", { name: /^Terminal/ })).toBeDisabled()
     expect(onOpenTerminalTab).not.toHaveBeenCalled()
+  })
+
+  it("shows queued detached execution state on a recent branch", () => {
+    renderRightSidebar({
+      activeSessionRuntimeDebug: {
+        generatedAt: 1,
+        logging: {},
+        session: {
+          id: "session-1",
+          missing: false,
+        },
+        status: { type: "busy" },
+        running: {
+          sessionID: "session-1",
+          startedAt: 1,
+          activeForMs: 1,
+        },
+        executions: [{
+          sessionID: "session-1",
+          executionID: "branch-execution",
+          targetKind: "detached-branch",
+          headMessageID: "assistant-branch",
+          status: "running",
+          startedAt: 1,
+          activeForMs: 1,
+          activeTurnID: "turn-branch",
+          queueLength: 1,
+          queuedOpCount: 1,
+          pendingSteerCount: 0,
+        }],
+        activeTurnID: "turn-branch",
+        latestTurn: null,
+        turns: [],
+        recentEvents: [],
+        diagnostics: {
+          blockedOnApproval: false,
+          activeToolCount: 0,
+          failedToolCount: 0,
+          llmFailureCount: 0,
+        },
+      },
+      messageTreeBySession: {
+        "session-1": createBranchChatTree(),
+      },
+      rightSidebar: {
+        activeTabID: null,
+        tabs: [],
+      },
+    })
+
+    expect(screen.getByRole("button", { name: /^Branch Chat/ })).toBeEnabled()
+    expect(screen.getByText("Recent branches")).toBeInTheDocument()
+    expect(screen.getByText("queued")).toBeInTheDocument()
+  })
+
+  it("opens a generic Branch Chat with a send-time latest-response strategy", () => {
+    const onOpenBranchChat = vi.fn()
+
+    renderRightSidebar({
+      messageTreeBySession: {
+        "session-1": createBranchChatTree(),
+      },
+      rightSidebar: {
+        activeTabID: null,
+        tabs: [],
+      },
+      onOpenBranchChat,
+    })
+
+    fireEvent.click(screen.getByRole("button", { name: /^Branch Chat/ }))
+
+    expect(onOpenBranchChat).toHaveBeenCalledWith({
+      anchorStrategy: "latest-at-send",
+      originMessageID: "assistant-main",
+      sessionID: "session-1",
+    })
   })
 
   it("localizes launcher cards in Chinese", () => {
@@ -471,6 +672,529 @@ describe("RightSidebar", () => {
     expect(screen.getByRole("button", { name: /^Tree/ })).toBeInTheDocument()
   })
 
+  it("keeps the default Branch Chat surface minimal and chooses a start from Advanced options", async () => {
+    const previousDesktop = window.desktop
+    const onLocateBranchAnchor = vi.fn()
+    const onUpdateTab = vi.fn()
+    window.desktop = {
+      ...previousDesktop,
+      agentSession: {
+        loadHistory: vi.fn().mockResolvedValue([
+          {
+            info: {
+              id: "user-root",
+              sessionID: "session-1",
+              role: "user",
+              created: 1,
+              parentMessageID: null,
+            },
+            parts: [{ id: "part-user-root", type: "text", text: "Root prompt" }],
+          },
+          {
+            info: {
+              id: "assistant-anchor",
+              sessionID: "session-1",
+              role: "assistant",
+              created: 2,
+              completed: 2,
+              parentMessageID: "user-root",
+              finishReason: "stop",
+            },
+            parts: [{ id: "part-assistant-anchor", type: "text", text: "Shared answer" }],
+          },
+        ]),
+        sendTurn: vi.fn(),
+        resumeTurn: vi.fn(),
+        cancelTurn: vi.fn(),
+        interrupt: vi.fn(),
+        answerQuestion: vi.fn(),
+        subscribe: vi.fn(),
+        unsubscribe: vi.fn(),
+        loadPermissionRequests: vi.fn().mockResolvedValue([]),
+        respondPermissionRequest: vi.fn(),
+        onEvent: vi.fn(() => () => undefined),
+      },
+    } as typeof window.desktop
+
+    try {
+      renderRightSidebar({
+        messageTreeBySession: {
+          "session-1": createBranchChatTree(),
+        },
+        rightSidebar: {
+          activeTabID: "branch-chat-tab",
+          tabs: [createBranchChatTab()],
+        },
+        threadPaneContext: {
+          paneID: "pane-1",
+          sessionID: "session-1",
+        },
+        onLocateBranchAnchor,
+        onUpdateTab,
+      })
+
+      const branchChat = await screen.findByRole("region", { name: "Branch Chat" })
+      expect(branchChat.firstElementChild).toHaveAttribute("aria-label", "Branch Chat tools")
+      expect(screen.queryByRole("heading", { name: "Branch Chat" })).not.toBeInTheDocument()
+      expect(screen.getByText("Tool read-only")).toBeInTheDocument()
+      expect(screen.queryByRole("dialog", { name: "Branch starting point" })).not.toBeInTheDocument()
+      expect(screen.queryByRole("listbox", { name: "Choose where this branch starts" })).not.toBeInTheDocument()
+
+      const advancedButton = screen.getByRole("button", { name: "Advanced Branch Chat options" })
+      const defaultTriggerClass = advancedButton.className
+      fireEvent.click(advancedButton)
+
+      const dialog = await screen.findByRole("dialog", { name: "Branch starting point" })
+      expect(dialog).toHaveTextContent("From which response should this branch start?")
+      const listbox = screen.getByRole("listbox", { name: "Choose where this branch starts" })
+      const options = [...listbox.querySelectorAll<HTMLElement>('[role="option"]')]
+      expect(options).toHaveLength(2)
+      expect(options[0]).toHaveTextContent("Shared answer")
+      expect(options[1]).toHaveTextContent("Main result")
+      expect(options[0]).toHaveAttribute("aria-selected", "true")
+
+      fireEvent.click(options[1]!)
+      expect(onUpdateTab).toHaveBeenCalledWith("branch-chat-tab", {
+        anchorStrategy: "selected",
+        headMessageID: "assistant-main",
+        originMessageID: "assistant-main",
+      })
+      expect(onLocateBranchAnchor).toHaveBeenCalledWith({
+        messageID: "assistant-main",
+        paneID: "pane-1",
+        sessionID: "session-1",
+      })
+      expect(screen.getByRole("dialog", { name: "Branch starting point" })).toBeInTheDocument()
+      expect(advancedButton.className).not.toBe(defaultTriggerClass)
+      expect(branchChat.firstElementChild).not.toHaveTextContent("Main result")
+      expect(screen.getByText("Ask about this branch…")).toBeInTheDocument()
+      expect(screen.getByLabelText("Composer utility bar")).toBeInTheDocument()
+
+      const editor = screen.getByRole("textbox", { name: "Task draft" })
+      fireEvent.pointerDown(editor)
+      editor.focus()
+      expect(screen.queryByRole("dialog", { name: "Branch starting point" })).not.toBeInTheDocument()
+      expect(editor).toHaveFocus()
+    } finally {
+      window.desktop = previousDesktop
+    }
+  })
+
+  it("supports keyboard selection, Escape, outside close, and focus return in Advanced options", async () => {
+    const onUpdateTab = vi.fn()
+    renderRightSidebar({
+      messageTreeBySession: {
+        "session-1": createBranchChatTree(),
+      },
+      rightSidebar: {
+        activeTabID: "branch-chat-tab",
+        tabs: [createBranchChatTab()],
+      },
+      onUpdateTab,
+    })
+
+    const advancedButton = screen.getByRole("button", { name: "Advanced Branch Chat options" })
+    advancedButton.focus()
+    fireEvent.keyDown(advancedButton, { key: "ArrowDown" })
+    const listbox = await screen.findByRole("listbox", { name: "Choose where this branch starts" })
+    expect(listbox).toHaveFocus()
+    fireEvent.keyDown(listbox, { key: "End" })
+    fireEvent.keyDown(listbox, { key: "Enter" })
+    expect(onUpdateTab).toHaveBeenCalledWith("branch-chat-tab", {
+      anchorStrategy: "selected",
+      headMessageID: "assistant-main",
+      originMessageID: "assistant-main",
+    })
+    expect(screen.getByRole("dialog", { name: "Branch starting point" })).toBeInTheDocument()
+    expect(listbox).toHaveFocus()
+
+    fireEvent.keyDown(listbox, { key: "Escape" })
+    expect(screen.queryByRole("dialog", { name: "Branch starting point" })).not.toBeInTheDocument()
+    expect(advancedButton).toHaveFocus()
+
+    fireEvent.click(advancedButton)
+    await screen.findByRole("dialog", { name: "Branch starting point" })
+    fireEvent.pointerDown(document.body)
+    expect(screen.queryByRole("dialog", { name: "Branch starting point" })).not.toBeInTheDocument()
+  })
+
+  it("shows the committed starting point as read-only and locates it in the main thread", async () => {
+    const onLocateBranchAnchor = vi.fn()
+    const tab = {
+      ...createBranchChatTab(),
+      headMessageID: "assistant-branch",
+      phase: "committed" as const,
+    }
+
+    renderRightSidebar({
+      messageTreeBySession: {
+        "session-1": createBranchChatTree(),
+      },
+      rightSidebar: {
+        activeTabID: tab.id,
+        tabs: [tab],
+      },
+      threadPaneContext: {
+        paneID: "pane-1",
+        sessionID: "session-1",
+      },
+      onLocateBranchAnchor,
+    })
+
+    fireEvent.click(screen.getByRole("button", { name: "Advanced Branch Chat options" }))
+    const dialog = await screen.findByRole("dialog", { name: "Branch starting point" })
+    expect(dialog).toHaveTextContent("This starting point is fixed for the current branch.")
+    expect(screen.queryByRole("listbox", { name: "Choose where this branch starts" })).not.toBeInTheDocument()
+    expect(dialog).toHaveTextContent("Shared answer")
+    fireEvent.click(screen.getByRole("button", { name: "Locate in main thread" }))
+    expect(onLocateBranchAnchor).toHaveBeenCalledWith({
+      messageID: "assistant-anchor",
+      paneID: "pane-1",
+      sessionID: "session-1",
+    })
+    expect(screen.getByRole("dialog", { name: "Branch starting point" })).toBeInTheDocument()
+    fireEvent.pointerDown(document.body)
+    expect(screen.queryByRole("dialog", { name: "Branch starting point" })).not.toBeInTheDocument()
+  })
+
+  it("resolves the newest completed response when the first draft is sent", async () => {
+    const previousDesktop = window.desktop
+    const sendTurn = vi.fn().mockResolvedValue(undefined)
+    const onUpdateTab = vi.fn()
+    window.desktop = {
+      ...previousDesktop,
+      agentSession: {
+        loadHistory: vi.fn().mockResolvedValue([
+          {
+            info: {
+              id: "user-root",
+              sessionID: "session-1",
+              role: "user",
+              created: 1,
+              parentMessageID: null,
+            },
+            parts: [{ id: "part-user-root", type: "text", text: "Root prompt" }],
+          },
+          {
+            info: {
+              id: "assistant-anchor",
+              sessionID: "session-1",
+              role: "assistant",
+              created: 2,
+              completed: 2,
+              parentMessageID: "user-root",
+              finishReason: "stop",
+            },
+            parts: [{ id: "part-assistant-anchor", type: "text", text: "Shared answer" }],
+          },
+        ]),
+        sendTurn,
+        resumeTurn: vi.fn(),
+        cancelTurn: vi.fn(),
+        interrupt: vi.fn(),
+        answerQuestion: vi.fn(),
+        subscribe: vi.fn(),
+        unsubscribe: vi.fn(),
+        loadPermissionRequests: vi.fn().mockResolvedValue([]),
+        respondPermissionRequest: vi.fn(),
+        onEvent: vi.fn(() => () => undefined),
+      },
+    } as typeof window.desktop
+
+    const initialTree = {
+      ...createBranchChatTree(),
+      activeMessageID: "assistant-anchor",
+      activePathMessageIDs: ["user-root", "assistant-anchor"],
+    }
+    const tab = {
+      ...createBranchChatTab(),
+      anchorStrategy: "latest-at-send" as const,
+    }
+    const initialInput: RenderRightSidebarInput = {
+      messageTreeBySession: {
+        "session-1": initialTree,
+      },
+      rightSidebar: {
+        activeTabID: tab.id,
+        tabs: [tab],
+      },
+      onUpdateTab,
+    }
+
+    try {
+      const { rerender } = renderRightSidebar(initialInput)
+      await screen.findByRole("region", { name: "Branch Chat" })
+
+      rerender(createRightSidebarUI({
+        ...initialInput,
+        messageTreeBySession: {
+          "session-1": createBranchChatTree(),
+        },
+      }))
+
+      const editor = screen.getByRole("textbox", { name: "Task draft" })
+      act(() => {
+        editor.dispatchEvent(new CustomEvent("desktop-composer-change", {
+          bubbles: true,
+          detail: { value: "Use the latest response" },
+        }))
+      })
+      fireEvent.click(await screen.findByRole("button", { name: "Send task" }))
+
+      await waitFor(() => {
+        expect(sendTurn).toHaveBeenCalledWith(expect.objectContaining({
+          text: "Use the latest response",
+          threadTarget: {
+            kind: "detached-branch",
+            parentMessageID: "assistant-main",
+          },
+        }))
+      })
+      expect(onUpdateTab).toHaveBeenCalledWith(tab.id, {
+        headMessageID: "assistant-main",
+        originMessageID: "assistant-main",
+      })
+      await waitFor(() => {
+        expect(onUpdateTab).toHaveBeenCalledWith(tab.id, {
+          anchorStrategy: "selected",
+        })
+      })
+    } finally {
+      window.desktop = previousDesktop
+    }
+  })
+
+  it("preserves the draft and automatic strategy when the first send fails", async () => {
+    const previousDesktop = window.desktop
+    const sendTurn = vi.fn().mockRejectedValue(new Error("Network unavailable"))
+    const onUpdateTab = vi.fn()
+    window.desktop = {
+      ...previousDesktop,
+      agentSession: {
+        loadHistory: vi.fn().mockResolvedValue([]),
+        sendTurn,
+        resumeTurn: vi.fn(),
+        cancelTurn: vi.fn(),
+        interrupt: vi.fn(),
+        answerQuestion: vi.fn(),
+        subscribe: vi.fn(),
+        unsubscribe: vi.fn(),
+        loadPermissionRequests: vi.fn().mockResolvedValue([]),
+        respondPermissionRequest: vi.fn(),
+        onEvent: vi.fn(() => () => undefined),
+      },
+    } as typeof window.desktop
+    const tab = {
+      ...createBranchChatTab(),
+      anchorStrategy: "latest-at-send" as const,
+    }
+
+    try {
+      renderRightSidebar({
+        messageTreeBySession: {
+          "session-1": createBranchChatTree(),
+        },
+        rightSidebar: {
+          activeTabID: tab.id,
+          tabs: [tab],
+        },
+        onUpdateTab,
+      })
+
+      const editor = screen.getByRole("textbox", { name: "Task draft" })
+      act(() => {
+        editor.dispatchEvent(new CustomEvent("desktop-composer-change", {
+          bubbles: true,
+          detail: { value: "Retry this unchanged" },
+        }))
+      })
+      fireEvent.click(screen.getByRole("button", { name: "Send task" }))
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("Network unavailable")
+      expect(editor.textContent ?? "").toBe("Retry this unchanged")
+      expect(onUpdateTab).not.toHaveBeenCalledWith(tab.id, {
+        anchorStrategy: "selected",
+      })
+    } finally {
+      window.desktop = previousDesktop
+    }
+  })
+
+  it("submits quote-only Branch Chat input against the detached branch head", async () => {
+    const previousDesktop = window.desktop
+    const sendTurn = vi.fn().mockResolvedValue(undefined)
+    window.desktop = {
+      ...previousDesktop,
+      agentSession: {
+        loadHistory: vi.fn().mockResolvedValue([
+          {
+            info: {
+              id: "user-root",
+              sessionID: "session-1",
+              role: "user",
+              created: 1,
+              parentMessageID: null,
+            },
+            parts: [{ id: "part-user-root", type: "text", text: "Root prompt" }],
+          },
+          {
+            info: {
+              id: "assistant-anchor",
+              sessionID: "session-1",
+              role: "assistant",
+              created: 2,
+              completed: 2,
+              parentMessageID: "user-root",
+              finishReason: "stop",
+            },
+            parts: [{ id: "part-assistant-anchor", type: "text", text: "Shared answer" }],
+          },
+        ]),
+        sendTurn,
+        resumeTurn: vi.fn(),
+        cancelTurn: vi.fn(),
+        interrupt: vi.fn(),
+        answerQuestion: vi.fn(),
+        subscribe: vi.fn(),
+        unsubscribe: vi.fn(),
+        loadPermissionRequests: vi.fn().mockResolvedValue([]),
+        respondPermissionRequest: vi.fn(),
+        onEvent: vi.fn(() => () => undefined),
+      },
+    } as typeof window.desktop
+
+    const tab = {
+      ...createBranchChatTab(),
+      initialQuotes: [{
+        sourceMessageID: "assistant-anchor",
+        text: "The selected response text",
+      }],
+    }
+
+    try {
+      renderRightSidebar({
+        messageTreeBySession: {
+          "session-1": createBranchChatTree(),
+        },
+        rightSidebar: {
+          activeTabID: tab.id,
+          tabs: [tab],
+        },
+      })
+
+      fireEvent.click(await screen.findByRole("button", { name: "Send task" }))
+
+      await waitFor(() => {
+        expect(sendTurn).toHaveBeenCalledWith(expect.objectContaining({
+          backendSessionID: "session-1",
+          clientTurnID: expect.any(String),
+          executionID: expect.any(String),
+          quotes: [{
+            sourceMessageID: "assistant-anchor",
+            text: "The selected response text",
+          }],
+          text: undefined,
+          threadTarget: {
+            kind: "detached-branch",
+            parentMessageID: "assistant-anchor",
+          },
+        }))
+      })
+    } finally {
+      window.desktop = previousDesktop
+    }
+  })
+
+  it("commits a draft Branch Chat as soon as its detached execution is accepted", async () => {
+    const previousDesktop = window.desktop
+    const onUpdateTab = vi.fn()
+    let eventListener: ((event: AgentSessionBridgeEvent) => void) | null = null
+    window.desktop = {
+      ...previousDesktop,
+      agentSession: {
+        loadHistory: vi.fn().mockResolvedValue([
+          {
+            info: {
+              id: "user-root",
+              sessionID: "session-1",
+              role: "user",
+              created: 1,
+              parentMessageID: null,
+            },
+            parts: [{ id: "part-user-root", type: "text", text: "Root prompt" }],
+          },
+          {
+            info: {
+              id: "assistant-anchor",
+              sessionID: "session-1",
+              role: "assistant",
+              created: 2,
+              completed: 2,
+              parentMessageID: "user-root",
+              finishReason: "stop",
+            },
+            parts: [{ id: "part-assistant-anchor", type: "text", text: "Shared answer" }],
+          },
+        ]),
+        sendTurn: vi.fn(),
+        resumeTurn: vi.fn(),
+        cancelTurn: vi.fn(),
+        interrupt: vi.fn(),
+        answerQuestion: vi.fn(),
+        subscribe: vi.fn(),
+        unsubscribe: vi.fn(),
+        loadPermissionRequests: vi.fn().mockResolvedValue([]),
+        respondPermissionRequest: vi.fn(),
+        onEvent: vi.fn((listener: (event: AgentSessionBridgeEvent) => void) => {
+          eventListener = listener
+          return () => undefined
+        }),
+      },
+    } as typeof window.desktop
+
+    try {
+      renderRightSidebar({
+        messageTreeBySession: {
+          "session-1": createBranchChatTree(),
+        },
+        rightSidebar: {
+          activeTabID: "branch-chat-tab",
+          tabs: [createBranchChatTab()],
+        },
+        onUpdateTab,
+      })
+
+      expect(await screen.findByRole("region", { name: "Branch Chat" })).toBeInTheDocument()
+
+      act(() => {
+        eventListener?.({
+          kind: "stream",
+          source: "request",
+          backendSessionID: "session-1",
+          clientTurnID: "client-turn-1",
+          event: "execution.mode",
+          data: {
+            sessionID: "session-1",
+            turnID: "turn-accepted",
+            executionID: "branch-chat-tab",
+            targetKind: "detached-branch",
+            headMessageID: "assistant-anchor",
+            mode: "queued",
+          },
+          receivedAt: 3,
+        })
+      })
+
+      expect(onUpdateTab).toHaveBeenCalledWith("branch-chat-tab", {
+        anchorStrategy: "selected",
+        headMessageID: "assistant-anchor",
+        phase: "committed",
+      })
+    } finally {
+      window.desktop = previousDesktop
+    }
+  })
+
   it("renders message tree tabs and selects non-active nodes", () => {
     const onMessageTreeNodeSelect = vi.fn()
 
@@ -492,6 +1216,34 @@ describe("RightSidebar", () => {
 
     fireEvent.click(screen.getByRole("treeitem", { name: /Alternative answer/ }))
     expect(onMessageTreeNodeSelect).toHaveBeenCalledWith("session-1", "assistant-2")
+  })
+
+  it("reopens an existing non-main leaf from the message tree as a committed Branch Chat", () => {
+    const onOpenBranchChat = vi.fn()
+
+    renderRightSidebar({
+      messageTreeBySession: {
+        "session-1": createBranchChatTree(),
+      },
+      rightSidebar: {
+        activeTabID: "message-tree-tab",
+        tabs: [createMessageTreeTab()],
+      },
+      onOpenBranchChat,
+    })
+
+    fireEvent.click(screen.getByRole("button", {
+      name: "Open Branch result in Branch Chat",
+    }))
+
+    expect(onOpenBranchChat).toHaveBeenCalledWith({
+      anchorStrategy: "selected",
+      sessionID: "session-1",
+      originMessageID: "assistant-anchor",
+      headMessageID: "assistant-branch",
+      phase: "committed",
+      title: "Explore branch",
+    })
   })
 
   it("does not expose rollback controls in the message tree", () => {

@@ -532,6 +532,28 @@ describe("ipc session stream cleanup helpers", () => {
     expect(requestBackendCancel).toHaveBeenCalledWith("session-a")
   })
 
+  it("targets a detached execution when interrupting a Branch Chat", async () => {
+    const requestBackendCancel = vi.fn(async () => ({
+      sessionID: "session-a",
+      cancelled: true,
+      activeCancelled: true,
+      queuedCancelled: 0,
+    }))
+
+    await internal.interruptAgentSessionBackendFirst({
+      backendSessionID: " session-a ",
+      backendExecutionID: " branch-execution ",
+      clientTurnID: " branch-turn ",
+      webContentsID: 12,
+      requestBackendCancel,
+    })
+
+    expect(requestBackendCancel).toHaveBeenCalledWith(
+      "session-a",
+      "branch-execution",
+    )
+  })
+
   it("reports backend interrupt failure without aborting the active local request", async () => {
     const requestBackendCancel = vi.fn(async () => {
       throw new Error("agent offline")

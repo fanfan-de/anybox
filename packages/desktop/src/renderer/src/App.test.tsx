@@ -1664,7 +1664,7 @@ describe("App", () => {
     expect(screen.queryByRole("button", { name: "Clear draft" })).not.toBeInTheDocument()
   })
 
-  it("opens the paired conversation and continues the composer from an inspected branch node", async () => {
+  it("inspects a branch node and only continues the composer through the explicit command", async () => {
     const branchHistory = [
       {
         info: {
@@ -1744,8 +1744,11 @@ describe("App", () => {
     expect(within(inspector).getByText("Inspect this prompt")).toBeInTheDocument()
     expect(within(inspector).getAllByText("Inspect this complete answer")).not.toHaveLength(0)
     expect(assistantNode).toHaveAttribute("aria-selected", "true")
-    expect(screen.getByText("Continuing from")).toBeInTheDocument()
+    expect(screen.queryByText("Continuing from")).not.toBeInTheDocument()
     expect(window.desktop!.updateSessionActiveMessage).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue main thread from selected message" }))
+    expect(screen.getByText("Continuing from")).toBeInTheDocument()
 
     setComposerDraftValue(
       screen.getByRole("textbox", { name: "Task draft" }),

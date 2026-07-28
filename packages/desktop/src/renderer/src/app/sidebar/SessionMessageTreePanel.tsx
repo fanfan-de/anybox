@@ -7,7 +7,8 @@ import {
   useState,
 } from "react"
 import type { CSSProperties, WheelEvent as ReactWheelEvent } from "react"
-import { ExpandIcon, MinimizeIcon } from "../icons"
+import { ExpandIcon, ForkIcon, MinimizeIcon } from "../icons"
+import { useI18n } from "../i18n/I18nProvider"
 import type { SessionMessageTree } from "../session-message-tree"
 import { joinClassNames } from "../shared-ui"
 import { ThreadMarkdown, type MarkdownArtifactLinkTarget, type MarkdownLocalFileLinkTarget } from "../thread-markdown"
@@ -19,6 +20,7 @@ interface SessionMessageTreePanelProps {
   onLocalFileLinkOpen?: (target: MarkdownLocalFileLinkTarget) => void
   session: SessionSummary | null
   onSelectMessage: (sessionID: string, messageID: string) => void | Promise<void>
+  onOpenBranchChat?: (messageID: string) => void
 }
 
 function countBranchPoints(messageTree: SessionMessageTree) {
@@ -586,7 +588,9 @@ export function SessionMessageTreePanel({
   onLocalFileLinkOpen,
   session,
   onSelectMessage,
+  onOpenBranchChat,
 }: SessionMessageTreePanelProps) {
+  const { t } = useI18n()
   const canvasRef = useRef<HTMLDivElement | null>(null)
   const canvasPanCleanupRef = useRef<(() => void) | null>(null)
   const canvasPanStateRef = useRef<MessageTreeCanvasPanState | null>(null)
@@ -1364,6 +1368,21 @@ export function SessionMessageTreePanel({
                     <div className="session-message-tree-response-card-header">
                       <span className="session-message-tree-response-card-title">Response</span>
                       <div className="session-message-tree-response-card-actions">
+                        {node.isCompletedResponse && onOpenBranchChat ? (
+                          <button
+                            type="button"
+                            className="session-message-tree-response-branch-chat"
+                            aria-label={t("branchChat.action.openResponse")}
+                            title={t("branchChat.action.open")}
+                            onClick={(event) => {
+                              event.preventDefault()
+                              event.stopPropagation()
+                              onOpenBranchChat(node.id)
+                            }}
+                          >
+                            <ForkIcon />
+                          </button>
+                        ) : null}
                         {isFullyExpanded ? null : (
                           <button
                             type="button"
@@ -1399,6 +1418,21 @@ export function SessionMessageTreePanel({
                 ) : (
                   <>
                     <span className="session-message-tree-node-preview">{node.preview}</span>
+                    {node.role === "assistant" && node.isCompletedResponse && onOpenBranchChat ? (
+                      <button
+                        type="button"
+                        className="session-message-tree-node-branch-chat"
+                        aria-label={t("branchChat.action.openNamed", { preview: node.preview })}
+                        title={t("branchChat.action.open")}
+                        onClick={(event) => {
+                          event.preventDefault()
+                          event.stopPropagation()
+                          onOpenBranchChat(node.id)
+                        }}
+                      >
+                        <ForkIcon />
+                      </button>
+                    ) : null}
                   </>
                 )}
               </div>

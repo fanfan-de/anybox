@@ -632,6 +632,53 @@ test("permission allows read-only tools to reference outside paths", async () =>
   }
 }, 120000)
 
+test("permission rejects forged write tools for detached branch turns", async () => {
+  await Instance.provide({
+    directory: process.cwd(),
+    async fn() {
+      const session = await Session.createSession({
+        directory: Instance.directory,
+        projectID: Instance.project.id,
+        title: "Detached branch permission test",
+      })
+
+      try {
+        const turn = Session.createTurn({
+          sessionID: session.id,
+          projectID: Instance.project.id,
+          executionID: "branch-permission-execution",
+          threadTargetKind: "detached-branch",
+          initialParentMessageID: null,
+        })
+        const decision = await Permission.evaluate({
+          sessionID: session.id,
+          turnID: turn.id,
+          messageID: Identifier.ascending("message"),
+          projectID: Instance.project.id,
+          agent: "default",
+          cwd: Instance.directory,
+          worktree: Instance.worktree,
+          tool: {
+            id: "apply_patch",
+            kind: "write",
+            readOnly: false,
+            destructive: false,
+            needsShell: false,
+          },
+          input: {
+            patch: "*** Begin Patch\n*** End Patch",
+          },
+        })
+
+        expect(decision.action).toBe("deny")
+        expect(decision.reason).toContain("Branch Chat is read-only")
+      } finally {
+        Session.removeSession(session.id)
+      }
+    },
+  })
+})
+
 test("permission defaults allow workflow, interaction, delegation, exec, and other tools explicitly", async () => {
   const repositoryRoot = await mkdtemp(path.join(tmpdir(), "anybox-permission-tool-kinds-"))
 

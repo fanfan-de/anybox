@@ -22,7 +22,8 @@
 .right-sidebar-view-host.is-changes,
 .right-sidebar-view-host.is-terminal,
 .right-sidebar-view-host.is-message-tree,
-.right-sidebar-view-host.is-message-inspector {
+.right-sidebar-view-host.is-message-inspector,
+.right-sidebar-view-host.is-branch-thread {
   overflow: hidden;
   scrollbar-gutter: auto;
   padding-right: 0;
@@ -51,6 +52,629 @@
   overflow: hidden;
   background: transparent;
   contain: layout paint;
+}
+
+.right-sidebar-launcher-shell {
+  align-content: start;
+  gap: 14px;
+}
+
+.right-sidebar-launcher-card.is-branch-thread .right-sidebar-launcher-card-icon {
+  color: var(--semantic-branch-chat-accent);
+}
+
+.right-sidebar-launcher-hint {
+  margin: 0;
+  padding: 9px 10px;
+  border: 1px dashed var(--semantic-branch-chat-border);
+  color: var(--semantic-branch-chat-text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.right-sidebar-recent-branches {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.right-sidebar-recent-branches > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--semantic-branch-chat-text-secondary);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.right-sidebar-recent-branches > header small {
+  color: var(--semantic-branch-chat-text-muted);
+  font-size: 10px;
+  font-weight: 450;
+}
+
+.right-sidebar-recent-branch-list {
+  display: grid;
+  gap: 1px;
+  border: 1px solid var(--semantic-branch-chat-border);
+  background: var(--semantic-branch-chat-divider);
+}
+
+.right-sidebar-recent-branch {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 11px;
+  border: 0;
+  border-radius: 0;
+  background: var(--semantic-branch-chat-row-surface);
+  color: var(--semantic-branch-chat-text);
+  text-align: left;
+  box-shadow: none;
+}
+
+.right-sidebar-recent-branch:hover,
+.right-sidebar-recent-branch:focus-visible {
+  background: var(--semantic-branch-chat-row-surface-hover);
+  outline: none;
+}
+
+.right-sidebar-recent-branch-main,
+.right-sidebar-recent-branch-meta {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.right-sidebar-recent-branch-main strong,
+.right-sidebar-recent-branch-main > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.right-sidebar-recent-branch-main strong {
+  font-size: 12px;
+  font-weight: 620;
+}
+
+.right-sidebar-recent-branch-main > span,
+.right-sidebar-recent-branch-meta {
+  color: var(--semantic-branch-chat-text-muted);
+  font-size: 10px;
+}
+
+.right-sidebar-recent-branch-meta {
+  justify-items: end;
+  white-space: nowrap;
+}
+
+.right-sidebar-recent-branch-meta > span {
+  text-transform: capitalize;
+}
+
+.right-sidebar-recent-branch-meta > span.is-running,
+.right-sidebar-recent-branch-meta > span.is-generating,
+.right-sidebar-recent-branch-meta > span.is-queued,
+.right-sidebar-recent-branch-meta > span.is-waiting_approval {
+  color: var(--semantic-branch-chat-accent);
+}
+
+.right-sidebar-recent-branch-meta > span.is-failed,
+.right-sidebar-recent-branch-meta > span.is-error {
+  color: var(--semantic-branch-chat-error);
+}
+
+.branch-chat-panel {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  background: var(--semantic-branch-chat-surface);
+  color: var(--semantic-branch-chat-text);
+}
+
+.branch-chat-panel[hidden] {
+  display: none;
+}
+
+.branch-chat-toolbar {
+  min-width: 0;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--semantic-branch-chat-divider);
+  background: var(--semantic-branch-chat-surface);
+}
+
+.branch-chat-advanced-trigger {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--semantic-icon-button-text);
+  box-shadow: none;
+}
+
+.branch-chat-advanced-trigger:hover,
+.branch-chat-advanced-trigger:focus-visible {
+  border-color: transparent;
+  background: var(--semantic-icon-button-surface-hover);
+  color: var(--semantic-icon-button-text-hover);
+  outline: none;
+}
+
+.branch-chat-advanced-trigger.is-open {
+  background: var(--semantic-icon-button-surface-active);
+  color: var(--semantic-icon-button-text-active);
+}
+
+.branch-chat-advanced-trigger svg {
+  width: 14px;
+  height: 14px;
+}
+
+.branch-chat-read-only-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--semantic-branch-chat-text-secondary);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.branch-chat-read-only-badge {
+  min-height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--semantic-branch-chat-border);
+  border-radius: var(--radius-chip);
+  background: var(--semantic-branch-chat-card-surface);
+}
+
+.branch-chat-read-only-badge svg {
+  width: 12px;
+  height: 12px;
+}
+
+.branch-chat-start-popover {
+  position: fixed;
+  z-index: 1000;
+  min-width: 0;
+  padding: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  border: 1px solid var(--semantic-branch-chat-border);
+  border-radius: var(--radius-overlay);
+  background: var(--semantic-dropdown-menu-surface);
+  color: var(--semantic-dropdown-option-text);
+  box-shadow: var(--shadow-md);
+}
+
+.branch-chat-start-popover:focus,
+.branch-chat-start-options:focus {
+  outline: none;
+}
+
+.branch-chat-start-popover-header {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding: 3px 4px 5px;
+}
+
+.branch-chat-start-popover-header strong,
+.branch-chat-start-popover-header span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.branch-chat-start-popover-header strong {
+  color: var(--semantic-dropdown-option-text);
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.branch-chat-start-popover-header span {
+  color: var(--semantic-dropdown-option-meta-text);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.branch-chat-start-options {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  scrollbar-width: none;
+}
+
+.branch-chat-start-options::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.branch-chat-start-option {
+  min-width: 0;
+  min-height: 46px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: var(--radius-control);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  color: var(--semantic-dropdown-option-text);
+  text-align: left;
+  box-shadow: none;
+}
+
+.branch-chat-start-option:hover,
+.branch-chat-start-option.is-active {
+  background: var(--semantic-dropdown-option-surface-hover);
+  color: var(--semantic-dropdown-option-text-hover);
+}
+
+.branch-chat-start-option.is-selected {
+  background: var(--semantic-dropdown-option-surface-selected);
+  color: var(--semantic-dropdown-option-text-selected);
+}
+
+.branch-chat-start-option-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.branch-chat-start-option-copy strong,
+.branch-chat-start-option-copy > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.branch-chat-start-option-copy strong {
+  font-size: 11px;
+  font-weight: 620;
+}
+
+.branch-chat-start-option-copy > span {
+  color: var(--semantic-dropdown-option-meta-text);
+  font-size: 10px;
+}
+
+.branch-chat-start-option:hover .branch-chat-start-option-copy > span,
+.branch-chat-start-option.is-active .branch-chat-start-option-copy > span {
+  color: var(--semantic-dropdown-option-text-hover);
+}
+
+.branch-chat-start-option.is-selected .branch-chat-start-option-copy > span {
+  color: var(--semantic-dropdown-option-meta-text-selected);
+}
+
+.branch-chat-start-option-mark {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.branch-chat-start-option-mark svg {
+  width: 13px;
+  height: 13px;
+}
+
+.branch-chat-start-read-only {
+  min-width: 0;
+  padding: 9px 10px;
+  border-radius: var(--radius-control);
+  display: grid;
+  gap: 4px;
+  background: var(--semantic-dropdown-option-surface-selected);
+  color: var(--semantic-dropdown-option-text-selected);
+}
+
+.branch-chat-start-read-only strong,
+.branch-chat-start-read-only p {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.branch-chat-start-read-only strong {
+  font-size: 11px;
+  font-weight: 620;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.branch-chat-start-read-only p {
+  max-height: 4.2em;
+  margin: 0;
+  color: var(--semantic-dropdown-option-meta-text-selected);
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.branch-chat-start-read-only time {
+  color: var(--semantic-dropdown-option-meta-text-selected);
+  font-size: 9px;
+}
+
+.branch-chat-start-empty {
+  margin: 0;
+  padding: 10px;
+  color: var(--semantic-dropdown-option-meta-text);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.branch-chat-start-popover-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 7px;
+  border-top: 1px solid var(--semantic-branch-chat-divider);
+}
+
+.branch-chat-start-locate {
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--semantic-button-secondary-border);
+  border-radius: var(--radius-control);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--semantic-button-secondary-surface);
+  color: var(--semantic-button-secondary-text);
+  font-size: 11px;
+  box-shadow: none;
+}
+
+.branch-chat-start-locate:hover,
+.branch-chat-start-locate:focus-visible {
+  border-color: var(--semantic-button-secondary-border-hover);
+  background: var(--semantic-button-secondary-surface-hover);
+  color: var(--semantic-button-secondary-text-hover);
+  outline: none;
+}
+
+.branch-chat-start-locate:disabled {
+  border-color: var(--semantic-button-secondary-disabled-border);
+  background: var(--semantic-button-secondary-disabled-surface);
+  color: var(--semantic-button-secondary-disabled-text);
+  cursor: not-allowed;
+}
+
+.branch-chat-start-locate svg {
+  width: 13px;
+  height: 13px;
+}
+
+.branch-chat-thread {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.branch-chat-thread > .thread-shell {
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.branch-chat-thread .thread-column {
+  padding-inline: var(--right-sidebar-inline-padding);
+}
+
+.branch-chat-loading,
+.branch-chat-inline-error {
+  margin: 0;
+  padding: 8px var(--right-sidebar-inline-padding);
+  color: var(--semantic-branch-chat-text-muted);
+  font-size: 11px;
+}
+
+.branch-chat-inline-error {
+  color: var(--semantic-branch-chat-error);
+}
+
+.branch-chat-composer-stack {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px 6px;
+  background: var(--semantic-branch-chat-surface);
+}
+
+.branch-chat-composer-stack .composer {
+  min-width: 0;
+}
+
+.branch-chat-quote-list {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.branch-chat-quote-card {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 8px 9px;
+  border: 1px solid var(--semantic-branch-chat-border);
+  border-left: 2px solid var(--semantic-branch-chat-accent);
+  background: var(--semantic-branch-chat-card-surface);
+}
+
+.branch-chat-quote-card > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.branch-chat-quote-card span {
+  color: var(--semantic-branch-chat-text-muted);
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.branch-chat-quote-card p {
+  max-height: 3em;
+  margin: 0;
+  overflow: hidden;
+  color: var(--semantic-branch-chat-text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.branch-chat-quote-card button,
+.session-message-tree-node-branch-chat,
+.session-message-tree-response-branch-chat,
+.session-message-inspector-branch-chat {
+  border: 0;
+  background: transparent;
+  color: var(--semantic-branch-chat-text-muted);
+  box-shadow: none;
+}
+
+.branch-chat-quote-card button {
+  width: 22px;
+  height: 22px;
+  padding: 4px;
+}
+
+.branch-chat-quote-card button:hover,
+.branch-chat-quote-card button:focus-visible,
+.session-message-tree-node-branch-chat:hover,
+.session-message-tree-node-branch-chat:focus-visible,
+.session-message-tree-response-branch-chat:hover,
+.session-message-tree-response-branch-chat:focus-visible,
+.session-message-inspector-branch-chat:hover,
+.session-message-inspector-branch-chat:focus-visible {
+  color: var(--semantic-branch-chat-accent);
+  outline: none;
+}
+
+.branch-chat-concurrent-mode {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--semantic-branch-chat-text-muted);
+  font-size: 10px;
+}
+
+.branch-chat-concurrent-mode > span {
+  margin-right: auto;
+}
+
+.branch-chat-concurrent-mode button {
+  min-height: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--semantic-branch-chat-border);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--semantic-branch-chat-text-secondary);
+  font-size: 10px;
+}
+
+.branch-chat-concurrent-mode button.is-active {
+  border-color: var(--semantic-branch-chat-accent);
+  color: var(--semantic-branch-chat-accent);
+}
+
+.user-bubble-message-quotes {
+  display: grid;
+  gap: 6px;
+}
+
+.user-bubble-message-quote {
+  margin: 0;
+  padding: 7px 9px;
+  border-left: 2px solid var(--semantic-branch-chat-accent);
+  background: var(--semantic-branch-chat-card-surface);
+}
+
+.user-bubble-message-quote-label,
+.user-bubble-message-quote-text {
+  display: block;
+}
+
+.user-bubble-message-quote-label {
+  margin-bottom: 3px;
+  color: var(--semantic-branch-chat-text-muted);
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.user-bubble-message-quote-text {
+  color: var(--semantic-branch-chat-text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.session-message-tree-node-branch-chat,
+.session-message-tree-response-branch-chat {
+  width: 22px;
+  height: 22px;
+  padding: 4px;
+  flex: 0 0 auto;
+}
+
+.session-message-tree-node-branch-chat {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  opacity: 0;
+}
+
+.session-message-tree-graph-node:hover .session-message-tree-node-branch-chat,
+.session-message-tree-graph-node:focus-within .session-message-tree-node-branch-chat {
+  opacity: 1;
+}
+
+.session-message-inspector-branch-chat {
+  min-height: 22px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 7px;
+  border: 1px solid var(--semantic-branch-chat-border);
+  border-radius: var(--radius-chip);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.session-message-inspector-branch-chat svg {
+  width: 12px;
+  height: 12px;
 }
 
 .right-sidebar-terminal-toggle-slot {
@@ -351,10 +975,10 @@
 .right-sidebar-launcher-tile-grid {
   min-width: 0;
   min-height: 0;
-  height: 100%;
+  height: auto;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: repeat(3, minmax(112px, 1fr));
+  grid-template-rows: repeat(3, minmax(104px, 1fr));
   gap: 8px;
   align-items: stretch;
   justify-content: stretch;
@@ -388,9 +1012,10 @@
 
 .right-sidebar-launcher-card.is-files {
   grid-column: span 1;
-  grid-row: span 2;
+  grid-row: span 1;
 }
 
+.right-sidebar-launcher-card.is-branch-thread,
 .right-sidebar-launcher-card.is-browser,
 .right-sidebar-launcher-card.is-message-tree,
 .right-sidebar-launcher-card.is-review,
@@ -441,23 +1066,25 @@
   transform: translateY(-2px);
 }
 
+.right-sidebar-launcher-card.is-branch-thread:hover .right-sidebar-launcher-card-icon,
+.right-sidebar-launcher-card.is-branch-thread:focus-visible .right-sidebar-launcher-card-icon {
+  color: var(--semantic-branch-chat-accent);
+}
+
 .right-sidebar-launcher-card-icon svg {
   width: 100%;
   height: 100%;
   stroke-width: 1.25;
 }
 
+.right-sidebar-launcher-card.is-branch-thread .right-sidebar-launcher-card-icon,
 .right-sidebar-launcher-card.is-browser .right-sidebar-launcher-card-icon,
+.right-sidebar-launcher-card.is-files .right-sidebar-launcher-card-icon,
 .right-sidebar-launcher-card.is-message-tree .right-sidebar-launcher-card-icon,
 .right-sidebar-launcher-card.is-review .right-sidebar-launcher-card-icon,
 .right-sidebar-launcher-card.is-terminal .right-sidebar-launcher-card-icon {
   width: min(46%, 112px);
   min-width: 82px;
-}
-
-.right-sidebar-launcher-card.is-files .right-sidebar-launcher-card-icon {
-  width: min(66%, 172px);
-  min-width: 128px;
 }
 
 .right-sidebar-launcher-card.is-files .right-sidebar-launcher-card-icon svg {
@@ -490,7 +1117,7 @@
 
   .right-sidebar-launcher-tile-grid {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: repeat(5, minmax(96px, 1fr));
+    grid-template-rows: repeat(6, minmax(96px, 1fr));
   }
 
   .right-sidebar-launcher-card.is-files {
@@ -498,6 +1125,7 @@
     grid-row: span 1;
   }
 
+  .right-sidebar-launcher-card.is-branch-thread,
   .right-sidebar-launcher-card.is-browser,
   .right-sidebar-launcher-card.is-message-tree,
   .right-sidebar-launcher-card.is-review,
@@ -512,6 +1140,7 @@
   }
 
   .right-sidebar-launcher-card-icon,
+  .right-sidebar-launcher-card.is-branch-thread .right-sidebar-launcher-card-icon,
   .right-sidebar-launcher-card.is-files .right-sidebar-launcher-card-icon,
   .right-sidebar-launcher-card.is-browser .right-sidebar-launcher-card-icon,
   .right-sidebar-launcher-card.is-message-tree .right-sidebar-launcher-card-icon,
@@ -524,13 +1153,17 @@
 }
 
 @container right-sidebar (max-width: 360px) {
+  .branch-chat-read-only-badge > span {
+    display: none;
+  }
+
   .right-sidebar-launcher {
     padding: 10px;
   }
 
   .right-sidebar-launcher-tile-grid {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: repeat(5, minmax(96px, 1fr));
+    grid-template-rows: repeat(6, minmax(96px, 1fr));
   }
 
   .right-sidebar-launcher-card.is-files {
@@ -538,6 +1171,7 @@
     grid-row: span 1;
   }
 
+  .right-sidebar-launcher-card.is-branch-thread,
   .right-sidebar-launcher-card.is-browser,
   .right-sidebar-launcher-card.is-message-tree,
   .right-sidebar-launcher-card.is-review,
@@ -552,6 +1186,7 @@
   }
 
   .right-sidebar-launcher-card-icon,
+  .right-sidebar-launcher-card.is-branch-thread .right-sidebar-launcher-card-icon,
   .right-sidebar-launcher-card.is-files .right-sidebar-launcher-card-icon,
   .right-sidebar-launcher-card.is-browser .right-sidebar-launcher-card-icon,
   .right-sidebar-launcher-card.is-message-tree .right-sidebar-launcher-card-icon,

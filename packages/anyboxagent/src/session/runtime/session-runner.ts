@@ -1,5 +1,7 @@
 import * as Orchestrator from "#session/runtime/orchestrator.ts"
 import * as Identifier from "#id/id.ts"
+import * as Status from "#session/runtime/status.ts"
+import { Instance } from "#project/instance.ts"
 import {
   getSessionLimits,
   SessionLimitError,
@@ -8,17 +10,24 @@ import {
 export type SessionRunnerStatus = "idle" | "running" | "cancelling" | "stopped"
 export type SessionOperationType = "prompt" | "resume"
 export type SessionExecutionMode = "new-turn" | "queued" | "steer"
+export type SessionThreadTargetKind = "active-thread" | "detached-branch"
 
 export type PromptRuntime = {
   sessionID: string
   turnID: string
+  executionID: string
+  targetKind: SessionThreadTargetKind
   controller: AbortController
   abort: AbortSignal
+  headMessageID: () => string | null
+  updateHeadMessageID: (messageID: string) => void
 }
 
 export type SessionExecutionHandle<T> = {
   sessionID: string
   turnID: string
+  executionID: string
+  targetKind: SessionThreadTargetKind
   mode: SessionExecutionMode
   promise: Promise<T>
   cancel: () => void
@@ -26,6 +35,7 @@ export type SessionExecutionHandle<T> = {
 
 export type SessionRunnerCancelResult = {
   sessionID: string
+  executionID?: string
   activeCancelled: boolean
   queuedCancelled: number
   queuedCancelledTurnIDs: string[]
@@ -41,6 +51,9 @@ export class SessionOperationCancelledError extends Error {
 
 export type SessionRunnerSnapshot = {
   sessionID: string
+  executionID: string
+  targetKind: SessionThreadTargetKind
+  headMessageID: string | null
   status: SessionRunnerStatus
   startedAt: number | null
   activeForMs: number
@@ -55,6 +68,7 @@ export type SessionRunnerSnapshot = {
 export type SessionRunnerEvent = {
   type: "registered" | "finished" | "cancelled" | "queued" | "steered"
   sessionID: string
+  executionID: string
 }
 
 type QueuedOperation<T> = {
@@ -82,6 +96,9 @@ type ActiveOperation = {
 
 type EnqueueOperationInput<T> = {
   sessionID: string
+  executionID?: string
+  targetKind?: SessionThreadTargetKind
+  initialHeadMessageID?: string | null
   directory: string
   type: SessionOperationType
   execute: (runtime: PromptRuntime) => Promise<T>
@@ -93,6 +110,28 @@ type EnqueuePromptInput<T> = EnqueueOperationInput<T> & {
 
 const runners = new Map<string, SessionRunner>()
 const subscribers = new Set<(event: SessionRunnerEvent) => void>()
+let capacityWakeScheduled = false
+
+function setAggregatedSessionStatus(sessionID: string, status: Status.Info) {
+  try {
+    void Instance.directory
+    Status.set(sessionID, status)
+  } catch {
+    // Low-level runner tests and shutdown paths may execute without a project
+    // instance. Prompt executions run inside one and still publish status.
+  }
+}
+
+function sessionHasExecutionWork(sessionID: string) {
+  return [...runners.values()].some((runner) => (
+    runner.sessionID === sessionID &&
+    (
+      runner.status() === "running" ||
+      runner.status() === "cancelling" ||
+      runner.queueLength() > 0
+    )
+  ))
+}
 
 function notify(event: SessionRunnerEvent) {
   for (const subscriber of [...subscribers]) {
@@ -142,30 +181,90 @@ function assertRunningCapacity(directory: string) {
   }
 }
 
+function hasImmediateRunningCapacity(directory: string, candidate: SessionRunner) {
+  const limits = getSessionLimits()
+  const active = activeRunnerSnapshots()
+  const pendingStarts = [...runners.values()]
+    .filter((runner) => runner !== candidate)
+    .map((runner) => runner.pendingStartDirectory())
+    .filter((value): value is string => Boolean(value))
+  if (active.length + pendingStarts.length >= limits.maxRunning) return false
+
+  const activeInDirectory = active.filter((snapshot) => snapshot.directory === directory).length
+  const pendingInDirectory = pendingStarts.filter((pendingDirectory) => pendingDirectory === directory).length
+  return activeInDirectory + pendingInDirectory < limits.maxRunningPerDirectory
+}
+
+function scheduleCapacityWake() {
+  if (capacityWakeScheduled) return
+  capacityWakeScheduled = true
+  queueMicrotask(() => {
+    capacityWakeScheduled = false
+    for (const runner of runners.values()) {
+      runner.tryWakeForCapacity()
+    }
+  })
+}
+
 class SessionRunner {
   readonly sessionID: string
+  readonly executionID: string
+  readonly targetKind: SessionThreadTargetKind
   private readonly queue: QueuedOperation<unknown>[] = []
+  private currentHeadMessageID: string | null
   private statusValue: SessionRunnerStatus = "idle"
   private active: ActiveOperation | undefined
   private draining = false
+  private waitingForCapacity = false
   private idleWaiters: Array<() => void> = []
 
-  constructor(sessionID: string) {
-    this.sessionID = sessionID
+  constructor(input: {
+    sessionID: string
+    executionID: string
+    targetKind: SessionThreadTargetKind
+    initialHeadMessageID?: string | null
+  }) {
+    this.sessionID = input.sessionID
+    this.executionID = input.executionID
+    this.targetKind = input.targetKind
+    this.currentHeadMessageID = input.initialHeadMessageID ?? null
   }
 
   status() {
     return this.statusValue
   }
 
+  syncInitialHeadMessageID(headMessageID: string | null | undefined) {
+    if (headMessageID === undefined || this.active || this.queueLength() > 0) return
+    this.currentHeadMessageID = headMessageID
+  }
+
   queueLength() {
     return this.queue.filter((op) => !op.cancelled).length
+  }
+
+  pendingStartDirectory() {
+    if (!this.draining || this.active || this.waitingForCapacity) return null
+    return this.queue.find((op) => !op.cancelled)?.directory ?? null
+  }
+
+  tryWakeForCapacity() {
+    if (!this.waitingForCapacity || this.active || this.queueLength() === 0) return
+    this.waitingForCapacity = false
+    this.drain()
   }
 
   enqueue<T>(input: EnqueueOperationInput<T>): SessionExecutionHandle<T> {
     assertQueueCapacity(this)
     const turnID = Identifier.ascending("turn")
-    const mode: SessionExecutionMode = this.active || this.statusValue === "cancelling" ? "queued" : "new-turn"
+    const waitsForDetachedCapacity =
+      this.targetKind === "detached-branch" &&
+      !this.active &&
+      !hasImmediateRunningCapacity(input.directory, this)
+    const mode: SessionExecutionMode =
+      this.active || this.statusValue === "cancelling" || waitsForDetachedCapacity
+        ? "queued"
+        : "new-turn"
 
     let resolve!: (value: T) => void
     let reject!: (error: unknown) => void
@@ -186,12 +285,17 @@ class SessionRunner {
     }
 
     this.queue.push(op as QueuedOperation<unknown>)
-    notify({ type: "queued", sessionID: this.sessionID })
+    if (this.targetKind === "detached-branch") {
+      setAggregatedSessionStatus(this.sessionID, { type: "busy" })
+    }
+    notify({ type: "queued", sessionID: this.sessionID, executionID: this.executionID })
     this.drain()
 
     return {
       sessionID: input.sessionID,
       turnID,
+      executionID: this.executionID,
+      targetKind: this.targetKind,
       mode,
       promise,
       cancel: () => {
@@ -204,7 +308,9 @@ class SessionRunner {
   }
 
   enqueuePrompt<T>(input: EnqueuePromptInput<T>): SessionExecutionHandle<T> {
-    const activeTurn = Orchestrator.activeTurn(input.sessionID)
+    const activeTurn = this.active
+      ? Orchestrator.activeTurn(input.sessionID, this.active.turnID)
+      : undefined
     if (
       this.statusValue === "running" &&
       this.active &&
@@ -246,12 +352,14 @@ class SessionRunner {
         this.active.pendingSteerCount += 1
         this.active.pendingSteerTurnIDs.add(turnID)
       }
-      notify({ type: "steered", sessionID: this.sessionID })
+      notify({ type: "steered", sessionID: this.sessionID, executionID: this.executionID })
       this.drain()
 
       return {
         sessionID: input.sessionID,
         turnID,
+        executionID: this.executionID,
+        targetKind: this.targetKind,
         mode: "steer",
         promise,
         cancel: () => {
@@ -267,7 +375,7 @@ class SessionRunner {
     if (!this.active) return false
     this.statusValue = "cancelling"
     this.active.controller.abort()
-    notify({ type: "cancelled", sessionID: this.sessionID })
+    notify({ type: "cancelled", sessionID: this.sessionID, executionID: this.executionID })
     return true
   }
 
@@ -276,6 +384,7 @@ class SessionRunner {
     const queuedCancelledTurnIDs = options?.cancelQueued ? this.cancelQueued() : []
     return {
       sessionID: this.sessionID,
+      executionID: this.executionID,
       activeCancelled,
       queuedCancelled: queuedCancelledTurnIDs.length,
       queuedCancelledTurnIDs,
@@ -302,6 +411,9 @@ class SessionRunner {
     const startedAt = this.active?.startedAt ?? null
     return {
       sessionID: this.sessionID,
+      executionID: this.executionID,
+      targetKind: this.targetKind,
+      headMessageID: this.currentHeadMessageID,
       status: this.statusValue,
       startedAt,
       activeForMs: startedAt ? Math.max(0, Date.now() - startedAt) : 0,
@@ -323,6 +435,10 @@ class SessionRunner {
     op.cancelled = true
     op.reject(new SessionOperationCancelledError())
     this.resolveIdleIfNeeded()
+    setAggregatedSessionStatus(
+      this.sessionID,
+      sessionHasExecutionWork(this.sessionID) ? { type: "busy" } : { type: "idle" },
+    )
     return true
   }
 
@@ -336,8 +452,12 @@ class SessionRunner {
       cancelledTurnIDs.push(op.turnID)
     }
     if (cancelledTurnIDs.length > 0) {
-      notify({ type: "cancelled", sessionID: this.sessionID })
+      notify({ type: "cancelled", sessionID: this.sessionID, executionID: this.executionID })
       this.resolveIdleIfNeeded()
+      setAggregatedSessionStatus(
+        this.sessionID,
+        sessionHasExecutionWork(this.sessionID) ? { type: "busy" } : { type: "idle" },
+      )
     }
     return cancelledTurnIDs
   }
@@ -361,12 +481,18 @@ class SessionRunner {
         }
 
         if (op.cancelled) continue
-        await this.runOperation(op)
+        const completed = await this.runOperation(op)
+        if (!completed) break
       }
     } finally {
       this.draining = false
-      if (!this.active && this.queueLength() > 0) {
+      if (!this.active && this.queueLength() > 0 && !this.waitingForCapacity) {
         this.drain()
+      } else if (!this.active && this.targetKind === "detached-branch") {
+        const key = runnerKey(this.sessionID, this.executionID)
+        if (this.queueLength() === 0 && runners.get(key) === this) {
+          runners.delete(key)
+        }
       }
     }
   }
@@ -375,16 +501,32 @@ class SessionRunner {
     try {
       assertRunningCapacity(op.directory)
     } catch (error) {
+      if (this.targetKind === "detached-branch" && error instanceof SessionLimitError) {
+        this.queue.unshift(op)
+        this.waitingForCapacity = true
+        this.statusValue = "idle"
+        return false
+      }
       op.reject(error)
-      return
+      setAggregatedSessionStatus(
+        this.sessionID,
+        sessionHasExecutionWork(this.sessionID) ? { type: "busy" } : { type: "idle" },
+      )
+      return true
     }
     const controller = new AbortController()
     const startedAt = Date.now()
     const runtime: PromptRuntime = {
       sessionID: op.sessionID,
       turnID: op.turnID,
+      executionID: this.executionID,
+      targetKind: this.targetKind,
       controller,
       abort: controller.signal,
+      headMessageID: () => this.currentHeadMessageID,
+      updateHeadMessageID: (messageID) => {
+        this.currentHeadMessageID = messageID
+      },
     }
     let resolveActive!: (value: unknown) => void
     let rejectActive!: (error: unknown) => void
@@ -404,7 +546,8 @@ class SessionRunner {
       promise,
     }
     this.statusValue = "running"
-    notify({ type: "registered", sessionID: this.sessionID })
+    setAggregatedSessionStatus(this.sessionID, { type: "busy" })
+    notify({ type: "registered", sessionID: this.sessionID, executionID: this.executionID })
 
     try {
       const value = await op.execute(runtime)
@@ -417,10 +560,16 @@ class SessionRunner {
       if (this.active?.turnID === op.turnID) {
         this.active = undefined
       }
-      notify({ type: "finished", sessionID: this.sessionID })
+      notify({ type: "finished", sessionID: this.sessionID, executionID: this.executionID })
       this.statusValue = "idle"
       this.resolveIdleIfNeeded()
+      setAggregatedSessionStatus(
+        this.sessionID,
+        sessionHasExecutionWork(this.sessionID) ? { type: "busy" } : { type: "idle" },
+      )
+      scheduleCapacityWake()
     }
+    return true
   }
 
   private resolveIdleIfNeeded() {
@@ -439,30 +588,72 @@ class SessionRunner {
   }
 }
 
-function getOrCreateRunner(sessionID: string) {
-  let runner = runners.get(sessionID)
+function normalizeExecutionID(input: Pick<EnqueueOperationInput<unknown>, "executionID" | "targetKind">) {
+  const targetKind = input.targetKind ?? "active-thread"
+  const executionID = input.executionID?.trim()
+  if (executionID) return executionID
+  return targetKind === "active-thread"
+    ? "active-thread"
+    : `detached-${Identifier.ascending("turn")}`
+}
+
+function runnerKey(sessionID: string, executionID: string) {
+  return `${sessionID}\u0000${executionID}`
+}
+
+function getOrCreateRunner<T>(input: EnqueueOperationInput<T>) {
+  const executionID = normalizeExecutionID(input)
+  const key = runnerKey(input.sessionID, executionID)
+  let runner = runners.get(key)
+  const targetKind = input.targetKind ?? "active-thread"
+  if (runner && runner.targetKind !== targetKind) {
+    throw new Error(
+      `Execution '${executionID}' cannot change target kind from '${runner.targetKind}' to '${targetKind}'.`,
+    )
+  }
   if (!runner) {
-    runner = new SessionRunner(sessionID)
-    runners.set(sessionID, runner)
+    runner = new SessionRunner({
+      sessionID: input.sessionID,
+      executionID,
+      targetKind,
+      initialHeadMessageID: input.initialHeadMessageID,
+    })
+    runners.set(key, runner)
+  } else {
+    runner.syncInitialHeadMessageID(input.initialHeadMessageID)
   }
   return runner
 }
 
 export function enqueuePrompt<T>(input: EnqueuePromptInput<T>): SessionExecutionHandle<T> {
-  return getOrCreateRunner(input.sessionID).enqueuePrompt(input)
+  return getOrCreateRunner(input).enqueuePrompt(input)
 }
 
 export function enqueueResume<T>(input: EnqueueOperationInput<T>): SessionExecutionHandle<T> {
-  return getOrCreateRunner(input.sessionID).enqueue(input)
+  return getOrCreateRunner(input).enqueue(input)
 }
 
-export function cancel(sessionID: string) {
-  return runners.get(sessionID)?.cancel() ?? false
+function runnersForSession(sessionID: string) {
+  return [...runners.values()].filter((runner) => runner.sessionID === sessionID)
 }
 
-export function cancelSession(sessionID: string, options?: { cancelQueued?: boolean }): SessionRunnerCancelResult {
-  return runners.get(sessionID)?.cancelSession(options) ?? {
+export function cancel(sessionID: string, executionID?: string) {
+  if (executionID) {
+    return runners.get(runnerKey(sessionID, executionID))?.cancel() ?? false
+  }
+  const sessionRunners = runnersForSession(sessionID)
+  const activeThread = sessionRunners.find((runner) => runner.executionID === "active-thread")
+  return activeThread?.cancel() ?? sessionRunners.find((runner) => runner.status() === "running")?.cancel() ?? false
+}
+
+export function cancelExecution(
+  sessionID: string,
+  executionID: string,
+  options?: { cancelQueued?: boolean },
+): SessionRunnerCancelResult {
+  return runners.get(runnerKey(sessionID, executionID))?.cancelSession(options) ?? {
     sessionID,
+    executionID,
     activeCancelled: false,
     queuedCancelled: 0,
     queuedCancelledTurnIDs: [],
@@ -470,20 +661,60 @@ export function cancelSession(sessionID: string, options?: { cancelQueued?: bool
   }
 }
 
+export function cancelSession(sessionID: string, options?: { cancelQueued?: boolean }): SessionRunnerCancelResult {
+  const results = runnersForSession(sessionID).map((runner) => runner.cancelSession(options))
+  return results.reduce<SessionRunnerCancelResult>((total, result) => ({
+    sessionID,
+    activeCancelled: total.activeCancelled || result.activeCancelled,
+    queuedCancelled: total.queuedCancelled + result.queuedCancelled,
+    queuedCancelledTurnIDs: [...total.queuedCancelledTurnIDs, ...result.queuedCancelledTurnIDs],
+    cancelled: total.cancelled || result.cancelled,
+  }), {
+    sessionID,
+    activeCancelled: false,
+    queuedCancelled: 0,
+    queuedCancelledTurnIDs: [],
+    cancelled: false,
+  })
+}
+
 export function isSessionOperationCancelledError(error: unknown) {
   return error instanceof SessionOperationCancelledError
 }
 
 export function consumePendingSteer(sessionID: string, turnID: string) {
-  return runners.get(sessionID)?.consumePendingSteer(turnID) ?? Promise.resolve(0)
+  const runner = runnersForSession(sessionID).find((candidate) => candidate.snapshot().activeTurnID === turnID)
+  return runner?.consumePendingSteer(turnID) ?? Promise.resolve(0)
 }
 
 export function waitForIdle(sessionID: string) {
-  return runners.get(sessionID)?.waitForIdle() ?? Promise.resolve()
+  return Promise.all(runnersForSession(sessionID).map((runner) => runner.waitForIdle())).then(() => undefined)
 }
 
 export function info(sessionID: string) {
-  return runners.get(sessionID)?.snapshot() ?? null
+  const allSnapshots = runnersForSession(sessionID).map((runner) => runner.snapshot())
+  if (allSnapshots.length === 0) return null
+  const activeSnapshots = allSnapshots.filter(
+    (item) => item.status === "running" || item.status === "cancelling" || item.queueLength > 0,
+  )
+  const snapshots = activeSnapshots.length > 0 ? activeSnapshots : allSnapshots
+  const preferred = snapshots.find((item) => item.targetKind === "active-thread") ?? snapshots[0]!
+  const started = activeSnapshots
+    .map((item) => item.startedAt)
+    .filter((value): value is number => value !== null)
+  return {
+    ...preferred,
+    status: activeSnapshots.length > 0 ? preferred.status : "idle" as const,
+    startedAt: started.length > 0 ? Math.min(...started) : null,
+    activeForMs: Math.max(...snapshots.map((item) => item.activeForMs)),
+    queueLength: snapshots.reduce((sum, item) => sum + item.queueLength, 0),
+    queuedOpCount: snapshots.reduce((sum, item) => sum + item.queuedOpCount, 0),
+    pendingSteerCount: snapshots.reduce((sum, item) => sum + item.pendingSteerCount, 0),
+  }
+}
+
+export function infoForExecution(sessionID: string, executionID: string) {
+  return runners.get(runnerKey(sessionID, executionID))?.snapshot() ?? null
 }
 
 export function snapshot() {
@@ -494,8 +725,10 @@ export function snapshot() {
 }
 
 export function isRunning(sessionID: string) {
-  const status = runners.get(sessionID)?.status()
-  return status === "running" || status === "cancelling"
+  return runnersForSession(sessionID).some((runner) => {
+    const status = runner.status()
+    return status === "running" || status === "cancelling"
+  })
 }
 
 export function subscribe(subscriber: (event: SessionRunnerEvent) => void) {

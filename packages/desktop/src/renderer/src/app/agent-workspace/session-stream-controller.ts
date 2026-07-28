@@ -150,6 +150,9 @@ export type SessionStreamReconnectReplayWindows = Record<string, SessionStreamRe
 type ExecutionModeEventPayload = {
   sessionID: string
   turnID: string
+  executionID?: string
+  targetKind?: "active-thread" | "detached-branch"
+  headMessageID?: string | null
   mode: AgentSessionExecutionMode
 }
 
@@ -429,12 +432,20 @@ function readExecutionModeEvent(streamEvent: { event: string; data: unknown }): 
 
   const sessionID = readString(data.sessionID)
   const turnID = readString(data.turnID)
+  const executionID = readString(data.executionID)
   const mode = data.mode
   if (!sessionID || !turnID || !isAgentSessionExecutionMode(mode)) return null
 
   return {
     sessionID,
     turnID,
+    ...(executionID ? { executionID } : {}),
+    ...(data.targetKind === "active-thread" || data.targetKind === "detached-branch"
+      ? { targetKind: data.targetKind }
+      : {}),
+    ...(typeof data.headMessageID === "string" || data.headMessageID === null
+      ? { headMessageID: data.headMessageID }
+      : {}),
     mode,
   }
 }
@@ -455,6 +466,17 @@ function readRuntimeStreamPayload(value: unknown) {
 function readRuntimeStreamType(streamEvent: { event: string; data: unknown }) {
   if (streamEvent.event !== "runtime") return undefined
   return readString(readRuntimeStreamEvent(streamEvent.data)?.type)
+}
+
+export function isDetachedBranchStreamEvent(
+  streamEvent: { event: string; data: unknown },
+) {
+  const runtimeEvent = readRuntimeStreamEvent(streamEvent.data)
+  if (!runtimeEvent) return false
+  if (readString(runtimeEvent.targetKind) === "detached-branch") return true
+  if (runtimeEvent.type !== "turn.started") return false
+  const payload = readRecord(runtimeEvent.payload)
+  return readString(payload?.targetKind) === "detached-branch"
 }
 
 export type LlmCallSegmentIdentity = {
@@ -1772,6 +1794,8 @@ export function useSessionStreamController({
   const externalTurnUserHistoryMergedRef = useRef<Set<string>>(new Set())
   const externalTurnHistoryRefreshInFlightRef = useRef<Set<string>>(new Set())
   const externalTurnHistoryLastAttemptAtRef = useRef<Record<string, number>>({})
+  const detachedBranchTurnIDsRef = useRef<Set<string>>(new Set())
+  const detachedMessageTreeRequestRef = useRef<Record<string, number>>({})
   const [backgroundObservedSessionIDs, setBackgroundObservedSessionIDs] = useState<string[]>([])
   const pendingConversationInputsBySessionRef = useRef(pendingConversationInputsBySession)
   pendingConversationInputsBySessionRef.current = pendingConversationInputsBySession
@@ -2856,13 +2880,21 @@ export function useSessionStreamController({
   }
 
   function handleRequestStreamEvent(streamEvent: AgentStreamIPCEvent) {
+    const executionMode = readExecutionModeEvent(streamEvent)
     const target = pendingStreamsRef.current[streamEvent.streamID]
-    if (!target) return
+    if (!target) {
+      if (executionMode?.targetKind === "detached-branch") {
+        const uiSessionID = resolveUISessionID(executionMode.sessionID)
+        if (uiSessionID) {
+          scheduleRuntimeDebugRefresh(uiSessionID, executionMode.sessionID)
+        }
+      }
+      return
+    }
 
     const backendSessionID = target.backendSessionID ?? resolveBackendSessionID(target.sessionID)
     clearSessionStreamReconnectReplayWindow(reconnectReplayWindowsRef.current, backendSessionID)
 
-    const executionMode = readExecutionModeEvent(streamEvent)
     if (executionMode) {
       applyExecutionModeToPendingRequest(streamEvent.streamID, executionMode)
       return
@@ -3041,6 +3073,68 @@ export function useSessionStreamController({
     }
   }
 
+  function handleDetachedBranchSessionStreamEvent(input: {
+    backendSessionID: string
+    backendTurnID: string
+    runtimeType: string | undefined
+    streamEvent: AgentSessionStreamIPCEvent
+    uiSessionID: string
+  }) {
+    const shouldRefreshTree = Boolean(
+      input.runtimeType && (
+        input.runtimeType === "message.recorded" ||
+        input.runtimeType === "message.removed" ||
+        input.runtimeType === "part.recorded" ||
+        input.runtimeType === "part.removed" ||
+        input.runtimeType === "text.part.completed" ||
+        input.runtimeType === "reasoning.part.completed" ||
+        input.runtimeType === "permission.requested" ||
+        input.runtimeType === "permission.resolved" ||
+        input.runtimeType === "source.recorded" ||
+        input.runtimeType === "file.generated" ||
+        input.runtimeType === "patch.generated" ||
+        input.runtimeType === "snapshot.captured" ||
+        input.runtimeType.startsWith("tool.call.") ||
+        isTerminalStreamEvent(input.streamEvent)
+      )
+    )
+
+    if (shouldRefreshTree) {
+      void refreshDetachedBranchMessageTree(
+        input.uiSessionID,
+        input.backendSessionID,
+      ).catch((error) => {
+        console.error("[desktop] detached branch message tree refresh failed:", error)
+      })
+    }
+
+    if (
+      input.runtimeType === "permission.requested" ||
+      input.runtimeType === "permission.resolved"
+    ) {
+      void loadPendingPermissionRequestsForSession(
+        input.uiSessionID,
+        input.backendSessionID,
+      ).catch((error) => {
+        console.error("[desktop] detached branch permission refresh failed:", error)
+      })
+    }
+
+    if (shouldRefreshRuntimeDebugForStreamEvent(input.streamEvent)) {
+      scheduleRuntimeDebugRefresh(input.uiSessionID, input.backendSessionID)
+    }
+
+    if (isTerminalStreamEvent(input.streamEvent)) {
+      const turnKey = `${input.backendSessionID}\u0000${input.backendTurnID}`
+      detachedBranchTurnIDsRef.current.delete(turnKey)
+      sessionEventRouterRef.current.markBackendTurnSettled(
+        input.backendSessionID,
+        input.backendTurnID,
+      )
+      refreshWorkspaceForSession(input.uiSessionID)
+    }
+  }
+
   function handleSessionStreamEvent(streamEvent: AgentSessionStreamIPCEvent) {
     const uiSessionID = resolveUISessionID(streamEvent.sessionID)
     if (!uiSessionID) return
@@ -3131,6 +3225,21 @@ export function useSessionStreamController({
           console.error("[desktop] session stream history refresh failed:", error)
         })
       }
+      return
+    }
+
+    const turnKey = `${streamEvent.sessionID}\u0000${backendTurnID}`
+    if (isDetachedBranchStreamEvent(streamEvent)) {
+      detachedBranchTurnIDsRef.current.add(turnKey)
+    }
+    if (detachedBranchTurnIDsRef.current.has(turnKey)) {
+      handleDetachedBranchSessionStreamEvent({
+        backendSessionID: streamEvent.sessionID,
+        backendTurnID,
+        runtimeType,
+        streamEvent,
+        uiSessionID,
+      })
       return
     }
 
@@ -3329,6 +3438,39 @@ export function useSessionStreamController({
       id: sessionEvent.id,
       event: sessionEvent.event,
       data: sessionEvent.data,
+    })
+  }
+
+  async function refreshDetachedBranchMessageTree(
+    sessionID: string,
+    backendSessionID = resolveBackendSessionID(sessionID),
+  ) {
+    const agentSession = getAgentSessionBridge()
+    if (!agentSession) return
+
+    const requestID = (detachedMessageTreeRequestRef.current[sessionID] ?? 0) + 1
+    detachedMessageTreeRequestRef.current[sessionID] = requestID
+    const [activeMessages, allMessages] = await Promise.all([
+      agentSession.loadHistory({ backendSessionID }),
+      agentSession.loadHistory({ backendSessionID, view: "all" }),
+    ])
+    if (detachedMessageTreeRequestRef.current[sessionID] !== requestID) return
+
+    const activeMessageID = activeMessages.at(-1)?.info.id ?? null
+    const nextMessageTree = buildSessionMessageTree(allMessages, activeMessageID)
+    startTransition(() => {
+      setMessageTreeBySession((current) => {
+        if (!nextMessageTree) {
+          if (!(sessionID in current)) return current
+          const next = { ...current }
+          delete next[sessionID]
+          return next
+        }
+        return {
+          ...current,
+          [sessionID]: nextMessageTree,
+        }
+      })
     })
   }
 

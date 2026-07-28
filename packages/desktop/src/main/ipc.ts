@@ -3299,6 +3299,7 @@ type SessionStreamSubscription = {
 
 type ActiveAgentSessionRequest = {
   backendSessionID: string
+  backendExecutionID?: string
   cancelRequested: boolean
   clientTurnID: string
   controller: AbortController
@@ -3379,14 +3380,21 @@ function abortActiveAgentSessionRequestsInMap(
 async function interruptAgentSessionBackendFirst(input: {
   backendSessionID: string
   clientTurnID?: string
+  backendExecutionID?: string
   webContentsID: number
-  requestBackendCancel: (backendSessionID: string) => Promise<AgentSessionBackendCancelResult>
+  requestBackendCancel: (
+    backendSessionID: string,
+    executionID?: string,
+  ) => Promise<AgentSessionBackendCancelResult>
 }): Promise<DesktopIpcOutput<"desktop:agent-session-interrupt">> {
   const backendSessionID = input.backendSessionID.trim()
   const clientTurnID = input.clientTurnID?.trim() || undefined
+  const backendExecutionID = input.backendExecutionID?.trim() || undefined
 
   try {
-    const result = await input.requestBackendCancel(backendSessionID)
+    const result = backendExecutionID
+      ? await input.requestBackendCancel(backendSessionID, backendExecutionID)
+      : await input.requestBackendCancel(backendSessionID)
 
     return {
       backendSessionID,
@@ -7130,9 +7138,20 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
 
   handleDesktopIpc(
     "desktop:agent-session-load-history",
-    async (_event, input: { backendSessionID: string; view?: "active" | "all" }) => {
+    async (_event, input: {
+      backendSessionID: string
+      view?: "active" | "all" | "branch"
+      headMessageID?: string
+    }) => {
       const sessionID = input.backendSessionID.trim()
-      const search = input.view === "all" ? "?view=all" : ""
+      const searchParams = new URLSearchParams()
+      if (input.view && input.view !== "active") {
+        searchParams.set("view", input.view)
+      }
+      if (input.view === "branch" && input.headMessageID?.trim()) {
+        searchParams.set("headMessageID", input.headMessageID.trim())
+      }
+      const search = searchParams.size > 0 ? `?${searchParams.toString()}` : ""
       const result = await requestAgentJSON<AgentSessionHistoryMessage[]>(
         `/api/sessions/${encodeURIComponent(sessionID)}/messages${search}`,
       )
@@ -7237,6 +7256,10 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
       text: input.text,
       displayText: input.displayText,
       parentMessageID: input.parentMessageID,
+      clientTurnID: input.clientTurnID,
+      executionID: input.executionID,
+      threadTarget: input.threadTarget,
+      quotes: input.quotes,
       attachments: input.attachments,
       questionAnswer: input.questionAnswer,
       concurrentInputMode: input.concurrentInputMode,
@@ -7258,6 +7281,10 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
     const backendSessionID = input.backendSessionID.trim()
     const request: ActiveAgentSessionRequest = {
       backendSessionID,
+      backendExecutionID:
+        input.threadTarget?.kind === "detached-branch"
+          ? input.executionID?.trim() || clientTurnID
+          : "active-thread",
       cancelRequested: false,
       clientTurnID,
       controller: new AbortController(),
@@ -7368,13 +7395,24 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
 
   async function interruptAgentSession(
     event: IpcMainInvokeEvent,
-    input: { backendSessionID: string; clientTurnID?: string; reason?: "user-interrupt" },
+    input: {
+      backendSessionID: string
+      clientTurnID?: string
+      executionID?: string
+      reason?: "user-interrupt"
+    },
   ): Promise<DesktopIpcOutput<"desktop:agent-session-interrupt">> {
+    const activeRequest = input.clientTurnID
+      ? activeAgentSessionRequests.get(
+          agentSessionRequestKey(event.sender.id, input.clientTurnID.trim()),
+        )
+      : undefined
     return interruptAgentSessionBackendFirst({
       backendSessionID: input.backendSessionID,
       clientTurnID: input.clientTurnID,
+      backendExecutionID: input.executionID?.trim() || activeRequest?.backendExecutionID,
       webContentsID: event.sender.id,
-      requestBackendCancel: async (backendSessionID) => {
+      requestBackendCancel: async (backendSessionID, executionID) => {
         const result = await requestAgentJSON<AgentSessionBackendCancelResult>(
           `/api/sessions/${encodeURIComponent(backendSessionID)}/cancel`,
           {
@@ -7385,6 +7423,7 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
             body: JSON.stringify({
               cancelQueued: true,
               reason: "user",
+              executionID,
             }),
           },
         )
@@ -7395,18 +7434,24 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
 
   handleDesktopIpc(
     "desktop:agent-session-interrupt",
-    async (event, input: { backendSessionID: string; clientTurnID?: string; reason?: "user-interrupt" }) =>
+    async (event, input: {
+      backendSessionID: string
+      clientTurnID?: string
+      executionID?: string
+      reason?: "user-interrupt"
+    }) =>
       interruptAgentSession(event, input),
   )
 
   handleDesktopIpc(
     "desktop:agent-session-cancel-turn",
-    async (event, input: { clientTurnID: string; backendSessionID: string }) => {
+    async (event, input: { clientTurnID: string; backendSessionID: string; executionID?: string }) => {
       const clientTurnID = input.clientTurnID.trim()
       const backendSessionID = input.backendSessionID.trim()
       const result = await interruptAgentSession(event, {
         backendSessionID,
         clientTurnID,
+        executionID: input.executionID,
         reason: "user-interrupt",
       })
 

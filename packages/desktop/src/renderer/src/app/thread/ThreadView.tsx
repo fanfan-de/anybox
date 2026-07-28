@@ -22,9 +22,14 @@ import {
   PaperclipIcon,
   PlusIcon,
   ResetIcon,
+  ForkIcon,
 } from "../icons"
 import { joinClassNames, writeTextToClipboard } from "../shared-ui"
-import { type SessionMessageBranchOption, type SessionMessageTree } from "../session-message-tree"
+import {
+  getSessionMessageIDForMessage,
+  type SessionMessageBranchOption,
+  type SessionMessageTree,
+} from "../session-message-tree"
 import {
   ThreadMarkdown,
   normalizeMarkdownLinkTarget,
@@ -98,12 +103,19 @@ import {
   type ThreadProjectionLayoutTransaction,
   type ThreadScrollSnapshot,
 } from "./use-thread-scroll-controller"
-import { buildThreadTurnNavigationItems, useThreadTurnNavigation, type ThreadTurnNavigationItem } from "./use-thread-turn-navigation"
+import {
+  buildThreadTurnNavigationItems,
+  findThreadMessageNavigationRowIndex,
+  useThreadTurnNavigation,
+  type ThreadTurnNavigationItem,
+} from "./use-thread-turn-navigation"
 import { useThreadVirtualList } from "./use-thread-virtual-list"
 
 export type { ThreadScrollSnapshot } from "./use-thread-scroll-controller"
 
 export interface ThreadNavigationRequest {
+  messageID?: string
+  paneID?: string
   requestID: number
   turnID?: string
 }
@@ -252,6 +264,7 @@ interface ThreadViewProps {
   onBranchSelect?: (messageID: string) => void | Promise<void>
   onFileChangeSelect?: (file: string) => void
   onForkFromMessage?: (messageID: string) => void | Promise<void>
+  onBranchChatFromSelection?: (input: { messageID: string; text: string }) => void | Promise<void>
   onArtifactLinkOpen?: (target: MarkdownArtifactLinkTarget) => void
   onLocalFileLinkOpen?: (target: MarkdownLocalFileLinkTarget) => void
   onMessageDiffSummaryHydrate?: (messageID: string, diffSummary: SessionDiffSummary) => void | Promise<void>
@@ -283,6 +296,7 @@ type ThreadViewActionPropName =
   | "onBranchSelect"
   | "onFileChangeSelect"
   | "onForkFromMessage"
+  | "onBranchChatFromSelection"
   | "onArtifactLinkOpen"
   | "onLocalFileLinkOpen"
   | "onMessageDiffSummaryHydrate"
@@ -300,6 +314,7 @@ interface ThreadViewActions {
   onBranchSelect: NonNullable<ThreadViewProps["onBranchSelect"]>
   onFileChangeSelect: NonNullable<ThreadViewProps["onFileChangeSelect"]>
   onForkFromMessage: NonNullable<ThreadViewProps["onForkFromMessage"]>
+  onBranchChatFromSelection: NonNullable<ThreadViewProps["onBranchChatFromSelection"]>
   onArtifactLinkOpen: NonNullable<ThreadViewProps["onArtifactLinkOpen"]>
   onLocalFileLinkOpen: NonNullable<ThreadViewProps["onLocalFileLinkOpen"]>
   onMessageDiffSummaryHydrate: NonNullable<ThreadViewProps["onMessageDiffSummaryHydrate"]>
@@ -316,6 +331,7 @@ interface ThreadViewActionCapabilities {
   canSelectBranch: boolean
   canSelectFileChange: boolean
   canForkFromMessage: boolean
+  canBranchChatFromSelection: boolean
   canOpenArtifactLink: boolean
   canOpenLocalFileLink: boolean
   canHydrateMessageDiffSummary: boolean
@@ -349,6 +365,9 @@ function useThreadViewActions(source: ThreadViewActionSource) {
     },
     onForkFromMessage(messageID) {
       return committedSourceRef.current.onForkFromMessage?.(messageID)
+    },
+    onBranchChatFromSelection(input) {
+      return committedSourceRef.current.onBranchChatFromSelection?.(input)
     },
     onArtifactLinkOpen(target) {
       return committedSourceRef.current.onArtifactLinkOpen?.(target)
@@ -606,15 +625,40 @@ function selectionIntersectsThreadElement(selection: Selection, element: HTMLEle
   return false
 }
 
+function readOwnedAssistantResponseMessageID(threadColumn: HTMLDivElement, node: Node | null) {
+  const element = node instanceof Element ? node : node?.parentElement
+  const row = element?.closest<HTMLElement>(
+    '[data-thread-row-kind="assistant-response-row"][data-thread-message-id]',
+  ) ?? null
+  if (!row || row.closest(".thread-column") !== threadColumn) return null
+  return row.dataset.threadMessageId?.trim() || null
+}
+
 function readSelectedThreadText(threadColumn: HTMLDivElement) {
-  if (typeof window === "undefined") return ""
+  if (typeof window === "undefined") return null
 
   const selection = window.getSelection()
   const selectedText = selection?.toString().trim() ?? ""
-  if (!selection || selection.isCollapsed || !selectedText) return ""
-  if (!selectionIntersectsThreadElement(selection, threadColumn)) return ""
+  if (!selection || selection.isCollapsed || !selectedText) return null
+  if (!selectionIntersectsThreadElement(selection, threadColumn)) return null
 
-  return selectedText
+  let messageID: string | null = null
+  for (let index = 0; index < selection.rangeCount; index += 1) {
+    const range = selection.getRangeAt(index)
+    const startMessageID = readOwnedAssistantResponseMessageID(threadColumn, range.startContainer)
+    const endMessageID = readOwnedAssistantResponseMessageID(threadColumn, range.endContainer)
+    if (!startMessageID || startMessageID !== endMessageID) {
+      messageID = null
+      break
+    }
+    if (messageID && messageID !== startMessageID) {
+      messageID = null
+      break
+    }
+    messageID = startMessageID
+  }
+
+  return { messageID, text: selectedText }
 }
 
 function getThreadContextMenuEventPath(event: ReactMouseEvent<HTMLElement>) {
@@ -880,10 +924,12 @@ function UserBubbleAttachmentItem({ attachment }: { attachment: UserThreadMessag
 }
 
 function UserThreadMessageBubble({ message }: { message: UserThreadMessage }) {
+  const { t } = useI18n()
   const displayText = message.displayText?.trim() || ""
   const references = message.references ?? []
   const attachments = message.attachments ?? []
-  const hasStructuredContent = Boolean(displayText) || references.length > 0 || attachments.length > 0
+  const messageQuotes = message.messageQuotes ?? []
+  const hasStructuredContent = Boolean(displayText) || references.length > 0 || attachments.length > 0 || messageQuotes.length > 0
   const bodyText = getUserMessageBodyText(message)
   const steerNote = message.submissionMode === "steer"
     ? (
@@ -905,7 +951,23 @@ function UserThreadMessageBubble({ message }: { message: UserThreadMessage }) {
   return (
     <div className="user-bubble">
       <div className="user-bubble-content">
-        <CollapsibleUserMessageText references={references} text={bodyText} />
+        {messageQuotes.length > 0 ? (
+          <div className="user-bubble-message-quotes" aria-label={t("branchChat.quote.region")}>
+            {messageQuotes.map((quote, index) => (
+              <blockquote
+                key={`${quote.sourceMessageID}:${index}`}
+                className="user-bubble-message-quote"
+                data-source-message-id={quote.sourceMessageID}
+              >
+                <span className="user-bubble-message-quote-label">{t("branchChat.quote.label")}</span>
+                <span className="user-bubble-message-quote-text">{quote.text}</span>
+              </blockquote>
+            ))}
+          </div>
+        ) : null}
+        {displayText || references.length > 0 || messageQuotes.length === 0 ? (
+          <CollapsibleUserMessageText references={references} text={bodyText} />
+        ) : null}
         {steerNote}
 
         {attachments.length > 0 ? (
@@ -921,6 +983,21 @@ function UserThreadMessageBubble({ message }: { message: UserThreadMessage }) {
       </div>
     </div>
   )
+}
+
+function getUserMessageCopyText(message: UserThreadMessage) {
+  const messageQuotes = message.messageQuotes ?? []
+  const bodyText = getUserMessageBodyText(message).trim()
+  const isQuoteOnlyFallback =
+    messageQuotes.length > 0 &&
+    !message.displayText?.trim() &&
+    (message.references?.length ?? 0) === 0 &&
+    bodyText === "Sent a non-text message."
+
+  return [
+    ...messageQuotes.map((quote) => quote.text.trim()).filter(Boolean),
+    isQuoteOnlyFallback ? "" : bodyText,
+  ].filter(Boolean).join("\n\n")
 }
 
 const UserThreadMessageArticle = memo(function UserThreadMessageArticle({
@@ -940,7 +1017,7 @@ const UserThreadMessageArticle = memo(function UserThreadMessageArticle({
   message: UserThreadMessage
   rowKind?: string
 }) {
-  const userCopyText = getUserMessageBodyText(message).trim()
+  const userCopyText = getUserMessageCopyText(message)
 
   return (
     <article
@@ -4843,6 +4920,8 @@ function getThreadViewPropsChangeReason(left: ThreadViewViewportProps, right: Th
   if (left.threadColumnRef !== right.threadColumnRef) return "threadColumnRef"
   if (left.isThreadVisible !== right.isThreadVisible) return "isThreadVisible"
   if (left.navigationRequest?.requestID !== right.navigationRequest?.requestID) return "navigationRequest"
+  if (left.navigationRequest?.messageID !== right.navigationRequest?.messageID) return "navigationRequest"
+  if (left.navigationRequest?.paneID !== right.navigationRequest?.paneID) return "navigationRequest"
   if (left.navigationRequest?.turnID !== right.navigationRequest?.turnID) return "navigationRequest"
   if (left.virtualMeasurementKey !== right.virtualMeasurementKey) return "virtualMeasurementKey"
   if (left.readScrollSnapshot !== right.readScrollSnapshot) return "readScrollSnapshot"
@@ -4881,6 +4960,7 @@ export function ThreadView(props: ThreadViewProps) {
   const canSelectBranch = Boolean(props.onBranchSelect)
   const canSelectFileChange = Boolean(props.onFileChangeSelect)
   const canForkFromMessage = Boolean(props.onForkFromMessage)
+  const canBranchChatFromSelection = Boolean(props.onBranchChatFromSelection)
   const canOpenArtifactLink = Boolean(props.onArtifactLinkOpen)
   const canOpenLocalFileLink = Boolean(props.onLocalFileLinkOpen)
   const canHydrateMessageDiffSummary = Boolean(props.onMessageDiffSummaryHydrate)
@@ -4890,6 +4970,7 @@ export function ThreadView(props: ThreadViewProps) {
   const canAddImageToComposer = Boolean(props.onAddImageToComposer)
   const canConfirmProposedPlan = Boolean(props.onProposedPlanConfirm)
   const actionCapabilities = useMemo<ThreadViewActionCapabilities>(() => ({
+    canBranchChatFromSelection,
     canSelectBranch,
     canSelectFileChange,
     canForkFromMessage,
@@ -4902,6 +4983,7 @@ export function ThreadView(props: ThreadViewProps) {
     canAddImageToComposer,
     canConfirmProposedPlan,
   }), [
+    canBranchChatFromSelection,
     canAddImageToComposer,
     canAddToComposer,
     canConfirmProposedPlan,
@@ -4961,12 +5043,16 @@ function VisibleThreadView({
   saveScrollSnapshot,
   showTurnNavigator = true,
 }: ThreadViewViewportProps) {
+  const { t } = useI18n()
   const threadLinkRouting = useThreadLinkRouting()
   const activeSessionID = activeSession?.id ?? null
   const effectiveScrollStateKey = scrollStateKey ?? activeSessionID ?? "thread:no-session"
   const onBranchSelect = actionCapabilities.canSelectBranch ? actions.onBranchSelect : undefined
   const onFileChangeSelect = actionCapabilities.canSelectFileChange ? actions.onFileChangeSelect : undefined
   const onForkFromMessage = actionCapabilities.canForkFromMessage ? actions.onForkFromMessage : undefined
+  const onBranchChatFromSelection = actionCapabilities.canBranchChatFromSelection
+    ? actions.onBranchChatFromSelection
+    : undefined
   const onArtifactLinkOpen = actionCapabilities.canOpenArtifactLink ? actions.onArtifactLinkOpen : undefined
   const onLocalFileLinkOpen = actionCapabilities.canOpenLocalFileLink ? actions.onLocalFileLinkOpen : undefined
   const onMessageDiffSummaryHydrate = actionCapabilities.canHydrateMessageDiffSummary
@@ -5138,10 +5224,10 @@ function VisibleThreadView({
       if (row.kind === "assistant-actions" && row.responseCopyText) {
         assistant.set(row.ownerMessageID, row.responseCopyText)
       } else if (row.kind === "user-message") {
-        const text = getUserMessageBodyText(row.message).trim()
+        const text = getUserMessageCopyText(row.message)
         if (text) user.set(row.message.id, text)
       } else if (row.kind === "assistant-inserted-user-message") {
-        const text = getUserMessageBodyText(row.insertedMessage).trim()
+        const text = getUserMessageCopyText(row.insertedMessage)
         if (text) user.set(row.insertedMessage.id, text)
       }
     }
@@ -5405,7 +5491,24 @@ function VisibleThreadView({
 
   useLayoutEffect(() => {
     if (!navigationRequest || handledNavigationRequestIDRef.current === navigationRequest.requestID) return
-    if (!isThreadVisible || threadTurnNavigationItems.length === 0) return
+    if (!isThreadVisible) return
+
+    if (navigationRequest.messageID) {
+      const requestedRowIndex = findThreadMessageNavigationRowIndex(
+        displayRows,
+        navigationRequest.messageID,
+      )
+      if (requestedRowIndex < 0) return
+
+      const offset = getThreadVirtualOffsetForRowIndex(requestedRowIndex, 16)
+      if (offset === null) return
+
+      navigateThreadToOffset(offset, effectiveScrollStateKey)
+      handledNavigationRequestIDRef.current = navigationRequest.requestID
+      return
+    }
+
+    if (threadTurnNavigationItems.length === 0) return
 
     const requestedItem = threadTurnNavigationItems.find((item) => item.turnID === navigationRequest.turnID)
     const targetItem = requestedItem ?? threadTurnNavigationItems.at(-1)
@@ -5419,6 +5522,7 @@ function VisibleThreadView({
       handledNavigationRequestIDRef.current = navigationRequest.requestID
     }
   }, [
+    displayRows,
     effectiveScrollStateKey,
     getThreadVirtualOffsetForRowIndex,
     isThreadVisible,
@@ -5598,7 +5702,22 @@ function VisibleThreadView({
     }
 
     const selectedText = readSelectedThreadText(threadColumn)
-    const position = getThreadCopyContextMenuCoordinates(event)
+    const selectedResponseMessageID = selectedText?.messageID
+      ? (() => {
+          const selectedMessage = displayMessages.find(
+            (message) => message.kind === "assistant" && message.id === selectedText.messageID,
+          )
+          if (selectedMessage?.kind !== "assistant") return null
+          const persistedMessageID = getSessionMessageIDForMessage(selectedMessage)
+          return messageTree?.nodesByID[persistedMessageID]?.isCompletedResponse
+            ? persistedMessageID
+            : null
+        })()
+      : null
+    const position = getThreadCopyContextMenuCoordinates(
+      event,
+      selectedResponseMessageID && onBranchChatFromSelection ? 124 : THREAD_TEXT_CONTEXT_MENU_HEIGHT,
+    )
 
     if (selectedText) {
       event.preventDefault()
@@ -5606,8 +5725,8 @@ function VisibleThreadView({
       setThreadCopyContextMenu({
         target: "text",
         kind: "selection",
-        messageID: null,
-        text: selectedText,
+        messageID: selectedResponseMessageID,
+        text: selectedText.text,
         ...position,
       })
       return
@@ -5698,6 +5817,15 @@ function VisibleThreadView({
     }
 
     await onAddToComposer?.(menu.text)
+  }
+
+  function handleThreadCopyContextMenuBranchChat(menu: ThreadTextCopyContextMenuState) {
+    setThreadCopyContextMenu(null)
+    if (menu.kind !== "selection" || !menu.messageID) return
+    void onBranchChatFromSelection?.({
+      messageID: menu.messageID,
+      text: menu.text,
+    })
   }
 
   async function handleThreadCopyContextMenuSaveImage(menu: ThreadImageCopyContextMenuState) {
@@ -6039,6 +6167,22 @@ function VisibleThreadView({
                     <PlusIcon />
                   </span>
                   <span className="thread-copy-context-menu-label">加入 Composer</span>
+                </button>
+              ) : null}
+              {threadCopyContextMenu.target === "text" &&
+              threadCopyContextMenu.kind === "selection" &&
+              threadCopyContextMenu.messageID &&
+              onBranchChatFromSelection ? (
+                <button
+                  className="thread-copy-context-menu-item"
+                  type="button"
+                  role="menuitem"
+                  onClick={() => handleThreadCopyContextMenuBranchChat(threadCopyContextMenu)}
+                >
+                  <span className="thread-copy-context-menu-icon" aria-hidden="true">
+                    <ForkIcon />
+                  </span>
+                  <span className="thread-copy-context-menu-label">{t("branchChat.name")}</span>
                 </button>
               ) : null}
               {threadCopyContextMenu.target === "image" && onAddImageToComposer ? (

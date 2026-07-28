@@ -159,6 +159,156 @@ describe("session runner", () => {
     ])
   })
 
+  it("resynchronizes an idle active execution after the active branch changes", async () => {
+    const sessionID = testSessionID()
+    const directory = testDirectory()
+    const observedHeads: Array<string | null> = []
+
+    const first = SessionRunner.enqueuePrompt({
+      sessionID,
+      directory,
+      executionID: "active-thread",
+      targetKind: "active-thread",
+      initialHeadMessageID: "old-active-head",
+      type: "prompt",
+      execute: async (runtime) => {
+        observedHeads.push(runtime.headMessageID())
+        runtime.updateHeadMessageID("first-response")
+      },
+    })
+    await first.promise
+    await SessionRunner.waitForIdle(sessionID)
+
+    const second = SessionRunner.enqueuePrompt({
+      sessionID,
+      directory,
+      executionID: "active-thread",
+      targetKind: "active-thread",
+      initialHeadMessageID: "switched-active-head",
+      type: "prompt",
+      execute: async (runtime) => {
+        observedHeads.push(runtime.headMessageID())
+      },
+    })
+    await second.promise
+    await SessionRunner.waitForIdle(sessionID)
+
+    expect(observedHeads).toEqual(["old-active-head", "switched-active-head"])
+  })
+
+  it("runs detached executions for the same session concurrently and cancels one precisely", async () => {
+    const sessionID = testSessionID()
+    const directory = testDirectory()
+    const firstStarted = deferred<SessionRunner.PromptRuntime>()
+    const secondStarted = deferred<SessionRunner.PromptRuntime>()
+    const firstAborted = deferred()
+    const releaseBoth = deferred()
+    let secondWasAborted = false
+
+    const first = SessionRunner.enqueuePrompt({
+      sessionID,
+      directory,
+      executionID: "branch-one",
+      targetKind: "detached-branch",
+      initialHeadMessageID: "anchor-one",
+      type: "prompt",
+      execute: async (runtime) => {
+        firstStarted.resolve(runtime)
+        runtime.abort.addEventListener("abort", () => firstAborted.resolve(), { once: true })
+        await releaseBoth.promise
+        return "first"
+      },
+    })
+    const second = SessionRunner.enqueuePrompt({
+      sessionID,
+      directory,
+      executionID: "branch-two",
+      targetKind: "detached-branch",
+      initialHeadMessageID: "anchor-two",
+      type: "prompt",
+      execute: async (runtime) => {
+        secondStarted.resolve(runtime)
+        runtime.abort.addEventListener("abort", () => {
+          secondWasAborted = true
+        }, { once: true })
+        await releaseBoth.promise
+        return "second"
+      },
+    })
+
+    const [firstRuntime, secondRuntime] = await Promise.all([firstStarted.promise, secondStarted.promise])
+    expect(first.mode).toBe("new-turn")
+    expect(second.mode).toBe("new-turn")
+    expect(firstRuntime.headMessageID()).toBe("anchor-one")
+    expect(secondRuntime.headMessageID()).toBe("anchor-two")
+    expect(SessionRunner.snapshot().filter((item) => item.sessionID === sessionID)).toHaveLength(2)
+
+    expect(SessionRunner.cancelExecution(sessionID, "branch-one")).toMatchObject({
+      executionID: "branch-one",
+      activeCancelled: true,
+      cancelled: true,
+    })
+    await firstAborted.promise
+    expect(secondWasAborted).toBe(false)
+    expect(SessionRunner.infoForExecution(sessionID, "branch-two")?.status).toBe("running")
+
+    releaseBoth.resolve()
+    await expect(first.promise).resolves.toBe("first")
+    await expect(second.promise).resolves.toBe("second")
+    await SessionRunner.waitForIdle(sessionID)
+  })
+
+  it("queues a detached execution until global running capacity becomes available", async () => {
+    await withEnv("ANYBOX_SESSION_MAX_RUNNING", "1", async () => {
+      const sessionID = testSessionID()
+      const directory = testDirectory()
+      const mainStarted = deferred()
+      const releaseMain = deferred()
+      const branchStarted = deferred<SessionRunner.PromptRuntime>()
+
+      const main = SessionRunner.enqueuePrompt({
+        sessionID,
+        directory,
+        executionID: "active-thread",
+        targetKind: "active-thread",
+        initialHeadMessageID: "main-head",
+        type: "prompt",
+        execute: async () => {
+          mainStarted.resolve()
+          await releaseMain.promise
+          return "main"
+        },
+      })
+      await mainStarted.promise
+
+      const branch = SessionRunner.enqueuePrompt({
+        sessionID,
+        directory,
+        executionID: "capacity-queued-branch",
+        targetKind: "detached-branch",
+        initialHeadMessageID: "branch-anchor",
+        type: "prompt",
+        execute: async (runtime) => {
+          branchStarted.resolve(runtime)
+          return "branch"
+        },
+      })
+
+      expect(branch.mode).toBe("queued")
+      expect(SessionRunner.infoForExecution(sessionID, "capacity-queued-branch")).toMatchObject({
+        headMessageID: "branch-anchor",
+        queueLength: 1,
+      })
+
+      releaseMain.resolve()
+      await expect(main.promise).resolves.toBe("main")
+      const branchRuntime = await branchStarted.promise
+      expect(branchRuntime.headMessageID()).toBe("branch-anchor")
+      await expect(branch.promise).resolves.toBe("branch")
+      await SessionRunner.waitForIdle(sessionID)
+    })
+  })
+
   it("waits for idle with a promise instead of polling callers", async () => {
     const sessionID = testSessionID()
     const directory = testDirectory()

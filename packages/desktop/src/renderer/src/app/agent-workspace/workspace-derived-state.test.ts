@@ -13,10 +13,89 @@ import {
   buildWorkspaceDerivedState,
   createCreateSessionWorkbenchTab,
   createSessionWorkbenchTab,
+  filterPermissionRequestsForThread,
   getWorkbenchTabKey,
   resolveCreateSessionWorkspaceID,
   workbenchPublishSnapshotsAreEqual,
 } from "./workspace-derived-state"
+
+describe("thread permission routing", () => {
+  it("keeps detached branch permission requests out of the main ThreadView", () => {
+    const requests = [
+      { id: "permission-main", turnID: "turn-main" },
+      { id: "permission-branch", turnID: "turn-branch" },
+      { id: "permission-legacy" },
+    ] as any[]
+    const messages = [
+      {
+        id: "assistant-main",
+        kind: "assistant",
+        backendTurnID: "turn-main",
+      },
+    ] as any[]
+
+    expect(filterPermissionRequestsForThread(requests, messages).map((request) => request.id)).toEqual([
+      "permission-main",
+      "permission-legacy",
+    ])
+  })
+})
+
+describe("thread execution routing", () => {
+  it("restores main interruptibility from the active-thread execution only", () => {
+    const session = createSession("session-runtime", "Runtime")
+    const workspace = createWorkspace("workspace-runtime", [session])
+    const layout = createDockviewLayoutFromPanes([
+      createWorkbenchPane([createSessionWorkbenchTab(session.id)], "pane-runtime"),
+    ])
+    const execution = {
+      sessionID: session.id,
+      executionID: "active-thread",
+      targetKind: "active-thread",
+      headMessageID: null,
+      status: "running",
+      startedAt: 1,
+      activeForMs: 1,
+      activeTurnID: "turn-main",
+      queueLength: 0,
+      queuedOpCount: 0,
+      pendingSteerCount: 0,
+    }
+
+    const main = buildDerivedState({
+      dockviewLayout: layout,
+      selectedFolderID: workspace.id,
+      sessionRuntimeDebugBySession: {
+        [session.id]: {
+          status: { type: "busy" },
+          activeTurnID: "turn-main",
+          executions: [execution],
+        } as any,
+      },
+      workspaces: [workspace],
+    })
+    const detachedOnly = buildDerivedState({
+      dockviewLayout: layout,
+      selectedFolderID: workspace.id,
+      sessionRuntimeDebugBySession: {
+        [session.id]: {
+          status: { type: "busy" },
+          activeTurnID: "turn-branch",
+          executions: [{
+            ...execution,
+            executionID: "branch-execution",
+            targetKind: "detached-branch",
+            activeTurnID: "turn-branch",
+          }],
+        } as any,
+      },
+      workspaces: [workspace],
+    })
+
+    expect(main.isInterruptible).toBe(true)
+    expect(detachedOnly.isInterruptible).toBe(false)
+  })
+})
 
 function createWorkbenchPane(tabs: WorkbenchTabReference[], id: string, activeTabIndex = 0) {
   return { activeTabIndex, id, tabs }

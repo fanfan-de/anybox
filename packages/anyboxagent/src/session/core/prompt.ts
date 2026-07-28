@@ -3,7 +3,6 @@ import * as Log from "#util/log.ts";
 import z from "zod";
 import * as Identifier from "#id/id.ts";
 import { fn } from "#util/fn.ts";
-import * as Status from "#session/runtime/status.ts";
 import * as Session from "#session/core/session.ts";
 import * as Processor from "#session/core/processor.ts";
 import * as ModelRegistry from "#model/registry.ts"
@@ -63,6 +62,18 @@ export function state() {
 export const PromptInput = z.object({
     sessionID: Identifier.schema("session"),
     parentMessageID: Identifier.schema("message").nullable().optional(),
+    clientTurnID: z.string().min(1).optional(),
+    executionID: z.string().min(1).optional(),
+    threadTarget: z.discriminatedUnion("kind", [
+        z.object({
+            kind: z.literal("active-thread"),
+            parentMessageID: Identifier.schema("message").nullable().optional(),
+        }),
+        z.object({
+            kind: z.literal("detached-branch"),
+            parentMessageID: Identifier.schema("message"),
+        }),
+    ]).optional(),
     model: z
         .object({
             providerID: z.string(),
@@ -90,6 +101,16 @@ export const PromptInput = z.object({
                 })
                 .meta({
                     ref: "TextPartInput",
+                }),
+            Message.MessageQuotePart.omit({
+                messageID: true,
+                sessionID: true,
+            })
+                .partial({
+                    id: true,
+                })
+                .meta({
+                    ref: "MessageQuotePartInput",
                 }),
             Message.FilePart.omit({
                 messageID: true,
@@ -136,6 +157,26 @@ export const PromptInput = z.object({
 });
 export type PromptInput = z.infer<typeof PromptInput>;
 
+type NormalizedThreadTarget =
+    | {
+        kind: "active-thread"
+        parentMessageID?: string | null
+    }
+    | {
+        kind: "detached-branch"
+        parentMessageID: string
+    }
+
+function normalizeThreadTarget(input: PromptInput): NormalizedThreadTarget {
+    if (input.threadTarget) return input.threadTarget
+    return {
+        kind: "active-thread",
+        ...(Object.prototype.hasOwnProperty.call(input, "parentMessageID")
+            ? { parentMessageID: input.parentMessageID }
+            : {}),
+    }
+}
+
 async function persistMessageRecord(
     message: Message.MessageInfo,
     turn?: Orchestrator.TurnContext,
@@ -147,7 +188,7 @@ async function persistMessageRecord(
         return
     }
 
-    await Session.recordMessage(message)
+    await Session.recordActiveMessage(message)
 }
 
 async function persistRecoveredToolError(
@@ -430,7 +471,13 @@ function reconcileInterruptedTurn(
 ) {
     const current = Session.DataBaseRead("turns", turn.id) as Session.TurnInfo | null
     if (!current || current.status !== "running") return false
-    if (Orchestrator.activeTurn(current.sessionID) || RunningState.info(current.sessionID)) return false
+    const execution = current.executionID
+        ? SessionRunner.infoForExecution(current.sessionID, current.executionID)
+        : null
+    if (
+        Orchestrator.activeTurn(current.sessionID, current.id) ||
+        execution?.activeTurnID === current.id
+    ) return false
 
     const endedAt = Date.now()
     const detail = options?.detail ?? INTERRUPTED_TURN_DETAIL
@@ -562,8 +609,8 @@ function finishPromptTurnFromResult(
 }
 
 export function cancelSession(sessionID: string, options?: { cancelQueued?: boolean; reason?: RuntimeEvent.RuntimeEventPayloadByType["turn.cancelled"]["reason"] }) {
-    const turn = Orchestrator.activeTurn(sessionID)
-    if (turn) {
+    const activeTurns = Orchestrator.activeTurnsForSession(sessionID)
+    for (const turn of activeTurns) {
         Session.updateTurn(turn.turnID, {
             status: "cancelled",
             phase: "cancelled",
@@ -585,7 +632,7 @@ export function cancelSession(sessionID: string, options?: { cancelQueued?: bool
         })
     }
     let interruptedTurnCancelled = false
-    if (!turn && !result.cancelled) {
+    if (activeTurns.length === 0 && !result.cancelled) {
         for (const candidate of Session.listTurns(sessionID)) {
             if (candidate.status !== "running") continue
             interruptedTurnCancelled = reconcileInterruptedTurn(candidate, {
@@ -598,6 +645,37 @@ export function cancelSession(sessionID: string, options?: { cancelQueued?: bool
         ...result,
         cancelled: result.cancelled || interruptedTurnCancelled,
     }
+}
+
+export function cancelExecution(
+    sessionID: string,
+    executionID: string,
+    options?: {
+        cancelQueued?: boolean
+        reason?: RuntimeEvent.RuntimeEventPayloadByType["turn.cancelled"]["reason"]
+    },
+) {
+    const activeTurns = Orchestrator.activeTurnsForSession(sessionID)
+        .filter((turn) => turn.executionID === executionID)
+    for (const turn of activeTurns) {
+        Session.updateTurn(turn.turnID, {
+            status: "cancelled",
+            phase: "cancelled",
+            error: "Prompt cancellation requested.",
+        })
+        emitTurnCancellationRequested({ turn })
+    }
+    const result = RunningState.cancelExecution(sessionID, executionID, {
+        cancelQueued: options?.cancelQueued,
+    })
+    for (const turnID of result.queuedCancelledTurnIDs) {
+        emitQueuedTurnCancelled({
+            sessionID,
+            turnID,
+            reason: options?.reason ?? "user",
+        })
+    }
+    return result
 }
 
 export function cancel(sessionID: string) {
@@ -653,9 +731,17 @@ async function runLoop(input: LoopRuntimeInput): Promise<RunLoopResult> {
         while (true) {
             if (abort.aborted) throw new Error("Prompt aborted");
 
-            Status.set(sessionID, { type: "busy" });
             // 每轮从数据库重建历史，确保工具结果、恢复补写、diff part 都进入上下文。
-            const messages = loadMessagesWithParts(sessionID);
+            log.debug("rebuilding prompt execution context", {
+                sessionID,
+                clientTurnID: input.clientTurnID,
+                turnID: turn.turnID,
+                executionID: turn.executionID,
+                targetKind: turn.targetKind,
+                initialParentMessageID: turn.initialParentMessageID,
+                currentExecutionHead: input.headMessageID(),
+            })
+            const messages = loadMessagesWithParts(sessionID, input.headMessageID());
 
             let lastUser: Message.User | undefined;
             let lastAssistant: Message.Assistant | undefined;
@@ -795,6 +881,7 @@ async function runLoop(input: LoopRuntimeInput): Promise<RunLoopResult> {
                 tools: toolPlan.visibleTools,
                 recordCompactionMessage: async ({ message, parts }) => {
                     await persistMessageRecord(message, turn)
+                    input.updateHeadMessageID(message.id)
                     for (const part of parts) {
                         if (turn) {
                             turn.emit("part.recorded", { part })
@@ -806,7 +893,7 @@ async function runLoop(input: LoopRuntimeInput): Promise<RunLoopResult> {
             })
             throwIfAborted(abort)
 
-            const assistantParentMessageID = Session.getActiveMessageID(sessionID) ?? lastUser.id
+            const assistantParentMessageID = input.headMessageID() ?? lastUser.id
             const assistantMessage = createAssistantMessage(
                 sessionID,
                 lastUser,
@@ -818,6 +905,7 @@ async function runLoop(input: LoopRuntimeInput): Promise<RunLoopResult> {
             );
             currentAssistant = assistantMessage;
             await persistMessageRecord(assistantMessage, turn);
+            input.updateHeadMessageID(assistantMessage.id)
             Session.updateTurn(turn.turnID, {
                 phase: "waiting_llm",
                 lastMessageID: assistantMessage.id,
@@ -1029,9 +1117,23 @@ function createPromptExecutionHandle(input: PromptInput) {
     if (!session) {
         throw new Error(`Session '${input.sessionID}' was not found.`);
     }
+    const target = normalizeThreadTarget(input)
+    const hasExplicitParent = Object.prototype.hasOwnProperty.call(target, "parentMessageID")
+    const initialHeadMessageID = hasExplicitParent
+        ? resolveUserParentMessageID({
+            ...input,
+            parentMessageID: target.parentMessageID,
+        }, session)
+        : session.activeMessageID ?? null
 
     return SessionRunner.enqueuePrompt({
         sessionID: input.sessionID,
+        executionID:
+            target.kind === "detached-branch"
+                ? input.executionID ?? input.clientTurnID
+                : "active-thread",
+        targetKind: target.kind,
+        initialHeadMessageID,
         directory: session.directory,
         type: "prompt",
         execute: (runtime) => runPromptOperation(input, runtime),
@@ -1046,13 +1148,34 @@ export const prompt = fn(PromptInput, async (input) => createPromptExecutionHand
 // 新用户输入的真实执行：先记录 user message / parts，再启动 runLoop。
 async function runPromptOperation(input: PromptInput, runtime: SessionRunner.PromptRuntime) {
     throwIfAborted(runtime.abort)
-    const existingMessages = loadMessagesWithParts(input.sessionID)
     const session = Session.DataBaseRead("sessions", input.sessionID) as Session.SessionInfo | null;
     if (!session) {
         throw new Error(`Session '${input.sessionID}' was not found.`);
     }
+    const target = normalizeThreadTarget(input)
+    const parentMessageID =
+        target.kind === "detached-branch"
+            ? runtime.headMessageID() ?? target.parentMessageID
+            : target.parentMessageID
+    const existingMessages =
+        parentMessageID === null
+            ? []
+            : parentMessageID
+                ? loadMessagesWithParts(input.sessionID, parentMessageID)
+                : loadMessagesWithParts(input.sessionID)
+
+    log.info("starting prompt execution", {
+        sessionID: input.sessionID,
+        clientTurnID: input.clientTurnID,
+        turnID: runtime.turnID,
+        executionID: runtime.executionID,
+        targetKind: target.kind,
+        parentMessageID,
+        currentExecutionHead: runtime.headMessageID(),
+    })
 
     const shouldAutoGenerateTitle =
+        target.kind === "active-thread" &&
         Session.isDefaultSessionTitle(session.title) &&
         existingMessages.length === 0
     const agentName = resolveUserMessageAgentName(input.agent)
@@ -1064,6 +1187,11 @@ async function runPromptOperation(input: PromptInput, runtime: SessionRunner.Pro
     throwIfAborted(runtime.abort)
     const nextInput: PromptInput = {
         ...input,
+        parentMessageID,
+        threadTarget: {
+            kind: target.kind,
+            ...(parentMessageID !== undefined ? { parentMessageID } : {}),
+        } as PromptInput["threadTarget"],
         agent: agentName,
         skills: await Skill.resolveTurnSkillIDs({
             projectID: session.projectID,
@@ -1092,7 +1220,6 @@ async function runPromptOperation(input: PromptInput, runtime: SessionRunner.Pro
             })
         }
     } catch (error) {
-        Status.set(input.sessionID, { type: "idle" });
         throw error;
     }
 
@@ -1101,6 +1228,9 @@ async function runPromptOperation(input: PromptInput, runtime: SessionRunner.Pro
         turn = Orchestrator.startTurn({
             sessionID: input.sessionID,
             turnID: runtime.turnID,
+            executionID: runtime.executionID,
+            targetKind: target.kind,
+            initialParentMessageID: userMessage.messageinfo.parentMessageID,
             userMessageID: userMessage.messageinfo.id,
             agent: userMessage.messageinfo.agent,
             model: userMessage.messageinfo.model,
@@ -1112,6 +1242,9 @@ async function runPromptOperation(input: PromptInput, runtime: SessionRunner.Pro
             userMessageID: userMessage.messageinfo.id,
             agent: userMessage.messageinfo.agent,
             model: userMessage.messageinfo.model,
+            executionID: runtime.executionID,
+            threadTargetKind: target.kind,
+            initialParentMessageID: userMessage.messageinfo.parentMessageID,
             phase: "preparing",
         })
         userMessage.messageinfo = {
@@ -1128,6 +1261,7 @@ async function runPromptOperation(input: PromptInput, runtime: SessionRunner.Pro
         turn.emit("message.recorded", {
             message: userMessage.messageinfo,
         })
+        runtime.updateHeadMessageID(userMessage.messageinfo.id)
 
         for (const part of userMessage.parts) {
             if (part.type === "snapshot") {
@@ -1142,13 +1276,18 @@ async function runPromptOperation(input: PromptInput, runtime: SessionRunner.Pro
                 part,
             })
         }
-        clearPendingWorkflowInstruction(input.sessionID)
+        if (target.kind === "active-thread") {
+            clearPendingWorkflowInstruction(input.sessionID)
+        }
 
         const result = await runLoop({
             sessionID: input.sessionID,
             abort: runtime.abort,
             controller: runtime.controller,
             turn,
+            clientTurnID: input.clientTurnID,
+            headMessageID: runtime.headMessageID,
+            updateHeadMessageID: runtime.updateHeadMessageID,
         });
         throwIfAborted(runtime.abort)
 
@@ -1162,6 +1301,7 @@ async function runPromptOperation(input: PromptInput, runtime: SessionRunner.Pro
         const latestAssistant = latestAssistantWithPartsAfter(
             input.sessionID,
             userMessage.messageinfo.id,
+            runtime.headMessageID(),
         )
         if (isTurnAbort(runtime)) {
             void sessionTitlePromise?.catch((titleError) => {
@@ -1226,7 +1366,6 @@ async function runPromptOperation(input: PromptInput, runtime: SessionRunner.Pro
         if (turn) {
             Orchestrator.finishTurn(turn)
         }
-        Status.set(input.sessionID, { type: "idle" })
     }
 }
 
@@ -1244,6 +1383,9 @@ function createResumeExecutionHandle(input: ResumeInput) {
 
     return SessionRunner.enqueueResume({
         sessionID: input.sessionID,
+        executionID: "active-thread",
+        targetKind: "active-thread",
+        initialHeadMessageID: session.activeMessageID ?? null,
         directory: session.directory,
         type: "resume",
         execute: (runtime) => runResumeOperation(input, runtime),
@@ -1269,6 +1411,9 @@ async function runResumeOperation(input: ResumeInput, runtime: SessionRunner.Pro
         turn = Orchestrator.startTurn({
             sessionID: input.sessionID,
             turnID: runtime.turnID,
+            executionID: runtime.executionID,
+            targetKind: "active-thread",
+            initialParentMessageID: runtime.headMessageID(),
             userMessageID: latestUser?.message.id,
             agent: latestUser?.message.agent,
             model: latestUser?.message.model,
@@ -1282,6 +1427,9 @@ async function runResumeOperation(input: ResumeInput, runtime: SessionRunner.Pro
             resume: true,
             agent: latestUser?.message.agent,
             model: latestUser?.message.model,
+            executionID: runtime.executionID,
+            threadTargetKind: "active-thread",
+            initialParentMessageID: runtime.headMessageID(),
             phase: "preparing",
         })
 
@@ -1296,6 +1444,8 @@ async function runResumeOperation(input: ResumeInput, runtime: SessionRunner.Pro
             abort: runtime.abort,
             controller: runtime.controller,
             turn,
+            headMessageID: runtime.headMessageID,
+            updateHeadMessageID: runtime.updateHeadMessageID,
         });
         throwIfAborted(runtime.abort)
 
@@ -1359,15 +1509,17 @@ async function runResumeOperation(input: ResumeInput, runtime: SessionRunner.Pro
         if (turn) {
             Orchestrator.finishTurn(turn)
         }
-        Status.set(input.sessionID, { type: "idle" })
     }
 }
 
 type LoopRuntimeInput = {
     sessionID: string
+    clientTurnID?: string
     abort: AbortSignal
     controller: AbortController
     turn: Orchestrator.TurnContext
+    headMessageID: () => string | null
+    updateHeadMessageID: (messageID: string) => void
 }
 
 // ---------------------------------------------------------------------------
@@ -1375,8 +1527,10 @@ type LoopRuntimeInput = {
 // ---------------------------------------------------------------------------
 
 // 从 messages + parts 重建模型上下文，避免内存态与数据库脱节。
-function loadMessagesWithParts(sessionID: string): Message.WithParts[] {
-    return Message.listActiveBranch(sessionID)
+function loadMessagesWithParts(sessionID: string, headMessageID?: string | null): Message.WithParts[] {
+    return headMessageID
+        ? Message.listBranch(sessionID, headMessageID)
+        : Message.listActiveBranch(sessionID)
 }
 
 function findBlockingAssistantInteractionAfterUser(
@@ -1503,10 +1657,11 @@ function latestAssistantWithParts(sessionID: string): Message.WithParts | undefi
 function latestAssistantWithPartsAfter(
     sessionID: string,
     userMessageID?: string,
+    headMessageID?: string | null,
 ): Message.WithParts | undefined {
     if (!userMessageID) return
 
-    const messages = loadMessagesWithParts(sessionID)
+    const messages = loadMessagesWithParts(sessionID, headMessageID)
     let afterUser = false
     let latestAssistant: Message.WithParts | undefined
 
@@ -1700,6 +1855,11 @@ function toUserPart(
                 ...base,
                 ...part,
             } as Message.TextPart;
+        case "message-quote":
+            return {
+                ...base,
+                ...part,
+            } as Message.MessageQuotePart;
         case "subtask":
             return {
                 ...base,
@@ -1850,7 +2010,10 @@ function resolveUserParentMessageID(input: PromptInput, session: Session.Session
 async function createUserMessage(input: PromptInput, options?: { snapshot?: string }) {
     const session = Session.DataBaseRead("sessions", input.sessionID) as Session.SessionInfo | null
     const workflow = Session.normalizeWorkflowState(session?.workflow)
-    const pendingWorkflowInstruction = await buildPendingWorkflowInstruction(workflow)
+    const pendingWorkflowInstruction =
+        normalizeThreadTarget(input).kind === "active-thread"
+            ? await buildPendingWorkflowInstruction(workflow)
+            : undefined
     const inputParts = injectWorkflowInstructionIntoParts(input.parts, pendingWorkflowInstruction)
     const turnMcpServerIDs = [...new Set(
         (input.turnMcpServerIDs ?? [])

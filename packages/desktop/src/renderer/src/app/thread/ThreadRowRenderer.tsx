@@ -1,5 +1,6 @@
 import { memo, useMemo, type ComponentType, type ReactNode } from "react"
 import { CopyIcon, ForkIcon } from "../icons"
+import { useI18n } from "../i18n/I18nProvider"
 import { joinClassNames } from "../shared-ui"
 import type { SessionMessageBranchOption } from "../session-message-tree"
 import type { MarkdownArtifactLinkTarget, MarkdownLocalFileLinkTarget } from "../thread-markdown"
@@ -796,6 +797,7 @@ const AssistantActionsRowView = memo(function AssistantActionsRowView({
   onForkFromMessage,
   row,
 }: AssistantActionsRowViewProps) {
+  const { t } = useI18n()
   const { BranchSwitcher } = components
 
   return (
@@ -826,8 +828,8 @@ const AssistantActionsRowView = memo(function AssistantActionsRowView({
             <button
               className="assistant-response-action-button message-action-icon-button"
               type="button"
-              aria-label="Fork from here"
-              title="Fork from here"
+              aria-label={t("branchChat.action.openFromHere")}
+              title={t("branchChat.action.open")}
               onClick={() => void onForkFromMessage?.(row.threadMessageID)}
             >
               <ForkIcon />

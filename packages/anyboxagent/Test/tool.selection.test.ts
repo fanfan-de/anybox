@@ -254,6 +254,48 @@ describe("global built-in tool selection", () => {
     })
   })
 
+  it("limits detached branch turns to explicitly read-only tools", async () => {
+    await Instance.provide({
+      directory: process.cwd(),
+      async fn() {
+        const session = await Session.createSession({
+          directory: process.cwd(),
+          projectID: Instance.project.id,
+          title: "Detached branch policy test",
+        })
+
+        try {
+          const turn = Session.createTurn({
+            sessionID: session.id,
+            projectID: Instance.project.id,
+            executionID: "branch-execution",
+            threadTargetKind: "detached-branch",
+            initialParentMessageID: null,
+          })
+          const agent = await Agent.get("default")
+          if (!agent) throw new Error("Expected default agent to exist.")
+
+          expect(readOnlyToolsOnlyForSession(agent, session.id, turn.id)).toBe(true)
+
+          const toolNames = Object.keys(await resolveTools({
+            agent,
+            sessionID: session.id,
+            turnID: turn.id,
+            messageID: "msg_detached_branch_policy",
+            abort: new AbortController().signal,
+          }))
+
+          expect(toolNames).toContain("read_file")
+          expect(toolNames).toContain("exec")
+          expect(toolNames).not.toContain("apply_patch")
+          expect(toolNames).not.toContain("replace_text")
+        } finally {
+          Session.removeSession(session.id)
+        }
+      },
+    })
+  })
+
   it("does not apply built-in selection records to custom tools", async () => {
     await Config.setToolSelection(Config.GLOBAL_CONFIG_ID, {
       "custom-test-tool": false,

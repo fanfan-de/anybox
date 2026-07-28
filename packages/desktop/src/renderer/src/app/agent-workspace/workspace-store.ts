@@ -141,6 +141,12 @@ function getRightSidebarTabTargetKey(input: RightSidebarOpenTabInput) {
       return ["message-tree", normalizeRightSidebarTargetSegment(input.sessionID)].join(":")
     case "message-inspector":
       return "message-inspector"
+    case "branch-thread":
+      return [
+        "branch-thread",
+        normalizeRightSidebarTargetSegment(input.sessionID),
+        normalizeRightSidebarTargetSegment(input.headMessageID ?? input.originMessageID),
+      ].join(":")
   }
 }
 
@@ -160,6 +166,8 @@ function getRightSidebarTabTitle(input: RightSidebarOpenTabInput) {
       return "Tree"
     case "message-inspector":
       return "Conversation"
+    case "branch-thread":
+      return "Branch Chat"
   }
 }
 
@@ -214,6 +222,18 @@ function createRightSidebarTab(input: RightSidebarOpenTabInput): RightSidebarTab
         kind: "message-inspector",
         messageID: input.messageID,
         sessionID: input.sessionID,
+      }
+    case "branch-thread":
+      return {
+        ...base,
+        kind: "branch-thread",
+        anchorStrategy: input.anchorStrategy ?? "selected",
+        sessionID: input.sessionID,
+        originMessageID: input.originMessageID,
+        headMessageID: input.headMessageID ?? input.originMessageID,
+        executionID: input.executionID ?? base.id,
+        phase: input.phase ?? "draft",
+        initialQuotes: input.initialQuotes ?? [],
       }
   }
 }
@@ -277,6 +297,30 @@ function updateRightSidebarTab(
         messageID: update.messageID ?? tab.messageID,
         sessionID: update.sessionID ?? tab.sessionID,
       }
+    case "branch-thread": {
+      const sessionID = update.sessionID ?? tab.sessionID
+      const originMessageID = update.originMessageID ?? tab.originMessageID
+      const headMessageID = update.headMessageID ?? tab.headMessageID
+      const phase = update.phase ?? tab.phase
+      const branchTargetKey = update.targetKey ?? [
+        "branch-thread",
+        normalizeRightSidebarTargetSegment(sessionID),
+        normalizeRightSidebarTargetSegment(headMessageID),
+      ].join(":")
+      return {
+        ...tab,
+        kind: "branch-thread",
+        anchorStrategy: update.anchorStrategy ?? tab.anchorStrategy ?? "selected",
+        title,
+        targetKey: branchTargetKey,
+        sessionID,
+        originMessageID,
+        headMessageID,
+        executionID: update.executionID ?? tab.executionID,
+        phase,
+        initialQuotes: update.initialQuotes ?? tab.initialQuotes,
+      }
+    }
   }
 }
 
@@ -610,9 +654,12 @@ export function createWorkspaceStore({
         let resolvedTabID = ""
         set((state) => {
           const targetKey = getRightSidebarTabTargetKey(input)
-          const existingTab = state.sessions.rightSidebar.tabs.find(
-            (tab) => tab.kind === input.kind && tab.targetKey === targetKey,
-          )
+          const existingTab =
+            input.kind === "branch-thread" && (input.phase ?? "draft") === "draft"
+              ? undefined
+              : state.sessions.rightSidebar.tabs.find(
+                  (tab) => tab.kind === input.kind && tab.targetKey === targetKey,
+                )
           if (existingTab) {
             resolvedTabID = existingTab.id
             if (state.sessions.rightSidebar.activeTabID === existingTab.id) return state

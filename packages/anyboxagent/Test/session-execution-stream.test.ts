@@ -75,6 +75,8 @@ function handle(input: {
   return {
     sessionID: input.sessionID,
     turnID: input.turnID,
+    executionID: "active-thread",
+    targetKind: "active-thread",
     mode: input.mode,
     promise: input.promise ?? new Promise<StreamResult>(() => undefined),
     cancel: input.cancel ?? (() => undefined),

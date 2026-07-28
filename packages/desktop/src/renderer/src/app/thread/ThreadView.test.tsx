@@ -568,7 +568,7 @@ describe("ThreadView trace item renderers", () => {
     expect(within(approvalRow!).getAllByText("Permission requested").length).toBeGreaterThanOrEqual(2)
     expect(within(approvalRow!).queryByText("git_bash_command - Tool requires approval before it can continue.")).toBeNull()
     expect(container.querySelector('[data-thread-row-kind="permission-request"]')).toBeNull()
-    expect(queryByRole("button", { name: "Fork from here" })).toBeNull()
+    expect(queryByRole("button", { name: "Open Branch Chat from here" })).toBeNull()
 
     fireEvent.click(within(approvalRow!).getByRole("button", { name: "Allow: Check Node.js and npm availability" }))
 
@@ -5451,7 +5451,7 @@ describe("ThreadView message actions", () => {
     const { rerender } = render(<ThreadView {...props} />)
 
     rerender(<ThreadView {...props} onForkFromMessage={latestFork} />)
-    fireEvent.click(screen.getByRole("button", { name: "Fork from here" }))
+    fireEvent.click(screen.getByRole("button", { name: "Open Branch Chat from here" }))
 
     expect(firstFork).not.toHaveBeenCalled()
     expect(latestFork).toHaveBeenCalledWith("assistant-1")
@@ -5477,10 +5477,10 @@ describe("ThreadView message actions", () => {
     const props = createThreadProps([message], threadColumnRef)
     const { rerender } = render(<ThreadView {...props} />)
 
-    expect(screen.queryByRole("button", { name: "Fork from here" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "Open Branch Chat from here" })).toBeNull()
 
     rerender(<ThreadView {...props} onForkFromMessage={onForkFromMessage} />)
-    fireEvent.click(screen.getByRole("button", { name: "Fork from here" }))
+    fireEvent.click(screen.getByRole("button", { name: "Open Branch Chat from here" }))
 
     expect(onForkFromMessage).toHaveBeenCalledWith("assistant-1")
   })
@@ -5546,7 +5546,7 @@ describe("ThreadView message actions", () => {
     })
 
     expect(queryByRole("button", { name: "Copy assistant response" })).toBeNull()
-    expect(queryByRole("button", { name: "Fork from here" })).toBeNull()
+    expect(queryByRole("button", { name: "Open Branch Chat from here" })).toBeNull()
     expect(container.querySelector(".assistant-branch-switcher")).toBeNull()
     expect(container.querySelector(".assistant-response-actions")).toBeNull()
   })
@@ -5875,6 +5875,121 @@ describe("ThreadView message actions", () => {
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith(responseText)
     })
+    selection?.removeAllRanges()
+  })
+
+  it("opens Branch Chat for a selection using the persisted assistant message id", async () => {
+    const onBranchChatFromSelection = vi.fn()
+    const responseText = "Use this exact response excerpt as branch context."
+    const assistant = assistantTraceMessage(
+      "assistant-branch-selection",
+      [
+        {
+          id: "response-branch-selection",
+          kind: "text",
+          timestamp: 1,
+          label: "Assistant",
+          text: responseText,
+          status: "completed",
+        },
+      ],
+      false,
+    )
+    assistant.messageID = "persisted-assistant-response"
+    const messageTree: SessionMessageTree = {
+      activeMessageID: "persisted-assistant-response",
+      activePathMessageIDs: ["persisted-assistant-response"],
+      branchOptionsByParentID: {},
+      childIDsByParentID: {
+        "persisted-assistant-response": [],
+      },
+      nodesByID: {
+        "persisted-assistant-response": {
+          id: "persisted-assistant-response",
+          sessionID: "session-1",
+          role: "assistant",
+          created: 1,
+          completed: 2,
+          content: responseText,
+          preview: responseText,
+          parentMessageID: null,
+          isCompletedResponse: true,
+        },
+      },
+      rootMessageIDs: ["persisted-assistant-response"],
+      sessionID: "session-1",
+    }
+    const { getByText } = renderThread([assistant], {
+      messageTree,
+      onBranchChatFromSelection,
+    })
+    const responseElement = getByText(responseText)
+    const selection = window.getSelection()
+    const range = document.createRange()
+    range.selectNodeContents(responseElement)
+    selection?.removeAllRanges()
+    selection?.addRange(range)
+
+    fireEvent.contextMenu(responseElement, { clientX: 60, clientY: 30 })
+
+    const menu = screen.getByRole("menu", { name: "Thread copy actions" })
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Branch Chat" }))
+
+    expect(onBranchChatFromSelection).toHaveBeenCalledWith({
+      messageID: "persisted-assistant-response",
+      text: responseText,
+    })
+    selection?.removeAllRanges()
+  })
+
+  it("does not offer Branch Chat for a selection spanning assistant responses", () => {
+    const onBranchChatFromSelection = vi.fn()
+    const { getByText } = renderThread(
+      [
+        assistantTraceMessage(
+          "assistant-branch-selection-a",
+          [
+            {
+              id: "response-branch-selection-a",
+              kind: "text",
+              timestamp: 1,
+              label: "Assistant",
+              text: "First response excerpt.",
+              status: "completed",
+            },
+          ],
+          false,
+        ),
+        assistantTraceMessage(
+          "assistant-branch-selection-b",
+          [
+            {
+              id: "response-branch-selection-b",
+              kind: "text",
+              timestamp: 2,
+              label: "Assistant",
+              text: "Second response excerpt.",
+              status: "completed",
+            },
+          ],
+          false,
+        ),
+      ],
+      { onBranchChatFromSelection },
+    )
+    const firstResponse = getByText("First response excerpt.")
+    const secondResponse = getByText("Second response excerpt.")
+    const selection = window.getSelection()
+    const range = document.createRange()
+    range.setStart(firstResponse.firstChild!, 0)
+    range.setEnd(secondResponse.firstChild!, secondResponse.textContent?.length ?? 0)
+    selection?.removeAllRanges()
+    selection?.addRange(range)
+
+    fireEvent.contextMenu(secondResponse, { clientX: 60, clientY: 30 })
+
+    const menu = screen.getByRole("menu", { name: "Thread copy actions" })
+    expect(within(menu).queryByRole("menuitem", { name: "Branch Chat" })).toBeNull()
     selection?.removeAllRanges()
   })
 
@@ -6281,7 +6396,7 @@ describe("ThreadView message actions", () => {
     })
 
     expect(container.querySelectorAll(".assistant-branch-switcher")).toHaveLength(1)
-    const forkButtons = screen.getAllByRole("button", { name: "Fork from here" })
+    const forkButtons = screen.getAllByRole("button", { name: "Open Branch Chat from here" })
     expect(forkButtons).toHaveLength(1)
 
     fireEvent.click(forkButtons[0]!)

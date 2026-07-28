@@ -55,6 +55,8 @@ function getTabTargetKey(input: RightSidebarOpenTabInput) {
       return ["message-tree", normalizeTargetSegment(input.sessionID)].join(":")
     case "message-inspector":
       return "message-inspector"
+    case "branch-thread":
+      return ["branch-thread", normalizeTargetSegment(input.sessionID), normalizeTargetSegment(input.headMessageID ?? input.originMessageID)].join(":")
   }
 }
 
@@ -117,6 +119,18 @@ function createRightSidebarTab(input: RightSidebarOpenTabInput, index: number): 
         kind: "message-inspector",
         messageID: input.messageID,
         sessionID: input.sessionID,
+      }
+    case "branch-thread":
+      return {
+        ...base,
+        kind: "branch-thread",
+        anchorStrategy: input.anchorStrategy ?? "selected",
+        sessionID: input.sessionID,
+        originMessageID: input.originMessageID,
+        headMessageID: input.headMessageID ?? input.originMessageID,
+        executionID: input.executionID ?? base.id,
+        phase: input.phase ?? "draft",
+        initialQuotes: input.initialQuotes ?? [],
       }
   }
 }
@@ -196,6 +210,18 @@ function applyTabUpdate(tab: RightSidebarTab, update: RightSidebarTabUpdate): Ri
         targetKey,
         messageID: update.messageID ?? tab.messageID,
         sessionID: update.sessionID ?? tab.sessionID,
+      }
+    case "branch-thread":
+      return {
+        ...tab,
+        title,
+        targetKey,
+        sessionID: update.sessionID ?? tab.sessionID,
+        originMessageID: update.originMessageID ?? tab.originMessageID,
+        headMessageID: update.headMessageID ?? tab.headMessageID,
+        executionID: update.executionID ?? tab.executionID,
+        phase: update.phase ?? tab.phase,
+        initialQuotes: update.initialQuotes ?? tab.initialQuotes,
       }
   }
 }

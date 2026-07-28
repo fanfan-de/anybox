@@ -20,6 +20,7 @@ import { resolveWorkspaceRelativePath } from "./app/agent-workspace/workspace-lo
 import type { MarkdownArtifactLinkTarget, MarkdownLocalFileLinkTarget } from "./app/thread-markdown"
 import { ThreadLinkRoutingProvider } from "./app/thread-link-routing"
 import type {
+  BranchChatQuote,
   ConnectionsTab,
   ProjectWorktreeCreateRequest,
   SessionDiffFile,
@@ -1215,6 +1216,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
   const {
     activeSession,
     activeSessionDirectory,
+    activeSessionRuntimeDebug,
     activeWorkspaceFileScopeDirectory,
     activeWorkspaceFileScopeName,
     canInsertWorkspaceFileCommentsIntoDraft,
@@ -1315,6 +1317,8 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     setDraftForTab,
     saveThreadScrollSnapshot,
     threadNavigationRequestBySession,
+    requestThreadNavigation,
+    focusedPaneID,
     handleWorkbenchDockviewCommandsReady,
     setHoveredFolderID,
     setDockviewLayout,
@@ -1330,6 +1334,13 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     surfaceID,
     workbenchState: workbenchContext.state,
   })
+  const threadPaneContext =
+    focusedPaneID && activeSession
+      ? {
+          paneID: focusedPaneID,
+          sessionID: activeSession.id,
+        }
+      : null
   const shouldDeferAppUpdateForRunningSession = useCallback(
     () => hasRunningSessionBlockingAppUpdate(runningSessionIDs),
     [runningSessionIDs],
@@ -2028,6 +2039,8 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     [conversationWorkspaceID],
   )
   const rightSidebarMessageInspectorSelection = activeRightSidebarTab?.kind === "message-inspector"
+    || activeRightSidebarTab?.kind === "branch-thread"
+    || activeRightSidebarTab?.kind === "message-tree"
     ? findSession(workspaces, activeRightSidebarTab.sessionID)
     : null
   const rightSidebarThreadLinkContext =
@@ -2134,6 +2147,73 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
   function handleActivateRightSidebarTab(tabID: string) {
     activateRightSidebarTab(tabID)
   }
+
+  function handleOpenBranchChat(input: {
+    anchorStrategy?: "latest-at-send" | "selected"
+    headMessageID?: string
+    initialQuotes?: BranchChatQuote[]
+    originMessageID: string
+    phase?: "draft" | "committed"
+    sessionID: string
+    title?: string
+  }) {
+    const sessionID = input.sessionID.trim()
+    const originMessageID = input.originMessageID.trim()
+    const headMessageID = input.headMessageID?.trim() || originMessageID
+    if (!sessionID || !originMessageID || !headMessageID) return
+
+    if (isRightSidebarCollapsed) {
+      handleRightSidebarToggle()
+    }
+
+    openOrFocusRightSidebarTab({
+      kind: "branch-thread",
+      anchorStrategy: input.anchorStrategy ?? "selected",
+      sessionID,
+      originMessageID,
+      headMessageID,
+      phase: input.phase ?? "draft",
+      initialQuotes: input.initialQuotes ?? [],
+      title: input.title ?? "Branch Chat",
+    })
+  }
+
+  function handleOpenBranchChatFromThread(input: {
+    messageID: string
+    paneID: string
+    quoteText?: string
+    sessionID: string
+  }) {
+    handlePaneFocus(input.paneID)
+    handleOpenBranchChat({
+      anchorStrategy: "selected",
+      sessionID: input.sessionID,
+      originMessageID: input.messageID,
+      initialQuotes: input.quoteText?.trim()
+        ? [{ sourceMessageID: input.messageID, text: input.quoteText.trim() }]
+        : [],
+    })
+  }
+
+  const handleLocateBranchAnchor = useCallback((input: {
+    messageID: string
+    paneID: string
+    sessionID: string
+  }) => {
+    if (
+      input.paneID !== focusedPaneID ||
+      input.sessionID !== activeSession?.id
+    ) {
+      return
+    }
+    handlePaneFocus(input.paneID)
+    requestThreadNavigation(input)
+  }, [
+    activeSession?.id,
+    focusedPaneID,
+    handlePaneFocus,
+    requestThreadNavigation,
+  ])
 
   useEffect(() => {
     let cancelled = false
@@ -3069,6 +3149,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                 onOpenCreateSessionTab={handleOpenCreateSessionTab}
                 onOpenSubagentSession={handleOpenSubagentSessionTab}
                 onForkFromMessage={handleForkFromMessage}
+                onOpenBranchChat={handleOpenBranchChatFromThread}
                 onPermissionRequestResponse={handlePermissionRequestResponse}
                 onApproveProposedPlan={handleApproveProposedPlan}
                 onToolPermissionModeChange={handleToolPermissionModeChange}
@@ -3106,6 +3187,8 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
             />
 
             <RightSidebar
+              assistantTraceVisibility={assistantTraceVisibility}
+              activeSessionRuntimeDebug={activeSessionRuntimeDebug}
               activeWorkspaceFileScopeDirectory={activeWorkspaceFileScopeDirectory}
               activeWorkspaceFileScopeName={activeWorkspaceFileScopeName}
               activeSessionDirectory={activeSessionDirectory}
@@ -3115,6 +3198,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               codeTheme={resolvedCodeTheme}
               canInsertWorkspaceFileCommentsIntoDraft={canInsertWorkspaceFileCommentsIntoDraft}
               rightSidebar={rightSidebar}
+              threadPaneContext={threadPaneContext}
               selectedDiffFileBySession={selectedDiffFileBySession}
               sessionDiffBySession={sessionDiffBySession}
               sessionDiffStateBySession={sessionDiffStateBySession}
@@ -3122,6 +3206,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               workspaces={workspaces}
               onActivateTab={handleActivateRightSidebarTab}
               onCloseTab={closeRightSidebarTab}
+              onUpdateTab={updateRightSidebarTab}
               onArtifactLinkOpen={(target) =>
                 handleArtifactLinkOpen({
                   paneID: "right-sidebar",
@@ -3167,6 +3252,8 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               onOpenMessageTreeTab={handleOpenRightSidebarMessageTreeTab}
               onOpenReviewTab={handleOpenRightSidebarReviewTab}
               onOpenTerminalTab={handleOpenRightSidebarTerminalTab}
+              onOpenBranchChat={handleOpenBranchChat}
+              onLocateBranchAnchor={handleLocateBranchAnchor}
               onMessageTreeNodeSelect={handleMessageTreeNodeSelect}
               renderTerminalTab={(sessionID) => (
                 <TerminalAreaHost

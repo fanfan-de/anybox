@@ -1,6 +1,6 @@
 # Thread View 前端设计说明
 
-更新日期：2026-07-28
+更新日期：2026-07-29
 
 ## 1. 文档定位
 
@@ -11,6 +11,8 @@
 - `packages/desktop/src/renderer/src/app/thread/ThreadView.tsx`
 - `packages/desktop/src/renderer/src/app/thread/BranchThreadView.tsx`
 - `packages/desktop/src/renderer/src/app/thread/branch-thread-layout.ts`
+- `packages/desktop/src/renderer/src/app/sidebar/BranchChatPanel.tsx`
+- `packages/desktop/src/renderer/src/app/session-message-tree.ts`
 - `packages/desktop/src/renderer/src/app/sidebar/SessionMessageInspectorPanel.tsx`
 - `packages/desktop/src/renderer/src/app/sidebar/RightSidebar.tsx`
 - `packages/desktop/src/renderer/src/app/thread/use-thread-projection.ts`
@@ -46,6 +48,7 @@
 - `packages/desktop/src/renderer/src/app/thread/ThreadView.test.tsx`
 - `packages/desktop/src/renderer/src/app/thread/BranchThreadView.test.tsx`
 - `packages/desktop/src/renderer/src/app/thread/branch-thread-layout.test.ts`
+- `packages/desktop/src/renderer/src/app/session-message-tree.test.ts`
 - `packages/desktop/src/renderer/src/app/sidebar/SessionMessageInspectorPanel.test.tsx`
 - `packages/desktop/src/renderer/src/app/sidebar/RightSidebar.test.tsx`
 - `packages/desktop/src/renderer/src/app/thread/thread-display-rows.test.ts`
@@ -67,6 +70,7 @@ Thread view 不是普通聊天窗口，而是 agent 工作台里的执行记录�
 
 1. 用户快速读取最终回复。
 2. 开发者扫描 agent 的 reasoning、tool、workflow、file change 等执行轨迹。
+3. 用户在不切换主 active path 的前提下，对消息树中的另一条路径进行只读探索。
 
 因此当前设计优先级是：
 
@@ -116,15 +120,113 @@ ComposerUtilityBar
 - `sessionViewMode` 属于当前 workbench tab 的 renderer 内存状态，不写回 session，也不调用后端。
 - Linear 继续消费 active history 的 canonical `ThreadTurn[]`，保留 streaming、trace、权限交互、bottom-lock 和虚拟列表。
 - Branch 消费 `view: "all"` 派生的 `SessionMessageTree`，`buildBranchThreadLayout()` 只计算节点坐标和 active-path edge；节点只渲染 role、状态和短摘要。
-- 单击 Branch 节点改变 `BranchThreadView` 内的 `inspectedMessageID`，同时打开或更新 Right Sidebar 中唯一的上下文页签 `message-inspector`；右侧栏若已折叠会自动展开。同一次选择还通过既有 `onForkFromMessage` 链路，把该节点写入当前 workbench tab 的 `composerParentMessageID`。
+- 单击 Branch 节点只改变 `BranchThreadView` 内的 `inspectedMessageID`，同时打开或更新 Right Sidebar 中唯一的上下文页签 `message-inspector`；右侧栏若已折叠会自动展开。Inspect 与主线程续写是两个独立动作。
+- 工具栏的“从所选消息继续主线程”命令才会通过既有 `onForkFromMessage` 链路，把当前 Inspect 节点写入 workbench tab 的 `composerParentMessageID`。
 - `message-inspector` 以 `sessionID + messageID` 为目标。选中 assistant 时显示其最近的父级 user message 与该 assistant；选中 user 时默认显示 active-path 上的直接 assistant 回复，有多个直接回复时允许只在详情内切换查看。
 - inspect 不会调用 branch select，也不会立即修改持久化的 `activeMessageID`。它只设置 renderer 内存中的 Composer 续写锚点；右侧栏的“当前”与“正在查看”标记继续区分 session 分支头和瞬时查看目标。
 - `SessionMessageInspectorPanel` 只挂载当前一组 user/assistant Markdown；不会在每个地图节点内挂载完整 `ThreadView`，也不会在中央地图旁保留第二个详情区。
 - 当前 `SessionMessageTree` 只保留 user message 与每个 backend turn 的最终 assistant 文本，且单节点正文有长度上限。因此首版详情不宣称能重放历史 trace、tool、permission 或 file changes；这些能力需要后续保留可索引的全历史 turn projection。
 - Branch 的 `pan / zoom / inspected / keyboard focus` snapshot 以 `tab + session` 为 key 保存在 pane 组件内存中，切回 Linear 再返回时恢复；它不持久化到 session 或磁盘。
-- Composer 仍是两种视图共同的 sibling。Branch 节点选择会显示 `ComposerBranchParentNotice`；下一次非并发发送把所选 message ID 作为 `parentMessageID` 交给既有发送服务，成功提交后清除该 tab 的显式 parent。新消息由后端按该 parent 建立分支，其他历史分支保持不变。
+- Composer 仍是两种视图共同的 sibling。只有显式执行“从所选消息继续主线程”后才显示 `ComposerBranchParentNotice`；下一次非并发发送把所选 message ID 作为 `parentMessageID` 交给既有发送服务，成功提交后清除该 tab 的显式 parent。新消息由后端按该 parent 建立分支，其他历史分支保持不变。
 
 Right Sidebar 的现有 Message Tree 暂时保留，作为迁移期导航器；中央 Branch 视图不复用其“点击节点即切换 active branch”的行为。`message-inspector` 是由 Branch 节点点击打开的上下文页签，不出现在 Right Sidebar 的通用新增页签 launcher 中；再次点击其他节点会复用并更新同一个页签。
+
+### Branch Map、主 ThreadView 与 Branch Chat
+
+三种界面共享消息树，但职责不同：
+
+```text
+Session message tree
+├─ Central Branch Map                 # 全树拓扑、选择与 inspect
+├─ Main ThreadView                    # root → Session.activeMessageID
+└─ Right Sidebar Branch Chat
+   └─ detached Branch ThreadView      # root → tab.headMessageID 的投影
+```
+
+- 中央 `BranchThreadView` 是消息树地图，不负责重放完整 trace，也不是 Branch Chat。
+- 主 `ThreadView` 只投影 `Session.activeMessageID` 指向的 active path。
+- 产品名称 `Branch Chat` 指右侧页签；实现上它是 detached branch 的 `ThreadView` 投影，不是 Session、branch record 或新的会话类型。
+- Branch Chat 复用标准 `ThreadView` 的 response、reasoning、tool、permission、question 和 file-change 渲染管线；右侧 `Composer` 与它保持 sibling 关系。
+
+Branch Chat 不增加持久化的 branch ID、anchor、head、标题或最近列表。数据库中的唯一真相仍是 message 的 `parentMessageID`：
+
+```text
+response(anchor)
+├─ user(main)   → response(main)
+├─ user(branch) → response(branch)
+└─ user(branch) → response(branch)
+```
+
+右侧页签只保存 renderer 生命周期内的展示目标：
+
+```ts
+{
+  tabID,
+  sessionID,
+  originMessageID,
+  headMessageID,
+  anchorStrategy: "latest-at-send" | "selected",
+  phase: "draft" | "committed"
+}
+```
+
+Draft 的 `originMessageID` 与 `headMessageID` 相同。首次请求被接受后进入 committed；首条 user message 的 `parentMessageID` 永久表达分叉边，后续 head 随该 execution 的新消息推进。页签关闭只移除 renderer 状态，不删除消息，也不取消仍在运行的 execution。
+
+#### 查询与可见投影
+
+后端 branch history 使用 `view: "branch" + headMessageID`，由 `Message.listBranch(sessionID, headMessageID)` 从 head 沿 parent 回溯并返回 root → head 的完整 message、part 和 turn 数据。缺失 parent、循环和跨 Session parent 会被拒绝。模型每轮同样从 execution 当前 head 重建完整上下文，不能读取 detached execution 之外的 `Session.activeMessageID`。
+
+右侧 UI 不直接显示完整 root → head：
+
+1. 页签顶部只保留极薄的工具栏：右侧是 `⋯` 高级入口和常驻的“工具只读”安全状态。默认界面不显示来源摘要、选择器、跟随、定位、详情或锁定状态。
+2. `ThreadView` 只接收 origin 之后的 messages/turns。
+3. Composer、引用卡、Queue / Steer 和权限区域固定在底部。
+
+因此 UI 截断不会截断模型上下文。已经打开的页签保持自己的 origin；关闭后从非主 leaf 重开时，以 leaf path 和当前 active path 的最后公共节点重新计算 origin。
+
+#### 入口与分支起点
+
+- Right Sidebar 通用新增入口以 `anchorStrategy: "latest-at-send"` 创建 draft。创建时的 `originMessageID/headMessageID` 只用于临时展示；用户首次发送时重新读取当前 Session active path 上最新的有效完成回复，并把它作为 detached branch 的 parent。没有有效回复时入口禁用；若候选在发送前失效，则不发送并保留草稿。
+- 回复分支按钮、response 文本引用、最近分支、Message Tree / Message Inspector 和高级选择器使用 `anchorStrategy: "selected"`，固定使用明确选择的回复；之后出现的新回复不会改写它。
+- `⋯` 直接打开使用 portal 渲染的高级列表。Draft 沿主 active path 按从旧到新列出有效回复，阅读方向与主 ThreadView 一致；`latest-at-send` 单独取最后一个有效候选，不依赖列表首项。打开列表时自动把当前选择或最新回复滚入视口。文案使用“从哪条回复开始”，不向普通用户暴露“锚点”术语；选择后切换为 `"selected"`，并立即让 focused 主 ThreadView 定位到该回复所属轮次的 user message，使 user message 与 response 开头连续可见。列表保持打开，默认界面不增加来源条或特殊标记。
+- Committed 分支中的同一入口只读展示实际起点，不提供修改操作，并可通过 `paneID + messageID` 在同 Session 的 focused 主线程中定位。
+- 高级列表支持 Escape、方向键、Home / End、Enter / Space、点击外部空白或 Branch Chat Composer 关闭和焦点归还；选项选择与面板内定位动作不关闭列表。列表使用 fixed portal 定位，在窄于 360px 的右侧容器中仍限制于 viewport。
+- 主 ThreadView 与 Branch Chat 内最终 response 的 branch icon 每次都新建独立 draft 页签；它不再把 parent 写入主 Composer。
+- response 选区右键菜单会创建 draft，并把选中文字作为结构化引用。选区必须完整属于同一条可分支 assistant response；链接内有有效选区时，ThreadView 选区菜单优先于链接菜单。
+- Message Tree / Message Inspector 的 Branch Chat 动作对中间 response 创建 draft；对已有非主 leaf 则使用计算出的 origin/head 重开 committed 分支。
+
+通用入口下的“最近分支”不读取页签历史，而是实时扫描消息树中的非主 leaf。标题取分叉后的第一条 user message，摘要取 leaf response，时间取 leaf；generating、queued、waiting permission 和 error 由 turn parts 与瞬时 execution snapshot 合并显示。相同 leaf 已打开时聚焦已有页签；相同 anchor 的新 draft 不去重。
+
+#### Execution 隔离与只读边界
+
+发送协议使用线程目标，而不是 Branch Chat ID：
+
+```ts
+type AgentThreadTarget =
+  | { kind: "active-thread"; parentMessageID?: string | null }
+  | { kind: "detached-branch"; parentMessageID: string }
+```
+
+- main execution 使用固定的 `active-thread` slot，并显式推进 `Session.activeMessageID`。
+- detached 首轮使用新的 `clientTurnID` 建立 execution；同一 Branch Chat 的 Queue / Steer 复用正在运行的 execution，真正执行时从 execution 最新 head 继续。
+- 同一 Session 的 main 与多个 detached executions 可并行；停止操作通过 execution/turn 精确路由。
+- 所有 runtime event 携带 `turnID`、`executionID` 和 target kind。中央 stream controller 会过滤 detached event，只刷新 message tree、权限和聚合 runtime 状态；每个 Branch Chat 页签只消费属于自身 execution/turn 的事件。
+- renderer 重载后，可通过 branch history 中 running turn 的 execution ID 与 runtime execution snapshot 重新关联。
+- detached target 在工具解析层只暴露显式 `readOnly` 工具；权限评估与已批准工具执行层再次拒绝写入型调用。右侧固定显示“工具只读”，不提供权限模式切换。
+
+#### 结构化 response 引用
+
+选区引用持久化为 user message part，而不是拼进可编辑文本：
+
+```ts
+{
+  type: "message-quote",
+  sourceMessageID,
+  text
+}
+```
+
+Composer 中引用是可移除、不可编辑的卡片；只有引用也允许发送。后端验证来源属于同一 Session 且为 assistant message，历史恢复后继续按引用卡渲染。模型输入会把快照转换成带转义边界的 `<message-quote source_message_id="…">…</message-quote>` 文本块。
 
 截图中的蓝色大块不是正常主题色，也不是 semantic token。它来自 debug region 模式：
 
@@ -371,7 +473,7 @@ ThreadView
 
 `content-visibility` 不叠加到 `.thread-virtual-row` 上。虚拟列表依赖 JS 测量和缓存真实 row 高度；让浏览器延迟虚拟 row 的高度计算会干扰滚动布局。
 
-`ThreadRowRenderer` 是 `thread-column` 的主要 UI 分发表；`VisibleThreadView` 只保留一个很薄的 `renderDisplayRow(row)` wrapper，用来注入 copy、lightbox、branch 和 fork 等 handler：
+`ThreadRowRenderer` 是 `thread-column` 的主要 UI 分发表；`VisibleThreadView` 只保留一个很薄的 `renderDisplayRow(row)` wrapper，用来注入 copy、lightbox、branch switch 和 Branch Chat 等 handler：
 
 ```text
 ThreadRowRenderer(row)
@@ -420,7 +522,7 @@ ThreadRowRenderer(row)
 │     └─ div.assistant-response-actions
 │        ├─ BranchSwitcher
 │        ├─ copy assistant response button
-│        └─ fork button
+│        └─ Branch Chat button
 ```
 
 `TraceItemView` 按 `item.kind` 分发到不同 renderer。多数简单类型最终走 `GenericTraceItemView`，复杂类型会渲染专用 UI：
@@ -453,7 +555,7 @@ TraceItemView
       └─ task-state → TaskStateTraceItemView
 ```
 
-注意：主 pane 底部的紫色主输入框 `Composer` 不是主 `ThreadView` 的子组件，它是 `WorkbenchPaneSurface` 中 `ThreadView` 后面的 sibling。
+注意：主 pane 底部的紫色主输入框 `Composer` 不是主 `ThreadView` 的子组件，它是 `WorkbenchPaneSurface` 中 `ThreadView` 后面的 sibling。Branch Chat 也保持同一结构：右侧 `ThreadView` 与其本地 Composer 是 sibling，草稿、附件、model、reasoning、skills 和 MCP 选择按页签隔离。
 
 ## 5. 视觉层级
 
@@ -524,6 +626,7 @@ debug 信息由 developer mode 和 trace visibility 控制。默认不应该干�
 - `useThreadVirtualList` 的 `scrollToFn` 只写入 `scrollTop`，依赖浏览器随后产生的原生 `scroll` 事件更新 virtualizer 与 controller，不同步手工派发事件。一次行高测量可能连续算出多个补偿 offset；同步派发会把浏览器原本可在同一帧合并的中间值暴露给 React，形成“向上滚动 → 中间值回到底边 → 再向上”的抖动。jsdom 不会为 `scrollTop` 赋值生成原生事件，因此相关虚拟跳转测试显式补发 `fireEvent.scroll`。
 - 点击 `ThreadTurnNavigator` 的轮次节点时，`useThreadVirtualList` 通过目标 display row index 获取 TanStack virtualizer 的 start offset，并减去少量顶部阅读留白；即使目标 row 尚未挂载到 DOM，也不依赖 `scrollIntoView()`。
 - 轮次跳转通过 `useThreadScrollController.navigateThreadToOffset()` 明确切换为 `detached`，同时保存 `pinnedToBottom: false` 的 scroll snapshot。点击最后一轮也只定位到该轮 user message，不会滚到 thread 最底部；用户随后手动回到底部时仍由原有 scroll intent 规则恢复 follow。
+- Branch Chat 高级列表按 response 的公开 `messageID` 发起定位。`assistant-actions` row 只负责把该 ID 解析到 response owner；实际目标是该 response 前最近的常规 `user-message` row，使提问与回答开头连续进入视口。若当前投影不存在对应 user row，才回退到同一 owner 的第一条 `assistant-response-row` 或 `assistant-question-row`，不会定位到回复尾部的 actions row；offset 继续由 virtualizer 计算。
 - 点击任务完成系统通知时，主进程把完成事件的 `turnID` 随 `focus-session` 事件传到目标窗口。工作区聚焦对应 session 后发出一次性 thread navigation request，复用轮次导航的 virtual row offset 定位到该轮 user message；若历史刷新后仍没有对应 turn，则回退到当前最后一轮 user message。
 - 轮次可见状态由 `.thread-column` 自身的 React `onScroll` 直接触发；virtualizer 的 measurement key 变化通过 requestAnimationFrame 合并更新。每轮范围从该轮 user row 开始，到下一轮 user row 之前结束；范围与当前 viewport 相交的所有轮次标记会同时高亮。导航组件同时接收一个主 current index，供紧凑模式文案、`aria-current` 和标记列表自动滚动使用，不再自行监听或观察 sibling 滚动节点。这样 Dockview 重挂载不会留下旧滚动监听，且只有可见集合或主索引变化时才更新导航状态。
 - 键盘焦点进入 virtual row 后，该 row ID 会加入 virtualizer range；用户滚动阅读其他位置时不会卸载正在输入或操作的控件，blur 后解除 pin。

@@ -634,6 +634,7 @@ export interface WorkbenchShellProps {
   onBranchSelect: WorkbenchPaneSurfaceProps["onBranchSelect"]
   onClearComposerParentMessage: WorkbenchPaneSurfaceProps["onClearComposerParentMessage"]
   onForkFromMessage: WorkbenchPaneSurfaceProps["onForkFromMessage"]
+  onOpenBranchChat?: WorkbenchPaneSurfaceProps["onOpenBranchChat"]
   onAskUserQuestionAnswer: WorkbenchPaneSurfaceProps["onAskUserQuestionAnswer"]
   onApproveProposedPlan: WorkbenchPaneSurfaceProps["onApproveProposedPlan"]
   onPermissionRequestResponse: WorkbenchPaneSurfaceProps["onPermissionRequestResponse"]
@@ -1312,6 +1313,7 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
         onBranchSelect={props.onBranchSelect}
         onClearComposerParentMessage={props.onClearComposerParentMessage}
         onForkFromMessage={props.onForkFromMessage}
+        onOpenBranchChat={props.onOpenBranchChat}
         onAskUserQuestionAnswer={props.onAskUserQuestionAnswer}
         onApproveProposedPlan={props.onApproveProposedPlan}
         onPermissionRequestResponse={props.onPermissionRequestResponse}

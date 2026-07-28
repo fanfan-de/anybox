@@ -2454,7 +2454,11 @@ export interface DesktopIpcContract {
     output: { serverID: string; removed: boolean }
   }
   "desktop:agent-session-load-history": {
-    input: { backendSessionID: string; view?: "active" | "all" }
+    input: {
+      backendSessionID: string
+      view?: "active" | "all" | "branch"
+      headMessageID?: string
+    }
     output: AgentSessionHistoryMessage[]
   }
   "desktop:agent-session-compact": {
@@ -2478,7 +2482,7 @@ export interface DesktopIpcContract {
     output: DesktopAgentSessionTurnResult
   }
   "desktop:agent-session-cancel-turn": {
-    input: { clientTurnID: string; backendSessionID: string }
+    input: { clientTurnID: string; backendSessionID: string; executionID?: string }
     output: DesktopAgentSessionCancelTurnResult
   }
   "desktop:agent-session-abort-turn": {
@@ -2486,7 +2490,12 @@ export interface DesktopIpcContract {
     output: DesktopAgentSessionAbortTurnResult
   }
   "desktop:agent-session-interrupt": {
-    input: { backendSessionID: string; clientTurnID?: string; reason?: "user-interrupt" }
+    input: {
+      backendSessionID: string
+      clientTurnID?: string
+      executionID?: string
+      reason?: "user-interrupt"
+    }
     output: DesktopAgentSessionInterruptResult
   }
   "desktop:agent-session-answer-question": {

@@ -70,6 +70,9 @@ function readToolCallID(
 export interface TurnContext {
   readonly sessionID: string
   readonly turnID: string
+  readonly executionID: string
+  readonly targetKind: "active-thread" | "detached-branch"
+  readonly initialParentMessageID?: string | null
   readonly steerable: boolean
   emit<TType extends RuntimeEvent.RuntimeEventType>(
     type: TType,
@@ -91,6 +94,9 @@ const activeTurns = new Map<string, TurnRuntime>()
 class TurnRuntime implements TurnContext {
   readonly sessionID: string
   readonly turnID: string
+  readonly executionID: string
+  readonly targetKind: "active-thread" | "detached-branch"
+  readonly initialParentMessageID?: string | null
   readonly steerable: boolean
   private readonly factory: ReturnType<typeof RuntimeEvent.createRuntimeEventFactory>
   private readonly pendingStreamEvents: PendingStreamEvent[] = []
@@ -100,13 +106,25 @@ class TurnRuntime implements TurnContext {
   private acceptingSteer = true
   private readonly preparingToolCallIDs = new Set<string>()
 
-  constructor(input: { sessionID: string; turnID: string; steerable: boolean }) {
+  constructor(input: {
+    sessionID: string
+    turnID: string
+    executionID: string
+    targetKind: "active-thread" | "detached-branch"
+    initialParentMessageID?: string | null
+    steerable: boolean
+  }) {
     this.sessionID = input.sessionID
     this.turnID = input.turnID
+    this.executionID = input.executionID
+    this.targetKind = input.targetKind
+    this.initialParentMessageID = input.initialParentMessageID
     this.steerable = input.steerable
     this.factory = RuntimeEvent.createRuntimeEventFactory({
       sessionID: input.sessionID,
       turnID: input.turnID,
+      executionID: input.executionID,
+      targetKind: input.targetKind,
     })
   }
 
@@ -193,10 +211,7 @@ class TurnRuntime implements TurnContext {
     this.flushStreamEvents()
     this.closed = true
 
-    const current = activeTurns.get(this.sessionID)
-    if (current?.turnID === this.turnID) {
-      activeTurns.delete(this.sessionID)
-    }
+    activeTurns.delete(this.turnID)
   }
 
   private emitNow<TType extends RuntimeEvent.RuntimeEventType>(
@@ -264,6 +279,9 @@ class TurnRuntime implements TurnContext {
 export function startTurn(input: {
   sessionID: string
   turnID?: string
+  executionID?: string
+  targetKind?: "active-thread" | "detached-branch"
+  initialParentMessageID?: string | null
   userMessageID?: string
   agent?: string
   model?: {
@@ -273,27 +291,53 @@ export function startTurn(input: {
   resume?: boolean
   steerable?: boolean
 }) {
-  if (activeTurns.has(input.sessionID)) {
-    throw new Error(`Session '${input.sessionID}' already has an active turn.`)
+  const turnID = input.turnID ?? Identifier.ascending("turn")
+  if (activeTurns.has(turnID)) {
+    throw new Error(`Turn '${turnID}' is already active.`)
+  }
+  const executionID = input.executionID?.trim() || "active-thread"
+  if (
+    [...activeTurns.values()].some(
+      (turn) => turn.sessionID === input.sessionID && turn.executionID === executionID,
+    )
+  ) {
+    throw new Error(
+      `Execution '${executionID}' in session '${input.sessionID}' already has an active turn.`,
+    )
   }
 
   const turn = new TurnRuntime({
     sessionID: input.sessionID,
-    turnID: input.turnID ?? Identifier.ascending("turn"),
+    turnID,
+    executionID,
+    targetKind: input.targetKind ?? "active-thread",
+    initialParentMessageID: input.initialParentMessageID,
     steerable: input.steerable ?? true,
   })
-  activeTurns.set(input.sessionID, turn)
+  activeTurns.set(turn.turnID, turn)
   turn.emit("turn.started", {
     userMessageID: input.userMessageID,
     agent: input.agent,
     model: input.model,
     resume: input.resume,
+    executionID: turn.executionID,
+    targetKind: turn.targetKind,
+    initialParentMessageID: turn.initialParentMessageID,
   })
   return turn
 }
 
-export function activeTurn(sessionID: string) {
-  return activeTurns.get(sessionID)
+export function activeTurn(sessionID: string, turnID?: string) {
+  if (turnID) {
+    const turn = activeTurns.get(turnID)
+    return turn?.sessionID === sessionID ? turn : undefined
+  }
+  const turns = [...activeTurns.values()].filter((turn) => turn.sessionID === sessionID)
+  return turns.find((turn) => turn.targetKind === "active-thread") ?? turns[0]
+}
+
+export function activeTurnsForSession(sessionID: string) {
+  return [...activeTurns.values()].filter((turn) => turn.sessionID === sessionID)
 }
 
 export function finishTurn(turn: TurnContext) {

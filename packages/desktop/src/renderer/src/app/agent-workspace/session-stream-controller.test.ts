@@ -25,6 +25,7 @@ import {
   findPendingStreamForBackendTurn,
   isBackendUserMessageRecordedStreamEvent,
   isCompletedStreamEvent,
+  isDetachedBranchStreamEvent,
   isHighFrequencyDeltaStreamEvent,
   isLlmCompletedStreamEvent,
   isPermissionRequestStreamEvent,
@@ -80,6 +81,52 @@ describe("resolveRuntimeThreadTurnStatus", () => {
     expect(resolveRuntimeThreadTurnStatus({ eventType: "turn.failed", payloadStatus: "completed" })).toBe("failed")
     expect(resolveRuntimeThreadTurnStatus({ eventType: "turn.cancelled", payloadStatus: "completed" })).toBe("cancelled")
     expect(resolveRuntimeThreadTurnStatus({ eventType: "turn.completed" })).toBe("completed")
+  })
+})
+
+describe("detached branch stream routing", () => {
+  it("recognizes target metadata on every runtime event and the legacy start payload", () => {
+    expect(isDetachedBranchStreamEvent({
+      event: "runtime",
+      data: {
+        eventID: "event-detached-delta",
+        sessionID: "session-1",
+        turnID: "turn-branch",
+        targetKind: "detached-branch",
+        type: "text.part.delta",
+        payload: {
+          messageID: "assistant-branch",
+          partID: "part-branch",
+          kind: "text",
+          delta: "Branch",
+        },
+      },
+    })).toBe(true)
+
+    expect(isDetachedBranchStreamEvent({
+      event: "runtime",
+      data: {
+        eventID: "event-detached-start",
+        sessionID: "session-1",
+        turnID: "turn-branch",
+        type: "turn.started",
+        payload: {
+          targetKind: "detached-branch",
+        },
+      },
+    })).toBe(true)
+
+    expect(isDetachedBranchStreamEvent({
+      event: "runtime",
+      data: {
+        eventID: "event-active",
+        sessionID: "session-1",
+        turnID: "turn-main",
+        targetKind: "active-thread",
+        type: "turn.started",
+        payload: {},
+      },
+    })).toBe(false)
   })
 })
 

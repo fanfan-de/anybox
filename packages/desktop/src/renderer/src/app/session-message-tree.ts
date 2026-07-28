@@ -12,6 +12,26 @@ export interface SessionMessageTreeNode {
   parentMessageID: string | null
   content: string
   preview: string
+  completed?: number | null
+  turnStatus?: string | null
+  isCompletedResponse?: boolean
+}
+
+export interface BranchAnchorOption {
+  messageID: string
+  preview: string
+  created: number
+  promptPreview: string
+}
+
+export interface RecentBranchThread {
+  sessionID: string
+  originMessageID: string
+  headMessageID: string
+  title: string
+  leafPreview: string
+  updatedAt: number
+  status: string
 }
 
 export interface SessionMessageBranchOption {
@@ -52,6 +72,40 @@ function readBoolean(value: unknown) {
   return typeof value === "boolean" ? value : false
 }
 
+function readTurnStatus(message: LoadedSessionHistoryMessage) {
+  const hasWaitingApproval = message.parts.some((part) => {
+    const record = readRecord(part)
+    if (!record) return false
+    if (readString(record.type) === "permission" && readString(record.action) === "ask") {
+      return true
+    }
+    const state = readRecord(record.state)
+    return readString(record.type) === "tool" && readString(state?.status) === "waiting-approval"
+  })
+  if (hasWaitingApproval) return "waiting_approval"
+
+  const status = readString(message.turn?.status).trim()
+  if (status === "running") return "generating"
+  if (status === "failed") return "error"
+  return status || null
+}
+
+export function isCompletedAssistantResponse(message: LoadedSessionHistoryMessage) {
+  if (message.info.role !== "assistant") return false
+  const status = readTurnStatus(message)
+  const finishReason = readString(message.info.finishReason).trim()
+  const hasFinalFinishReason = Boolean(
+    finishReason && !["tool-calls", "unknown"].includes(finishReason),
+  )
+  if (status) {
+    return status === "completed" && (
+      finishReason ? hasFinalFinishReason : readNumber(message.info.completed) > 0
+    )
+  }
+  if (finishReason) return hasFinalFinishReason
+  return readNumber(message.info.completed) > 0
+}
+
 function compactPreview(value: string, maxLength = 72) {
   const compacted = value.replace(/\s+/g, " ").trim()
   return compacted.length > maxLength ? `${compacted.slice(0, maxLength - 1)}...` : compacted
@@ -68,6 +122,12 @@ function readTextPartPreview(part: unknown) {
   return readString(record.text)
 }
 
+function readMessageQuotePreview(part: unknown) {
+  const record = readRecord(part)
+  if (!record || readString(record.type) !== "message-quote") return ""
+  return readString(record.text)
+}
+
 function getMessageContent(message: LoadedSessionHistoryMessage) {
   const displayText = readString(message.info.displayText)
   if (displayText.trim()) return displayText.trim()
@@ -75,7 +135,10 @@ function getMessageContent(message: LoadedSessionHistoryMessage) {
   const text = message.parts.map(readTextPartPreview).filter(Boolean).join("\n\n").trim()
   if (text) return text
 
-  if (message.info.role === "user") return "User message"
+  if (message.info.role === "user") {
+    const quote = message.parts.map(readMessageQuotePreview).find((value) => value.trim())
+    return quote?.trim() || "User message"
+  }
   return "Assistant response"
 }
 
@@ -237,6 +300,9 @@ export function buildSessionMessageTree(
       role: message.info.role,
       created: readNumber(message.info.created),
       content: limitNodeContent(getMessageContent(message)),
+      completed: readNumber(message.info.completed) || null,
+      turnStatus: readTurnStatus(message),
+      isCompletedResponse: isCompletedAssistantResponse(message),
       parentMessageID: typeof message.info.parentMessageID === "string" ? message.info.parentMessageID : null,
       preview: getMessagePreview(message),
     }))
@@ -335,6 +401,84 @@ export function buildSessionMessageTree(
     rootMessageIDs,
     sessionID: firstNode.sessionID,
   }
+}
+
+function buildPathToNode(tree: SessionMessageTree, headMessageID: string) {
+  const path: string[] = []
+  const seen = new Set<string>()
+  let currentID: string | null = headMessageID
+  while (currentID) {
+    if (seen.has(currentID)) return []
+    seen.add(currentID)
+    const node: SessionMessageTreeNode | undefined = tree.nodesByID[currentID]
+    if (!node) return []
+    path.push(node.id)
+    currentID = node.parentMessageID
+  }
+  return path.reverse()
+}
+
+export function listBranchAnchorOptions(tree: SessionMessageTree | null): BranchAnchorOption[] {
+  if (!tree) return []
+  return [...tree.activePathMessageIDs]
+    .map((messageID) => tree.nodesByID[messageID])
+    .filter(
+      (node): node is SessionMessageTreeNode =>
+        Boolean(node && node.role === "assistant" && node.isCompletedResponse),
+    )
+    .map((node) => {
+      const path = buildPathToNode(tree, node.id)
+      const prompt = [...path]
+        .reverse()
+        .map((messageID) => tree.nodesByID[messageID])
+        .find((candidate) => candidate?.role === "user")
+      return {
+        messageID: node.id,
+        preview: node.preview,
+        created: node.completed ?? node.created,
+        promptPreview: prompt?.preview ?? "Earlier prompt",
+      }
+    })
+}
+
+export function listRecentBranchThreads(tree: SessionMessageTree | null): RecentBranchThread[] {
+  if (!tree?.activeMessageID) return []
+  const activePath = buildPathToNode(tree, tree.activeMessageID)
+  const activePathSet = new Set(activePath)
+  const leaves = Object.values(tree.nodesByID)
+    .filter((node) => (tree.childIDsByParentID[node.id] ?? []).length === 0)
+    .filter((node) => node.id !== tree.activeMessageID)
+
+  return leaves
+    .map((leaf): RecentBranchThread | null => {
+      const leafPath = buildPathToNode(tree, leaf.id)
+      if (leafPath.length === 0) return null
+      let originMessageID: string | null = null
+      for (const messageID of leafPath) {
+        if (!activePathSet.has(messageID)) break
+        originMessageID = messageID
+      }
+      if (!originMessageID) return null
+      const originIndex = leafPath.indexOf(originMessageID)
+      const divergentNodes = leafPath
+        .slice(originIndex + 1)
+        .map((messageID) => tree.nodesByID[messageID])
+        .filter((node): node is SessionMessageTreeNode => Boolean(node))
+      if (divergentNodes.length === 0) return null
+      const firstUser = divergentNodes.find((node) => node.role === "user")
+      const leafResponse = [...divergentNodes].reverse().find((node) => node.role === "assistant")
+      return {
+        sessionID: tree.sessionID,
+        originMessageID,
+        headMessageID: leaf.id,
+        title: firstUser?.preview ?? "Quoted response",
+        leafPreview: leafResponse?.preview ?? leaf.preview,
+        updatedAt: leaf.completed ?? leaf.created,
+        status: leaf.turnStatus ?? (leaf.role === "assistant" ? "completed" : "running"),
+      }
+    })
+    .filter((item): item is RecentBranchThread => Boolean(item))
+    .sort((left, right) => right.updatedAt - left.updatedAt)
 }
 
 export function getSessionMessageIDForMessage(input: {

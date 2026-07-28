@@ -165,6 +165,49 @@ describe("appearance token manifest", () => {
     expect(pluginItemHoverRule).not.toContain("--semantic-list-detail-row-surface-hover")
   })
 
+  it("keeps Branch Chat tokens public while routing Advanced controls through shared semantics", () => {
+    const branchChatGroup = APPEARANCE_TOKEN_GROUPS.find(
+      (group) => group.id === "component-branch-chat",
+    )
+    const branchChatTokenIDs = branchChatGroup?.rows.map((row) => row.id) ?? []
+
+    expect(branchChatTokenIDs).toEqual(expect.arrayContaining([
+      "semantic-branch-chat-field-surface-focus",
+      "semantic-branch-chat-field-surface-disabled",
+      "semantic-branch-chat-field-border-disabled",
+      "semantic-branch-chat-field-border-invalid",
+      "semantic-branch-chat-field-text-disabled",
+    ]))
+
+    const triggerRules = rightSidebarCss.match(
+      /\.branch-chat-advanced-trigger[^{}]*\{[^}]*\}/g,
+    )?.join("\n") ?? ""
+    const popoverRule = rightSidebarCss.match(
+      /\.branch-chat-start-popover\s*\{[^}]*\}/s,
+    )?.[0] ?? ""
+    const optionRules = rightSidebarCss.match(
+      /\.branch-chat-start-option[^{}]*\{[^}]*\}/g,
+    )?.join("\n") ?? ""
+    const locateRules = rightSidebarCss.match(
+      /\.branch-chat-start-locate[^{}]*\{[^}]*\}/g,
+    )?.join("\n") ?? ""
+
+    expect(triggerRules).toContain("var(--semantic-icon-button-text)")
+    expect(triggerRules).toContain("var(--semantic-icon-button-surface-hover)")
+    expect(triggerRules).toContain("var(--semantic-icon-button-text-hover)")
+    expect(triggerRules).toContain("var(--semantic-icon-button-surface-active)")
+    expect(popoverRule).toContain("var(--semantic-dropdown-menu-surface)")
+    expect(optionRules).toContain("var(--semantic-dropdown-option-text)")
+    expect(optionRules).toContain("var(--semantic-dropdown-option-surface-hover)")
+    expect(optionRules).toContain("var(--semantic-dropdown-option-text-hover)")
+    expect(optionRules).toContain("var(--semantic-dropdown-option-surface-selected)")
+    expect(optionRules).toContain("var(--semantic-dropdown-option-text-selected)")
+    expect(locateRules).toContain("var(--semantic-button-secondary-surface)")
+    expect(locateRules).toContain("var(--semantic-button-secondary-surface-hover)")
+    expect(locateRules).toContain("var(--semantic-button-secondary-disabled-surface)")
+    expect(rightSidebarCss).not.toContain(".branch-chat-anchor-picker")
+  })
+
   it("routes appearance color mode cards through segmented-control semantics", () => {
     const colorModeRules =
       settingsCss.match(/\.settings-color-mode[^{}]*\{[^{}]*\}/g)?.join("\n") ?? ""

@@ -1,9 +1,16 @@
 import { describe, expect, it } from "vitest"
 import type { LoadedSessionHistoryMessage } from "./types"
-import { buildSessionMessageTree } from "./session-message-tree"
+import {
+  buildSessionMessageTree,
+  isCompletedAssistantResponse,
+  listBranchAnchorOptions,
+  listRecentBranchThreads,
+} from "./session-message-tree"
 
 function createMessage(input: {
   created: number
+  completed?: number
+  finishReason?: string
   internal?: boolean
   id: string
   parentMessageID?: string | null
@@ -12,11 +19,14 @@ function createMessage(input: {
   text: string
   turnID?: string
   turnLastMessageID?: string
+  turnStatus?: "running" | "completed" | "blocked" | "failed" | "cancelled" | "continued_by_user"
   turnUserMessageID?: string
 }): LoadedSessionHistoryMessage {
   return {
     info: {
       created: input.created,
+      completed: input.completed ?? (input.role === "assistant" ? input.created : undefined),
+      finishReason: input.finishReason,
       id: input.id,
       internal: input.internal,
       parentMessageID: input.parentMessageID ?? null,
@@ -30,7 +40,7 @@ function createMessage(input: {
           sessionID: "session-1",
           projectID: "project-1",
           userMessageID: input.turnUserMessageID,
-          status: "completed",
+          status: input.turnStatus ?? "completed",
           lastMessageID: input.turnLastMessageID,
           createdAt: input.created,
           updatedAt: input.created,
@@ -41,6 +51,29 @@ function createMessage(input: {
 }
 
 describe("session message tree", () => {
+  it("recognizes only final completed assistant responses as branch anchors", () => {
+    expect(isCompletedAssistantResponse(createMessage({
+      id: "assistant-final",
+      role: "assistant",
+      created: 1,
+      text: "Done",
+      finishReason: "stop",
+    }))).toBe(true)
+    expect(isCompletedAssistantResponse(createMessage({
+      id: "assistant-tool-loop",
+      role: "assistant",
+      created: 2,
+      text: "Calling a tool",
+      finishReason: "tool-calls",
+    }))).toBe(false)
+    expect(isCompletedAssistantResponse(createMessage({
+      id: "user-complete",
+      role: "user",
+      created: 3,
+      text: "Not an assistant response",
+    }))).toBe(false)
+  })
+
   it("builds active paths and branch options from parent message links", () => {
     const tree = buildSessionMessageTree([
       createMessage({ id: "user-1", role: "user", created: 1, text: "Start" }),
@@ -221,5 +254,159 @@ describe("session message tree", () => {
     const content = tree?.nodesByID["assistant-1"]?.content ?? ""
     expect(content.length).toBeLessThan(longResponse.length)
     expect(content).toContain("Message tree preview truncated")
+  })
+
+  it("derives valid anchors and recent detached leaves relative to the active path", () => {
+    const messages = [
+      createMessage({ id: "user-root", role: "user", created: 1, text: "Start" }),
+      createMessage({ id: "assistant-anchor", role: "assistant", created: 2, parentMessageID: "user-root", text: "Shared answer" }),
+      createMessage({ id: "user-main", role: "user", created: 3, parentMessageID: "assistant-anchor", text: "Continue main" }),
+      createMessage({ id: "assistant-main", role: "assistant", created: 4, parentMessageID: "user-main", text: "Main result" }),
+      createMessage({ id: "user-branch", role: "user", created: 5, parentMessageID: "assistant-anchor", text: "Explore alternative" }),
+      createMessage({
+        id: "assistant-branch",
+        role: "assistant",
+        created: 6,
+        parentMessageID: "user-branch",
+        text: "Alternative result",
+        turnID: "turn-branch",
+        turnLastMessageID: "assistant-branch",
+        turnUserMessageID: "user-branch",
+      }),
+    ]
+    const tree = buildSessionMessageTree(messages, "assistant-main")
+
+    expect(listBranchAnchorOptions(tree).map((anchor) => anchor.messageID)).toEqual([
+      "assistant-anchor",
+      "assistant-main",
+    ])
+    expect(listRecentBranchThreads(tree)).toEqual([
+      expect.objectContaining({
+        originMessageID: "assistant-anchor",
+        headMessageID: "assistant-branch",
+        title: "Explore alternative",
+        leafPreview: "Alternative result",
+        status: "completed",
+      }),
+    ])
+
+    const switchedTree = buildSessionMessageTree(messages, "assistant-branch")
+    expect(listRecentBranchThreads(switchedTree)).toEqual([
+      expect.objectContaining({
+        originMessageID: "assistant-anchor",
+        headMessageID: "assistant-main",
+        title: "Continue main",
+      }),
+    ])
+  })
+
+  it("excludes blocked tool-loop responses from anchor choices and derives quote-only titles", () => {
+    const tree = buildSessionMessageTree([
+      createMessage({ id: "user-root", role: "user", created: 1, text: "Start" }),
+      createMessage({
+        id: "assistant-complete",
+        role: "assistant",
+        created: 2,
+        parentMessageID: "user-root",
+        text: "Completed response",
+        turnID: "turn-complete",
+        turnLastMessageID: "assistant-complete",
+        turnStatus: "completed",
+        turnUserMessageID: "user-root",
+      }),
+      createMessage({
+        id: "user-main",
+        role: "user",
+        created: 3,
+        parentMessageID: "assistant-complete",
+        text: "Continue",
+      }),
+      createMessage({
+        id: "assistant-blocked",
+        role: "assistant",
+        created: 4,
+        parentMessageID: "user-main",
+        text: "Waiting for a tool",
+        turnID: "turn-blocked",
+        turnLastMessageID: "assistant-blocked",
+        turnStatus: "blocked",
+        turnUserMessageID: "user-main",
+      }),
+      createMessage({
+        id: "user-quote-branch",
+        role: "user",
+        created: 5,
+        parentMessageID: "assistant-complete",
+        text: "",
+        parts: [{
+          id: "quote-only",
+          type: "message-quote",
+          sourceMessageID: "assistant-complete",
+          text: "Quoted title source",
+        }],
+      }),
+      createMessage({
+        id: "assistant-quote-branch",
+        role: "assistant",
+        created: 6,
+        parentMessageID: "user-quote-branch",
+        text: "Quote branch result",
+      }),
+    ], "assistant-blocked")
+
+    expect(listBranchAnchorOptions(tree).map((anchor) => anchor.messageID)).toEqual([
+      "assistant-complete",
+    ])
+    expect(listRecentBranchThreads(tree)).toEqual([
+      expect.objectContaining({
+        headMessageID: "assistant-quote-branch",
+        title: "Quoted title source",
+      }),
+    ])
+  })
+
+  it("presents detached leaf runtime status for recent branches", () => {
+    const tree = buildSessionMessageTree([
+      createMessage({ id: "user-root", role: "user", created: 1, text: "Start" }),
+      createMessage({ id: "assistant-anchor", role: "assistant", created: 2, parentMessageID: "user-root", text: "Shared answer" }),
+      createMessage({ id: "user-main", role: "user", created: 3, parentMessageID: "assistant-anchor", text: "Main" }),
+      createMessage({ id: "assistant-main", role: "assistant", created: 4, parentMessageID: "user-main", text: "Main result" }),
+      createMessage({ id: "user-branch", role: "user", created: 5, parentMessageID: "assistant-anchor", text: "Inspect" }),
+      createMessage({
+        id: "assistant-waiting",
+        role: "assistant",
+        created: 6,
+        parentMessageID: "user-branch",
+        text: "Waiting",
+        turnID: "turn-waiting",
+        turnLastMessageID: "assistant-waiting",
+        turnStatus: "blocked",
+        turnUserMessageID: "user-branch",
+        parts: [
+          {
+            id: "text-waiting",
+            type: "text",
+            text: "Waiting",
+          },
+          {
+            id: "tool-waiting",
+            type: "tool",
+            callID: "tool-call",
+            tool: "read-file",
+            state: {
+              status: "waiting-approval",
+              approvalID: "approval",
+              input: {},
+              time: { start: 1 },
+            },
+          },
+        ],
+      }),
+    ], "assistant-main")
+
+    expect(listRecentBranchThreads(tree)[0]).toEqual(expect.objectContaining({
+      headMessageID: "assistant-waiting",
+      status: "waiting_approval",
+    }))
   })
 })

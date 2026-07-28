@@ -80,6 +80,7 @@ interface ComposerProps {
   hasBagSubmit?: boolean
   hasCompactCommand?: boolean
   hasPendingPermissionRequests: boolean
+  hasSupplementalSubmitContent?: boolean
   isCancelling?: boolean
   isInterruptible?: boolean
   isSending: boolean
@@ -1127,6 +1128,7 @@ export function Composer({
   hasBagSubmit = false,
   hasCompactCommand = false,
   hasPendingPermissionRequests,
+  hasSupplementalSubmitContent = false,
   isCancelling = false,
   isInterruptible = false,
   isSending,
@@ -1918,7 +1920,11 @@ export function Composer({
     if (action.type === "send") {
       if (!isEditorEventTarget(event.target)) return
       if (isCancelling) return
-      if ((isSending || isInterruptible) && !hasComposerSubmittableContent(draftStateRef.current, attachments)) {
+      if (
+        (isSending || isInterruptible) &&
+        !hasSupplementalSubmitContent &&
+        !hasComposerSubmittableContent(draftStateRef.current, attachments)
+      ) {
         void onCancelSend?.()
         return
       }
@@ -1965,7 +1971,10 @@ export function Composer({
 
   const unsupportedAttachmentPathSet = new Set(unsupportedAttachmentPaths)
   const hasRunningTask = isSending || isInterruptible
-  const hasSubmittableContent = hasDraftText || attachments.length > 0
+  const hasSubmittableContent =
+    hasDraftText ||
+    attachments.length > 0 ||
+    hasSupplementalSubmitContent
   const sendButtonActsAsStop = hasRunningTask && !hasSubmittableContent
   const showStopButton = isCancelling || hasRunningTask
   const stopButtonLabel = isCancelling ? "Cancelling task" : "Stop task"

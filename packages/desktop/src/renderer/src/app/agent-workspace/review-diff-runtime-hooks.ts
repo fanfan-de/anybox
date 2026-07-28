@@ -44,6 +44,7 @@ export function buildSessionRuntimeDebugSignature(snapshot: SessionRuntimeDebugS
   return JSON.stringify({
     activeTurnID: snapshot.activeTurnID,
     diagnostics: snapshot.diagnostics,
+    executions: snapshot.executions ?? [],
     latestTurn: snapshot.latestTurn,
     running: {
       reason: snapshot.running.reason,

@@ -72,7 +72,7 @@ test("cancel reconciles a persisted running turn when no runtime is active", () 
     sessionID,
     projectID: "project_prompt_orphan_cancel_test",
   })
-  Session.recordMessage(Message.Assistant.parse({
+  Session.recordActiveMessage(Message.Assistant.parse({
     id: messageID,
     sessionID,
     turnID,

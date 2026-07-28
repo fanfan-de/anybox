@@ -6,6 +6,7 @@ import "./sqlite.cleanup.ts"
 import * as Identifier from "#id/id.ts"
 import * as Sqlite from "#database/Sqlite.ts"
 import * as Message from "#session/core/message.ts"
+import * as Prompt from "#session/core/prompt.ts"
 import * as Session from "#session/core/session.ts"
 import { z } from "zod"
 
@@ -280,7 +281,113 @@ test("active branch history follows parentMessageID from the session head", asyn
   }
 })
 
-test("recordMessage advances active head for new messages without rewinding on old updates", async () => {
+test("listBranch resolves any head strictly and rejects invalid tree edges", async () => {
+  const root = await mkdtemp(join(tmpdir(), "anybox-message-tree-branch-"))
+  const databaseFile = join(root, "message-tree-branch.db")
+
+  try {
+    Sqlite.setDatabaseFile(databaseFile)
+    const session = makeSession()
+    const otherSession = makeSession()
+    Session.DataBaseCreate("sessions", session)
+    Session.DataBaseCreate("sessions", otherSession)
+
+    const rootMessage = makeUserMessage({ sessionID: session.id, created: 1, parentMessageID: null })
+    const firstLeaf = makeUserMessage({ sessionID: session.id, created: 2, parentMessageID: rootMessage.id })
+    const secondLeaf = makeUserMessage({ sessionID: session.id, created: 3, parentMessageID: rootMessage.id })
+    Session.upsertMessage(rootMessage)
+    Session.upsertMessage(firstLeaf)
+    Session.upsertMessage(secondLeaf)
+
+    expect(Message.listBranch(session.id, secondLeaf.id).map((message) => message.info.id)).toEqual([
+      rootMessage.id,
+      secondLeaf.id,
+    ])
+
+    const missingHead = makeUserMessage({
+      sessionID: session.id,
+      created: 4,
+      parentMessageID: Identifier.ascending("message"),
+    })
+    Session.upsertMessage(missingHead)
+    expect(() => Message.listBranch(session.id, missingHead.id)).toThrow("references missing message")
+
+    const otherMessage = makeUserMessage({ sessionID: otherSession.id, created: 1, parentMessageID: null })
+    const crossSessionHead = makeUserMessage({
+      sessionID: session.id,
+      created: 5,
+      parentMessageID: otherMessage.id,
+    })
+    Session.upsertMessage(otherMessage)
+    Session.upsertMessage(crossSessionHead)
+    expect(() => Message.listBranch(session.id, crossSessionHead.id)).toThrow("belongs to a different session")
+
+    const cycleRoot = makeUserMessage({ sessionID: session.id, created: 6 })
+    const cycleHead = makeUserMessage({ sessionID: session.id, created: 7, parentMessageID: cycleRoot.id })
+    Session.upsertMessage({ ...cycleRoot, parentMessageID: cycleHead.id })
+    Session.upsertMessage(cycleHead)
+    expect(() => Message.listBranch(session.id, cycleHead.id)).toThrow("contains a cycle")
+  } finally {
+    Sqlite.closeDatabase()
+    Sqlite.setDatabaseFile(undefined)
+    await removeWithRetry(root)
+  }
+})
+
+test("detached prompt targets reject invalid parents before an execution is accepted", async () => {
+  const root = await mkdtemp(join(tmpdir(), "anybox-detached-parent-validation-"))
+  const databaseFile = join(root, "detached-parent-validation.db")
+
+  try {
+    Sqlite.setDatabaseFile(databaseFile)
+    const session = makeSession()
+    const otherSession = makeSession()
+    Session.DataBaseCreate("sessions", session)
+    Session.DataBaseCreate("sessions", otherSession)
+
+    const crossSessionParent = makeUserMessage({
+      sessionID: otherSession.id,
+      created: 1,
+      parentMessageID: null,
+    })
+    const internalParent = Message.User.parse({
+      ...makeUserMessage({
+        sessionID: session.id,
+        created: 2,
+        parentMessageID: null,
+      }),
+      internal: true,
+    })
+    Session.recordMessage(crossSessionParent)
+    Session.recordMessage(internalParent)
+
+    const promptInput = (parentMessageID: string) => ({
+      sessionID: session.id,
+      executionID: `branch-${parentMessageID}`,
+      threadTarget: {
+        kind: "detached-branch" as const,
+        parentMessageID,
+      },
+      parts: [{ type: "text" as const, text: "Inspect this branch." }],
+    })
+
+    expect(() =>
+      Prompt.promptExecution(promptInput(Identifier.ascending("message"))),
+    ).toThrow("was not found")
+    expect(() =>
+      Prompt.promptExecution(promptInput(crossSessionParent.id)),
+    ).toThrow("same session")
+    expect(() =>
+      Prompt.promptExecution(promptInput(internalParent.id)),
+    ).toThrow("Internal messages")
+  } finally {
+    Sqlite.closeDatabase()
+    Sqlite.setDatabaseFile(undefined)
+    await removeWithRetry(root)
+  }
+})
+
+test("recordActiveMessage advances the main head while recordMessage stays side-effect free", async () => {
   const root = await mkdtemp(join(tmpdir(), "anybox-message-tree-record-"))
   const databaseFile = join(root, "message-tree-record.db")
 
@@ -292,13 +399,17 @@ test("recordMessage advances active head for new messages without rewinding on o
     const first = makeUserMessage({ sessionID: session.id, created: 1, parentMessageID: null })
     const second = makeUserMessage({ sessionID: session.id, created: 2, parentMessageID: first.id })
 
-    Session.recordMessage(first)
+    Session.recordActiveMessage(first)
     expect(Session.getActiveMessageID(session.id)).toBe(first.id)
 
-    Session.recordMessage(second)
+    Session.recordActiveMessage(second)
     expect(Session.getActiveMessageID(session.id)).toBe(second.id)
 
-    Session.recordMessage({
+    const detached = makeUserMessage({ sessionID: session.id, created: 3, parentMessageID: first.id })
+    Session.recordMessage(detached)
+    expect(Session.getActiveMessageID(session.id)).toBe(second.id)
+
+    Session.recordActiveMessage({
       ...first,
       displayText: "Updated old message",
     })

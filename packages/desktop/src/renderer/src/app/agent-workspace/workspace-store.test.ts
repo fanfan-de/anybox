@@ -163,6 +163,69 @@ describe("workspace store", () => {
     expect(inspectorTab?.kind === "message-inspector" ? inspectorTab.sessionID : null).toBe("session-2")
   })
 
+  it("keeps draft branch chats independent and focuses an already-open committed leaf", () => {
+    const store = createTestStore()
+
+    const firstDraftID = store.getState().sessionsActions.openOrFocusRightSidebarTab({
+      kind: "branch-thread",
+      sessionID: "session-1",
+      originMessageID: "response-1",
+    })
+    const secondDraftID = store.getState().sessionsActions.openOrFocusRightSidebarTab({
+      kind: "branch-thread",
+      sessionID: "session-1",
+      originMessageID: "response-1",
+    })
+
+    expect(secondDraftID).not.toBe(firstDraftID)
+    expect(store.getState().sessions.rightSidebar.tabs).toHaveLength(2)
+
+    store.getState().sessionsActions.updateRightSidebarTab(firstDraftID, {
+      phase: "committed",
+      headMessageID: "branch-response-1",
+      title: "Investigate the branch",
+    })
+
+    const reopenedID = store.getState().sessionsActions.openOrFocusRightSidebarTab({
+      kind: "branch-thread",
+      sessionID: "session-1",
+      originMessageID: "response-1",
+      headMessageID: "branch-response-1",
+      phase: "committed",
+    })
+
+    expect(reopenedID).toBe(firstDraftID)
+    expect(store.getState().sessions.rightSidebar.tabs).toHaveLength(2)
+    expect(store.getState().sessions.rightSidebar.activeTabID).toBe(firstDraftID)
+
+    const committed = store.getState().sessions.rightSidebar.tabs.find((tab) => tab.id === firstDraftID)
+    expect(committed?.kind).toBe("branch-thread")
+    expect(committed?.kind === "branch-thread" ? committed.headMessageID : null).toBe("branch-response-1")
+    expect(committed?.kind === "branch-thread" ? committed.executionID : null).toBe(firstDraftID)
+    expect(committed?.kind === "branch-thread" ? committed.anchorStrategy : null).toBe("selected")
+  })
+
+  it("stores the send-time strategy and preserves it across provisional start updates", () => {
+    const store = createTestStore()
+    const tabID = store.getState().sessionsActions.openOrFocusRightSidebarTab({
+      kind: "branch-thread",
+      anchorStrategy: "latest-at-send",
+      sessionID: "session-1",
+      originMessageID: "response-1",
+    })
+
+    store.getState().sessionsActions.updateRightSidebarTab(tabID, {
+      originMessageID: "response-2",
+      headMessageID: "response-2",
+    })
+
+    const tab = store.getState().sessions.rightSidebar.tabs.find(
+      (candidate) => candidate.id === tabID,
+    )
+    expect(tab?.kind === "branch-thread" ? tab.anchorStrategy : null).toBe("latest-at-send")
+    expect(tab?.kind === "branch-thread" ? tab.originMessageID : null).toBe("response-2")
+  })
+
   it("starts without seed workspaces while the desktop workspace loader is available", () => {
     const store = createWorkspaceStore({
       hasFolderWorkspaceLoader: true,

@@ -53,6 +53,21 @@ const EMPTY_PERMISSION_REQUESTS: PermissionRequest[] = []
 const EMPTY_MESSAGES: ThreadMessage[] = []
 const runningSessionIDsCache = new WeakMap<Record<string, ThreadMessage[]>, WeakMap<Record<string, boolean>, string[]>>()
 
+export function filterPermissionRequestsForThread(
+  requests: PermissionRequest[],
+  messages: ThreadMessage[],
+) {
+  const visibleTurnIDs = new Set(
+    messages.flatMap((message) =>
+      message.kind === "assistant" && message.backendTurnID
+        ? [message.backendTurnID]
+        : [],
+    ),
+  )
+  const filtered = requests.filter((request) => !request.turnID || visibleTurnIDs.has(request.turnID))
+  return filtered.length === requests.length ? requests : filtered
+}
+
 export function getUniqueSessionIDs(sessionIDs: string[]) {
   const seen = new Set<string>()
   const nextSessionIDs: string[] = []
@@ -227,8 +242,23 @@ function hasStreamingAssistantMessage(messages: ThreadMessage[]) {
   return messages.some((message) => message.kind === "assistant" && message.isStreaming)
 }
 
-function isRuntimeDebugBusy(debug: SessionRuntimeDebugSnapshot | null | undefined) {
-  return debug?.status.type === "busy" || Boolean(debug?.activeTurnID)
+function isRuntimeDebugBusy(
+  debug: SessionRuntimeDebugSnapshot | null | undefined,
+  messages: ThreadMessage[],
+) {
+  if (debug?.executions?.some(
+    (execution) =>
+      execution.targetKind === "active-thread" &&
+      (execution.status === "running" || execution.status === "cancelling"),
+  )) {
+    return true
+  }
+  if (!debug?.activeTurnID) return false
+  return messages.some(
+    (message) =>
+      message.kind === "assistant" &&
+      message.backendTurnID === debug.activeTurnID,
+  )
 }
 
 function isSessionInterruptible(input: {
@@ -249,7 +279,10 @@ function isSessionInterruptible(input: {
         ? Boolean(input.conversationActivityBySession[input.sessionID]?.hasStreamingAssistantMessage)
         : hasStreamingAssistantMessage(input.conversations[input.sessionID] ?? [])
     ) ||
-    isRuntimeDebugBusy(input.sessionRuntimeDebugBySession[input.sessionID])
+    isRuntimeDebugBusy(
+      input.sessionRuntimeDebugBySession[input.sessionID],
+      input.conversations[input.sessionID] ?? [],
+    )
   )
 }
 
@@ -474,6 +507,15 @@ export function buildWorkbenchSurfaceState(
     findIndexedWorkspaceByID(input.workspaces, currentActiveCreateSessionTab?.workspaceID ?? null) ??
     null
   const currentSession = currentSessionSelection.session
+  const currentActiveMessages = currentActiveSessionID
+    ? input.conversations[currentActiveSessionID] ?? EMPTY_MESSAGES
+    : EMPTY_MESSAGES
+  const currentPermissionRequests = currentActiveSessionID
+    ? filterPermissionRequestsForThread(
+        input.pendingPermissionRequestsBySession[currentActiveSessionID] ?? EMPTY_PERMISSION_REQUESTS,
+        currentActiveMessages,
+      )
+    : EMPTY_PERMISSION_REQUESTS
 
   return {
     id: surface.id,
@@ -496,7 +538,7 @@ export function buildWorkbenchSurfaceState(
       ? input.sessionDirectoryBySession[currentActiveSessionID] ?? currentWorkspace?.directory ?? null
       : null,
     activeSessionSelectedDiffFile: currentActiveSessionID ? input.selectedDiffFileBySession[currentActiveSessionID] ?? null : null,
-    activeMessages: currentActiveSessionID ? input.conversations[currentActiveSessionID] ?? EMPTY_MESSAGES : EMPTY_MESSAGES,
+    activeMessages: currentActiveMessages,
     messageTree: currentActiveSessionID ? input.messageTreeBySession?.[currentActiveSessionID] ?? null : null,
     composerAttachments: currentActiveTabKey ? input.composerAttachmentsByTabKey[currentActiveTabKey] ?? EMPTY_COMPOSER_ATTACHMENTS : EMPTY_COMPOSER_ATTACHMENTS,
     composerParentMessageID: currentActiveTabKey ? input.composerParentMessageIDByTabKey?.[currentActiveTabKey] ?? null : null,
@@ -533,7 +575,7 @@ export function buildWorkbenchSurfaceState(
         sessionRuntimeDebugBySession: input.sessionRuntimeDebugBySession,
         tabKey: currentActiveTabKey,
       }),
-    pendingPermissionRequests: currentActiveSessionID ? input.pendingPermissionRequestsBySession[currentActiveSessionID] ?? EMPTY_PERMISSION_REQUESTS : EMPTY_PERMISSION_REQUESTS,
+    pendingPermissionRequests: currentPermissionRequests,
     pendingConversationInputs: currentActiveSessionID
       ? input.pendingConversationInputsBySession?.[currentActiveSessionID] ?? EMPTY_PENDING_CONVERSATION_INPUTS
       : EMPTY_PENDING_CONVERSATION_INPUTS,
@@ -991,7 +1033,12 @@ export function buildWorkspaceDerivedState({
     ? sessionDirectoryBySession[activeSession.id] ?? activeWorkspace?.directory ?? null
     : null
   const activeSessionSelectedDiffFile = activeSession ? selectedDiffFileBySession[activeSession.id] ?? null : null
-  const activePendingPermissionRequests = activeSession ? pendingPermissionRequestsBySession[activeSession.id] ?? [] : []
+  const activePendingPermissionRequests = activeSession
+    ? filterPermissionRequestsForThread(
+        pendingPermissionRequestsBySession[activeSession.id] ?? [],
+        activeMessages,
+      )
+    : []
   const activePendingConversationInputs =
     activeSession ? pendingConversationInputsBySession?.[activeSession.id] ?? [] : []
   const activeSessionContextUsage = activeSession ? contextUsageBySession[activeSession.id] ?? null : null
@@ -1017,7 +1064,12 @@ export function buildWorkspaceDerivedState({
     tabKey: activeTabKey,
   })
   const isCreatingSession = activeTabKey ? Boolean(isCreatingSessionByTabKey[activeTabKey]) : false
-  const runningSessionIDs = getRunningSessionIDs(conversations, isSendingByTabKey, conversationActivityBySession)
+  const runningSessionIDs = getUniqueSessionIDs([
+    ...getRunningSessionIDs(conversations, isSendingByTabKey, conversationActivityBySession),
+    ...Object.entries(sessionRuntimeDebugBySession)
+      .filter(([, debug]) => debug.status.type === "busy")
+      .map(([sessionID]) => sessionID),
+  ])
   const canvasSessionTabs = focusedPane
     ? focusedPane.views.flatMap((reference) => {
         if (reference.kind !== "session") return []

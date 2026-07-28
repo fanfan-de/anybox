@@ -27,7 +27,11 @@ import type {
 } from "../types"
 import { useProjectComposer } from "../use-project-composer"
 import { BranchThreadView, type BranchThreadViewSnapshot } from "../thread/BranchThreadView"
-import { ThreadView, type ThreadNavigationRequest, type ThreadScrollSnapshot } from "../thread/ThreadView"
+import {
+  ThreadView,
+  type ThreadNavigationRequest,
+  type ThreadScrollSnapshot,
+} from "../thread/ThreadView"
 import { deriveActiveMessages } from "../thread-turn-state"
 import type { WorkbenchPaneState } from "../agent-workspace/workspace-derived-state"
 import { useConversationTurns, type ConversationStoreApi } from "../agent-workspace/conversation-store"
@@ -380,6 +384,12 @@ export interface WorkbenchPaneSurfaceProps {
   onBranchSelect: (input: { messageID: string; sessionID?: string | null }) => Promise<void>
   onClearComposerParentMessage: (input?: { tabKey?: string | null }) => void
   onForkFromMessage: (messageID: string, options?: { tabKey?: string | null }) => void
+  onOpenBranchChat?: (input: {
+    messageID: string
+    paneID: string
+    quoteText?: string
+    sessionID: string
+  }) => void
   onAskUserQuestionAnswer: (input: {
     freeformText?: string
     questionID?: string
@@ -436,6 +446,17 @@ export interface WorkbenchPaneSurfaceProps {
   onMessageDiffSummaryHydrate: (messageID: string, diffSummary: SessionDiffSummary, sessionID?: string | null) => void | Promise<void>
 }
 
+export function resolveWorkbenchPaneNavigationRequest(
+  paneID: string,
+  sessionID: string | null | undefined,
+  requestsBySession?: Record<string, ThreadNavigationRequest>,
+) {
+  if (!sessionID) return null
+  const request = requestsBySession?.[sessionID] ?? null
+  if (request?.paneID && request.paneID !== paneID) return null
+  return request
+}
+
 function InactiveWorkbenchPaneSurface({
   isTopRow,
   pane,
@@ -466,19 +487,34 @@ export const WorkbenchPaneSurface = memo(function WorkbenchPaneSurface(props: Wo
 
   if (props.pane.isActivePanel || import.meta.env.MODE === "test") {
     lastActivePropsRef.current = props
-    return <ActiveWorkbenchPaneSurface {...props} threadActivationVersion={threadActivationVersion} />
+    return (
+      <ActiveWorkbenchPaneSurface
+        {...props}
+        threadActivationVersion={threadActivationVersion}
+      />
+    )
   }
 
   const cachedProps = lastActivePropsRef.current
   if (cachedProps) {
-    return <ActiveWorkbenchPaneSurface {...cachedProps} threadActivationVersion={threadActivationVersion} />
+    return (
+      <ActiveWorkbenchPaneSurface
+        {...cachedProps}
+        threadActivationVersion={threadActivationVersion}
+      />
+    )
   }
 
   if (!props.pane.isActivePanel) {
     return <InactiveWorkbenchPaneSurface isTopRow={props.isTopRow} pane={props.pane} />
   }
 
-  return <ActiveWorkbenchPaneSurface {...props} threadActivationVersion={threadActivationVersion} />
+  return (
+    <ActiveWorkbenchPaneSurface
+      {...props}
+      threadActivationVersion={threadActivationVersion}
+    />
+  )
 })
 
 interface ActiveWorkbenchPaneSurfaceProps extends WorkbenchPaneSurfaceProps {
@@ -525,6 +561,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
   onBranchSelect,
   onClearComposerParentMessage,
   onForkFromMessage,
+  onOpenBranchChat,
   onAskUserQuestionAnswer,
   onApproveProposedPlan,
   onPermissionRequestResponse,
@@ -556,6 +593,12 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
     conversationStore,
     pane.sessionID,
   )
+  const paneNavigationRequest = resolveWorkbenchPaneNavigationRequest(
+    pane.id,
+    pane.sessionID,
+    threadNavigationRequestBySession,
+  )
+
   const composerParentMessagePreview = pane.composerParentMessageID
     ? pane.messageTree?.nodesByID[pane.composerParentMessageID]?.preview
     : undefined
@@ -876,12 +919,14 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                   initialSnapshot={branchViewSnapshotsRef.current[branchViewSnapshotKey] ?? null}
                   isSessionRunning={pane.isSending || pane.isInterruptible}
                   messageTree={pane.messageTree}
-                  onInspectMessage={(messageID) => {
-                    if (!pane.sessionID) return
-                    onInspectMessageInSidebar(messageID, pane.sessionID, pane.id)
+                  onContinueFromMessage={(messageID) => {
                     if (pane.tabKey) {
                       onForkFromMessage(messageID, { tabKey: pane.tabKey })
                     }
+                  }}
+                  onInspectMessage={(messageID) => {
+                    if (!pane.sessionID) return
+                    onInspectMessageInSidebar(messageID, pane.sessionID, pane.id)
                   }}
                   onSnapshotChange={(snapshot) => {
                     branchViewSnapshotsRef.current[branchViewSnapshotKey] = snapshot
@@ -905,12 +950,31 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                   scrollStateKey={pane.tabKey}
                   threadColumnRef={threadColumnRef}
                   isThreadVisible={pane.isActivePanel}
-                  navigationRequest={pane.sessionID ? threadNavigationRequestBySession?.[pane.sessionID] ?? null : null}
+                  navigationRequest={paneNavigationRequest}
                   virtualMeasurementKey={`${pane.tabKey ?? pane.sessionID ?? pane.id}:${String(threadActivationVersion)}`}
                   readScrollSnapshot={readThreadScrollSnapshot}
                   saveScrollSnapshot={saveThreadScrollSnapshot}
                   onBranchSelect={(messageID) => onBranchSelect({ messageID, sessionID: pane.sessionID })}
-                  onForkFromMessage={(messageID) => onForkFromMessage(messageID, { tabKey: pane.tabKey })}
+                  onForkFromMessage={(messageID) => {
+                    if (pane.sessionID && onOpenBranchChat) {
+                      onOpenBranchChat({
+                        messageID,
+                        paneID: pane.id,
+                        sessionID: pane.sessionID,
+                      })
+                      return
+                    }
+                    onForkFromMessage(messageID, { tabKey: pane.tabKey })
+                  }}
+                  onBranchChatFromSelection={({ messageID, text }) => {
+                    if (!pane.sessionID || !onOpenBranchChat) return
+                    onOpenBranchChat({
+                      messageID,
+                      paneID: pane.id,
+                      quoteText: text,
+                      sessionID: pane.sessionID,
+                    })
+                  }}
                   onAskUserQuestionAnswer={(answer) =>
                     onAskUserQuestionAnswer({
                       freeformText: answer.freeformText,

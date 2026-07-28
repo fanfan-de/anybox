@@ -316,6 +316,7 @@ function updateCachedProjectComposerModelSelection(
 
 export interface UseProjectComposerOptions {
   attachmentPaths: string[]
+  persistSelection?: boolean
   onSessionModelSelectionChange?: (sessionID: string, selection: SessionModelSelection | undefined) => void
   projectID: string | null
   refreshToken?: number
@@ -325,6 +326,7 @@ export interface UseProjectComposerOptions {
 
 export function useProjectComposer({
   attachmentPaths,
+  persistSelection = true,
   onSessionModelSelectionChange,
   projectID,
   refreshToken = 0,
@@ -748,6 +750,7 @@ export function useProjectComposer({
     const previousSmallModel = smallModel
     const requestID = ++modelSelectionRequestRef.current
     setSelectedModel(value)
+    if (!persistSelection) return
 
     if (targetSessionID) {
       onSessionModelSelectionChange?.(targetSessionID, {
@@ -846,6 +849,7 @@ export function useProjectComposer({
       ? selectedSkillIDs.filter((item) => item !== value)
       : [...selectedSkillIDs, value]
     setSelectedSkillIDs(nextSelection)
+    if (!persistSelection) return
 
     const requestID = ++skillSelectionRequestRef.current
 
@@ -882,6 +886,7 @@ export function useProjectComposer({
       ? selectedPluginIDs.filter((item) => item !== value)
       : [...selectedPluginIDs, value]
     setSelectedPluginIDs(nextSelection)
+    if (!persistSelection) return
 
     const requestID = ++pluginSelectionRequestRef.current
 
@@ -918,6 +923,7 @@ export function useProjectComposer({
       ? selectedMcpServerIDs.filter((item) => item !== value)
       : [...selectedMcpServerIDs, value]
     setSelectedMcpServerIDs(nextSelection)
+    if (!persistSelection) return
 
     const requestID = ++mcpSelectionRequestRef.current
 
@@ -951,6 +957,7 @@ export function useProjectComposer({
     const previousReasoningEffort = selectedReasoningEffort
     const requestID = ++modelSelectionRequestRef.current
     setSelectedReasoningEffort(value)
+    if (!persistSelection) return
 
     if (!targetSessionID) {
       if (!targetProjectID || !updateProjectModelSelection) return

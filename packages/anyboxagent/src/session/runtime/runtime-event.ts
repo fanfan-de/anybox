@@ -16,6 +16,8 @@ export const RuntimeEventBase = z.object({
   eventID: Identifier.schema("event"),
   sessionID: Identifier.schema("session"),
   turnID: Identifier.schema("turn").nullable(),
+  executionID: z.string().optional(),
+  targetKind: z.enum(["active-thread", "detached-branch"]).optional(),
   seq: z.number().int().positive(),
   timestamp: z.number().int().nonnegative(),
 })
@@ -31,6 +33,9 @@ const TurnStartedPayload = z.object({
   agent: z.string().optional(),
   model: ModelRef.optional(),
   resume: z.boolean().optional(),
+  executionID: z.string().optional(),
+  targetKind: z.enum(["active-thread", "detached-branch"]).optional(),
+  initialParentMessageID: z.string().nullable().optional(),
 })
 
 const MessageRecordedPayload = z.object({
@@ -530,6 +535,8 @@ export type RuntimeEventPayloadByType = {
 export function createRuntimeEventFactory<TTurnID extends string | null>(input: {
   sessionID: string
   turnID: TTurnID
+  executionID?: string
+  targetKind?: "active-thread" | "detached-branch"
   timestamp?: () => number
   initialSeq?: number
 }) {
@@ -548,6 +555,8 @@ export function createRuntimeEventFactory<TTurnID extends string | null>(input: 
         eventID: Identifier.ascending("event"),
         sessionID: input.sessionID,
         turnID: input.turnID,
+        executionID: input.executionID,
+        targetKind: input.targetKind,
         seq,
         timestamp: now(),
         type,

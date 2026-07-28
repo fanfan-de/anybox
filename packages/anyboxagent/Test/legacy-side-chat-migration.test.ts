@@ -53,7 +53,7 @@ function rowCount(tableName: string, column: string, value: string) {
 
 function addSessionRecords(sessionID: string, projectID: string) {
   const messageID = Identifier.ascending("message")
-  Session.recordMessage({
+  Session.recordActiveMessage({
     id: messageID,
     sessionID,
     role: "user",

@@ -357,6 +357,48 @@ export const APPEARANCE_TOKEN_NAMES = [
   "semantic-media-viewer-border-strong-dark",
   "semantic-media-viewer-text-light",
   "semantic-media-viewer-text-dark",
+  "semantic-branch-chat-surface-light",
+  "semantic-branch-chat-surface-dark",
+  "semantic-branch-chat-surface-muted-light",
+  "semantic-branch-chat-surface-muted-dark",
+  "semantic-branch-chat-card-surface-light",
+  "semantic-branch-chat-card-surface-dark",
+  "semantic-branch-chat-row-surface-light",
+  "semantic-branch-chat-row-surface-dark",
+  "semantic-branch-chat-row-surface-hover-light",
+  "semantic-branch-chat-row-surface-hover-dark",
+  "semantic-branch-chat-border-light",
+  "semantic-branch-chat-border-dark",
+  "semantic-branch-chat-divider-light",
+  "semantic-branch-chat-divider-dark",
+  "semantic-branch-chat-text-light",
+  "semantic-branch-chat-text-dark",
+  "semantic-branch-chat-text-secondary-light",
+  "semantic-branch-chat-text-secondary-dark",
+  "semantic-branch-chat-text-muted-light",
+  "semantic-branch-chat-text-muted-dark",
+  "semantic-branch-chat-accent-light",
+  "semantic-branch-chat-accent-dark",
+  "semantic-branch-chat-error-light",
+  "semantic-branch-chat-error-dark",
+  "semantic-branch-chat-field-surface-light",
+  "semantic-branch-chat-field-surface-dark",
+  "semantic-branch-chat-field-surface-focus-light",
+  "semantic-branch-chat-field-surface-focus-dark",
+  "semantic-branch-chat-field-surface-disabled-light",
+  "semantic-branch-chat-field-surface-disabled-dark",
+  "semantic-branch-chat-field-border-light",
+  "semantic-branch-chat-field-border-dark",
+  "semantic-branch-chat-field-border-focus-light",
+  "semantic-branch-chat-field-border-focus-dark",
+  "semantic-branch-chat-field-border-disabled-light",
+  "semantic-branch-chat-field-border-disabled-dark",
+  "semantic-branch-chat-field-border-invalid-light",
+  "semantic-branch-chat-field-border-invalid-dark",
+  "semantic-branch-chat-field-text-light",
+  "semantic-branch-chat-field-text-dark",
+  "semantic-branch-chat-field-text-disabled-light",
+  "semantic-branch-chat-field-text-disabled-dark",
   "semantic-markdown-text-light",
   "semantic-markdown-text-dark",
   "semantic-markdown-muted-text-light",
@@ -1828,6 +1870,161 @@ export const APPEARANCE_TOKEN_GROUPS = [
     ]
   },
   {
+    "id": "component-branch-chat",
+    "layer": "product",
+    "label": "Branch Chat",
+    "description": "Dedicated semantic colors for the right-sidebar branch thread, anchor preview, recent branches, and message quotes.",
+    "rows": [
+      {
+        "id": "semantic-branch-chat-surface",
+        "label": "Surface",
+        "description": "Primary background for the Branch Chat panel and composer stack.",
+        "lightToken": "semantic-branch-chat-surface-light",
+        "darkToken": "semantic-branch-chat-surface-dark"
+      },
+      {
+        "id": "semantic-branch-chat-surface-muted",
+        "label": "Muted Surface",
+        "description": "Low-emphasis background for the Branch Chat anchor region.",
+        "lightToken": "semantic-branch-chat-surface-muted-light",
+        "darkToken": "semantic-branch-chat-surface-muted-dark"
+      },
+      {
+        "id": "semantic-branch-chat-card-surface",
+        "label": "Card Surface",
+        "description": "Background for Branch Chat anchor previews, quote cards, and read-only badges.",
+        "lightToken": "semantic-branch-chat-card-surface-light",
+        "darkToken": "semantic-branch-chat-card-surface-dark"
+      },
+      {
+        "id": "semantic-branch-chat-row-surface",
+        "label": "Recent Row Surface",
+        "description": "Default background for recent-branch rows.",
+        "lightToken": "semantic-branch-chat-row-surface-light",
+        "darkToken": "semantic-branch-chat-row-surface-dark"
+      },
+      {
+        "id": "semantic-branch-chat-row-surface-hover",
+        "label": "Recent Row Hover",
+        "description": "Hover and keyboard-focus background for recent-branch rows.",
+        "lightToken": "semantic-branch-chat-row-surface-hover-light",
+        "darkToken": "semantic-branch-chat-row-surface-hover-dark"
+      },
+      {
+        "id": "semantic-branch-chat-border",
+        "label": "Border",
+        "description": "Default border for Branch Chat cards, controls, and compact actions.",
+        "lightToken": "semantic-branch-chat-border-light",
+        "darkToken": "semantic-branch-chat-border-dark"
+      },
+      {
+        "id": "semantic-branch-chat-divider",
+        "label": "Divider",
+        "description": "Divider color between Branch Chat regions and recent-branch rows.",
+        "lightToken": "semantic-branch-chat-divider-light",
+        "darkToken": "semantic-branch-chat-divider-dark"
+      },
+      {
+        "id": "semantic-branch-chat-text",
+        "label": "Primary Text",
+        "description": "Primary text and icon color inside Branch Chat.",
+        "lightToken": "semantic-branch-chat-text-light",
+        "darkToken": "semantic-branch-chat-text-dark"
+      },
+      {
+        "id": "semantic-branch-chat-text-secondary",
+        "label": "Secondary Text",
+        "description": "Supporting response, quote, and control text inside Branch Chat.",
+        "lightToken": "semantic-branch-chat-text-secondary-light",
+        "darkToken": "semantic-branch-chat-text-secondary-dark"
+      },
+      {
+        "id": "semantic-branch-chat-text-muted",
+        "label": "Muted Text",
+        "description": "Low-emphasis metadata and helper text inside Branch Chat.",
+        "lightToken": "semantic-branch-chat-text-muted-light",
+        "darkToken": "semantic-branch-chat-text-muted-dark"
+      },
+      {
+        "id": "semantic-branch-chat-accent",
+        "label": "Accent",
+        "description": "Accent for branch actions, quote rails, and active execution states.",
+        "lightToken": "semantic-branch-chat-accent-light",
+        "darkToken": "semantic-branch-chat-accent-dark"
+      },
+      {
+        "id": "semantic-branch-chat-error",
+        "label": "Error",
+        "description": "Error text and status color inside Branch Chat.",
+        "lightToken": "semantic-branch-chat-error-light",
+        "darkToken": "semantic-branch-chat-error-dark"
+      },
+      {
+        "id": "semantic-branch-chat-field-surface",
+        "label": "Anchor Field Surface",
+        "description": "Background for the draft anchor selector.",
+        "lightToken": "semantic-branch-chat-field-surface-light",
+        "darkToken": "semantic-branch-chat-field-surface-dark"
+      },
+      {
+        "id": "semantic-branch-chat-field-surface-focus",
+        "label": "Anchor Field Focus Surface",
+        "description": "Background for the draft anchor selector while keyboard focused.",
+        "lightToken": "semantic-branch-chat-field-surface-focus-light",
+        "darkToken": "semantic-branch-chat-field-surface-focus-dark"
+      },
+      {
+        "id": "semantic-branch-chat-field-surface-disabled",
+        "label": "Anchor Field Disabled Surface",
+        "description": "Background for the disabled draft anchor selector.",
+        "lightToken": "semantic-branch-chat-field-surface-disabled-light",
+        "darkToken": "semantic-branch-chat-field-surface-disabled-dark"
+      },
+      {
+        "id": "semantic-branch-chat-field-border",
+        "label": "Anchor Field Border",
+        "description": "Default border for the draft anchor selector.",
+        "lightToken": "semantic-branch-chat-field-border-light",
+        "darkToken": "semantic-branch-chat-field-border-dark"
+      },
+      {
+        "id": "semantic-branch-chat-field-border-focus",
+        "label": "Anchor Field Focus Border",
+        "description": "Border for the draft anchor selector while keyboard focused.",
+        "lightToken": "semantic-branch-chat-field-border-focus-light",
+        "darkToken": "semantic-branch-chat-field-border-focus-dark"
+      },
+      {
+        "id": "semantic-branch-chat-field-border-disabled",
+        "label": "Anchor Field Disabled Border",
+        "description": "Border for the disabled draft anchor selector.",
+        "lightToken": "semantic-branch-chat-field-border-disabled-light",
+        "darkToken": "semantic-branch-chat-field-border-disabled-dark"
+      },
+      {
+        "id": "semantic-branch-chat-field-border-invalid",
+        "label": "Anchor Field Invalid Border",
+        "description": "Border for the draft anchor selector when its anchor is invalid.",
+        "lightToken": "semantic-branch-chat-field-border-invalid-light",
+        "darkToken": "semantic-branch-chat-field-border-invalid-dark"
+      },
+      {
+        "id": "semantic-branch-chat-field-text",
+        "label": "Anchor Field Text",
+        "description": "Text color for the selected draft anchor.",
+        "lightToken": "semantic-branch-chat-field-text-light",
+        "darkToken": "semantic-branch-chat-field-text-dark"
+      },
+      {
+        "id": "semantic-branch-chat-field-text-disabled",
+        "label": "Anchor Field Disabled Text",
+        "description": "Text color for the disabled draft anchor selector.",
+        "lightToken": "semantic-branch-chat-field-text-disabled-light",
+        "darkToken": "semantic-branch-chat-field-text-disabled-dark"
+      }
+    ]
+  },
+  {
     "id": "component-markdown",
     "layer": "product",
     "label": "Markdown",
@@ -2825,6 +3022,27 @@ export const APPEARANCE_TOKEN_RUNTIME_MAP = {
   "semantic-media-viewer-border": "semantic-media-viewer-border",
   "semantic-media-viewer-border-strong": "semantic-media-viewer-border-strong",
   "semantic-media-viewer-text": "semantic-media-viewer-text",
+  "semantic-branch-chat-surface": "semantic-branch-chat-surface",
+  "semantic-branch-chat-surface-muted": "semantic-branch-chat-surface-muted",
+  "semantic-branch-chat-card-surface": "semantic-branch-chat-card-surface",
+  "semantic-branch-chat-row-surface": "semantic-branch-chat-row-surface",
+  "semantic-branch-chat-row-surface-hover": "semantic-branch-chat-row-surface-hover",
+  "semantic-branch-chat-border": "semantic-branch-chat-border",
+  "semantic-branch-chat-divider": "semantic-branch-chat-divider",
+  "semantic-branch-chat-text": "semantic-branch-chat-text",
+  "semantic-branch-chat-text-secondary": "semantic-branch-chat-text-secondary",
+  "semantic-branch-chat-text-muted": "semantic-branch-chat-text-muted",
+  "semantic-branch-chat-accent": "semantic-branch-chat-accent",
+  "semantic-branch-chat-error": "semantic-branch-chat-error",
+  "semantic-branch-chat-field-surface": "semantic-branch-chat-field-surface",
+  "semantic-branch-chat-field-surface-focus": "semantic-branch-chat-field-surface-focus",
+  "semantic-branch-chat-field-surface-disabled": "semantic-branch-chat-field-surface-disabled",
+  "semantic-branch-chat-field-border": "semantic-branch-chat-field-border",
+  "semantic-branch-chat-field-border-focus": "semantic-branch-chat-field-border-focus",
+  "semantic-branch-chat-field-border-disabled": "semantic-branch-chat-field-border-disabled",
+  "semantic-branch-chat-field-border-invalid": "semantic-branch-chat-field-border-invalid",
+  "semantic-branch-chat-field-text": "semantic-branch-chat-field-text",
+  "semantic-branch-chat-field-text-disabled": "semantic-branch-chat-field-text-disabled",
   "semantic-markdown-text": "semantic-markdown-text",
   "semantic-markdown-muted-text": "semantic-markdown-muted-text",
   "semantic-markdown-strong-text": "semantic-markdown-strong-text",
@@ -4925,6 +5143,174 @@ export const APPEARANCE_BRAND_DEFINITIONS = {
           "alpha": 1,
           "hex": "#292524"
         }
+      },
+      "semantic-branch-chat-surface-light": {
+        "type": "alias",
+        "token": "surface-right-sidebar-light"
+      },
+      "semantic-branch-chat-surface-dark": {
+        "type": "alias",
+        "token": "surface-right-sidebar-dark"
+      },
+      "semantic-branch-chat-surface-muted-light": {
+        "type": "alias",
+        "token": "surface-panel-muted-light"
+      },
+      "semantic-branch-chat-surface-muted-dark": {
+        "type": "alias",
+        "token": "surface-panel-muted-dark"
+      },
+      "semantic-branch-chat-card-surface-light": {
+        "type": "alias",
+        "token": "semantic-thread-panel-surface-light"
+      },
+      "semantic-branch-chat-card-surface-dark": {
+        "type": "alias",
+        "token": "semantic-thread-panel-surface-dark"
+      },
+      "semantic-branch-chat-row-surface-light": {
+        "type": "alias",
+        "token": "surface-right-sidebar-light"
+      },
+      "semantic-branch-chat-row-surface-dark": {
+        "type": "alias",
+        "token": "surface-right-sidebar-dark"
+      },
+      "semantic-branch-chat-row-surface-hover-light": {
+        "type": "alias",
+        "token": "semantic-list-detail-row-surface-hover-light"
+      },
+      "semantic-branch-chat-row-surface-hover-dark": {
+        "type": "alias",
+        "token": "semantic-list-detail-row-surface-hover-dark"
+      },
+      "semantic-branch-chat-border-light": {
+        "type": "alias",
+        "token": "border-default-light"
+      },
+      "semantic-branch-chat-border-dark": {
+        "type": "alias",
+        "token": "border-default-dark"
+      },
+      "semantic-branch-chat-divider-light": {
+        "type": "alias",
+        "token": "border-subtle-light"
+      },
+      "semantic-branch-chat-divider-dark": {
+        "type": "alias",
+        "token": "border-subtle-dark"
+      },
+      "semantic-branch-chat-text-light": {
+        "type": "alias",
+        "token": "text-primary-light"
+      },
+      "semantic-branch-chat-text-dark": {
+        "type": "alias",
+        "token": "text-primary-dark"
+      },
+      "semantic-branch-chat-text-secondary-light": {
+        "type": "alias",
+        "token": "text-secondary-light"
+      },
+      "semantic-branch-chat-text-secondary-dark": {
+        "type": "alias",
+        "token": "text-secondary-dark"
+      },
+      "semantic-branch-chat-text-muted-light": {
+        "type": "alias",
+        "token": "text-tertiary-light"
+      },
+      "semantic-branch-chat-text-muted-dark": {
+        "type": "alias",
+        "token": "text-tertiary-dark"
+      },
+      "semantic-branch-chat-accent-light": {
+        "type": "alias",
+        "token": "brand-primary-hover"
+      },
+      "semantic-branch-chat-accent-dark": {
+        "type": "alias",
+        "token": "brand-primary-hover-dark"
+      },
+      "semantic-branch-chat-error-light": {
+        "type": "alias",
+        "token": "semantic-error-text-light"
+      },
+      "semantic-branch-chat-error-dark": {
+        "type": "alias",
+        "token": "semantic-error-text-dark"
+      },
+      "semantic-branch-chat-field-surface-light": {
+        "type": "alias",
+        "token": "semantic-field-surface-light"
+      },
+      "semantic-branch-chat-field-surface-dark": {
+        "type": "alias",
+        "token": "semantic-field-surface-dark"
+      },
+      "semantic-branch-chat-field-surface-focus-light": {
+        "type": "alias",
+        "token": "semantic-field-surface-focus-light"
+      },
+      "semantic-branch-chat-field-surface-focus-dark": {
+        "type": "alias",
+        "token": "semantic-field-surface-focus-dark"
+      },
+      "semantic-branch-chat-field-surface-disabled-light": {
+        "type": "alias",
+        "token": "semantic-field-surface-disabled-light"
+      },
+      "semantic-branch-chat-field-surface-disabled-dark": {
+        "type": "alias",
+        "token": "semantic-field-surface-disabled-dark"
+      },
+      "semantic-branch-chat-field-border-light": {
+        "type": "alias",
+        "token": "semantic-field-border-light"
+      },
+      "semantic-branch-chat-field-border-dark": {
+        "type": "alias",
+        "token": "semantic-field-border-dark"
+      },
+      "semantic-branch-chat-field-border-focus-light": {
+        "type": "alias",
+        "token": "semantic-field-border-focus-light"
+      },
+      "semantic-branch-chat-field-border-focus-dark": {
+        "type": "alias",
+        "token": "semantic-field-border-focus-dark"
+      },
+      "semantic-branch-chat-field-border-disabled-light": {
+        "type": "alias",
+        "token": "semantic-field-border-disabled-light"
+      },
+      "semantic-branch-chat-field-border-disabled-dark": {
+        "type": "alias",
+        "token": "semantic-field-border-disabled-dark"
+      },
+      "semantic-branch-chat-field-border-invalid-light": {
+        "type": "alias",
+        "token": "semantic-field-border-invalid-light"
+      },
+      "semantic-branch-chat-field-border-invalid-dark": {
+        "type": "alias",
+        "token": "semantic-field-border-invalid-dark"
+      },
+      "semantic-branch-chat-field-text-light": {
+        "type": "alias",
+        "token": "semantic-field-text-light"
+      },
+      "semantic-branch-chat-field-text-dark": {
+        "type": "alias",
+        "token": "semantic-field-text-dark"
+      },
+      "semantic-branch-chat-field-text-disabled-light": {
+        "type": "alias",
+        "token": "semantic-field-text-disabled-light"
+      },
+      "semantic-branch-chat-field-text-disabled-dark": {
+        "type": "alias",
+        "token": "semantic-field-text-disabled-dark"
       },
       "semantic-thread-response-text-light": {
         "type": "alias",
@@ -16790,10 +17176,10 @@ export const DEFAULT_APPEARANCE_THEME_DEFINITION =
 export const APPEARANCE_TOKEN_TEST_DATA = {
   "schemaVersion": 2,
   "dtcgVersion": "2025.10",
-  "groupCount": 29,
-  "pairCount": 259,
-  "modeTokenCount": 518,
-  "runtimeTokenCount": 259,
+  "groupCount": 30,
+  "pairCount": 280,
+  "modeTokenCount": 560,
+  "runtimeTokenCount": 280,
   "derivationCount": 92,
   "canonicalDerivationCount": 92,
   "legacyMixPairCount": 0,
@@ -17101,6 +17487,48 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
     "semantic-media-viewer-border-strong-dark",
     "semantic-media-viewer-text-light",
     "semantic-media-viewer-text-dark",
+    "semantic-branch-chat-surface-light",
+    "semantic-branch-chat-surface-dark",
+    "semantic-branch-chat-surface-muted-light",
+    "semantic-branch-chat-surface-muted-dark",
+    "semantic-branch-chat-card-surface-light",
+    "semantic-branch-chat-card-surface-dark",
+    "semantic-branch-chat-row-surface-light",
+    "semantic-branch-chat-row-surface-dark",
+    "semantic-branch-chat-row-surface-hover-light",
+    "semantic-branch-chat-row-surface-hover-dark",
+    "semantic-branch-chat-border-light",
+    "semantic-branch-chat-border-dark",
+    "semantic-branch-chat-divider-light",
+    "semantic-branch-chat-divider-dark",
+    "semantic-branch-chat-text-light",
+    "semantic-branch-chat-text-dark",
+    "semantic-branch-chat-text-secondary-light",
+    "semantic-branch-chat-text-secondary-dark",
+    "semantic-branch-chat-text-muted-light",
+    "semantic-branch-chat-text-muted-dark",
+    "semantic-branch-chat-accent-light",
+    "semantic-branch-chat-accent-dark",
+    "semantic-branch-chat-error-light",
+    "semantic-branch-chat-error-dark",
+    "semantic-branch-chat-field-surface-light",
+    "semantic-branch-chat-field-surface-dark",
+    "semantic-branch-chat-field-surface-focus-light",
+    "semantic-branch-chat-field-surface-focus-dark",
+    "semantic-branch-chat-field-surface-disabled-light",
+    "semantic-branch-chat-field-surface-disabled-dark",
+    "semantic-branch-chat-field-border-light",
+    "semantic-branch-chat-field-border-dark",
+    "semantic-branch-chat-field-border-focus-light",
+    "semantic-branch-chat-field-border-focus-dark",
+    "semantic-branch-chat-field-border-disabled-light",
+    "semantic-branch-chat-field-border-disabled-dark",
+    "semantic-branch-chat-field-border-invalid-light",
+    "semantic-branch-chat-field-border-invalid-dark",
+    "semantic-branch-chat-field-text-light",
+    "semantic-branch-chat-field-text-dark",
+    "semantic-branch-chat-field-text-disabled-light",
+    "semantic-branch-chat-field-text-disabled-dark",
     "semantic-markdown-text-light",
     "semantic-markdown-text-dark",
     "semantic-markdown-muted-text-light",
@@ -17470,6 +17898,27 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
     "semantic-media-viewer-border",
     "semantic-media-viewer-border-strong",
     "semantic-media-viewer-text",
+    "semantic-branch-chat-surface",
+    "semantic-branch-chat-surface-muted",
+    "semantic-branch-chat-card-surface",
+    "semantic-branch-chat-row-surface",
+    "semantic-branch-chat-row-surface-hover",
+    "semantic-branch-chat-border",
+    "semantic-branch-chat-divider",
+    "semantic-branch-chat-text",
+    "semantic-branch-chat-text-secondary",
+    "semantic-branch-chat-text-muted",
+    "semantic-branch-chat-accent",
+    "semantic-branch-chat-error",
+    "semantic-branch-chat-field-surface",
+    "semantic-branch-chat-field-surface-focus",
+    "semantic-branch-chat-field-surface-disabled",
+    "semantic-branch-chat-field-border",
+    "semantic-branch-chat-field-border-focus",
+    "semantic-branch-chat-field-border-disabled",
+    "semantic-branch-chat-field-border-invalid",
+    "semantic-branch-chat-field-text",
+    "semantic-branch-chat-field-text-disabled",
     "semantic-markdown-text",
     "semantic-markdown-muted-text",
     "semantic-markdown-strong-text",
@@ -17581,13 +18030,13 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
   ],
   "legacyMixRuntimeTokens": [],
   "brandTokenCounts": {
-    "terra": 426,
+    "terra": 468,
     "sage": 141
   },
   "brandValueTypes": {
     "terra": {
       "literal": 154,
-      "alias": 272
+      "alias": 314
     },
     "sage": {
       "literal": 141,

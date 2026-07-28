@@ -302,6 +302,61 @@ test("runtime events project messages and parts into the session read model", as
   })
 })
 
+test("detached branch message events never advance the session active head", async () => {
+  await Instance.provide({
+    directory: process.cwd(),
+    async fn() {
+      const session = await Session.createSession({
+        directory: Instance.directory,
+        projectID: Instance.project.id,
+      })
+      const activeMessage = Message.User.parse({
+        id: Identifier.ascending("message"),
+        sessionID: session.id,
+        role: "user",
+        created: Date.now(),
+        agent: "plan",
+        model: {
+          providerID: "test-provider",
+          modelID: "test-model",
+        },
+      })
+      Session.recordActiveMessage(activeMessage)
+
+      const detachedMessage = Message.User.parse({
+        ...activeMessage,
+        id: Identifier.ascending("message"),
+        parentMessageID: activeMessage.id,
+        created: Date.now() + 1,
+      })
+      const turn = Orchestrator.startTurn({
+        sessionID: session.id,
+        executionID: "detached-projector-test",
+        targetKind: "detached-branch",
+        initialParentMessageID: activeMessage.id,
+        userMessageID: detachedMessage.id,
+        agent: detachedMessage.agent,
+        model: detachedMessage.model,
+      })
+
+      try {
+        turn.emit("message.recorded", {
+          message: detachedMessage,
+        })
+
+        expect(Session.getActiveMessageID(session.id)).toBe(activeMessage.id)
+        expect(db.findById("messages", Message.MessageInfo, detachedMessage.id)).toMatchObject({
+          id: detachedMessage.id,
+          parentMessageID: activeMessage.id,
+        })
+      } finally {
+        Orchestrator.finishTurn(turn)
+        Session.removeSession(session.id)
+      }
+    },
+  })
+})
+
 test("appendAndProject is idempotent and publishes only committed events", async () => {
   await Instance.provide({
     directory: process.cwd(),

@@ -82,7 +82,7 @@ function emitTaskStateUpdated(
     state: Task.SessionTaskListView
   },
 ) {
-  Orchestrator.activeTurn(ctx.sessionID)?.emit("task.state.updated", input)
+  Orchestrator.activeTurn(ctx.sessionID, ctx.turnID)?.emit("task.state.updated", input)
 }
 
 function renderTaskListText(state: Task.SessionTaskListView) {

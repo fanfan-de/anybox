@@ -1849,6 +1849,17 @@ function extractAttachmentNames(parts: unknown[]) {
     .map((part) => readString(part.filename) || "Attachment")
 }
 
+function extractMessageQuotes(parts: unknown[]) {
+  return parts.flatMap((input) => {
+    const part = readRecord(input)
+    if (!part || readString(part.type) !== "message-quote") return []
+
+    const sourceMessageID = readString(part.sourceMessageID).trim()
+    const text = readString(part.text).trim()
+    return sourceMessageID && text ? [{ sourceMessageID, text }] : []
+  })
+}
+
 function extractQuestionAnswer(parts: unknown[]) {
   for (const input of parts) {
     const part = readRecord(input)
@@ -2007,6 +2018,7 @@ export function buildUserThreadMessage(input: {
   displayText?: string
   fallbackText?: string
   id?: string
+  messageQuotes?: UserThreadMessage["messageQuotes"]
   questionAnswer?: UserThreadMessage["questionAnswer"]
   references?: UserThreadMessageReference[]
   submissionMode?: UserThreadMessage["submissionMode"]
@@ -2030,6 +2042,7 @@ export function buildUserThreadMessage(input: {
     text,
     ...(displayText ? { displayText } : {}),
     ...(attachments.length > 0 ? { attachments } : {}),
+    ...(input.messageQuotes?.length ? { messageQuotes: input.messageQuotes } : {}),
     ...(references.length > 0 ? { references } : {}),
     ...(input.questionAnswer ? { questionAnswer: input.questionAnswer } : {}),
     ...(input.turnMcpServerIDs?.length ? { turnMcpServerIDs: [...new Set(input.turnMcpServerIDs)] } : {}),
@@ -2276,6 +2289,7 @@ function buildUserThreadMessageFromHistory(message: LoadedSessionHistoryMessage)
   const textParts = extractTextParts(message.parts)
   const attachmentNames = extractAttachmentNames(message.parts)
   const attachments = attachmentNames.map((name) => ({ name }))
+  const messageQuotes = extractMessageQuotes(message.parts)
   const questionAnswer = extractQuestionAnswer(message.parts)
   const persistedDisplayText = readString(message.info.displayText).trim()
   const presentation = extractReferencedFilePathsFromText(
@@ -2287,6 +2301,7 @@ function buildUserThreadMessageFromHistory(message: LoadedSessionHistoryMessage)
     attachments,
     diffSummary: readSessionDiffSummary(message.info.diffSummary),
     displayText: presentation.displayText,
+    messageQuotes,
     questionAnswer,
     references: presentation.references,
     turnMcpServerIDs: Array.isArray(message.info.turnMcpServerIDs)

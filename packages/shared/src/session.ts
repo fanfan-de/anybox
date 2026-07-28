@@ -17,6 +17,22 @@ export const AgentModelReferenceSchema = z.object({
   modelID: z.string(),
 })
 
+export const AgentThreadTargetSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("active-thread"),
+    parentMessageID: z.string().min(1).nullable().optional(),
+  }),
+  z.object({
+    kind: z.literal("detached-branch"),
+    parentMessageID: z.string().min(1),
+  }),
+])
+
+export const SessionMessageQuoteBodySchema = z.object({
+  sourceMessageID: z.string().min(1),
+  text: z.string().trim().min(1),
+})
+
 export const CreateSessionBodySchema = z.object({
   directory: z.string().min(1),
 })
@@ -46,6 +62,10 @@ export const StreamSessionMessageBodySchema = z
     text: z.string().optional(),
     displayText: z.string().optional(),
     parentMessageID: z.string().min(1).nullable().optional(),
+    clientTurnID: z.string().min(1).optional(),
+    executionID: z.string().min(1).optional(),
+    threadTarget: AgentThreadTargetSchema.optional(),
+    quotes: z.array(SessionMessageQuoteBodySchema).optional(),
     attachments: z.array(SessionAttachmentBodySchema).optional(),
     questionAnswer: SessionQuestionAnswerBodySchema.optional(),
     concurrentInputMode: z.enum(["queue", "steer"]).optional(),
@@ -58,17 +78,41 @@ export const StreamSessionMessageBodySchema = z
   })
   .superRefine((value, ctx) => {
     const hasText = typeof value.text === "string" && value.text.trim().length > 0
+    const hasQuotes = Array.isArray(value.quotes) && value.quotes.length > 0
     const hasAttachments = Array.isArray(value.attachments) && value.attachments.length > 0
     const hasQuestionAnswer =
       Boolean(value.questionAnswer?.questionID.trim()) &&
       (Boolean(value.questionAnswer?.freeformText?.trim()) ||
         Boolean(value.questionAnswer?.selectedOptions?.length))
 
-    if (!hasText && !hasAttachments && !hasQuestionAnswer) {
+    if (!hasText && !hasQuotes && !hasAttachments && !hasQuestionAnswer) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Body must include a non-empty 'text', a structured question answer, or at least one attachment",
+        message: "Body must include text, a message quote, a structured question answer, or at least one attachment",
         path: ["text"],
+      })
+    }
+
+    if (
+      value.threadTarget?.kind === "detached-branch" &&
+      value.parentMessageID !== undefined &&
+      value.parentMessageID !== value.threadTarget.parentMessageID
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Detached branch parentMessageID must match threadTarget.parentMessageID",
+        path: ["parentMessageID"],
+      })
+    }
+
+    if (
+      value.threadTarget?.kind === "detached-branch" &&
+      value.executionID?.trim() === "active-thread"
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Detached branches cannot use the active-thread execution ID",
+        path: ["executionID"],
       })
     }
   })
@@ -101,6 +145,8 @@ export const AgentRouteSchemas = {
 
 export type SessionAttachmentBody = z.infer<typeof SessionAttachmentBodySchema>
 export type SessionQuestionAnswerBody = z.infer<typeof SessionQuestionAnswerBodySchema>
+export type AgentThreadTarget = z.infer<typeof AgentThreadTargetSchema>
+export type SessionMessageQuoteBody = z.infer<typeof SessionMessageQuoteBodySchema>
 export type CreateSessionBody = z.infer<typeof CreateSessionBodySchema>
 export type RollbackSessionBody = z.infer<typeof RollbackSessionBodySchema>
 export type UpdateSessionWorkflowBody = z.infer<typeof UpdateSessionWorkflowBodySchema>

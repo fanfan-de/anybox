@@ -117,6 +117,7 @@ export function SessionRoutes(options: { ptyRegistry: PtyRegistry }) {
   app.get("/:id/messages", async (c) =>
     ok(c, await SessionUseCase.listSessionMessages(c.req.param("id"), {
       view: c.req.query("view"),
+      headMessageID: c.req.query("headMessageID"),
     })),
   )
 

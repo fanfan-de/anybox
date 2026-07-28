@@ -211,7 +211,7 @@ export async function resolveToolPlan(input: ResolveToolsInput): Promise<Resolve
     discoveredToolNames.add(Tool.toModelToolName(name))
   }
 
-  const readOnlyToolsOnly = readOnlyToolsOnlyForSession(input.agent, input.sessionID)
+  const readOnlyToolsOnly = readOnlyToolsOnlyForSession(input.agent, input.sessionID, input.turnID)
   const toolSearchCatalogItem = builtinRegistry.find((item) => item.id === TOOL_SEARCH_ID)
   const toolSearchAccessFailure = toolSearchCatalogItem
     ? getToolAccessFailure({

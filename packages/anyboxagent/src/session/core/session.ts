@@ -86,6 +86,11 @@ export const TurnModelReference = z
   })
 export type TurnModelReference = z.output<typeof TurnModelReference>
 
+export const AgentThreadTargetKind = z.enum(["active-thread", "detached-branch"]).meta({
+  ref: "AgentThreadTargetKind",
+})
+export type AgentThreadTargetKind = z.output<typeof AgentThreadTargetKind>
+
 export const TurnInfo = z
   .object({
     id: Identifier.schema("turn"),
@@ -95,6 +100,9 @@ export const TurnInfo = z
     resume: z.boolean().optional(),
     agent: z.string().optional(),
     model: TurnModelReference.optional(),
+    executionID: z.string().optional(),
+    threadTargetKind: AgentThreadTargetKind.optional(),
+    initialParentMessageID: Identifier.schema("message").nullable().optional(),
     status: TurnStatus,
     phase: z.string().optional(),
     lastMessageID: Identifier.schema("message").optional(),
@@ -118,6 +126,9 @@ export type CreateTurnInput = {
   resume?: boolean
   agent?: string
   model?: TurnModelReference
+  executionID?: string
+  threadTargetKind?: AgentThreadTargetKind
+  initialParentMessageID?: string | null
   phase?: string
 }
 
@@ -510,10 +521,17 @@ function updateActiveMessageID(
 
 function recordMessage(message: Message.MessageInfo) {
   ensureSessionTables()
+  upsertMessage(message)
+}
+
+function recordActiveMessage(message: Message.MessageInfo) {
+  ensureSessionTables()
   const existing = db.findById("messages", Message.MessageInfo, message.id)
   const currentActiveMessageID = getActiveMessageID(message.sessionID)
-  upsertMessage(message)
-  if (!existing || !currentActiveMessageID || currentActiveMessageID === message.id) {
+  recordMessage(message)
+  if (
+    (!existing || !currentActiveMessageID || currentActiveMessageID === message.id)
+  ) {
     updateActiveMessageID(message.sessionID, message.id)
   }
 }
@@ -714,6 +732,9 @@ function createTurn(input: CreateTurnInput): TurnInfo {
     resume: input.resume,
     agent: input.agent,
     model: input.model,
+    executionID: input.executionID,
+    threadTargetKind: input.threadTargetKind,
+    initialParentMessageID: input.initialParentMessageID,
     status: "running",
     phase: input.phase ?? "preparing",
     lastMessageID: input.userMessageID,
@@ -980,7 +1001,7 @@ function removeProjectSessions(projectID: string): SessionInfo[] {
 }
 
 const updateMessage = fn(Message.MessageInfo, (msg) => {
-  recordMessage(msg)
+  recordActiveMessage(msg)
 })
 
 const updatePart = fn(Message.Part, (part) => {
@@ -1065,6 +1086,7 @@ export {
   removeProjectSessions,
   removeSession,
   restoreArchivedSession,
+  recordActiveMessage,
   recordMessage,
   updateActiveMessageID,
   updateSessionPinned,

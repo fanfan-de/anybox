@@ -705,6 +705,28 @@ describe("Composer", () => {
     expect(onSend).not.toHaveBeenCalled()
   })
 
+  it("shows queue and stop while sending with supplemental structured content", () => {
+    const onCancelSend = vi.fn()
+    const onSend = vi.fn()
+
+    renderComposer({
+      draftState: createComposerDraftStateFromPlainText(""),
+      hasSupplementalSubmitContent: true,
+      isSending: true,
+      onCancelSend,
+      onSend,
+    })
+
+    const sendButton = screen.getByRole("button", { name: "Queue message" })
+    const stopButton = screen.getByRole("button", { name: "Stop task" })
+
+    expect(sendButton).toBeEnabled()
+    expect(stopButton).toBeEnabled()
+    fireEvent.click(sendButton)
+    expect(onSend).toHaveBeenCalledTimes(1)
+    expect(onCancelSend).not.toHaveBeenCalled()
+  })
+
   it("renders raster image attachments as thumbnails and keeps the remove action", () => {
     const onRemoveAttachment = vi.fn()
     const imagePath = "C:\\Temp\\screenshot.png"

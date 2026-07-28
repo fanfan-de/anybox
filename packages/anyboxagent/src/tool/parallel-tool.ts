@@ -214,7 +214,7 @@ export const ParallelTool = Tool.define(
         ])
         const agent = initctx?.agent ?? await defaultAgent()
         const builtinToolIDs = new Set(builtinRegistry.map((item) => item.id))
-        const readOnlyToolsOnly = readOnlyToolsOnlyForSession(agent, ctx.sessionID)
+        const readOnlyToolsOnly = readOnlyToolsOnlyForSession(agent, ctx.sessionID, ctx.turnID)
         const parentToolCallID = ctx.toolCallID ?? Identifier.ascending("tool")
         const results: ParallelChildResult[] = await Promise.all(
           parsedParameters.calls.map((call: ParallelCallInput, index: number) =>

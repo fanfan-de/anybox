@@ -5,6 +5,7 @@ import {
   ChangesIcon,
   CloseIcon,
   FileSearchIcon,
+  ForkIcon,
   PlusIcon,
   PreviewIcon,
   SessionTreeIcon,
@@ -15,32 +16,47 @@ import { useI18n } from "../i18n/I18nProvider"
 import { UnifiedPreviewPanel } from "../preview/UnifiedPreviewPanel"
 import { ShellTopMenu } from "../shared-ui"
 import type { CodeHighlightTheme } from "../code-theme"
-import type { SessionMessageTree } from "../session-message-tree"
+import {
+  listBranchAnchorOptions,
+  listRecentBranchThreads,
+  type SessionMessageTree,
+} from "../session-message-tree"
 import type {
+  AssistantTraceVisibility,
   PreviewInteractionCommitInput,
   PreviewInteractionPluginID,
   RightSidebarState,
   RightSidebarTab,
+  RightSidebarTabUpdate,
   SessionDiffState,
   SessionDiffScope,
   SessionDiffSummary,
+  SessionRuntimeDebugSnapshot,
   SessionSummary,
   WorkspaceGroup,
 } from "../types"
 import type { MarkdownArtifactLinkTarget, MarkdownLocalFileLinkTarget } from "../thread-markdown"
 import { SessionMessageTreePanel } from "./SessionMessageTreePanel"
 import { SessionMessageInspectorPanel } from "./SessionMessageInspectorPanel"
+import {
+  BranchChatPanel,
+  type BranchChatThreadPaneContext,
+  type OpenBranchChatInput,
+} from "./BranchChatPanel"
 
 interface RightSidebarProps {
   activeSession: SessionSummary | null
+  activeSessionRuntimeDebug?: SessionRuntimeDebugSnapshot | null
   activeSessionDirectory: string | null
   activeWorkspaceFileScopeDirectory: string | null
   activeWorkspaceFileScopeName: string | null
   canInsertWorkspaceFileCommentsIntoDraft: boolean
   canOpenReview: boolean
   canOpenTerminal: boolean
+  assistantTraceVisibility: AssistantTraceVisibility
   codeTheme: CodeHighlightTheme
   rightSidebar: RightSidebarState
+  threadPaneContext?: BranchChatThreadPaneContext | null
   selectedDiffFileBySession: Record<string, string | null>
   sessionDiffBySession: Record<string, SessionDiffSummary>
   sessionDiffStateBySession: Record<string, SessionDiffState>
@@ -48,6 +64,7 @@ interface RightSidebarProps {
   workspaces: WorkspaceGroup[]
   onActivateTab: (tabID: string) => void
   onCloseTab: (tabID: string) => void
+  onUpdateTab: (tabID: string, update: RightSidebarTabUpdate) => void
   onDiffFileRestore: (file: string, sessionID?: string | null) => void | Promise<void>
   onDiffFileSelect: (file: string | null, sessionID?: string | null) => void
   onSessionDiffScopeLoad?: (sessionID: string, scope: SessionDiffScope) => Promise<SessionDiffSummary>
@@ -58,6 +75,12 @@ interface RightSidebarProps {
   onOpenMessageTreeTab: () => void
   onOpenReviewTab: () => void
   onOpenTerminalTab: () => void
+  onOpenBranchChat: (input: OpenBranchChatInput) => void
+  onLocateBranchAnchor?: (input: {
+    messageID: string
+    paneID: string
+    sessionID: string
+  }) => void
   onMessageTreeNodeSelect: (sessionID: string, messageID: string) => void | Promise<void>
   onPreviewActiveInteractionChange: (pluginID: PreviewInteractionPluginID | null) => void
   onPreviewBack: () => void
@@ -117,6 +140,11 @@ function findSessionDirectoryByID(workspaces: WorkspaceGroup[], sessionID: strin
   return null
 }
 
+function findWorkspaceBySessionID(workspaces: WorkspaceGroup[], sessionID: string | null | undefined) {
+  if (!sessionID) return null
+  return workspaces.find((workspace) => workspace.sessions.some((session) => session.id === sessionID)) ?? null
+}
+
 function getTabIcon(kind: RightSidebarTab["kind"]) {
   switch (kind) {
     case "files":
@@ -131,6 +159,8 @@ function getTabIcon(kind: RightSidebarTab["kind"]) {
       return <SessionTreeIcon />
     case "message-inspector":
       return <InfoIcon />
+    case "branch-thread":
+      return <ForkIcon />
   }
 }
 
@@ -150,11 +180,15 @@ function getViewHostClassName(tab: RightSidebarTab | null, isLauncherVisible: bo
       return "right-sidebar-view-host is-message-tree"
     case "message-inspector":
       return "right-sidebar-view-host is-message-inspector"
+    case "branch-thread":
+      return "right-sidebar-view-host is-branch-thread"
   }
 }
 
 export function RightSidebar({
+  assistantTraceVisibility,
   activeSession,
+  activeSessionRuntimeDebug,
   activeSessionDirectory,
   activeWorkspaceFileScopeDirectory,
   activeWorkspaceFileScopeName,
@@ -163,6 +197,7 @@ export function RightSidebar({
   canOpenTerminal,
   codeTheme,
   rightSidebar,
+  threadPaneContext,
   selectedDiffFileBySession,
   sessionDiffBySession,
   sessionDiffStateBySession,
@@ -170,6 +205,7 @@ export function RightSidebar({
   workspaces,
   onActivateTab,
   onCloseTab,
+  onUpdateTab,
   onDiffFileRestore,
   onDiffFileSelect,
   onSessionDiffScopeLoad,
@@ -180,6 +216,8 @@ export function RightSidebar({
   onOpenMessageTreeTab,
   onOpenReviewTab,
   onOpenTerminalTab,
+  onOpenBranchChat,
+  onLocateBranchAnchor,
   onMessageTreeNodeSelect,
   onPreviewActiveInteractionChange,
   onPreviewBack,
@@ -208,7 +246,38 @@ export function RightSidebar({
   const lastActiveTabIDRef = useRef<string | null>(null)
   const activeTab = rightSidebar.tabs.find((tab) => tab.id === rightSidebar.activeTabID) ?? null
   const viewHostClassName = getViewHostClassName(activeTab, isLauncherVisible)
+  const activeMessageTree = activeSession ? messageTreeBySession[activeSession.id] ?? null : null
+  const branchAnchorOptions = useMemo(
+    () => listBranchAnchorOptions(activeMessageTree),
+    [activeMessageTree],
+  )
+  const recentBranches = useMemo(
+    () => listRecentBranchThreads(activeMessageTree).map((branch) => {
+      const execution = activeSessionRuntimeDebug?.executions?.find(
+        (candidate) =>
+          candidate.targetKind === "detached-branch" &&
+          candidate.headMessageID === branch.headMessageID,
+      )
+      if (!execution) return branch
+      return {
+        ...branch,
+        status:
+          execution.queueLength > 0
+            ? "queued"
+            : execution.status === "running" || execution.status === "cancelling"
+              ? "generating"
+              : branch.status,
+      }
+    }),
+    [activeMessageTree, activeSessionRuntimeDebug?.executions],
+  )
   const launcherCards = useMemo<LauncherCard[]>(() => [
+    {
+      key: "branch-thread",
+      title: t("branchChat.name"),
+      disabled: branchAnchorOptions.length === 0,
+      icon: <ForkIcon />,
+    },
     {
       key: "files",
       title: t("rightSidebar.launcher.filesTitle"),
@@ -237,7 +306,7 @@ export function RightSidebar({
       disabled: !canOpenTerminal,
       icon: <TerminalIcon />,
     },
-  ], [activeSession, canOpenReview, canOpenTerminal, t])
+  ], [activeSession, branchAnchorOptions.length, canOpenReview, canOpenTerminal, t])
 
   useEffect(() => {
     if (rightSidebar.tabs.length === 0) {
@@ -291,6 +360,16 @@ export function RightSidebar({
         if (!activeSession) return
         onOpenMessageTreeTab()
         break
+      case "branch-thread": {
+        const defaultAnchor = branchAnchorOptions.at(-1)
+        if (!activeSession || !defaultAnchor) return
+        onOpenBranchChat({
+          anchorStrategy: "latest-at-send",
+          sessionID: activeSession.id,
+          originMessageID: defaultAnchor.messageID,
+        })
+        break
+      }
     }
     setIsLauncherVisible(false)
   }
@@ -315,6 +394,48 @@ export function RightSidebar({
               </button>
             ))}
           </div>
+          {branchAnchorOptions.length === 0 ? (
+            <p className="right-sidebar-launcher-hint">
+              {t("branchChat.launcherUnavailable")}
+            </p>
+          ) : null}
+          {recentBranches.length > 0 ? (
+            <section className="right-sidebar-recent-branches" aria-label={t("branchChat.recent.region")}>
+              <header>
+                <span>{t("branchChat.recent.title")}</span>
+                <small>{t("branchChat.recent.description")}</small>
+              </header>
+              <div className="right-sidebar-recent-branch-list">
+                {recentBranches.map((branch) => (
+                  <button
+                    key={branch.headMessageID}
+                    type="button"
+                    className="right-sidebar-recent-branch"
+                    onClick={() => {
+                      onOpenBranchChat({
+                        anchorStrategy: "selected",
+                        sessionID: branch.sessionID,
+                        originMessageID: branch.originMessageID,
+                        headMessageID: branch.headMessageID,
+                        phase: "committed",
+                        title: branch.title,
+                      })
+                      setIsLauncherVisible(false)
+                    }}
+                  >
+                    <span className="right-sidebar-recent-branch-main">
+                      <strong>{branch.title}</strong>
+                      <span>{branch.leafPreview}</span>
+                    </span>
+                    <span className="right-sidebar-recent-branch-meta">
+                      <span className={`is-${branch.status}`}>{branch.status.replaceAll("_", " ")}</span>
+                      <time>{new Date(branch.updatedAt).toLocaleString()}</time>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ) : null}
         </div>
       </div>
     )
@@ -386,25 +507,67 @@ export function RightSidebar({
         return renderTerminalTab(activeTab.sessionID)
       case "message-tree": {
         const treeSession = findSessionByID(workspaces, activeTab.sessionID)
+        const messageTree = messageTreeBySession[activeTab.sessionID] ?? null
+        const openTreeNodeInBranchChat = (messageID: string) => {
+          const existingBranch = listRecentBranchThreads(messageTree)
+            .find((branch) => branch.headMessageID === messageID)
+          onOpenBranchChat(existingBranch
+            ? {
+                anchorStrategy: "selected",
+                sessionID: existingBranch.sessionID,
+                originMessageID: existingBranch.originMessageID,
+                headMessageID: existingBranch.headMessageID,
+                phase: "committed",
+                title: existingBranch.title,
+              }
+            : {
+                anchorStrategy: "selected",
+                sessionID: activeTab.sessionID,
+                originMessageID: messageID,
+              })
+        }
         return (
           <SessionMessageTreePanel
             session={treeSession}
-            messageTree={messageTreeBySession[activeTab.sessionID] ?? null}
+            messageTree={messageTree}
             onArtifactLinkOpen={onArtifactLinkOpen}
             onLocalFileLinkOpen={onLocalFileLinkOpen}
             onSelectMessage={onMessageTreeNodeSelect}
+            onOpenBranchChat={openTreeNodeInBranchChat}
           />
         )
       }
-      case "message-inspector":
+      case "message-inspector": {
+        const messageTree = messageTreeBySession[activeTab.sessionID] ?? null
         return (
           <SessionMessageInspectorPanel
             messageID={activeTab.messageID}
-            messageTree={messageTreeBySession[activeTab.sessionID] ?? null}
+            messageTree={messageTree}
             onArtifactLinkOpen={onArtifactLinkOpen}
             onLocalFileLinkOpen={onLocalFileLinkOpen}
+            onOpenBranchChat={(messageID) => {
+              const existingBranch = listRecentBranchThreads(messageTree)
+                .find((branch) => branch.headMessageID === messageID)
+              onOpenBranchChat(existingBranch
+                ? {
+                    anchorStrategy: "selected",
+                    sessionID: existingBranch.sessionID,
+                    originMessageID: existingBranch.originMessageID,
+                    headMessageID: existingBranch.headMessageID,
+                    phase: "committed",
+                    title: existingBranch.title,
+                  }
+                : {
+                    anchorStrategy: "selected",
+                    sessionID: activeTab.sessionID,
+                    originMessageID: messageID,
+                  })
+            }}
           />
         )
+      }
+      case "branch-thread":
+        return null
     }
   }
 
@@ -466,7 +629,33 @@ export function RightSidebar({
 
       <div className="right-sidebar-main-stack">
         <div className={viewHostClassName}>
-          {isLauncherVisible ? renderLauncher() : renderActiveTab()}
+          {rightSidebar.tabs.flatMap((tab) => {
+            if (tab.kind !== "branch-thread") return []
+            const workspace = findWorkspaceBySessionID(workspaces, tab.sessionID)
+            return [
+              <BranchChatPanel
+                key={tab.id}
+                assistantTraceVisibility={assistantTraceVisibility}
+                codeTheme={codeTheme}
+                isActive={!isLauncherVisible && activeTab?.id === tab.id}
+                messageTree={messageTreeBySession[tab.sessionID] ?? null}
+                session={findSessionByID(workspaces, tab.sessionID)}
+                tab={tab}
+                threadPaneContext={threadPaneContext}
+                workspace={workspace}
+                onArtifactLinkOpen={onArtifactLinkOpen}
+                onLocalFileLinkOpen={onLocalFileLinkOpen}
+                onOpenBranchChat={onOpenBranchChat}
+                onLocateAnchor={onLocateBranchAnchor}
+                onUpdateTab={onUpdateTab}
+              />,
+            ]
+          })}
+          {isLauncherVisible
+            ? renderLauncher()
+            : activeTab?.kind === "branch-thread"
+              ? null
+              : renderActiveTab()}
         </div>
       </div>
     </aside>

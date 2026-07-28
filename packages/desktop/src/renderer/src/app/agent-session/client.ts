@@ -40,10 +40,24 @@ export type AgentSessionBridgeEvent =
 
 export interface AgentSessionTurnInput {
   clientTurnID: string
+  executionID?: string
   backendSessionID: string
   text?: string
   displayText?: string
   parentMessageID?: string | null
+  threadTarget?:
+    | {
+        kind: "active-thread"
+        parentMessageID?: string | null
+      }
+    | {
+        kind: "detached-branch"
+        parentMessageID: string
+      }
+  quotes?: Array<{
+    sourceMessageID: string
+    text: string
+  }>
   attachments?: Array<Pick<ComposerAttachment, "path" | "name">>
   questionAnswer?: {
     questionID: string
@@ -107,13 +121,26 @@ export interface AgentSessionInterruptResult {
 export interface AgentSessionBridge {
   canStream: boolean
   canResumeStream: boolean
-  loadHistory(input: { backendSessionID: string; view?: "active" | "all" }): Promise<LoadedSessionHistoryMessage[]>
+  loadHistory(input: {
+    backendSessionID: string
+    view?: "active" | "all" | "branch"
+    headMessageID?: string
+  }): Promise<LoadedSessionHistoryMessage[]>
   compact?(input: { backendSessionID: string }): Promise<AgentSessionCompactResult>
   sendTurn(input: AgentSessionTurnInput): Promise<AgentSessionSendTurnResult>
   resumeTurn(input: { clientTurnID: string; backendSessionID: string }): Promise<AgentSessionSendTurnResult>
-  cancelTurn(input: { clientTurnID: string; backendSessionID: string }): Promise<AgentSessionCancelTurnResult>
+  cancelTurn(input: {
+    clientTurnID: string
+    backendSessionID: string
+    executionID?: string
+  }): Promise<AgentSessionCancelTurnResult>
   abortTurn?(input: { clientTurnID: string; backendSessionID: string }): Promise<AgentSessionAbortTurnResult>
-  interrupt(input: { backendSessionID: string; clientTurnID?: string; reason?: "user-interrupt" }): Promise<AgentSessionInterruptResult>
+  interrupt(input: {
+    backendSessionID: string
+    clientTurnID?: string
+    executionID?: string
+    reason?: "user-interrupt"
+  }): Promise<AgentSessionInterruptResult>
   answerQuestion(input: {
     backendSessionID: string
     questionID: string

@@ -178,3 +178,11 @@ export function cancelSession(sessionID: string, options?: { cancelQueued?: bool
     cancelled: true,
   }
 }
+
+export function cancelExecution(
+  sessionID: string,
+  executionID: string,
+  options?: { cancelQueued?: boolean },
+) {
+  return SessionRunner.cancelExecution(sessionID, executionID, options)
+}

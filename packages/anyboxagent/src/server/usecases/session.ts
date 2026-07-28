@@ -74,6 +74,7 @@ export const UpdateSessionActiveMessageBody = z.object({
 export const CancelSessionBody = z.object({
   cancelQueued: z.boolean().optional(),
   reason: z.enum(["user", "client-disconnect", "shutdown", "unknown"]).optional(),
+  executionID: z.string().min(1).optional(),
 }).optional().default({})
 
 const IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
@@ -234,7 +235,7 @@ async function resolveAttachmentPart(
 
 async function resolvePromptPartsFromStreamPayload(
   payload: StreamSessionMessageInput,
-  options?: { signal?: AbortSignal },
+  options?: { signal?: AbortSignal; sessionID?: string },
 ) {
   throwIfAborted(options?.signal)
   const parts: z.infer<typeof Prompt.PromptInput>["parts"] = []
@@ -254,6 +255,36 @@ async function resolvePromptPartsFromStreamPayload(
             },
           }
         : {}),
+    })
+  }
+
+  for (const quote of payload.quotes ?? []) {
+    const source = Session.DataBaseRead("messages", quote.sourceMessageID) as Message.MessageInfo | null
+    if (!source) {
+      throw new ApiError(
+        400,
+        "MESSAGE_QUOTE_SOURCE_NOT_FOUND",
+        `Quoted message '${quote.sourceMessageID}' was not found`,
+      )
+    }
+    if (source.sessionID !== options?.sessionID) {
+      throw new ApiError(
+        400,
+        "MESSAGE_QUOTE_CROSS_SESSION",
+        "Quoted messages must belong to the same session",
+      )
+    }
+    if (source.role !== "assistant") {
+      throw new ApiError(
+        400,
+        "MESSAGE_QUOTE_SOURCE_INVALID",
+        "Only assistant responses can be quoted",
+      )
+    }
+    parts.push({
+      type: "message-quote",
+      sourceMessageID: source.id,
+      text: quote.text.trim(),
     })
   }
 
@@ -519,14 +550,30 @@ export function getSessionTask(sessionID: string, taskID: string) {
   return task
 }
 
-export async function listSessionMessages(sessionID: string, input?: { view?: string }) {
+export async function listSessionMessages(
+  sessionID: string,
+  input?: { view?: string; headMessageID?: string },
+) {
   requireSession(sessionID)
 
-  const messages: Message.WithParts[] =
-    input?.view === "all"
-      ? Message.listAllWithParts(sessionID)
-      : []
-  if (input?.view !== "all") {
+  if (input?.view === "branch" && !input.headMessageID) {
+    throw new ApiError(400, "BRANCH_HEAD_REQUIRED", "Branch history requires headMessageID")
+  }
+  let messages: Message.WithParts[] = []
+  if (input?.view === "all") {
+    messages = Message.listAllWithParts(sessionID)
+  } else if (input?.view === "branch" && input.headMessageID) {
+    try {
+      messages = Message.listBranch(sessionID, input.headMessageID)
+    } catch (error) {
+      throw new ApiError(
+        400,
+        "INVALID_BRANCH_PATH",
+        error instanceof Error ? error.message : String(error),
+      )
+    }
+  }
+  if (input?.view !== "all" && input?.view !== "branch") {
     for await (const item of Message.stream(sessionID)) {
       messages.push(item)
     }
@@ -804,13 +851,21 @@ export async function deleteSession(sessionID: string, options?: { ptyRegistry?:
 
 export async function cancelSession(sessionID: string, input: CancelSessionInput = {}) {
   requireSession(sessionID)
-  const result = Prompt.cancelSession(sessionID, {
-    cancelQueued: input.cancelQueued ?? false,
-    reason: input.reason ?? "user",
-  })
-  const subtasks = await Subtask.cancelRunningSubtasksByParentSession(sessionID, {
-    cancelQueued: true,
-  })
+  const result = input.executionID
+    ? Prompt.cancelExecution(sessionID, input.executionID, {
+        cancelQueued: input.cancelQueued ?? false,
+        reason: input.reason ?? "user",
+      })
+    : Prompt.cancelSession(sessionID, {
+        cancelQueued: input.cancelQueued ?? false,
+        reason: input.reason ?? "user",
+      })
+  const subtasks =
+    !input.executionID || input.executionID === "active-thread"
+      ? await Subtask.cancelRunningSubtasksByParentSession(sessionID, {
+          cancelQueued: true,
+        })
+      : { cancelled: false }
 
   return {
     sessionID,
@@ -888,8 +943,14 @@ export async function createMessageStreamResponse(input: {
   log.info("received session stream request", {
     sessionID: input.sessionID,
     requestId: input.requestId,
+    clientTurnID: input.payload.clientTurnID,
+    executionID: input.payload.executionID,
+    targetKind: input.payload.threadTarget?.kind ?? "active-thread",
+    parentMessageID:
+      input.payload.threadTarget?.parentMessageID ?? input.payload.parentMessageID,
     directory: session.directory,
     textLength: normalizedText?.length ?? 0,
+    quoteCount: input.payload.quotes?.length ?? 0,
     questionAnswerID: input.payload.questionAnswer?.questionID,
     questionAnswerOptions: input.payload.questionAnswer?.selectedOptions?.length ?? 0,
     attachmentCount: input.payload.attachments?.length ?? 0,
@@ -906,11 +967,15 @@ export async function createMessageStreamResponse(input: {
       fn: async () => {
         const parts = await resolvePromptPartsFromStreamPayload(input.payload, {
           signal: input.signal,
+          sessionID: input.sessionID,
         })
         throwIfAborted(input.signal)
         const handle = Prompt.promptExecution({
           sessionID: input.sessionID,
+          clientTurnID: input.payload.clientTurnID,
+          executionID: input.payload.executionID,
           parentMessageID: input.payload.parentMessageID,
+          threadTarget: input.payload.threadTarget,
           parts,
           system: input.payload.system,
           agent: input.payload.agent,
@@ -939,6 +1004,16 @@ export async function createMessageStreamResponse(input: {
     }
     throw error
   }
+
+  log.info("accepted session stream execution", {
+    sessionID: input.sessionID,
+    clientTurnID: input.payload.clientTurnID,
+    turnID: handle.turnID,
+    executionID: handle.executionID,
+    targetKind: input.payload.threadTarget?.kind ?? "active-thread",
+    parentMessageID:
+      input.payload.threadTarget?.parentMessageID ?? input.payload.parentMessageID,
+  })
 
   return createSessionExecutionStream({
     sessionID: input.sessionID,

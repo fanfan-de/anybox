@@ -389,7 +389,7 @@ export const ExecTool = Tool.define(
             tools: Object.freeze({ ...globalSelectionResult.tools }),
           })
           const agent = snapshotAgent(resolvedAgent)
-          const readOnlyToolsOnly = readOnlyToolsOnlyForSession(agent, ctx.sessionID)
+          const readOnlyToolsOnly = readOnlyToolsOnlyForSession(agent, ctx.sessionID, ctx.turnID)
           const childTools = new Map<ExecChildToolID, Tool.ToolInfo>()
           let canonicalRemoteRootsPromise: Promise<readonly string[]> | undefined
           const loadCanonicalRemoteRoots = () => {

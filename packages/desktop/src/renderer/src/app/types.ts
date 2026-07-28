@@ -311,6 +311,9 @@ export interface LoadedSessionHistoryTurn {
   id: string
   sessionID: string
   projectID: string
+  executionID?: string
+  threadTargetKind?: "active-thread" | "detached-branch"
+  initialParentMessageID?: string | null
   userMessageID?: string
   resume?: boolean
   agent?: string
@@ -533,6 +536,7 @@ export type RightSidebarTabKind =
   | "terminal"
   | "message-tree"
   | "message-inspector"
+  | "branch-thread"
 
 interface RightSidebarBaseTab {
   id: string
@@ -577,6 +581,22 @@ export interface RightSidebarMessageInspectorTab extends RightSidebarBaseTab {
   sessionID: string
 }
 
+export interface BranchChatQuote {
+  sourceMessageID: string
+  text: string
+}
+
+export interface RightSidebarBranchThreadTab extends RightSidebarBaseTab {
+  anchorStrategy: "latest-at-send" | "selected"
+  kind: "branch-thread"
+  sessionID: string
+  originMessageID: string
+  headMessageID: string
+  executionID: string
+  phase: "draft" | "committed"
+  initialQuotes: BranchChatQuote[]
+}
+
 export type RightSidebarTab =
   | RightSidebarFilesTab
   | RightSidebarBrowserTab
@@ -584,6 +604,7 @@ export type RightSidebarTab =
   | RightSidebarTerminalTab
   | RightSidebarMessageTreeTab
   | RightSidebarMessageInspectorTab
+  | RightSidebarBranchThreadTab
 
 export interface RightSidebarState {
   tabs: RightSidebarTab[]
@@ -632,9 +653,27 @@ export type RightSidebarOpenTabInput =
       targetKey?: string
       title?: string
     }
+  | {
+      kind: "branch-thread"
+      anchorStrategy?: "latest-at-send" | "selected"
+      sessionID: string
+      originMessageID: string
+      headMessageID?: string
+      executionID?: string
+      phase?: "draft" | "committed"
+      initialQuotes?: BranchChatQuote[]
+      targetKey?: string
+      title?: string
+    }
 
 export interface RightSidebarTabUpdate {
+  anchorStrategy?: "latest-at-send" | "selected"
+  executionID?: string
   messageID?: string
+  originMessageID?: string
+  headMessageID?: string
+  phase?: "draft" | "committed"
+  initialQuotes?: BranchChatQuote[]
   scopeDirectory?: string | null
   scopeName?: string | null
   sessionID?: string | null
@@ -811,6 +850,19 @@ export interface SessionRuntimeDebugSnapshot {
     activeForMs: number
     reason?: string
   }
+  executions?: Array<{
+    sessionID: string
+    executionID: string
+    targetKind: "active-thread" | "detached-branch"
+    headMessageID: string | null
+    status: "idle" | "running" | "cancelling" | "stopped"
+    startedAt: number | null
+    activeForMs: number
+    activeTurnID: string | null
+    queueLength: number
+    queuedOpCount: number
+    pendingSteerCount: number
+  }>
   activeTurnID: string | null
   latestTurn: SessionRuntimeTurnSummary | null
   turns: SessionRuntimeTurnSummary[]
@@ -841,6 +893,7 @@ export interface UserThreadMessage {
   text: string
   displayText?: string
   attachments?: UserThreadMessageAttachment[]
+  messageQuotes?: BranchChatQuote[]
   references?: UserThreadMessageReference[]
   questionAnswer?: {
     questionID: string
@@ -1143,6 +1196,8 @@ export interface AgentRuntimeEvent {
   eventID: string
   sessionID: string
   turnID: string | null
+  executionID?: string
+  targetKind?: "active-thread" | "detached-branch"
   seq: number
   timestamp: number
   type: string

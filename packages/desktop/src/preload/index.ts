@@ -485,7 +485,11 @@ try {
     rollbackSessionToCheckpoint: (input: DesktopIpcInput<"desktop:rollback-session-to-checkpoint">) =>
       invokeDesktop("desktop:rollback-session-to-checkpoint", input) as Promise<DesktopIpcOutput<"desktop:rollback-session-to-checkpoint">>,
     agentSession: {
-      loadHistory: (input: { backendSessionID: string; view?: "active" | "all" }) =>
+      loadHistory: (input: {
+        backendSessionID: string
+        view?: "active" | "all" | "branch"
+        headMessageID?: string
+      }) =>
         invokeDesktop("desktop:agent-session-load-history", input) as Promise<AgentSessionHistoryMessage[]>,
       compact: (input: DesktopIpcInput<"desktop:agent-session-compact">) =>
         invokeDesktop("desktop:agent-session-compact", input) as Promise<DesktopIpcOutput<"desktop:agent-session-compact">>,
@@ -499,7 +503,11 @@ try {
           clientTurnID: string
           requestId?: string
         }>,
-      cancelTurn: (input: { clientTurnID: string; backendSessionID: string }) =>
+      cancelTurn: (input: {
+        clientTurnID: string
+        backendSessionID: string
+        executionID?: string
+      }) =>
         invokeDesktop("desktop:agent-session-cancel-turn", input) as Promise<{
           clientTurnID: string
           backendSessionID: string

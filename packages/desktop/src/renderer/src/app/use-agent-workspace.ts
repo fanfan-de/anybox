@@ -144,6 +144,23 @@ export function useAgentWorkspace({
   const [threadNavigationRequestBySession, setThreadNavigationRequestBySession] = useState<
     Record<string, ThreadNavigationRequest>
   >({})
+  const requestThreadNavigation = useCallback((input: {
+    messageID?: string
+    paneID?: string
+    sessionID: string
+    turnID?: string
+  }) => {
+    threadNavigationRequestIDRef.current += 1
+    setThreadNavigationRequestBySession((current) => ({
+      ...current,
+      [input.sessionID]: {
+        messageID: input.messageID,
+        paneID: input.paneID,
+        requestID: threadNavigationRequestIDRef.current,
+        turnID: input.turnID,
+      },
+    }))
+  }, [])
   const workspaceStoreRef = useRef<WorkspaceStoreApi | null>(null)
   const [composerCommandStatusByTabKey, setComposerCommandStatusByTabKey] = useState<Record<string, ComposerCommandStatus>>({})
   if (!workspaceStoreRef.current) {
@@ -682,14 +699,10 @@ export function useAgentWorkspace({
       return
     }
 
-    threadNavigationRequestIDRef.current += 1
-    setThreadNavigationRequestBySession((current) => ({
-      ...current,
-      [selection.session.id]: {
-        requestID: threadNavigationRequestIDRef.current,
-        turnID,
-      },
-    }))
+    requestThreadNavigation({
+      sessionID: selection.session.id,
+      turnID,
+    })
     focusSession(selection.workspace.id, selection.session.id)
   }
 
@@ -1150,6 +1163,7 @@ export function useAgentWorkspace({
     readThreadScrollSnapshot,
     saveThreadScrollSnapshot,
     threadNavigationRequestBySession,
+    requestThreadNavigation,
     focusedPaneID,
     hoveredFolderID,
     isCreateSessionTabActive,

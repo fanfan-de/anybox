@@ -87,6 +87,46 @@ export function buildThreadTurnNavigationItems(
   return items
 }
 
+export function findThreadMessageNavigationRowIndex(
+  displayRows: readonly ThreadDisplayRow[],
+  messageID: string,
+) {
+  const actionsRowIndex = displayRows.findIndex(
+    (row) =>
+      row.kind === "assistant-actions" &&
+      row.threadMessageID === messageID,
+  )
+  if (actionsRowIndex < 0) return -1
+
+  const actionsRow = displayRows[actionsRowIndex]
+  if (actionsRow?.kind !== "assistant-actions") return actionsRowIndex
+
+  let responseRowIndex = -1
+  for (let index = 0; index < actionsRowIndex; index += 1) {
+    const row = displayRows[index]
+    if (
+      (row?.kind === "assistant-response-row" || row?.kind === "assistant-question-row") &&
+      row.ownerMessageID === actionsRow.ownerMessageID
+    ) {
+      responseRowIndex = index
+      break
+    }
+  }
+
+  const responseStartRowIndex = responseRowIndex >= 0 ? responseRowIndex : actionsRowIndex
+  for (let index = responseStartRowIndex - 1; index >= 0; index -= 1) {
+    const row = displayRows[index]
+    if (
+      row?.kind === "user-message" &&
+      row.messageIndex < actionsRow.ownerMessageIndex
+    ) {
+      return index
+    }
+  }
+
+  return responseStartRowIndex
+}
+
 interface UseThreadTurnNavigationInput {
   items: ThreadTurnNavigationItem[]
   measurementKey: string

@@ -68,9 +68,20 @@ export function isToolGloballyEnabled(
   return true
 }
 
-export function readOnlyToolsOnlyForSession(agent: Agent.AgentInfo, sessionID: string) {
+export function readOnlyToolsOnlyForSession(
+  agent: Agent.AgentInfo,
+  sessionID: string,
+  turnID?: string,
+) {
   const session = Session.DataBaseRead("sessions", sessionID) as Session.SessionInfo | null
-  return session?.policy?.toolPolicy === "read-only" || agent.toolPolicy === "read-only"
+  const turn = turnID
+    ? Session.DataBaseRead("turns", turnID) as Session.TurnInfo | null
+    : null
+  return (
+    turn?.threadTargetKind === "detached-branch" ||
+    session?.policy?.toolPolicy === "read-only" ||
+    agent.toolPolicy === "read-only"
+  )
 }
 
 export function getToolAccessFailure(input: {
@@ -159,6 +170,7 @@ export async function createToolExecution(input: {
 
     const decision = await Permission.evaluate({
       sessionID: input.sessionID,
+      turnID: input.turnID,
       messageID: input.messageID,
       toolCallID,
       projectID: Instance.project.id,

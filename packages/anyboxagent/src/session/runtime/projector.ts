@@ -96,6 +96,9 @@ function projectTurnStarted(event: z.infer<typeof RuntimeEvent.TurnStartedEvent>
     resume: event.payload.resume,
     agent: event.payload.agent,
     model: event.payload.model,
+    executionID: event.payload.executionID,
+    threadTargetKind: event.payload.targetKind,
+    initialParentMessageID: event.payload.initialParentMessageID,
     phase: "preparing",
   })
 }
@@ -139,7 +142,18 @@ export function project(event: RuntimeEvent.RuntimeEvent) {
       })
       return
     case "message.recorded":
-      Session.recordMessage(event.payload.message)
+      if (
+        event.targetKind === "detached-branch" ||
+        (
+          event.turnID &&
+          (Session.DataBaseRead("turns", event.turnID) as Session.TurnInfo | null)?.threadTargetKind ===
+            "detached-branch"
+        )
+      ) {
+        Session.recordMessage(event.payload.message)
+      } else {
+        Session.recordActiveMessage(event.payload.message)
+      }
       return
     case "message.removed":
       Session.deleteMessage(event.sessionID, event.payload.messageID)

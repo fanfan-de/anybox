@@ -612,10 +612,24 @@ export interface AgentSessionQuestionAnswerResult extends AgentSessionQuestionAn
 
 export interface AgentSessionTurnRequestInput {
   clientTurnID: string
+  executionID?: string
   backendSessionID: string
   text?: string
   displayText?: string
   parentMessageID?: string | null
+  threadTarget?:
+    | {
+        kind: "active-thread"
+        parentMessageID?: string | null
+      }
+    | {
+        kind: "detached-branch"
+        parentMessageID: string
+      }
+  quotes?: Array<{
+    sourceMessageID: string
+    text: string
+  }>
   attachments?: AgentSessionComposerAttachmentInput[]
   questionAnswer?: AgentSessionQuestionAnswerInput
   concurrentInputMode?: "queue" | "steer"
@@ -1017,6 +1031,19 @@ export interface AgentSessionRuntimeDebugSnapshot {
     activeForMs: number
     reason?: string
   }
+  executions?: Array<{
+    sessionID: string
+    executionID: string
+    targetKind: "active-thread" | "detached-branch"
+    headMessageID: string | null
+    status: "idle" | "running" | "cancelling" | "stopped"
+    startedAt: number | null
+    activeForMs: number
+    activeTurnID: string | null
+    queueLength: number
+    queuedOpCount: number
+    pendingSteerCount: number
+  }>
   activeTurnID: string | null
   latestTurn: AgentSessionRuntimeTurnSummary | null
   turns: AgentSessionRuntimeTurnSummary[]

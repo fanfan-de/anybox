@@ -41,7 +41,10 @@ import {
   Info,
   KeyRound,
   LayoutPanelLeft,
+  Link2,
   ListTree,
+  Lock,
+  LocateFixed,
   LoaderCircle,
   MessageCirclePlus,
   Minus,
@@ -105,6 +108,9 @@ export const DownloadIcon = createIcon(Download)
 export const StarIcon = createIcon(Star)
 export const VerifiedIcon = createIcon(BadgeCheck)
 export const KeyIcon = createIcon(KeyRound)
+export const LockIcon = createIcon(Lock)
+export const LinkIcon = createIcon(Link2)
+export const LocateIcon = createIcon(LocateFixed)
 export function SkillDefaultLogo() {
   return (
     <svg

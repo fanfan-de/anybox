@@ -108,6 +108,45 @@ describe("stream trace reducer", () => {
     expect(responseItem?.backendTurnID).toBe("turn-history")
   })
 
+  it("restores structured response quotes on user messages", () => {
+    const [message] = buildThreadMessagesFromHistory([
+      {
+        info: {
+          id: "user-with-quote",
+          sessionID: "session-quote",
+          role: "user",
+          created: 100,
+          parentMessageID: "assistant-source",
+        },
+        parts: [
+          {
+            id: "quote-part",
+            type: "message-quote",
+            sourceMessageID: "assistant-source",
+            text: "The selected response excerpt.",
+          },
+          {
+            id: "text-part",
+            type: "text",
+            text: "Please explore this.",
+          },
+        ],
+      },
+    ])
+
+    expect(message).toMatchObject({
+      id: "user-with-quote",
+      kind: "user",
+      text: "Please explore this.",
+      messageQuotes: [
+        {
+          sourceMessageID: "assistant-source",
+          text: "The selected response excerpt.",
+        },
+      ],
+    })
+  })
+
   it("groups history messages by backend turn while keeping multiple assistant segments", () => {
     const historyMessages = [
       {

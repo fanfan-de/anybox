@@ -46,7 +46,14 @@ function createTree(): SessionMessageTree {
 describe("BranchThreadView", () => {
   it("inspects a historical node without changing the current branch marker", () => {
     const onInspectMessage = vi.fn()
-    render(<BranchThreadView messageTree={createTree()} onInspectMessage={onInspectMessage} />)
+    const onContinueFromMessage = vi.fn()
+    render(
+      <BranchThreadView
+        messageTree={createTree()}
+        onContinueFromMessage={onContinueFromMessage}
+        onInspectMessage={onInspectMessage}
+      />,
+    )
 
     const currentNode = screen.getByRole("treeitem", { name: /Large result, Current/ })
     const historicalNode = screen.getByRole("treeitem", { name: /Small result/ })
@@ -60,7 +67,11 @@ describe("BranchThreadView", () => {
     expect(currentNode).toHaveAttribute("aria-current", "true")
     expect(currentNode).toHaveAttribute("aria-selected", "false")
     expect(onInspectMessage).toHaveBeenCalledWith("assistant-left")
+    expect(onContinueFromMessage).not.toHaveBeenCalled()
     expect(screen.queryByRole("complementary", { name: "Inspected message detail" })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue main thread from selected message" }))
+    expect(onContinueFromMessage).toHaveBeenCalledWith("assistant-left")
   })
 
   it("supports parent and child keyboard navigation without inspecting on focus", () => {

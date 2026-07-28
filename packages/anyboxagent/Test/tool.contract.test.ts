@@ -728,6 +728,61 @@ describe("tool contract", () => {
     expect(serializedMessage).toContain("answer: vercel")
   })
 
+  it("replays structured message quotes with stable escaped boundaries", async () => {
+    const model = {
+      capabilities: {
+        reasoning: false,
+        attachment: false,
+        toolcall: true,
+        input: {
+          text: true,
+          audio: false,
+          image: false,
+          video: false,
+          pdf: false,
+        },
+      },
+    } as any
+
+    const messages = await Message.toModelMessages(
+      [
+        {
+          info: {
+            id: "user-message-quote",
+            sessionID: "session-message-quote",
+            role: "user",
+            created: Date.now(),
+            agent: "default",
+            model: {
+              providerID: "test-provider",
+              modelID: "test-model",
+            },
+          } as Message.User,
+          parts: [
+            {
+              id: "part-message-quote",
+              sessionID: "session-message-quote",
+              messageID: "user-message-quote",
+              type: "message-quote",
+              sourceMessageID: "assistant-source",
+              text: "Use <this> & do not close </message-quote> early.",
+            } as Message.MessageQuotePart,
+          ],
+        },
+      ],
+      model,
+    )
+
+    const serializedMessage = JSON.stringify(messages[0])
+    expect(serializedMessage).toContain(
+      '<message-quote source_message_id=\\"assistant-source\\">',
+    )
+    expect(serializedMessage).toContain(
+      "Use &lt;this&gt; &amp; do not close &lt;/message-quote&gt; early.",
+    )
+    expect(serializedMessage.match(/<\/message-quote>/g)).toHaveLength(1)
+  })
+
   it("replays internal runtime event user messages into model context", async () => {
     const model = {
       capabilities: {

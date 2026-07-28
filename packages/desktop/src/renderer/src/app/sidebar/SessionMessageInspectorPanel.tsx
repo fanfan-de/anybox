@@ -7,12 +7,14 @@ import {
   type MarkdownLocalFileLinkTarget,
 } from "../thread-markdown"
 import { joinClassNames } from "../shared-ui"
+import { ForkIcon } from "../icons"
 
 interface SessionMessageInspectorPanelProps {
   messageID: string
   messageTree: SessionMessageTree | null
   onArtifactLinkOpen?: (target: MarkdownArtifactLinkTarget) => void
   onLocalFileLinkOpen?: (target: MarkdownLocalFileLinkTarget) => void
+  onOpenBranchChat?: (messageID: string) => void
 }
 
 function findNearestUserAncestor(
@@ -47,6 +49,7 @@ export function SessionMessageInspectorPanel({
   messageTree,
   onArtifactLinkOpen,
   onLocalFileLinkOpen,
+  onOpenBranchChat,
 }: SessionMessageInspectorPanelProps) {
   const { t } = useI18n()
   const [selectedResponseMessageID, setSelectedResponseMessageID] = useState<string | null>(null)
@@ -95,6 +98,16 @@ export function SessionMessageInspectorPanel({
           <h2 title={headingNode.preview}>{headingNode.preview}</h2>
         </div>
         <div className="session-message-inspector-meta">
+          {responseNode?.isCompletedResponse && onOpenBranchChat ? (
+            <button
+              type="button"
+              className="session-message-inspector-branch-chat"
+              onClick={() => onOpenBranchChat(responseNode.id)}
+            >
+              <ForkIcon />
+              {t("branchChat.name")}
+            </button>
+          ) : null}
           {isCurrent ? (
             <span className="is-current">{t("branchView.current")}</span>
           ) : null}

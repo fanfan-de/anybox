@@ -66,4 +66,29 @@ describe("thread link routing", () => {
     fireEvent.keyDown(menu, { key: "Escape" })
     expect(screen.queryByRole("menu", { name: "链接打开方式" })).not.toBeInTheDocument()
   })
+
+  it("lets the thread selected-text menu take precedence over the link menu", () => {
+    const onParentContextMenu = vi.fn((event: React.MouseEvent) => event.preventDefault())
+    render(
+      <div onContextMenu={onParentContextMenu}>
+        <ThreadLinkRoutingProvider openInAnybox={vi.fn()}>
+          <ThreadExternalLink className="thread-inline-link" href="https://example.com/docs">
+            Selected docs
+          </ThreadExternalLink>
+        </ThreadLinkRoutingProvider>
+      </div>,
+    )
+    const link = screen.getByRole("link", { name: "Selected docs" })
+    const selection = window.getSelection()
+    const range = document.createRange()
+    range.selectNodeContents(link)
+    selection?.removeAllRanges()
+    selection?.addRange(range)
+
+    fireEvent.contextMenu(link, { clientX: 120, clientY: 80 })
+
+    expect(onParentContextMenu).toHaveBeenCalledOnce()
+    expect(screen.queryByRole("menu", { name: "链接打开方式" })).not.toBeInTheDocument()
+    selection?.removeAllRanges()
+  })
 })

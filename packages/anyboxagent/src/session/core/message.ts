@@ -244,6 +244,15 @@ export const TextPart = PartBase.extend({
 })
 export type TextPart = z.infer<typeof TextPart>
 
+export const MessageQuotePart = PartBase.extend({
+    type: z.literal("message-quote"),
+    sourceMessageID: z.string(),
+    text: z.string(),
+}).meta({
+    ref: "MessageQuotePart",
+})
+export type MessageQuotePart = z.infer<typeof MessageQuotePart>
+
 export const ReasoningPart = PartBase.extend({
     type: z.literal("reasoning"),
     text: z.string(),
@@ -616,6 +625,7 @@ export type RetryPart = z.infer<typeof RetryPart>
 export const Part = z
     .discriminatedUnion("type", [
         TextPart,
+        MessageQuotePart,
         SubtaskPart,
         ReasoningPart,
         SourceUrlPart,
@@ -846,44 +856,29 @@ function fallbackToLinearHistory(sessionID: string, messages: MessageInfo[], rea
     return messages
 }
 
-function resolveActiveBranchMessages(sessionID: string, messages: MessageInfo[]): MessageInfo[] {
-    if (messages.length === 0) return []
-
-    const activeMessageID = readActiveMessageID(sessionID)
-    if (!activeMessageID) {
-        return fallbackToLinearHistory(sessionID, messages, "missing_active_message_id")
-    }
-
+function resolveBranchMessages(sessionID: string, headMessageID: string, messages: MessageInfo[]): MessageInfo[] {
     const messageByID = new Map(messages.map((message) => [message.id, message]))
-    let currentID: string | null | undefined = activeMessageID
+    let currentID: string | null | undefined = headMessageID
     const seen = new Set<string>()
     const path: MessageInfo[] = []
 
     while (currentID) {
         if (seen.has(currentID)) {
-            return fallbackToLinearHistory(sessionID, messages, "cycle_detected", {
-                messageID: currentID,
-            })
+            throw new Error(`Message branch contains a cycle at '${currentID}'.`)
         }
         seen.add(currentID)
 
         const message = messageByID.get(currentID)
         if (!message) {
             const referenced = db.findById("messages", MessageInfo, currentID)
-            const reason = currentID === activeMessageID
-                ? (referenced ? "cross_session_active_message" : "missing_active_message")
-                : (referenced ? "cross_session_parent" : "missing_parent")
-            return fallbackToLinearHistory(sessionID, messages, reason, {
-                messageID: currentID,
-                parentSessionID: referenced?.sessionID,
-            })
+            if (referenced) {
+                throw new Error(`Message '${currentID}' belongs to a different session.`)
+            }
+            throw new Error(`Message branch references missing message '${currentID}'.`)
         }
 
         if (message.sessionID !== sessionID) {
-            return fallbackToLinearHistory(sessionID, messages, "cross_session_parent", {
-                messageID: message.id,
-                parentSessionID: message.sessionID,
-            })
+            throw new Error(`Message '${message.id}' belongs to a different session.`)
         }
 
         path.push(message)
@@ -897,8 +892,30 @@ export function listAllWithParts(sessionID: string): WithParts[] {
     return attachParts(loadSessionMessages(sessionID))
 }
 
+export function listBranch(sessionID: string, headMessageID: string): WithParts[] {
+    const normalizedHeadMessageID = headMessageID.trim()
+    if (!normalizedHeadMessageID) {
+        throw new Error("Branch head message ID is required.")
+    }
+    const messages = loadSessionMessages(sessionID)
+    return attachParts(resolveBranchMessages(sessionID, normalizedHeadMessageID, messages))
+}
+
 export function listActiveBranch(sessionID: string): WithParts[] {
-    return attachParts(resolveActiveBranchMessages(sessionID, loadSessionMessages(sessionID)))
+    const messages = loadSessionMessages(sessionID)
+    if (messages.length === 0) return []
+    const activeMessageID = readActiveMessageID(sessionID)
+    if (!activeMessageID) {
+        return attachParts(fallbackToLinearHistory(sessionID, messages, "missing_active_message_id"))
+    }
+    try {
+        return attachParts(resolveBranchMessages(sessionID, activeMessageID, messages))
+    } catch (error) {
+        return attachParts(fallbackToLinearHistory(sessionID, messages, "invalid_active_branch", {
+            activeMessageID,
+            error: error instanceof Error ? error.message : String(error),
+        }))
+    }
 }
 
 // TODO: move message streaming/query helpers out of message.ts after the schema settles.
@@ -1041,6 +1058,13 @@ export async function toModelMessages(
         }
     }
 
+    function escapeMessageQuoteText(value: string) {
+        return value
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+    }
+
     function convertPartToAIPart(part: Part, model: Provider.Model, aiRole: "user" | "assistant"): any | any[] | null {
         switch (part.type) {
             case "text":
@@ -1048,6 +1072,15 @@ export async function toModelMessages(
                 return {
                     type: "text" as const,
                     text: summarizeQuestionAnswerForModel(part),
+                }
+            case "message-quote":
+                return {
+                    type: "text" as const,
+                    text: [
+                        `<message-quote source_message_id="${escapeMessageQuoteText(part.sourceMessageID)}">`,
+                        escapeMessageQuoteText(part.text),
+                        "</message-quote>",
+                    ].join("\n"),
                 }
             case "reasoning":
                 if (!replayAssistantReasoning) {

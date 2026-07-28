@@ -21,6 +21,9 @@ type SessionStreamResult = {
 type ExecutionModePayload = {
   sessionID: string
   turnID: string
+  executionID: string
+  targetKind: SessionRunner.SessionThreadTargetKind
+  headMessageID: string | null
   mode: SessionRunner.SessionExecutionMode
 }
 
@@ -58,6 +61,10 @@ function executionModePayload(input: {
   return {
     sessionID: input.sessionID,
     turnID: input.handle.turnID,
+    executionID: input.handle.executionID,
+    targetKind: input.handle.targetKind,
+    headMessageID:
+      SessionRunner.infoForExecution(input.sessionID, input.handle.executionID)?.headMessageID ?? null,
     mode: input.handle.mode,
   }
 }
@@ -274,10 +281,11 @@ export function createSessionExecutionErrorStream(input: {
 
 function cancelActiveRuntimeTurn(input: {
   sessionID: string
+  turnID?: string
   reason: RuntimeEvent.RuntimeEventPayloadByType["turn.cancelled"]["reason"]
   detail?: string
 }) {
-  const turn = Orchestrator.activeTurn(input.sessionID)
+  const turn = Orchestrator.activeTurn(input.sessionID, input.turnID)
   if (!turn) return
 
   try {
@@ -664,6 +672,7 @@ export function createSessionExecutionStream(input: {
       if (!input.handle || input.handle.mode === "new-turn") {
         cancelActiveRuntimeTurn({
           sessionID: input.sessionID,
+          turnID: input.handle?.turnID ?? streamTurnID,
           reason: "client-disconnect",
           detail: "Execution stream was cancelled by the client.",
         })

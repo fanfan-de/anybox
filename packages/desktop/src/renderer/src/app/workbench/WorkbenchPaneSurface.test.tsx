@@ -7,10 +7,39 @@ import { I18nProvider } from "../i18n/I18nProvider"
 import type { AssistantThreadMessage, ThreadTurn, UserThreadMessage } from "../types"
 import {
   SessionBagSubmissionDialog,
+  resolveWorkbenchPaneNavigationRequest,
   useWorkbenchPaneConversationSnapshot,
 } from "./WorkbenchPaneSurface"
 
 type SessionBagPrepareResult = DesktopIpcOutput<"desktop:prepare-session-bag-submission">
+
+describe("resolveWorkbenchPaneNavigationRequest", () => {
+  const request = {
+    messageID: "assistant-2",
+    paneID: "pane-2",
+    requestID: 1,
+  }
+
+  it("isolates pane-targeted message navigation while preserving legacy requests", () => {
+    expect(resolveWorkbenchPaneNavigationRequest(
+      "pane-2",
+      "session-1",
+      { "session-1": request },
+    )).toBe(request)
+    expect(resolveWorkbenchPaneNavigationRequest(
+      "pane-1",
+      "session-1",
+      { "session-1": request },
+    )).toBeNull()
+
+    const legacyRequest = { requestID: 2, turnID: "turn-2" }
+    expect(resolveWorkbenchPaneNavigationRequest(
+      "pane-1",
+      "session-1",
+      { "session-1": legacyRequest },
+    )).toBe(legacyRequest)
+  })
+})
 
 const prepare: SessionBagPrepareResult = {
   account: {
