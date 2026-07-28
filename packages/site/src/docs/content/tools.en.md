@@ -62,7 +62,7 @@ The global switch only decides whether a built-in may enter subsequent tool plan
 | --- | --- | --- |
 | Global tool selection | Whether the user disabled a built-in on the Tools page | Disabled tools are not offered to the current agent |
 | Agent tool policy | Agent allowlists, denylists, and read-only policy | Can further reduce the available set |
-| Session restriction | Whether a read-only session such as Side Chat may use mutating tools | Non-read-only tools are excluded |
+| Session policy | Whether `session.policy.toolPolicy` marks the current session read-only | Non-read-only tools are excluded |
 | Call-level permission | Evaluation of the tool kind, path, command, parameters, and risk | Allow, deny, or ask the user |
 | Tool guards | Input schema, workspace boundaries, validation, and authorization | Invalid calls do not execute |
 

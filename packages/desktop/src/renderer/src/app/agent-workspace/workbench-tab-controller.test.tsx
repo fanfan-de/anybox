@@ -108,7 +108,6 @@ function useWorkbenchHarness(options: { surfaceID?: string; workbenchState?: Wor
   }
   vi.mocked(commandsRef.current.getSnapshot).mockReturnValue(dockviewLayout)
   const derived = buildWorkspaceDerivedState({
-    activeSideChatSessionIDByParentSessionID: {},
     cancellingSessionIDs: {},
     composerAttachmentsByTabKey: {},
     composerDraftStateByTabKey: {},

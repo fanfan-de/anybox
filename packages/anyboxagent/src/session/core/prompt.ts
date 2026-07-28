@@ -245,60 +245,11 @@ function normalizePromptErrorMessage(error: unknown) {
     return String(error)
 }
 
-function buildSideChatSystemPrompt(link: Session.SideChatLink) {
-    const lines = [
-        "<side_chat_context>",
-    ]
-
-    if (link.snapshot.userText?.trim()) {
-        lines.push("", "Anchoring user question:", link.snapshot.userText.trim())
-    }
-
-    lines.push("", "Anchoring assistant reply:", link.snapshot.assistantText.trim())
-
-    if ((link.snapshot.sources?.length ?? 0) > 0) {
-        lines.push("", "Anchoring sources:")
-        for (const source of link.snapshot.sources ?? []) {
-            lines.push(`- ${source.kind}: ${source.title}${source.url ? ` (${source.url})` : ""}`)
-        }
-    }
-
-    if ((link.snapshot.toolSummaries?.length ?? 0) > 0) {
-        lines.push("", "Anchoring tool outcomes:")
-        for (const summary of link.snapshot.toolSummaries ?? []) {
-            lines.push(`- ${summary.tool} [${summary.status}]: ${summary.summary}`)
-        }
-    }
-
-    if ((link.snapshot.filePaths?.length ?? 0) > 0) {
-        lines.push("", "Anchoring files:", ...(link.snapshot.filePaths ?? []).map((filePath) => `- ${filePath}`))
-    }
-
-    lines.push("</side_chat_context>")
-    return lines.join("\n")
-}
-
-function resolveUserMessageAgentName(session: Session.SessionInfo, requestedAgentName?: string) {
-    if (Session.isSideChatSession(session)) {
-        return Agent.SIDECHAT_AGENT_NAME
-    }
-
-    if (requestedAgentName === Agent.SIDECHAT_AGENT_NAME) {
-        throw new Error("Agent 'sidechat' can only be used by side chat sessions.")
-    }
-
+function resolveUserMessageAgentName(requestedAgentName?: string) {
     return requestedAgentName ?? "default"
 }
 
 function resolveRuntimeAgentName(session: Session.SessionInfo, requestedAgentName?: string) {
-    if (Session.isSideChatSession(session)) {
-        return Agent.SIDECHAT_AGENT_NAME
-    }
-
-    if (requestedAgentName === Agent.SIDECHAT_AGENT_NAME) {
-        throw new Error("Agent 'sidechat' can only be used by side chat sessions.")
-    }
-
     const workflow = Session.normalizeWorkflowState(session.workflow)
     return workflow.mode === "planning" ? "plan" : requestedAgentName ?? "default"
 }
@@ -693,10 +644,6 @@ async function runLoop(input: LoopRuntimeInput): Promise<RunLoopResult> {
     if (!session) {
         throw new Error(`Session '${sessionID}' was not found.`);
     }
-    const sideChatLink = Session.isSideChatSession(session)
-        ? Session.getSideChatLink(sessionID)
-        : null
-
     let currentAssistant: Message.Assistant | undefined;
     let turnDiffStartSnapshot: string | undefined;
     let turnDiffEndSnapshot: string | undefined;
@@ -826,14 +773,13 @@ async function runLoop(input: LoopRuntimeInput): Promise<RunLoopResult> {
             });
             throwIfAborted(abort)
 
-            // system prompt 由 agent 基础规则、侧聊上下文、项目环境、skills 和用户追加规则组成。
+            // system prompt 由 agent 基础规则、项目环境、skills 和用户追加规则组成。
             const system: string[] = [
                 ...await SystemPrompt.defaultPrompt({
                     agent,
                     session: activeSession,
                 }),
                 ...SystemPrompt.tools(toolPlan.activeToolNames),
-                ...(sideChatLink ? [buildSideChatSystemPrompt(sideChatLink)] : []),
                 ...await SystemPrompt.environment(model),
                 ...await SystemPrompt.skills(sessionID, lastUser.skills ?? []),
                 ...(lastUser.system ? [lastUser.system] : []),
@@ -857,7 +803,6 @@ async function runLoop(input: LoopRuntimeInput): Promise<RunLoopResult> {
                         }
                     }
                 },
-                disableCompaction: Session.isSideChatSession(activeSession),
             })
             throwIfAborted(abort)
 
@@ -1110,7 +1055,7 @@ async function runPromptOperation(input: PromptInput, runtime: SessionRunner.Pro
     const shouldAutoGenerateTitle =
         Session.isDefaultSessionTitle(session.title) &&
         existingMessages.length === 0
-    const agentName = resolveUserMessageAgentName(session, input.agent)
+    const agentName = resolveUserMessageAgentName(input.agent)
 
     const baselineSnapshot = await captureSnapshot({
         context: "pre-turn",

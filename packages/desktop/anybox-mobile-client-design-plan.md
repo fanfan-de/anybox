@@ -329,7 +329,6 @@ interface MobileSessionSummary {
   directory: string
   created: number
   updated: number
-  kind?: "main" | "side-chat"
   status?: "ready" | "running" | "blocked" | "stopped"
 }
 ```
@@ -831,10 +830,9 @@ packages/mobile-web/
 4. 是否需要多用户/多设备同时连接？
 5. 是否需要云端 relay，还是局域网已经满足第一版？
 6. 是否需要手机推送通知？
-7. 是否需要手机端继续 side chat？
-8. 是否要显示 agent reasoning/tool calls？
-9. 是否要支持语音输入？
-10. 手机端是否需要管理模型、插件、MCP？
+7. 是否要显示 agent reasoning/tool calls？
+8. 是否要支持语音输入？
+9. 手机端是否需要管理模型、插件、MCP？
 
 ## 18. 建议下一步
 

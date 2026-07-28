@@ -1,15 +1,14 @@
-import { Fragment, useMemo } from "react"
+import { Fragment } from "react"
 import {
   CloseIcon,
   PlusIcon,
 } from "../icons"
-import { joinClassNames, ShellTopMenu, SidebarToggleButton, SideChatBadge } from "../shared-ui"
+import { joinClassNames, ShellTopMenu, SidebarToggleButton } from "../shared-ui"
 import type {
   CreateSessionTab,
   SessionSummary,
   WorkspaceGroup
 } from "../types"
-import { isSideChatSession } from "../workspace"
 
 interface CanvasRegionTopMenuProps {
   activeSessionID: string | null
@@ -66,10 +65,9 @@ export function CanvasRegionTopMenu({
   onToggleLeftSidebar,
   onToggleRightSidebar,
 }: CanvasRegionTopMenuProps) {
-  const visibleSessions = useMemo(() => sessions.filter((session) => !isSideChatSession(session)), [sessions])
   const canCloseCreateSessionTab = sessions.length > 0 || createSessionTabs.length > 1
   const tabNodes = [
-    ...visibleSessions.map((session) => {
+    ...sessions.map((session) => {
       const isActive = activeCreateSessionTabID === null && session.id === activeSessionID
 
       return {
@@ -86,7 +84,6 @@ export function CanvasRegionTopMenu({
             >
               <span className="session-tab-copy">
                 <span className="session-tab-title">{session.title}</span>
-                {isSideChatSession(session) ? <SideChatBadge compact /> : null}
               </span>
             </button>
             <button

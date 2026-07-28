@@ -395,7 +395,6 @@ export interface AgentSessionTaskListView {
   }
 }
 
-export type AgentSessionKind = "main" | "side-chat"
 export type AgentSessionToolPolicy = "default" | "read-only"
 
 export interface AgentSessionPolicy {
@@ -408,12 +407,6 @@ export interface AgentSessionAutomationMetadata {
   runID: string
   name: string
   trigger: "manual" | "schedule"
-}
-
-export interface AgentSessionOrigin {
-  parentSessionID: string
-  anchorMessageID: string
-  anchorPreview: string
 }
 
 export interface AgentSessionSubagentOrigin {
@@ -440,10 +433,8 @@ export interface AgentSessionInfo {
   title: string
   pinned?: boolean
   version?: string
-  kind?: AgentSessionKind
   policy?: AgentSessionPolicy
   automation?: AgentSessionAutomationMetadata
-  origin?: AgentSessionOrigin
   subagent?: AgentSessionSubagentOrigin
   workflow?: AgentSessionWorkflowSummary
   modelSelection?: AgentSessionModelSelection
@@ -460,10 +451,8 @@ export interface AgentWorkspaceSession {
   directory: string
   title: string
   pinned?: boolean
-  kind?: AgentSessionKind
   policy?: AgentSessionPolicy
   automation?: AgentSessionAutomationMetadata
-  origin?: AgentSessionOrigin
   subagent?: AgentSessionSubagentOrigin
   created: number
   updated: number
@@ -521,7 +510,6 @@ export interface AgentSessionArchiveResult {
   projectID: string
   directory: string
   archivedAt: number
-  archivedSessionIDs?: string[]
 }
 
 export interface AgentArchivedSessionSummary {
@@ -531,48 +519,13 @@ export interface AgentArchivedSessionSummary {
   projectMissing: boolean
   directory: string
   title: string
-  kind?: AgentSessionKind
   policy?: AgentSessionPolicy
   automation?: AgentSessionAutomationMetadata
-  origin?: AgentSessionOrigin
   created: number
   updated: number
   archivedAt: number
   messageCount: number
   eventCount: number
-}
-
-export interface AgentSideChatSource {
-  kind: "url" | "document"
-  title: string
-  url?: string
-}
-
-export interface AgentSideChatToolSummary {
-  tool: string
-  status: "completed" | "error" | "denied"
-  summary: string
-}
-
-export interface AgentSideChatSnapshot {
-  userText?: string
-  assistantText: string
-  sources?: AgentSideChatSource[]
-  toolSummaries?: AgentSideChatToolSummary[]
-  filePaths?: string[]
-}
-
-export interface AgentSideChatLink {
-  sessionID: string
-  parentSessionID: string
-  anchorMessageID: string
-  anchorUserMessageID?: string
-  createdAt: number
-  anchorPreview: string
-  snapshotVersion: 1
-  snapshot: AgentSideChatSnapshot
-  session?: AgentSessionInfo
-  archived?: boolean
 }
 
 export interface AgentArchivedSessionDeleteResult {
@@ -1467,7 +1420,6 @@ export type AgentPromptPresetSource = "bundled" | "custom"
 export interface AgentPromptPresetSelection {
   systemPromptPresetID: string
   planModePromptPresetID: string
-  sideChatPromptPresetID: string
   gitCommitPromptPresetID: string
   cinemaTextGenerationPromptPresetID: string
 }

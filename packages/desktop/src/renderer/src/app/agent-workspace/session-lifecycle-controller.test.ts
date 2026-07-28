@@ -1,13 +1,11 @@
 import { act, renderHook } from "@testing-library/react"
 import { useRef, useState, type MouseEvent } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
-import type { PendingAgentStream, SessionSummary, SideChatLink, WorkspaceGroup } from "../types"
+import type { PendingAgentStream, SessionSummary, WorkspaceGroup } from "../types"
 import { createSessionDataLoadCache } from "./session-data-load-cache"
 import {
-  filterSideChatMappingForCleanup,
   removePendingStreamsForSessions,
   removeSubscribedSessionStreamsForCleanup,
-  sideChatLinkHasRealResponse,
   useSessionLifecycleController,
 } from "./session-lifecycle-controller"
 
@@ -63,8 +61,6 @@ function useProjectClickHarness(
     activeCreateSessionTab: null,
     activeCreateSessionTabID: null,
     agentDefaultDirectory: input.agentDefaultDirectory ?? "C:/work/default-chat",
-    activeSessionID: "session-outside-workspace",
-    activeSideChatSessionIDByParentSessionID: {},
     activeWorkspace: null,
     agentSessionStoreRef: useRef({ dispatch: vi.fn() }),
     canLoadSessionHistory: true,
@@ -88,7 +84,6 @@ function useProjectClickHarness(
     ensurePendingPermissionRequestsLoaded: vi.fn(async () => {}),
     ensureSessionHistoryLoaded: vi.fn(async () => {}),
     openCreateSessionTab,
-    openOrFocusRightSidebarTab: vi.fn(() => "tab-1"),
     pendingStreamsRef: useRef({}),
     permissionRequestsRequestRef: useRef({}),
     preserveLocalWorkspaceStateOnInitialLoadRef: useRef(false),
@@ -97,7 +92,6 @@ function useProjectClickHarness(
     sessionDiffRequestRef: useRef({}),
     sessionDataLoadCacheRef: useRef(createSessionDataLoadCache()),
     sessionEventRouterRef: useRef({ cleanupUISession: vi.fn() }),
-    setActiveSideChatSessionIDByParentSessionID: noop,
     setAgentSessions: noop,
     setCanLoadSessionHistory: noop,
     setComposerAttachmentsByTabKey: noop,
@@ -125,7 +119,6 @@ function useProjectClickHarness(
     setSessionTasksBySession: noop,
     setWorkspaces,
     refreshWorkspaceFromDirectory: input.refreshWorkspaceFromDirectory ?? vi.fn(async () => workspace),
-    updateRightSidebarTab: noop,
     clearRuntimeDebugRefreshTimer: noop,
     clearSessionDiffRefreshTimer: noop,
     selectedFolderID,
@@ -291,26 +284,6 @@ describe("session lifecycle cleanup helpers", () => {
     expect(setWorkspaces).not.toHaveBeenCalled()
   })
 
-  it("removes side chat mappings when either parent or side chat session is cleaned up", () => {
-    const mapping = {
-      "parent-1": "side-1",
-      "parent-2": "side-2",
-      "parent-3": "side-3",
-    }
-
-    expect(filterSideChatMappingForCleanup(mapping, new Set(["parent-1", "side-2"]))).toEqual({
-      "parent-3": "side-3",
-    })
-  })
-
-  it("keeps side chat mapping object identity when no entries are removed", () => {
-    const mapping = {
-      "parent-1": "side-1",
-    }
-
-    expect(filterSideChatMappingForCleanup(mapping, new Set(["unrelated"]))).toBe(mapping)
-  })
-
   it("removes pending streams owned by cleaned sessions", () => {
     const pendingStreams: Record<string, PendingAgentStream> = {
       "stream-1": {
@@ -360,24 +333,5 @@ describe("session lifecycle cleanup helpers", () => {
     expect(subscribed).toEqual({
       "ui-session-2": "backend-session-2",
     })
-  })
-
-  it("detects whether side chat link snapshots contain a real response", () => {
-    const createLink = (assistantText: string): SideChatLink => ({
-      sessionID: "side-1",
-      parentSessionID: "parent-1",
-      anchorMessageID: "assistant-1",
-      createdAt: 1,
-      anchorPreview: "Parent response",
-      snapshotVersion: 1,
-      snapshot: {
-        assistantText,
-      },
-    })
-
-    expect(sideChatLinkHasRealResponse(createLink(""))).toBe(false)
-    expect(sideChatLinkHasRealResponse(createLink("   "))).toBe(false)
-    expect(sideChatLinkHasRealResponse(createLink("<!-- anybox-response-format: markdown -->"))).toBe(false)
-    expect(sideChatLinkHasRealResponse(createLink("<!-- anybox-response-format: markdown -->\nA real answer."))).toBe(true)
   })
 })

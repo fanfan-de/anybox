@@ -1,7 +1,6 @@
-import { fireEvent, render, screen, within } from "@testing-library/react"
+import { fireEvent, render, screen } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 import {
-  DEFAULT_ASSISTANT_TRACE_VISIBILITY,
   type RightSidebarState,
   type RightSidebarTab,
   type WorkspaceGroup,
@@ -340,28 +339,18 @@ function renderRightSidebar(input: {
         activeSessionDirectory={workspace.directory}
         activeWorkspaceFileScopeDirectory={workspace.directory}
         activeWorkspaceFileScopeName={workspace.name}
-        assistantTraceVisibility={DEFAULT_ASSISTANT_TRACE_VISIBILITY}
         canInsertWorkspaceFileCommentsIntoDraft={true}
         canOpenReview={input.canOpenReview ?? true}
         canOpenTerminal={input.canOpenTerminal ?? true}
         codeTheme="github-light"
-        composerRefreshVersion={0}
-        isAgentDebugTraceEnabled={false}
-        isResolvingPermissionRequest={false}
-        permissionRequestActionError={null}
-        permissionRequestActionRequestID={null}
-        readThreadScrollSnapshot={() => null}
         rightSidebar={input.rightSidebar}
-        saveThreadScrollSnapshot={vi.fn()}
         selectedDiffFileBySession={{}}
         sessionDiffBySession={{}}
         sessionDiffStateBySession={{}}
         messageTreeBySession={input.messageTreeBySession ?? {}}
-        sideChatPanelState={null}
         workspaces={input.workspaces ?? [workspace]}
         onActivateTab={input.onActivateTab ?? vi.fn()}
         onCloseTab={input.onCloseTab ?? vi.fn()}
-        onAskUserQuestionAnswer={vi.fn()}
         onArtifactLinkOpen={vi.fn()}
         onDiffFileRestore={vi.fn()}
         onDiffFileSelect={vi.fn()}
@@ -381,15 +370,6 @@ function renderRightSidebar(input: {
         onPreviewOpenExternal={vi.fn()}
         onPreviewOpenUrl={vi.fn()}
         onPreviewReload={vi.fn()}
-        onPermissionRequestResponse={vi.fn()}
-        onSideChatCreate={vi.fn()}
-        onSideChatDelete={vi.fn()}
-        onSideChatDraftStateChange={vi.fn()}
-        onSideChatPickAttachments={vi.fn()}
-        onSideChatRemoveAttachment={vi.fn()}
-        onSideChatSelect={vi.fn()}
-        onSideChatSend={vi.fn()}
-        onSessionModelSelectionChange={vi.fn()}
         onWorkspaceFileCommentCancel={vi.fn()}
         onWorkspaceFileCommentChange={vi.fn()}
         onWorkspaceFileCommentConfirm={vi.fn()}
@@ -530,72 +510,6 @@ describe("RightSidebar", () => {
     fireEvent.click(screen.getByText("Active answer"))
     expect(screen.queryByRole("button", { name: /Rollback from/ })).toBeNull()
     expect(screen.queryByRole("dialog", { name: "Active answer" })).toBeNull()
-  })
-
-  it("does not render side chat controls in message tree nodes", () => {
-    const onMessageTreeNodeSelect = vi.fn()
-    const sideChatWorkspace: WorkspaceGroup = {
-      ...workspace,
-      sessions: [
-        ...workspace.sessions,
-        {
-          id: "side-chat-1",
-          title: "Side chat 1",
-          branch: "main",
-          focus: "Side chat",
-          summary: "Active answer",
-          status: "Ready",
-          kind: "side-chat",
-          origin: {
-            parentSessionID: "session-1",
-            anchorMessageID: "assistant-1",
-            anchorPreview: "Active answer",
-          },
-          created: 10,
-          updated: 10,
-        },
-        {
-          id: "side-chat-2",
-          title: "Side chat 2",
-          branch: "main",
-          focus: "Side chat",
-          summary: "Active answer",
-          status: "Ready",
-          kind: "side-chat",
-          origin: {
-            parentSessionID: "session-1",
-            anchorMessageID: "assistant-1",
-            anchorPreview: "Active answer",
-          },
-          created: 11,
-          updated: 11,
-        },
-      ],
-    }
-
-    renderRightSidebar({
-      messageTreeBySession: {
-        "session-1": createMessageTree(),
-      },
-      rightSidebar: {
-        activeTabID: "message-tree-tab",
-        tabs: [createMessageTreeTab()],
-      },
-      workspaces: [sideChatWorkspace],
-      onMessageTreeNodeSelect,
-    })
-
-    const activeNode = queryMessageTreeNode("assistant-1")
-    const userNode = queryMessageTreeNode("user-1")
-    expect(activeNode).not.toBeNull()
-    expect(userNode).not.toBeNull()
-    if (!activeNode || !userNode) return
-
-    expect(within(activeNode).queryByRole("button", { name: /Open side chat/ })).toBeNull()
-    expect(within(userNode).queryByRole("button", { name: /Open side chat/ })).toBeNull()
-
-    fireEvent.click(activeNode)
-    expect(onMessageTreeNodeSelect).not.toHaveBeenCalled()
   })
 
   it("toggles full expansion from the message tree panel header", () => {

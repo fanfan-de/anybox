@@ -7,6 +7,7 @@ import * as Message from "#session/core/message.ts"
 import * as Installation from "#installation/installation.ts"
 import { fn } from "#util/fn.ts"
 import * as db from "#database/Sqlite.ts"
+import { ensureLegacySessionCleanup } from "#database/legacy-session-cleanup.ts"
 import * as EventStore from "#session/runtime/event-store.ts"
 import * as LiveStreamHub from "#session/runtime/live-stream-hub.ts"
 import * as RuntimeEvent from "#session/runtime/runtime-event.ts"
@@ -20,17 +21,11 @@ interface TableRecordMap {
   sessions: SessionInfo
   turns: TurnInfo
   archived_sessions: ArchivedSessionRecord
-  side_chat_links: SideChatLink
   messages: Message.MessageInfo
   parts: Message.Part
 }
 
 type TableName = keyof TableRecordMap
-
-export const SessionKind = z.enum(["main", "side-chat"]).meta({
-  ref: "SessionKind",
-})
-export type SessionKind = z.output<typeof SessionKind>
 
 export const SessionToolPolicy = z.enum(["default", "read-only"]).meta({
   ref: "SessionToolPolicy",
@@ -168,7 +163,6 @@ export const SessionInfo = z
       })
       .optional(),
     modelSelection: SessionModelSelection.optional(),
-    kind: SessionKind.optional(),
     policy: SessionPolicy.optional(),
     automation: SessionAutomationMetadata.optional(),
     time: z.object({
@@ -276,70 +270,10 @@ export const ArchivedSessionSummaryRecord = ArchivedSessionRecord.omit({
 })
 export type ArchivedSessionSummaryRecord = z.output<typeof ArchivedSessionSummaryRecord>
 
-export const SideChatSource = z
-  .object({
-    kind: z.enum(["url", "document"]),
-    title: z.string(),
-    url: z.string().optional(),
-  })
-  .meta({
-    ref: "SideChatSource",
-  })
-export type SideChatSource = z.output<typeof SideChatSource>
-
-export const SideChatToolSummary = z
-  .object({
-    tool: z.string(),
-    status: z.enum(["completed", "error", "denied"]),
-    summary: z.string(),
-  })
-  .meta({
-    ref: "SideChatToolSummary",
-  })
-export type SideChatToolSummary = z.output<typeof SideChatToolSummary>
-
-export const SideChatSnapshot = z
-  .object({
-    userText: z.string().optional(),
-    assistantText: z.string(),
-    sources: z.array(SideChatSource).optional(),
-    toolSummaries: z.array(SideChatToolSummary).optional(),
-    filePaths: z.array(z.string()).optional(),
-  })
-  .meta({
-    ref: "SideChatSnapshot",
-  })
-export type SideChatSnapshot = z.output<typeof SideChatSnapshot>
-
-export const SideChatLink = z
-  .object({
-    sessionID: Identifier.schema("session"),
-    parentSessionID: Identifier.schema("session"),
-    anchorMessageID: Identifier.schema("message"),
-    anchorUserMessageID: Identifier.schema("message").optional(),
-    createdAt: z.number(),
-    anchorPreview: z.string(),
-    snapshotVersion: z.literal(1),
-    snapshot: SideChatSnapshot,
-  })
-  .meta({
-    ref: "SideChatLink",
-  })
-export type SideChatLink = z.output<typeof SideChatLink>
-
-export type SessionOrigin = Pick<SideChatLink, "parentSessionID" | "anchorMessageID" | "anchorPreview">
-
-export type SideChatContext = {
-  session: SessionInfo
-  link: SideChatLink
-  messages: Message.WithParts[]
-}
-
 const TableSchemaMap = {
   sessions: SessionInfo,
   turns: TurnInfo,
   archived_sessions: ArchivedSessionRecord,
-  side_chat_links: SideChatLink,
   messages: Message.MessageInfo,
   parts: Message.Part,
 } as const
@@ -347,16 +281,9 @@ const TableSchemaMap = {
 const log = Log.create({ service: "session" })
 let sessionTablesGeneration = -1
 const DEFAULT_SESSION_TITLE = "New chat"
-const DEFAULT_SIDE_CHAT_TITLE = "Side chat"
-const DEFAULT_SESSION_KIND: SessionKind = "main"
 const DEFAULT_SESSION_POLICY: SessionPolicy = {
   toolPolicy: "default",
 }
-const SIDE_CHAT_POLICY: SessionPolicy = {
-  toolPolicy: "read-only",
-  ignoreFullAccess: true,
-}
-const SIDE_CHAT_PREVIEW_LENGTH = 160
 
 function normalizeSessionPolicy(policy: SessionInfo["policy"] | undefined): SessionPolicy {
   return {
@@ -383,18 +310,14 @@ function normalizeSessionModelSelection(
 export function normalizeSessionInfo(session: SessionInfo): SessionInfo {
   return {
     ...session,
-    kind: session.kind ?? DEFAULT_SESSION_KIND,
     modelSelection: normalizeSessionModelSelection(session.modelSelection),
     policy: normalizeSessionPolicy(session.policy),
     workflow: session.workflow ? normalizeWorkflowState(session.workflow, session.time.updated) : session.workflow,
   }
 }
 
-export function isSideChatSession(session: SessionInfo | null | undefined) {
-  return (session?.kind ?? DEFAULT_SESSION_KIND) === "side-chat"
-}
-
 function ensureSessionTables() {
+  ensureLegacySessionCleanup()
   const generation = db.getDatabaseGeneration()
   if (sessionTablesGeneration === generation && generation > 0) return
 
@@ -414,12 +337,6 @@ function ensureSessionTables() {
     db.createTableByZodObject("archived_sessions", ArchivedSessionRecord)
   } else {
     db.syncTableColumnsWithZodObject("archived_sessions", ArchivedSessionRecord)
-  }
-
-  if (!db.tableExists("side_chat_links")) {
-    db.createTableByZodObject("side_chat_links", SideChatLink)
-  } else {
-    db.syncTableColumnsWithZodObject("side_chat_links", SideChatLink)
   }
 
   if (!db.tableExists("messages")) {
@@ -449,14 +366,6 @@ function ensureSessionTables() {
   db.db.run(`
     CREATE INDEX IF NOT EXISTS "idx_archived_sessions_archived"
     ON "archived_sessions" ("archivedAt");
-  `)
-  db.db.run(`
-    CREATE UNIQUE INDEX IF NOT EXISTS "idx_side_chat_links_session"
-    ON "side_chat_links" ("sessionID");
-  `)
-  db.db.run(`
-    CREATE INDEX IF NOT EXISTS "idx_side_chat_links_parent_anchor"
-    ON "side_chat_links" ("parentSessionID", "anchorMessageID", "createdAt");
   `)
   db.db.run(`
     CREATE INDEX IF NOT EXISTS "idx_messages_session_parent_created"
@@ -666,46 +575,6 @@ function loadSessionTurns(sessionID: string) {
   })
 }
 
-function loadMessagesWithParts(sessionID: string): Message.WithParts[] {
-  const messages = loadSessionMessages(sessionID)
-  const parts = loadSessionParts(sessionID)
-  const partsByMessageID = new Map<string, Message.Part[]>()
-
-  for (const part of parts) {
-    const list = partsByMessageID.get(part.messageID) ?? []
-    list.push(part)
-    partsByMessageID.set(part.messageID, list)
-  }
-
-  return messages.map((message) => ({
-    info: message,
-    parts: partsByMessageID.get(message.id) ?? [],
-  }))
-}
-
-function loadSideChatLinks(input: {
-  parentSessionID?: string
-  anchorMessageID?: string
-  sessionID?: string
-}) {
-  ensureSessionTables()
-  const where: Array<{ column: string; value: string }> = []
-  if (input.parentSessionID) {
-    where.push({ column: "parentSessionID", value: input.parentSessionID })
-  }
-  if (input.anchorMessageID) {
-    where.push({ column: "anchorMessageID", value: input.anchorMessageID })
-  }
-  if (input.sessionID) {
-    where.push({ column: "sessionID", value: input.sessionID })
-  }
-
-  return db.findManyWithSchema("side_chat_links", SideChatLink, {
-    where,
-    orderBy: [{ column: "createdAt", direction: "DESC" }],
-  })
-}
-
 function loadSessionTasks(sessionID: string) {
   ensureSessionTables()
   if (!db.tableExists("session_tasks")) return []
@@ -820,7 +689,6 @@ async function createSession(input: {
     worktreeID: worktree?.id,
     title: normalizeSessionTitle(input.title),
     version: Installation.VERSION,
-    kind: "main",
     policy: DEFAULT_SESSION_POLICY,
     automation: input.automation,
     workflow: defaultWorkflowState(now),
@@ -906,204 +774,6 @@ function listRunningTurns(): TurnInfo[] {
       { column: "id", direction: "ASC" },
     ],
   })
-}
-
-function buildSideChatTitle(anchorPreview: string) {
-  const preview = anchorPreview.trim()
-  if (!preview) return DEFAULT_SIDE_CHAT_TITLE
-  return `${DEFAULT_SIDE_CHAT_TITLE}: ${preview}`.slice(0, 120)
-}
-
-function compactWhitespace(text: string) {
-  return text.replace(/\s+/g, " ").trim()
-}
-
-/*
-function makeAnchorPreview(text: string) {
-  const compact = compactWhitespace(text)
-  if (!compact) return ""
-  return compact.length > SIDE_CHAT_PREVIEW_LENGTH
-    ? `${compact.slice(0, SIDE_CHAT_PREVIEW_LENGTH - 1).trimEnd()}…`
-    : compact
-}
-
-*/
-
-function makeAnchorPreview(text: string) {
-  const compact = compactWhitespace(text)
-  if (!compact) return ""
-  if (compact.length <= SIDE_CHAT_PREVIEW_LENGTH) {
-    return compact
-  }
-
-  return `${compact.slice(0, SIDE_CHAT_PREVIEW_LENGTH - 3).trimEnd()}...`
-}
-
-function renderToolSummary(part: Message.ToolPart): SideChatToolSummary | null {
-  switch (part.state.status) {
-    case "completed":
-      return {
-        tool: part.tool,
-        status: "completed",
-        summary: compactWhitespace(part.state.output).slice(0, 500),
-      }
-    case "error":
-      return {
-        tool: part.tool,
-        status: "error",
-        summary: compactWhitespace(part.state.error).slice(0, 500),
-      }
-    case "denied":
-      return {
-        tool: part.tool,
-        status: "denied",
-        summary: compactWhitespace(part.state.reason).slice(0, 500),
-      }
-    default:
-      return null
-  }
-}
-
-function snapshotFromAnchorMessage(input: {
-  parentSessionID: string
-  anchorMessageID: string
-}): Omit<SideChatLink, "sessionID" | "createdAt"> {
-  const messages = loadMessagesWithParts(input.parentSessionID)
-  const anchorIndex = messages.findIndex(
-    (message) => message.info.id === input.anchorMessageID && message.info.role === "assistant",
-  )
-
-  if (anchorIndex === -1) {
-    throw new Error(
-      `Assistant message '${input.anchorMessageID}' was not found in session '${input.parentSessionID}'.`,
-    )
-  }
-
-  const anchorMessage = messages[anchorIndex]!
-  const anchorUserMessage = [...messages.slice(0, anchorIndex)]
-    .reverse()
-    .find((message) => message.info.role === "user" && !message.info.internal)
-
-  const assistantText = anchorMessage.parts
-    .filter((part): part is Message.TextPart => part.type === "text")
-    .map((part) => part.text.trim())
-    .filter(Boolean)
-    .join("\n\n")
-
-  const userText = anchorUserMessage
-    ? anchorUserMessage.parts
-        .filter((part): part is Message.TextPart => part.type === "text")
-        .map((part) => part.text.trim())
-        .filter(Boolean)
-        .join("\n\n")
-        .trim() || undefined
-    : undefined
-
-  const sources = anchorMessage.parts
-    .flatMap((part): SideChatSource[] => {
-      if (part.type === "source-url") {
-        return [
-          {
-            kind: "url",
-            title: part.title ?? part.url,
-            url: part.url,
-          },
-        ]
-      }
-
-      if (part.type === "source-document") {
-        return [
-          {
-            kind: "document",
-            title: part.title,
-          },
-        ]
-      }
-
-      return []
-    })
-
-  const toolSummaries = anchorMessage.parts
-    .flatMap((part) => (part.type === "tool" ? [renderToolSummary(part)] : []))
-    .filter((item): item is SideChatToolSummary => Boolean(item))
-
-  const filePaths = [...new Set(
-    anchorMessage.parts.flatMap((part) => (part.type === "patch" ? part.files : [])),
-  )]
-  const normalizedAssistantText =
-    assistantText.trim() ||
-    [
-      sources.map((source) => source.title).join(", "),
-      toolSummaries.map((summary) => `${summary.tool}: ${summary.summary}`).join("\n"),
-      filePaths.length > 0 ? `Files: ${filePaths.join(", ")}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n")
-      .trim()
-
-  if (!normalizedAssistantText) {
-    throw new Error(`Assistant message '${input.anchorMessageID}' does not contain any anchorable content.`)
-  }
-
-  return {
-    parentSessionID: input.parentSessionID,
-    anchorMessageID: input.anchorMessageID,
-    anchorUserMessageID: anchorUserMessage?.info.id,
-    anchorPreview: makeAnchorPreview(normalizedAssistantText),
-    snapshotVersion: 1,
-    snapshot: {
-      userText,
-      assistantText: normalizedAssistantText,
-      sources: sources.length > 0 ? sources : undefined,
-      toolSummaries: toolSummaries.length > 0 ? toolSummaries : undefined,
-      filePaths: filePaths.length > 0 ? filePaths : undefined,
-    },
-  }
-}
-
-async function createSideChat(input: {
-  parentSessionID: string
-  anchorMessageID: string
-}): Promise<SessionInfo> {
-  ensureSessionTables()
-  const parentSession = DataBaseRead("sessions", input.parentSessionID) as SessionInfo | null
-  if (!parentSession) {
-    throw new Error(`Parent session '${input.parentSessionID}' was not found.`)
-  }
-  if (isSideChatSession(parentSession)) {
-    throw new Error("Side chats can only be created from main sessions.")
-  }
-
-  const now = Date.now()
-  const linkSeed = snapshotFromAnchorMessage(input)
-  const session = normalizeSessionInfo({
-    id: Identifier.descending("session"),
-    projectID: parentSession.projectID,
-    directory: parentSession.directory,
-    worktreeID: parentSession.worktreeID,
-    title: buildSideChatTitle(linkSeed.anchorPreview),
-    version: Installation.VERSION,
-    kind: "side-chat",
-    policy: SIDE_CHAT_POLICY,
-    workflow: defaultWorkflowState(now),
-    time: {
-      created: now,
-      updated: now,
-    },
-  })
-  const link = SideChatLink.parse({
-    ...linkSeed,
-    sessionID: session.id,
-    createdAt: now,
-  })
-
-  const commitCreate = db.db.transaction((nextSession: SessionInfo, nextLink: SideChatLink) => {
-    db.insertOneWithSchema("sessions", nextSession, SessionInfo)
-    db.insertOneWithSchema("side_chat_links", nextLink, SideChatLink)
-  })
-
-  commitCreate(session, link)
-  return session
 }
 
 function normalizeSessionTitle(title: string | undefined) {
@@ -1207,30 +877,6 @@ function listArchivedSessionSummaries(): ArchivedSessionSummaryRecord[] {
   })
 }
 
-function listArchivableSessions(sessionID: string): SessionInfo[] {
-  ensureSessionTables()
-  const existing = DataBaseRead("sessions", sessionID) as SessionInfo | null
-  if (!existing) return []
-
-  if (isSideChatSession(existing)) {
-    return [existing]
-  }
-
-  const sessions = [existing]
-  const seenSessionIDs = new Set([existing.id])
-
-  for (const link of loadSideChatLinks({ parentSessionID: sessionID })) {
-    if (seenSessionIDs.has(link.sessionID)) continue
-    const sideChatSession = DataBaseRead("sessions", link.sessionID) as SessionInfo | null
-    if (!sideChatSession) continue
-
-    sessions.push(sideChatSession)
-    seenSessionIDs.add(sideChatSession.id)
-  }
-
-  return sessions
-}
-
 function removeSession(sessionID: string): SessionInfo | null {
   ensureSessionTables()
   const existing = DataBaseRead("sessions", sessionID) as SessionInfo | null
@@ -1244,40 +890,28 @@ function removeSession(sessionID: string): SessionInfo | null {
   LiveStreamHub.clearSession(sessionID)
   ToolResultPersistence.removeSessionOutputDirectory(sessionID)
   db.deleteById("sessions", sessionID)
-  db.deleteById("side_chat_links", sessionID, "sessionID")
 
   return existing
 }
 
 function archiveSession(sessionID: string): ArchivedSessionRecord | null {
-  return archiveSessionCascade(sessionID)[0] ?? null
-}
-
-function archiveSessionCascade(sessionID: string): ArchivedSessionRecord[] {
   ensureSessionTables()
-  const sessions = listArchivableSessions(sessionID)
-  if (sessions.length === 0) return []
+  const session = DataBaseRead("sessions", sessionID) as SessionInfo | null
+  if (!session) return null
 
-  const archivedRecords = sessions.map((session) => buildArchivedSessionRecord(session))
-  const commitArchive = db.db.transaction((records: ArchivedSessionRecord[]) => {
-    for (const record of records) {
-      db.insertOneWithSchema("archived_sessions", record, ArchivedSessionRecord)
-    }
-
-    for (const record of records) {
-      db.deleteMany("parts", [{ column: "sessionID", value: record.sessionID }])
-      db.deleteMany("messages", [{ column: "sessionID", value: record.sessionID }])
-      db.deleteMany("turns", [{ column: "sessionID", value: record.sessionID }])
-      removeSessionTasks(record.sessionID)
-      db.deleteById("sessions", record.sessionID)
-    }
+  const archivedRecord = buildArchivedSessionRecord(session)
+  const commitArchive = db.db.transaction((record: ArchivedSessionRecord) => {
+    db.insertOneWithSchema("archived_sessions", record, ArchivedSessionRecord)
+    db.deleteMany("parts", [{ column: "sessionID", value: record.sessionID }])
+    db.deleteMany("messages", [{ column: "sessionID", value: record.sessionID }])
+    db.deleteMany("turns", [{ column: "sessionID", value: record.sessionID }])
+    removeSessionTasks(record.sessionID)
+    db.deleteById("sessions", record.sessionID)
   })
 
-  commitArchive(archivedRecords)
-  for (const record of archivedRecords) {
-    LiveStreamHub.clearSession(record.sessionID)
-  }
-  return archivedRecords
+  commitArchive(archivedRecord)
+  LiveStreamHub.clearSession(archivedRecord.sessionID)
+  return archivedRecord
 }
 
 function restoreArchivedSession(sessionID: string): SessionInfo | null {
@@ -1330,65 +964,10 @@ function deleteArchivedSession(sessionID: string): ArchivedSessionRecord | null 
   if (!archived) return null
 
   db.deleteById("archived_sessions", sessionID, "sessionID")
-  db.deleteById("side_chat_links", sessionID, "sessionID")
   EventStore.deleteSessionEvents(sessionID)
   LiveStreamHub.clearSession(sessionID)
   ToolResultPersistence.removeSessionOutputDirectory(sessionID)
   return archived
-}
-
-function listSideChats(parentSessionID: string, anchorMessageID?: string): SideChatLink[] {
-  return loadSideChatLinks({
-    parentSessionID,
-    anchorMessageID,
-  })
-}
-
-function getSideChatLink(sessionID: string): SideChatLink | null {
-  return (DataBaseRead("side_chat_links", sessionID, "sessionID") as SideChatLink | null) ?? null
-}
-
-function getSessionOrigin(sessionID: string): SessionOrigin | undefined {
-  const link = getSideChatLink(sessionID)
-  if (!link) return undefined
-  return {
-    parentSessionID: link.parentSessionID,
-    anchorMessageID: link.anchorMessageID,
-    anchorPreview: link.anchorPreview,
-  }
-}
-
-function getSideChatContext(sessionID: string): SideChatContext | null {
-  const link = getSideChatLink(sessionID)
-  if (!link) return null
-
-  const activeSession = DataBaseRead("sessions", sessionID) as SessionInfo | null
-  if (activeSession) {
-    return {
-      session: activeSession,
-      link,
-      messages: loadMessagesWithParts(sessionID),
-    }
-  }
-
-  const archived = readArchivedSession(sessionID)
-  if (!archived) return null
-
-  const partsByMessageID = new Map<string, Message.Part[]>()
-  for (const part of archived.snapshot.parts) {
-    const list = partsByMessageID.get(part.messageID) ?? []
-    list.push(part)
-    partsByMessageID.set(part.messageID, list)
-  }
-
-  return {
-    session: normalizeSessionInfo(archived.snapshot.session),
-    link,
-    messages: archived.snapshot.messages.map((message) => ({
-      info: message,
-      parts: partsByMessageID.get(message.id) ?? [],
-    })),
-  }
 }
 
 function removeProjectSessions(projectID: string): SessionInfo[] {
@@ -1466,9 +1045,7 @@ function updateSessionModelSelection(
 
 export {
   archiveSession,
-  archiveSessionCascade,
   createSession,
-  createSideChat,
   createTurn,
   deleteArchivedSession,
   DataBaseCreate,
@@ -1479,16 +1056,11 @@ export {
   listArchivedSessionSummaries,
   listByProject,
   listRunningTurns,
-  listSideChats,
   listTurns,
   DEFAULT_SESSION_TITLE,
   isDefaultSessionTitle,
-  getSessionOrigin,
   getActiveMessageID,
   getSessionModelSelection,
-  getSideChatContext,
-  getSideChatLink,
-  listArchivableSessions,
   readArchivedSession,
   removeProjectSessions,
   removeSession,

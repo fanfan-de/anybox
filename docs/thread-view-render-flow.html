@@ -566,7 +566,7 @@
                 <div class="io-grid">
                   <div class="io">
                     <b>输入</b>
-                    <p><code>activeMessages</code>、trace visibility、pending permission、messageTree、side chat。</p>
+                    <p><code>activeMessages</code>、trace visibility、pending permission、messageTree。</p>
                   </div>
                   <div class="io">
                     <b>处理</b>
@@ -668,7 +668,7 @@
             </article>
             <article class="card" data-tone="green">
               <h3>投影两阶段</h3>
-              <p>base rows 展开 message 和 trace；decoration rows 只追加最终 assistant 消息后的 diff 和 actions。side chat 内容由右侧栏 tab 渲染。</p>
+              <p>base rows 展开 message 和 trace；decoration rows 只追加最终 assistant 消息后的 diff 和 actions。</p>
             </article>
             <article class="card" data-tone="orange">
               <h3>虚拟列表</h3>
@@ -677,10 +677,6 @@
             <article class="card" data-tone="green">
               <h3>Turn execution disclosure</h3>
               <p>Canonical <code>ThreadTurn</code> 先派生 <code>ThreadExecutionGroup</code>；同 backend execution 在任一帧最多一个 summary。投影只对有 backend/segment 强身份的重复 canonical wrappers 做保守归并，随后由 <code>ThreadPresentationStore</code> 决定是否从 <code>displayRows</code> 移除 process prefix。<code>completed</code> 且 final response 已解析时，response 前的失败 trace 仍属于 process prefix；非 <code>completed</code> 终态或 <code>completed</code> 无最终 response 时，最后一条失败/终态 trace 才作为 protected outcome 留在折叠区外。自动折叠使用 semantic scroll-anchor transaction，不使用 CSS 隐藏 row。</p>
-            </article>
-            <article class="card" data-tone="violet">
-              <h3>Right sidebar side chat</h3>
-              <p>side chat is no longer rendered as a main <code>ThreadView</code> row; the main thread keeps only the actions button/count/active state, and the right sidebar tab renders the side chat content.</p>
             </article>
           </div>
         </section>
@@ -742,7 +738,7 @@
                 </tr>
                 <tr>
                   <td><code>assistant-actions</code></td>
-                  <td>branch / copy / side chat / fork action buttons</td>
+                  <td>branch / copy / fork action buttons</td>
                   <td>回复下方的操作栏。</td>
                 </tr>
               </tbody>

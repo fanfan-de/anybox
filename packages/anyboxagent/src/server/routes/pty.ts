@@ -41,15 +41,11 @@ function readClientMessageData(data: MessageEvent["data"]) {
   throw new Error("PTY websocket payload must be text")
 }
 
-function requireMainSession(sessionID: string) {
+function requireSession(sessionID: string) {
   const session = Session.DataBaseRead("sessions", sessionID) as Session.SessionInfo | null
   if (!session) {
     throw new ApiError(404, "SESSION_NOT_FOUND", `Session '${sessionID}' not found`)
   }
-  if (Session.isSideChatSession(session)) {
-    throw new ApiError(409, "TERMINAL_UNAVAILABLE", "Side chat sessions do not support terminals")
-  }
-
   return session
 }
 
@@ -62,7 +58,7 @@ export function PtyRoutes(options: { registry: PtyRegistry; upgradeWebSocket: Up
       throw new ApiError(400, "INVALID_PAYLOAD", "Body must include a valid sessionID and PTY session fields")
     }
 
-    const ownerSession = requireMainSession(payload.data.sessionID)
+    const ownerSession = requireSession(payload.data.sessionID)
     const session = await options.registry.create({
       ...payload.data,
       cwd: ownerSession.directory,

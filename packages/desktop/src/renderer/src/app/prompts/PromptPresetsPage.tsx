@@ -49,7 +49,6 @@ const PROMPT_TRANSLATION_LANGUAGES: Array<{
 const BUILTIN_PROMPT_LABEL_KEYS = {
   "System prompt": "prompts.builtin.systemPrompt",
   "Plan mode prompt": "prompts.builtin.planModePrompt",
-  "Side chat prompt": "prompts.builtin.sideChatPrompt",
   "Git commit message prompt": "prompts.builtin.gitCommitMessagePrompt",
   "Cinema text generation prompt": "prompts.builtin.cinemaTextGenerationPrompt",
   "Anthropic Provider Prompt": "prompts.builtin.anthropicProviderPrompt",
@@ -185,9 +184,6 @@ function getPromptPresetUsageLabels(
   }
   if (selection.planModePromptPresetID === presetID) {
     labels.push(t("prompts.usage.plan"))
-  }
-  if (selection.sideChatPromptPresetID === presetID) {
-    labels.push(t("prompts.usage.sideChat"))
   }
   if (selection.gitCommitPromptPresetID === presetID) {
     labels.push(t("prompts.usage.gitCommit"))
@@ -993,27 +989,6 @@ export function PromptPresetsPage({
                         disabled={!promptPresetSelection || isSavingPromptPresetSelection}
                         onChange={(value) =>
                           void onPromptPresetSelectionChange("planModePromptPresetID", value)
-                        }
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="settings-prompt-assignment-row" role="listitem">
-                  <div className="settings-prompt-assignment-copy">
-                    <span className="settings-prompt-assignment-title">{t("prompts.slot.sideChat")}</span>
-                  </div>
-
-                  <div className="settings-prompt-assignment-control">
-                    <div className="settings-prompt-assignment-actions">
-                      <SettingsSelect
-                        ariaLabel={t("prompts.slot.sideChatSelectAria")}
-                        className="settings-prompt-assignment-select"
-                        options={promptPresetSelectOptions}
-                        value={promptPresetSelection?.sideChatPromptPresetID ?? ""}
-                        disabled={!promptPresetSelection || isSavingPromptPresetSelection}
-                        onChange={(value) =>
-                          void onPromptPresetSelectionChange("sideChatPromptPresetID", value)
                         }
                       />
                     </div>

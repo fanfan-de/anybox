@@ -16,7 +16,6 @@ const ACTIVE_SESSION_TABLES = new Set([
   "parts",
   "session_events",
   "session_tasks",
-  "side_chat_links",
 ])
 
 const CATEGORY_LABELS: Record<StorageUsageCategoryID, string> = {

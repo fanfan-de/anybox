@@ -1702,7 +1702,7 @@ export const APPEARANCE_TOKEN_GROUPS = [
       {
         "id": "semantic-thread-panel-surface",
         "label": "Thread Panel Surface",
-        "description": "Background fill for thread-owned panels such as side chats and default assistant cards.",
+        "description": "Background fill for thread-owned panels and default assistant cards.",
         "lightToken": "semantic-thread-panel-surface-light",
         "darkToken": "semantic-thread-panel-surface-dark"
       },

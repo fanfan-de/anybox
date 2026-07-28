@@ -26,11 +26,10 @@ ContextWindow.preparePromptContext({
   reasoningEffort,
   tools,
   recordCompactionMessage,
-  disableCompaction: Session.isSideChatSession(activeSession),
 })
 ```
 
-普通会话默认启用自动压缩。侧聊会话会传入 `disableCompaction: true`，避免 side chat 的锚点上下文被改写。
+会话默认启用自动压缩。
 
 自动压缩还受项目配置和环境标记控制：
 
@@ -44,7 +43,7 @@ ContextWindow.preparePromptContext({
 - `/compact`
 - `~compact`
 
-这两个命令由 Composer 在发送前拦截，只在已有主会话中启用，不会作为普通用户消息发给模型。拦截后 renderer 通过 `window.desktop.agentSession.compact` 进入 Electron IPC，再调用后端：
+这两个命令由 Composer 在发送前拦截，只在已有会话中启用，不会作为普通用户消息发给模型。拦截后 renderer 通过 `window.desktop.agentSession.compact` 进入 Electron IPC，再调用后端：
 
 ```text
 POST /api/sessions/:id/compact
@@ -54,7 +53,6 @@ POST /api/sessions/:id/compact
 
 手动压缩同样遵守以下保护：
 
-- side chat 不允许手动压缩，避免改写锚点上下文。
 - 会话正在运行时不允许压缩，避免和当前 prompt 构建竞争。
 - 最近 `6` 个 turns 仍保留为原始消息，命令只压缩更早的完整 turns。
 

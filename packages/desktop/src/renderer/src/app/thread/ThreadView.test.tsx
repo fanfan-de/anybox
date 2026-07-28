@@ -181,7 +181,6 @@ function createThreadProps(
     pendingPermissionRequests: [],
     permissionRequestActionError: null,
     permissionRequestActionRequestID: null,
-    sideChatCountsByAnchorMessageID: {},
     threadColumnRef,
     presentationStore,
     onAskUserQuestionAnswer: vi.fn(),
@@ -1214,27 +1213,6 @@ describe("ThreadView trace item renderers", () => {
     expect(row?.textContent).not.toContain("completed")
     expect(container.querySelector(".trace-kind-step .trace-item-step-row")).toBeNull()
     expect(container.querySelector(".trace-kind-step .trace-log-detail")).toBeNull()
-  })
-})
-
-describe("ThreadView side chat sessions", () => {
-  it("does not render a session banner for side chat sessions", () => {
-    const { queryByText } = renderThread([], {
-      activeSession: {
-        ...session,
-        title: "Side chat: Raw markdown response",
-        kind: "side-chat",
-        origin: {
-          parentSessionID: "session-parent",
-          anchorMessageID: "assistant-message-1",
-          anchorPreview: "Raw markdown response",
-        },
-      },
-    })
-
-    expect(queryByText("Linked reply thread")).not.toBeInTheDocument()
-    expect(queryByText("Isolated")).not.toBeInTheDocument()
-    expect(queryByText("Raw markdown response")).not.toBeInTheDocument()
   })
 })
 
@@ -5449,39 +5427,9 @@ describe("ThreadView message actions", () => {
     expect(screen.queryByRole("button", { name: /个文件已更改/i })).toBeNull()
   })
 
-  it("renders assistant copy and side chat actions as icon buttons", () => {
-    const onOpenSideChat = vi.fn()
-    const { getByRole, queryByText } = renderThread(
-      [
-        assistantTraceMessage(
-          "assistant-1",
-          [
-            {
-              id: "response-1",
-              kind: "text",
-              timestamp: 1,
-              label: "Assistant",
-              text: "Done",
-              status: "completed",
-            },
-          ],
-          false,
-        ),
-      ],
-      { onOpenSideChat },
-    )
-
-    expect(getByRole("button", { name: "Copy assistant response" })).toBeInTheDocument()
-    expect(queryByText("Sidechat")).toBeNull()
-
-    fireEvent.click(getByRole("button", { name: "Open side chat" }))
-
-    expect(onOpenSideChat).toHaveBeenCalledWith("assistant-1")
-  })
-
   it("uses the latest action callback without rebuilding the memoized viewport", () => {
-    const firstOpenSideChat = vi.fn()
-    const latestOpenSideChat = vi.fn()
+    const firstFork = vi.fn()
+    const latestFork = vi.fn()
     const message = assistantTraceMessage(
       "assistant-1",
       [
@@ -5498,19 +5446,19 @@ describe("ThreadView message actions", () => {
     )
     const threadColumnRef = createRef<HTMLDivElement | null>()
     const props = createThreadProps([message], threadColumnRef, {
-      onOpenSideChat: firstOpenSideChat,
+      onForkFromMessage: firstFork,
     })
     const { rerender } = render(<ThreadView {...props} />)
 
-    rerender(<ThreadView {...props} onOpenSideChat={latestOpenSideChat} />)
-    fireEvent.click(screen.getByRole("button", { name: "Open side chat" }))
+    rerender(<ThreadView {...props} onForkFromMessage={latestFork} />)
+    fireEvent.click(screen.getByRole("button", { name: "Fork from here" }))
 
-    expect(firstOpenSideChat).not.toHaveBeenCalled()
-    expect(latestOpenSideChat).toHaveBeenCalledWith("assistant-1")
+    expect(firstFork).not.toHaveBeenCalled()
+    expect(latestFork).toHaveBeenCalledWith("assistant-1")
   })
 
   it("updates action capabilities when a callback becomes available", () => {
-    const onOpenSideChat = vi.fn()
+    const onForkFromMessage = vi.fn()
     const message = assistantTraceMessage(
       "assistant-1",
       [
@@ -5529,65 +5477,17 @@ describe("ThreadView message actions", () => {
     const props = createThreadProps([message], threadColumnRef)
     const { rerender } = render(<ThreadView {...props} />)
 
-    expect(screen.queryByRole("button", { name: "Open side chat" })).toBeNull()
+    expect(screen.queryByRole("button", { name: "Fork from here" })).toBeNull()
 
-    rerender(<ThreadView {...props} onOpenSideChat={onOpenSideChat} />)
-    fireEvent.click(screen.getByRole("button", { name: "Open side chat" }))
+    rerender(<ThreadView {...props} onForkFromMessage={onForkFromMessage} />)
+    fireEvent.click(screen.getByRole("button", { name: "Fork from here" }))
 
-    expect(onOpenSideChat).toHaveBeenCalledWith("assistant-1")
-  })
-
-  it("uses segment id for side chat anchors when backend message id is duplicated within a turn", () => {
-    const onOpenSideChat = vi.fn()
-    const assistantA = {
-      ...assistantTraceMessage(
-        "assistant-a",
-        [
-          {
-            id: "response-a",
-            kind: "text" as const,
-            timestamp: 1,
-            label: "Assistant",
-            text: "First segment",
-            status: "completed" as const,
-          },
-        ],
-        false,
-      ),
-      backendTurnID: "turn-shared",
-      messageID: "message-shared",
-      segmentID: "message-shared:1",
-    }
-    const assistantB = {
-      ...assistantTraceMessage(
-        "assistant-b",
-        [
-          {
-            id: "response-b",
-            kind: "text" as const,
-            timestamp: 2,
-            label: "Assistant",
-            text: "Second segment",
-            status: "completed" as const,
-          },
-        ],
-        false,
-      ),
-      backendTurnID: "turn-shared",
-      messageID: "message-shared",
-      segmentID: "message-shared:2",
-    }
-    const { getByRole } = renderThread([assistantA, assistantB], { onOpenSideChat })
-
-    fireEvent.click(getByRole("button", { name: "Open side chat" }))
-
-    expect(onOpenSideChat).toHaveBeenCalledWith("message-shared:2")
+    expect(onForkFromMessage).toHaveBeenCalledWith("assistant-1")
   })
 
   it("hides final response actions while the session is still running", () => {
     const onBranchSelect = vi.fn()
     const onForkFromMessage = vi.fn()
-    const onOpenSideChat = vi.fn()
     const messageTree: SessionMessageTree = {
       activeMessageID: "message-1",
       activePathMessageIDs: ["message-1"],
@@ -5643,11 +5543,9 @@ describe("ThreadView message actions", () => {
       messageTree,
       onBranchSelect,
       onForkFromMessage,
-      onOpenSideChat,
     })
 
     expect(queryByRole("button", { name: "Copy assistant response" })).toBeNull()
-    expect(queryByRole("button", { name: "Open side chat" })).toBeNull()
     expect(queryByRole("button", { name: "Fork from here" })).toBeNull()
     expect(container.querySelector(".assistant-branch-switcher")).toBeNull()
     expect(container.querySelector(".assistant-response-actions")).toBeNull()
@@ -5659,8 +5557,6 @@ describe("ThreadView message actions", () => {
       configurable: true,
       value: { writeText },
     })
-    const onOpenSideChat = vi.fn()
-
     const { container, getAllByRole, getByRole, getByText } = renderThread(
       [
         userMessage("user-with-diff", "Please update the file."),
@@ -5722,13 +5618,10 @@ describe("ThreadView message actions", () => {
           },
         },
       ],
-      { onOpenSideChat },
     )
 
     const copyButtons = getAllByRole("button", { name: "Copy assistant response" })
-    const sideChatButtons = getAllByRole("button", { name: "Open side chat" })
     expect(copyButtons).toHaveLength(1)
-    expect(sideChatButtons).toHaveLength(1)
 
     const actionRow = copyButtons[0]?.closest(".assistant-actions-row")
     const firstResponseSection = getByText("I will check the directory first.").closest(".assistant-section")
@@ -5748,9 +5641,6 @@ describe("ThreadView message actions", () => {
 
     fireEvent.click(copyButtons[0]!)
     expect(writeText).toHaveBeenCalledWith("Deleted. The directory is empty now.")
-
-    fireEvent.click(sideChatButtons[0]!)
-    expect(onOpenSideChat).toHaveBeenCalledWith("assistant-1")
   })
 
   it("folds intermediate assistant messages into the final response trace", () => {
@@ -5759,8 +5649,6 @@ describe("ThreadView message actions", () => {
       configurable: true,
       value: { writeText },
     })
-    const onOpenSideChat = vi.fn()
-
     const intermediateMessage = assistantTraceMessage(
       "assistant-intermediate",
       [
@@ -5798,18 +5686,15 @@ describe("ThreadView message actions", () => {
         intermediateMessage,
         finalMessage,
       ],
-      { onOpenSideChat },
     )
 
     const copyButtons = getAllByRole("button", { name: "Copy assistant response" })
-    const sideChatButtons = getAllByRole("button", { name: "Open side chat" })
     const foldedTraceText = getByText("I will inspect the plugin first.")
     const foldedResponseRow = foldedTraceText.closest('[data-thread-row-kind="assistant-response-row"]')
     const finalResponseRow = getByText("The plugin is available.").closest('[data-thread-row-kind="assistant-response-row"]')
     const actionRow = copyButtons[0]?.closest(".assistant-actions-row")
 
     expect(copyButtons).toHaveLength(1)
-    expect(sideChatButtons).toHaveLength(1)
     expect(actionRow).not.toBeNull()
     expect(foldedResponseRow).not.toBeNull()
     expect(finalResponseRow).not.toBeNull()
@@ -5821,9 +5706,6 @@ describe("ThreadView message actions", () => {
 
     fireEvent.click(copyButtons[0]!)
     expect(writeText).toHaveBeenCalledWith("The plugin is available.")
-
-    fireEvent.click(sideChatButtons[0]!)
-    expect(onOpenSideChat).toHaveBeenCalledWith("assistant-final")
   })
 
   it("folds stale streaming intermediate assistant messages into the final response trace", () => {
@@ -6635,35 +6517,6 @@ describe("ThreadView turn navigator", () => {
     expect(threadColumn.scrollTop).toBeGreaterThan(0)
     fireEvent.keyDown(second, { key: "Escape" })
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument()
-  })
-
-  it("resets with the session and can be explicitly disabled for nested side chat", () => {
-    const firstUser = userMessage("user-1", "First session")
-    const secondUser = userMessage("user-2", "Second session")
-    const { props, rerender } = renderThread([firstUser], {
-      activeTurns: [threadTurn("turn-1", firstUser)],
-    })
-
-    rerender(
-      <ThreadView
-        {...props}
-        activeSession={sessionB}
-        activeMessages={[secondUser]}
-        activeTurns={[threadTurn("turn-2", secondUser)]}
-      />,
-    )
-    expect(screen.getByRole("button", { name: "跳转到第 1 / 1 轮：Second session" })).toHaveAttribute("aria-current", "step")
-    expect(screen.queryByRole("button", { name: /First session/ })).not.toBeInTheDocument()
-
-    rerender(
-      <ThreadView
-        {...props}
-        activeMessages={[firstUser]}
-        activeTurns={[threadTurn("turn-1", firstUser)]}
-        showTurnNavigator={false}
-      />,
-    )
-    expect(screen.queryByRole("navigation", { name: "对话轮次导航" })).not.toBeInTheDocument()
   })
 
   it("keeps a turn-navigation jump detached while streaming content changes", async () => {

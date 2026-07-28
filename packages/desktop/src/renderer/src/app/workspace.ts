@@ -8,10 +8,6 @@ export function isGitWorkspaceProject(workspace: Pick<WorkspaceGroup, "project">
   return workspace?.project.kind === "git" || workspace?.project.vcs === "git"
 }
 
-export function isSideChatSession(session: Pick<SessionSummary, "kind"> | null | undefined) {
-  return session?.kind === "side-chat"
-}
-
 export function normalizeWorkspaceDirectoryKey(value: string) {
   return value.trim().replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase()
 }
@@ -75,8 +71,8 @@ export function updateSessionInWorkspaces(
   }))
 }
 
-export function getPrimaryWorkspaceSessions<T extends Pick<SessionSummary, "kind">>(sessions: T[]) {
-  return sessions.filter((session) => !isSideChatSession(session))
+export function getPrimaryWorkspaceSessions<T>(sessions: T[]) {
+  return sessions
 }
 
 function getPreferredWorkspaces(workspaces: WorkspaceGroup[]) {
@@ -111,7 +107,6 @@ export function sortWorkspaceSessions<T extends Pick<SessionSummary, "pinned" | 
 }
 
 export function mapLoadedSession(session: LoadedSessionSnapshot, sessionIndex: number): SessionSummary {
-  const sideChat = isSideChatSession(session)
   return {
     id: session.id,
     title: session.title.trim() || `Session ${sessionIndex + 1}`,
@@ -121,14 +116,10 @@ export function mapLoadedSession(session: LoadedSessionSnapshot, sessionIndex: n
     status: "Ready",
     created: session.created,
     updated: session.updated,
-    focus: sideChat ? "Side chat" : "Backend",
-    summary: sideChat
-      ? session.origin?.anchorPreview || "Read-only side chat"
-      : `Loaded from ${session.directory}`,
-    kind: session.kind,
+    focus: "Backend",
+    summary: `Loaded from ${session.directory}`,
     policy: session.policy,
     automation: session.automation,
-    origin: session.origin,
     subagent: session.subagent,
     workflow: session.workflow,
     modelSelection: session.modelSelection,

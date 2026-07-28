@@ -42,10 +42,6 @@ export async function writeTextToClipboard(text: string) {
   }
 }
 
-export function SideChatBadge({ compact = false }: { compact?: boolean }) {
-  return <span className={compact ? "side-chat-badge is-compact" : "side-chat-badge"}>Side chat</span>
-}
-
 export function SessionWorkflowBadge({
   compact = false,
   workflow,

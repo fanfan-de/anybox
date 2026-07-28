@@ -141,15 +141,9 @@ export interface AssistantDiffCardRow extends AssistantDisplayRowBase {
 export interface AssistantActionsRow extends AssistantDisplayRowBase {
   branchOptions: SessionMessageBranchOption[]
   canForkFromMessage: boolean
-  canOpenSideChat: boolean
-  existingSideChatCount: number
   kind: "assistant-actions"
-  marksSideChatButtonActive: boolean
   responseCopyText: string
   responseItems: AssistantTraceItem[]
-  sideChatAnchorMessageID: string
-  sideChatButtonLabel: string
-  sideChatButtonTitle: string
   threadMessageID: string
 }
 
@@ -175,7 +169,6 @@ export interface ThreadDisplayContext {
   latestRenderableAssistantMessageID: string | null
   messageIndexByID: Map<string, number>
   messages: ThreadMessage[]
-  sideChatAnchorMessageIDByAssistantID: Map<string, string>
   streamInsertionItemIndexByUserMessageID: Map<string, number>
   streamInsertionTargetUserMessageIDs: Set<string>
   streamInsertedUserMessagesByAssistantID: Map<string, UserThreadMessage[]>
@@ -196,14 +189,10 @@ export interface DecorateThreadDisplayRowsInput {
   assistantTraceVisibility: AssistantTraceVisibility
   baseRows: ThreadDisplayRow[]
   canForkFromMessage: boolean
-  canOpenSideChat: boolean
   context: ThreadDisplayContext
   hasPendingPermissionRequests: boolean
   isSessionRunning: boolean
   messageTree?: SessionMessageTree | null
-  readOnlySideChat: boolean
-  sideChatCountsByAnchorMessageID: Record<string, number>
-  sideChatSession?: SessionSummary | null
 }
 
 export interface ThreadDisplayRowsCacheStats {
@@ -591,21 +580,6 @@ export function shouldFoldAssistantMessageIntoFinalRunTrace(
   return isFoldableAssistantRunMessage(message) || Boolean(message.isStreaming)
 }
 
-export function resolveAssistantSideChatAnchorMessageID(messages: ThreadMessage[], message: AssistantThreadMessage) {
-  if (!message.messageID) return message.id
-
-  const hasDuplicateBackendMessageSegment = messages.some(
-    (candidate) =>
-      candidate.kind === "assistant" &&
-      candidate.id !== message.id &&
-      candidate.backendTurnID === message.backendTurnID &&
-      candidate.messageID === message.messageID &&
-      candidate.segmentID !== message.segmentID,
-  )
-
-  return hasDuplicateBackendMessageSegment ? message.segmentID : message.messageID
-}
-
 export function isAssistantLatestRenderableMessage(
   messages: ThreadMessage[],
   assistantIndex: number,
@@ -644,9 +618,7 @@ export function buildThreadDisplayContext(
   const foldedAssistantMessageIDs = new Set<string>()
   const foldedAssistantMessagesByFinalAssistantID = new Map<string, AssistantThreadMessage[]>()
   const finalOperableAssistantMessageIDs = new Set<string>()
-  const sideChatAnchorMessageIDByAssistantID = new Map<string, string>()
   const trailingUserDiffMessageByAssistantID = new Map<string, UserThreadMessage>()
-  const segmentIDsByBackendTurnAndMessageID = new Map<string, Map<string, Set<string>>>()
   let latestRenderableAssistantMessageID: string | null = null
 
   messages.forEach((message, index) => {
@@ -657,36 +629,7 @@ export function buildThreadDisplayContext(
       assistantMessageIDsWithDiffSummary.add(message.id)
     }
 
-    if (!message.messageID) return
-    let segmentIDsByMessageID = segmentIDsByBackendTurnAndMessageID.get(message.backendTurnID)
-    if (!segmentIDsByMessageID) {
-      segmentIDsByMessageID = new Map()
-      segmentIDsByBackendTurnAndMessageID.set(message.backendTurnID, segmentIDsByMessageID)
-    }
-    let segmentIDs = segmentIDsByMessageID.get(message.messageID)
-    if (!segmentIDs) {
-      segmentIDs = new Set()
-      segmentIDsByMessageID.set(message.messageID, segmentIDs)
-    }
-    segmentIDs.add(message.segmentID)
   })
-
-  for (const message of messages) {
-    if (message.kind !== "assistant") continue
-
-    if (!message.messageID) {
-      sideChatAnchorMessageIDByAssistantID.set(message.id, message.id)
-      continue
-    }
-
-    const segmentIDs = segmentIDsByBackendTurnAndMessageID
-      .get(message.backendTurnID)
-      ?.get(message.messageID)
-    sideChatAnchorMessageIDByAssistantID.set(
-      message.id,
-      segmentIDs && segmentIDs.size > 1 ? message.segmentID : message.messageID,
-    )
-  }
 
   const finalizeFoldableRun = (runAssistantMessages: AssistantThreadMessage[]) => {
     if (options.disableAssistantRunFolding) return
@@ -801,7 +744,6 @@ export function buildThreadDisplayContext(
     latestRenderableAssistantMessageID,
     messageIndexByID,
     messages,
-    sideChatAnchorMessageIDByAssistantID,
     streamInsertionItemIndexByUserMessageID: streamInsertionIndex.insertionItemIndexByUserMessageID,
     streamInsertionTargetUserMessageIDs: new Set(
       streamInsertionIndex.targetAssistantMessageIDByUserMessageID.keys(),
@@ -867,7 +809,6 @@ function createAssistantBaseRowsCacheState({
     context.foldedAssistantMessageIDs.has(message.id) ? 1 : 0,
     context.finalOperableAssistantMessageIDs.has(message.id) ? 1 : 0,
     context.latestRenderableAssistantMessageID === message.id ? 1 : 0,
-    context.sideChatAnchorMessageIDByAssistantID.get(message.id) ?? message.id,
     foldedRunMessages.map((foldedMessage) => context.messageIndexByID.get(foldedMessage.id) ?? -1).join(","),
   ])
 
@@ -1537,26 +1478,16 @@ function buildAssistantActionsRow({
   assistantTraceVisibility,
   baseRow,
   canForkFromMessage,
-  canOpenSideChat,
   hasPendingPermissionRequests,
   isSessionRunning,
   messageTree,
-  readOnlySideChat,
-  sideChatAnchorMessageID,
-  sideChatCountsByAnchorMessageID,
-  sideChatSession,
 }: {
   assistantTraceVisibility: AssistantTraceVisibility
   baseRow: AssistantDisplayRow
   canForkFromMessage: boolean
-  canOpenSideChat: boolean
   hasPendingPermissionRequests: boolean
   isSessionRunning: boolean
   messageTree?: SessionMessageTree | null
-  readOnlySideChat: boolean
-  sideChatAnchorMessageID: string
-  sideChatCountsByAnchorMessageID: Record<string, number>
-  sideChatSession?: SessionSummary | null
 }): AssistantActionsRow | null {
   const message = baseRow.message
   const threadMessageID = getSessionMessageIDForMessage(message)
@@ -1566,31 +1497,13 @@ function buildAssistantActionsRow({
     : []
   const canExposeResponseActions = ownsFinalResponse && responseItems.length > 0
   const branchOptions = canExposeResponseActions ? messageTree?.branchOptionsByParentID[threadMessageID] ?? [] : []
-  const existingSideChatCount = sideChatCountsByAnchorMessageID[sideChatAnchorMessageID] ?? 0
   const responseCopyText = canExposeResponseActions ? buildAssistantResponseCopyText(responseItems) : ""
-  const activeSideChatSession = sideChatSession?.origin?.anchorMessageID === sideChatAnchorMessageID ? sideChatSession : null
-  const marksSideChatButtonActive = Boolean(activeSideChatSession)
-  const sideChatButtonLabel =
-    existingSideChatCount > 0
-      ? `Open side chat (${existingSideChatCount})`
-      : "Open side chat"
-  const sideChatButtonTitle =
-    existingSideChatCount > 0
-      ? `${existingSideChatCount} side chat thread${existingSideChatCount === 1 ? "" : "s"}`
-      : "Open a side chat for this reply"
-  const rowCanOpenSideChat =
-    !readOnlySideChat &&
-    !message.isStreaming &&
-    canExposeResponseActions &&
-    canOpenSideChat
   const rowCanForkFromMessage =
-    !readOnlySideChat &&
     !message.isStreaming &&
     canExposeResponseActions &&
     canForkFromMessage
   const shouldRenderResponseActions = Boolean(
     responseCopyText ||
-    rowCanOpenSideChat ||
     rowCanForkFromMessage ||
     branchOptions.length > 1,
   )
@@ -1605,14 +1518,8 @@ function buildAssistantActionsRow({
     ),
     branchOptions,
     canForkFromMessage: rowCanForkFromMessage,
-    canOpenSideChat: rowCanOpenSideChat,
-    existingSideChatCount,
-    marksSideChatButtonActive,
     responseCopyText,
     responseItems,
-    sideChatAnchorMessageID,
-    sideChatButtonLabel,
-    sideChatButtonTitle,
     threadMessageID,
   }
 }
@@ -1674,45 +1581,15 @@ function createAssistantDecorationDiffState({
   }
 }
 
-function createAssistantDecorationSideChatState({
-  sideChatAnchorMessageID,
-  sideChatCountsByAnchorMessageID,
-  sideChatSession,
-}: {
-  sideChatAnchorMessageID: string
-  sideChatCountsByAnchorMessageID: Record<string, number>
-  sideChatSession?: SessionSummary | null
-}) {
-  const existingSideChatCount = sideChatCountsByAnchorMessageID[sideChatAnchorMessageID] ?? 0
-  const activeSideChatSession = sideChatSession?.origin?.anchorMessageID === sideChatAnchorMessageID ? sideChatSession : null
-  const signature = joinCacheKeyParts([
-    sideChatAnchorMessageID,
-    existingSideChatCount,
-    activeSideChatSession ? 1 : 0,
-  ])
-
-  return {
-    signature,
-  }
-}
-
 function createAssistantDecorationCacheState({
   assistantTraceVisibility,
   baseRow,
   canForkFromMessage,
-  canOpenSideChat,
   context,
   hasPendingPermissionRequests,
   isSessionRunning,
   messageTree,
-  readOnlySideChat,
-  sideChatAnchorMessageID,
-  sideChatCountsByAnchorMessageID,
-  sideChatSession,
-}: DecorateThreadDisplayRowsInput & {
-  baseRow: AssistantDisplayRow
-  sideChatAnchorMessageID: string
-}) {
+}: DecorateThreadDisplayRowsInput & { baseRow: AssistantDisplayRow }) {
   const branchOptions = readAssistantDecorationBranchOptions({
     baseRow,
     hasPendingPermissionRequests,
@@ -1720,11 +1597,6 @@ function createAssistantDecorationCacheState({
     messageTree,
   })
   const diffState = createAssistantDecorationDiffState({ baseRow, context })
-  const sideChatState = createAssistantDecorationSideChatState({
-    sideChatAnchorMessageID,
-    sideChatCountsByAnchorMessageID,
-    sideChatSession,
-  })
   const key = joinCacheKeyParts([
     "decoration:assistant",
     baseRow.ownerMessageID,
@@ -1735,11 +1607,8 @@ function createAssistantDecorationCacheState({
     diffState.signature,
     hasPendingPermissionRequests ? 1 : 0,
     isSessionRunning ? 1 : 0,
-    readOnlySideChat ? 1 : 0,
     canForkFromMessage ? 1 : 0,
-    canOpenSideChat ? 1 : 0,
     assistantTraceVisibilitySignature(assistantTraceVisibility),
-    sideChatState.signature,
   ])
 
   return {
@@ -1771,14 +1640,10 @@ export function decorateThreadDisplayRowsIncremental(
     assistantTraceVisibility,
     baseRows,
     canForkFromMessage,
-    canOpenSideChat,
     context,
     hasPendingPermissionRequests,
     isSessionRunning,
     messageTree,
-    readOnlySideChat,
-    sideChatCountsByAnchorMessageID,
-    sideChatSession,
   } = input
   const sessionID = previousCache?.sessionID ?? null
   const compatiblePreviousCache = getCompatibleThreadDisplayRowsCache(previousCache, sessionID)
@@ -1803,12 +1668,9 @@ export function decorateThreadDisplayRowsIncremental(
     const ownerLastBaseRow = lastDecoratableBaseRowByOwnerID.get(row.ownerMessageID)
     if (ownerLastBaseRow !== row) return
 
-    const sideChatAnchorMessageID =
-      context.sideChatAnchorMessageIDByAssistantID.get(row.ownerMessageID) ?? row.ownerMessageID
     const cacheState = createAssistantDecorationCacheState({
       ...input,
       baseRow: row,
-      sideChatAnchorMessageID,
     })
     const previousEntry = compatiblePreviousCache?.decorationRowsByOwnerMessageID.get(row.ownerMessageID)
     if (canReuseDecorationRows(previousEntry, cacheState, row)) {
@@ -1830,14 +1692,9 @@ export function decorateThreadDisplayRowsIncremental(
       assistantTraceVisibility,
       baseRow: row,
       canForkFromMessage,
-      canOpenSideChat,
       hasPendingPermissionRequests,
       isSessionRunning,
       messageTree,
-      readOnlySideChat,
-      sideChatAnchorMessageID,
-      sideChatCountsByAnchorMessageID,
-      sideChatSession,
     })
     if (actionsRow) decorationRows.push(actionsRow)
 

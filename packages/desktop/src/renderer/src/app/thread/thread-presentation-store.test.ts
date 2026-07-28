@@ -13,11 +13,11 @@ describe("thread presentation store", () => {
     expect(store.getState().getProcessDisclosurePreference("main", "turn-1")).toBe("auto")
 
     store.getState().setProcessDisclosurePreference("main", "turn-1", "expanded")
-    store.getState().setProcessDisclosurePreference("side-chat", "turn-1", "collapsed")
+    store.getState().setProcessDisclosurePreference("secondary-scope", "turn-1", "collapsed")
     store.getState().setProcessDisclosurePreference("main", "turn-2", "collapsed")
 
     expect(store.getState().getProcessDisclosurePreference("main", "turn-1")).toBe("expanded")
-    expect(store.getState().getProcessDisclosurePreference("side-chat", "turn-1")).toBe("collapsed")
+    expect(store.getState().getProcessDisclosurePreference("secondary-scope", "turn-1")).toBe("collapsed")
     expect(store.getState().getProcessDisclosurePreference("main", "turn-2")).toBe("collapsed")
   })
 
@@ -55,13 +55,13 @@ describe("thread presentation store", () => {
     const store = createThreadPresentationStore()
     store.getState().setProcessDisclosurePreference("main", "turn-1", "expanded")
     store.getState().setProcessDisclosurePreference("main", "turn-2", "collapsed")
-    store.getState().setProcessDisclosurePreference("side-chat", "turn-1", "expanded")
+    store.getState().setProcessDisclosurePreference("secondary-scope", "turn-1", "expanded")
 
     store.getState().clearScope("main")
 
     expect(store.getState().getProcessDisclosurePreference("main", "turn-1")).toBe("auto")
     expect(store.getState().getProcessDisclosurePreference("main", "turn-2")).toBe("auto")
-    expect(store.getState().getProcessDisclosurePreference("side-chat", "turn-1")).toBe("expanded")
+    expect(store.getState().getProcessDisclosurePreference("secondary-scope", "turn-1")).toBe("expanded")
   })
 
   it("keeps selector results stable across unrelated updates", () => {
@@ -69,7 +69,7 @@ describe("thread presentation store", () => {
     store.getState().setProcessDisclosurePreference("main", "turn-1", "expanded")
     const entry = selectThreadPresentationEntry(store.getState(), "main", "turn-1")
 
-    store.getState().setProcessDisclosurePreference("side-chat", "turn-2", "collapsed")
+    store.getState().setProcessDisclosurePreference("secondary-scope", "turn-2", "collapsed")
 
     expect(selectThreadPresentationEntry(store.getState(), "main", "turn-1")).toBe(entry)
     expect(selectProcessDisclosurePreference(store.getState(), "main", "turn-1")).toBe("expanded")

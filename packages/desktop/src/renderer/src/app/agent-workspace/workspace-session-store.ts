@@ -17,10 +17,6 @@ export function useWorkspaceSessionStore({ store }: WorkspaceSessionStoreOptions
   const gitRefreshSuppressedUntilRef = useRef<Record<string, number>>({})
   const workspaceReloadSuppressedUntilRef = useRef<Record<string, number>>({})
 
-  const activeSideChatSessionIDByParentSessionID = useWorkspaceStoreSelector(
-    store,
-    (state) => state.sessions.activeSideChatSessionIDByParentSessionID,
-  )
   const canLoadSessionHistory = useWorkspaceStoreSelector(store, (state) => state.sessions.canLoadSessionHistory)
   const createSessionTabs = useWorkspaceStoreSelector(store, (state) => state.sessions.createSessionTabs)
   const deletingSessionID = useWorkspaceStoreSelector(store, (state) => state.sessions.deletingSessionID)
@@ -40,10 +36,6 @@ export function useWorkspaceSessionStore({ store }: WorkspaceSessionStoreOptions
     (state) => state.sessions.sessionCanvasUnreadBySession,
   )
   const workspaces = useWorkspaceStoreSelector(store, (state) => state.sessions.workspaces)
-  const setActiveSideChatSessionIDByParentSessionID = useWorkspaceStoreSelector(
-    store,
-    (state) => state.sessionsActions.setActiveSideChatSessionIDByParentSessionID,
-  )
   const setCanLoadSessionHistory = useWorkspaceStoreSelector(
     store,
     (state) => state.sessionsActions.setCanLoadSessionHistory,
@@ -88,7 +80,6 @@ export function useWorkspaceSessionStore({ store }: WorkspaceSessionStoreOptions
   const setWorkspaces = useWorkspaceStoreSelector(store, (state) => state.sessionsActions.setWorkspaces)
 
   return {
-    activeSideChatSessionIDByParentSessionID,
     canLoadSessionHistory,
     createSessionTabs,
     deletingSessionID,
@@ -107,7 +98,6 @@ export function useWorkspaceSessionStore({ store }: WorkspaceSessionStoreOptions
     projectRowRefs,
     rightSidebar,
     selectedFolderID,
-    setActiveSideChatSessionIDByParentSessionID,
     setCanLoadSessionHistory,
     setCreateSessionTabs,
     setDeletingSessionID,

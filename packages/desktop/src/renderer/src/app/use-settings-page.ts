@@ -140,10 +140,6 @@ function replacePromptPresetAssignments(
       selection.planModePromptPresetID === sourcePresetID
         ? replacementPresetID
         : selection.planModePromptPresetID,
-    sideChatPromptPresetID:
-      selection.sideChatPromptPresetID === sourcePresetID
-        ? replacementPresetID
-        : selection.sideChatPromptPresetID,
     gitCommitPromptPresetID:
       selection.gitCommitPromptPresetID === sourcePresetID
         ? replacementPresetID
@@ -2142,7 +2138,6 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     return {
       systemPromptPresetID: field === "systemPromptPresetID" ? value : selectedPromptPresetID ?? value,
       planModePromptPresetID: field === "planModePromptPresetID" ? value : selectedPromptPresetID ?? value,
-      sideChatPromptPresetID: field === "sideChatPromptPresetID" ? value : selectedPromptPresetID ?? value,
       gitCommitPromptPresetID: field === "gitCommitPromptPresetID" ? value : selectedPromptPresetID ?? value,
       cinemaTextGenerationPromptPresetID:
         field === "cinemaTextGenerationPromptPresetID" ? value : selectedPromptPresetID ?? value,
@@ -2174,13 +2169,11 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
             ? t("prompts.message.systemUpdated")
             : field === "planModePromptPresetID"
               ? t("prompts.message.planUpdated")
-              : field === "sideChatPromptPresetID"
-                ? t("prompts.message.sideChatUpdated")
-                : field === "gitCommitPromptPresetID"
-                  ? t("prompts.message.gitCommitUpdated")
-                  : field === "cinemaTextGenerationPromptPresetID"
-                    ? t("prompts.message.cinemaTextGenerationUpdated")
-                    : t("prompts.message.assignmentsUpdated"),
+              : field === "gitCommitPromptPresetID"
+                ? t("prompts.message.gitCommitUpdated")
+                : field === "cinemaTextGenerationPromptPresetID"
+                  ? t("prompts.message.cinemaTextGenerationUpdated")
+                  : t("prompts.message.assignmentsUpdated"),
       })
       return true
     } catch (error) {
@@ -2222,10 +2215,6 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
               field === "planModePromptPresetID"
                 ? promptPresetSelection.planModePromptPresetID
                 : savedPromptPresetSelection.planModePromptPresetID,
-            sideChatPromptPresetID:
-              field === "sideChatPromptPresetID"
-                ? promptPresetSelection.sideChatPromptPresetID
-                : savedPromptPresetSelection.sideChatPromptPresetID,
             gitCommitPromptPresetID:
               field === "gitCommitPromptPresetID"
                 ? promptPresetSelection.gitCommitPromptPresetID
@@ -2678,7 +2667,6 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       const nextPresetID =
         remainingPromptPresets.find((preset) => preset.id === nextSelection.systemPromptPresetID)?.id ??
         remainingPromptPresets.find((preset) => preset.id === nextSelection.planModePromptPresetID)?.id ??
-        remainingPromptPresets.find((preset) => preset.id === nextSelection.sideChatPromptPresetID)?.id ??
         remainingPromptPresets.find((preset) => preset.id === nextSelection.gitCommitPromptPresetID)?.id ??
         remainingPromptPresets.find((preset) => preset.id === nextSelection.cinemaTextGenerationPromptPresetID)?.id ??
         remainingPromptPresets[0]?.id ??
@@ -4117,10 +4105,6 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     promptPresetSelection !== null &&
     savedPromptPresetSelection !== null &&
     promptPresetSelection.planModePromptPresetID !== savedPromptPresetSelection.planModePromptPresetID
-  const isSideChatPromptPresetDirty =
-    promptPresetSelection !== null &&
-    savedPromptPresetSelection !== null &&
-    promptPresetSelection.sideChatPromptPresetID !== savedPromptPresetSelection.sideChatPromptPresetID
   const isGitCommitPromptPresetDirty =
     promptPresetSelection !== null &&
     savedPromptPresetSelection !== null &&
@@ -4201,7 +4185,6 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     isBuiltinToolSelectionDirty,
     isSystemPromptPresetDirty,
     isPlanModePromptPresetDirty,
-    isSideChatPromptPresetDirty,
     isGitCommitPromptPresetDirty,
     isCinemaTextGenerationPromptPresetDirty,
     isRefreshingProviderCatalog,

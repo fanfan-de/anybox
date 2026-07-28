@@ -961,10 +961,10 @@ export async function evaluate(input: EvaluationInput): Promise<EvaluationResult
   const workflow = Session.normalizeWorkflowState(session?.workflow)
   const risk = maxRisk(deriveRisk(input, derived.paths), intent?.risk ?? "low")
 
-  if (Session.isSideChatSession(session) && input.tool.readOnly !== true) {
+  if (session?.policy?.toolPolicy === "read-only" && input.tool.readOnly !== true) {
     const result: EvaluationResult = {
       action: "deny",
-      reason: "Side chat sessions are read-only and block tools with side effects.",
+      reason: "This session is read-only and blocks tools with side effects.",
       risk: risk === "low" ? "medium" : risk,
       derived,
     }

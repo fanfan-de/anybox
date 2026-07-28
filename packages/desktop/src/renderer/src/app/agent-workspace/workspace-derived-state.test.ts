@@ -7,7 +7,7 @@ import {
   WORKBENCH_DOCK_PANEL_COMPONENT,
   WORKBENCH_DOCK_TAB_COMPONENT,
 } from "../workbench/dockview-state"
-import { DEFAULT_WORKSPACE_FILE_REVIEW_STATE, DEFAULT_WORKSPACE_PREVIEW_STATE } from "./review-preview-state"
+import { DEFAULT_WORKSPACE_FILE_REVIEW_STATE } from "./review-preview-state"
 import {
   buildWorkbenchPublishSnapshot,
   buildWorkspaceDerivedState,
@@ -96,7 +96,6 @@ function createWorkspace(id: string, sessions: SessionSummary[], exists = true):
 
 function buildDerivedState(overrides: Partial<Parameters<typeof buildWorkspaceDerivedState>[0]> = {}) {
   return buildWorkspaceDerivedState({
-    activeSideChatSessionIDByParentSessionID: {},
     cancellingSessionIDs: {},
     composerAttachmentsByTabKey: {},
     composerDraftStateByTabKey: {},
@@ -127,126 +126,6 @@ function buildDerivedState(overrides: Partial<Parameters<typeof buildWorkspaceDe
 }
 
 describe("workspace derived state", () => {
-  it("builds active session, side chat, preview scope, and pane states from store slices", () => {
-    const parentSession = createSession("session-parent", "Parent")
-    const sideChatSession: SessionSummary = {
-      ...createSession("side-chat-1", "Side chat"),
-      kind: "side-chat",
-      origin: {
-        parentSessionID: parentSession.id,
-        anchorMessageID: "message-1",
-        anchorPreview: "Selected text",
-      },
-      updated: 200,
-    }
-    const secondSideChatSession: SessionSummary = {
-      ...createSession("side-chat-2", "Side chat 2"),
-      kind: "side-chat",
-      origin: {
-        parentSessionID: parentSession.id,
-        anchorMessageID: "message-1",
-        anchorPreview: "Selected text",
-      },
-      created: 150,
-      updated: 150,
-    }
-    const otherAnchorSideChatSession: SessionSummary = {
-      ...createSession("side-chat-3", "Side chat 3"),
-      kind: "side-chat",
-      origin: {
-        parentSessionID: parentSession.id,
-        anchorMessageID: "message-2",
-        anchorPreview: "Other selected text",
-      },
-      created: 160,
-      updated: 160,
-    }
-    const workspace = createWorkspace("workspace-1", [parentSession, sideChatSession, secondSideChatSession, otherAnchorSideChatSession])
-    const createSessionTab = {
-      id: "create-1",
-      workspaceID: workspace.id,
-      title: "",
-    }
-    const layout = createDockviewLayoutFromPanes([
-      createWorkbenchPane([
-        createSessionWorkbenchTab(parentSession.id),
-        createCreateSessionWorkbenchTab(createSessionTab.id),
-      ], "pane-1"),
-    ])
-
-    const derived = buildWorkspaceDerivedState({
-      activeSideChatSessionIDByParentSessionID: {
-        [parentSession.id]: sideChatSession.id,
-      },
-      cancellingSessionIDs: {},
-      composerAttachmentsByTabKey: {},
-      composerDraftStateByTabKey: {},
-      contextUsageBySession: {},
-      conversations: {
-        [parentSession.id]: [{ id: "message-1", kind: "user", text: "hello", timestamp: 1 }],
-        [sideChatSession.id]: [{ id: "message-2", kind: "user", text: "side", timestamp: 2 }],
-      },
-      createSessionTabs: [createSessionTab],
-      isCreatingSessionByTabKey: {},
-      isInitialWorkspaceLoadPending: false,
-      isSendingByTabKey: {},
-      pendingPermissionRequestsBySession: {},
-      platform: "win32",
-      previewByWorkspaceID: {
-        [workspace.id]: {
-          ...DEFAULT_WORKSPACE_PREVIEW_STATE,
-          draftUrl: "http://localhost:5173",
-          draftTarget: "http://localhost:5173",
-          committedUrl: null,
-          reloadToken: 0,
-          errorKind: null,
-          errorMessage: null,
-          navigationHistory: [],
-          navigationIndex: -1,
-          activeInteractionID: null,
-          interactions: [],
-        },
-      },
-      selectedDiffFileBySession: {},
-      selectedFolderID: workspace.id,
-      sessionDiffBySession: {},
-      sessionDiffStateBySession: {},
-      sessionDirectoryBySession: {},
-      sessionRuntimeDebugBySession: {},
-      sessionRuntimeDebugStateBySession: {},
-      seedWorkspaceIDs: new Set(),
-      dockviewActiveState: createDockviewActiveStateFromLayout(layout),
-      dockviewLayout: layout,
-      workspaceFileCommentsByTarget: {},
-      workspaceFileReviewState: DEFAULT_WORKSPACE_FILE_REVIEW_STATE,
-      workspaces: [workspace],
-    })
-
-    expect(derived.activeSession?.id).toBe(parentSession.id)
-    expect(derived.activeMessages).toHaveLength(1)
-    expect(derived.activeSideChatSession?.id).toBe(sideChatSession.id)
-    expect(derived.activeSideChatMessages).toHaveLength(1)
-    expect(derived.activeSideChatCountsByAnchorMessageID).toEqual({ "message-1": 2, "message-2": 1 })
-    expect(derived.activeSideChatSessionsByAnchorMessageID["message-1"]?.map((session) => session.id)).toEqual([
-      "side-chat-2",
-      "side-chat-1",
-    ])
-    expect(derived.activePreviewState.draftUrl).toBe("http://localhost:5173")
-    expect(derived.canvasSessionTabs.map((session) => session.id)).toEqual([parentSession.id])
-    expect(derived.visibleCanvasSessionIDs).toEqual([parentSession.id])
-    expect(derived.runningSessionIDs).toEqual([])
-    expect(derived.workbenchPaneStates[0]).toMatchObject({
-      id: "pane-1",
-      activeTabKey: getWorkbenchTabKey(createSessionWorkbenchTab(parentSession.id)),
-      sessionID: parentSession.id,
-      sideChatCountsByAnchorMessageID: { "message-1": 2, "message-2": 1 },
-      workspace,
-    })
-    expect(derived.workbenchPaneStates[0]?.sideChatSessionsByAnchorMessageID["message-1"]?.map((session) => session.id)).toEqual([
-      "side-chat-2",
-      "side-chat-1",
-    ])
-  })
 
   it("keeps panel states bound to their own session or create-session reference", () => {
     const sessionA = createSession("session-a", "Session A")
@@ -396,7 +275,6 @@ describe("workspace derived state", () => {
     const workspace = createWorkspace("workspace-1", [sendingSession, streamingSession, idleSession])
 
     const derived = buildWorkspaceDerivedState({
-      activeSideChatSessionIDByParentSessionID: {},
       cancellingSessionIDs: {},
       composerAttachmentsByTabKey: {},
       composerDraftStateByTabKey: {},
@@ -479,7 +357,6 @@ describe("workspace derived state", () => {
     ])
 
     const derived = buildWorkspaceDerivedState({
-      activeSideChatSessionIDByParentSessionID: {},
       cancellingSessionIDs: {},
       composerAttachmentsByTabKey: {},
       composerDraftStateByTabKey: {},
@@ -526,7 +403,6 @@ describe("workspace derived state", () => {
     ])
 
     const derived = buildWorkspaceDerivedState({
-      activeSideChatSessionIDByParentSessionID: {},
       cancellingSessionIDs: {},
       composerAttachmentsByTabKey: {},
       composerDraftStateByTabKey: {},

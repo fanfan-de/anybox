@@ -440,7 +440,7 @@ export function SettingsRoutes() {
     const payload = await parseJsonBody(
       c,
       SettingsUseCase.PromptPresetSelectionBody,
-      "Body must contain non-empty 'systemPromptPresetID', 'planModePromptPresetID', 'sideChatPromptPresetID', 'gitCommitPromptPresetID', and 'cinemaTextGenerationPromptPresetID' fields.",
+      "Body must contain non-empty 'systemPromptPresetID', 'planModePromptPresetID', 'gitCommitPromptPresetID', and 'cinemaTextGenerationPromptPresetID' fields.",
     )
     return ok(c, await SettingsUseCase.updatePromptPresetSelection(payload))
   })

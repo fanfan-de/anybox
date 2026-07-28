@@ -285,7 +285,6 @@ function Harness() {
           saveScrollSnapshot={saveScrollSnapshot}
           scrollStateKey="thread-execution-e2e"
           showTurnNavigator={false}
-          sideChatCountsByAnchorMessageID={{}}
           threadColumnRef={threadColumnRef}
           onAskUserQuestionAnswer={() => undefined}
           onPermissionRequestResponse={() => undefined}

@@ -141,12 +141,6 @@ function getRightSidebarTabTargetKey(input: RightSidebarOpenTabInput) {
       return ["message-tree", normalizeRightSidebarTargetSegment(input.sessionID)].join(":")
     case "message-inspector":
       return "message-inspector"
-    case "side-chat":
-      return [
-        "side-chat",
-        normalizeRightSidebarTargetSegment(input.parentSessionID),
-        normalizeRightSidebarTargetSegment(input.anchorMessageID),
-      ].join(":")
   }
 }
 
@@ -166,8 +160,6 @@ function getRightSidebarTabTitle(input: RightSidebarOpenTabInput) {
       return "Tree"
     case "message-inspector":
       return "Conversation"
-    case "side-chat":
-      return "Side chat"
   }
 }
 
@@ -221,14 +213,6 @@ function createRightSidebarTab(input: RightSidebarOpenTabInput): RightSidebarTab
         ...base,
         kind: "message-inspector",
         messageID: input.messageID,
-        sessionID: input.sessionID,
-      }
-    case "side-chat":
-      return {
-        ...base,
-        kind: "side-chat",
-        anchorMessageID: input.anchorMessageID,
-        parentSessionID: input.parentSessionID,
         sessionID: input.sessionID,
       }
   }
@@ -293,16 +277,6 @@ function updateRightSidebarTab(
         messageID: update.messageID ?? tab.messageID,
         sessionID: update.sessionID ?? tab.sessionID,
       }
-    case "side-chat":
-      return {
-        ...tab,
-        kind: "side-chat",
-        title,
-        targetKey,
-        anchorMessageID: update.anchorMessageID ?? tab.anchorMessageID,
-        parentSessionID: update.parentSessionID ?? tab.parentSessionID,
-        sessionID: update.sessionID ?? tab.sessionID,
-      }
   }
 }
 
@@ -312,7 +286,6 @@ export interface WorkbenchSliceState {
 }
 
 export interface SessionsSliceState {
-  activeSideChatSessionIDByParentSessionID: Record<string, string>
   canLoadSessionHistory: boolean
   createSessionTabs: CreateSessionTab[]
   deletingSessionID: string | null
@@ -376,9 +349,6 @@ export interface SessionsSliceActions {
   setRightSidebarFileState: (tabID: string, update: WorkspaceStateUpdater<WorkspaceFileReviewState>) => void
   setRightSidebarPreviewState: (tabID: string, update: WorkspaceStateUpdater<WorkspacePreviewState>) => void
   updateRightSidebarTab: (tabID: string, update: RightSidebarTabUpdate) => void
-  setActiveSideChatSessionIDByParentSessionID: (
-    update: WorkspaceStateUpdater<Record<string, string>>,
-  ) => void
   setCanLoadSessionHistory: (update: WorkspaceStateUpdater<boolean>) => void
   setCreateSessionTabs: (update: WorkspaceStateUpdater<CreateSessionTab[]>) => void
   setDeletingSessionID: (update: WorkspaceStateUpdater<string | null>) => void
@@ -507,7 +477,6 @@ export function createWorkspaceStore({
       dockviewLayout: initialDockviewLayout,
     },
     sessions: {
-      activeSideChatSessionIDByParentSessionID: {},
       canLoadSessionHistory: false,
       createSessionTabs: initialCreateSessionTab ? [initialCreateSessionTab] : [],
       deletingSessionID: null,
@@ -745,16 +714,6 @@ export function createWorkspaceStore({
             },
           }
         }),
-      setActiveSideChatSessionIDByParentSessionID: (update) =>
-        set((state) => ({
-          sessions: {
-            ...state.sessions,
-            activeSideChatSessionIDByParentSessionID: resolveStateUpdate(
-              state.sessions.activeSideChatSessionIDByParentSessionID,
-              update,
-            ),
-          },
-        })),
       setCanLoadSessionHistory: (update) =>
         set((state) => ({
           sessions: {

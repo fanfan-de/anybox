@@ -27,20 +27,16 @@ const WriteInputParameters = z.object({
   data: z.string().min(1).describe("Raw input to write to this session's terminal."),
 }).strict()
 
-function requireMainSession(sessionID: string) {
+function requireSession(sessionID: string) {
   const session = Session.DataBaseRead("sessions", sessionID) as Session.SessionInfo | null
   if (!session) {
     throw new Error(`Session '${sessionID}' was not found.`)
   }
-  if (Session.isSideChatSession(session)) {
-    throw new Error("Side chat sessions do not support terminal tools.")
-  }
-
   return session
 }
 
 async function getOrCreateTerminal(sessionID: string) {
-  const session = requireMainSession(sessionID)
+  const session = requireSession(sessionID)
   const registry = getPtyRegistry()
   await registry.create({
     sessionID: session.id,

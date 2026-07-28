@@ -629,7 +629,6 @@ describe("ipc prompt helpers", () => {
     const selection = {
       systemPromptPresetID: "system-codex",
       planModePromptPresetID: "plan-mode",
-      sideChatPromptPresetID: "side-chat",
       gitCommitPromptPresetID: "git-commit-message",
       cinemaTextGenerationPromptPresetID: "cinema-text-generation",
     }
@@ -645,57 +644,6 @@ describe("ipc prompt helpers", () => {
       },
       body: JSON.stringify(selection),
     })
-  })
-})
-
-describe("ipc side chat cleanup helpers", () => {
-  function createSideChatLink(input: {
-    sessionID: string
-    assistantText?: string
-    archived?: boolean
-  }) {
-    return {
-      sessionID: input.sessionID,
-      parentSessionID: "parent-1",
-      anchorMessageID: "assistant-1",
-      createdAt: 1,
-      anchorPreview: "Parent response",
-      snapshotVersion: 1 as const,
-      snapshot: {
-        assistantText: input.assistantText ?? "",
-      },
-      archived: input.archived,
-    }
-  }
-
-  it("deletes live side chat links that do not have an assistant response", async () => {
-    const deleteSession = vi.fn().mockResolvedValue(undefined)
-    const links = [
-      createSideChatLink({ sessionID: "empty-1" }),
-      createSideChatLink({ sessionID: "response-1", assistantText: "A real answer." }),
-      createSideChatLink({ sessionID: "empty-archived", archived: true }),
-      createSideChatLink({ sessionID: "empty-2", assistantText: "   " }),
-    ]
-
-    await expect(internal.cleanupSideChatLinksWithoutResponses(links, deleteSession)).resolves.toEqual([
-      links[1],
-      links[2],
-    ])
-    expect(deleteSession).toHaveBeenCalledTimes(2)
-    expect(deleteSession).toHaveBeenNthCalledWith(1, "empty-1")
-    expect(deleteSession).toHaveBeenNthCalledWith(2, "empty-2")
-  })
-
-  it("keeps an empty side chat link when deletion fails so the cleanup can be retried", async () => {
-    const deleteSession = vi.fn().mockRejectedValue(new Error("network failed"))
-    const link = createSideChatLink({ sessionID: "empty-1" })
-    const stderrWrite = vi.spyOn(process.stderr, "write").mockImplementation(() => true)
-
-    try {
-      await expect(internal.cleanupSideChatLinksWithoutResponses([link], deleteSession)).resolves.toEqual([link])
-    } finally {
-      stderrWrite.mockRestore()
-    }
   })
 })
 

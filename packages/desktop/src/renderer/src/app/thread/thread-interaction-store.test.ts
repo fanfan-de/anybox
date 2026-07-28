@@ -19,13 +19,13 @@ describe("thread interaction store", () => {
 
     store.getState().setQuestionDraft("main", "question-1", "Main answer")
     store.getState().setQuestionSelectedOptions("main", "question-1", ["a", "b", "a"])
-    store.getState().setQuestionDraft("side-chat", "question-1", "Side answer")
+    store.getState().setQuestionDraft("secondary-scope", "question-1", "Side answer")
 
     expect(entry(store, "main", "question-1")?.question).toEqual({
       draft: "Main answer",
       selectedOptions: ["a", "b"],
     })
-    expect(entry(store, "side-chat", "question-1")?.question).toEqual({
+    expect(entry(store, "secondary-scope", "question-1")?.question).toEqual({
       draft: "Side answer",
       selectedOptions: [],
     })
@@ -124,14 +124,14 @@ describe("thread interaction store", () => {
     expect(store.getState().focusedRow).toBeNull()
 
     store.getState().focusRow("main", "question-1")
-    store.getState().focusRow("side-chat", "question-2")
+    store.getState().focusRow("secondary-scope", "question-2")
     store.getState().blurRow("main", "question-1")
-    expect(store.getState().focusedRow).toEqual({ scopeID: "side-chat", rowID: "question-2" })
-    store.getState().blurRow("side-chat", "question-2")
+    expect(store.getState().focusedRow).toEqual({ scopeID: "secondary-scope", rowID: "question-2" })
+    store.getState().blurRow("secondary-scope", "question-2")
     expect(store.getState().focusedRow).toBeNull()
 
-    store.getState().focusRow("side-chat", "question-2")
-    store.getState().clearScope("side-chat")
+    store.getState().focusRow("secondary-scope", "question-2")
+    store.getState().clearScope("secondary-scope")
     expect(store.getState().focusedRow).toBeNull()
   })
 
@@ -139,14 +139,14 @@ describe("thread interaction store", () => {
     const store = createThreadInteractionStore()
     store.getState().setQuestionDraft("main", "keep", "Keep")
     store.getState().setQuestionDraft("main", "remove", "Remove")
-    store.getState().setQuestionDraft("side-chat", "remove", "Different scope")
+    store.getState().setQuestionDraft("secondary-scope", "remove", "Different scope")
     store.getState().focusRow("main", "remove")
 
     store.getState().reconcileScope("main", ["keep"])
 
     expect(entry(store, "main", "keep")?.question.draft).toBe("Keep")
     expect(entry(store, "main", "remove")).toBeNull()
-    expect(entry(store, "side-chat", "remove")?.question.draft).toBe("Different scope")
+    expect(entry(store, "secondary-scope", "remove")?.question.draft).toBe("Different scope")
     expect(store.getState().focusedRow).toBeNull()
   })
 

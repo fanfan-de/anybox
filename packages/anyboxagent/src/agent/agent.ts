@@ -6,7 +6,7 @@ export const AgentInfo = z
   .object({
     name: z.string(),
     description: z.string().optional(),
-    mode: z.enum(["subagent", "primary", "all", "side-chat"]),
+    mode: z.enum(["subagent", "primary", "all"]),
     native: z.boolean().optional(),
     hidden: z.boolean().optional(),
     topP: z.number().optional(),
@@ -28,7 +28,6 @@ export const AgentInfo = z
   .meta({ ref: "AgentInfo", description: "Information about the agent" })
 
 export type AgentInfo = z.infer<typeof AgentInfo>
-export const SIDECHAT_AGENT_NAME = "sidechat"
 
 const PLAN_AGENT_TOOL_POLICY: Record<string, boolean> = {
   ask_user_question: true,
@@ -64,17 +63,6 @@ export const planAgent: AgentInfo = {
   tools: PLAN_AGENT_TOOL_POLICY,
 }
 
-export const sideChatAgent: AgentInfo = {
-  name: SIDECHAT_AGENT_NAME,
-  description: "Side chat mode. Answers from an anchored assistant reply without side effects.",
-  mode: "side-chat",
-  native: true,
-  hidden: true,
-  options: {},
-  toolPolicy: "read-only",
-}
-
-
 const state = Instance.state(async () => {
   const result: Record<string, AgentInfo> = {
     default: {
@@ -85,7 +73,6 @@ const state = Instance.state(async () => {
       native: true,
     },
     plan: planAgent,
-    [SIDECHAT_AGENT_NAME]: sideChatAgent,
     compaction:{
       name: "compaction",
       mode: "subagent",

@@ -5402,12 +5402,6 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   gap: 8px;
 }
 
-.session-canvas-top-menu-copy .side-chat-badge {
-  min-height: 20px;
-  padding: 0 8px;
-  font-size: 11px;
-}
-
 .canvas-top-menu-button svg {
   width: var(--section-toolbar-icon-size);
   height: var(--section-toolbar-icon-size);

@@ -24,7 +24,7 @@ ThreadView 是 agent 执行记录视图，不是普通聊天窗口。
 
 - 用户快速读取最终 assistant 回复。
 - 开发者扫描 reasoning、tools、workflow、file changes 和 debug traces。
-- 用户针对某条 assistant 回复开启 side chat，同时不打断主上下文。
+- 用户从消息树选择 Branch，或从某条回复 fork 新任务。
 
 优先级：
 
@@ -46,7 +46,7 @@ Composer
 ComposerUtilityBar
 ```
 
-主 pane 的 `Composer` 是 `ThreadView` 的 sibling，不是子组件。只有 inline side chat 内部包含 nested `ThreadView` 和 nested composer。
+主 pane 的 `Composer` 是 `ThreadView` 的 sibling，不是子组件。
 
 ## Trace Section
 
@@ -73,7 +73,7 @@ Assistant trace item 按 section 分组，而不是只按 `item.kind`：
 
 - 除非任务明确修改滚动逻辑，否则保留 bottom-lock 行为。
 - 只有用户已接近底部时，新 turn 才继续锁底。
-- Assistant actions 可以在 hover/focus、copied、active side chat 时显示，但必须保证键盘可发现。
+- Assistant actions 可以在 hover、focus 或 copied 状态显示，但必须保证键盘可发现。
 - Permission prompt 是阻塞决策点，使用 warning 语义。
 - Ask-user card 需要 answered 状态，避免重复提交。
 - Lightbox 打开时要避免背景滚动干扰。
@@ -83,7 +83,7 @@ Assistant trace item 按 section 分组，而不是只按 `item.kind`：
 修改 ThreadView 时检查是否影响：
 
 - `Turn` 或 `AssistantTraceItem` 的分组、显示、折叠规则。
-- response、trace、file-change、permission、question、side chat 的视觉层级。
-- 多 pane、窄窗口、nested side-chat 场景。
+- response、trace、file-change、permission、question、branch actions 的视觉层级。
+- 多 pane、窄窗口和 right sidebar 场景。
 - `ThreadView.test.tsx` 或 `App.test.tsx`。
 - `docs/thread-view-frontend-design.md`。

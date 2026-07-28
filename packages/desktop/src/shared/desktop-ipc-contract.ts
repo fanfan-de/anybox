@@ -79,7 +79,6 @@ import type {
   AgentSessionTraceExport,
   AgentSessionTurnRequestInput,
   AgentSessionWorkflowUpdateInput,
-  AgentSideChatLink,
   AgentSkillGitInstallPreview,
   AgentSkillInfo,
   AgentSkillInstallCandidate,
@@ -302,7 +301,6 @@ export type {
   AgentSessionTraceExport,
   AgentSessionTurnRequestInput,
   AgentSessionWorkflowUpdateInput,
-  AgentSideChatLink,
   AgentSkillGitInstallPreview,
   AgentSkillInfo,
   AgentSkillInstallCandidate,
@@ -1786,18 +1784,6 @@ export interface DesktopIpcContract {
     input: { sessionID: string; pinned: boolean }
     output: DesktopSessionMutationResult
   }
-  "desktop:create-side-chat": {
-    input: { parentSessionID: string; anchorMessageID: string }
-    output: DesktopSessionMutationResult
-  }
-  "desktop:list-side-chats": {
-    input: { parentSessionID: string; anchorMessageID?: string }
-    output: AgentSideChatLink[]
-  }
-  "desktop:get-side-chat-link": {
-    input: { sessionID: string }
-    output: AgentSideChatLink
-  }
   "desktop:delete-project-workspace": {
     input: { projectID: string }
     output: DesktopDeleteProjectWorkspaceResult
@@ -2713,12 +2699,9 @@ export interface DesktopApiMethods {
   createProjectSession(input: DesktopIpcInput<"desktop:create-project-session">): Promise<DesktopIpcOutput<"desktop:create-project-session">>
   updateSessionTitle(input: DesktopIpcInput<"desktop:update-session-title">): Promise<DesktopIpcOutput<"desktop:update-session-title">>
   updateSessionPinned(input: DesktopIpcInput<"desktop:update-session-pinned">): Promise<DesktopIpcOutput<"desktop:update-session-pinned">>
-  createSideChat(input: DesktopIpcInput<"desktop:create-side-chat">): Promise<DesktopIpcOutput<"desktop:create-side-chat">>
   updateSessionWorkflow(input: DesktopIpcInput<"desktop:update-session-workflow">): Promise<DesktopIpcOutput<"desktop:update-session-workflow">>
   updateSessionActiveMessage(input: DesktopIpcInput<"desktop:update-session-active-message">): Promise<DesktopIpcOutput<"desktop:update-session-active-message">>
   rollbackSessionToCheckpoint(input: DesktopIpcInput<"desktop:rollback-session-to-checkpoint">): Promise<DesktopIpcOutput<"desktop:rollback-session-to-checkpoint">>
-  listSideChats(input: DesktopIpcInput<"desktop:list-side-chats">): Promise<DesktopIpcOutput<"desktop:list-side-chats">>
-  getSideChatLink(input: DesktopIpcInput<"desktop:get-side-chat-link">): Promise<DesktopIpcOutput<"desktop:get-side-chat-link">>
   deleteProjectWorkspace(input: DesktopIpcInput<"desktop:delete-project-workspace">): Promise<DesktopIpcOutput<"desktop:delete-project-workspace">>
   deleteAgentSession(input: DesktopIpcInput<"desktop:delete-agent-session">): Promise<DesktopIpcOutput<"desktop:delete-agent-session">>
   archiveAgentSession(input: DesktopIpcInput<"desktop:archive-agent-session">): Promise<DesktopIpcOutput<"desktop:archive-agent-session">>

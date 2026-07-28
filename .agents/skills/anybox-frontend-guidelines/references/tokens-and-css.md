@@ -77,7 +77,7 @@ manifest 使用 schema v2。公开 token 值只允许两种表达：
 - `shell.css`：window shell、app grid、rails、顶层 chrome。
 - `sidebar.css`：左右侧栏、workspace/session tree、skills tree、context menu。
 - `workbench.css`：canvas、panes、tabs、workbench layout、canvas top menu。
-- `thread.css`：ThreadView、assistant/user turns、trace items、权限提示、side chat、markdown。
+- `thread.css`：ThreadView、assistant/user turns、trace items、权限提示、branch actions、markdown。
 - `composer.css`：composer、utility bar、branch/model menus、command menus。
 - `settings.css`：settings、plugins、connectors、MCP、provider/model 管理。
 - `responsive.css`：跨区域响应式覆盖规则。

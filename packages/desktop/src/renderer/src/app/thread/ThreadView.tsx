@@ -2,10 +2,6 @@
 import { createPortal } from "react-dom"
 import { createContext, useContext, useSyncExternalStore, type FocusEvent as ReactFocusEvent } from "react"
 import { toLocalImageProtocolUrl } from "../../../../shared/local-image-protocol"
-import { getAgentSessionBridge } from "../agent-session/client"
-import { Composer } from "../composer/Composer"
-import { ComposerConcurrentInputDrawer } from "../composer/ComposerConcurrentInputDrawer"
-import { appendTextToComposerDraftState } from "../composer/draft-state"
 import { CodeBlockPreview } from "../code-highlight"
 import {
   DEFAULT_LIGHT_CODE_THEME,
@@ -18,7 +14,6 @@ import {
   ChevronRightIcon,
   CloseIcon,
   CopyIcon,
-  DeleteIcon,
   DownloadIcon,
   ExpandIcon,
   FileImageIcon,
@@ -30,8 +25,6 @@ import {
 } from "../icons"
 import { joinClassNames, writeTextToClipboard } from "../shared-ui"
 import { type SessionMessageBranchOption, type SessionMessageTree } from "../session-message-tree"
-import { buildThreadTurnsFromHistory } from "../stream"
-import { deriveActiveMessages } from "../thread-turn-state"
 import {
   ThreadMarkdown,
   normalizeMarkdownLinkTarget,
@@ -53,13 +46,10 @@ import type {
   AssistantTraceVisibility,
   AssistantThreadMessage,
   AssistantThreadMessagePhase,
-  ComposerAttachment,
-  ComposerDraftState,
   ComposerPastedImageAttachment,
   PendingConversationInput,
   PermissionDecision,
   PermissionRequest,
-  ReasoningEffort,
   SessionDiffFile,
   SessionDiffSummary,
   SessionSummary,
@@ -68,8 +58,6 @@ import type {
   UserThreadMessage,
   UserThreadMessageAttachment
 } from "../types"
-import { useProjectComposer } from "../use-project-composer"
-import { mergeUserMessagePresentationState, readPersistedUserMessages } from "../user-message-presentation"
 import { formatTime } from "../utils"
 import {
   getUserMessageBodyText,
@@ -266,7 +254,6 @@ interface ThreadViewProps {
   onForkFromMessage?: (messageID: string) => void | Promise<void>
   onArtifactLinkOpen?: (target: MarkdownArtifactLinkTarget) => void
   onLocalFileLinkOpen?: (target: MarkdownLocalFileLinkTarget) => void
-  onOpenSideChat?: (anchorMessageID: string) => void | Promise<void>
   onMessageDiffSummaryHydrate?: (messageID: string, diffSummary: SessionDiffSummary) => void | Promise<void>
   onMessageDiffRestore?: (diffs: SessionDiffFile[]) => void | Promise<void>
   onMessageDiffReview?: (files: string[]) => void | Promise<void>
@@ -277,8 +264,6 @@ interface ThreadViewProps {
   onAddToComposer?: (text: string) => void | Promise<void>
   onAddImageToComposer?: (images: ComposerPastedImageAttachment[]) => void | Promise<void>
   addImageToComposerDisabledReason?: string | null
-  sideChatCountsByAnchorMessageID: Record<string, number>
-  sideChatSession?: SessionSummary | null
   interactionStore?: ThreadInteractionStoreApi
   presentationStore?: ThreadPresentationStoreApi
   scrollStateKey?: string | null
@@ -300,7 +285,6 @@ type ThreadViewActionPropName =
   | "onForkFromMessage"
   | "onArtifactLinkOpen"
   | "onLocalFileLinkOpen"
-  | "onOpenSideChat"
   | "onMessageDiffSummaryHydrate"
   | "onMessageDiffRestore"
   | "onMessageDiffReview"
@@ -318,7 +302,6 @@ interface ThreadViewActions {
   onForkFromMessage: NonNullable<ThreadViewProps["onForkFromMessage"]>
   onArtifactLinkOpen: NonNullable<ThreadViewProps["onArtifactLinkOpen"]>
   onLocalFileLinkOpen: NonNullable<ThreadViewProps["onLocalFileLinkOpen"]>
-  onOpenSideChat: NonNullable<ThreadViewProps["onOpenSideChat"]>
   onMessageDiffSummaryHydrate: NonNullable<ThreadViewProps["onMessageDiffSummaryHydrate"]>
   onMessageDiffRestore: NonNullable<ThreadViewProps["onMessageDiffRestore"]>
   onMessageDiffReview: NonNullable<ThreadViewProps["onMessageDiffReview"]>
@@ -335,7 +318,6 @@ interface ThreadViewActionCapabilities {
   canForkFromMessage: boolean
   canOpenArtifactLink: boolean
   canOpenLocalFileLink: boolean
-  canOpenSideChat: boolean
   canHydrateMessageDiffSummary: boolean
   canRestoreMessageDiff: boolean
   canReviewMessageDiff: boolean
@@ -373,9 +355,6 @@ function useThreadViewActions(source: ThreadViewActionSource) {
     },
     onLocalFileLinkOpen(target) {
       return committedSourceRef.current.onLocalFileLinkOpen?.(target)
-    },
-    onOpenSideChat(anchorMessageID) {
-      return committedSourceRef.current.onOpenSideChat?.(anchorMessageID)
     },
     onMessageDiffSummaryHydrate(messageID, diffSummary) {
       return committedSourceRef.current.onMessageDiffSummaryHydrate?.(messageID, diffSummary)
@@ -2068,491 +2047,6 @@ function ImageLightbox({
       </div>
     </div>,
     document.body,
-  )
-}
-
-export interface SideChatThreadProps {
-  activeProjectID: string | null
-  attachments: ComposerAttachment[]
-  assistantTraceVisibility: AssistantTraceVisibility
-  composerRefreshVersion: number
-  draftState: ComposerDraftState
-  isAgentDebugTraceEnabled: boolean
-  isResolvingPermissionRequest: boolean
-  isCancelling?: boolean
-  isInterruptible?: boolean
-  isSending: boolean
-  pendingInputs: PendingConversationInput[]
-  pendingPermissionRequests: PermissionRequest[]
-  permissionRequestActionError: string | null
-  permissionRequestActionRequestID: string | null
-  session: SessionSummary
-  sideChatSessions: SessionSummary[]
-  messages: ThreadMessage[]
-  turns: ThreadTurn[]
-  isThreadVisible?: boolean
-  readScrollSnapshot?: (key: string) => ThreadScrollSnapshot | null
-  saveScrollSnapshot?: (key: string, snapshot: ThreadScrollSnapshot) => void
-  onDraftStateChange: (value: ComposerDraftState) => void
-  onHide: () => void
-  onAskUserQuestionAnswer: QuestionAnswerHandler
-  onArtifactLinkOpen?: (target: MarkdownArtifactLinkTarget) => void
-  onLocalFileLinkOpen?: (target: MarkdownLocalFileLinkTarget) => void
-  onPermissionRequestResponse: PermissionRequestResponseHandler
-  onPickAttachments: (input: {
-    allowImage: boolean
-    allowPdf: boolean
-    disabledReason: string | null
-  }) => void | Promise<void>
-  onPasteImageAttachments?: (input: {
-    allowImage: boolean
-    disabledReason: string | null
-    images: ComposerPastedImageAttachment[]
-  }) => void | Promise<void>
-  onRemoveAttachment: (path: string) => void
-  onCancelSend?: () => void | Promise<void>
-  onCreateSideChat: () => void | Promise<void>
-  onDeleteSideChat: (sessionID: string) => void | Promise<void>
-  onSend: (input: {
-    attachmentError?: string | null
-    draftStateOverride?: ComposerDraftState
-    questionAnswer?: {
-      questionID: string
-      selectedOptions?: string[]
-      freeformText?: string
-    }
-    selectedReasoningEffort?: ReasoningEffort | null
-    selectedModel?: string | null
-    selectedSkillIDs: string[]
-    steerQueuedMessageID?: string
-    submissionMode?: UserThreadMessage["submissionMode"]
-    waitForPendingModelSelection: () => Promise<void>
-  }) => void | Promise<void>
-  onSelectSideChat: (sessionID: string) => void | Promise<void>
-  onSessionModelSelectionChange?: (sessionID: string, selection: SessionSummary["modelSelection"] | undefined) => void
-  ariaLabel?: string
-  variant?: "inline" | "sidebar"
-}
-
-export function SideChatThread({
-  activeProjectID,
-  attachments,
-  assistantTraceVisibility,
-  composerRefreshVersion,
-  draftState,
-  isAgentDebugTraceEnabled,
-  isResolvingPermissionRequest,
-  isCancelling = false,
-  isInterruptible = false,
-  isSending,
-  pendingInputs,
-  pendingPermissionRequests,
-  permissionRequestActionError,
-  permissionRequestActionRequestID,
-  session,
-  sideChatSessions,
-  messages,
-  turns,
-  isThreadVisible = true,
-  readScrollSnapshot,
-  saveScrollSnapshot,
-  onDraftStateChange,
-  onHide,
-  onAskUserQuestionAnswer,
-  onArtifactLinkOpen,
-  onLocalFileLinkOpen,
-  onPermissionRequestResponse,
-  onPickAttachments,
-  onPasteImageAttachments,
-  onRemoveAttachment,
-  onCancelSend,
-  onCreateSideChat,
-  onDeleteSideChat,
-  onSend,
-  onSelectSideChat,
-  onSessionModelSelectionChange,
-  ariaLabel = "Nested side chat",
-  variant = "inline",
-}: SideChatThreadProps) {
-  const presentationStoreRef = useRef<ThreadPresentationStoreApi | null>(null)
-  if (!presentationStoreRef.current) {
-    presentationStoreRef.current = createThreadPresentationStore()
-  }
-  const composer = useProjectComposer({
-    attachmentPaths: attachments.map((attachment) => attachment.path),
-    onSessionModelSelectionChange,
-    projectID: activeProjectID,
-    refreshToken: composerRefreshVersion,
-    sessionModelSelection: session.modelSelection,
-    sessionID: session.id,
-  })
-  const [hydratedTurnsBySessionID, setHydratedTurnsBySessionID] = useState<Record<string, ThreadTurn[]>>({})
-  const [isCreatingSideChatTab, setIsCreatingSideChatTab] = useState(false)
-  const [deletingSideChatTabID, setDeletingSideChatTabID] = useState<string | null>(null)
-  const [sideChatTabMenu, setSideChatTabMenu] = useState<{ sessionID: string; x: number; y: number } | null>(null)
-  const sideChatTabMenuRef = useRef<HTMLDivElement | null>(null)
-  const threadColumnRef = useRef<HTMLDivElement | null>(null)
-  const historyHydrationSessionIDsRef = useRef(new Set<string>())
-  const hydratedTurns = hydratedTurnsBySessionID[session.id] ?? []
-  const hydratedMessages = useMemo(() => deriveActiveMessages(hydratedTurns), [hydratedTurns])
-  const effectiveMessages = messages.length > 0 ? messages : hydratedMessages
-  const effectiveTurns = turns.length > 0 ? turns : hydratedTurns
-  const sideChatTabs = sideChatSessions.some((sideChat) => sideChat.id === session.id)
-    ? sideChatSessions
-    : [...sideChatSessions, session]
-  const shouldRenderNestedThread =
-    effectiveMessages.length > 0 ||
-    pendingPermissionRequests.length > 0 ||
-    isResolvingPermissionRequest ||
-    Boolean(permissionRequestActionError)
-  const pendingSubmissionInputs = useMemo(
-    () => [...pendingInputs].sort((left, right) => left.createdAt - right.createdAt),
-    [pendingInputs],
-  )
-  const addImageToComposerDisabledReason = composer.attachmentCapabilities.image
-    ? composer.attachmentDisabledReason
-    : composer.attachmentDisabledReason ?? "The current model does not support image input."
-
-  useEffect(() => {
-    if (turns.length > 0) {
-      setHydratedTurnsBySessionID((current) => ({
-        ...current,
-        [session.id]: turns,
-      }))
-      return
-    }
-
-    if (hydratedTurns.length > 0 || historyHydrationSessionIDsRef.current.has(session.id)) return
-
-    const agentSession = getAgentSessionBridge()
-    if (!agentSession) {
-      return
-    }
-
-    let isCancelled = false
-    historyHydrationSessionIDsRef.current.add(session.id)
-
-    void agentSession.loadHistory({ backendSessionID: session.id })
-      .then((messages) => {
-        if (isCancelled) return
-        const nextTurns = buildThreadTurnsFromHistory(messages)
-        const nextMessages = deriveActiveMessages(nextTurns)
-        const nextHydratedMessages = mergeUserMessagePresentationState(readPersistedUserMessages(session.id), nextMessages)
-        const hydratedMessageByID = new Map(nextHydratedMessages.map((message) => [message.id, message]))
-        const nextHydratedTurns = nextTurns.map((turn) => ({
-          ...turn,
-          messages: turn.messages.map((message) => hydratedMessageByID.get(message.id) ?? message),
-        }))
-        setHydratedTurnsBySessionID((current) => ({
-          ...current,
-          [session.id]: nextHydratedTurns,
-        }))
-      })
-      .catch((error) => {
-        if (isCancelled) return
-        historyHydrationSessionIDsRef.current.delete(session.id)
-        console.error("[desktop] agentSession.loadHistory failed for side chat:", error)
-      })
-
-    return () => {
-      isCancelled = true
-      historyHydrationSessionIDsRef.current.delete(session.id)
-    }
-  }, [hydratedTurns.length, session.id, turns])
-
-  useEffect(() => {
-    if (!sideChatTabMenu) return
-
-    function handlePointerDown(event: PointerEvent) {
-      if (sideChatTabMenuRef.current?.contains(event.target as Node)) return
-      setSideChatTabMenu(null)
-    }
-
-    function handleKeyDown(event: globalThis.KeyboardEvent) {
-      if (event.key === "Escape") {
-        setSideChatTabMenu(null)
-      }
-    }
-
-    function handleBlur() {
-      setSideChatTabMenu(null)
-    }
-
-    window.addEventListener("pointerdown", handlePointerDown)
-    window.addEventListener("keydown", handleKeyDown)
-    window.addEventListener("blur", handleBlur)
-
-    return () => {
-      window.removeEventListener("pointerdown", handlePointerDown)
-      window.removeEventListener("keydown", handleKeyDown)
-      window.removeEventListener("blur", handleBlur)
-    }
-  }, [sideChatTabMenu])
-
-  async function handleCreateSideChat() {
-    if (isCreatingSideChatTab) return
-
-    setIsCreatingSideChatTab(true)
-    try {
-      await onCreateSideChat()
-    } finally {
-      setIsCreatingSideChatTab(false)
-    }
-  }
-
-  function openSideChatTabMenu(event: ReactMouseEvent<HTMLElement>, sessionID: string) {
-    event.preventDefault()
-    event.stopPropagation()
-
-    const menuWidth = 132
-    const menuHeight = 42
-    const x = Math.min(Math.max(8, event.clientX), Math.max(8, window.innerWidth - menuWidth - 8))
-    const y = Math.min(Math.max(8, event.clientY), Math.max(8, window.innerHeight - menuHeight - 8))
-    setSideChatTabMenu({ sessionID, x, y })
-  }
-
-  function openSideChatTabMenuFromKeyboard(event: KeyboardEvent<HTMLElement>, sessionID: string) {
-    const target = event.currentTarget
-    const rect = target.getBoundingClientRect()
-    const menuWidth = 132
-    const x = Math.min(Math.max(8, rect.left), Math.max(8, window.innerWidth - menuWidth - 8))
-    const y = Math.min(Math.max(8, rect.bottom + 4), Math.max(8, window.innerHeight - 50))
-    setSideChatTabMenu({ sessionID, x, y })
-  }
-
-  async function handleDeleteSideChatTab(sessionID: string) {
-    if (deletingSideChatTabID) return
-
-    const deletedSession = sideChatTabs.find((sideChat) => sideChat.id === sessionID)
-    setDeletingSideChatTabID(sessionID)
-    setSideChatTabMenu(null)
-    try {
-      await onDeleteSideChat(sessionID)
-      if (deletedSession) {
-        presentationStoreRef.current?.getState().clearScope(
-          `side-chat:${deletedSession.origin?.parentSessionID ?? "unknown"}:${deletedSession.id}`,
-        )
-      }
-    } finally {
-      setDeletingSideChatTabID(null)
-    }
-  }
-
-  function handleAddTextToComposer(text: string) {
-    onDraftStateChange(appendTextToComposerDraftState(draftState, text))
-  }
-
-  async function handleAddImageToComposer(images: ComposerPastedImageAttachment[]) {
-    await onPasteImageAttachments?.({
-      allowImage: composer.attachmentCapabilities.image,
-      disabledReason: composer.attachmentDisabledReason,
-      images,
-    })
-  }
-
-  return (
-    <section
-      className={joinClassNames("inline-side-chat-thread", variant === "sidebar" && "is-sidebar")}
-      aria-label={ariaLabel}
-    >
-      <header className="inline-side-chat-header">
-        <div className="inline-side-chat-tabs" aria-label="Side chat tabs">
-          <div className="inline-side-chat-tab-list" role="tablist" aria-label="Side chat threads">
-            {sideChatTabs.map((sideChat, index) => {
-              const isActive = sideChat.id === session.id
-
-              return (
-                <button
-                  key={sideChat.id}
-                  className={isActive ? "inline-side-chat-tab is-active" : "inline-side-chat-tab"}
-                  type="button"
-                  role="tab"
-                  aria-selected={isActive}
-                  aria-label={`Chat ${index + 1}`}
-                  title={sideChat.title}
-                  onClick={() => {
-                    if (!isActive) {
-                      void onSelectSideChat(sideChat.id)
-                    }
-                  }}
-                  onContextMenu={(event) => openSideChatTabMenu(event, sideChat.id)}
-                  onKeyDown={(event) => {
-                    if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
-                      event.preventDefault()
-                      openSideChatTabMenuFromKeyboard(event, sideChat.id)
-                    }
-                  }}
-                >
-                  Chat {index + 1}
-                </button>
-              )
-            })}
-          </div>
-          <button
-            className="inline-side-chat-tab-add"
-            type="button"
-            aria-label="Create side chat tab"
-            title="Create side chat tab"
-            disabled={isCreatingSideChatTab}
-            onClick={() => void handleCreateSideChat()}
-          >
-            <PlusIcon />
-          </button>
-        </div>
-        <button
-          aria-label="Hide side chat"
-          className="inline-side-chat-close"
-          title="Hide side chat"
-          type="button"
-          onClick={onHide}
-        >
-          <CloseIcon />
-        </button>
-      </header>
-
-      {sideChatTabMenu
-        ? createPortal(
-            <div
-              ref={sideChatTabMenuRef}
-              className="inline-side-chat-tab-menu"
-              role="menu"
-              aria-label="Side chat tab actions"
-              style={{ left: sideChatTabMenu.x, top: sideChatTabMenu.y }}
-            >
-              <button
-                className="inline-side-chat-tab-menu-item"
-                type="button"
-                role="menuitem"
-                data-variant="danger"
-                disabled={deletingSideChatTabID !== null}
-                onClick={() => void handleDeleteSideChatTab(sideChatTabMenu.sessionID)}
-              >
-                <span className="inline-side-chat-tab-menu-icon" aria-hidden="true">
-                  <DeleteIcon />
-                </span>
-                <span className="inline-side-chat-tab-menu-label">Archive</span>
-              </button>
-            </div>,
-            document.body,
-          )
-        : null}
-
-      <div className="inline-side-chat-body">
-        {shouldRenderNestedThread ? (
-          <ThreadView
-            activeSession={session}
-            activeMessages={effectiveMessages}
-            activeTurns={effectiveTurns}
-            assistantTraceVisibility={assistantTraceVisibility}
-            isResolvingPermissionRequest={isResolvingPermissionRequest}
-            isSessionRunning={isSending || isInterruptible}
-            pendingConversationInputs={pendingInputs}
-            pendingPermissionRequests={pendingPermissionRequests}
-            permissionRequestActionError={permissionRequestActionError}
-            permissionRequestActionRequestID={permissionRequestActionRequestID}
-            sideChatCountsByAnchorMessageID={{}}
-            scrollStateKey={`side-chat:${session.origin?.parentSessionID ?? "unknown"}:${session.id}`}
-            presentationStore={presentationStoreRef.current}
-            threadColumnRef={threadColumnRef}
-            isThreadVisible={isThreadVisible}
-            readScrollSnapshot={readScrollSnapshot}
-            saveScrollSnapshot={saveScrollSnapshot}
-            showTurnNavigator={false}
-            onAskUserQuestionAnswer={(answer) =>
-              onAskUserQuestionAnswer({
-                ...answer,
-                sessionID: session.id,
-              })
-            }
-            onArtifactLinkOpen={onArtifactLinkOpen}
-            onLocalFileLinkOpen={onLocalFileLinkOpen}
-            onAddToComposer={handleAddTextToComposer}
-            onAddImageToComposer={onPasteImageAttachments ? handleAddImageToComposer : undefined}
-            addImageToComposerDisabledReason={addImageToComposerDisabledReason}
-            onPermissionRequestResponse={onPermissionRequestResponse}
-          />
-        ) : null}
-
-        <ComposerConcurrentInputDrawer
-          canSteer
-          hasPendingPermissionRequests={pendingPermissionRequests.length > 0 || isResolvingPermissionRequest}
-          isCancelling={isCancelling}
-          pendingInputs={pendingSubmissionInputs}
-          onSteerQueuedMessage={(input) =>
-            void onSend({
-              selectedReasoningEffort: composer.selectedReasoningEffort,
-              selectedModel: composer.selectedModel,
-              selectedSkillIDs: composer.selectedSkillIDs,
-              steerQueuedMessageID: input.id,
-              waitForPendingModelSelection: composer.awaitPendingModelSelection,
-            })
-          }
-        />
-        <Composer
-          attachments={attachments}
-          attachmentButtonTitle={composer.attachmentButtonTitle}
-          attachmentDisabledReason={composer.attachmentDisabledReason}
-          attachmentError={composer.attachmentError}
-          canSend
-          canPasteImageAttachments={
-            Boolean(onPasteImageAttachments) && composer.attachmentCapabilities.image && composer.attachmentDisabledReason === null
-          }
-          draftState={draftState}
-          hasPendingPermissionRequests={pendingPermissionRequests.length > 0 || isResolvingPermissionRequest}
-          isCancelling={isCancelling}
-          isInterruptible={isInterruptible}
-          isSending={isSending}
-          mcpOptions={composer.mcpOptions}
-          modelOptions={composer.modelOptions}
-          reasoningEffortOptions={composer.reasoningEffortOptions}
-          selectedMcpServerIDs={composer.selectedMcpServerIDs}
-          selectedModel={composer.selectedModel}
-          selectedModelLabel={composer.selectedModelLabel}
-          selectedReasoningEffort={composer.selectedReasoningEffort}
-          selectedReasoningEffortLabel={composer.selectedReasoningEffortLabel}
-          selectedSkillIDs={composer.selectedSkillIDs}
-          showModelSelector={false}
-          placeholder="Ask a follow-up about this reply."
-          showProjectTagCommands={false}
-          skillOptions={composer.skillOptions}
-          unsupportedAttachmentPaths={composer.unsupportedAttachmentPaths}
-          workspaceDirectory={null}
-          onDraftStateChange={onDraftStateChange}
-          onModelChange={composer.handleModelChange}
-          onReasoningEffortChange={composer.handleReasoningEffortChange}
-          onPickAttachments={() =>
-            onPickAttachments({
-              allowImage: composer.attachmentCapabilities.image,
-              allowPdf: composer.attachmentCapabilities.pdf,
-              disabledReason: composer.attachmentDisabledReason,
-            })
-          }
-          onPasteImageAttachments={
-            onPasteImageAttachments
-              ? (images) =>
-                  onPasteImageAttachments({
-                    allowImage: composer.attachmentCapabilities.image,
-                    disabledReason: composer.attachmentDisabledReason,
-                    images,
-                  })
-              : undefined
-          }
-          onRemoveAttachment={onRemoveAttachment}
-          onCancelSend={onCancelSend}
-          onSend={(draftStateOverride) =>
-            void onSend({
-              attachmentError: composer.attachmentError,
-              draftStateOverride,
-              selectedReasoningEffort: composer.selectedReasoningEffort,
-              selectedModel: composer.selectedModel,
-              selectedSkillIDs: composer.selectedSkillIDs,
-              submissionMode: isSending || isInterruptible ? "queued" : undefined,
-              waitForPendingModelSelection: composer.awaitPendingModelSelection,
-            })
-          }
-        />
-      </div>
-    </section>
   )
 }
 
@@ -5314,25 +4808,6 @@ function areArraysShallowEqual<T>(left: readonly T[] | undefined, right: readonl
   return true
 }
 
-function areRecordValuesEqual<T>(
-  left: Record<string, T> | undefined,
-  right: Record<string, T> | undefined,
-  areValuesEqual: (leftValue: T, rightValue: T) => boolean,
-) {
-  if (left === right) return true
-  if (!left || !right) return false
-
-  const leftKeys = Object.keys(left)
-  const rightKeys = Object.keys(right)
-  if (leftKeys.length !== rightKeys.length) return false
-
-  for (const key of leftKeys) {
-    if (!Object.prototype.hasOwnProperty.call(right, key)) return false
-    if (!areValuesEqual(left[key], right[key])) return false
-  }
-  return true
-}
-
 function areSessionSummariesEqual(left: SessionSummary | null | undefined, right: SessionSummary | null | undefined) {
   if (left === right) return true
   if (!left || !right) return false
@@ -5341,8 +4816,7 @@ function areSessionSummariesEqual(left: SessionSummary | null | undefined, right
     left.id === right.id &&
     left.title === right.title &&
     left.modelSelection === right.modelSelection &&
-    left.workflow === right.workflow &&
-    left.origin === right.origin
+    left.workflow === right.workflow
   )
 }
 
@@ -5365,10 +4839,6 @@ function getThreadViewPropsChangeReason(left: ThreadViewViewportProps, right: Th
   if (left.addImageToComposerDisabledReason !== right.addImageToComposerDisabledReason) {
     return "addImageToComposerDisabledReason"
   }
-  if (!areRecordValuesEqual(left.sideChatCountsByAnchorMessageID, right.sideChatCountsByAnchorMessageID, Object.is)) {
-    return "sideChatCountsByAnchorMessageID"
-  }
-  if (!areSessionSummariesEqual(left.sideChatSession, right.sideChatSession)) return "sideChatSession"
   if (left.scrollStateKey !== right.scrollStateKey) return "scrollStateKey"
   if (left.threadColumnRef !== right.threadColumnRef) return "threadColumnRef"
   if (left.isThreadVisible !== right.isThreadVisible) return "isThreadVisible"
@@ -5413,7 +4883,6 @@ export function ThreadView(props: ThreadViewProps) {
   const canForkFromMessage = Boolean(props.onForkFromMessage)
   const canOpenArtifactLink = Boolean(props.onArtifactLinkOpen)
   const canOpenLocalFileLink = Boolean(props.onLocalFileLinkOpen)
-  const canOpenSideChat = Boolean(props.onOpenSideChat)
   const canHydrateMessageDiffSummary = Boolean(props.onMessageDiffSummaryHydrate)
   const canRestoreMessageDiff = Boolean(props.onMessageDiffRestore)
   const canReviewMessageDiff = Boolean(props.onMessageDiffReview)
@@ -5426,7 +4895,6 @@ export function ThreadView(props: ThreadViewProps) {
     canForkFromMessage,
     canOpenArtifactLink,
     canOpenLocalFileLink,
-    canOpenSideChat,
     canHydrateMessageDiffSummary,
     canRestoreMessageDiff,
     canReviewMessageDiff,
@@ -5441,7 +4909,6 @@ export function ThreadView(props: ThreadViewProps) {
     canHydrateMessageDiffSummary,
     canOpenArtifactLink,
     canOpenLocalFileLink,
-    canOpenSideChat,
     canRestoreMessageDiff,
     canReviewMessageDiff,
     canSelectBranch,
@@ -5486,8 +4953,6 @@ function VisibleThreadView({
   pendingPermissionRequests,
   permissionRequestActionError,
   permissionRequestActionRequestID,
-  sideChatCountsByAnchorMessageID,
-  sideChatSession = null,
   scrollStateKey,
   threadColumnRef,
   isThreadVisible = true,
@@ -5504,7 +4969,6 @@ function VisibleThreadView({
   const onForkFromMessage = actionCapabilities.canForkFromMessage ? actions.onForkFromMessage : undefined
   const onArtifactLinkOpen = actionCapabilities.canOpenArtifactLink ? actions.onArtifactLinkOpen : undefined
   const onLocalFileLinkOpen = actionCapabilities.canOpenLocalFileLink ? actions.onLocalFileLinkOpen : undefined
-  const onOpenSideChat = actionCapabilities.canOpenSideChat ? actions.onOpenSideChat : undefined
   const onMessageDiffSummaryHydrate = actionCapabilities.canHydrateMessageDiffSummary
     ? actions.onMessageDiffSummaryHydrate
     : undefined
@@ -5528,13 +4992,10 @@ function VisibleThreadView({
     activeTurns,
     assistantTraceVisibility,
     canForkFromMessage: Boolean(onForkFromMessage),
-    canOpenSideChat: Boolean(onOpenSideChat),
     isResolvingPermissionRequest,
     isSessionRunning,
     messageTree,
     pendingPermissionRequests,
-    sideChatCountsByAnchorMessageID,
-    sideChatSession,
     presentationScopeID: effectiveScrollStateKey,
     presentationStore,
   })
@@ -6452,7 +5913,6 @@ function VisibleThreadView({
         onMessageDiffRestore={onMessageDiffRestore}
         onMessageDiffReview={onMessageDiffReview}
         onOpenImagePreview={handleOpenImagePreview}
-        onOpenSideChat={onOpenSideChat}
         onPermissionRequestResponse={onPermissionRequestResponse}
         onProposedPlanConfirm={onProposedPlanConfirm}
         pendingPermissionRequests={pendingPermissionRequests}

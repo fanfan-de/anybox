@@ -13,9 +13,6 @@ function requireSession(projectID: string, sessionID: string) {
   if (!session || session.projectID !== projectID) {
     throw new ApiError(404, "SESSION_NOT_FOUND", `Session '${sessionID}' was not found in this project.`)
   }
-  if (Session.isSideChatSession(session)) {
-    throw new ApiError(409, "TERMINAL_UNAVAILABLE", "Side chat sessions do not support environment actions.")
-  }
   return Session.normalizeSessionInfo(session)
 }
 

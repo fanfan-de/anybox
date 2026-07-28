@@ -48,7 +48,6 @@ function createProps(overrides: Partial<PromptPresetsPageProps> = {}): PromptPre
     promptPresetSelection: {
       systemPromptPresetID: selectedPromptPreset.id,
       planModePromptPresetID: selectedPromptPreset.id,
-      sideChatPromptPresetID: selectedPromptPreset.id,
       gitCommitPromptPresetID: selectedPromptPreset.id,
       cinemaTextGenerationPromptPresetID: selectedPromptPreset.id,
     },
@@ -105,7 +104,6 @@ describe("PromptPresetsPage", () => {
       promptPresetSelection: {
         systemPromptPresetID: bundledPrompt.id,
         planModePromptPresetID: bundledPrompt.id,
-        sideChatPromptPresetID: bundledPrompt.id,
         gitCommitPromptPresetID: bundledPrompt.id,
         cinemaTextGenerationPromptPresetID: bundledPrompt.id,
       },

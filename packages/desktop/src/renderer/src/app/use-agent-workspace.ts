@@ -110,12 +110,7 @@ function isThreadScrollKeyStale(key: string, validSessionIDs: Set<string>) {
     return !validSessionIDs.has(key.slice("session:".length))
   }
 
-  if (key.startsWith("side-chat:")) {
-    const [, parentSessionID, sideChatSessionID] = key.split(":")
-    return !parentSessionID || !sideChatSessionID || !validSessionIDs.has(parentSessionID) || !validSessionIDs.has(sideChatSessionID)
-  }
-
-  return false
+  return true
 }
 
 function deleteThreadScrollSnapshotsForSession(
@@ -123,7 +118,7 @@ function deleteThreadScrollSnapshotsForSession(
   sessionID: string,
 ) {
   for (const key of Object.keys(snapshots)) {
-    if (key === `session:${sessionID}` || key.startsWith(`side-chat:${sessionID}:`) || key.endsWith(`:${sessionID}`)) {
+    if (key === `session:${sessionID}`) {
       delete snapshots[key]
     }
   }
@@ -179,7 +174,6 @@ export function useAgentWorkspace({
     deleteThreadScrollSnapshotsForSession(threadScrollSnapshotsRef.current, sessionID)
   }, [])
   const {
-    activeSideChatSessionIDByParentSessionID,
     canLoadSessionHistory,
     createSessionTabs,
     deletingSessionID,
@@ -196,7 +190,6 @@ export function useAgentWorkspace({
     rightSidebar,
     selectedFolderID,
     sessionCanvasUnreadBySession,
-    setActiveSideChatSessionIDByParentSessionID,
     setCanLoadSessionHistory,
     setCreateSessionTabs,
     setDeletingSessionID,
@@ -294,7 +287,6 @@ export function useAgentWorkspace({
     updateConversationTurns,
   } = useStreamPermissionController({ initialSessionID: initialSelection.session?.id ?? null, store: workspaceStore })
   const workspaceDerivedState = buildWorkspaceDerivedState({
-    activeSideChatSessionIDByParentSessionID,
     composerAttachmentsByTabKey,
     composerDraftStateByTabKey,
     composerParentMessageIDByTabKey,
@@ -340,22 +332,9 @@ export function useAgentWorkspace({
     activeSessionDiffState,
     activeSessionDirectory,
     activeSessionID,
-    activeSessionIsSideChat,
     activeSessionRuntimeDebug,
     activeSessionRuntimeDebugState,
     activeSessionSelectedDiffFile,
-    activeSideChatAttachments,
-    activeSideChatCountsByAnchorMessageID,
-    activeSideChatDraftState,
-    activeSideChatIsCancelling,
-    activeSideChatIsInterruptible,
-    activeSideChatIsSending,
-    activeSideChatPendingInputs,
-    activeSideChatPendingPermissionRequests,
-    activeSideChatSession,
-    activeSideChatSessionsByAnchorMessageID,
-    activeSideChatTabKey,
-    activeSideChatMessages,
     activeTabKey,
     activeWorkspace,
     activeWorkspaceFileScopeDirectory,
@@ -718,10 +697,6 @@ export function useAgentWorkspace({
     createSessionForWorkspace,
     handleCreateSessionForDirectory,
     handleCreateSessionSubmit,
-    handleCreateSideChatTab,
-    handleDeleteSideChatTab,
-    handleOpenSideChat,
-    handleOpenSideChatInTab,
     handleProjectClick,
     handleProjectArchiveSessions,
     handleProjectCreateSession,
@@ -729,14 +704,11 @@ export function useAgentWorkspace({
     handleProjectRemove,
     handleSessionDelete,
     handleSessionSelect,
-    handleSelectSideChatTab,
     handleSidebarAction,
   } = useSessionLifecycleController({
     activeCreateSessionTab,
     activeCreateSessionTabID,
     agentDefaultDirectory,
-    activeSessionID,
-    activeSideChatSessionIDByParentSessionID,
     activeWorkspace,
     agentSessionStoreRef,
     canLoadSessionHistory,
@@ -760,7 +732,6 @@ export function useAgentWorkspace({
     ensurePendingPermissionRequestsLoaded,
     ensureSessionHistoryLoaded,
     openCreateSessionTab,
-    openOrFocusRightSidebarTab,
     pendingStreamsRef,
     permissionRequestsRequestRef,
     preserveLocalWorkspaceStateOnInitialLoadRef,
@@ -768,7 +739,6 @@ export function useAgentWorkspace({
     sessionDiffRequestRef,
     sessionDataLoadCacheRef,
     sessionEventRouterRef,
-    setActiveSideChatSessionIDByParentSessionID,
     setAgentSessions,
     setCanLoadSessionHistory,
     setComposerAttachmentsByTabKey,
@@ -797,7 +767,6 @@ export function useAgentWorkspace({
     setWorkspaces,
     refreshWorkspaceFromDirectory,
     reportSessionActionError: (message) => toast.error(message),
-    updateRightSidebarTab,
     clearRuntimeDebugRefreshTimer,
     clearSessionDiffRefreshTimer,
     selectedFolderID,
@@ -1084,20 +1053,7 @@ export function useAgentWorkspace({
     activeSessionRuntimeDebug,
     activeSessionRuntimeDebugState,
     activePendingPermissionRequests,
-    activeSideChatAttachments,
     activeSessionSelectedDiffFile,
-    activeSideChatDraftState,
-    activeSideChatIsCancelling,
-    activeSideChatIsInterruptible,
-    activeSideChatIsSending,
-    activeSessionIsSideChat,
-    activeSideChatCountsByAnchorMessageID,
-    activeSideChatPendingInputs,
-    activeSideChatPendingPermissionRequests,
-    activeSideChatSession,
-    activeSideChatSessionsByAnchorMessageID,
-    activeSideChatTabKey,
-    activeSideChatMessages,
     activeWorkspaceFileScopeDirectory,
     activeWorkspaceFileScopeName,
     activeWorkspaceFileState,
@@ -1122,14 +1078,10 @@ export function useAgentWorkspace({
     handleCloseCreateSessionTab,
     handleCreateSessionSubmit,
     handleCreateSessionForDirectory,
-    handleCreateSideChatTab,
     handleClearComposerParentMessage,
-    handleDeleteSideChatTab,
     handleCreateSessionTitleChange,
     handleCreateSessionWorkspaceChange,
     handleLeftSidebarViewChange,
-    handleOpenSideChat,
-    handleOpenSideChatInTab,
     handleOpenCreateSessionTab,
     activateRightSidebarTab,
     closeRightSidebarTab,
@@ -1192,7 +1144,6 @@ export function useAgentWorkspace({
     handleSessionBranchSelect,
     handleSessionRollbackToCheckpoint,
     handleSessionSelect,
-    handleSelectSideChatTab,
     handleSidebarAction,
     handleSessionModelSelectionChange,
     handleMessageDiffSummaryHydrate,

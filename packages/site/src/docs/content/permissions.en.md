@@ -12,7 +12,7 @@ This page explains when a permission request appears, what to inspect, how decis
 | --- | --- |
 | Global tool selection | Decides whether a built-in may be available to later tasks |
 | Agent tool policy | Reduces capabilities through allow, deny, or read-only rules |
-| Session restriction | Excludes mutation from read-only contexts such as Side Chat |
+| Session policy | `session.policy.toolPolicy` can exclude mutation from any session |
 | Call-level permission | Evaluates the current tool, parameters, paths, command, and risk |
 | Tool guards | Validate the input schema, path boundary, and runtime conditions |
 

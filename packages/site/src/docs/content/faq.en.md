@@ -30,15 +30,11 @@ Provider and model catalogs refresh dynamically. Names, capabilities, context li
 
 ## Will Anybox modify my project automatically?
 
-Default mode classifies tools, commands, paths, and risk before allowing, asking, or denying an action, so it does not prompt for every write. For unfamiliar work, begin with a read-only prompt, Side Chat, or Planning mode and inspect the diff afterward.
+Default mode classifies tools, commands, paths, and risk before allowing, asking, or denying an action, so it does not prompt for every write. For unfamiliar work, begin with a read-only prompt or Planning mode and inspect the diff afterward.
 
 ## Does Full Access remove every restriction?
 
 No. Full Access reduces routine prompts, but critical-risk actions, side effects outside the active project, and some operations on sensitive paths remain blocked. It is not a project-boundary bypass.
-
-## How is Side Chat different from a normal session?
-
-A normal session can execute tools under the permission policy. A Side Chat is a read-only companion for code questions, error explanations, or context organization and cannot run side-effecting tools.
 
 ## How do projects, sessions, and tasks relate?
 
@@ -82,7 +78,7 @@ The default local agent is `http://127.0.0.1:4096`, with `/healthz` as its healt
 
 ## Why was an action denied without an approval button?
 
-Common causes are a Side Chat, an unapproved plan, a path outside the active project, a sensitive file, or a critical-risk classification. Approval is for user-decidable actions and does not bypass operations prohibited by automatic safety policy.
+Common causes are a read-only session or agent policy, an unapproved plan, a path outside the active project, a sensitive file, or a critical-risk classification. Approval is for user-decidable actions and does not bypass operations prohibited by automatic safety policy.
 
 ## How do I submit a diagnostic report?
 

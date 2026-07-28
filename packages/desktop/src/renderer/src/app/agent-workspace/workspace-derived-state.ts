@@ -34,7 +34,7 @@ import {
   type WorkbenchDockviewActiveState,
   type WorkbenchDockviewGroupLocation,
 } from "../workbench/dockview-state"
-import { findWorkspaceByID, isSideChatSession, isWorkspaceAvailable } from "../workspace"
+import { findWorkspaceByID, isWorkspaceAvailable } from "../workspace"
 import type { WorkbenchPaneRenderSnapshot } from "../../../../shared/desktop-ipc-contract"
 import type { ConversationActivityMap } from "./conversation-store"
 import {
@@ -50,89 +50,8 @@ const EMPTY_COMPOSER_ATTACHMENTS: ComposerAttachment[] = []
 const EMPTY_COMPOSER_DRAFT_STATE = createEmptyComposerDraftState()
 const EMPTY_PENDING_CONVERSATION_INPUTS: PendingConversationInput[] = []
 const EMPTY_PERMISSION_REQUESTS: PermissionRequest[] = []
-const EMPTY_SIDE_CHAT_COUNTS_BY_ANCHOR_MESSAGE_ID: Record<string, number> = {}
-const EMPTY_SIDE_CHAT_SESSIONS_BY_ANCHOR_MESSAGE_ID: Record<string, SessionSummary[]> = {}
 const EMPTY_MESSAGES: ThreadMessage[] = []
-const sideChatSessionsByParentCache = new WeakMap<WorkspaceGroup[], Map<string, Record<string, SessionSummary[]>>>()
 const runningSessionIDsCache = new WeakMap<Record<string, ThreadMessage[]>, WeakMap<Record<string, boolean>, string[]>>()
-
-function getSideChatCreatedAt(session: SessionSummary) {
-  return session.created ?? session.updated
-}
-
-function compareSideChatSessions(left: SessionSummary, right: SessionSummary) {
-  const createdDelta = getSideChatCreatedAt(left) - getSideChatCreatedAt(right)
-  if (createdDelta !== 0) return createdDelta
-
-  const updatedDelta = left.updated - right.updated
-  if (updatedDelta !== 0) return updatedDelta
-
-  return left.id.localeCompare(right.id)
-}
-
-export function collectSideChatSessionsByAnchorMessageID(workspaces: WorkspaceGroup[], parentSessionID: string) {
-  const cachedByParentSessionID = sideChatSessionsByParentCache.get(workspaces)
-  const cached = cachedByParentSessionID?.get(parentSessionID)
-  if (cached) return cached
-
-  const sessionsByAnchorMessageID: Record<string, SessionSummary[]> = {}
-
-  for (const workspace of workspaces) {
-    for (const session of workspace.sessions) {
-      if (!isSideChatSession(session)) continue
-      if (session.origin?.parentSessionID !== parentSessionID) continue
-      const anchorMessageID = session.origin.anchorMessageID
-      sessionsByAnchorMessageID[anchorMessageID] = [...(sessionsByAnchorMessageID[anchorMessageID] ?? []), session]
-    }
-  }
-
-  for (const [anchorMessageID, sessions] of Object.entries(sessionsByAnchorMessageID)) {
-    sessionsByAnchorMessageID[anchorMessageID] = [...sessions].sort(compareSideChatSessions)
-  }
-
-  const nextCachedByParentSessionID = cachedByParentSessionID ?? new Map<string, Record<string, SessionSummary[]>>()
-  if (!cachedByParentSessionID) {
-    sideChatSessionsByParentCache.set(workspaces, nextCachedByParentSessionID)
-  }
-  nextCachedByParentSessionID.set(parentSessionID, sessionsByAnchorMessageID)
-
-  return sessionsByAnchorMessageID
-}
-
-export function collectSideChatCountsFromSessionsByAnchorMessageID(sessionsByAnchorMessageID: Record<string, SessionSummary[]>) {
-  const counts: Record<string, number> = {}
-
-  for (const [anchorMessageID, sessions] of Object.entries(sessionsByAnchorMessageID)) {
-    counts[anchorMessageID] = sessions.length
-  }
-
-  return counts
-}
-
-export function collectSideChatCountsForParentSession(workspaces: WorkspaceGroup[], parentSessionID: string) {
-  return collectSideChatCountsFromSessionsByAnchorMessageID(collectSideChatSessionsByAnchorMessageID(workspaces, parentSessionID))
-}
-
-export function findLatestSideChatForAnchor(
-  workspaces: WorkspaceGroup[],
-  parentSessionID: string,
-  anchorMessageID: string,
-) {
-  let match: { workspace: WorkspaceGroup; session: SessionSummary } | null = null
-
-  for (const workspace of workspaces) {
-    for (const session of workspace.sessions) {
-      if (!isSideChatSession(session)) continue
-      if (session.origin?.parentSessionID !== parentSessionID) continue
-      if (session.origin.anchorMessageID !== anchorMessageID) continue
-      if (!match || compareSideChatSessions(match.session, session) < 0) {
-        match = { workspace, session }
-      }
-    }
-  }
-
-  return match
-}
 
 export function getUniqueSessionIDs(sessionIDs: string[]) {
   const seen = new Set<string>()
@@ -340,7 +259,6 @@ export type WorkbenchPaneTab =
       kind: "session"
       sessionID: string
       title: string
-      sessionKind?: SessionSummary["kind"]
       workflow?: SessionSummary["workflow"]
     }
   | {
@@ -351,7 +269,6 @@ export type WorkbenchPaneTab =
     }
 
 export interface BuildWorkspaceDerivedStateInput {
-  activeSideChatSessionIDByParentSessionID: Record<string, string>
   cancellingSessionIDs: Record<string, boolean>
   composerAttachmentsByTabKey: Record<string, ComposerAttachment[]>
   composerDraftStateByTabKey: Record<string, ComposerDraftState>
@@ -409,7 +326,6 @@ export function buildWorkbenchPaneTabs(
         kind: tab.kind,
         sessionID: tab.sessionID,
         title: session.title,
-        sessionKind: session.kind,
         workflow: session.workflow,
       })
       continue
@@ -434,7 +350,7 @@ function workbenchPaneTabIsEqual(left: WorkbenchPaneTab | null, right: Workbench
     return false
   }
   if (left.kind === "session" && right.kind === "session") {
-    return left.sessionID === right.sessionID && left.sessionKind === right.sessionKind && left.workflow === right.workflow
+    return left.sessionID === right.sessionID && left.workflow === right.workflow
   }
   return left.kind === "create-session" && right.kind === "create-session" && left.createSessionTabID === right.createSessionTabID
 }
@@ -558,39 +474,6 @@ export function buildWorkbenchSurfaceState(
     findIndexedWorkspaceByID(input.workspaces, currentActiveCreateSessionTab?.workspaceID ?? null) ??
     null
   const currentSession = currentSessionSelection.session
-  const currentSessionIsSideChat = isSideChatSession(currentSession)
-  const paneSideChatSessionsByAnchorMessageID =
-    shouldBuildVisibleThreadState && currentSession && !currentSessionIsSideChat
-      ? collectSideChatSessionsByAnchorMessageID(input.workspaces, currentSession.id)
-      : EMPTY_SIDE_CHAT_SESSIONS_BY_ANCHOR_MESSAGE_ID
-  const paneActiveSideChatSessionID =
-    shouldBuildVisibleThreadState && currentSession && !currentSessionIsSideChat
-      ? input.activeSideChatSessionIDByParentSessionID[currentSession.id] ?? null
-      : null
-  const paneActiveSideChatSelection = findIndexedSession(input.workspaces, paneActiveSideChatSessionID)
-  const paneActiveSideChatSession =
-    currentSession &&
-    !currentSessionIsSideChat &&
-    paneActiveSideChatSelection.session?.origin?.parentSessionID === currentSession.id
-      ? paneActiveSideChatSelection.session
-      : null
-  const paneActiveSideChatTabKey = paneActiveSideChatSession
-    ? getWorkbenchTabKey(createSessionWorkbenchTab(paneActiveSideChatSession.id))
-    : null
-  const paneActiveSideChatIsCancelling = paneActiveSideChatSession
-    ? Boolean(input.cancellingSessionIDs[paneActiveSideChatSession.id])
-    : false
-  const paneActiveSideChatIsInterruptible =
-    shouldBuildVisibleThreadState &&
-    isSessionInterruptible({
-      cancellingSessionIDs: input.cancellingSessionIDs,
-      conversationActivityBySession: input.conversationActivityBySession,
-      conversations: input.conversations,
-      isSendingByTabKey: input.isSendingByTabKey,
-      sessionID: paneActiveSideChatSession?.id,
-      sessionRuntimeDebugBySession: input.sessionRuntimeDebugBySession,
-      tabKey: paneActiveSideChatTabKey,
-    })
 
   return {
     id: surface.id,
@@ -609,24 +492,6 @@ export function buildWorkbenchSurfaceState(
       ? input.sessionRuntimeDebugStateBySession[currentActiveSessionID] ?? DEFAULT_SESSION_RUNTIME_DEBUG_STATE
       : DEFAULT_SESSION_RUNTIME_DEBUG_STATE,
     activeSessionTasks: currentActiveSessionID ? input.sessionTasksBySession?.[currentActiveSessionID] ?? null : null,
-    activeSideChatAttachments: paneActiveSideChatTabKey
-      ? input.composerAttachmentsByTabKey[paneActiveSideChatTabKey] ?? EMPTY_COMPOSER_ATTACHMENTS
-      : EMPTY_COMPOSER_ATTACHMENTS,
-    activeSideChatDraftState: paneActiveSideChatTabKey
-      ? input.composerDraftStateByTabKey[paneActiveSideChatTabKey] ?? EMPTY_COMPOSER_DRAFT_STATE
-      : EMPTY_COMPOSER_DRAFT_STATE,
-    activeSideChatIsSending: paneActiveSideChatTabKey ? Boolean(input.isSendingByTabKey[paneActiveSideChatTabKey]) : false,
-    activeSideChatIsCancelling: paneActiveSideChatIsCancelling,
-    activeSideChatIsInterruptible: paneActiveSideChatIsInterruptible,
-    activeSideChatPendingPermissionRequests: paneActiveSideChatSession
-      ? input.pendingPermissionRequestsBySession[paneActiveSideChatSession.id] ?? EMPTY_PERMISSION_REQUESTS
-      : EMPTY_PERMISSION_REQUESTS,
-    activeSideChatPendingInputs: paneActiveSideChatSession
-      ? input.pendingConversationInputsBySession?.[paneActiveSideChatSession.id] ?? EMPTY_PENDING_CONVERSATION_INPUTS
-      : EMPTY_PENDING_CONVERSATION_INPUTS,
-    activeSideChatSession: paneActiveSideChatSession,
-    activeSideChatTabKey: paneActiveSideChatTabKey,
-    activeSideChatMessages: paneActiveSideChatSession ? input.conversations[paneActiveSideChatSession.id] ?? EMPTY_MESSAGES : EMPTY_MESSAGES,
     activeSessionDirectory: currentActiveSessionID
       ? input.sessionDirectoryBySession[currentActiveSessionID] ?? currentWorkspace?.directory ?? null
       : null,
@@ -639,7 +504,7 @@ export function buildWorkbenchSurfaceState(
       input.isInitialWorkspaceLoadPending && currentWorkspace && input.seedWorkspaceIDs.has(currentWorkspace.id)
         ? null
         : currentWorkspace?.project.id ?? null,
-    contextLabel: currentActiveCreateSessionTab ? "Create session" : currentSessionIsSideChat ? "Side chat" : "Session",
+    contextLabel: currentActiveCreateSessionTab ? "Create session" : "Session",
     contextTitle: currentSession
       ? currentSession.title
       : currentWorkspace
@@ -678,10 +543,6 @@ export function buildWorkbenchSurfaceState(
         : currentWorkspace?.project.id ?? null,
     size: 1,
     sessionID: currentSession?.id ?? null,
-    sideChatCountsByAnchorMessageID: currentSession && !currentSessionIsSideChat
-      ? collectSideChatCountsFromSessionsByAnchorMessageID(paneSideChatSessionsByAnchorMessageID)
-      : EMPTY_SIDE_CHAT_COUNTS_BY_ANCHOR_MESSAGE_ID,
-    sideChatSessionsByAnchorMessageID: paneSideChatSessionsByAnchorMessageID,
     tabKey: currentActiveTabKey,
     tabs: surface.tabs,
     workspace: currentWorkspace,
@@ -704,16 +565,6 @@ function createInactiveWorkbenchSurfaceState(surface: Pick<WorkbenchSurfaceState
     activeSessionRuntimeDebug: null,
     activeSessionRuntimeDebugState: DEFAULT_SESSION_RUNTIME_DEBUG_STATE,
     activeSessionTasks: null,
-    activeSideChatAttachments: EMPTY_COMPOSER_ATTACHMENTS,
-    activeSideChatDraftState: EMPTY_COMPOSER_DRAFT_STATE,
-    activeSideChatIsSending: false,
-    activeSideChatIsCancelling: false,
-    activeSideChatIsInterruptible: false,
-    activeSideChatPendingPermissionRequests: EMPTY_PERMISSION_REQUESTS,
-    activeSideChatPendingInputs: EMPTY_PENDING_CONVERSATION_INPUTS,
-    activeSideChatSession: null,
-    activeSideChatTabKey: null,
-    activeSideChatMessages: EMPTY_MESSAGES,
     activeSessionDirectory: null,
     activeSessionSelectedDiffFile: null,
     activeMessages: EMPTY_MESSAGES,
@@ -736,30 +587,10 @@ function createInactiveWorkbenchSurfaceState(surface: Pick<WorkbenchSurfaceState
     projectID: null,
     size: 1,
     sessionID: null,
-    sideChatCountsByAnchorMessageID: EMPTY_SIDE_CHAT_COUNTS_BY_ANCHOR_MESSAGE_ID,
-    sideChatSessionsByAnchorMessageID: EMPTY_SIDE_CHAT_SESSIONS_BY_ANCHOR_MESSAGE_ID,
     tabKey: null,
     tabs: [],
     workspace: null,
   }
-}
-
-function shallowEqualRecords<T>(
-  left: Record<string, T>,
-  right: Record<string, T>,
-  equalValue: (leftValue: T, rightValue: T) => boolean = Object.is,
-) {
-  if (Object.is(left, right)) return true
-  const leftKeys = Object.keys(left)
-  const rightKeys = Object.keys(right)
-  if (leftKeys.length !== rightKeys.length) return false
-  return leftKeys.every((key) => Object.prototype.hasOwnProperty.call(right, key) && equalValue(left[key], right[key]))
-}
-
-function shallowEqualSessionArrays(left: SessionSummary[], right: SessionSummary[]) {
-  if (Object.is(left, right)) return true
-  if (left.length !== right.length) return false
-  return left.every((item, index) => Object.is(item, right[index]))
 }
 
 function areStringArraysEqual(left: string[], right: string[]) {
@@ -781,21 +612,11 @@ export function workbenchPaneStatesAreEqual(left: WorkbenchPaneState | null, rig
 
   for (const key of leftKeys) {
     if (!Object.prototype.hasOwnProperty.call(right, key)) return false
-    if (key === "activeMessages" || key === "activeSideChatMessages") {
+    if (key === "activeMessages") {
       continue
     }
     if (key === "tabs") {
       if (!workbenchPaneTabsAreEqual(left.tabs, right.tabs)) return false
-      continue
-    }
-    if (key === "sideChatCountsByAnchorMessageID") {
-      if (!shallowEqualRecords(left.sideChatCountsByAnchorMessageID, right.sideChatCountsByAnchorMessageID)) return false
-      continue
-    }
-    if (key === "sideChatSessionsByAnchorMessageID") {
-      if (!shallowEqualRecords(left.sideChatSessionsByAnchorMessageID, right.sideChatSessionsByAnchorMessageID, shallowEqualSessionArrays)) {
-        return false
-      }
       continue
     }
     if (!Object.is(left[key], right[key])) return false
@@ -816,7 +637,6 @@ export function buildWorkspaceDerivedStateInputFromStore(
   seedWorkspaceIDs: Set<string>,
 ): BuildWorkspaceDerivedStateInput {
   return {
-    activeSideChatSessionIDByParentSessionID: state.sessions.activeSideChatSessionIDByParentSessionID,
     cancellingSessionIDs: state.agentStream.cancellingSessionIDs,
     composerAttachmentsByTabKey: state.composer.composerAttachmentsByTabKey,
     composerDraftStateByTabKey: state.composer.composerDraftStateByTabKey,
@@ -1071,7 +891,6 @@ export function getWorkbenchGridPaneIDs(dockviewLayout: SerializedDockview | nul
 }
 
 export function buildWorkspaceDerivedState({
-  activeSideChatSessionIDByParentSessionID,
   cancellingSessionIDs,
   composerAttachmentsByTabKey,
   composerDraftStateByTabKey,
@@ -1176,43 +995,6 @@ export function buildWorkspaceDerivedState({
   const activePendingConversationInputs =
     activeSession ? pendingConversationInputsBySession?.[activeSession.id] ?? [] : []
   const activeSessionContextUsage = activeSession ? contextUsageBySession[activeSession.id] ?? null : null
-  const activeSessionIsSideChat = isSideChatSession(activeSession)
-  const activeSideChatSessionID =
-    activeSession && !activeSessionIsSideChat
-      ? activeSideChatSessionIDByParentSessionID[activeSession.id] ?? null
-      : null
-  const activeSideChatSelection = findIndexedSession(workspaces, activeSideChatSessionID)
-  const activeSideChatSession =
-    activeSession &&
-    !activeSessionIsSideChat &&
-    activeSideChatSelection.session?.origin?.parentSessionID === activeSession.id
-      ? activeSideChatSelection.session
-      : null
-  const activeSideChatTabKey = activeSideChatSession ? getWorkbenchTabKey(createSessionWorkbenchTab(activeSideChatSession.id)) : null
-  const activeSideChatMessages = activeSideChatSession ? conversations[activeSideChatSession.id] ?? [] : []
-  const activeSideChatPendingPermissionRequests =
-    activeSideChatSession ? pendingPermissionRequestsBySession[activeSideChatSession.id] ?? [] : []
-  const activeSideChatPendingInputs =
-    activeSideChatSession ? pendingConversationInputsBySession?.[activeSideChatSession.id] ?? [] : []
-  const activeSideChatDraftState = activeSideChatTabKey
-    ? composerDraftStateByTabKey[activeSideChatTabKey] ?? createEmptyComposerDraftState()
-    : createEmptyComposerDraftState()
-  const activeSideChatAttachments = activeSideChatTabKey ? composerAttachmentsByTabKey[activeSideChatTabKey] ?? [] : []
-  const activeSideChatIsSending = activeSideChatTabKey ? Boolean(isSendingByTabKey[activeSideChatTabKey]) : false
-  const activeSideChatIsCancelling = activeSideChatSession ? Boolean(cancellingSessionIDs[activeSideChatSession.id]) : false
-  const activeSideChatIsInterruptible = isSessionInterruptible({
-    cancellingSessionIDs,
-    conversationActivityBySession,
-    conversations,
-    isSendingByTabKey,
-    sessionID: activeSideChatSession?.id,
-    sessionRuntimeDebugBySession,
-    tabKey: activeSideChatTabKey,
-  })
-  const activeSideChatSessionsByAnchorMessageID =
-    activeSession && !activeSessionIsSideChat ? collectSideChatSessionsByAnchorMessageID(workspaces, activeSession.id) : {}
-  const activeSideChatCountsByAnchorMessageID =
-    collectSideChatCountsFromSessionsByAnchorMessageID(activeSideChatSessionsByAnchorMessageID)
   const isCreateSessionTabActive = activeCreateSessionTab !== null
   const createSessionWorkspaceID = activeCreateSessionTab?.workspaceID ?? null
   const createSessionTitle = activeCreateSessionTab?.title ?? ""
@@ -1244,7 +1026,6 @@ export function buildWorkspaceDerivedState({
       })
     : []
   const derivedInput = {
-    activeSideChatSessionIDByParentSessionID,
     cancellingSessionIDs,
     composerAttachmentsByTabKey,
     composerDraftStateByTabKey,
@@ -1293,23 +1074,10 @@ export function buildWorkspaceDerivedState({
     activeSessionDiffState,
     activeSessionDirectory,
     activeSessionID,
-    activeSessionIsSideChat,
     activeSessionRuntimeDebug,
     activeSessionRuntimeDebugState,
     activeSessionTasks,
     activeSessionSelectedDiffFile,
-    activeSideChatAttachments,
-    activeSideChatCountsByAnchorMessageID,
-    activeSideChatDraftState,
-    activeSideChatIsCancelling,
-    activeSideChatIsInterruptible,
-    activeSideChatIsSending,
-    activeSideChatPendingPermissionRequests,
-    activeSideChatPendingInputs,
-    activeSideChatSession,
-    activeSideChatSessionsByAnchorMessageID,
-    activeSideChatTabKey,
-    activeSideChatMessages,
     activeTab,
     activeTabKey,
     activeWorkspace,

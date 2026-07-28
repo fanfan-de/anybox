@@ -286,7 +286,6 @@ function mapSessionSummary(session: Session.SessionInfo) {
   const normalized = Session.normalizeSessionInfo(session)
   return {
     ...normalized,
-    origin: Session.getSessionOrigin(normalized.id),
     subagent: Subtask.getSubtaskSessionOrigin(normalized.id),
   }
 }

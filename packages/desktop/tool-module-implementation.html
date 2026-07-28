@@ -305,7 +305,7 @@
     -> getToolAccessFailure()
       -> 全局内置工具禁用过滤
       -> agent.tools allowlist/denylist 过滤
-      -> side-chat / read-only agent 过滤
+      -> SessionPolicy / read-only agent 过滤
     -> createToolExecution()
       -> item.init({ agent })
       -> Permission.evaluate()
@@ -351,7 +351,7 @@
         <td><code>anyboxagent/src/permission/permission.ts</code></td>
         <td>权限与审批</td>
         <td>风险推导、allow/ask/deny 决策、审批请求表、审批后工具补执行</td>
-        <td>side-chat 和 planning mode 对副作用工具有额外限制。</td>
+        <td>SessionPolicy、read-only agent 和 planning mode 对副作用工具有额外限制。</td>
       </tr>
       <tr>
         <td><code>anyboxagent/src/tool/shared.ts</code></td>
@@ -476,7 +476,7 @@
       <tr><td>读/搜索</td><td><code>read-file</code>, <code>glob</code>, <code>grep</code>, <code>list-directory</code>, skill/resource tools</td><td>多数应标记 <code>readOnly=true</code> 和 <code>concurrency=safe</code>。</td></tr>
       <tr><td>写入</td><td><code>replace-text</code>, <code>apply_patch</code></td><td>项目内文本修改，通常 <code>destructive=true</code>、<code>concurrency=exclusive</code>。</td></tr>
       <tr><td>Shell/Terminal</td><td><code>git_bash_command</code>, <code>powershell_command</code>, <code>cmd_command</code>, <code>wsl_bash_command</code>, terminal tools</td><td>需要 shell 或终端进程，风险和权限提示更高。</td></tr>
-      <tr><td>MCP 资源</td><td><code>list_mcp_resources</code>, <code>list_mcp_resource_templates</code>, <code>read_mcp_resource</code></td><td>作为内置只读工具出现，可在 read-only agent / side chat 中使用。</td></tr>
+      <tr><td>MCP 资源</td><td><code>list_mcp_resources</code>, <code>list_mcp_resource_templates</code>, <code>read_mcp_resource</code></td><td>作为内置只读工具出现，可在 read-only session 或 agent 中使用。</td></tr>
       <tr><td>并行</td><td><code>multi_tool_use_parallel</code></td><td>只允许批量执行 read/search 且 <code>readOnly=true</code>、<code>concurrency=safe</code> 的子工具。</td></tr>
       <tr><td>媒体/浏览</td><td><code>generate-image</code>, <code>view-image</code>, <code>web-fetch</code></td><td>图片、网页读取或生成能力。</td></tr>
       <tr><td>委派</td><td><code>spawn-subagent</code>, <code>read-subagent</code>, <code>wait-subagent</code>, <code>cancel-subagent</code></td><td>子代理生命周期管理。</td></tr>
@@ -499,7 +499,7 @@
       <tr>
         <td>只读会话</td>
         <td><code>readOnlyToolsOnlyForSession</code></td>
-        <td>side-chat 或 <code>agent.toolPolicy === "read-only"</code> 时，只保留 <code>capabilities.readOnly === true</code> 的工具。</td>
+        <td><code>session.policy.toolPolicy === "read-only"</code> 或 <code>agent.toolPolicy === "read-only"</code> 时，只保留 <code>capabilities.readOnly === true</code> 的工具。</td>
       </tr>
       <tr>
         <td>Provider-safe 名称</td>
@@ -553,7 +553,7 @@
     <ol>
       <li>准备权限表和审计表。</li>
       <li>从输入与 intent 中抽取路径、命令、workdir、body，并推导风险。</li>
-      <li>side-chat 中任何非 read-only 工具直接 deny。</li>
+      <li>SessionPolicy 标记为 read-only 时，任何非 read-only 工具直接 deny。</li>
       <li><code>ANYBOX_PERMISSION=off/false/0/disabled</code> 时直接 allow。</li>
       <li>非 read-only 工具引用 active project boundary 外路径时 deny，风险为 critical。</li>
       <li>如果当前 toolCallID 已有 approved/denied 审批记录，按记录复用。</li>
@@ -794,11 +794,11 @@ npm test -- ipc</pre>
       <tr>
         <td>权限 fallback</td>
         <td><code>DEFAULT_ACTIONS</code> 当前对所有 kind 都是 allow。</td>
-        <td>安全性主要依赖路径边界、critical 风险阻断、planning/side-chat 限制、工具自身 <code>assessPermission</code>。</td>
+        <td>安全性主要依赖路径边界、critical 风险阻断、planning/read-only 策略、工具自身 <code>assessPermission</code>。</td>
       </tr>
       <tr>
         <td>full_access 模式</td>
-        <td>只改变 intent=ask 的结果；<code>forceAsk</code>、critical、deny、side-chat、外部路径写入等仍会阻断。</td>
+        <td>只改变 intent=ask 的结果；<code>forceAsk</code>、critical、deny、read-only 策略、外部路径写入等仍会阻断。</td>
         <td>它不是无条件跳过安全策略。</td>
       </tr>
       <tr>

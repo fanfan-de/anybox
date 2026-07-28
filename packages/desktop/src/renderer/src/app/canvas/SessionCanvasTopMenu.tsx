@@ -3,7 +3,7 @@ import { ExternalEditorMenuButton } from "../external-editor/ExternalEditorMenuB
 import { GitQuickMenuButton } from "../git/GitQuickMenuButton"
 import { CheckIcon, ChevronDownIcon, CopyIcon, DownloadIcon, FolderIcon, InfoIcon, SessionRunningIcon, SessionTreeIcon } from "../icons"
 import { useI18n } from "../i18n/I18nProvider"
-import { ShellTopMenu, SideChatBadge, writeTextToClipboard } from "../shared-ui"
+import { ShellTopMenu, writeTextToClipboard } from "../shared-ui"
 import type {
   ComposerMcpOption,
   ComposerPluginOption,
@@ -15,7 +15,6 @@ import type {
   SessionSummary,
   ToolPermissionMode,
 } from "../types"
-import { isSideChatSession } from "../workspace"
 import { EnvironmentActionsMenuButton } from "./EnvironmentActionsMenuButton"
 
 const TOOL_PERMISSION_MODE_OPTIONS: Array<{
@@ -1101,11 +1100,9 @@ export function SessionCanvasTopMenu({
   onSkillToggle,
 }: SessionCanvasTopMenuProps) {
   const { t } = useI18n()
-  const readOnlySideChat = isSideChatSession(activeSession)
   const sessionTitle = activeSession?.title ?? ""
   const showSessionViewModeSwitch = Boolean(
     activeSession &&
-    !readOnlySideChat &&
     sessionViewMode &&
     onSessionViewModeChange,
   )
@@ -1130,7 +1127,7 @@ export function SessionCanvasTopMenu({
       as="div"
       className="session-canvas-top-menu"
       contentClassName="panel-toolbar-copy session-canvas-top-menu-copy"
-      content={sessionTitle || readOnlySideChat || showSessionViewModeSwitch ? (
+      content={sessionTitle || showSessionViewModeSwitch ? (
         <div className="session-canvas-top-menu-copy-main">
           {sessionTitle ? <span className="label" title={sessionTitle}>{sessionTitle}</span> : null}
           {showSessionViewModeSwitch ? (
@@ -1165,11 +1162,6 @@ export function SessionCanvasTopMenu({
               </button>
             </nav>
           ) : null}
-          {readOnlySideChat ? (
-            <div className="session-canvas-top-menu-copy-status">
-              {readOnlySideChat ? <SideChatBadge /> : null}
-            </div>
-          ) : null}
         </div>
       ) : null}
       controlsSpacerVariant="canvas"
@@ -1184,48 +1176,44 @@ export function SessionCanvasTopMenu({
               projectID={gitProjectID}
             />
           ) : null}
-          {!readOnlySideChat ? (
-            <>
-              {activeSession ? (
-                <EnvironmentActionsMenuButton
-                  directory={gitDirectory}
-                  projectID={gitProjectID}
-                  sessionID={activeSession.id}
-                />
-              ) : null}
-              <ToolPermissionModeMenuButton
-                error={toolPermissionModeError}
-                isSaving={isSavingToolPermissionMode}
-                mode={toolPermissionMode}
-                onModeChange={onToolPermissionModeChange}
-              />
-              <ProjectPluginsMenuButton
-                pluginOptions={pluginOptions}
-                selectedPluginIDs={selectedPluginIDs}
-                selectedPluginLabel={selectedPluginLabel}
-                onPluginToggle={onPluginToggle}
-              />
-              <ProjectMcpMenuButton
-                mcpOptions={mcpOptions}
-                selectedMcpServerIDs={selectedMcpServerIDs}
-                selectedMcpServerLabel={selectedMcpServerLabel}
-                onMcpServerToggle={onMcpServerToggle}
-              />
-              <ProjectSkillsMenuButton
-                skillOptions={skillOptions}
-                selectedSkillIDs={selectedSkillIDs}
-                selectedSkillLabel={selectedSkillLabel}
-                onSkillToggle={onSkillToggle}
-              />
-              {showGitControls ? (
-                <GitQuickMenuButton
-                  projectID={gitProjectID}
-                  directory={gitDirectory}
-                  sessionID={activeSession?.id ?? null}
-                  onOpenReview={onOpenReview}
-                />
-              ) : null}
-            </>
+          {activeSession ? (
+            <EnvironmentActionsMenuButton
+              directory={gitDirectory}
+              projectID={gitProjectID}
+              sessionID={activeSession.id}
+            />
+          ) : null}
+          <ToolPermissionModeMenuButton
+            error={toolPermissionModeError}
+            isSaving={isSavingToolPermissionMode}
+            mode={toolPermissionMode}
+            onModeChange={onToolPermissionModeChange}
+          />
+          <ProjectPluginsMenuButton
+            pluginOptions={pluginOptions}
+            selectedPluginIDs={selectedPluginIDs}
+            selectedPluginLabel={selectedPluginLabel}
+            onPluginToggle={onPluginToggle}
+          />
+          <ProjectMcpMenuButton
+            mcpOptions={mcpOptions}
+            selectedMcpServerIDs={selectedMcpServerIDs}
+            selectedMcpServerLabel={selectedMcpServerLabel}
+            onMcpServerToggle={onMcpServerToggle}
+          />
+          <ProjectSkillsMenuButton
+            skillOptions={skillOptions}
+            selectedSkillIDs={selectedSkillIDs}
+            selectedSkillLabel={selectedSkillLabel}
+            onSkillToggle={onSkillToggle}
+          />
+          {showGitControls ? (
+            <GitQuickMenuButton
+              projectID={gitProjectID}
+              directory={gitDirectory}
+              sessionID={activeSession?.id ?? null}
+              onOpenReview={onOpenReview}
+            />
           ) : null}
           {activeSession ? (
             <SessionInfoMenuButton

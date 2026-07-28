@@ -135,7 +135,6 @@ export interface SessionTaskListView {
   }
 }
 
-export type SessionKind = "main" | "side-chat"
 export type SessionToolPolicy = "default" | "read-only"
 
 export interface SessionPolicy {
@@ -148,12 +147,6 @@ export interface SessionAutomationMetadata {
   runID: string
   name: string
   trigger: "manual" | "schedule"
-}
-
-export interface SessionOrigin {
-  parentSessionID: string
-  anchorMessageID: string
-  anchorPreview: string
 }
 
 export interface SessionSubagentOrigin {
@@ -173,39 +166,6 @@ export interface SessionModelSelection {
   reasoning_effort?: ReasoningEffort
 }
 
-export interface SideChatSource {
-  kind: "url" | "document"
-  title: string
-  url?: string
-}
-
-export interface SideChatToolSummary {
-  tool: string
-  status: "completed" | "error" | "denied"
-  summary: string
-}
-
-export interface SideChatSnapshot {
-  userText?: string
-  assistantText: string
-  sources?: SideChatSource[]
-  toolSummaries?: SideChatToolSummary[]
-  filePaths?: string[]
-}
-
-export interface SideChatLink {
-  sessionID: string
-  parentSessionID: string
-  anchorMessageID: string
-  anchorUserMessageID?: string
-  createdAt: number
-  anchorPreview: string
-  snapshotVersion: 1
-  snapshot: SideChatSnapshot
-  session?: LoadedSessionSnapshot
-  archived?: boolean
-}
-
 export interface SessionSummary {
   id: string
   title: string
@@ -217,10 +177,8 @@ export interface SessionSummary {
   updated: number
   focus: string
   summary: string
-  kind?: SessionKind
   policy?: SessionPolicy
   automation?: SessionAutomationMetadata
-  origin?: SessionOrigin
   subagent?: SessionSubagentOrigin
   workflow?: SessionWorkflowSummary
   modelSelection?: SessionModelSelection
@@ -281,10 +239,8 @@ export interface LoadedSessionSnapshot {
   directory: string
   title: string
   pinned?: boolean
-  kind?: SessionKind
   policy?: SessionPolicy
   automation?: SessionAutomationMetadata
-  origin?: SessionOrigin
   subagent?: SessionSubagentOrigin
   created: number
   updated: number
@@ -299,9 +255,7 @@ export interface ArchivedSessionSummary {
   projectMissing: boolean
   directory: string
   title: string
-  kind?: SessionKind
   policy?: SessionPolicy
-  origin?: SessionOrigin
   created: number
   updated: number
   archivedAt: number
@@ -577,7 +531,6 @@ export type RightSidebarTabKind =
   | "browser"
   | "review"
   | "terminal"
-  | "side-chat"
   | "message-tree"
   | "message-inspector"
 
@@ -613,13 +566,6 @@ export interface RightSidebarTerminalTab extends RightSidebarBaseTab {
   sessionID: string | null
 }
 
-export interface RightSidebarSideChatTab extends RightSidebarBaseTab {
-  kind: "side-chat"
-  anchorMessageID: string
-  parentSessionID: string
-  sessionID: string | null
-}
-
 export interface RightSidebarMessageTreeTab extends RightSidebarBaseTab {
   kind: "message-tree"
   sessionID: string
@@ -636,7 +582,6 @@ export type RightSidebarTab =
   | RightSidebarBrowserTab
   | RightSidebarReviewTab
   | RightSidebarTerminalTab
-  | RightSidebarSideChatTab
   | RightSidebarMessageTreeTab
   | RightSidebarMessageInspectorTab
 
@@ -675,14 +620,6 @@ export type RightSidebarOpenTabInput =
       title?: string
     }
   | {
-      kind: "side-chat"
-      anchorMessageID: string
-      parentSessionID: string
-      sessionID: string | null
-      targetKey?: string
-      title?: string
-    }
-  | {
       kind: "message-tree"
       sessionID: string
       targetKey?: string
@@ -697,9 +634,7 @@ export type RightSidebarOpenTabInput =
     }
 
 export interface RightSidebarTabUpdate {
-  anchorMessageID?: string
   messageID?: string
-  parentSessionID?: string
   scopeDirectory?: string | null
   scopeName?: string | null
   sessionID?: string | null
@@ -1454,7 +1389,6 @@ export type PromptPresetSource = "bundled" | "custom"
 export interface PromptPresetSelection {
   systemPromptPresetID: string
   planModePromptPresetID: string
-  sideChatPromptPresetID: string
   gitCommitPromptPresetID: string
   cinemaTextGenerationPromptPresetID: string
 }

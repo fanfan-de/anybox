@@ -444,7 +444,6 @@ type PromptPresetDocumentEnvelope = JsonEnvelope<{
 type PromptPresetSelectionEnvelope = JsonEnvelope<{
   systemPromptPresetID: string
   planModePromptPresetID: string
-  sideChatPromptPresetID: string
   gitCommitPromptPresetID: string
   cinemaTextGenerationPromptPresetID: string
 }>
@@ -1794,6 +1793,33 @@ describe("server api", () => {
     expect(response.status).toBe(404)
     expect(body.success).toBe(false)
     expect(body.error?.code).toBe("NOT_FOUND")
+  })
+
+  test("removed legacy auxiliary-conversation routes return 404", async () => {
+    const app = createServerApp()
+    const legacyPrefix = ["side", "chat"].join("-")
+    const routes = [
+      { method: "POST", suffix: `${legacyPrefix}s` },
+      { method: "GET", suffix: `${legacyPrefix}s` },
+      { method: "GET", suffix: `${legacyPrefix}-link` },
+      { method: "GET", suffix: `${legacyPrefix}-context` },
+    ]
+
+    for (const route of routes) {
+      const response = await app.request(
+        `http://localhost/api/sessions/session_removed_feature/${route.suffix}`,
+        {
+          method: route.method,
+          headers: { "content-type": "application/json" },
+          body: route.method === "POST" ? "{}" : undefined,
+        },
+      )
+      const body = (await response.json()) as JsonEnvelope
+
+      expect(response.status).toBe(404)
+      expect(body.success).toBe(false)
+      expect(body.error?.code).toBe("NOT_FOUND")
+    }
   })
 
   test("POST /api/sessions/:id/messages/stream should validate payload", async () => {
@@ -3535,7 +3561,6 @@ describe("server api", () => {
         await Config.setSelectedPromptPresetIDs(Config.GLOBAL_CONFIG_ID, {
           systemPromptPresetID: null,
           planModePromptPresetID: null,
-          sideChatPromptPresetID: null,
           gitCommitPromptPresetID: null,
           cinemaTextGenerationPromptPresetID: null,
         })
@@ -3589,7 +3614,6 @@ describe("server api", () => {
         expect(selectionBody.data).toEqual({
           systemPromptPresetID: "system-codex",
           planModePromptPresetID: "plan-mode",
-          sideChatPromptPresetID: "side-chat",
           gitCommitPromptPresetID: "git-commit-message",
           cinemaTextGenerationPromptPresetID: "cinema-text-generation",
         })
@@ -3597,7 +3621,6 @@ describe("server api", () => {
         await Config.setSelectedPromptPresetIDs(Config.GLOBAL_CONFIG_ID, {
           systemPromptPresetID: "system-default",
           planModePromptPresetID: "plan-mode",
-          sideChatPromptPresetID: "side-chat",
           gitCommitPromptPresetID: "git-commit-message",
         })
       }
@@ -3627,7 +3650,6 @@ describe("server api", () => {
         await Config.setSelectedPromptPresetIDs(Config.GLOBAL_CONFIG_ID, {
           systemPromptPresetID: "system-default",
           planModePromptPresetID: "plan-mode",
-          sideChatPromptPresetID: "side-chat",
           gitCommitPromptPresetID: "git-commit-message",
         })
         await app.request("http://localhost/api/prompts", {
@@ -3675,7 +3697,6 @@ describe("server api", () => {
         expect(selectionBody.data).toEqual({
           systemPromptPresetID: "system-default",
           planModePromptPresetID: "plan-mode",
-          sideChatPromptPresetID: "side-chat",
           gitCommitPromptPresetID: "git-commit-message",
           cinemaTextGenerationPromptPresetID: "cinema-text-generation",
         })
@@ -3685,7 +3706,6 @@ describe("server api", () => {
         await Config.setSelectedPromptPresetIDs(Config.GLOBAL_CONFIG_ID, {
           systemPromptPresetID: "system-default",
           planModePromptPresetID: "plan-mode",
-          sideChatPromptPresetID: "side-chat",
           gitCommitPromptPresetID: "git-commit-message",
         })
       }
@@ -3878,7 +3898,6 @@ describe("server api", () => {
       await Config.setSelectedPromptPresetIDs(Config.GLOBAL_CONFIG_ID, {
         systemPromptPresetID: "system-default",
         planModePromptPresetID: "plan-mode",
-        sideChatPromptPresetID: "side-chat",
         gitCommitPromptPresetID: "git-commit-message",
       })
 
@@ -3899,12 +3918,6 @@ describe("server api", () => {
           }),
           expect.objectContaining({
             id: "plan-mode",
-            source: "bundled",
-            editable: false,
-            hasOverride: false,
-          }),
-          expect.objectContaining({
-            id: "side-chat",
             source: "bundled",
             editable: false,
             hasOverride: false,
@@ -3935,7 +3948,6 @@ describe("server api", () => {
       expect(selectionBody.data).toEqual({
         systemPromptPresetID: "system-default",
         planModePromptPresetID: "plan-mode",
-        sideChatPromptPresetID: "side-chat",
         gitCommitPromptPresetID: "git-commit-message",
         cinemaTextGenerationPromptPresetID: "cinema-text-generation",
       })
@@ -3970,7 +3982,6 @@ describe("server api", () => {
         body: JSON.stringify({
           systemPromptPresetID: customPresetIDValue,
           planModePromptPresetID: "plan-mode",
-          sideChatPromptPresetID: "side-chat",
           gitCommitPromptPresetID: customPresetIDValue,
           cinemaTextGenerationPromptPresetID: customPresetIDValue,
         }),
@@ -3982,7 +3993,6 @@ describe("server api", () => {
       expect(updateSelectionBody.data).toEqual({
         systemPromptPresetID: customPresetIDValue,
         planModePromptPresetID: "plan-mode",
-        sideChatPromptPresetID: "side-chat",
         gitCommitPromptPresetID: customPresetIDValue,
         cinemaTextGenerationPromptPresetID: customPresetIDValue,
       })
@@ -4039,15 +4049,6 @@ describe("server api", () => {
       })
       expect(runtimePrompt.some((section) => section?.includes(customPlanPrompt) === true)).toBe(false)
       expect(runtimePrompt.some((section) => section?.includes(`${customSystemPrompt}\nupdated`) === true)).toBe(true)
-      const sideChatRuntimePrompt = await SystemPrompt.defaultPrompt({
-        agent: {
-          name: "sidechat",
-        },
-      })
-      expect(
-        sideChatRuntimePrompt.some((section) => section?.includes("This session is a side chat anchored") === true),
-      ).toBe(true)
-
       const blankOverrideResponse = await app.request("http://localhost/api/prompts/provider-gpt", {
         method: "PUT",
         headers: { "content-type": "application/json" },
@@ -4091,7 +4092,6 @@ describe("server api", () => {
       expect(deleteCustomBody.data).toEqual({
         systemPromptPresetID: "system-codex",
         planModePromptPresetID: "plan-mode",
-        sideChatPromptPresetID: "side-chat",
         gitCommitPromptPresetID: "git-commit-message",
         cinemaTextGenerationPromptPresetID: "cinema-text-generation",
       })
@@ -4114,7 +4114,6 @@ describe("server api", () => {
       await Config.setSelectedPromptPresetIDs(Config.GLOBAL_CONFIG_ID, {
         systemPromptPresetID: "system-default",
         planModePromptPresetID: "plan-mode",
-        sideChatPromptPresetID: "side-chat",
         gitCommitPromptPresetID: "git-commit-message",
       })
     }
@@ -4951,7 +4950,6 @@ describe("server api", () => {
         await PromptPresets.updatePromptPresetSelection({
           systemPromptPresetID: "system-codex",
           planModePromptPresetID: "plan-mode",
-          sideChatPromptPresetID: "side-chat",
           gitCommitPromptPresetID: customCommitPromptPreset.id,
           cinemaTextGenerationPromptPresetID: "cinema-text-generation",
         }, Config.GLOBAL_CONFIG_ID)
@@ -5012,7 +5010,6 @@ describe("server api", () => {
         await Config.setSelectedPromptPresetIDs(Config.GLOBAL_CONFIG_ID, {
           systemPromptPresetID: "system-codex",
           planModePromptPresetID: "plan-mode",
-          sideChatPromptPresetID: "side-chat",
           gitCommitPromptPresetID: "git-commit-message",
         })
         restoreCommitMessage()

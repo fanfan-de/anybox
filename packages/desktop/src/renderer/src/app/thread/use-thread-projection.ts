@@ -9,7 +9,6 @@ import type {
   ThreadMessage,
   ThreadTurn,
 } from "../types"
-import { isSideChatSession } from "../workspace"
 import {
   buildThreadDisplayContext,
   buildThreadDisplayRowsIncremental,
@@ -36,13 +35,10 @@ interface ThreadProjectionInput {
   activeTurns?: ThreadTurn[] | null
   assistantTraceVisibility: AssistantTraceVisibility
   canForkFromMessage: boolean
-  canOpenSideChat: boolean
   isResolvingPermissionRequest: boolean
   isSessionRunning: boolean
   messageTree?: SessionMessageTree | null
   pendingPermissionRequests: PermissionRequest[]
-  sideChatCountsByAnchorMessageID: Record<string, number>
-  sideChatSession?: SessionSummary | null
   presentationScopeID: string
   presentationStore: ThreadPresentationStoreApi
 }
@@ -313,13 +309,10 @@ export function useThreadProjection({
   activeTurns,
   assistantTraceVisibility,
   canForkFromMessage,
-  canOpenSideChat,
   isResolvingPermissionRequest,
   isSessionRunning,
   messageTree = null,
   pendingPermissionRequests,
-  sideChatCountsByAnchorMessageID,
-  sideChatSession = null,
   presentationScopeID,
   presentationStore,
 }: ThreadProjectionInput): ThreadProjection {
@@ -349,7 +342,6 @@ export function useThreadProjection({
   const pendingPermissionRequestCount = pendingPermissionRequests.length
   const answeredQuestionIDs = useMemo(() => collectAnsweredQuestionIDs(activeMessages), [activeMessages])
   const displayMessages = useMemo(() => orderAdjacentAssistantMessagesForDisplay(activeMessages), [activeMessages])
-  const readOnlySideChat = isSideChatSession(activeSession)
   const hasCanonicalTurns = activeTurns !== undefined && activeTurns !== null
 
   const threadDisplayContext = useMemo(
@@ -532,14 +524,10 @@ export function useThreadProjection({
           assistantTraceVisibility,
           baseRows: projectionBaseDisplayRows,
           canForkFromMessage,
-          canOpenSideChat,
           context: projectionThreadDisplayContext,
           hasPendingPermissionRequests: pendingPermissionRequestCount > 0,
           isSessionRunning,
           messageTree,
-          readOnlySideChat,
-          sideChatCountsByAnchorMessageID,
-          sideChatSession,
         },
         previousCache,
       )
@@ -550,13 +538,9 @@ export function useThreadProjection({
       projectionBaseDisplayRows,
       baseDisplayRowsResult.cache,
       canForkFromMessage,
-      canOpenSideChat,
       isSessionRunning,
       messageTree,
       pendingPermissionRequestCount,
-      readOnlySideChat,
-      sideChatCountsByAnchorMessageID,
-      sideChatSession,
       projectionThreadDisplayContext,
     ],
   )

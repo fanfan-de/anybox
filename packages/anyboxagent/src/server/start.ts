@@ -6,6 +6,7 @@ import * as Connector from "#connector/connector.ts"
 import * as BuiltinMcp from "#mcp/builtin.ts"
 import * as Plugin from "#plugin/plugin.ts"
 import * as Prompt from "#session/core/prompt.ts"
+import { ensureLegacySessionCleanup } from "#database/legacy-session-cleanup.ts"
 
 const log = Log.create({ service: "server-bootstrap" })
 
@@ -30,6 +31,8 @@ await Log.init({
 })
 
 log.info("server-logging-ready", Log.status())
+
+ensureLegacySessionCleanup()
 
 try {
   const recovered = Prompt.reconcileInterruptedTurns({

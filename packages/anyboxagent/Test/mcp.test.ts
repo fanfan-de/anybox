@@ -671,8 +671,7 @@ describe("mcp integration", () => {
           })
 
           const plan = await Agent.get("plan")
-          const sidechat = await Agent.get("sidechat")
-          if (!plan || !sidechat) {
+          if (!plan) {
             throw new Error("Expected built-in agents to exist.")
           }
 
@@ -686,15 +685,6 @@ describe("mcp integration", () => {
           expect(planTools["list_mcp_resource_templates"]).toBeDefined()
           expect(planTools["read_mcp_resource"]).toBeDefined()
 
-          const sidechatTools = await ResolveTools.resolveTools({
-            agent: sidechat,
-            sessionID: "session_mcp_resource_tools_sidechat",
-            messageID: "message_mcp_resource_tools_sidechat",
-            abort: new AbortController().signal,
-          })
-          expect(sidechatTools["list_mcp_resources"]).toBeDefined()
-          expect(sidechatTools["list_mcp_resource_templates"]).toBeDefined()
-          expect(sidechatTools["read_mcp_resource"]).toBeDefined()
         },
       })
     } finally {

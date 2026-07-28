@@ -70,7 +70,7 @@ export function isToolGloballyEnabled(
 
 export function readOnlyToolsOnlyForSession(agent: Agent.AgentInfo, sessionID: string) {
   const session = Session.DataBaseRead("sessions", sessionID) as Session.SessionInfo | null
-  return Session.isSideChatSession(session) || agent.toolPolicy === "read-only"
+  return session?.policy?.toolPolicy === "read-only" || agent.toolPolicy === "read-only"
 }
 
 export function getToolAccessFailure(input: {

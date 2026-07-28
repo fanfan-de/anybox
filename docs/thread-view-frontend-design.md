@@ -4,7 +4,7 @@
 
 ## 1. 文档定位
 
-本文记录桌面端 `ThreadView` 的当前前端设计。它是维护入口，不替代源码；当 `ThreadView` 的布局、信息层级、trace 呈现、side chat、权限确认或 composer 嵌套行为发生变化时，需要同步更新本文。
+本文记录桌面端 `ThreadView` 的当前前端设计。它是维护入口，不替代源码；当 `ThreadView` 的布局、信息层级、trace 呈现、权限确认或 composer 行为发生变化时，需要同步更新本文。
 
 主要实现文件：
 
@@ -67,13 +67,12 @@ Thread view 不是普通聊天窗口，而是 agent 工作台里的执行记录�
 
 1. 用户快速读取最终回复。
 2. 开发者扫描 agent 的 reasoning、tool、workflow、file change 等执行轨迹。
-3. 用户在不中断主会话上下文的前提下，对某条 assistant 回复开启 side chat。
 
 因此当前设计优先级是：
 
 - 主回复优先，trace 信息降噪。
 - 桌面端高密度，可长时间扫描。
-- 关键动作贴近对应消息，例如复制回复、打开 side chat、批准工具调用。
+- 关键动作贴近对应消息，例如复制回复、切换分支、fork 和批准工具调用。
 - 多 pane 工作台里保持固定宽度、可读行长和独立滚动。
 
 ## 3. 工作台嵌入关系
@@ -161,7 +160,7 @@ Canonical conversation state is `ConversationTurnMap = Record<string, ThreadTurn
 const activeMessages = turns.flatMap((turn) => turn.messages)
 ```
 
-Do not treat `activeMessages` as the source of truth. New stream/history state should update `ThreadTurn[]` first, then derive flat messages for `ThreadView`, side chat, and legacy selectors. `ThreadTurnNavigator` creates a read-only projection from each turn's `userMessageID` to the corresponding `user-message` display row; assistant rows, trace rows, permission rows, workflow/debug rows, and stream-inserted user rows never create navigation turns.
+Do not treat `activeMessages` as the source of truth. New stream/history state should update `ThreadTurn[]` first, then derive flat messages for `ThreadView` and legacy selectors. `ThreadTurnNavigator` creates a read-only projection from each turn's `userMessageID` to the corresponding `user-message` display row; assistant rows, trace rows, permission rows, workflow/debug rows, and stream-inserted user rows never create navigation turns.
 
 Live composer sends initially create a `pending:*` turn. When an authoritative runtime turn ID arrives, `bindPendingThreadTurnToCanonical()` must rename or merge that pending turn in the same conversation-store transaction that applies `turn.started` metadata. Matching is limited to explicit optimistic user IDs, assistant placeholder IDs, or an assistant already carrying the backend turn ID; adjacency, text equality, and timestamps are never identity evidence. Placeholder-to-segment binding performs the same re-homing before updating the assistant identity, so React never observes two assistant-bearing `ThreadTurn` objects for one backend execution.
 
@@ -177,7 +176,7 @@ Live composer sends initially create a `pending:*` turn. When an authoritative r
 
 自动折叠和手动 toggle 都使用 projection layout transaction。事务记录 surviving `rowID + viewportOffset + turnID`，临时 pin summary/outcome row，暂停普通 follow sync 与 TanStack size compensation，并在新投影提交后最多用两个 animation frame 做 DOM rect 校正。虚拟 thread column 使用 `overflow-anchor: none`，避免浏览器原生 anchoring 与应用语义锚竞争；事务期间若收到用户滚动意图，保留 disclosure 结果但取消余下校正。
 
-存在 execution group 时，`ThreadTurnNavigator` 始终把 summary row 作为该 turn 的稳定导航锚点。copy、fork、side-chat 和 response actions 仍归属于最终 response owner，不归属于 summary。
+存在 execution group 时，`ThreadTurnNavigator` 始终把 summary row 作为该 turn 的稳定导航锚点。copy、branch、fork 和 response actions 仍归属于最终 response owner，不归属于 summary。
 
 数据层级可以按下面的树理解：
 
@@ -250,7 +249,7 @@ streaming 更新需要保持历史 trace 的 structural sharing：
 
 - stream merge 只替换真正变化的 live item；已完成且语义未变化的 `AssistantTraceItem` 必须复用旧对象引用。
 - `thread-display-rows.ts` 为每个 `AssistantTraceItem` 建立稳定 row metadata；streaming 文本变化只更新对应 live row，不改变 `rowID`。
-- `buildThreadDisplayContext()` 通过线性多遍索引一次预计算 folding、final/latest、side-chat anchor、trailing diff 和 stream insertion；row builder 不再为每条 assistant message 重扫完整 message 列表。
+- `buildThreadDisplayContext()` 通过线性多遍索引一次预计算 folding、final/latest、trailing diff 和 stream insertion；row builder 不再为每条 assistant message 重扫完整 message 列表。
 - 增量 row cache 以不可变 message/item 引用作为 revision 信号，不序列化 tool output、图片、patch、diff 或 session payload。conversation store 若新增原地 mutation，必须同时引入显式 revision，不能在 projection 层恢复 payload `JSON.stringify`。
 - live 判定只覆盖 `isStreaming`、`draftPatch.isStreaming`、以及 pending/running/waiting-approval tool；如果 live item 出现在历史中间，则回退到原整段渲染，保证顺序优先。
 - question answered 状态在 trace item 边界降成 boolean；不要把整份 answered question Set 传给所有 trace item。
@@ -304,8 +303,7 @@ flowchart LR
   subgraph output["屏幕结果"]
     response["最终回复正文"]
     traces["reasoning / tools / workflow"]
-    actionUi["copy / branch / side chat / fork"]
-    sideChatPanel["RightSidebar side-chat panel"]
+    actionUi["copy / branch / fork"]
     lightbox["ImageLightbox"]
   end
 
@@ -339,7 +337,6 @@ flowchart LR
   trace --> response
   trace --> traces
   actions --> actionUi
-  actionUi --> sideChatPanel
   trace --> lightbox
 ```
 
@@ -374,7 +371,7 @@ ThreadView
 
 `content-visibility` 不叠加到 `.thread-virtual-row` 上。虚拟列表依赖 JS 测量和缓存真实 row 高度；让浏览器延迟虚拟 row 的高度计算会干扰滚动布局。
 
-`ThreadRowRenderer` 是 `thread-column` 的主要 UI 分发表；`VisibleThreadView` 只保留一个很薄的 `renderDisplayRow(row)` wrapper，用来注入 copy/lightbox/side chat 等 handler：
+`ThreadRowRenderer` 是 `thread-column` 的主要 UI 分发表；`VisibleThreadView` 只保留一个很薄的 `renderDisplayRow(row)` wrapper，用来注入 copy、lightbox、branch 和 fork 等 handler：
 
 ```text
 ThreadRowRenderer(row)
@@ -423,7 +420,6 @@ ThreadRowRenderer(row)
 │     └─ div.assistant-response-actions
 │        ├─ BranchSwitcher
 │        ├─ copy assistant response button
-│        ├─ side chat button
 │        └─ fork button
 ```
 
@@ -457,22 +453,7 @@ TraceItemView
       └─ task-state → TaskStateTraceItemView
 ```
 
-side chat 不再作为主 `ThreadView` 的 display row 渲染。主线 assistant response 只渲染 actions row 中的 side chat button、count 和 active state；点击后由 workbench 打开右侧栏 side-chat tab：
-
-```text
-RightSidebar side-chat tab
-└─ SideChatThread  # 当前由右侧栏承载，CSS class 暂沿用 inline-side-chat 前缀
-├─ header.inline-side-chat-header
-│  ├─ side chat tabs  # 多个 side chat thread
-│  ├─ create side chat tab button
-│  └─ hide side chat button
-├─ inline-side-chat-tab-menu portal?  # tab 右键菜单
-└─ div.inline-side-chat-body
-   ├─ nested ThreadView?  # side chat 的消息历史
-   └─ nested Composer  # side chat 专用输入框
-```
-
-注意：主 pane 底部的紫色主输入框 `Composer` 不是主 `ThreadView` 的子组件，它是 `WorkbenchPaneSurface` 中 `ThreadView` 后面的 sibling。side chat 专用 composer 属于右侧栏中的 `SideChatThread` 子树。
+注意：主 pane 底部的紫色主输入框 `Composer` 不是主 `ThreadView` 的子组件，它是 `WorkbenchPaneSurface` 中 `ThreadView` 后面的 sibling。
 
 ## 5. 视觉层级
 
@@ -490,7 +471,7 @@ RightSidebar side-chat tab
 
 这让最终回复接近文档正文，而不是一张卡片。
 
-Completed Markdown 的 block 仍是单个 semantic response row 内部的渐进内容，不提升为外层 virtual rows。这样 turn navigator、scroll snapshot、focused-row pin 和 side-chat scope 继续使用原有坐标模型；渐进 block 导致的高度变化仍由现有 `ResizeObserver` 与 bottom-lock 规则处理。
+Completed Markdown 的 block 仍是单个 semantic response row 内部的渐进内容，不提升为外层 virtual rows。这样 turn navigator、scroll snapshot 和 focused-row pin 继续使用原有坐标模型；渐进 block 导致的高度变化仍由现有 `ResizeObserver` 与 bottom-lock 规则处理。
 
 ### 用户消息
 
@@ -556,25 +537,12 @@ debug 信息由 developer mode 和 trace visibility 控制。默认不应该干�
 assistant response 后方可显示动作行：
 
 - copy assistant response。
-- open/hide side chat。
+- branch switcher（存在兄弟节点时）。
+- fork from message。
 
-桌面 hover 设备上，动作行默认隐藏；当 hover、focus-within、已复制、已有 side chat 或 side chat 正在打开时常驻显示。这样能保持正文干净，但会牺牲 side chat 的发现性。
+桌面 hover 设备上，动作行默认隐藏；在 hover、focus-within 或复制反馈期间显示。键盘焦点必须仍能发现所有可用操作。
 
 用户消息也支持复制，但只显示 copy icon。
-
-### Side Chat
-
-side chat 是挂在某条 assistant response 下的右侧栏讨论：
-
-- 只允许主 session 的非 streaming assistant response 打开。
-- side chat 锚点为 `message.messageID ?? message.id`。
-- 打开后在 right sidebar 的 side-chat tab 中渲染 `SideChatThread`。
-- `SideChatThread` 内部再次渲染一个 `ThreadView`，并在下方放置专用 `Composer`。
-- nested `ThreadView` 显式设置 `showTurnNavigator={false}`，避免右侧窄栏出现重复轮次导航。
-- side chat composer 隐藏 model selector 和项目 tag command，placeholder 为 `Ask a follow-up about this reply.`。
-- side chat session banner 在右侧栏嵌套视图中关闭，避免重复说明。
-
-视觉上，side chat 使用右侧栏 panel 承载，主 thread 中只保留 side chat action button 的 count / active state，不增加主线纵向长度。
 
 ### 权限请求
 
@@ -620,7 +588,6 @@ agent 提问通过 `question` trace item 渲染：
 主要响应式规则在 `responsive.css`：
 
 - 小于 900px 时，assistant response actions 和 session banner 纵向排列。
-- 小屏下 side chat 由 right sidebar panel 承载，不再挤压主 thread 的纵向 row。
 - 小屏下 pane content gutter 降低到 10px。
 - composer、utility bar、菜单 panel 会全宽显示。
 - permission request grid 在窄屏变成单列。
@@ -661,7 +628,7 @@ Thread view 的 assistant 文本有两组专用 semantic token：
 
 Thread view 的面板背景使用专用 semantic token，不直接消费全局 `surface-panel` / `seg-panel`：
 
-- `semantic-thread-panel-surface`：thread-owned 面板、side chat、默认 assistant card、markdown table / HTML frame 背景。
+- `semantic-thread-panel-surface`：thread-owned 面板、默认 assistant card、markdown table / HTML frame 背景。
 - `semantic-thread-panel-surface-muted`：低强调 trace、metadata、nested panel 背景。
 - `semantic-thread-tool-io-panel-surface`：tool input/output 合并滚动面板背景，可独立于普通 nested panel 调整；对应的 light/dark token 暴露在外观设置的 Thread View 分组。
 - `semantic-thread-panel-surface-hover`：thread 面板内紧凑控件的 hover / focus 背景。
@@ -700,19 +667,17 @@ User-message 文件变更卡片使用一组专用 semantic token：
 
 1. `thread.css` 是从 legacy styles 拆分出来的，存在“先定义卡片，再在文件末尾清空卡片”的覆盖链。
 2. `ThreadRowRenderer` 已经承接 row kind 分发，但 `ThreadView.tsx` 仍保留 TraceItemView、各类 trace renderer 和 lightbox；后续应继续把 trace renderer 拆到独立模块，降低主文件变更冲突。
-3. side chat 入口在无 hover 环境和首次发现时不够明显。
-4. reasoning/tools/file-change 的视觉差异在最终 override 后偏弱，扫描执行状态时不够直观。
-5. side chat 是完整嵌套 thread，但由右侧栏承载；需要关注右侧栏宽度和长会话滚动体验。
-6. `thread-column` 的原生滚动位置仍较弱；主 pane 的语义轮次导航只表达 canonical user turns，不表达单条 trace 或 assistant 输出内部的精确滚动比例。
-7. README 中提到的若干前端规格文档当前不存在，本文暂时作为 thread view 设计记录入口。
+3. reasoning/tools/file-change 的视觉差异在最终 override 后偏弱，扫描执行状态时不够直观。
+4. `thread-column` 的原生滚动位置仍较弱；主 pane 的语义轮次导航只表达 canonical user turns，不表达单条 trace 或 assistant 输出内部的精确滚动比例。
+5. README 中提到的若干前端规格文档当前不存在，本文暂时作为 thread view 设计记录入口。
 
 ## 10. 维护约定
 
 改动 thread view 时，按以下顺序检查：
 
 1. 是否改变了 `ThreadMessage` 或 `AssistantTraceItem` 的分组、显示、折叠规则。
-2. 是否影响 response、trace、file-change、permission、question、side chat 的视觉层级。
-3. 是否影响多 pane、窄屏、right sidebar side chat 嵌套场景。
+2. 是否影响 response、trace、file-change、permission、question 和 actions 的视觉层级。
+3. 是否影响多 pane、窄屏和 right sidebar 场景。
 4. 是否需要更新 `ThreadView.test.tsx` 或 `App.test.tsx` 中的行为断言。
 5. 是否需要同步更新本文档。
 

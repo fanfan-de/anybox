@@ -88,9 +88,6 @@ export async function defaultPrompt(input?: {
     if (agentPrompt) {
         prompts.push(agentPrompt)
     }
-    if (input?.agent?.name === "sidechat") {
-        prompts.push(await PromptPresets.getResolvedPromptPresetContent(selection.sideChatPromptPresetID))
-    }
     const activeTasks = renderActiveTasks(input?.session)
     if (activeTasks) {
         prompts.push(activeTasks)

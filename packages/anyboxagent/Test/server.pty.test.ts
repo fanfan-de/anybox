@@ -457,25 +457,6 @@ describe("server pty api", () => {
     expect(runtime.handles).toHaveLength(2)
   })
 
-  test("rejects session PTY creation for side chats", async () => {
-    const { baseURL } = await startPtyTestServer()
-    const parent = await createPty(baseURL)
-    const { assistantMessage } = createAnchorMessages(parent.session)
-    const sideChat = await SessionCore.createSideChat({
-      parentSessionID: parent.session.id,
-      anchorMessageID: assistantMessage.id,
-    })
-
-    const response = await fetch(`${baseURL}/api/sessions/${sideChat.id}/pty`, {
-      method: "POST",
-    })
-    const body = (await response.json()) as JsonEnvelope<PtySessionInfo>
-
-    expect(response.status).toBe(409)
-    expect(body.success).toBe(false)
-    expect(body.error?.code).toBe("TERMINAL_UNAVAILABLE")
-  })
-
   test("returns null for a session without a terminal", async () => {
     const { baseURL } = await startPtyTestServer()
     const sessionResponse = await fetch(`${baseURL}/api/sessions`, {

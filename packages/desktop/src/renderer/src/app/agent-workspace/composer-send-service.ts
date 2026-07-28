@@ -23,14 +23,13 @@ import type {
   WorkspaceGroup,
 } from "../types"
 import { createID } from "../utils"
-import { isSideChatSession } from "../workspace"
 import type { WorkspaceStateUpdater } from "./workspace-store"
 
 export function resolveComposerSkillSelectionForSession(
-  session: Pick<SessionSummary, "kind"> | null | undefined,
+  _session: SessionSummary | null | undefined,
   selectedSkillIDs: string[],
 ) {
-  return isSideChatSession(session) ? [] : selectedSkillIDs
+  return selectedSkillIDs
 }
 
 export function normalizeQuestionAnswerText(input?: {

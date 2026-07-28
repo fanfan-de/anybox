@@ -89,7 +89,6 @@ function createWorkspace(sessions: SessionSummary[]): WorkspaceGroup {
 function buildInput(overrides: Partial<BuildWorkspaceDerivedStateInput> = {}): BuildWorkspaceDerivedStateInput {
   const dockviewLayout = overrides.dockviewLayout ?? null
   return {
-    activeSideChatSessionIDByParentSessionID: {},
     cancellingSessionIDs: {},
     composerAttachmentsByTabKey: {},
     composerDraftStateByTabKey: {},

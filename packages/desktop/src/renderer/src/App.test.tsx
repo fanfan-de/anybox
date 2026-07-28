@@ -575,15 +575,6 @@ const PROMPT_PRESET_FIXTURES: PromptPresetFixture[] = [
     sourcePath: "src/session/prompt/plan.md",
   },
   {
-    id: "side-chat",
-    label: "Side chat prompt",
-    description: "Additional instructions appended when a side chat session is active.",
-    source: "bundled" as const,
-    hasOverride: false,
-    editable: false,
-    sourcePath: "src/session/prompt/side-chat.md",
-  },
-  {
     id: "git-commit-message",
     label: "Git commit message prompt",
     description: "Instructions used when auto-generating Git commit subjects.",
@@ -615,7 +606,6 @@ const PROMPT_PRESET_FIXTURES: PromptPresetFixture[] = [
 const PROMPT_PRESET_SELECTION_FIXTURE = {
   systemPromptPresetID: "system-default",
   planModePromptPresetID: "plan-mode",
-  sideChatPromptPresetID: "side-chat",
   gitCommitPromptPresetID: "git-commit-message",
   cinemaTextGenerationPromptPresetID: "cinema-text-generation",
 }
@@ -655,9 +645,7 @@ function createPromptPresetDocument(
       ? "You are Anybox, an interactive tool that helps users with software engineering tasks."
       : presetID === "plan-mode"
         ? "<system-reminder>\n# Plan Mode - System Reminder"
-        : presetID === "side-chat"
-          ? "This session is a side chat anchored to a single assistant reply from another session."
-          : presetID === "git-commit-message"
+        : presetID === "git-commit-message"
             ? "You generate Git commit messages."
         : preset.source === "custom"
           ? ""
@@ -1432,23 +1420,6 @@ describe("App", () => {
           updated: 1,
         },
       }),
-      createSideChat: vi.fn().mockResolvedValue({
-        session: {
-          id: "session-side-chat-1",
-          projectID: "project-2",
-          directory: "C:\\Projects\\Project 2",
-          title: "Chat 1 / Side chat",
-          kind: "side-chat",
-          origin: {
-            parentSessionID: "session-chat-1",
-            anchorMessageID: "chat-agent-message-1",
-            anchorPreview: "Anchored reply snapshot",
-          },
-          created: 1,
-          updated: 1,
-        },
-      }),
-      listSideChats: vi.fn().mockResolvedValue([]),
       agentSession: {
         loadHistory: vi.fn().mockResolvedValue([]),
         sendTurn: vi.fn().mockImplementation(async (input: { clientTurnID: string }) => ({
@@ -1973,366 +1944,6 @@ describe("App", () => {
     expect(within(inspector).queryByText("Current execution state")).not.toBeInTheDocument()
   })
 
-  it("opens side chat in the right sidebar without replacing the current session tab", async () => {
-    render(<App />)
-
-    const threadSideChatButton = await screen.findByRole("button", { name: "Open side chat" })
-    const currentSessionTab = screen.getByRole("button", { name: "Switch to session Chat 1" })
-
-    expect(currentSessionTab).toHaveAttribute("aria-pressed", "true")
-
-    fireEvent.click(threadSideChatButton)
-
-    await waitFor(() => {
-      expect(window.desktop?.createSideChat).toHaveBeenCalledWith({
-        parentSessionID: "session-chat-1",
-        anchorMessageID: "chat-agent-message-1",
-      })
-    })
-
-    const nestedSideChat = await screen.findByRole("region", { name: "Side chat" })
-
-    expect(currentSessionTab).toHaveAttribute("aria-pressed", "true")
-    expect(screen.queryByRole("button", { name: "Switch to session Chat 1 / Side chat" })).not.toBeInTheDocument()
-    expect(within(nestedSideChat).getByRole("tab", { name: "Chat 1" })).toHaveAttribute("aria-selected", "true")
-    expect(within(nestedSideChat).getByRole("button", { name: "Create side chat tab" })).toBeInTheDocument()
-    expect(within(nestedSideChat).queryByText("Anchored reply snapshot")).not.toBeInTheDocument()
-    expect(within(nestedSideChat).queryByText("Scoped")).not.toBeInTheDocument()
-    expect(
-      within(nestedSideChat).queryByText("Focused on this reply only. Messages here stay outside the main thread context."),
-    ).not.toBeInTheDocument()
-    expect(within(nestedSideChat).getByRole("button", { name: "Hide side chat" })).toBeInTheDocument()
-    expect(within(nestedSideChat).getByText("Ask a follow-up about this reply.")).toBeInTheDocument()
-    expect(nestedSideChat.querySelector(".thread-shell")).not.toBeInTheDocument()
-    expect(screen.getAllByRole("textbox", { name: "Task draft" }).length).toBeGreaterThan(1)
-  })
-
-  it("inherits the parent session model selection when opening a right sidebar side chat", async () => {
-    const parentModelSelection = {
-      model: "deepseek/deepseek-v4-pro",
-      small_model: "deepseek/deepseek-chat",
-    }
-
-    window.desktop!.listFolderWorkspaces = vi.fn().mockResolvedValue([
-      {
-        id: "workspace-model-selection",
-        directory: "C:\\Projects\\Project 2\\app",
-        name: "app",
-        created: 1,
-        updated: 1,
-        project: {
-          id: "project-2",
-          name: "Project 2",
-          worktree: "C:\\Projects\\Project 2",
-        },
-        sessions: [
-          {
-            id: "session-chat-1",
-            projectID: "project-2",
-            directory: "C:\\Projects\\Project 2\\app",
-            title: "Chat 1",
-            created: 1,
-            updated: 1,
-            modelSelection: parentModelSelection,
-          },
-        ],
-      },
-    ])
-    window.desktop!.agentSession!.loadHistory = vi.fn().mockImplementation(async ({ backendSessionID }: { backendSessionID: string }) => {
-      if (backendSessionID !== "session-chat-1") return []
-
-      return [
-        {
-          info: {
-            id: "msg-user-main-1",
-            sessionID: backendSessionID,
-            role: "user",
-            created: 1,
-          },
-          parts: [{ id: "part-user-main-1", type: "text", text: "Use the selected model." }],
-        },
-        {
-          info: {
-            id: "msg-assistant-main-1",
-            sessionID: backendSessionID,
-            role: "assistant",
-            created: 2,
-            completed: 3,
-          },
-          parts: [{ id: "part-assistant-main-1", type: "text", text: "The parent response is ready." }],
-        },
-      ]
-    })
-    window.desktop!.createSideChat = vi.fn().mockResolvedValue({
-      session: {
-        id: "session-side-chat-1",
-        projectID: "project-2",
-        directory: "C:\\Projects\\Project 2\\app",
-        title: "Chat 1 / Side chat",
-        kind: "side-chat",
-        origin: {
-          parentSessionID: "session-chat-1",
-          anchorMessageID: "msg-assistant-main-1",
-          anchorPreview: "The parent response is ready.",
-        },
-        created: 4,
-        updated: 4,
-      },
-    })
-    window.desktop!.updateSessionModelSelection = vi.fn().mockResolvedValue(parentModelSelection)
-    window.desktop!.getAgentHealth = vi.fn().mockResolvedValue({
-      ok: true,
-      baseURL: "http://127.0.0.1:4096",
-    })
-
-    render(<App />)
-
-    fireEvent.click(await screen.findByRole("button", { name: "Open side chat" }))
-
-    await waitFor(() => {
-      expect(window.desktop!.createSideChat).toHaveBeenCalledWith({
-        parentSessionID: "session-chat-1",
-        anchorMessageID: "msg-assistant-main-1",
-      })
-      expect(window.desktop!.updateSessionModelSelection).toHaveBeenCalledWith({
-        sessionID: "session-side-chat-1",
-        model: "deepseek/deepseek-v4-pro",
-        small_model: "deepseek/deepseek-chat",
-      })
-    })
-
-    const nestedSideChat = await screen.findByRole("region", { name: "Side chat" })
-    setComposerDraftValue(within(nestedSideChat).getByRole("textbox", { name: "Task draft" }), "Follow up with the same model")
-    fireEvent.click(within(nestedSideChat).getByRole("button", { name: "Send task" }))
-
-    await waitFor(() => {
-      expect(window.desktop!.agentSession!.sendTurn).toHaveBeenCalledWith(expect.objectContaining({
-        backendSessionID: "session-side-chat-1",
-        model: {
-          providerID: "deepseek",
-          modelID: "deepseek-v4-pro",
-        },
-      }))
-    })
-  })
-
-  it("keeps the response action row available after hiding an existing side chat", async () => {
-    render(<App />)
-
-    const threadSideChatButton = await screen.findByRole("button", { name: "Open side chat" })
-    const assistantActionsRow = threadSideChatButton.closest(".assistant-actions-row") as HTMLElement | null
-
-    expect(assistantActionsRow).not.toBeNull()
-
-    fireEvent.click(threadSideChatButton)
-
-    const nestedSideChat = await screen.findByRole("region", { name: "Side chat" })
-    fireEvent.click(within(nestedSideChat).getByRole("button", { name: "Hide side chat" }))
-
-    await waitFor(() => {
-      expect(screen.queryByRole("region", { name: "Side chat" })).not.toBeInTheDocument()
-    })
-
-    const responseActionRow = assistantActionsRow?.querySelector(".assistant-response-side-chat") as HTMLElement | null
-
-    expect(responseActionRow).not.toBeNull()
-    expect(within(responseActionRow as HTMLElement).getByRole("button", { name: "Open side chat (1)" })).toHaveAttribute(
-      "title",
-      "1 side chat thread",
-    )
-  })
-
-  it("adds and switches between multiple right sidebar side chat tabs for one assistant response", async () => {
-    const createSideChat = vi.mocked(window.desktop!.createSideChat!)
-    createSideChat.mockReset()
-    createSideChat
-      .mockResolvedValueOnce({
-        session: {
-          id: "session-side-chat-1",
-          projectID: "project-2",
-          directory: "C:\\Projects\\Project 2",
-          title: "Chat 1 / Side chat",
-          kind: "side-chat",
-          origin: {
-            parentSessionID: "session-chat-1",
-            anchorMessageID: "chat-agent-message-1",
-            anchorPreview: "Anchored reply snapshot",
-          },
-          created: 1,
-          updated: 1,
-        },
-      })
-      .mockResolvedValueOnce({
-        session: {
-          id: "session-side-chat-2",
-          projectID: "project-2",
-          directory: "C:\\Projects\\Project 2",
-          title: "Chat 1 / Side chat",
-          kind: "side-chat",
-          origin: {
-            parentSessionID: "session-chat-1",
-            anchorMessageID: "chat-agent-message-1",
-            anchorPreview: "Anchored reply snapshot",
-          },
-          created: 2,
-          updated: 2,
-        },
-      })
-    window.desktop!.agentSession!.loadHistory = vi.fn().mockImplementation(
-      async ({ backendSessionID }: { backendSessionID: string }) => backendSessionID === "session-side-chat-1"
-        ? [
-            {
-              info: {
-                id: "msg-assistant-side-chat-tab-1",
-                sessionID: backendSessionID,
-                role: "assistant",
-                created: 100,
-                completed: 103,
-              },
-              parts: [
-                { id: "reasoning-side-chat-tab-1", type: "reasoning", text: "Inspecting the first side chat." },
-                {
-                  id: "tool-side-chat-tab-1",
-                  type: "tool",
-                  tool: "read-file",
-                  state: { status: "completed", output: "ok" },
-                },
-                { id: "text-side-chat-tab-1", type: "text", text: "First side chat result." },
-              ],
-            },
-          ]
-        : [],
-    )
-
-    render(<App />)
-
-    fireEvent.click(await screen.findByRole("button", { name: "Open side chat" }))
-
-    const nestedSideChat = await screen.findByRole("region", { name: "Side chat" })
-    const getNestedSideChat = () => screen.getByRole("region", { name: "Side chat" })
-    expect(await within(nestedSideChat).findByRole("tab", { name: "Chat 1" })).toHaveAttribute("aria-selected", "true")
-    const firstSideChatSummary = await within(nestedSideChat).findByRole("button", {
-      name: /Expand processing details/,
-    })
-    fireEvent.click(firstSideChatSummary)
-    expect(within(nestedSideChat).getByRole("button", { name: /Collapse processing details/ })).toHaveAttribute(
-      "aria-expanded",
-      "true",
-    )
-
-    setComposerDraftValue(within(nestedSideChat).getByRole("textbox", { name: "Task draft" }), "First side chat draft")
-    fireEvent.click(within(nestedSideChat).getByRole("button", { name: "Create side chat tab" }))
-
-    await waitFor(() => {
-      expect(window.desktop!.createSideChat).toHaveBeenCalledTimes(2)
-      expect(within(getNestedSideChat()).getByRole("tab", { name: "Chat 2" })).toHaveAttribute("aria-selected", "true")
-    })
-
-    expectComposerDraftValue(within(getNestedSideChat()).getByRole("textbox", { name: "Task draft" }), "")
-    setComposerDraftValue(within(getNestedSideChat()).getByRole("textbox", { name: "Task draft" }), "Second side chat draft")
-
-    fireEvent.click(within(getNestedSideChat()).getByRole("tab", { name: "Chat 1" }))
-
-    await waitFor(() => {
-      expect(within(getNestedSideChat()).getByRole("tab", { name: "Chat 1" })).toHaveAttribute("aria-selected", "true")
-      expectComposerDraftValue(within(getNestedSideChat()).getByRole("textbox", { name: "Task draft" }), "First side chat draft")
-      expect(within(getNestedSideChat()).getByRole("button", { name: /Collapse processing details/ })).toHaveAttribute(
-        "aria-expanded",
-        "true",
-      )
-    })
-
-    fireEvent.click(within(getNestedSideChat()).getByRole("tab", { name: "Chat 2" }))
-
-    await waitFor(() => {
-      expect(within(getNestedSideChat()).getByRole("tab", { name: "Chat 2" })).toHaveAttribute("aria-selected", "true")
-      expectComposerDraftValue(within(getNestedSideChat()).getByRole("textbox", { name: "Task draft" }), "Second side chat draft")
-    })
-
-    fireEvent.click(within(getNestedSideChat()).getByRole("button", { name: "Send task" }))
-
-    await waitFor(() => {
-      expectComposerDraftValue(within(getNestedSideChat()).getByRole("textbox", { name: "Task draft" }), "")
-      expect(within(getNestedSideChat()).getAllByText("Second side chat draft").length).toBeGreaterThan(0)
-    })
-
-    fireEvent.click(within(getNestedSideChat()).getByRole("tab", { name: "Chat 1" }))
-
-    await waitFor(() => {
-      expect(within(getNestedSideChat()).queryByText("Second side chat draft")).not.toBeInTheDocument()
-      expectComposerDraftValue(within(getNestedSideChat()).getByRole("textbox", { name: "Task draft" }), "First side chat draft")
-    })
-  })
-
-  it("archives a right sidebar side chat tab from the tab context menu", async () => {
-    const createSideChat = vi.mocked(window.desktop!.createSideChat!)
-    createSideChat.mockReset()
-    createSideChat
-      .mockResolvedValueOnce({
-        session: {
-          id: "session-side-chat-1",
-          projectID: "project-2",
-          directory: "C:\\Projects\\Project 2",
-          title: "Chat 1 / Side chat",
-          kind: "side-chat",
-          origin: {
-            parentSessionID: "session-chat-1",
-            anchorMessageID: "chat-agent-message-1",
-            anchorPreview: "Anchored reply snapshot",
-          },
-          created: 1,
-          updated: 1,
-        },
-      })
-      .mockResolvedValueOnce({
-        session: {
-          id: "session-side-chat-2",
-          projectID: "project-2",
-          directory: "C:\\Projects\\Project 2",
-          title: "Chat 2 / Side chat",
-          kind: "side-chat",
-          origin: {
-            parentSessionID: "session-chat-1",
-            anchorMessageID: "chat-agent-message-1",
-            anchorPreview: "Anchored reply snapshot",
-          },
-          created: 2,
-          updated: 2,
-        },
-      })
-
-    window.desktop!.archiveAgentSession = vi.fn().mockResolvedValue({
-      sessionID: "session-side-chat-2",
-      projectID: "project-2",
-      directory: "C:\\Projects\\Project 2",
-      archivedAt: 3,
-      archivedSessionIDs: ["session-side-chat-2"],
-    })
-
-    render(<App />)
-
-    fireEvent.click(await screen.findByRole("button", { name: "Open side chat" }))
-
-    await screen.findByRole("region", { name: "Side chat" })
-    const getNestedSideChat = () => screen.getByRole("region", { name: "Side chat" })
-    fireEvent.click(await within(getNestedSideChat()).findByRole("button", { name: "Create side chat tab" }))
-
-    await waitFor(() => {
-      expect(within(getNestedSideChat()).getByRole("tab", { name: "Chat 2" })).toHaveAttribute("aria-selected", "true")
-    })
-
-    fireEvent.contextMenu(within(getNestedSideChat()).getByRole("tab", { name: "Chat 2" }))
-
-    expect(screen.getByRole("menu", { name: "Side chat tab actions" })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole("menuitem", { name: "Archive" }))
-
-    await waitFor(() => {
-      expect(window.desktop!.archiveAgentSession).toHaveBeenCalledWith({ sessionID: "session-side-chat-2" })
-      expect(within(getNestedSideChat()).queryByRole("tab", { name: "Chat 2" })).not.toBeInTheDocument()
-      expect(within(getNestedSideChat()).getByRole("tab", { name: "Chat 1" })).toHaveAttribute("aria-selected", "true")
-    })
-  })
-
   it("copies the response content from the response action row", async () => {
     render(<App />)
 
@@ -2354,161 +1965,6 @@ describe("App", () => {
     })
 
     expect(await screen.findByRole("button", { name: "Copied assistant response" })).toBeInTheDocument()
-  })
-
-  it("renders full assistant sections inside right sidebar side chat", async () => {
-    window.desktop!.agentSession!.loadHistory = vi.fn().mockImplementation(async ({ backendSessionID: sessionID }: { backendSessionID: string }) => {
-      if (sessionID !== "session-side-chat-1") return []
-
-      return [
-        {
-          info: {
-            id: "msg-user-side-1",
-            sessionID,
-            role: "user",
-            created: 200,
-          },
-          parts: [{ id: "part-user-side-1", type: "text", text: "Follow up on the failing config step" }],
-        },
-        {
-          info: {
-            id: "msg-assistant-side-1",
-            sessionID,
-            role: "assistant",
-            created: 201,
-            completed: 202,
-          },
-          parts: [
-            { id: "side-reasoning-1", type: "reasoning", text: "Inspecting the failing config step." },
-            {
-              id: "side-tool-1",
-              type: "tool",
-              tool: "read-file",
-              state: {
-                status: "completed",
-                output: "config loaded",
-              },
-            },
-            {
-              id: "side-patch-1",
-              type: "patch",
-              summary: {
-                files: 1,
-                additions: 2,
-                deletions: 0,
-              },
-              changes: [
-                {
-                  file: "src/config.ts",
-                  additions: 2,
-                  deletions: 0,
-                },
-              ],
-            },
-            { id: "side-text-1", type: "text", text: "I found the root cause in the config parser." },
-          ],
-        },
-      ]
-    })
-
-    render(<App />)
-
-    fireEvent.click(await screen.findByRole("button", { name: "Open side chat" }))
-
-    await waitFor(() => {
-      expect(window.desktop!.agentSession!.loadHistory).toHaveBeenCalledWith({
-        backendSessionID: "session-side-chat-1",
-      })
-    })
-
-    const nestedSideChat = await screen.findByRole("region", { name: "Side chat" })
-    expect(await within(nestedSideChat).findByText("I found the root cause in the config parser.")).toBeInTheDocument()
-
-    expect(within(nestedSideChat).queryByText("Scoped")).not.toBeInTheDocument()
-    expect(
-      within(nestedSideChat).queryByText("Focused on this reply only. Messages here stay outside the main thread context."),
-    ).not.toBeInTheDocument()
-    expect(within(nestedSideChat).getByRole("button", { name: "Hide side chat" })).toBeInTheDocument()
-    const executionSummary = within(nestedSideChat).getByRole("button", { name: /Expand processing details/ })
-    expect(executionSummary).toHaveAttribute("aria-expanded", "false")
-    fireEvent.click(executionSummary)
-    expect(within(nestedSideChat).getByRole("region", { name: "Reasoning" })).toBeInTheDocument()
-    expect(within(nestedSideChat).getByRole("button", { name: /read-file/i })).toBeInTheDocument()
-    expect(within(nestedSideChat).getByRole("region", { name: "File Changes" })).toBeInTheDocument()
-  })
-
-  it("clears the right sidebar side chat draft after sending a prompt", async () => {
-    render(<App />)
-
-    fireEvent.click(await screen.findByRole("button", { name: "Open side chat" }))
-
-    const nestedSideChat = await screen.findByRole("region", { name: "Side chat" })
-    const sideChatDraft = within(nestedSideChat).getByRole("textbox", { name: "Task draft" })
-
-    setComposerDraftValue(sideChatDraft, "Drill into the parser failure from this reply")
-    fireEvent.click(within(nestedSideChat).getByRole("button", { name: "Send task" }))
-
-    await waitFor(() => {
-      expect(within(nestedSideChat).getAllByText("Drill into the parser failure from this reply").length).toBeGreaterThan(0)
-      expectComposerDraftValue(within(nestedSideChat).getByRole("textbox", { name: "Task draft" }), "")
-    })
-  })
-
-  it("streams right sidebar side chat output before the backend turn completes", async () => {
-    let activeStreamID = ""
-    let activeBackendSessionID = ""
-
-    window.desktop!.getAgentHealth = vi.fn().mockResolvedValue({
-      ok: true,
-      baseURL: "http://127.0.0.1:4096",
-    })
-    window.desktop!.agentSession!.sendTurn = vi.fn().mockImplementation(
-      async (input: {
-        clientTurnID: string
-        backendSessionID: string
-      }) => {
-        activeStreamID = input.clientTurnID
-        activeBackendSessionID = input.backendSessionID
-
-        return {
-          clientTurnID: input.clientTurnID,
-        }
-      },
-    )
-
-    render(<App />)
-
-    await waitFor(() => {
-      expect(window.desktop!.getAgentHealth).toHaveBeenCalledTimes(1)
-      expect(window.desktop!.agentSession!.onEvent).toHaveBeenCalledTimes(1)
-    })
-
-    fireEvent.click(await screen.findByRole("button", { name: "Open side chat" }))
-
-    const nestedSideChat = await screen.findByRole("region", { name: "Side chat" })
-    const sideChatDraft = within(nestedSideChat).getByRole("textbox", { name: "Task draft" })
-
-    setComposerDraftValue(sideChatDraft, "Stream from the side chat")
-    fireEvent.click(within(nestedSideChat).getByRole("button", { name: "Send task" }))
-
-    await waitFor(() => {
-      expect(window.desktop!.agentSession!.sendTurn).toHaveBeenCalledTimes(1)
-      expect(activeStreamID).not.toBe("")
-      expect(activeBackendSessionID).not.toBe("")
-    })
-
-    act(() => {
-      for (const listener of agentSessionEventListeners) {
-        listener(createRequestStreamEvent({
-          backendSessionID: activeBackendSessionID,
-          clientTurnID: activeStreamID,
-          event: "delta",
-          data: { kind: "text", delta: "Live side chat response." },
-        }))
-      }
-    })
-
-    expect(await within(nestedSideChat).findByText("Live side chat response.")).toBeInTheDocument()
   })
 
   it("opens a local URL in the unified preview sidebar", async () => {
@@ -9705,7 +9161,6 @@ describe("App", () => {
     let promptPresetDocuments = [
       createPromptPresetDocument("system-default"),
       createPromptPresetDocument("plan-mode"),
-      createPromptPresetDocument("side-chat"),
       createPromptPresetDocument("git-commit-message"),
       createPromptPresetDocument("cinema-text-generation"),
       createPromptPresetDocument("provider-gpt"),
@@ -9790,7 +9245,6 @@ describe("App", () => {
             ? "system-default"
             : promptPresetSelection.systemPromptPresetID,
         planModePromptPresetID: promptPresetSelection.planModePromptPresetID,
-        sideChatPromptPresetID: promptPresetSelection.sideChatPromptPresetID,
         gitCommitPromptPresetID:
           promptPresetSelection.gitCommitPromptPresetID === presetID
             ? "git-commit-message"
@@ -9855,22 +9309,18 @@ describe("App", () => {
     ).toEqual([
       "System prompt",
       "Plan mode prompt",
-      "Side chat prompt",
       "Git commit message prompt",
       "Cinema text generation prompt",
     ])
     expect(screen.queryByText("Every execution")).not.toBeInTheDocument()
     expect(screen.queryByText("Plan only")).not.toBeInTheDocument()
-    expect(screen.queryByText("Side chat only")).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "System prompt" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Plan mode prompt" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Side chat prompt" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Git commit message prompt" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Cinema text generation prompt" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "GPT Provider Prompt" })).toBeInTheDocument()
     expect(getPromptPresetCombobox("System prompt preset")).toHaveTextContent("System prompt")
     expect(getPromptPresetCombobox("Plan mode prompt preset")).toHaveTextContent("Plan mode prompt")
-    expect(getPromptPresetCombobox("Side chat prompt preset")).toHaveTextContent("Side chat prompt")
     expect(getPromptPresetCombobox("Git commit message prompt preset")).toHaveTextContent("Git commit message prompt")
     expect(screen.queryByRole("button", { name: /Confirm .* prompt preset/ })).not.toBeInTheDocument()
 
@@ -9899,7 +9349,6 @@ describe("App", () => {
       expect(window.desktop!.updatePromptPresetSelection).toHaveBeenCalledWith({
         systemPromptPresetID: "provider-gpt",
         planModePromptPresetID: "plan-mode",
-        sideChatPromptPresetID: "side-chat",
         gitCommitPromptPresetID: "git-commit-message",
         cinemaTextGenerationPromptPresetID: "cinema-text-generation",
       })
@@ -9937,7 +9386,6 @@ describe("App", () => {
       expect(window.desktop!.updatePromptPresetSelection).toHaveBeenLastCalledWith({
         systemPromptPresetID: "custom-untitled-preset",
         planModePromptPresetID: "plan-mode",
-        sideChatPromptPresetID: "side-chat",
         gitCommitPromptPresetID: "git-commit-message",
         cinemaTextGenerationPromptPresetID: "cinema-text-generation",
       })
@@ -9949,7 +9397,6 @@ describe("App", () => {
       expect(window.desktop!.updatePromptPresetSelection).toHaveBeenLastCalledWith({
         systemPromptPresetID: "custom-untitled-preset",
         planModePromptPresetID: "plan-mode",
-        sideChatPromptPresetID: "side-chat",
         gitCommitPromptPresetID: "custom-untitled-preset",
         cinemaTextGenerationPromptPresetID: "cinema-text-generation",
       })
@@ -10024,7 +9471,6 @@ describe("App", () => {
       expect(window.desktop!.updatePromptPresetSelection).toHaveBeenLastCalledWith({
         systemPromptPresetID: "custom-gpt-provider-prompt-custom",
         planModePromptPresetID: "plan-mode",
-        sideChatPromptPresetID: "side-chat",
         gitCommitPromptPresetID: "git-commit-message",
         cinemaTextGenerationPromptPresetID: "cinema-text-generation",
       })
@@ -10062,7 +9508,6 @@ describe("App", () => {
     let promptPresetDocuments = [
       createPromptPresetDocument("system-default"),
       createPromptPresetDocument("plan-mode"),
-      createPromptPresetDocument("side-chat"),
       createPromptPresetDocument("git-commit-message"),
       createPromptPresetDocument("cinema-text-generation"),
       createPromptPresetDocument("provider-gpt"),
@@ -13060,34 +12505,6 @@ describe("App", () => {
     })
   })
 
-  it("removes right sidebar side chats when archiving a parent session cascade", async () => {
-    window.desktop!.archiveAgentSession = vi.fn().mockResolvedValue({
-      sessionID: "session-chat-1",
-      projectID: "project-2",
-      directory: "C:\\Projects\\Project 2",
-      archivedAt: 1,
-      archivedSessionIDs: ["session-chat-1", "session-side-chat-1"],
-    })
-
-    render(<App />)
-
-    fireEvent.click(await screen.findByRole("button", { name: "Open side chat" }))
-    expect(await screen.findByRole("region", { name: "Side chat" })).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole("button", { name: "Archive session Chat 1" }))
-
-    await waitFor(() => {
-      expect(window.desktop!.archiveAgentSession).toHaveBeenCalledWith({
-        sessionID: "session-chat-1",
-      })
-    })
-    await waitFor(() => {
-      expect(screen.queryByRole("region", { name: "Side chat" })).not.toBeInTheDocument()
-      expect(screen.queryByText("Anchored reply snapshot")).not.toBeInTheDocument()
-      expect(screen.queryByRole("button", { name: "Chat 1" })).not.toBeInTheDocument()
-    })
-  })
-
   it("removes a folder from the sidebar without deleting it from the backend", () => {
     render(<App />)
 
@@ -15077,7 +14494,6 @@ describe("App", () => {
     expect(styles).toMatch(
       /\.session-canvas-top-menu\s+\.canvas-top-menu-button\s*\{[^}]*min-height:\s*var\(--section-toolbar-pill-height\);[^}]*border-radius:\s*8px;[^}]*font-size:\s*12px;[^}]*line-height:\s*1\.2;/s,
     )
-    expect(styles).toMatch(/\.session-canvas-top-menu-copy\s+\.side-chat-badge\s*\{[^}]*min-height:\s*20px;[^}]*padding:\s*0 8px;[^}]*font-size:\s*11px;/s)
     expect(styles).toMatch(
       /\.canvas-top-menu-mcp-trigger,\s*\.canvas-top-menu-skill-trigger\s*\{[^}]*gap:\s*4px;[^}]*max-width:\s*min\(128px,\s*22vw\);/s,
     )
@@ -15344,7 +14760,7 @@ describe("App", () => {
       /\.window-shell\.is-windows\s+\.dockview-theme-anybox\s*\{[^}]*--dv-background-color:\s*transparent;[^}]*--dv-group-view-background-color:\s*transparent;[^}]*--dv-tabs-and-actions-container-background-color:\s*var\(--surface-profile-tab\);[^}]*--dv-activegroup-visiblepanel-tab-background-color:\s*var\(--surface-profile-tab-active\);/s,
     )
     expect(styles).toMatch(
-      /\.window-shell\.is-windows\s+\.composer,[\s\S]*?\.window-shell\.is-windows\s+\.inline-side-chat-thread \.composer\s*\{[^}]*background:\s*var\(--surface-profile-composer\);/s,
+      /\.window-shell\.is-windows\s+\.composer\s*\{[^}]*background:\s*var\(--surface-profile-composer\);/s,
     )
     expect(styles).toMatch(
       /\.window-shell\.is-windows\s+\.right-sidebar-launcher\s*\{[^}]*background:\s*var\(--surface-profile-right-sidebar\);/s,
@@ -15453,9 +14869,7 @@ describe("App", () => {
     )
     expect(styles).toMatch(/\.assistant-reasoning-separator::before,\s*\.assistant-reasoning-separator::after\s*\{[^}]*height:\s*1px;/s)
     expect(styles).toMatch(/\.assistant-section\.is-response\s+\.trace-item-header\s*\{[^}]*display:\s*none;/s)
-    expect(styles).toMatch(/\.assistant-response-side-chat\s*\{[^}]*gap:\s*8px;[^}]*margin-top:\s*0;/s)
-    expect(styles).not.toMatch(/\.assistant-response-side-chat:not\(\.is-persistent\) \.assistant-response-actions/)
-    expect(styles).not.toMatch(/\.assistant-shell:hover \.assistant-response-side-chat \.assistant-response-actions/)
+    expect(styles).toMatch(/\.assistant-response-actions-row\s*\{[^}]*gap:\s*8px;[^}]*min-width:\s*0;/s)
     expect(styles).toMatch(
       /\.trace-item-collapsed-line\s*\{[^}]*--trace-collapsed-fade-width:\s*clamp\(104px,\s*28%,\s*160px\);[^}]*text-overflow:\s*clip;[^}]*white-space:\s*nowrap;[^}]*-webkit-mask-image:\s*linear-gradient\(to right,\s*var\(--functional-mask-opaque\) 0,\s*var\(--functional-mask-opaque\) calc\(100% - var\(--trace-collapsed-fade-width\)\),\s*transparent 100%\);[^}]*mask-image:\s*linear-gradient\(to right,\s*var\(--functional-mask-opaque\) 0,\s*var\(--functional-mask-opaque\) calc\(100% - var\(--trace-collapsed-fade-width\)\),\s*transparent 100%\);/s,
     )

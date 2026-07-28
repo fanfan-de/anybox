@@ -3,6 +3,7 @@ import { mergeDeep } from "remeda"
 import * as Log from "#util/log.ts"
 import * as db from "#database/Sqlite.ts"
 import { toCreateTableSQL, withPrimaryKey, zodObjectToColumnDefs } from "#database/parser.ts"
+import { ensureLegacySessionCleanup } from "#database/legacy-session-cleanup.ts"
 import { DevModel, DevProvider } from "#provider/modelsdev.ts"
 import { ReasoningEffortSchema } from "@anybox/shared"
 
@@ -191,11 +192,6 @@ const SelectedPlanModePromptPresetField = z
   .string()
   .optional()
   .describe("Selected preset id for the runtime plan-mode prompt")
-
-const SelectedSideChatPromptPresetField = z
-  .string()
-  .optional()
-  .describe("Selected preset id for the runtime side-chat prompt")
 
 const SelectedGitCommitPromptPresetField = z
   .string()
@@ -543,7 +539,6 @@ export const Info = z
     custom_prompt_presets: CustomPromptPresetsField,
     selected_system_prompt_preset: SelectedSystemPromptPresetField,
     selected_plan_mode_prompt_preset: SelectedPlanModePromptPresetField,
-    selected_side_chat_prompt_preset: SelectedSideChatPromptPresetField,
     selected_git_commit_prompt_preset: SelectedGitCommitPromptPresetField,
     selected_cinema_text_generation_prompt_preset: SelectedCinemaTextGenerationPromptPresetField,
     enterprise: z
@@ -677,6 +672,7 @@ function projectProviderConfigFromInfo(config: Info): ProjectProviderConfig {
 let projectConfigTableGeneration = -1
 
 function ensureProjectConfigTable() {
+  ensureLegacySessionCleanup()
   const generation = db.getDatabaseGeneration()
   if (projectConfigTableGeneration === generation && generation > 0) return
   if (db.tableExists("project_configs")) {
@@ -1359,10 +1355,6 @@ export async function getSelectedPlanModePromptPresetID(configID = GLOBAL_CONFIG
   return normalizePromptPresetID(readConfig(normalizeConfigID(configID)).selected_plan_mode_prompt_preset)
 }
 
-export async function getSelectedSideChatPromptPresetID(configID = GLOBAL_CONFIG_ID) {
-  return normalizePromptPresetID(readConfig(normalizeConfigID(configID)).selected_side_chat_prompt_preset)
-}
-
 export async function getSelectedGitCommitPromptPresetID(configID = GLOBAL_CONFIG_ID) {
   return normalizePromptPresetID(readConfig(normalizeConfigID(configID)).selected_git_commit_prompt_preset)
 }
@@ -1376,7 +1368,6 @@ export async function setSelectedPromptPresetIDs(
   selection: {
     systemPromptPresetID?: string | null
     planModePromptPresetID?: string | null
-    sideChatPromptPresetID?: string | null
     gitCommitPromptPresetID?: string | null
     cinemaTextGenerationPromptPresetID?: string | null
   },
@@ -1385,14 +1376,12 @@ export async function setSelectedPromptPresetIDs(
   const current = readConfig(normalizedConfigID)
   const systemPromptPresetID = normalizePromptPresetID(selection.systemPromptPresetID)
   const planModePromptPresetID = normalizePromptPresetID(selection.planModePromptPresetID)
-  const sideChatPromptPresetID = normalizePromptPresetID(selection.sideChatPromptPresetID)
   const gitCommitPromptPresetID = normalizePromptPresetID(selection.gitCommitPromptPresetID)
   const cinemaTextGenerationPromptPresetID = normalizePromptPresetID(selection.cinemaTextGenerationPromptPresetID)
   const next: Info = {
     ...current,
     selected_system_prompt_preset: systemPromptPresetID,
     selected_plan_mode_prompt_preset: planModePromptPresetID,
-    selected_side_chat_prompt_preset: sideChatPromptPresetID,
     selected_git_commit_prompt_preset: gitCommitPromptPresetID,
     selected_cinema_text_generation_prompt_preset: cinemaTextGenerationPromptPresetID,
   }

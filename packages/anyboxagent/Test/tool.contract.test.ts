@@ -11,7 +11,6 @@ import * as Identifier from "#id/id.ts"
 import { Instance } from "#project/instance.ts"
 import * as Message from "#session/core/message.ts"
 import { resolveTools } from "#session/core/resolve-tools.ts"
-import * as SessionCore from "#session/core/session.ts"
 import * as ImageAssets from "#session/support/image-assets.ts"
 import * as ToolResultPersistence from "#session/support/tool-result-persistence.ts"
 import { AskUserQuestionTool, answerAskUserQuestion } from "#tool/ask-user-question.ts"
@@ -125,75 +124,6 @@ async function createWorkspaceDependenciesFixture(root: string) {
 
 function platformShellToolID() {
   return ToolRegistry.builtinShellToolsForPlatform(process.platform)[0]?.id ?? null
-}
-
-async function createSideChatSessionForTerminalToolTest() {
-  const root = await mkdtemp(path.join(tmpdir(), "anybox-terminal-tool-side-chat-"))
-  const parent = await SessionCore.createSession({
-    directory: root,
-    projectID: `project-terminal-tool-${Identifier.ascending("message")}`,
-    title: "Parent terminal tool test",
-  })
-  const userMessage = Message.User.parse({
-    id: Identifier.ascending("message"),
-    sessionID: parent.id,
-    role: "user",
-    created: Date.now(),
-    agent: "plan",
-    model: {
-      providerID: "test",
-      modelID: "test-model",
-    },
-  })
-  const userPart = Message.TextPart.parse({
-    id: Identifier.ascending("part"),
-    sessionID: parent.id,
-    messageID: userMessage.id,
-    type: "text",
-    text: "Parent prompt",
-  })
-  const assistantMessage = Message.Assistant.parse({
-    id: Identifier.ascending("message"),
-    sessionID: parent.id,
-    role: "assistant",
-    created: Date.now(),
-    completed: Date.now(),
-    parentID: userMessage.id,
-    modelID: "test-model",
-    providerID: "test",
-    agent: "plan",
-    path: {
-      cwd: root,
-      root,
-    },
-    cost: 0,
-    tokens: {
-      input: 0,
-      output: 0,
-      reasoning: 0,
-      cache: {
-        read: 0,
-        write: 0,
-      },
-    },
-  })
-  const assistantPart = Message.TextPart.parse({
-    id: Identifier.ascending("part"),
-    sessionID: parent.id,
-    messageID: assistantMessage.id,
-    type: "text",
-    text: "Anchorable answer",
-  })
-
-  SessionCore.upsertMessage(userMessage)
-  SessionCore.upsertPart(userPart)
-  SessionCore.upsertMessage(assistantMessage)
-  SessionCore.upsertPart(assistantPart)
-
-  return await SessionCore.createSideChat({
-    parentSessionID: parent.id,
-    anchorMessageID: assistantMessage.id,
-  })
 }
 
 describe("tool contract", () => {
@@ -1528,21 +1458,6 @@ describe("tool contract", () => {
       expect(runtime.parameters.safeParse(item.validArgs).success).toBe(true)
       expect(runtime.parameters.safeParse(item.forbiddenArgs).success).toBe(false)
     }
-  })
-
-  it("rejects terminal tools from side chat sessions before touching a PTY", async () => {
-    const sideChat = await createSideChatSessionForTerminalToolTest()
-    const runtime = await TerminalReadTool.init()
-
-    await expect(
-      runtime.execute(
-        {},
-        {
-          sessionID: sideChat.id,
-          messageID: "message-terminal-side-chat",
-        },
-      ),
-    ).rejects.toThrow("Side chat sessions do not support terminal tools.")
   })
 
   it("resolves shell executables by shell-specific Windows rules", async () => {

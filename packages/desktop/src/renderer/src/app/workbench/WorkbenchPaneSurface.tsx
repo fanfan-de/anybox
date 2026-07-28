@@ -26,7 +26,6 @@ import type {
   WorkspaceGroup,
 } from "../types"
 import { useProjectComposer } from "../use-project-composer"
-import { isSideChatSession } from "../workspace"
 import { BranchThreadView, type BranchThreadViewSnapshot } from "../thread/BranchThreadView"
 import { ThreadView, type ThreadNavigationRequest, type ThreadScrollSnapshot } from "../thread/ThreadView"
 import { deriveActiveMessages } from "../thread-turn-state"
@@ -377,7 +376,6 @@ export interface WorkbenchPaneSurfaceProps {
     workspaceDirectory: string | null
     workspaceID: string | null
   }) => void
-  onOpenSideChat?: (anchorMessageID: string, options?: { paneID?: string | null; parentSessionID?: string | null }) => Promise<void>
   onOpenSubagentSession?: (sessionID: string, title?: string) => void | Promise<void>
   onBranchSelect: (input: { messageID: string; sessionID?: string | null }) => Promise<void>
   onClearComposerParentMessage: (input?: { tabKey?: string | null }) => void
@@ -523,7 +521,6 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
   onInspectMessageInSidebar,
   onArtifactLinkOpen,
   onLocalFileLinkOpen,
-  onOpenSideChat,
   onOpenSubagentSession,
   onBranchSelect,
   onClearComposerParentMessage,
@@ -553,10 +550,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
   const [bagDescription, setBagDescription] = useState("")
   const [sessionViewModeByTabKey, setSessionViewModeByTabKey] = useState<Record<string, SessionViewMode>>({})
   const sessionViewStateKey = pane.tabKey ?? pane.sessionID ?? pane.id
-  const readOnlySideChat = isSideChatSession(pane.activeSession)
-  const sessionViewMode = readOnlySideChat
-    ? "linear"
-    : sessionViewModeByTabKey[sessionViewStateKey] ?? "linear"
+  const sessionViewMode = sessionViewModeByTabKey[sessionViewStateKey] ?? "linear"
   const branchViewSnapshotKey = `${sessionViewStateKey}:${pane.sessionID ?? "none"}`
   const { activeMessages, activeTurns } = useWorkbenchPaneConversationSnapshot(
     conversationStore,
@@ -590,8 +584,8 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
     sessionModelSelection: pane.activeSession?.modelSelection,
     sessionID: pane.sessionID,
   })
-  const showGitControls = pane.isActivePanel && !readOnlySideChat
-  const mainSessionBagSessionID = !readOnlySideChat && pane.activeSession && pane.sessionID ? pane.sessionID : null
+  const showGitControls = pane.isActivePanel
+  const mainSessionBagSessionID = pane.activeSession && pane.sessionID ? pane.sessionID : null
   const pendingSubmissionInputs = useMemo(
     () => [...pane.pendingConversationInputs].sort((left, right) => left.createdAt - right.createdAt),
     [pane.pendingConversationInputs],
@@ -603,7 +597,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
     draftKey: pane.tabKey,
     onSync: onSetDraft,
   })
-  const composerWorkflowBadge = !readOnlySideChat ? getSessionWorkflowBadge(pane.activeSession?.workflow) : null
+  const composerWorkflowBadge = getSessionWorkflowBadge(pane.activeSession?.workflow)
   const composerCommandStatus = pane.tabKey ? composerCommandStatusByTabKey?.[pane.tabKey] ?? null : null
   const addImageToComposerDisabledReason = composer.attachmentCapabilities.image
     ? composer.attachmentDisabledReason
@@ -846,8 +840,6 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                     onPlanModeToggle={
                       pane.createSessionTabID
                         ? () => void onPlanModeToggle({ createSessionTabID: pane.createSessionTabID })
-                        : readOnlySideChat
-                        ? undefined
                         : () => void onPlanModeToggle({ sessionID: pane.sessionID })
                     }
                     onRemoveAttachment={(path) => onRemoveComposerAttachment(path, pane.tabKey)}
@@ -910,8 +902,6 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                   activeMessages={activeMessages}
                   activeTurns={activeTurns}
                   messageTree={pane.messageTree}
-                  sideChatCountsByAnchorMessageID={pane.sideChatCountsByAnchorMessageID}
-                  sideChatSession={pane.activeSideChatSession}
                   scrollStateKey={pane.tabKey}
                   threadColumnRef={threadColumnRef}
                   isThreadVisible={pane.isActivePanel}
@@ -963,13 +953,6 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                     })
                   }
                   addImageToComposerDisabledReason={addImageToComposerDisabledReason}
-                  onOpenSideChat={onOpenSideChat
-                    ? (anchorMessageID) =>
-                        void onOpenSideChat(anchorMessageID, {
-                          paneID: pane.id,
-                          parentSessionID: pane.sessionID,
-                        })
-                    : undefined}
                   onProposedPlanConfirm={(input) =>
                     onApproveProposedPlan({
                       planMarkdown: input.planMarkdown,
@@ -1012,7 +995,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                     canPasteImageAttachments={composer.attachmentCapabilities.image && composer.attachmentDisabledReason === null}
                     draftState={pane.draftState}
                     hasBagSubmit={mainSessionBagSessionID !== null}
-                    hasCompactCommand={!readOnlySideChat && Boolean(pane.activeSession)}
+                    hasCompactCommand={Boolean(pane.activeSession)}
                     hasPendingPermissionRequests={pane.pendingPermissionRequests.length > 0 || isResolvingPermissionRequest}
                     isCancelling={pane.isCancelling}
                     isInterruptible={pane.isInterruptible}
@@ -1020,7 +1003,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                     mcpOptions={composer.mcpOptions}
                     modelOptions={composer.modelOptions}
                     onDraftStateChange={scheduleDraftSync}
-                    onPluginToggle={readOnlySideChat ? undefined : composer.handlePluginToggle}
+                    onPluginToggle={composer.handlePluginToggle}
                     pluginOptions={composer.pluginOptions}
                     reasoningEffortOptions={composer.reasoningEffortOptions}
                     selectedMcpServerIDs={composer.selectedMcpServerIDs}
@@ -1030,8 +1013,8 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                     selectedReasoningEffort={composer.selectedReasoningEffort}
                     selectedReasoningEffortLabel={composer.selectedReasoningEffortLabel}
                     selectedSkillIDs={composer.selectedSkillIDs}
-                    showModelSelector={!readOnlySideChat}
-                    showProjectTagCommands={!readOnlySideChat}
+                    showModelSelector
+                    showProjectTagCommands
                     skillOptions={composer.skillOptions}
                     unsupportedAttachmentPaths={composer.unsupportedAttachmentPaths}
                     workspaceDirectory={pane.workspace?.directory ?? null}
@@ -1053,11 +1036,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                         tabKey: pane.tabKey,
                       })
                     }
-                    onPlanModeToggle={
-                      readOnlySideChat
-                        ? undefined
-                        : () => void onPlanModeToggle({ sessionID: pane.sessionID })
-                    }
+                    onPlanModeToggle={() => void onPlanModeToggle({ sessionID: pane.sessionID })}
                     onSubmitBag={
                       mainSessionBagSessionID === null
                         ? undefined

@@ -102,15 +102,9 @@
 }
 
 @media (max-width: 900px) {
-  .assistant-response-actions,
-  .inline-side-chat-header {
+  .assistant-response-actions {
     flex-direction: column;
     align-items: stretch;
-  }
-
-  .inline-side-chat-thread {
-    margin-left: 0;
-    padding: 12px;
   }
 }
 

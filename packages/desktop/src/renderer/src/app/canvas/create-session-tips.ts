@@ -17,7 +17,6 @@ export const CREATE_SESSION_USAGE_TIPS: readonly CreateSessionUsageTip[] = [
   { id: "use-plugins", messageKey: "createSession.tip.usePlugins" },
   { id: "control-permissions", messageKey: "createSession.tip.controlPermissions" },
   { id: "delegate-agents", messageKey: "createSession.tip.delegateAgents" },
-  { id: "use-side-chat", messageKey: "createSession.tip.useSideChat" },
 ]
 
 function normalizeRandomValue(value: number) {

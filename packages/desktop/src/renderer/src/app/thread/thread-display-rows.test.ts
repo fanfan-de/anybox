@@ -8,7 +8,6 @@ import {
   getAssistantTrailingUserDiffMessage,
   isAssistantFinalMessageInUserMessage,
   isAssistantLatestRenderableMessage,
-  resolveAssistantSideChatAnchorMessageID,
   shouldFoldAssistantMessageIntoFinalRunTrace,
   type DecorateThreadDisplayRowsInput,
   type ThreadDisplayRowsCache,
@@ -188,12 +187,8 @@ function decorateRowsIncremental(
   return decorateThreadDisplayRowsIncremental({
     assistantTraceVisibility: DEFAULT_ASSISTANT_TRACE_VISIBILITY,
     canForkFromMessage: true,
-    canOpenSideChat: true,
     isSessionRunning: false,
     messageTree: null,
-    readOnlySideChat: false,
-    sideChatCountsByAnchorMessageID: {},
-    sideChatSession: null,
     ...overrides,
     hasPendingPermissionRequests: overrides.hasPendingPermissionRequests ?? false,
     baseRows,
@@ -210,12 +205,8 @@ function decorateRows(
   return decorateThreadDisplayRows({
     assistantTraceVisibility: DEFAULT_ASSISTANT_TRACE_VISIBILITY,
     canForkFromMessage: true,
-    canOpenSideChat: true,
     isSessionRunning: false,
     messageTree: null,
-    readOnlySideChat: false,
-    sideChatCountsByAnchorMessageID: {},
-    sideChatSession: null,
     ...overrides,
     hasPendingPermissionRequests: overrides.hasPendingPermissionRequests ?? false,
     baseRows,
@@ -570,9 +561,6 @@ describe("thread display rows", () => {
       expect(context.latestRenderableAssistantMessageID === message.id).toBe(
         isAssistantLatestRenderableMessage(messages, messageIndex, message),
       )
-      expect(context.sideChatAnchorMessageIDByAssistantID.get(message.id)).toBe(
-        resolveAssistantSideChatAnchorMessageID(messages, message),
-      )
       expect(context.streamInsertedUserMessagesByAssistantID.get(message.id) ?? []).toEqual(
         getAssistantStreamInsertionUserMessages(messages, message),
       )
@@ -788,57 +776,6 @@ describe("thread display rows", () => {
     expect(rowByID(nextDecorated.rows, "assistant:assistant-new-final:actions")).toBeDefined()
   })
 
-  it("rebuilds only the matching anchor decoration rows when side chat state changes", () => {
-    const userOne = userMessage("user-1", "Start")
-    const assistantOne = assistantMessage("assistant-1", [textItem("response-1", "Done.")])
-    const userTwo = userMessage("user-2", "Next")
-    const assistantTwo = assistantMessage("assistant-2", [textItem("response-2", "Ready.")])
-    const messages = [userOne, assistantOne, userTwo, assistantTwo]
-    const base = buildRowsIncremental(messages)
-    const firstDecorated = decorateRowsIncremental(messages, base.rows, base.cache)
-    const withSideChatCount = decorateRowsIncremental(messages, base.rows, firstDecorated.cache, {
-      sideChatCountsByAnchorMessageID: {
-        "assistant-1": 1,
-      },
-    })
-
-    expect(rowByID(withSideChatCount.rows, "assistant:assistant-1:actions")).not.toBe(
-      rowByID(firstDecorated.rows, "assistant:assistant-1:actions"),
-    )
-    expect(rowByID(withSideChatCount.rows, "assistant:assistant-2:actions")).toBe(
-      rowByID(firstDecorated.rows, "assistant:assistant-2:actions"),
-    )
-    expect(rowByID(withSideChatCount.rows, "assistant:assistant-1:actions")).toMatchObject({
-      existingSideChatCount: 1,
-      sideChatButtonLabel: "Open side chat (1)",
-    })
-
-    const sideChatSession = {
-      id: "side-chat-1",
-      origin: {
-        anchorMessageID: "assistant-1",
-      },
-    } as SessionSummary
-    const withActiveSideChat = decorateRowsIncremental(messages, base.rows, withSideChatCount.cache, {
-      sideChatCountsByAnchorMessageID: {
-        "assistant-1": 1,
-      },
-      sideChatSession,
-    })
-
-    expect(rowByID(withActiveSideChat.rows, "assistant:assistant-1:actions")).not.toBe(
-      rowByID(withSideChatCount.rows, "assistant:assistant-1:actions"),
-    )
-    expect(rowByID(withActiveSideChat.rows, "assistant:assistant-1:actions")).toMatchObject({
-      marksSideChatButtonActive: true,
-      sideChatButtonLabel: "Open side chat (1)",
-    })
-    expect(withActiveSideChat.rows.map((row) => row.rowID)).not.toContain("assistant:assistant-1:inline-side-chat")
-    expect(rowByID(withActiveSideChat.rows, "assistant:assistant-2:actions")).toBe(
-      rowByID(withSideChatCount.rows, "assistant:assistant-2:actions"),
-    )
-  })
-
   it("builds response actions from the last visible response segment", () => {
     const messages = [
       assistantMessage("assistant-1", [
@@ -921,29 +858,15 @@ describe("thread display rows", () => {
         textItem("response-2", "Ready."),
       ]),
     ]
-    const sideChatSession = {
-      id: "side-chat-1",
-      origin: {
-        anchorMessageID: "assistant-2",
-      },
-    } as SessionSummary
-    const decorationOverrides: Partial<DecorateThreadDisplayRowsInput> = {
-      sideChatCountsByAnchorMessageID: {
-        "assistant-2": 1,
-      },
-      sideChatSession,
-    }
-
     const baselineBaseRows = buildRows(messages)
     const incrementalBaseRows = buildRowsIncremental(messages)
     expect(incrementalBaseRows.rows).toEqual(baselineBaseRows)
 
-    const baselineDecoratedRows = decorateRows(messages, baselineBaseRows, decorationOverrides)
+    const baselineDecoratedRows = decorateRows(messages, baselineBaseRows)
     const incrementalDecoratedRows = decorateRowsIncremental(
       messages,
       incrementalBaseRows.rows,
       incrementalBaseRows.cache,
-      decorationOverrides,
     )
     expect(incrementalDecoratedRows.rows).toEqual(baselineDecoratedRows)
   })

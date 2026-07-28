@@ -45,8 +45,6 @@ export { createSessionExecutionStream } from "#server/usecases/session-stream.ts
 
 export const CreateSessionBody = AgentRouteSchemas.sessions.create.body
 
-export const CreateSideChatBody = AgentRouteSchemas.sessions.createSideChat.body
-
 export const RollbackSessionBody = AgentRouteSchemas.sessions.rollback.body
 
 export const UpdateSessionModelSelectionBody = Config.ModelSelection
@@ -299,35 +297,11 @@ function requireSession(sessionID: string) {
   return session
 }
 
-function requireMainSession(sessionID: string) {
-  const session = requireSession(sessionID)
-  if (Session.isSideChatSession(session)) {
-    throw new ApiError(409, "TERMINAL_UNAVAILABLE", "Side chat sessions do not support terminals")
-  }
-
-  return session
-}
-
 function mapSessionSummary(session: Session.SessionInfo) {
   const normalized = Session.normalizeSessionInfo(session)
   return {
     ...normalized,
-    origin: Session.getSessionOrigin(normalized.id),
     subagent: Subtask.getSubtaskSessionOrigin(normalized.id),
-  }
-}
-
-function mapSideChatLink(link: Session.SideChatLink) {
-  const activeSession = safeReadSession(link.sessionID)
-  const archivedSession = safeReadArchivedSession(link.sessionID)
-  return {
-    ...link,
-    session: activeSession
-      ? mapSessionSummary(activeSession)
-      : archivedSession
-        ? mapSessionSummary(Session.normalizeSessionInfo(archivedSession.snapshot.session))
-        : undefined,
-    archived: !activeSession && Boolean(archivedSession),
   }
 }
 
@@ -347,9 +321,7 @@ function mapArchivedSessionSummary(record: Session.ArchivedSessionRecord | Sessi
     archivedAt: record.archivedAt,
     messageCount: record.messageCount,
     eventCount: record.eventCount,
-    kind: normalized?.kind,
     policy: normalized?.policy,
-    origin: Session.getSessionOrigin(record.sessionID),
   }
 }
 
@@ -381,27 +353,17 @@ export function archiveSession(sessionID: string, options?: { ptyRegistry?: PtyR
     throw new ApiError(409, "SESSION_ALREADY_ARCHIVED", `Session '${sessionID}' is already archived`)
   }
 
-  const sessionsToArchive = Session.listArchivableSessions(sessionID)
-  const runningSession = sessionsToArchive.find((candidate) => RunningState.isRunning(candidate.id))
-  if (runningSession) {
-    throw new ApiError(409, "SESSION_RUNNING", `Session '${runningSession.id}' is currently running and cannot be archived`)
-  }
-
-  const archivedRecords = Session.archiveSessionCascade(sessionID)
-  for (const record of archivedRecords) {
-    options?.ptyRegistry?.deleteBySession(record.sessionID)
-  }
-  const archived = archivedRecords[0]
+  const archived = Session.archiveSession(sessionID)
   if (!archived) {
     throw new ApiError(404, "SESSION_NOT_FOUND", `Session '${sessionID}' not found`)
   }
+  options?.ptyRegistry?.deleteBySession(archived.sessionID)
 
   return {
     sessionID: archived.sessionID,
     projectID: archived.projectID,
     directory: archived.directory,
     archivedAt: archived.archivedAt,
-    archivedSessionIDs: archivedRecords.map((record) => record.sessionID),
   }
 }
 
@@ -440,70 +402,6 @@ export function deleteArchivedSession(sessionID: string) {
 
   return {
     sessionID: archived.sessionID,
-  }
-}
-
-export async function createSideChat(
-  parentSessionID: string,
-  input: z.infer<typeof CreateSideChatBody>,
-) {
-  const parentSession = safeReadSession(parentSessionID)
-  if (!parentSession) {
-    throw new ApiError(404, "SESSION_NOT_FOUND", `Session '${parentSessionID}' not found`)
-  }
-
-  if (Session.isSideChatSession(parentSession)) {
-    throw new ApiError(409, "INVALID_PARENT_SESSION", "Side chats can only be created from main sessions")
-  }
-
-  try {
-    const sideChat = await Session.createSideChat({
-      parentSessionID,
-      anchorMessageID: input.anchorMessageID,
-    })
-
-    return mapSessionSummary(sideChat)
-  } catch (error) {
-    throw new ApiError(
-      400,
-      "SIDE_CHAT_CREATE_FAILED",
-      error instanceof Error ? error.message : String(error),
-    )
-  }
-}
-
-export function listSideChats(parentSessionID: string, anchorMessageID?: string) {
-  const parentSession = safeReadSession(parentSessionID) ?? safeReadArchivedSession(parentSessionID)?.snapshot.session
-  if (!parentSession) {
-    throw new ApiError(404, "SESSION_NOT_FOUND", `Session '${parentSessionID}' not found`)
-  }
-
-  if (Session.isSideChatSession(parentSession)) {
-    throw new ApiError(409, "INVALID_PARENT_SESSION", "Side chats can only be listed from main sessions")
-  }
-
-  return Session.listSideChats(parentSessionID, anchorMessageID).map(mapSideChatLink)
-}
-
-export function getSideChatLink(sessionID: string) {
-  const link = Session.getSideChatLink(sessionID)
-  if (!link) {
-    throw new ApiError(404, "SIDE_CHAT_NOT_FOUND", `Side chat '${sessionID}' not found`)
-  }
-
-  return mapSideChatLink(link)
-}
-
-export function getSideChatContext(sessionID: string) {
-  const context = Session.getSideChatContext(sessionID)
-  if (!context) {
-    throw new ApiError(404, "SIDE_CHAT_NOT_FOUND", `Side chat '${sessionID}' not found`)
-  }
-
-  return {
-    session: mapSessionSummary(context.session),
-    link: mapSideChatLink(context.link),
-    messages: context.messages,
   }
 }
 
@@ -577,7 +475,7 @@ export async function rollbackSessionToCheckpoint(
 }
 
 export function getSessionPty(sessionID: string, options: { ptyRegistry: PtyRegistry }) {
-  const session = requireMainSession(sessionID)
+  const session = requireSession(sessionID)
   if (isSshWorkspaceUri(session.directory)) {
     throw new ApiError(409, "PTY_UNAVAILABLE_FOR_SSH", "Interactive terminal sessions are not available for SSH workspaces")
   }
@@ -585,7 +483,7 @@ export function getSessionPty(sessionID: string, options: { ptyRegistry: PtyRegi
 }
 
 export async function createSessionPty(sessionID: string, options: { ptyRegistry: PtyRegistry }) {
-  const session = requireMainSession(sessionID)
+  const session = requireSession(sessionID)
   if (isSshWorkspaceUri(session.directory)) {
     throw new ApiError(409, "PTY_UNAVAILABLE_FOR_SSH", "Interactive terminal sessions are not available for SSH workspaces")
   }
@@ -744,9 +642,6 @@ export async function updateSessionModelSelection(
 
 export async function compactSession(sessionID: string) {
   const session = requireSession(sessionID)
-  if (Session.isSideChatSession(session)) {
-    throw new ApiError(409, "INVALID_COMPACTION_SESSION", "Side chat sessions do not support manual compaction")
-  }
   if (RunningState.isRunning(sessionID)) {
     throw new ApiError(409, "SESSION_RUNNING", `Session '${sessionID}' is currently running and cannot be compacted`)
   }

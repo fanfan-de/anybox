@@ -22,8 +22,7 @@
 .right-sidebar-view-host.is-changes,
 .right-sidebar-view-host.is-terminal,
 .right-sidebar-view-host.is-message-tree,
-.right-sidebar-view-host.is-message-inspector,
-.right-sidebar-view-host.is-side-chat {
+.right-sidebar-view-host.is-message-inspector {
   overflow: hidden;
   scrollbar-gutter: auto;
   padding-right: 0;

@@ -55,30 +55,6 @@ describe("workspace store", () => {
     expect(store.getState().composer.isSendingByTabKey["session:beta"]).toBe(true)
   })
 
-  it("tracks session tab and side chat state in the sessions slice", () => {
-    const store = createTestStore()
-
-    store.getState().sessionsActions.setCreateSessionTabs([
-      {
-        id: "create-1",
-        title: "",
-        workspaceID: "workspace-1",
-      },
-    ])
-    store.getState().sessionsActions.setActiveSideChatSessionIDByParentSessionID({
-      "session-1": "side-chat-1",
-    })
-    store.getState().sessionsActions.setSessionCanvasUnreadBySession({
-      "session-2": true,
-    })
-    store.getState().sessionsActions.setSelectedFolderID("workspace-1")
-
-    expect(store.getState().sessions.createSessionTabs[0]?.id).toBe("create-1")
-    expect(store.getState().sessions.activeSideChatSessionIDByParentSessionID["session-1"]).toBe("side-chat-1")
-    expect(store.getState().sessions.sessionCanvasUnreadBySession["session-2"]).toBe(true)
-    expect(store.getState().sessions.selectedFolderID).toBe("workspace-1")
-  })
-
   it("opens, focuses, updates, and closes dynamic right sidebar tabs", () => {
     const store = createTestStore()
 

@@ -60,7 +60,7 @@ You should see the agent response, tool activity, and final conclusion. After co
 
 - Default mode classifies each tool, command, path, and risk before allowing, asking, or denying it; it does not prompt for every write.
 - Critical-risk actions, side effects outside the active project, and some operations on sensitive paths are blocked even in Full Access mode.
-- Side Chats are read-only. Planning mode blocks side-effecting tools until a submitted plan is approved.
+- Sessions and agents can use the generic read-only policy to exclude side-effecting tools. Planning mode also blocks them until a submitted plan is approved.
 - Projects, sessions, tasks, approval records, and most runtime state are stored in the local agent data directory.
 - Model requests send the prompt, conversation context, and task-relevant file or tool content to the selected provider.
 - MCP, connectors, Web Fetch, plugin or Skill marketplaces, and the mobile cloud relay can also make external network requests.

@@ -26,11 +26,10 @@ ContextWindow.preparePromptContext({
   reasoningEffort,
   tools,
   recordCompactionMessage,
-  disableCompaction: Session.isSideChatSession(activeSession),
 })
 ```
 
-Automatic compaction is enabled for normal sessions. Side-chat sessions pass `disableCompaction: true` so their anchor context is not rewritten.
+Automatic compaction is enabled for sessions by default.
 
 It is also controlled by configuration:
 
@@ -44,7 +43,7 @@ The desktop app also supports:
 - `/compact`
 - `~compact`
 
-The Composer intercepts these commands before sending. They are available only in an existing main session and are not stored as ordinary user messages. The renderer calls Electron IPC through `window.desktop.agentSession.compact`, which reaches:
+The Composer intercepts these commands before sending. They are available only in an existing session and are not stored as ordinary user messages. The renderer calls Electron IPC through `window.desktop.agentSession.compact`, which reaches:
 
 ```text
 POST /api/sessions/:id/compact
@@ -54,7 +53,6 @@ The backend reuses `ContextWindow.compactPromptContext` and records the resultin
 
 Manual compaction follows the same safeguards:
 
-- It is unavailable in side chat.
 - It cannot run while the session is active.
 - The six most recent turns remain uncompressed.
 

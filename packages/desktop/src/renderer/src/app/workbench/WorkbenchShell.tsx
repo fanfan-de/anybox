@@ -23,7 +23,7 @@ import {
 } from "dockview-react"
 import { CloseIcon, PlusIcon } from "../icons"
 import type { CodeHighlightTheme } from "../code-theme"
-import { joinClassNames, SidebarToggleButton, SideChatBadge } from "../shared-ui"
+import { joinClassNames, SidebarToggleButton } from "../shared-ui"
 import type { MarkdownArtifactLinkTarget, MarkdownLocalFileLinkTarget } from "../thread-markdown"
 import type { ThreadNavigationRequest, ThreadScrollSnapshot } from "../thread/ThreadView"
 import type { AssistantTraceVisibility, ComposerDraftState, SessionDiffFile, SessionDiffSummary, ToolPermissionMode } from "../types"
@@ -630,7 +630,6 @@ export interface WorkbenchShellProps {
     targetSurfaceID: string
   }) => boolean | Promise<boolean>
   onOpenCreateSessionTab: (preferredWorkspaceID?: string | null, paneID?: string) => void
-  onOpenSideChat?: WorkbenchPaneSurfaceProps["onOpenSideChat"]
   onOpenSubagentSession?: WorkbenchPaneSurfaceProps["onOpenSubagentSession"]
   onBranchSelect: WorkbenchPaneSurfaceProps["onBranchSelect"]
   onClearComposerParentMessage: WorkbenchPaneSurfaceProps["onClearComposerParentMessage"]
@@ -1309,7 +1308,6 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
         onInspectMessageInSidebar={props.onInspectMessageInSidebar}
         onArtifactLinkOpen={props.onArtifactLinkOpen}
         onLocalFileLinkOpen={props.onLocalFileLinkOpen}
-        onOpenSideChat={props.onOpenSideChat}
         onOpenSubagentSession={props.onOpenSubagentSession}
         onBranchSelect={props.onBranchSelect}
         onClearComposerParentMessage={props.onClearComposerParentMessage}
@@ -1403,7 +1401,6 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
         >
           <span className="dockview-workbench-tab-copy">
             <span className="dockview-workbench-tab-title">{title}</span>
-            {paneTab?.kind === "session" && paneTab.sessionKind === "side-chat" ? <SideChatBadge compact /> : null}
           </span>
         </button>
         <button

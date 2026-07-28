@@ -36,7 +36,7 @@ import type {
   SidebarActionKey,
   WorkspaceGroup
 } from "../types"
-import { isGitWorkspaceProject, isSideChatSession } from "../workspace"
+import { isGitWorkspaceProject } from "../workspace"
 import type {
   AgentEnvironmentCandidate,
   AgentEnvironmentListResult,
@@ -326,7 +326,7 @@ interface WorkspaceSessionTreeNode {
 }
 
 function buildWorkspaceSessionTree(sessions: SessionSummary[]): WorkspaceSessionTreeNode[] {
-  const primarySessions = sessions.filter((session) => !isSideChatSession(session) && !session.subagent)
+  const primarySessions = sessions.filter((session) => !session.subagent)
   const sessionsByID = new Map(primarySessions.map((session) => [session.id, session]))
   const childrenByParentID = new Map<string, SessionSummary[]>()
   const attachedChildIDs = new Set<string>()
@@ -487,7 +487,7 @@ function WorkspaceContextMenu({
 
   const { workspace } = menu
   const isMissingWorkspace = workspace.exists === false
-  const hasArchivableSessions = workspace.sessions.some((session) => !isSideChatSession(session)) || workspace.sessions.length > 0
+  const hasArchivableSessions = workspace.sessions.length > 0
   const isArchiveDisabled = deletingSessionID !== null || !hasArchivableSessions
   const isProtectedWorkspace = protectedWorkspaceIDs.includes(workspace.id)
   const isPinnedFirst = isProtectedWorkspace || pinnedWorkspaceIDs[0] === workspace.id

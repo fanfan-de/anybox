@@ -21,10 +21,6 @@ export const CreateSessionBodySchema = z.object({
   directory: z.string().min(1),
 })
 
-export const CreateSideChatBodySchema = z.object({
-  anchorMessageID: z.string().min(1),
-})
-
 export const RollbackSessionBodySchema = z.object({
   targetMessageID: z.string().min(1),
   reason: z.string().min(1),
@@ -88,9 +84,6 @@ export const AgentRouteSchemas = {
     create: {
       body: CreateSessionBodySchema,
     },
-    createSideChat: {
-      body: CreateSideChatBodySchema,
-    },
     rollback: {
       body: RollbackSessionBodySchema,
     },
@@ -109,7 +102,6 @@ export const AgentRouteSchemas = {
 export type SessionAttachmentBody = z.infer<typeof SessionAttachmentBodySchema>
 export type SessionQuestionAnswerBody = z.infer<typeof SessionQuestionAnswerBodySchema>
 export type CreateSessionBody = z.infer<typeof CreateSessionBodySchema>
-export type CreateSideChatBody = z.infer<typeof CreateSideChatBodySchema>
 export type RollbackSessionBody = z.infer<typeof RollbackSessionBodySchema>
 export type UpdateSessionWorkflowBody = z.infer<typeof UpdateSessionWorkflowBodySchema>
 export type StreamSessionMessageBody = z.infer<typeof StreamSessionMessageBodySchema>

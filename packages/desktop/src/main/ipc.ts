@@ -191,7 +191,6 @@ import type {
   AgentSessionTaskListView,
   AgentSessionTurnRequestInput,
   AgentSessionWorkflowUpdateInput,
-  AgentSideChatLink,
   AgentSshConnectionTestResult,
   AgentSshDirectoryListing,
   AgentSshProfile,
@@ -435,20 +434,14 @@ function mapSessionInfo(session: AgentSessionInfo) {
     directory: session.directory,
     title: session.title,
     pinned: session.pinned,
-    kind: session.kind,
     policy: session.policy,
     automation: session.automation,
-    origin: session.origin,
     subagent: session.subagent,
     modelSelection: session.modelSelection,
     created: session.time.created,
     updated: session.time.updated,
     workflow: session.workflow,
   }
-}
-
-function sideChatLinkHasRealAssistantResponse(link: AgentSideChatLink) {
-  return Boolean(link.snapshot?.assistantText?.trim())
 }
 
 async function deleteAgentSessionRecord(sessionID: string) {
@@ -459,36 +452,6 @@ async function deleteAgentSessionRecord(sessionID: string) {
     ...result.data,
     requestId: result.requestId,
   }
-}
-
-async function cleanupSideChatLinksWithoutResponses(
-  links: AgentSideChatLink[],
-  deleteSession: (sessionID: string) => Promise<unknown> = deleteAgentSessionRecord,
-) {
-  const retainedLinks: AgentSideChatLink[] = []
-  const deletedSessionIDs = new Set<string>()
-
-  for (const link of links) {
-    const sessionID = link.sessionID.trim()
-    if (deletedSessionIDs.has(sessionID)) {
-      continue
-    }
-
-    if (!sessionID || link.archived || sideChatLinkHasRealAssistantResponse(link)) {
-      retainedLinks.push(link)
-      continue
-    }
-
-    try {
-      await deleteSession(sessionID)
-      deletedSessionIDs.add(sessionID)
-    } catch (error) {
-      safeWarn("[desktop] empty side chat cleanup failed:", error)
-      retainedLinks.push(link)
-    }
-  }
-
-  return retainedLinks
 }
 
 async function loadProjectWorkspace(project: AgentProjectInfo): Promise<AgentProjectWorkspace> {
@@ -5060,54 +5023,6 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
     async (_event, input: { sessionID: string; pinned: boolean }) => updateAgentSessionPinned(input),
   )
 
-  handleDesktopIpc(
-    "desktop:create-side-chat",
-    async (_event, input: { parentSessionID: string; anchorMessageID: string }) => {
-      const parentSessionID = input.parentSessionID.trim()
-      const anchorMessageID = input.anchorMessageID.trim()
-      const result = await requestAgentJSON<AgentSessionInfo>(
-        `/api/sessions/${encodeURIComponent(parentSessionID)}/side-chats`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({
-            anchorMessageID,
-          }),
-        },
-      )
-
-      return {
-        session: mapSessionInfo(result.data),
-        requestId: result.requestId,
-      }
-    },
-  )
-
-  handleDesktopIpc(
-    "desktop:list-side-chats",
-    async (_event, input: { parentSessionID: string; anchorMessageID?: string }) => {
-      const parentSessionID = input.parentSessionID.trim()
-      const anchorMessageID = input.anchorMessageID?.trim()
-      const search = anchorMessageID ? `?anchorMessageID=${encodeURIComponent(anchorMessageID)}` : ""
-      const result = await requestAgentJSON<AgentSideChatLink[]>(
-        `/api/sessions/${encodeURIComponent(parentSessionID)}/side-chats${search}`,
-      )
-
-      return cleanupSideChatLinksWithoutResponses(result.data)
-    },
-  )
-
-  handleDesktopIpc("desktop:get-side-chat-link", async (_event, input: { sessionID: string }) => {
-    const sessionID = input.sessionID.trim()
-    const result = await requestAgentJSON<AgentSideChatLink>(
-      `/api/sessions/${encodeURIComponent(sessionID)}/side-chat-link`,
-    )
-
-    return result.data
-  })
-
   handleDesktopIpc("desktop:delete-project-workspace", async (_event, input: { projectID: string }) => {
     const projectID = input.projectID.trim()
     const result = await requestAgentJSON<AgentProjectDeleteResult>(`/api/projects/${encodeURIComponent(projectID)}`, {
@@ -7612,7 +7527,6 @@ export const internal = {
   cancelAnyboxRechargeOrder,
   cancelAnyboxSubscriptionOrder,
   createAnyboxRechargeOrder,
-  cleanupSideChatLinksWithoutResponses,
   capturePreviewScreenshotFromWindow,
   copyImageDataUrlToClipboard,
   discardSessionBagSubmission,

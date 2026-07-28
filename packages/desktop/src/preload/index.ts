@@ -22,7 +22,6 @@ import type {
   AgentSessionTraceExport,
   AgentSessionSummary,
   AgentSessionTurnRequestInput,
-  AgentSideChatLink,
   AgentSshConnectionTestResult,
   AgentSshDirectoryListing,
   AgentSshProfile,
@@ -411,15 +410,6 @@ try {
       invokeDesktop("desktop:update-session-title", input) as Promise<DesktopIpcOutput<"desktop:update-session-title">>,
     updateSessionPinned: (input: DesktopIpcInput<"desktop:update-session-pinned">) =>
       invokeDesktop("desktop:update-session-pinned", input) as Promise<DesktopIpcOutput<"desktop:update-session-pinned">>,
-    createSideChat: (input: { parentSessionID: string; anchorMessageID: string }) =>
-      invokeDesktop("desktop:create-side-chat", input) as Promise<{
-        session: AgentSessionSummary
-        requestId?: string
-      }>,
-    listSideChats: (input: { parentSessionID: string; anchorMessageID?: string }) =>
-      invokeDesktop("desktop:list-side-chats", input) as Promise<AgentSideChatLink[]>,
-    getSideChatLink: (input: { sessionID: string }) =>
-      invokeDesktop("desktop:get-side-chat-link", input) as Promise<AgentSideChatLink>,
     deleteProjectWorkspace: (input: { projectID: string }) =>
       invokeDesktop("desktop:delete-project-workspace", input) as Promise<{
         projectID: string

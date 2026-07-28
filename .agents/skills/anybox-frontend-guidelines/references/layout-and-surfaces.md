@@ -49,6 +49,6 @@ Workbench pane 应该像 shell 的一部分，而不是浮动页面。
 桌面端是主要目标，但窄窗口必须可用。
 
 - 新增局部媒体查询前先检查 `responsive.css`。
-- 约 900px 以下，很多 action row 和 side chat header 会纵向排列。
+- 约 900px 以下，很多 action row 和 session banner 会纵向排列。
 - 约 760px 以下，settings 和 plugin layout 会折叠为单列。
 - 检查 sidebar、composer、menu 和 permission prompt 不发生横向溢出。

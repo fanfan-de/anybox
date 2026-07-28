@@ -3,8 +3,11 @@ import "./sqlite.cleanup.ts"
 import z from "zod"
 import * as Agent from "#agent/agent.ts"
 import * as Config from "#config/config.ts"
+import * as db from "#database/Sqlite.ts"
 import { Instance } from "#project/instance.ts"
 import { resolveTools } from "#session/core/resolve-tools.ts"
+import * as Session from "#session/core/session.ts"
+import { readOnlyToolsOnlyForSession } from "#tool/execution.ts"
 import * as ToolRegistry from "#tool/registry.ts"
 import * as Tool from "#tool/tool.ts"
 
@@ -189,22 +192,64 @@ describe("global built-in tool selection", () => {
       async fn() {
         const defaultToolNames = await resolveAgentToolNames("default")
         const planToolNames = await resolveAgentToolNames("plan")
-        const sideChatToolNames = await resolveAgentToolNames("sidechat")
         expect(defaultToolNames).not.toContain("exec")
         expect(planToolNames).not.toContain("exec")
-        expect(sideChatToolNames).not.toContain("exec")
       },
     })
   })
 
-  it("exposes exec to default, plan, and side chat but not compaction", async () => {
+  it("keeps generic session read-only policy independent from agent identity", async () => {
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
-        expect(await resolveAgentToolNames("default")).toContain("exec")
-        expect(await resolveAgentToolNames("plan")).toContain("exec")
-        expect(await resolveAgentToolNames("sidechat")).toContain("exec")
-        expect(await resolveAgentToolNames("compaction")).not.toContain("exec")
+        const session = await Session.createSession({
+          directory: process.cwd(),
+          projectID: Instance.project.id,
+          title: "Read-only policy test",
+        })
+
+        try {
+          const current = Session.DataBaseRead("sessions", session.id) as Session.SessionInfo
+          db.updateByIdWithSchema("sessions", session.id, {
+            ...current,
+            policy: {
+              toolPolicy: "read-only",
+            },
+          }, Session.SessionInfo)
+          expect(
+            (Session.DataBaseRead("sessions", session.id) as Session.SessionInfo).policy?.toolPolicy,
+          ).toBe("read-only")
+          const agent = await Agent.get("default")
+          if (!agent) throw new Error("Expected default agent to exist.")
+          expect(readOnlyToolsOnlyForSession(agent, session.id)).toBe(true)
+
+          const toolNames = Object.keys(await resolveTools({
+            agent,
+            sessionID: session.id,
+            messageID: "msg_read_only_policy",
+            abort: new AbortController().signal,
+          }))
+
+          expect(toolNames).toContain("read_file")
+          expect(toolNames).toContain("exec")
+          expect(toolNames).not.toContain("apply_patch")
+
+          const agentPolicyToolNames = Object.keys(await resolveTools({
+            agent: {
+              ...agent,
+              name: "read-only-test",
+              toolPolicy: "read-only",
+            },
+            sessionID: "ses_missing_read_only_agent_policy",
+            messageID: "msg_read_only_agent_policy",
+            abort: new AbortController().signal,
+          }))
+          expect(agentPolicyToolNames).toContain("read_file")
+          expect(agentPolicyToolNames).toContain("exec")
+          expect(agentPolicyToolNames).not.toContain("apply_patch")
+        } finally {
+          Session.removeSession(session.id)
+        }
       },
     })
   })

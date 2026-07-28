@@ -2257,27 +2257,10 @@
   outline-offset: var(--focus-outline-offset);
 }
 
-.inline-side-chat-thread .composer {
-  --composer-editor-min-height: 76px;
-  width: 100%;
-  max-width: none;
-  margin: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--seg-composer-border);
-  border-radius: 8px;
-  background: var(--seg-composer-surface);
-  box-shadow: none;
-}
-
 /* Sage / Teal & Slate theme overrides */
 
 .composer {
   border-color: var(--seg-composer-border);
-  background: var(--seg-composer-surface);
-  box-shadow: none;
-}
-
-.inline-side-chat-thread .composer {
   background: var(--seg-composer-surface);
   box-shadow: none;
 }

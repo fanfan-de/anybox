@@ -1,5 +1,5 @@
 import { memo, useMemo, type ComponentType, type ReactNode } from "react"
-import { CopyIcon, ForkIcon, SideChatIcon } from "../icons"
+import { CopyIcon, ForkIcon } from "../icons"
 import { joinClassNames } from "../shared-ui"
 import type { SessionMessageBranchOption } from "../session-message-tree"
 import type { MarkdownArtifactLinkTarget, MarkdownLocalFileLinkTarget } from "../thread-markdown"
@@ -231,7 +231,6 @@ interface AssistantActionsRowViewProps {
   onBranchSelect?: (messageID: string) => void | Promise<void>
   onCopyAssistantResponse: (messageID: string, text: string) => void | Promise<void>
   onForkFromMessage?: (messageID: string) => void | Promise<void>
-  onOpenSideChat?: (anchorMessageID: string) => void | Promise<void>
   row: AssistantActionsRow
 }
 
@@ -256,7 +255,6 @@ export interface ThreadRowRendererProps {
   onMessageDiffReview?: (files: string[]) => void | Promise<void>
   onMessageDiffSummaryHydrate?: (messageID: string, diffSummary: SessionDiffSummary) => void | Promise<void>
   onOpenImagePreview: (payload: ImagePreviewPayload) => void
-  onOpenSideChat?: (anchorMessageID: string) => void | Promise<void>
   onPermissionRequestResponse: PermissionRequestResponseHandler
   onProposedPlanConfirm?: ProposedPlanConfirmHandler
   pendingPermissionRequests: PermissionRequest[]
@@ -796,7 +794,6 @@ const AssistantActionsRowView = memo(function AssistantActionsRowView({
   onBranchSelect,
   onCopyAssistantResponse,
   onForkFromMessage,
-  onOpenSideChat,
   row,
 }: AssistantActionsRowViewProps) {
   const { BranchSwitcher } = components
@@ -808,7 +805,7 @@ const AssistantActionsRowView = memo(function AssistantActionsRowView({
       data-thread-message-id={row.messageID}
       data-thread-message-motion={motion}
     >
-      <div className="assistant-response-side-chat">
+      <div className="assistant-response-actions-row">
         <div className="assistant-response-actions">
           <BranchSwitcher options={row.branchOptions} onSelect={onBranchSelect} />
           {row.responseCopyText ? (
@@ -823,21 +820,6 @@ const AssistantActionsRowView = memo(function AssistantActionsRowView({
               onClick={() => void onCopyAssistantResponse(row.ownerMessageID, row.responseCopyText)}
             >
               <CopyIcon />
-            </button>
-          ) : null}
-          {row.canOpenSideChat ? (
-            <button
-              className={joinClassNames(
-                "assistant-response-action-button message-action-icon-button",
-                row.marksSideChatButtonActive && "is-active",
-              )}
-              type="button"
-              aria-label={row.sideChatButtonLabel}
-              aria-pressed={row.marksSideChatButtonActive}
-              title={row.sideChatButtonTitle}
-              onClick={() => void onOpenSideChat?.(row.sideChatAnchorMessageID)}
-            >
-              <SideChatIcon />
             </button>
           ) : null}
           {row.canForkFromMessage ? (
@@ -867,14 +849,8 @@ function areAssistantActionsRowsEqual(left: AssistantActionsRow, right: Assistan
       left.motionKey === right.motionKey &&
       left.branchOptions === right.branchOptions &&
       left.canForkFromMessage === right.canForkFromMessage &&
-      left.canOpenSideChat === right.canOpenSideChat &&
-      left.existingSideChatCount === right.existingSideChatCount &&
-      left.marksSideChatButtonActive === right.marksSideChatButtonActive &&
       left.ownerMessageID === right.ownerMessageID &&
       left.responseCopyText === right.responseCopyText &&
-      left.sideChatAnchorMessageID === right.sideChatAnchorMessageID &&
-      left.sideChatButtonLabel === right.sideChatButtonLabel &&
-      left.sideChatButtonTitle === right.sideChatButtonTitle &&
       left.threadMessageID === right.threadMessageID
     )
   )
@@ -888,8 +864,7 @@ function areAssistantActionsRowViewPropsEqual(left: AssistantActionsRowViewProps
     left.motion === right.motion &&
     left.onBranchSelect === right.onBranchSelect &&
     left.onCopyAssistantResponse === right.onCopyAssistantResponse &&
-    left.onForkFromMessage === right.onForkFromMessage &&
-    left.onOpenSideChat === right.onOpenSideChat
+    left.onForkFromMessage === right.onForkFromMessage
   )
 }
 
@@ -944,7 +919,6 @@ export function ThreadRowRenderer({
   onMessageDiffReview,
   onMessageDiffSummaryHydrate,
   onOpenImagePreview,
-  onOpenSideChat,
   onPermissionRequestResponse,
   onProposedPlanConfirm,
   pendingPermissionRequests,
@@ -1088,7 +1062,6 @@ export function ThreadRowRenderer({
         onBranchSelect={onBranchSelect}
         onCopyAssistantResponse={onCopyAssistantResponse}
         onForkFromMessage={onForkFromMessage}
-        onOpenSideChat={onOpenSideChat}
         row={row}
       />
     )

@@ -103,8 +103,7 @@
   --dockview-tab-hover-bg: var(--surface-profile-panel-muted);
 }
 
-.window-shell.is-windows .composer,
-.window-shell.is-windows .inline-side-chat-thread .composer {
+.window-shell.is-windows .composer {
   background: var(--surface-profile-composer);
 }
 

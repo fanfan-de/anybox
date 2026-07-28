@@ -35,29 +35,6 @@ export function SessionRoutes(options: { ptyRegistry: PtyRegistry }) {
 
   app.delete("/archived/:id", (c) => ok(c, SessionUseCase.deleteArchivedSession(c.req.param("id"))))
 
-  app.post("/:id/side-chats", async (c) => {
-    const payload = await parseJsonBody(
-      c,
-      SessionUseCase.CreateSideChatBody,
-      "Body must include a non-empty 'anchorMessageID'",
-    )
-    return ok(c, await SessionUseCase.createSideChat(c.req.param("id"), payload), 201)
-  })
-
-  app.get("/:id/side-chats", (c) =>
-    ok(
-      c,
-      SessionUseCase.listSideChats(
-        c.req.param("id"),
-        c.req.query("anchorMessageID")?.trim() || undefined,
-      ),
-    ),
-  )
-
-  app.get("/:id/side-chat-link", (c) => ok(c, SessionUseCase.getSideChatLink(c.req.param("id"))))
-
-  app.get("/:id/side-chat-context", (c) => ok(c, SessionUseCase.getSideChatContext(c.req.param("id"))))
-
   app.get("/:id/pty", (c) => ok(c, SessionUseCase.getSessionPty(c.req.param("id"), options)))
 
   app.post("/:id/pty", async (c) => ok(c, await SessionUseCase.createSessionPty(c.req.param("id"), options), 201))

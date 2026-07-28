@@ -194,7 +194,6 @@ export const PromptPresetBody = z.object({
 export const PromptPresetSelectionBody = z.object({
   systemPromptPresetID: z.string().min(1),
   planModePromptPresetID: z.string().min(1),
-  sideChatPromptPresetID: z.string().min(1),
   gitCommitPromptPresetID: z.string().min(1),
   cinemaTextGenerationPromptPresetID: z.string().min(1),
 })

@@ -15,7 +15,7 @@ description: Anybox 桌面端前端 UI 规范与实现流程。当 Codex 需要�
    - shell、pane、sidebar、surface：`references/layout-and-surfaces.md`
    - 按钮、菜单、控件、列表行：`references/controls-and-menus.md`
    - 槽位式卡片列表交互：`references/slot-card-list.md`
-   - ThreadView、trace、side chat、composer 嵌套：`references/thread-view.md`
+   - ThreadView、trace、branch、composer：`references/thread-view.md`
    - 设置、插件、MCP、global skills 页面：`references/settings-and-management.md`
    - UI 修改完成前检查：`references/implementation-checklist.md`
 4. 以本地项目文件和可执行校验为事实来源。常用入口：
