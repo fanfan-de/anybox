@@ -310,12 +310,12 @@ Layer：`product`　Group：`component-markdown`
 | 155 | Divider | `--semantic-markdown-divider` | `--semantic-markdown-divider-light` | `#292524` · α 0 | `--semantic-markdown-divider-dark` | `#ffffff` · α 0 | Color for thematic breaks rendered from Markdown horizontal rules. |
 | 156 | Quote Surface | `--semantic-markdown-quote-surface` | `--semantic-markdown-quote-surface-light` | blend · 72% `--brand-primary-soft` + 28% `--surface-panel-light` | `--semantic-markdown-quote-surface-dark` | `#6c6c6c` · α 0.381 | Background fill for Markdown blockquotes. |
 | 157 | Inline Code Surface | `--semantic-markdown-inline-code-surface` | `--semantic-markdown-inline-code-surface-light` | `#ffffff` | `--semantic-markdown-inline-code-surface-dark` | `#8c8a8a` · α 0.312 | Background fill for inline code tokens inside Markdown. |
-| 158 | Table Surface | `--semantic-markdown-table-surface` | `--semantic-markdown-table-surface-light` | → `--semantic-thread-panel-surface-light`<br>resolved `#ffffff` | `--semantic-markdown-table-surface-dark` | → `--semantic-thread-panel-surface-dark`<br>resolved `#292524` | Default background fill for Markdown table containers and body cells. |
-| 159 | Table Header Surface | `--semantic-markdown-table-head-surface` | `--semantic-markdown-table-head-surface-light` | `#949494` | `--semantic-markdown-table-head-surface-dark` | `#272727` | Background fill for Markdown table headers. |
-| 160 | Table Row Alt Surface | `--semantic-markdown-table-row-alt-surface` | `--semantic-markdown-table-row-alt-surface-light` | `#000000` · α 0.14 | `--semantic-markdown-table-row-alt-surface-dark` | `#363636` | Alternating row background for Markdown tables. |
-| 161 | Code Block Surface | `--semantic-markdown-code-surface` | `--semantic-markdown-code-surface-light` | `#000000` | `--semantic-markdown-code-surface-dark` | → `--surface-code-dark`<br>resolved `#27272a` · α 0 | Background fill for fenced Markdown code blocks. |
-| 162 | Code Block Text | `--semantic-markdown-code-text` | `--semantic-markdown-code-text-light` | → `--text-on-dark-light`<br>resolved `#ffffff` | `--semantic-markdown-code-text-dark` | → `--text-on-dark-dark`<br>resolved `#ffffff` | Text color for fenced Markdown code blocks. |
-| 163 | Code Block Muted Text | `--semantic-markdown-code-muted-text` | `--semantic-markdown-code-muted-text-light` | `#fafaf9` · α 0.62 | `--semantic-markdown-code-muted-text-dark` | `#fafaf9` · α 0.62 | Muted metadata text inside fenced Markdown code blocks. |
+| 158 | Table Surface | `--semantic-markdown-table-surface` | `--semantic-markdown-table-surface-light` | `#ffffff` · α 0 | `--semantic-markdown-table-surface-dark` | → `--semantic-thread-panel-surface-dark`<br>resolved `#292524` | Default background fill for Markdown table containers and body cells. |
+| 159 | Table Header Surface | `--semantic-markdown-table-head-surface` | `--semantic-markdown-table-head-surface-light` | `#d3d3d3` | `--semantic-markdown-table-head-surface-dark` | `#272727` | Background fill for Markdown table headers. |
+| 160 | Table Row Alt Surface | `--semantic-markdown-table-row-alt-surface` | `--semantic-markdown-table-row-alt-surface-light` | `#000000` · α 0 | `--semantic-markdown-table-row-alt-surface-dark` | `#363636` | Alternating row background for Markdown tables. |
+| 161 | Code Block Surface | `--semantic-markdown-code-surface` | `--semantic-markdown-code-surface-light` | `#c6c6c6` | `--semantic-markdown-code-surface-dark` | → `--surface-code-dark`<br>resolved `#27272a` · α 0 | Background fill for fenced Markdown code blocks. |
+| 162 | Code Block Text | `--semantic-markdown-code-text` | `--semantic-markdown-code-text-light` | `#000000` | `--semantic-markdown-code-text-dark` | → `--text-on-dark-dark`<br>resolved `#ffffff` | Text color for fenced Markdown code blocks. |
+| 163 | Code Block Muted Text | `--semantic-markdown-code-muted-text` | `--semantic-markdown-code-muted-text-light` | `#000000` | `--semantic-markdown-code-muted-text-dark` | `#fafaf9` · α 0.62 | Muted metadata text inside fenced Markdown code blocks. |
 | 164 | Code Block Border | `--semantic-markdown-code-border` | `--semantic-markdown-code-border-light` | blend · 48% `--surface-code-light` + 52% `--border-default-light` | `--semantic-markdown-code-border-dark` | blend · 48% `--surface-code-dark` + 52% `--border-default-dark` | Border color for fenced Markdown code blocks. |
 
 ### Sidebar Tree Rows（6）
@@ -486,8 +486,8 @@ Layer：`component`　Group：`component-plugin-marketplace`
 | 唯一 Runtime token | 248 |
 | 唯一 Light token | 248 |
 | 唯一 Dark token | 248 |
-| 默认定义为 alias | 214 |
-| 默认定义为 literal | 229 |
+| 默认定义为 alias | 212 |
+| 默认定义为 literal | 231 |
 | 默认定义为 derivation | 53 |
 | Runtime / Light / Dark 缺失 | 0 |
 

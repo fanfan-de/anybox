@@ -10788,6 +10788,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#e4e4e4"
         }
       },
+      "surface-app-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.188235,
+            0.188235,
+            0.188235
+          ],
+          "alpha": 1,
+          "hex": "#303030"
+        }
+      },
       "surface-shell-light": {
         "type": "literal",
         "value": {
@@ -10799,6 +10812,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           ],
           "alpha": 0,
           "hex": "#ffffff"
+        }
+      },
+      "surface-shell-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 0,
+          "hex": "#000000"
         }
       },
       "surface-panel-light": {
@@ -10814,6 +10840,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#f2f2f2"
         }
       },
+      "surface-panel-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 0,
+          "hex": "#000000"
+        }
+      },
       "surface-panel-muted-light": {
         "type": "literal",
         "value": {
@@ -10825,6 +10864,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           ],
           "alpha": 0,
           "hex": "#ffffff"
+        }
+      },
+      "surface-panel-muted-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.203922,
+            0.176471,
+            0.164706
+          ],
+          "alpha": 0,
+          "hex": "#342d2a"
         }
       },
       "surface-left-sidebar-light": {
@@ -10840,6 +10892,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#e8e8e8"
         }
       },
+      "surface-left-sidebar-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.141176,
+            0.121569,
+            0.109804
+          ],
+          "alpha": 0,
+          "hex": "#241f1c"
+        }
+      },
       "surface-right-sidebar-light": {
         "type": "literal",
         "value": {
@@ -10851,6 +10916,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           ],
           "alpha": 0,
           "hex": "#e8e8e8"
+        }
+      },
+      "surface-right-sidebar-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.141176,
+            0.121569,
+            0.109804
+          ],
+          "alpha": 0,
+          "hex": "#241f1c"
         }
       },
       "surface-sidebar-strong-light": {
@@ -10866,6 +10944,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#e8e8e8"
         }
       },
+      "surface-sidebar-strong-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.094118,
+            0.07451,
+            0.066667
+          ],
+          "alpha": 0,
+          "hex": "#181311"
+        }
+      },
       "surface-user-bubble-light": {
         "type": "literal",
         "value": {
@@ -10877,6 +10968,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           ],
           "alpha": 0,
           "hex": "#ffffff"
+        }
+      },
+      "surface-user-bubble-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 0.16,
+          "hex": "#000000"
         }
       },
       "surface-trace-light": {
@@ -10892,6 +10996,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#ffffff"
         }
       },
+      "surface-trace-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.141176,
+            0.113725,
+            0.105882
+          ],
+          "alpha": 0,
+          "hex": "#241d1b"
+        }
+      },
       "surface-elevated-light": {
         "type": "literal",
         "value": {
@@ -10903,6 +11020,45 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           ],
           "alpha": 0,
           "hex": "#e3e3e3"
+        }
+      },
+      "surface-elevated-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.160784,
+            0.145098,
+            0.141176
+          ],
+          "alpha": 0,
+          "hex": "#292524"
+        }
+      },
+      "surface-overlay-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.160784,
+            0.145098,
+            0.141176
+          ],
+          "alpha": 0,
+          "hex": "#292524"
+        }
+      },
+      "surface-overlay-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.584314,
+            0.529412,
+            0.498039
+          ],
+          "alpha": 0,
+          "hex": "#95877f"
         }
       },
       "surface-code-light": {
@@ -10918,6 +11074,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#1c1c1c"
         }
       },
+      "surface-code-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.152941,
+            0.152941,
+            0.164706
+          ],
+          "alpha": 0,
+          "hex": "#27272a"
+        }
+      },
       "surface-code-strong-light": {
         "type": "literal",
         "value": {
@@ -10931,6 +11100,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#000000"
         }
       },
+      "surface-code-strong-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.078431,
+            0.062745,
+            0.058824
+          ],
+          "alpha": 0,
+          "hex": "#14100f"
+        }
+      },
       "text-primary-light": {
         "type": "literal",
         "value": {
@@ -10941,6 +11123,32 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
             0
           ],
           "alpha": 1,
+          "hex": "#000000"
+        }
+      },
+      "text-primary-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 1,
+          "hex": "#ffffff"
+        }
+      },
+      "text-secondary-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 0.47,
           "hex": "#000000"
         }
       },
@@ -10970,7 +11178,33 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#000000"
         }
       },
+      "text-tertiary-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.670588,
+            0.670588,
+            0.670588
+          ],
+          "alpha": 1,
+          "hex": "#ababab"
+        }
+      },
       "text-on-dark-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 1,
+          "hex": "#ffffff"
+        }
+      },
+      "text-on-dark-dark": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -10996,6 +11230,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#bcbcbc"
         }
       },
+      "border-subtle-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.403922,
+            0.403922,
+            0.403922
+          ],
+          "alpha": 0.56,
+          "hex": "#676767"
+        }
+      },
       "border-default-light": {
         "type": "literal",
         "value": {
@@ -11007,6 +11254,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           ],
           "alpha": 0.11,
           "hex": "#000000"
+        }
+      },
+      "border-default-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.905882,
+            0.898039,
+            0.894118
+          ],
+          "alpha": 0.29,
+          "hex": "#e7e5e4"
         }
       },
       "brand-primary": {
@@ -11100,6 +11360,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#000000"
         }
       },
+      "semantic-accent-icon-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 1,
+          "hex": "#ffffff"
+        }
+      },
       "semantic-accent-icon-hover-light": {
         "type": "literal",
         "value": {
@@ -11111,6 +11384,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           ],
           "alpha": 1,
           "hex": "#000000"
+        }
+      },
+      "semantic-accent-icon-hover-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 1,
+          "hex": "#ffffff"
         }
       },
       "semantic-accent-icon-active-light": {
@@ -11126,7 +11412,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#000000"
         }
       },
-      "semantic-markdown-inline-code-surface-light": {
+      "semantic-accent-icon-active-dark": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -11137,201 +11423,6 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           ],
           "alpha": 1,
           "hex": "#ffffff"
-        }
-      },
-      "semantic-sidebar-tree-row-text-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.321569,
-            0.321569,
-            0.321569
-          ],
-          "alpha": 1,
-          "hex": "#525252"
-        }
-      },
-      "semantic-sidebar-tree-row-text-active-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0,
-            0,
-            0
-          ],
-          "alpha": 1,
-          "hex": "#000000"
-        }
-      },
-      "semantic-sidebar-tree-row-surface-hover-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.784314,
-            0.784314,
-            0.784314
-          ],
-          "alpha": 1,
-          "hex": "#c8c8c8"
-        }
-      },
-      "semantic-sidebar-tree-row-surface-active-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.784314,
-            0.784314,
-            0.784314
-          ],
-          "alpha": 1,
-          "hex": "#c8c8c8"
-        }
-      },
-      "semantic-sidebar-tree-row-leading-active-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0,
-            0,
-            0
-          ],
-          "alpha": 1,
-          "hex": "#000000"
-        }
-      },
-      "semantic-dropdown-menu-surface-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            1,
-            1,
-            1
-          ],
-          "alpha": 1,
-          "hex": "#ffffff"
-        }
-      },
-      "semantic-composer-button-text-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0,
-            0,
-            0
-          ],
-          "alpha": 1,
-          "hex": "#000000"
-        }
-      },
-      "semantic-composer-button-text-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            1,
-            1,
-            1
-          ],
-          "alpha": 1,
-          "hex": "#ffffff"
-        }
-      },
-      "semantic-composer-button-text-strong-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.129412,
-            0.129412,
-            0.129412
-          ],
-          "alpha": 1,
-          "hex": "#212121"
-        }
-      },
-      "semantic-composer-button-text-strong-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            1,
-            1,
-            1
-          ],
-          "alpha": 1,
-          "hex": "#ffffff"
-        }
-      },
-      "semantic-shell-chrome-surface-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0,
-            0,
-            0
-          ],
-          "alpha": 0,
-          "hex": "#000000"
-        }
-      },
-      "surface-overlay-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.160784,
-            0.145098,
-            0.141176
-          ],
-          "alpha": 0,
-          "hex": "#292524"
-        }
-      },
-      "text-secondary-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0,
-            0,
-            0
-          ],
-          "alpha": 0.47,
-          "hex": "#000000"
-        }
-      },
-      "text-primary-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            1,
-            1,
-            1
-          ],
-          "alpha": 1,
-          "hex": "#ffffff"
-        }
-      },
-      "text-tertiary-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.670588,
-            0.670588,
-            0.670588
-          ],
-          "alpha": 1,
-          "hex": "#ababab"
         }
       },
       "brand-primary-soft": {
@@ -11347,6 +11438,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#000000"
         }
       },
+      "brand-primary-soft-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 1,
+          "hex": "#ffffff"
+        }
+      },
       "brand-primary-soft-strong": {
         "type": "literal",
         "value": {
@@ -11358,6 +11462,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           ],
           "alpha": 1,
           "hex": "#000000"
+        }
+      },
+      "brand-primary-soft-strong-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 1,
+          "hex": "#ffffff"
         }
       },
       "semantic-button-primary-surface-light": {
@@ -11373,6 +11490,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#000000"
         }
       },
+      "semantic-button-primary-surface-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 1,
+          "hex": "#ffffff"
+        }
+      },
       "semantic-button-primary-surface-hover-light": {
         "type": "literal",
         "value": {
@@ -11384,6 +11514,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           ],
           "alpha": 1,
           "hex": "#000000"
+        }
+      },
+      "semantic-button-primary-surface-hover-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 1,
+          "hex": "#ffffff"
         }
       },
       "semantic-button-primary-border-light": {
@@ -11399,6 +11542,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#ff0000"
         }
       },
+      "semantic-button-primary-border-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.811765,
+            0.811765,
+            0.811765
+          ],
+          "alpha": 0,
+          "hex": "#cfcfcf"
+        }
+      },
       "semantic-button-primary-border-hover-light": {
         "type": "literal",
         "value": {
@@ -11410,6 +11566,45 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           ],
           "alpha": 0,
           "hex": "#000000"
+        }
+      },
+      "semantic-button-primary-border-hover-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 0,
+          "hex": "#ffffff"
+        }
+      },
+      "semantic-button-primary-text-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 1,
+          "hex": "#000000"
+        }
+      },
+      "semantic-button-primary-text-hover-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 1,
+          "hex": "#ffffff"
         }
       },
       "semantic-button-primary-disabled-surface-light": {
@@ -11425,6 +11620,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#a9a9a9"
         }
       },
+      "semantic-button-primary-disabled-surface-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.168627,
+            0.168627,
+            0.168627
+          ],
+          "alpha": 1,
+          "hex": "#2b2b2b"
+        }
+      },
       "semantic-button-primary-disabled-border-light": {
         "type": "literal",
         "value": {
@@ -11438,7 +11646,33 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#292524"
         }
       },
+      "semantic-button-primary-disabled-border-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.337255,
+            0.337255,
+            0.337255
+          ],
+          "alpha": 0.32,
+          "hex": "#565656"
+        }
+      },
       "semantic-button-primary-disabled-text-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 1,
+          "hex": "#ffffff"
+        }
+      },
+      "semantic-button-primary-disabled-text-dark": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -11464,6 +11698,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#ffffff"
         }
       },
+      "semantic-button-secondary-surface-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.117647,
+            0.117647,
+            0.117647
+          ],
+          "alpha": 0,
+          "hex": "#1e1e1e"
+        }
+      },
       "semantic-button-secondary-surface-hover-light": {
         "type": "literal",
         "value": {
@@ -11475,6 +11722,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           ],
           "alpha": 0.34,
           "hex": "#a7a7a7"
+        }
+      },
+      "semantic-button-secondary-surface-hover-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.164706,
+            0.164706,
+            0.164706
+          ],
+          "alpha": 1,
+          "hex": "#2a2a2a"
         }
       },
       "semantic-button-secondary-border-light": {
@@ -11490,6 +11750,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#292524"
         }
       },
+      "semantic-button-secondary-border-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.905882,
+            0.898039,
+            0.894118
+          ],
+          "alpha": 0,
+          "hex": "#e7e5e4"
+        }
+      },
       "semantic-button-secondary-border-hover-light": {
         "type": "literal",
         "value": {
@@ -11501,6 +11774,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           ],
           "alpha": 0,
           "hex": "#ffffff"
+        }
+      },
+      "semantic-button-secondary-border-hover-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.894118,
+            0.639216,
+            0.619608
+          ],
+          "alpha": 0,
+          "hex": "#e4a39e"
         }
       },
       "semantic-button-secondary-text-light": {
@@ -11529,6 +11815,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#d6d5d5"
         }
       },
+      "semantic-button-secondary-disabled-surface-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.529412,
+            0.529412,
+            0.529412
+          ],
+          "alpha": 1,
+          "hex": "#878787"
+        }
+      },
       "semantic-button-secondary-disabled-border-light": {
         "type": "literal",
         "value": {
@@ -11542,7 +11841,46 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#292524"
         }
       },
+      "semantic-button-secondary-disabled-border-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.905882,
+            0.898039,
+            0.894118
+          ],
+          "alpha": 0,
+          "hex": "#e7e5e4"
+        }
+      },
+      "semantic-button-secondary-disabled-text-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.560784,
+            0.560784,
+            0.560784
+          ],
+          "alpha": 0.68,
+          "hex": "#8f8f8f"
+        }
+      },
       "semantic-button-danger-surface-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.615686,
+            0,
+            0
+          ],
+          "alpha": 0.43,
+          "hex": "#9d0000"
+        }
+      },
+      "semantic-button-danger-surface-dark": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -11568,7 +11906,33 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#e16f6f"
         }
       },
+      "semantic-button-danger-surface-hover-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.882353,
+            0.435294,
+            0.435294
+          ],
+          "alpha": 1,
+          "hex": "#e16f6f"
+        }
+      },
       "semantic-button-danger-border-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.827451,
+            0.666667,
+            0.705882
+          ],
+          "alpha": 0,
+          "hex": "#d3aab4"
+        }
+      },
+      "semantic-button-danger-border-dark": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -11594,6 +11958,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#d3aab4"
         }
       },
+      "semantic-button-danger-border-hover-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.827451,
+            0.666667,
+            0.705882
+          ],
+          "alpha": 0,
+          "hex": "#d3aab4"
+        }
+      },
       "semantic-button-danger-text-light": {
         "type": "literal",
         "value": {
@@ -11605,6 +11982,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           ],
           "alpha": 1,
           "hex": "#000000"
+        }
+      },
+      "semantic-button-danger-text-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.890196,
+            0.890196,
+            0.890196
+          ],
+          "alpha": 1,
+          "hex": "#e3e3e3"
         }
       },
       "semantic-button-danger-text-hover-light": {
@@ -11620,6 +12010,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#1d1c1c"
         }
       },
+      "semantic-button-danger-text-hover-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 1,
+          "hex": "#ffffff"
+        }
+      },
       "semantic-button-danger-disabled-surface-light": {
         "type": "literal",
         "value": {
@@ -11633,6 +12036,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#a5a5a5"
         }
       },
+      "semantic-button-danger-disabled-surface-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.54902,
+            0.54902,
+            0.54902
+          ],
+          "alpha": 1,
+          "hex": "#8c8c8c"
+        }
+      },
       "semantic-button-danger-disabled-border-light": {
         "type": "literal",
         "value": {
@@ -11644,6 +12060,188 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           ],
           "alpha": 0,
           "hex": "#292524"
+        }
+      },
+      "semantic-button-danger-disabled-border-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.905882,
+            0.898039,
+            0.894118
+          ],
+          "alpha": 0,
+          "hex": "#e7e5e4"
+        }
+      },
+      "semantic-button-danger-disabled-text-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 0.4,
+          "hex": "#000000"
+        }
+      },
+      "semantic-icon-button-text-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 0.9,
+          "hex": "#000000"
+        }
+      },
+      "semantic-icon-button-text-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 1,
+          "hex": "#ffffff"
+        }
+      },
+      "semantic-icon-button-text-hover-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 1,
+          "hex": "#000000"
+        }
+      },
+      "semantic-icon-button-text-hover-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 1,
+          "hex": "#ffffff"
+        }
+      },
+      "semantic-icon-button-text-active-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 1,
+          "hex": "#000000"
+        }
+      },
+      "semantic-icon-button-text-active-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 1,
+          "hex": "#ffffff"
+        }
+      },
+      "semantic-icon-button-surface-hover-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.509804,
+            0.509804,
+            0.509804
+          ],
+          "alpha": 0.3,
+          "hex": "#828282"
+        }
+      },
+      "semantic-icon-button-surface-hover-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.203922,
+            0.176471,
+            0.164706
+          ],
+          "alpha": 0,
+          "hex": "#342d2a"
+        }
+      },
+      "semantic-icon-button-surface-active-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 0.21,
+          "hex": "#000000"
+        }
+      },
+      "semantic-icon-button-surface-active-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.882353,
+            0.439216,
+            0.407843
+          ],
+          "alpha": 0,
+          "hex": "#e17068"
+        }
+      },
+      "semantic-field-border-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 0.11,
+          "hex": "#000000"
+        }
+      },
+      "semantic-field-border-focus-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 0.11,
+          "hex": "#000000"
         }
       },
       "semantic-success-light": {
@@ -11698,6 +12296,45 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#7a7ce2"
         }
       },
+      "semantic-info-strong-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.509804,
+            0.513725,
+            0.764706
+          ],
+          "alpha": 1,
+          "hex": "#8283c3"
+        }
+      },
+      "semantic-info-text-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.486275,
+            0.490196,
+            0.772549
+          ],
+          "alpha": 1,
+          "hex": "#7c7dc5"
+        }
+      },
+      "semantic-info-border-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.039216,
+            0,
+            0.792157
+          ],
+          "alpha": 0,
+          "hex": "#0a00ca"
+        }
+      },
       "semantic-info-surface-light": {
         "type": "literal",
         "value": {
@@ -11724,59 +12361,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#0914dc"
         }
       },
-      "semantic-info-border-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.039216,
-            0,
-            0.792157
-          ],
-          "alpha": 0,
-          "hex": "#0a00ca"
-        }
-      },
-      "semantic-info-text-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.486275,
-            0.490196,
-            0.772549
-          ],
-          "alpha": 1,
-          "hex": "#7c7dc5"
-        }
-      },
-      "semantic-info-strong-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.509804,
-            0.513725,
-            0.764706
-          ],
-          "alpha": 1,
-          "hex": "#8283c3"
-        }
-      },
-      "semantic-composer-button-surface-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.772549,
-            0.772549,
-            0.772549
-          ],
-          "alpha": 0.15,
-          "hex": "#c5c5c5"
-        }
-      },
-      "semantic-composer-button-surface-strong-light": {
+      "semantic-shell-chrome-surface-light": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -11785,11 +12370,50 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
             0,
             0
           ],
-          "alpha": 0.12,
+          "alpha": 0,
           "hex": "#000000"
         }
       },
-      "semantic-composer-surface-light": {
+      "semantic-shell-chrome-surface-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.133333,
+            0.113725,
+            0.101961
+          ],
+          "alpha": 0,
+          "hex": "#221d1a"
+        }
+      },
+      "semantic-shell-chrome-tab-surface-active-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.94902,
+            0.94902,
+            0.94902
+          ],
+          "alpha": 0,
+          "hex": "#f2f2f2"
+        }
+      },
+      "semantic-shell-chrome-tab-indicator-active-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 0.62,
+          "hex": "#000000"
+        }
+      },
+      "semantic-shell-chrome-tab-indicator-active-dark": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -11798,8 +12422,34 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
             1,
             1
           ],
-          "alpha": 0,
+          "alpha": 0.62,
           "hex": "#ffffff"
+        }
+      },
+      "semantic-popup-panel-surface-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 1,
+          "hex": "#ffffff"
+        }
+      },
+      "semantic-popup-panel-surface-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.168627,
+            0.168627,
+            0.168627
+          ],
+          "alpha": 1,
+          "hex": "#2b2b2b"
         }
       },
       "semantic-switch-row-surface-focus-light": {
@@ -11815,7 +12465,46 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#958884"
         }
       },
-      "semantic-composer-border-light": {
+      "semantic-switch-row-surface-focus-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.203922,
+            0.176471,
+            0.164706
+          ],
+          "alpha": 1,
+          "hex": "#342d2a"
+        }
+      },
+      "semantic-switch-track-surface-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.392157,
+            0.392157,
+            0.392157
+          ],
+          "alpha": 1,
+          "hex": "#646464"
+        }
+      },
+      "semantic-switch-track-surface-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.647059,
+            0.647059,
+            0.647059
+          ],
+          "alpha": 1,
+          "hex": "#a5a5a5"
+        }
+      },
+      "semantic-switch-track-border-light": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -11824,21 +12513,151 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
             0,
             0
           ],
-          "alpha": 0.2,
+          "alpha": 0,
           "hex": "#000000"
         }
       },
-      "semantic-segmented-control-item-surface-active-light": {
+      "semantic-switch-track-border-dark": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
           "components": [
-            0.772549,
-            0.772549,
-            0.772549
+            0.905882,
+            0.898039,
+            0.894118
+          ],
+          "alpha": 0,
+          "hex": "#e7e5e4"
+        }
+      },
+      "semantic-switch-track-border-focus-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 0,
+          "hex": "#000000"
+        }
+      },
+      "semantic-switch-track-border-focus-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.886275,
+            0.552941,
+            0.529412
+          ],
+          "alpha": 0,
+          "hex": "#e28d87"
+        }
+      },
+      "semantic-switch-track-surface-active-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.717647,
+            0,
+            1
+          ],
+          "alpha": 0.49,
+          "hex": "#b700ff"
+        }
+      },
+      "semantic-switch-track-surface-active-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.376471,
+            0.490196,
+            0.823529
           ],
           "alpha": 1,
-          "hex": "#c5c5c5"
+          "hex": "#607dd2"
+        }
+      },
+      "semantic-switch-track-border-active-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.235294,
+            0,
+            1
+          ],
+          "alpha": 0,
+          "hex": "#3c00ff"
+        }
+      },
+      "semantic-switch-track-border-active-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.647059,
+            0.647059,
+            0.647059
+          ],
+          "alpha": 0,
+          "hex": "#a5a5a5"
+        }
+      },
+      "semantic-switch-track-surface-disabled-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.717647,
+            0.372549,
+            0.372549
+          ],
+          "alpha": 0.02,
+          "hex": "#b75f5f"
+        }
+      },
+      "semantic-switch-track-border-disabled-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.8,
+            0.717647,
+            0.67451
+          ],
+          "alpha": 0,
+          "hex": "#ccb7ac"
+        }
+      },
+      "semantic-switch-thumb-surface-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 1,
+          "hex": "#ffffff"
+        }
+      },
+      "semantic-switch-thumb-surface-disabled-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.564706,
+            0.564706,
+            0.564706
+          ],
+          "alpha": 1,
+          "hex": "#909090"
         }
       },
       "semantic-segmented-control-surface-light": {
@@ -11878,6 +12697,84 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           ],
           "alpha": 0.86,
           "hex": "#d5d5d5"
+        }
+      },
+      "semantic-segmented-control-item-surface-active-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.772549,
+            0.772549,
+            0.772549
+          ],
+          "alpha": 1,
+          "hex": "#c5c5c5"
+        }
+      },
+      "semantic-segmented-control-item-surface-active-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.866667,
+            0.866667,
+            0.866667
+          ],
+          "alpha": 0.38,
+          "hex": "#dddddd"
+        }
+      },
+      "semantic-dropdown-menu-surface-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 1,
+          "hex": "#ffffff"
+        }
+      },
+      "semantic-dropdown-menu-surface-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.145098,
+            0.145098,
+            0.145098
+          ],
+          "alpha": 1,
+          "hex": "#252525"
+        }
+      },
+      "semantic-dropdown-option-surface-hover-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.854902,
+            0.854902,
+            0.854902
+          ],
+          "alpha": 1,
+          "hex": "#dadada"
+        }
+      },
+      "semantic-dropdown-option-surface-selected-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.003922,
+            0.631373,
+            0.160784
+          ],
+          "alpha": 0.32,
+          "hex": "#01a129"
         }
       },
       "semantic-thread-response-text-light": {
@@ -11945,7 +12842,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#ffffff"
         }
       },
-      "semantic-markdown-text-light": {
+      "semantic-thread-panel-surface-hover-light": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -11954,11 +12851,11 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
             0,
             0
           ],
-          "alpha": 1,
+          "alpha": 0.08,
           "hex": "#000000"
         }
       },
-      "semantic-markdown-strong-text-light": {
+      "semantic-markdown-text-light": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -11984,7 +12881,59 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#000000"
         }
       },
+      "semantic-markdown-strong-text-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 1,
+          "hex": "#000000"
+        }
+      },
       "semantic-markdown-accent-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 1,
+          "hex": "#000000"
+        }
+      },
+      "semantic-markdown-selection-background-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.662745,
+            0.662745,
+            0.662745
+          ],
+          "alpha": 1,
+          "hex": "#a9a9a9"
+        }
+      },
+      "semantic-markdown-selection-background-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 0.118,
+          "hex": "#ffffff"
+        }
+      },
+      "semantic-markdown-selection-text-light": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -12010,17 +12959,69 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#b1b1b1"
         }
       },
-      "semantic-markdown-code-surface-light": {
+      "semantic-markdown-border-strong-dark": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
           "components": [
-            0,
-            0,
-            0
+            1,
+            1,
+            1
+          ],
+          "alpha": 0.55,
+          "hex": "#ffffff"
+        }
+      },
+      "semantic-markdown-quote-surface-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.423529,
+            0.423529,
+            0.423529
+          ],
+          "alpha": 0.381,
+          "hex": "#6c6c6c"
+        }
+      },
+      "semantic-markdown-inline-code-surface-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
           ],
           "alpha": 1,
-          "hex": "#000000"
+          "hex": "#ffffff"
+        }
+      },
+      "semantic-markdown-inline-code-surface-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.54902,
+            0.541176,
+            0.541176
+          ],
+          "alpha": 0.312,
+          "hex": "#8c8a8a"
+        }
+      },
+      "semantic-markdown-table-surface-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 0,
+          "hex": "#ffffff"
         }
       },
       "semantic-markdown-table-head-surface-light": {
@@ -12028,38 +13029,25 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
         "value": {
           "colorSpace": "srgb",
           "components": [
-            0.580392,
-            0.580392,
-            0.580392
+            0.827451,
+            0.827451,
+            0.827451
           ],
           "alpha": 1,
-          "hex": "#949494"
+          "hex": "#d3d3d3"
         }
       },
-      "semantic-markdown-selection-background-light": {
+      "semantic-markdown-table-head-surface-dark": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
           "components": [
-            0.662745,
-            0.662745,
-            0.662745
+            0.152941,
+            0.152941,
+            0.152941
           ],
           "alpha": 1,
-          "hex": "#a9a9a9"
-        }
-      },
-      "semantic-markdown-selection-text-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0,
-            0,
-            0
-          ],
-          "alpha": 1,
-          "hex": "#000000"
+          "hex": "#272727"
         }
       },
       "semantic-markdown-table-row-alt-surface-light": {
@@ -12071,37 +13059,37 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
             0,
             0
           ],
-          "alpha": 0.14,
-          "hex": "#000000"
-        }
-      },
-      "semantic-composer-icon-button-surface-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0,
-            0,
-            0
-          ],
           "alpha": 0,
           "hex": "#000000"
         }
       },
-      "semantic-composer-icon-button-surface-hover-light": {
+      "semantic-markdown-table-row-alt-surface-dark": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
           "components": [
-            0.772549,
-            0.772549,
-            0.772549
+            0.211765,
+            0.211765,
+            0.211765
           ],
-          "alpha": 0.15,
-          "hex": "#c5c5c5"
+          "alpha": 1,
+          "hex": "#363636"
         }
       },
-      "semantic-composer-icon-button-text-light": {
+      "semantic-markdown-code-surface-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.776471,
+            0.776471,
+            0.776471
+          ],
+          "alpha": 1,
+          "hex": "#c6c6c6"
+        }
+      },
+      "semantic-markdown-code-text-light": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -12114,7 +13102,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#000000"
         }
       },
-      "semantic-icon-button-text-hover-light": {
+      "semantic-markdown-code-muted-text-light": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -12127,20 +13115,20 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#000000"
         }
       },
-      "semantic-icon-button-text-light": {
+      "semantic-sidebar-tree-row-text-light": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
           "components": [
-            0,
-            0,
-            0
+            0.321569,
+            0.321569,
+            0.321569
           ],
-          "alpha": 0.9,
-          "hex": "#000000"
+          "alpha": 1,
+          "hex": "#525252"
         }
       },
-      "semantic-icon-button-text-active-light": {
+      "semantic-sidebar-tree-row-text-active-light": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -12153,111 +13141,20 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#000000"
         }
       },
-      "semantic-icon-button-surface-hover-light": {
+      "semantic-sidebar-tree-row-surface-hover-light": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
           "components": [
-            0.509804,
-            0.509804,
-            0.509804
-          ],
-          "alpha": 0.3,
-          "hex": "#828282"
-        }
-      },
-      "semantic-icon-button-surface-active-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0,
-            0,
-            0
-          ],
-          "alpha": 0.21,
-          "hex": "#000000"
-        }
-      },
-      "semantic-thread-panel-surface-hover-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0,
-            0,
-            0
-          ],
-          "alpha": 0.08,
-          "hex": "#000000"
-        }
-      },
-      "semantic-switch-track-border-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0,
-            0,
-            0
-          ],
-          "alpha": 0,
-          "hex": "#000000"
-        }
-      },
-      "semantic-switch-track-surface-active-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.717647,
-            0,
-            1
-          ],
-          "alpha": 0.49,
-          "hex": "#b700ff"
-        }
-      },
-      "semantic-switch-track-surface-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.392157,
-            0.392157,
-            0.392157
+            0.784314,
+            0.784314,
+            0.784314
           ],
           "alpha": 1,
-          "hex": "#646464"
+          "hex": "#c8c8c8"
         }
       },
-      "semantic-switch-track-border-focus-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0,
-            0,
-            0
-          ],
-          "alpha": 0,
-          "hex": "#000000"
-        }
-      },
-      "semantic-switch-track-border-active-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.235294,
-            0,
-            1
-          ],
-          "alpha": 0,
-          "hex": "#3c00ff"
-        }
-      },
-      "semantic-popup-panel-surface-light": {
+      "semantic-sidebar-tree-row-surface-hover-dark": {
         "type": "literal",
         "value": {
           "colorSpace": "srgb",
@@ -12266,8 +13163,60 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
             1,
             1
           ],
-          "alpha": 1,
+          "alpha": 0.12,
           "hex": "#ffffff"
+        }
+      },
+      "semantic-sidebar-tree-row-surface-active-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.784314,
+            0.784314,
+            0.784314
+          ],
+          "alpha": 1,
+          "hex": "#c8c8c8"
+        }
+      },
+      "semantic-sidebar-tree-row-surface-active-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 0.12,
+          "hex": "#ffffff"
+        }
+      },
+      "semantic-sidebar-tree-row-leading-active-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 1,
+          "hex": "#000000"
+        }
+      },
+      "semantic-list-detail-row-surface-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 0,
+          "hex": "#000000"
         }
       },
       "semantic-list-detail-row-surface-hover-light": {
@@ -12281,6 +13230,45 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           ],
           "alpha": 0.86,
           "hex": "#c4c4c4"
+        }
+      },
+      "semantic-list-detail-row-surface-hover-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.309804,
+            0.309804,
+            0.309804
+          ],
+          "alpha": 1,
+          "hex": "#4f4f4f"
+        }
+      },
+      "semantic-list-detail-row-surface-current-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.768627,
+            0.768627,
+            0.768627
+          ],
+          "alpha": 0.86,
+          "hex": "#c4c4c4"
+        }
+      },
+      "semantic-list-detail-row-surface-current-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.309804,
+            0.309804,
+            0.309804
+          ],
+          "alpha": 1,
+          "hex": "#4f4f4f"
         }
       },
       "semantic-detail-icon-surface-light": {
@@ -12361,1163 +13349,6 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#ffffff"
         }
       },
-      "surface-app-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.188235,
-            0.188235,
-            0.188235
-          ],
-          "alpha": 1,
-          "hex": "#303030"
-        }
-      },
-      "surface-shell-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0,
-            0,
-            0
-          ],
-          "alpha": 0,
-          "hex": "#000000"
-        }
-      },
-      "surface-panel-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0,
-            0,
-            0
-          ],
-          "alpha": 0,
-          "hex": "#000000"
-        }
-      },
-      "surface-panel-muted-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.203922,
-            0.176471,
-            0.164706
-          ],
-          "alpha": 0,
-          "hex": "#342d2a"
-        }
-      },
-      "surface-left-sidebar-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.141176,
-            0.121569,
-            0.109804
-          ],
-          "alpha": 0,
-          "hex": "#241f1c"
-        }
-      },
-      "surface-right-sidebar-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.141176,
-            0.121569,
-            0.109804
-          ],
-          "alpha": 0,
-          "hex": "#241f1c"
-        }
-      },
-      "surface-sidebar-strong-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.094118,
-            0.07451,
-            0.066667
-          ],
-          "alpha": 0,
-          "hex": "#181311"
-        }
-      },
-      "surface-user-bubble-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0,
-            0,
-            0
-          ],
-          "alpha": 0.16,
-          "hex": "#000000"
-        }
-      },
-      "surface-trace-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.141176,
-            0.113725,
-            0.105882
-          ],
-          "alpha": 0,
-          "hex": "#241d1b"
-        }
-      },
-      "surface-elevated-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.160784,
-            0.145098,
-            0.141176
-          ],
-          "alpha": 0,
-          "hex": "#292524"
-        }
-      },
-      "surface-overlay-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.584314,
-            0.529412,
-            0.498039
-          ],
-          "alpha": 0,
-          "hex": "#95877f"
-        }
-      },
-      "surface-code-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.152941,
-            0.152941,
-            0.164706
-          ],
-          "alpha": 0,
-          "hex": "#27272a"
-        }
-      },
-      "surface-code-strong-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.078431,
-            0.062745,
-            0.058824
-          ],
-          "alpha": 0,
-          "hex": "#14100f"
-        }
-      },
-      "text-on-dark-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            1,
-            1,
-            1
-          ],
-          "alpha": 1,
-          "hex": "#ffffff"
-        }
-      },
-      "border-default-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.905882,
-            0.898039,
-            0.894118
-          ],
-          "alpha": 0.29,
-          "hex": "#e7e5e4"
-        }
-      },
-      "border-subtle-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.403922,
-            0.403922,
-            0.403922
-          ],
-          "alpha": 0.56,
-          "hex": "#676767"
-        }
-      },
-      "semantic-accent-icon-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            1,
-            1,
-            1
-          ],
-          "alpha": 1,
-          "hex": "#ffffff"
-        }
-      },
-      "semantic-accent-icon-hover-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            1,
-            1,
-            1
-          ],
-          "alpha": 1,
-          "hex": "#ffffff"
-        }
-      },
-      "semantic-accent-icon-active-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            1,
-            1,
-            1
-          ],
-          "alpha": 1,
-          "hex": "#ffffff"
-        }
-      },
-      "brand-primary-soft-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            1,
-            1,
-            1
-          ],
-          "alpha": 1,
-          "hex": "#ffffff"
-        }
-      },
-      "brand-primary-soft-strong-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            1,
-            1,
-            1
-          ],
-          "alpha": 1,
-          "hex": "#ffffff"
-        }
-      },
-      "semantic-button-primary-surface-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            1,
-            1,
-            1
-          ],
-          "alpha": 1,
-          "hex": "#ffffff"
-        }
-      },
-      "semantic-button-primary-surface-hover-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            1,
-            1,
-            1
-          ],
-          "alpha": 1,
-          "hex": "#ffffff"
-        }
-      },
-      "semantic-button-primary-border-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.811765,
-            0.811765,
-            0.811765
-          ],
-          "alpha": 0,
-          "hex": "#cfcfcf"
-        }
-      },
-      "semantic-button-primary-border-hover-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            1,
-            1,
-            1
-          ],
-          "alpha": 0,
-          "hex": "#ffffff"
-        }
-      },
-      "semantic-button-primary-text-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0,
-            0,
-            0
-          ],
-          "alpha": 1,
-          "hex": "#000000"
-        }
-      },
-      "semantic-button-primary-text-hover-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            1,
-            1,
-            1
-          ],
-          "alpha": 1,
-          "hex": "#ffffff"
-        }
-      },
-      "semantic-button-primary-disabled-surface-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.168627,
-            0.168627,
-            0.168627
-          ],
-          "alpha": 1,
-          "hex": "#2b2b2b"
-        }
-      },
-      "semantic-button-primary-disabled-border-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.337255,
-            0.337255,
-            0.337255
-          ],
-          "alpha": 0.32,
-          "hex": "#565656"
-        }
-      },
-      "semantic-button-primary-disabled-text-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            1,
-            1,
-            1
-          ],
-          "alpha": 1,
-          "hex": "#ffffff"
-        }
-      },
-      "semantic-button-secondary-surface-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.117647,
-            0.117647,
-            0.117647
-          ],
-          "alpha": 0,
-          "hex": "#1e1e1e"
-        }
-      },
-      "semantic-button-secondary-surface-hover-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.164706,
-            0.164706,
-            0.164706
-          ],
-          "alpha": 1,
-          "hex": "#2a2a2a"
-        }
-      },
-      "semantic-button-secondary-border-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.905882,
-            0.898039,
-            0.894118
-          ],
-          "alpha": 0,
-          "hex": "#e7e5e4"
-        }
-      },
-      "semantic-button-secondary-border-hover-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.894118,
-            0.639216,
-            0.619608
-          ],
-          "alpha": 0,
-          "hex": "#e4a39e"
-        }
-      },
-      "semantic-button-secondary-disabled-surface-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.529412,
-            0.529412,
-            0.529412
-          ],
-          "alpha": 1,
-          "hex": "#878787"
-        }
-      },
-      "semantic-button-secondary-disabled-border-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.905882,
-            0.898039,
-            0.894118
-          ],
-          "alpha": 0,
-          "hex": "#e7e5e4"
-        }
-      },
-      "semantic-button-secondary-disabled-text-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.560784,
-            0.560784,
-            0.560784
-          ],
-          "alpha": 0.68,
-          "hex": "#8f8f8f"
-        }
-      },
-      "semantic-button-danger-surface-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.615686,
-            0,
-            0
-          ],
-          "alpha": 0.43,
-          "hex": "#9d0000"
-        }
-      },
-      "semantic-button-danger-surface-hover-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.882353,
-            0.435294,
-            0.435294
-          ],
-          "alpha": 1,
-          "hex": "#e16f6f"
-        }
-      },
-      "semantic-button-danger-border-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.827451,
-            0.666667,
-            0.705882
-          ],
-          "alpha": 0,
-          "hex": "#d3aab4"
-        }
-      },
-      "semantic-button-danger-border-hover-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.827451,
-            0.666667,
-            0.705882
-          ],
-          "alpha": 0,
-          "hex": "#d3aab4"
-        }
-      },
-      "semantic-button-danger-text-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.890196,
-            0.890196,
-            0.890196
-          ],
-          "alpha": 1,
-          "hex": "#e3e3e3"
-        }
-      },
-      "semantic-button-danger-text-hover-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            1,
-            1,
-            1
-          ],
-          "alpha": 1,
-          "hex": "#ffffff"
-        }
-      },
-      "semantic-button-danger-disabled-surface-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.54902,
-            0.54902,
-            0.54902
-          ],
-          "alpha": 1,
-          "hex": "#8c8c8c"
-        }
-      },
-      "semantic-button-danger-disabled-border-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.905882,
-            0.898039,
-            0.894118
-          ],
-          "alpha": 0,
-          "hex": "#e7e5e4"
-        }
-      },
-      "semantic-button-danger-disabled-text-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0,
-            0,
-            0
-          ],
-          "alpha": 0.4,
-          "hex": "#000000"
-        }
-      },
-      "semantic-icon-button-text-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            1,
-            1,
-            1
-          ],
-          "alpha": 1,
-          "hex": "#ffffff"
-        }
-      },
-      "semantic-icon-button-text-hover-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            1,
-            1,
-            1
-          ],
-          "alpha": 1,
-          "hex": "#ffffff"
-        }
-      },
-      "semantic-icon-button-text-active-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            1,
-            1,
-            1
-          ],
-          "alpha": 1,
-          "hex": "#ffffff"
-        }
-      },
-      "semantic-icon-button-surface-hover-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.203922,
-            0.176471,
-            0.164706
-          ],
-          "alpha": 0,
-          "hex": "#342d2a"
-        }
-      },
-      "semantic-icon-button-surface-active-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.882353,
-            0.439216,
-            0.407843
-          ],
-          "alpha": 0,
-          "hex": "#e17068"
-        }
-      },
-      "semantic-shell-chrome-surface-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.133333,
-            0.113725,
-            0.101961
-          ],
-          "alpha": 0,
-          "hex": "#221d1a"
-        }
-      },
-      "semantic-popup-panel-surface-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.168627,
-            0.168627,
-            0.168627
-          ],
-          "alpha": 1,
-          "hex": "#2b2b2b"
-        }
-      },
-      "semantic-switch-row-surface-focus-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.203922,
-            0.176471,
-            0.164706
-          ],
-          "alpha": 1,
-          "hex": "#342d2a"
-        }
-      },
-      "semantic-sidebar-tree-row-surface-active-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            1,
-            1,
-            1
-          ],
-          "alpha": 0.12,
-          "hex": "#ffffff"
-        }
-      },
-      "semantic-sidebar-tree-row-surface-hover-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            1,
-            1,
-            1
-          ],
-          "alpha": 0.12,
-          "hex": "#ffffff"
-        }
-      },
-      "semantic-switch-track-surface-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.647059,
-            0.647059,
-            0.647059
-          ],
-          "alpha": 1,
-          "hex": "#a5a5a5"
-        }
-      },
-      "semantic-switch-track-border-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.905882,
-            0.898039,
-            0.894118
-          ],
-          "alpha": 0,
-          "hex": "#e7e5e4"
-        }
-      },
-      "semantic-switch-track-border-focus-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.886275,
-            0.552941,
-            0.529412
-          ],
-          "alpha": 0,
-          "hex": "#e28d87"
-        }
-      },
-      "semantic-switch-track-surface-active-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.376471,
-            0.490196,
-            0.823529
-          ],
-          "alpha": 1,
-          "hex": "#607dd2"
-        }
-      },
-      "semantic-switch-track-border-active-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.647059,
-            0.647059,
-            0.647059
-          ],
-          "alpha": 0,
-          "hex": "#a5a5a5"
-        }
-      },
-      "semantic-switch-track-border-disabled-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.8,
-            0.717647,
-            0.67451
-          ],
-          "alpha": 0,
-          "hex": "#ccb7ac"
-        }
-      },
-      "semantic-switch-thumb-surface-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            1,
-            1,
-            1
-          ],
-          "alpha": 1,
-          "hex": "#ffffff"
-        }
-      },
-      "semantic-switch-thumb-surface-disabled-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.564706,
-            0.564706,
-            0.564706
-          ],
-          "alpha": 1,
-          "hex": "#909090"
-        }
-      },
-      "semantic-dropdown-menu-surface-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.145098,
-            0.145098,
-            0.145098
-          ],
-          "alpha": 1,
-          "hex": "#252525"
-        }
-      },
-      "semantic-composer-surface-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.156863,
-            0.156863,
-            0.156863
-          ],
-          "alpha": 1,
-          "hex": "#282828"
-        }
-      },
-      "semantic-composer-border-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.905882,
-            0.898039,
-            0.894118
-          ],
-          "alpha": 0,
-          "hex": "#e7e5e4"
-        }
-      },
-      "semantic-composer-button-surface-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            1,
-            1,
-            1
-          ],
-          "alpha": 0.28,
-          "hex": "#ffffff"
-        }
-      },
-      "semantic-composer-icon-button-surface-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0,
-            0,
-            0
-          ],
-          "alpha": 0,
-          "hex": "#000000"
-        }
-      },
-      "semantic-composer-icon-button-surface-hover-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            1,
-            1,
-            1
-          ],
-          "alpha": 0.06,
-          "hex": "#ffffff"
-        }
-      },
-      "semantic-markdown-border-strong-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            1,
-            1,
-            1
-          ],
-          "alpha": 0.55,
-          "hex": "#ffffff"
-        }
-      },
-      "semantic-markdown-selection-background-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            1,
-            1,
-            1
-          ],
-          "alpha": 0.118,
-          "hex": "#ffffff"
-        }
-      },
-      "semantic-markdown-quote-surface-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.423529,
-            0.423529,
-            0.423529
-          ],
-          "alpha": 0.381,
-          "hex": "#6c6c6c"
-        }
-      },
-      "semantic-markdown-inline-code-surface-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.54902,
-            0.541176,
-            0.541176
-          ],
-          "alpha": 0.312,
-          "hex": "#8c8a8a"
-        }
-      },
-      "semantic-markdown-table-head-surface-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.152941,
-            0.152941,
-            0.152941
-          ],
-          "alpha": 1,
-          "hex": "#272727"
-        }
-      },
-      "semantic-markdown-table-row-alt-surface-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.211765,
-            0.211765,
-            0.211765
-          ],
-          "alpha": 1,
-          "hex": "#363636"
-        }
-      },
-      "semantic-segmented-control-item-surface-active-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.866667,
-            0.866667,
-            0.866667
-          ],
-          "alpha": 0.38,
-          "hex": "#dddddd"
-        }
-      },
-      "semantic-field-border-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0,
-            0,
-            0
-          ],
-          "alpha": 0.11,
-          "hex": "#000000"
-        }
-      },
-      "semantic-field-border-focus-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0,
-            0,
-            0
-          ],
-          "alpha": 0.11,
-          "hex": "#000000"
-        }
-      },
-      "semantic-shell-chrome-tab-surface-active-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.94902,
-            0.94902,
-            0.94902
-          ],
-          "alpha": 0,
-          "hex": "#f2f2f2"
-        }
-      },
-      "semantic-shell-chrome-tab-indicator-active-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0,
-            0,
-            0
-          ],
-          "alpha": 0.62,
-          "hex": "#000000"
-        }
-      },
-      "semantic-shell-chrome-tab-indicator-active-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            1,
-            1,
-            1
-          ],
-          "alpha": 0.62,
-          "hex": "#ffffff"
-        }
-      },
-      "semantic-switch-track-surface-disabled-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.717647,
-            0.372549,
-            0.372549
-          ],
-          "alpha": 0.02,
-          "hex": "#b75f5f"
-        }
-      },
-      "semantic-dropdown-option-surface-hover-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.854902,
-            0.854902,
-            0.854902
-          ],
-          "alpha": 1,
-          "hex": "#dadada"
-        }
-      },
-      "semantic-dropdown-option-surface-selected-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.003922,
-            0.631373,
-            0.160784
-          ],
-          "alpha": 0.32,
-          "hex": "#01a129"
-        }
-      },
-      "semantic-list-detail-row-surface-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0,
-            0,
-            0
-          ],
-          "alpha": 0,
-          "hex": "#000000"
-        }
-      },
-      "semantic-list-detail-row-surface-hover-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.309804,
-            0.309804,
-            0.309804
-          ],
-          "alpha": 1,
-          "hex": "#4f4f4f"
-        }
-      },
-      "semantic-list-detail-row-surface-current-light": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.768627,
-            0.768627,
-            0.768627
-          ],
-          "alpha": 0.86,
-          "hex": "#c4c4c4"
-        }
-      },
-      "semantic-list-detail-row-surface-current-dark": {
-        "type": "literal",
-        "value": {
-          "colorSpace": "srgb",
-          "components": [
-            0.309804,
-            0.309804,
-            0.309804
-          ],
-          "alpha": 1,
-          "hex": "#4f4f4f"
-        }
-      },
       "semantic-list-detail-count-surface-dark": {
         "type": "literal",
         "value": {
@@ -13542,6 +13373,214 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           ],
           "alpha": 1,
           "hex": "#ffffff"
+        }
+      },
+      "semantic-composer-surface-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 0,
+          "hex": "#ffffff"
+        }
+      },
+      "semantic-composer-surface-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.156863,
+            0.156863,
+            0.156863
+          ],
+          "alpha": 1,
+          "hex": "#282828"
+        }
+      },
+      "semantic-composer-border-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 0.2,
+          "hex": "#000000"
+        }
+      },
+      "semantic-composer-border-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.905882,
+            0.898039,
+            0.894118
+          ],
+          "alpha": 0,
+          "hex": "#e7e5e4"
+        }
+      },
+      "semantic-composer-button-surface-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.772549,
+            0.772549,
+            0.772549
+          ],
+          "alpha": 0.15,
+          "hex": "#c5c5c5"
+        }
+      },
+      "semantic-composer-button-surface-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 0.28,
+          "hex": "#ffffff"
+        }
+      },
+      "semantic-composer-button-surface-strong-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 0.12,
+          "hex": "#000000"
+        }
+      },
+      "semantic-composer-button-text-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 1,
+          "hex": "#000000"
+        }
+      },
+      "semantic-composer-button-text-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 1,
+          "hex": "#ffffff"
+        }
+      },
+      "semantic-composer-button-text-strong-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.129412,
+            0.129412,
+            0.129412
+          ],
+          "alpha": 1,
+          "hex": "#212121"
+        }
+      },
+      "semantic-composer-button-text-strong-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 1,
+          "hex": "#ffffff"
+        }
+      },
+      "semantic-composer-icon-button-surface-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 0,
+          "hex": "#000000"
+        }
+      },
+      "semantic-composer-icon-button-surface-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 0,
+          "hex": "#000000"
+        }
+      },
+      "semantic-composer-icon-button-surface-hover-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.772549,
+            0.772549,
+            0.772549
+          ],
+          "alpha": 0.15,
+          "hex": "#c5c5c5"
+        }
+      },
+      "semantic-composer-icon-button-surface-hover-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 0.06,
+          "hex": "#ffffff"
+        }
+      },
+      "semantic-composer-icon-button-text-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 1,
+          "hex": "#000000"
         }
       },
       "semantic-plugin-market-icon-surface-light": {
