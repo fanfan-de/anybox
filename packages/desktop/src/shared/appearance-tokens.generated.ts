@@ -363,10 +363,6 @@ export const APPEARANCE_TOKEN_NAMES = [
   "semantic-branch-chat-surface-muted-dark",
   "semantic-branch-chat-card-surface-light",
   "semantic-branch-chat-card-surface-dark",
-  "semantic-branch-chat-row-surface-light",
-  "semantic-branch-chat-row-surface-dark",
-  "semantic-branch-chat-row-surface-hover-light",
-  "semantic-branch-chat-row-surface-hover-dark",
   "semantic-branch-chat-border-light",
   "semantic-branch-chat-border-dark",
   "semantic-branch-chat-divider-light",
@@ -415,10 +411,14 @@ export const APPEARANCE_TOKEN_NAMES = [
   "semantic-markdown-border-dark",
   "semantic-markdown-border-strong-light",
   "semantic-markdown-border-strong-dark",
+  "semantic-markdown-divider-light",
+  "semantic-markdown-divider-dark",
   "semantic-markdown-quote-surface-light",
   "semantic-markdown-quote-surface-dark",
   "semantic-markdown-inline-code-surface-light",
   "semantic-markdown-inline-code-surface-dark",
+  "semantic-markdown-table-surface-light",
+  "semantic-markdown-table-surface-dark",
   "semantic-markdown-table-head-surface-light",
   "semantic-markdown-table-head-surface-dark",
   "semantic-markdown-table-row-alt-surface-light",
@@ -1873,7 +1873,7 @@ export const APPEARANCE_TOKEN_GROUPS = [
     "id": "component-branch-chat",
     "layer": "product",
     "label": "Branch Chat",
-    "description": "Dedicated semantic colors for the right-sidebar branch thread, anchor preview, recent branches, and message quotes.",
+    "description": "Dedicated semantic colors for the right-sidebar branch thread, anchor preview, execution state, and message quotes.",
     "rows": [
       {
         "id": "semantic-branch-chat-surface",
@@ -1897,20 +1897,6 @@ export const APPEARANCE_TOKEN_GROUPS = [
         "darkToken": "semantic-branch-chat-card-surface-dark"
       },
       {
-        "id": "semantic-branch-chat-row-surface",
-        "label": "Recent Row Surface",
-        "description": "Default background for recent-branch rows.",
-        "lightToken": "semantic-branch-chat-row-surface-light",
-        "darkToken": "semantic-branch-chat-row-surface-dark"
-      },
-      {
-        "id": "semantic-branch-chat-row-surface-hover",
-        "label": "Recent Row Hover",
-        "description": "Hover and keyboard-focus background for recent-branch rows.",
-        "lightToken": "semantic-branch-chat-row-surface-hover-light",
-        "darkToken": "semantic-branch-chat-row-surface-hover-dark"
-      },
-      {
         "id": "semantic-branch-chat-border",
         "label": "Border",
         "description": "Default border for Branch Chat cards, controls, and compact actions.",
@@ -1920,7 +1906,7 @@ export const APPEARANCE_TOKEN_GROUPS = [
       {
         "id": "semantic-branch-chat-divider",
         "label": "Divider",
-        "description": "Divider color between Branch Chat regions and recent-branch rows.",
+        "description": "Divider color between Branch Chat regions and compact tool surfaces.",
         "lightToken": "semantic-branch-chat-divider-light",
         "darkToken": "semantic-branch-chat-divider-dark"
       },
@@ -2075,7 +2061,7 @@ export const APPEARANCE_TOKEN_GROUPS = [
       {
         "id": "semantic-markdown-border",
         "label": "Border",
-        "description": "Default Markdown table, image, and divider border.",
+        "description": "Default Markdown table and image border.",
         "lightToken": "semantic-markdown-border-light",
         "darkToken": "semantic-markdown-border-dark"
       },
@@ -2085,6 +2071,13 @@ export const APPEARANCE_TOKEN_GROUPS = [
         "description": "Stronger Markdown borders for inline code and table headers.",
         "lightToken": "semantic-markdown-border-strong-light",
         "darkToken": "semantic-markdown-border-strong-dark"
+      },
+      {
+        "id": "semantic-markdown-divider",
+        "label": "Divider",
+        "description": "Color for thematic breaks rendered from Markdown horizontal rules.",
+        "lightToken": "semantic-markdown-divider-light",
+        "darkToken": "semantic-markdown-divider-dark"
       },
       {
         "id": "semantic-markdown-quote-surface",
@@ -2099,6 +2092,13 @@ export const APPEARANCE_TOKEN_GROUPS = [
         "description": "Background fill for inline code tokens inside Markdown.",
         "lightToken": "semantic-markdown-inline-code-surface-light",
         "darkToken": "semantic-markdown-inline-code-surface-dark"
+      },
+      {
+        "id": "semantic-markdown-table-surface",
+        "label": "Table Surface",
+        "description": "Default background fill for Markdown table containers and body cells.",
+        "lightToken": "semantic-markdown-table-surface-light",
+        "darkToken": "semantic-markdown-table-surface-dark"
       },
       {
         "id": "semantic-markdown-table-head-surface",
@@ -3025,8 +3025,6 @@ export const APPEARANCE_TOKEN_RUNTIME_MAP = {
   "semantic-branch-chat-surface": "semantic-branch-chat-surface",
   "semantic-branch-chat-surface-muted": "semantic-branch-chat-surface-muted",
   "semantic-branch-chat-card-surface": "semantic-branch-chat-card-surface",
-  "semantic-branch-chat-row-surface": "semantic-branch-chat-row-surface",
-  "semantic-branch-chat-row-surface-hover": "semantic-branch-chat-row-surface-hover",
   "semantic-branch-chat-border": "semantic-branch-chat-border",
   "semantic-branch-chat-divider": "semantic-branch-chat-divider",
   "semantic-branch-chat-text": "semantic-branch-chat-text",
@@ -3051,8 +3049,10 @@ export const APPEARANCE_TOKEN_RUNTIME_MAP = {
   "semantic-markdown-selection-text": "semantic-markdown-selection-text",
   "semantic-markdown-border": "semantic-markdown-border",
   "semantic-markdown-border-strong": "semantic-markdown-border-strong",
+  "semantic-markdown-divider": "semantic-markdown-divider",
   "semantic-markdown-quote-surface": "semantic-markdown-quote-surface",
   "semantic-markdown-inline-code-surface": "semantic-markdown-inline-code-surface",
+  "semantic-markdown-table-surface": "semantic-markdown-table-surface",
   "semantic-markdown-table-head-surface": "semantic-markdown-table-head-surface",
   "semantic-markdown-table-row-alt-surface": "semantic-markdown-table-row-alt-surface",
   "semantic-markdown-code-surface": "semantic-markdown-code-surface",
@@ -5168,22 +5168,6 @@ export const APPEARANCE_BRAND_DEFINITIONS = {
         "type": "alias",
         "token": "semantic-thread-panel-surface-dark"
       },
-      "semantic-branch-chat-row-surface-light": {
-        "type": "alias",
-        "token": "surface-right-sidebar-light"
-      },
-      "semantic-branch-chat-row-surface-dark": {
-        "type": "alias",
-        "token": "surface-right-sidebar-dark"
-      },
-      "semantic-branch-chat-row-surface-hover-light": {
-        "type": "alias",
-        "token": "semantic-list-detail-row-surface-hover-light"
-      },
-      "semantic-branch-chat-row-surface-hover-dark": {
-        "type": "alias",
-        "token": "semantic-list-detail-row-surface-hover-dark"
-      },
       "semantic-branch-chat-border-light": {
         "type": "alias",
         "token": "border-default-light"
@@ -5550,6 +5534,40 @@ export const APPEARANCE_BRAND_DEFINITIONS = {
       "semantic-markdown-selection-text-dark": {
         "type": "alias",
         "token": "semantic-markdown-text-dark"
+      },
+      "semantic-markdown-divider-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.160784,
+            0.145098,
+            0.141176
+          ],
+          "alpha": 0,
+          "hex": "#292524"
+        }
+      },
+      "semantic-markdown-divider-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 0,
+          "hex": "#ffffff"
+        }
+      },
+      "semantic-markdown-table-surface-light": {
+        "type": "alias",
+        "token": "semantic-thread-panel-surface-light"
+      },
+      "semantic-markdown-table-surface-dark": {
+        "type": "alias",
+        "token": "semantic-thread-panel-surface-dark"
       },
       "semantic-markdown-code-surface-light": {
         "type": "literal",
@@ -17493,10 +17511,6 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
     "semantic-branch-chat-surface-muted-dark",
     "semantic-branch-chat-card-surface-light",
     "semantic-branch-chat-card-surface-dark",
-    "semantic-branch-chat-row-surface-light",
-    "semantic-branch-chat-row-surface-dark",
-    "semantic-branch-chat-row-surface-hover-light",
-    "semantic-branch-chat-row-surface-hover-dark",
     "semantic-branch-chat-border-light",
     "semantic-branch-chat-border-dark",
     "semantic-branch-chat-divider-light",
@@ -17545,10 +17559,14 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
     "semantic-markdown-border-dark",
     "semantic-markdown-border-strong-light",
     "semantic-markdown-border-strong-dark",
+    "semantic-markdown-divider-light",
+    "semantic-markdown-divider-dark",
     "semantic-markdown-quote-surface-light",
     "semantic-markdown-quote-surface-dark",
     "semantic-markdown-inline-code-surface-light",
     "semantic-markdown-inline-code-surface-dark",
+    "semantic-markdown-table-surface-light",
+    "semantic-markdown-table-surface-dark",
     "semantic-markdown-table-head-surface-light",
     "semantic-markdown-table-head-surface-dark",
     "semantic-markdown-table-row-alt-surface-light",
@@ -17901,8 +17919,6 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
     "semantic-branch-chat-surface",
     "semantic-branch-chat-surface-muted",
     "semantic-branch-chat-card-surface",
-    "semantic-branch-chat-row-surface",
-    "semantic-branch-chat-row-surface-hover",
     "semantic-branch-chat-border",
     "semantic-branch-chat-divider",
     "semantic-branch-chat-text",
@@ -17927,8 +17943,10 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
     "semantic-markdown-selection-text",
     "semantic-markdown-border",
     "semantic-markdown-border-strong",
+    "semantic-markdown-divider",
     "semantic-markdown-quote-surface",
     "semantic-markdown-inline-code-surface",
+    "semantic-markdown-table-surface",
     "semantic-markdown-table-head-surface",
     "semantic-markdown-table-row-alt-surface",
     "semantic-markdown-code-surface",
@@ -18035,8 +18053,8 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
   },
   "brandValueTypes": {
     "terra": {
-      "literal": 154,
-      "alias": 314
+      "literal": 156,
+      "alias": 312
     },
     "sage": {
       "literal": 141,

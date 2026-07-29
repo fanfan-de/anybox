@@ -42,8 +42,8 @@ PaneTabBar
 SessionCanvasTopMenu
 ThreadView
 ComposerTaskProgress
-Composer
-ComposerUtilityBar
+Composer  # 底栏包含附件、模型、reasoning、上下文压力和发送/停止
+ComposerUtilityBar?  # 仅在 Git 分支控件可用时出现
 ```
 
 主 pane 的 `Composer` 是 `ThreadView` 的 sibling，不是子组件。

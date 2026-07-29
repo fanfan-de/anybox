@@ -724,11 +724,15 @@ const zhCNTokenRowCopy = {
   },
   "semantic-markdown-border": {
     label: "边框",
-    description: "Markdown 表格、图片和分隔线的默认边框。",
+    description: "Markdown 表格和图片的默认边框。",
   },
   "semantic-markdown-border-strong": {
     label: "强调边框",
     description: "行内代码和表头使用的更强 Markdown 边框。",
+  },
+  "semantic-markdown-divider": {
+    label: "分隔线",
+    description: "Markdown 水平分隔语义的颜色；默认透明，仅保留章节留白。",
   },
   "semantic-markdown-quote-surface": {
     label: "引用背景",
@@ -737,6 +741,10 @@ const zhCNTokenRowCopy = {
   "semantic-markdown-inline-code-surface": {
     label: "行内代码背景",
     description: "Markdown 行内代码片段的背景。",
+  },
+  "semantic-markdown-table-surface": {
+    label: "表格背景",
+    description: "Markdown 表格容器和普通内容单元格的默认背景。",
   },
   "semantic-markdown-table-head-surface": {
     label: "表头背景",

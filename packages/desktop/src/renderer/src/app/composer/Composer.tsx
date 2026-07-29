@@ -46,8 +46,10 @@ import type {
   ComposerTagData,
   ComposerLongTextTagData,
   ReasoningEffort,
+  SessionContextUsage,
 } from "../types"
 import { getComposerAttachmentKind } from "./attachment-utils"
+import { ComposerContextPressure } from "./ComposerContextPressure"
 import { $createComposerTagNode, ComposerTagNode } from "./ComposerTagNode"
 import {
   createComposerDraftStateFromEditorState,
@@ -76,6 +78,8 @@ interface ComposerProps {
   attachmentError: string | null
   canSend: boolean
   canPasteImageAttachments?: boolean
+  contextUsage: SessionContextUsage | null
+  contextWindow: number | null
   draftState: ComposerDraftState
   hasBagSubmit?: boolean
   hasCompactCommand?: boolean
@@ -1124,6 +1128,8 @@ export function Composer({
   attachmentError,
   canSend,
   canPasteImageAttachments = false,
+  contextUsage,
+  contextWindow,
   draftState,
   hasBagSubmit = false,
   hasCompactCommand = false,
@@ -2362,6 +2368,15 @@ export function Composer({
               ) : null}
             </div>
           ) : null}
+
+          <ComposerContextPressure
+            contextWindow={contextWindow}
+            usage={contextUsage}
+            onBeforeOpen={() => {
+              setOpenMenu(null)
+              setIsAttachmentUnavailablePopoverOpen(false)
+            }}
+          />
         </div>
 
         <div className="composer-actions">

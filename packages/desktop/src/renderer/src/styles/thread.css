@@ -953,10 +953,12 @@ body.is-resizing-sidebar .trace-log-detail.is-collapsing {
   --md-selection-text: var(--semantic-markdown-selection-text, var(--md-text));
   --md-border: var(--semantic-markdown-border, var(--seg-border));
   --md-border-strong: var(--semantic-markdown-border-strong, var(--seg-border));
+  --md-divider: var(--semantic-markdown-divider);
   --md-quote-bg: var(--semantic-markdown-quote-surface, var(--semantic-thread-panel-surface-muted));
   --md-inline-code-bg: var(--semantic-markdown-inline-code-surface, var(--semantic-thread-panel-surface-muted));
-  --md-table-head-bg: var(--semantic-markdown-table-head-surface, var(--semantic-thread-panel-surface-muted));
-  --md-table-row-alt-bg: var(--semantic-markdown-table-row-alt-surface, var(--semantic-thread-panel-surface-muted));
+  --md-table-bg: var(--semantic-markdown-table-surface);
+  --md-table-head-bg: var(--semantic-markdown-table-head-surface);
+  --md-table-row-alt-bg: var(--semantic-markdown-table-row-alt-surface);
   --md-code-bg: var(--semantic-markdown-code-surface, var(--surface-code));
   --md-code-text: var(--semantic-markdown-code-text, var(--text-on-dark));
   --md-code-muted: var(--semantic-markdown-code-muted-text);
@@ -1283,7 +1285,7 @@ body.is-resizing-sidebar .trace-log-detail.is-collapsing {
   overflow-y: hidden;
   border: 1px solid var(--md-border);
   border-radius: var(--seg-radius-xs);
-  background: var(--semantic-thread-panel-surface);
+  background: var(--md-table-bg);
   scrollbar-width: thin;
   contain: layout paint;
 }
@@ -1314,7 +1316,7 @@ body.is-resizing-sidebar .trace-log-detail.is-collapsing {
 
 .thread-markdown td {
   color: var(--md-text);
-  background: var(--semantic-thread-panel-surface);
+  background: var(--md-table-bg);
 }
 
 .thread-markdown tbody tr:nth-child(even) td {
@@ -1337,7 +1339,7 @@ body.is-resizing-sidebar .trace-log-detail.is-collapsing {
   height: 1px;
   margin: 1em 0;
   border: 0;
-  background: var(--md-border);
+  background: var(--md-divider);
 }
 
 .thread-markdown .contains-task-list {

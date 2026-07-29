@@ -8,7 +8,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type WheelEvent as ReactWheelEvent,
 } from "react"
-import { ExpandIcon, ForkIcon, MinimizeIcon, PlusIcon, SessionRunningIcon, SessionTreeIcon } from "../icons"
+import { ExpandIcon, MinimizeIcon, PlusIcon, SessionRunningIcon, SessionTreeIcon } from "../icons"
 import { useI18n } from "../i18n/I18nProvider"
 import type { SessionMessageTree } from "../session-message-tree"
 import { joinClassNames } from "../shared-ui"
@@ -43,7 +43,6 @@ interface BranchThreadViewProps {
   initialSnapshot?: BranchThreadViewSnapshot | null
   isSessionRunning?: boolean
   messageTree: SessionMessageTree | null
-  onContinueFromMessage?: (messageID: string) => void
   onInspectMessage?: (messageID: string) => void
   onSnapshotChange?: (snapshot: BranchThreadViewSnapshot) => void
 }
@@ -84,7 +83,6 @@ export function BranchThreadView({
   initialSnapshot = null,
   isSessionRunning = false,
   messageTree,
-  onContinueFromMessage,
   onInspectMessage,
   onSnapshotChange,
 }: BranchThreadViewProps) {
@@ -333,20 +331,6 @@ export function BranchThreadView({
           <span className="branch-thread-continue-hint">{t("branchView.continueHint")}</span>
         </div>
         <div className="branch-thread-toolbar-actions">
-          {onContinueFromMessage ? (
-            <button
-              type="button"
-              className="top-menu-view-button branch-thread-tool-button"
-              aria-label={t("branchView.continueFromSelected")}
-              title={t("branchView.continueFromSelected")}
-              disabled={!inspectedMessageID}
-              onClick={() => {
-                if (inspectedMessageID) onContinueFromMessage(inspectedMessageID)
-              }}
-            >
-              <ForkIcon />
-            </button>
-          ) : null}
           <button
             type="button"
             className="top-menu-view-button branch-thread-tool-button"

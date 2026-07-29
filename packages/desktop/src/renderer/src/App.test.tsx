@@ -1664,7 +1664,7 @@ describe("App", () => {
     expect(screen.queryByRole("button", { name: "Clear draft" })).not.toBeInTheDocument()
   })
 
-  it("inspects a branch node and only continues the composer through the explicit command", async () => {
+  it("opens the paired conversation and continues the composer from an inspected branch node", async () => {
     const branchHistory = [
       {
         info: {
@@ -1744,11 +1744,8 @@ describe("App", () => {
     expect(within(inspector).getByText("Inspect this prompt")).toBeInTheDocument()
     expect(within(inspector).getAllByText("Inspect this complete answer")).not.toHaveLength(0)
     expect(assistantNode).toHaveAttribute("aria-selected", "true")
-    expect(screen.queryByText("Continuing from")).not.toBeInTheDocument()
-    expect(window.desktop!.updateSessionActiveMessage).not.toHaveBeenCalled()
-
-    fireEvent.click(screen.getByRole("button", { name: "Continue main thread from selected message" }))
     expect(screen.getByText("Continuing from")).toBeInTheDocument()
+    expect(window.desktop!.updateSessionActiveMessage).not.toHaveBeenCalled()
 
     setComposerDraftValue(
       screen.getByRole("textbox", { name: "Task draft" }),
@@ -13490,6 +13487,8 @@ describe("App", () => {
         name: "Context pressure 50% (64k / 128k input tokens)",
     })
     expect(contextButton).toHaveAttribute("aria-expanded", "false")
+    expect(contextButton.closest(".composer")).not.toBeNull()
+    expect(contextButton.closest(".composer-utility-bar")).toBeNull()
 
     fireEvent.click(contextButton)
 
@@ -14700,6 +14699,46 @@ describe("App", () => {
       /(?:border|border-color|box-shadow):[^;}]*(?:var\(--border-default\)|var\(--focus-outline-color\)|var\(--seg-panel\))/,
     )
     expect(windowsLauncherCardRules).not.toMatch(/(?:^|[;{])\s*border(?:-color)?\s*:/)
+  })
+
+  it("routes the Branch Chat recent picker through button and dropdown semantic tokens", () => {
+    const stylesRoot = resolve(process.cwd(), "src/renderer/src/styles")
+    const rightSidebarStyles = readFileSync(resolve(stylesRoot, "right-sidebar.css"), "utf8")
+
+    expect(rightSidebarStyles).toMatch(
+      /\.branch-chat-recent-trigger\s*\{[^}]*border:\s*1px solid var\(--semantic-button-secondary-border\);[^}]*background:\s*var\(--semantic-button-secondary-surface\);[^}]*color:\s*var\(--semantic-button-secondary-text\);/s,
+    )
+    expect(rightSidebarStyles).toMatch(
+      /\.branch-chat-recent-trigger:not\(:disabled\):hover,[\s\S]*?\.branch-chat-recent-trigger\.is-open\s*\{[^}]*border-color:\s*var\(--semantic-button-secondary-border-hover\);[^}]*background:\s*var\(--semantic-button-secondary-surface-hover\);[^}]*color:\s*var\(--semantic-button-secondary-text-hover\);/s,
+    )
+    expect(rightSidebarStyles).toMatch(
+      /\.branch-chat-recent-trigger:disabled\s*\{[^}]*border-color:\s*var\(--semantic-button-secondary-disabled-border\);[^}]*background:\s*var\(--semantic-button-secondary-disabled-surface\);[^}]*color:\s*var\(--semantic-button-secondary-disabled-text\);/s,
+    )
+    expect(rightSidebarStyles).toMatch(
+      /\.branch-chat-recent-popover\s*\{[^}]*background:\s*var\(--semantic-dropdown-menu-surface\);[^}]*color:\s*var\(--semantic-dropdown-option-text\);/s,
+    )
+    expect(rightSidebarStyles).toMatch(
+      /\.branch-chat-recent-option:hover,\s*\.branch-chat-recent-option\.is-active\s*\{[^}]*background:\s*var\(--semantic-dropdown-option-surface-hover\);[^}]*color:\s*var\(--semantic-dropdown-option-text-hover\);/s,
+    )
+    expect(rightSidebarStyles).toMatch(
+      /\.branch-chat-recent-option\.is-selected\s*\{[^}]*background:\s*var\(--semantic-dropdown-option-surface-selected\);[^}]*color:\s*var\(--semantic-dropdown-option-text-selected\);/s,
+    )
+    expect(rightSidebarStyles).not.toMatch(/--semantic-branch-chat-row-surface/)
+  })
+
+  it("lets the right sidebar launcher tile grid fill the available height", () => {
+    const stylesRoot = resolve(process.cwd(), "src/renderer/src/styles")
+    const rightSidebarStyles = readFileSync(resolve(stylesRoot, "right-sidebar.css"), "utf8")
+
+    expect(rightSidebarStyles).toMatch(
+      /\.right-sidebar-launcher-shell\s*\{[^}]*align-content:\s*stretch;[^}]*\}/s,
+    )
+    expect(rightSidebarStyles).toMatch(
+      /\.right-sidebar-launcher-shell\s*\{[^}]*grid-template-rows:\s*minmax\(0,\s*1fr\);[^}]*\}/s,
+    )
+    expect(rightSidebarStyles).toMatch(
+      /\.right-sidebar-launcher-tile-grid\s*\{[^}]*grid-template-rows:\s*repeat\(3,\s*minmax\(104px,\s*1fr\)\);[^}]*\}/s,
+    )
   })
 
   it("routes left and right sidebar backgrounds through independent tokens", () => {

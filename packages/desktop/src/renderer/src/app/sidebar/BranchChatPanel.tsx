@@ -13,7 +13,6 @@ import type { PermissionDecision } from "../../../../shared/permission"
 import { getAgentSessionBridge, type AgentSessionBridgeEvent } from "../agent-session/client"
 import { Composer } from "../composer/Composer"
 import { buildComposerAttachment } from "../composer/attachment-utils"
-import { ComposerUtilityBar } from "../ComposerUtilityBar"
 import {
   compileComposerSubmission,
   createEmptyComposerDraftState,
@@ -21,6 +20,7 @@ import {
 import {
   CheckIcon,
   CloseIcon,
+  ForkIcon,
   InfoIcon,
   LocateIcon,
   MoreIcon,
@@ -29,6 +29,7 @@ import { useI18n } from "../i18n/I18nProvider"
 import {
   isCompletedAssistantResponse,
   listBranchAnchorOptions,
+  type RecentBranchThread,
   type SessionMessageTree,
 } from "../session-message-tree"
 import {
@@ -79,6 +80,7 @@ interface BranchChatPanelProps {
   codeTheme: CodeHighlightTheme
   isActive: boolean
   messageTree: SessionMessageTree | null
+  recentBranches: RecentBranchThread[]
   session: SessionSummary | null
   tab: RightSidebarBranchThreadTab
   threadPaneContext?: BranchChatThreadPaneContext | null
@@ -115,49 +117,53 @@ interface ExecutionModeEnvelope {
   turnID: string
 }
 
-interface BranchStartPopoverPosition {
+interface BranchToolbarPopoverPosition {
   left: number
   maxHeight: number
   top: number
   width: number
 }
 
-const BRANCH_START_POPOVER_GAP = 6
-const BRANCH_START_POPOVER_VIEWPORT_PADDING = 8
-const BRANCH_START_POPOVER_MAX_WIDTH = 360
-const BRANCH_START_POPOVER_MIN_HEIGHT = 160
+const BRANCH_TOOLBAR_POPOVER_GAP = 6
+const BRANCH_TOOLBAR_POPOVER_VIEWPORT_PADDING = 8
+const BRANCH_TOOLBAR_POPOVER_MAX_WIDTH = 360
+const BRANCH_TOOLBAR_POPOVER_MIN_HEIGHT = 160
 
-function getBranchStartPopoverPosition(trigger: HTMLElement): BranchStartPopoverPosition {
+function getBranchToolbarPopoverPosition(
+  trigger: HTMLElement,
+  align: "start" | "end",
+): BranchToolbarPopoverPosition {
   const rect = trigger.getBoundingClientRect()
-  const viewportPadding = BRANCH_START_POPOVER_VIEWPORT_PADDING
+  const viewportPadding = BRANCH_TOOLBAR_POPOVER_VIEWPORT_PADDING
   const width = Math.max(
     0,
     Math.min(
-      BRANCH_START_POPOVER_MAX_WIDTH,
+      BRANCH_TOOLBAR_POPOVER_MAX_WIDTH,
       window.innerWidth - viewportPadding * 2,
     ),
   )
+  const preferredLeft = align === "start" ? rect.left : rect.right - width
   const left = Math.max(
     viewportPadding,
     Math.min(
-      rect.right - width,
+      preferredLeft,
       window.innerWidth - width - viewportPadding,
     ),
   )
   const availableBelow =
-    window.innerHeight - rect.bottom - BRANCH_START_POPOVER_GAP - viewportPadding
+    window.innerHeight - rect.bottom - BRANCH_TOOLBAR_POPOVER_GAP - viewportPadding
   const availableAbove =
-    rect.top - BRANCH_START_POPOVER_GAP - viewportPadding
+    rect.top - BRANCH_TOOLBAR_POPOVER_GAP - viewportPadding
   const shouldOpenAbove =
-    availableBelow < BRANCH_START_POPOVER_MIN_HEIGHT &&
+    availableBelow < BRANCH_TOOLBAR_POPOVER_MIN_HEIGHT &&
     availableAbove > availableBelow
   const maxHeight = Math.max(
     80,
     shouldOpenAbove ? availableAbove : availableBelow,
   )
   const top = shouldOpenAbove
-    ? Math.max(viewportPadding, rect.top - BRANCH_START_POPOVER_GAP - maxHeight)
-    : rect.bottom + BRANCH_START_POPOVER_GAP
+    ? Math.max(viewportPadding, rect.top - BRANCH_TOOLBAR_POPOVER_GAP - maxHeight)
+    : rect.bottom + BRANCH_TOOLBAR_POPOVER_GAP
 
   return { left, maxHeight, top, width }
 }
@@ -390,6 +396,7 @@ export function BranchChatPanel({
   codeTheme,
   isActive,
   messageTree,
+  recentBranches,
   session,
   tab,
   threadPaneContext,
@@ -403,9 +410,14 @@ export function BranchChatPanel({
   const { t } = useI18n()
   const bridge = useMemo(() => getAgentSessionBridge(), [])
   const threadColumnRef = useRef<HTMLDivElement | null>(null)
+  const recentTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const recentPopoverRef = useRef<HTMLDivElement | null>(null)
+  const recentListboxRef = useRef<HTMLDivElement | null>(null)
   const advancedTriggerRef = useRef<HTMLButtonElement | null>(null)
   const advancedPopoverRef = useRef<HTMLDivElement | null>(null)
   const advancedListboxRef = useRef<HTMLDivElement | null>(null)
+  const recentPopoverID = useId()
+  const recentListboxID = useId()
   const advancedPopoverID = useId()
   const advancedListboxID = useId()
   const initialModelSelectionRef = useRef(session?.modelSelection)
@@ -433,9 +445,12 @@ export function BranchChatPanel({
   const [permissionRequestActionError, setPermissionRequestActionError] = useState<string | null>(null)
   const [permissionRequestActionRequestID, setPermissionRequestActionRequestID] = useState<string | null>(null)
   const [sendError, setSendError] = useState<string | null>(null)
+  const [isRecentOpen, setIsRecentOpen] = useState(false)
+  const [activeRecentIndex, setActiveRecentIndex] = useState(0)
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false)
   const [activeAnchorIndex, setActiveAnchorIndex] = useState(0)
-  const [advancedPopoverPosition, setAdvancedPopoverPosition] = useState<BranchStartPopoverPosition | null>(null)
+  const [recentPopoverPosition, setRecentPopoverPosition] = useState<BranchToolbarPopoverPosition | null>(null)
+  const [advancedPopoverPosition, setAdvancedPopoverPosition] = useState<BranchToolbarPopoverPosition | null>(null)
 
   tabRef.current = tab
 
@@ -1015,10 +1030,78 @@ export function BranchChatPanel({
     setDraftState(nextDraftState)
   }
 
+  const selectedRecentIndex = recentBranches.findIndex(
+    (branch) => branch.headMessageID === tab.headMessageID,
+  )
   const selectedAnchorIndex = effectiveAnchorOptions.findIndex(
     (option) => option.messageID === advancedAnchorMessageID,
   )
   const canChooseAnchor = tab.phase === "draft" && !isSending
+
+  function closeRecentPopover({ restoreFocus = true }: { restoreFocus?: boolean } = {}) {
+    setIsRecentOpen(false)
+    if (restoreFocus) recentTriggerRef.current?.focus()
+  }
+
+  function openRecentPopover(
+    preferredIndex = selectedRecentIndex >= 0 ? selectedRecentIndex : 0,
+  ) {
+    if (recentBranches.length === 0) return
+    setIsAdvancedOpen(false)
+    setActiveRecentIndex(Math.max(0, preferredIndex))
+    setIsRecentOpen(true)
+  }
+
+  function commitRecentBranch(index: number) {
+    const branch = recentBranches[index]
+    if (!branch) return
+    setActiveRecentIndex(index)
+    closeRecentPopover({ restoreFocus: false })
+    onOpenBranchChat({
+      anchorStrategy: "selected",
+      sessionID: branch.sessionID,
+      originMessageID: branch.originMessageID,
+      headMessageID: branch.headMessageID,
+      phase: "committed",
+      title: branch.title,
+    })
+  }
+
+  function handleRecentTriggerKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return
+    event.preventDefault()
+    const fallbackIndex = event.key === "ArrowUp"
+      ? Math.max(0, recentBranches.length - 1)
+      : 0
+    openRecentPopover(selectedRecentIndex >= 0 ? selectedRecentIndex : fallbackIndex)
+  }
+
+  function handleRecentPopoverKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault()
+      event.stopPropagation()
+      closeRecentPopover()
+      return
+    }
+    if (recentBranches.length === 0) return
+
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault()
+      const direction = event.key === "ArrowDown" ? 1 : -1
+      setActiveRecentIndex((current) =>
+        (current + direction + recentBranches.length) % recentBranches.length)
+      return
+    }
+    if (event.key === "Home" || event.key === "End") {
+      event.preventDefault()
+      setActiveRecentIndex(event.key === "Home" ? 0 : recentBranches.length - 1)
+      return
+    }
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault()
+      commitRecentBranch(activeRecentIndex)
+    }
+  }
 
   function closeAdvancedPopover({ restoreFocus = true }: { restoreFocus?: boolean } = {}) {
     setIsAdvancedOpen(false)
@@ -1026,6 +1109,7 @@ export function BranchChatPanel({
   }
 
   function openAdvancedPopover(preferredIndex = selectedAnchorIndex >= 0 ? selectedAnchorIndex : 0) {
+    setIsRecentOpen(false)
     setActiveAnchorIndex(Math.max(0, preferredIndex))
     setIsAdvancedOpen(true)
   }
@@ -1076,6 +1160,72 @@ export function BranchChatPanel({
   }
 
   useLayoutEffect(() => {
+    if (!isRecentOpen) {
+      setRecentPopoverPosition(null)
+      return
+    }
+
+    const trigger = recentTriggerRef.current
+    if (!trigger) return
+    setRecentPopoverPosition(getBranchToolbarPopoverPosition(trigger, "start"))
+  }, [isRecentOpen])
+
+  useLayoutEffect(() => {
+    if (!isRecentOpen || !recentPopoverPosition) return
+    const focusTarget = recentListboxRef.current ?? recentPopoverRef.current
+    focusTarget?.focus()
+  }, [isRecentOpen, recentPopoverPosition])
+
+  useLayoutEffect(() => {
+    if (!isRecentOpen || !recentPopoverPosition) return
+    const activeOption = recentListboxRef.current
+      ?.querySelectorAll<HTMLElement>('[role="option"]')
+      .item(activeRecentIndex)
+    activeOption?.scrollIntoView?.({ block: "nearest", inline: "nearest" })
+  }, [activeRecentIndex, isRecentOpen, recentPopoverPosition])
+
+  useEffect(() => {
+    if (!isRecentOpen) return
+
+    function updatePosition() {
+      const trigger = recentTriggerRef.current
+      if (trigger) {
+        setRecentPopoverPosition(getBranchToolbarPopoverPosition(trigger, "start"))
+      }
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (
+        recentTriggerRef.current?.contains(target) ||
+        recentPopoverRef.current?.contains(target)
+      ) {
+        return
+      }
+      closeRecentPopover({ restoreFocus: false })
+    }
+
+    window.addEventListener("resize", updatePosition)
+    window.addEventListener("scroll", updatePosition, true)
+    document.addEventListener("pointerdown", handlePointerDown)
+    return () => {
+      window.removeEventListener("resize", updatePosition)
+      window.removeEventListener("scroll", updatePosition, true)
+      document.removeEventListener("pointerdown", handlePointerDown)
+    }
+  }, [isRecentOpen])
+
+  useEffect(() => {
+    if (!isRecentOpen) return
+    if (recentBranches.length === 0) {
+      setIsRecentOpen(false)
+      return
+    }
+    setActiveRecentIndex((current) => Math.min(current, recentBranches.length - 1))
+  }, [isRecentOpen, recentBranches.length])
+
+  useLayoutEffect(() => {
     if (!isAdvancedOpen) {
       setAdvancedPopoverPosition(null)
       return
@@ -1083,7 +1233,7 @@ export function BranchChatPanel({
 
     const trigger = advancedTriggerRef.current
     if (!trigger) return
-    setAdvancedPopoverPosition(getBranchStartPopoverPosition(trigger))
+    setAdvancedPopoverPosition(getBranchToolbarPopoverPosition(trigger, "end"))
   }, [isAdvancedOpen])
 
   useLayoutEffect(() => {
@@ -1113,7 +1263,9 @@ export function BranchChatPanel({
 
     function updatePosition() {
       const trigger = advancedTriggerRef.current
-      if (trigger) setAdvancedPopoverPosition(getBranchStartPopoverPosition(trigger))
+      if (trigger) {
+        setAdvancedPopoverPosition(getBranchToolbarPopoverPosition(trigger, "end"))
+      }
     }
 
     function handlePointerDown(event: PointerEvent) {
@@ -1140,6 +1292,7 @@ export function BranchChatPanel({
 
   useEffect(() => {
     if (isActive) return
+    setIsRecentOpen(false)
     setIsAdvancedOpen(false)
   }, [isActive])
 
@@ -1150,6 +1303,75 @@ export function BranchChatPanel({
     )
     setActiveAnchorIndex(nextIndex >= 0 ? nextIndex : 0)
   }, [advancedAnchorMessageID, effectiveAnchorOptions, isAdvancedOpen])
+
+  const recentPopover =
+    isRecentOpen &&
+    recentPopoverPosition &&
+    typeof document !== "undefined"
+      ? createPortal(
+          <div
+            ref={recentPopoverRef}
+            id={recentPopoverID}
+            className="branch-chat-recent-popover"
+            role="dialog"
+            aria-label={t("branchChat.recent.region")}
+            tabIndex={-1}
+            style={{
+              left: recentPopoverPosition.left,
+              maxHeight: recentPopoverPosition.maxHeight,
+              top: recentPopoverPosition.top,
+              width: recentPopoverPosition.width,
+            }}
+            onKeyDown={handleRecentPopoverKeyDown}
+          >
+            <header className="branch-chat-recent-popover-header">
+              <strong>{t("branchChat.recent.title")}</strong>
+              <span>{t("branchChat.recent.description")}</span>
+            </header>
+            <div
+              ref={recentListboxRef}
+              id={recentListboxID}
+              className="branch-chat-recent-options"
+              role="listbox"
+              aria-label={t("branchChat.recent.region")}
+              aria-activedescendant={`${recentListboxID}-option-${String(activeRecentIndex)}`}
+              tabIndex={0}
+            >
+              {recentBranches.map((branch, index) => {
+                const isSelected = branch.headMessageID === tab.headMessageID
+                const isActiveOption = index === activeRecentIndex
+                return (
+                  <button
+                    key={branch.headMessageID}
+                    id={`${recentListboxID}-option-${String(index)}`}
+                    type="button"
+                    className={[
+                      "branch-chat-recent-option",
+                      isSelected ? "is-selected" : "",
+                      isActiveOption ? "is-active" : "",
+                    ].filter(Boolean).join(" ")}
+                    role="option"
+                    aria-selected={isSelected}
+                    tabIndex={-1}
+                    onClick={() => commitRecentBranch(index)}
+                    onMouseEnter={() => setActiveRecentIndex(index)}
+                  >
+                    <span className="branch-chat-recent-option-main">
+                      <strong>{branch.title}</strong>
+                      <span>{branch.leafPreview}</span>
+                    </span>
+                    <span className="branch-chat-recent-option-meta">
+                      <span>{branch.status.replaceAll("_", " ")}</span>
+                      <time>{new Date(branch.updatedAt).toLocaleString()}</time>
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>,
+          document.body,
+        )
+      : null
 
   const advancedPopover =
     isAdvancedOpen &&
@@ -1256,35 +1478,64 @@ export function BranchChatPanel({
         aria-label={t("branchChat.advanced.toolbar")}
       >
         <button
-          ref={advancedTriggerRef}
+          ref={recentTriggerRef}
           type="button"
-          className={isAdvancedOpen
-            ? "branch-chat-advanced-trigger is-open"
-            : "branch-chat-advanced-trigger"}
-          aria-controls={isAdvancedOpen ? advancedPopoverID : undefined}
-          aria-expanded={isAdvancedOpen}
+          className={isRecentOpen
+            ? "branch-chat-recent-trigger is-open"
+            : "branch-chat-recent-trigger"}
+          aria-controls={isRecentOpen ? recentPopoverID : undefined}
+          aria-expanded={isRecentOpen}
           aria-haspopup="dialog"
-          aria-label={t("branchChat.advanced.open")}
-          title={t("branchChat.advanced.open")}
+          aria-label={t("branchChat.recent.open")}
+          title={recentBranches.length > 0
+            ? t("branchChat.recent.open")
+            : t("branchChat.recent.empty")}
+          disabled={recentBranches.length === 0}
           onClick={() => {
-            if (isAdvancedOpen) {
-              closeAdvancedPopover({ restoreFocus: false })
+            if (isRecentOpen) {
+              closeRecentPopover({ restoreFocus: false })
             } else {
-              openAdvancedPopover()
+              openRecentPopover()
             }
           }}
-          onKeyDown={handleAdvancedTriggerKeyDown}
+          onKeyDown={handleRecentTriggerKeyDown}
         >
-          <MoreIcon />
+          <ForkIcon />
+          <span>{t("branchChat.recent.title")}</span>
         </button>
-        <span
-          className="branch-chat-read-only-badge"
-          title={t("branchChat.readOnlyTitle")}
-        >
-          <InfoIcon />
-          <span>{t("branchChat.readOnly")}</span>
-        </span>
+        <div className="branch-chat-toolbar-actions">
+          <button
+            ref={advancedTriggerRef}
+            type="button"
+            className={isAdvancedOpen
+              ? "branch-chat-advanced-trigger is-open"
+              : "branch-chat-advanced-trigger"}
+            aria-controls={isAdvancedOpen ? advancedPopoverID : undefined}
+            aria-expanded={isAdvancedOpen}
+            aria-haspopup="dialog"
+            aria-label={t("branchChat.advanced.open")}
+            title={t("branchChat.advanced.open")}
+            onClick={() => {
+              if (isAdvancedOpen) {
+                closeAdvancedPopover({ restoreFocus: false })
+              } else {
+                openAdvancedPopover()
+              }
+            }}
+            onKeyDown={handleAdvancedTriggerKeyDown}
+          >
+            <MoreIcon />
+          </button>
+          <span
+            className="branch-chat-read-only-badge"
+            title={t("branchChat.readOnlyTitle")}
+          >
+            <InfoIcon />
+            <span>{t("branchChat.readOnly")}</span>
+          </span>
+        </div>
       </div>
+      {recentPopover}
       {advancedPopover}
 
       <div className="branch-chat-thread">
@@ -1386,6 +1637,8 @@ export function BranchChatPanel({
           attachmentError={composer.attachmentError}
           canPasteImageAttachments={composer.attachmentCapabilities.image && composer.attachmentDisabledReason === null}
           canSend={canSend}
+          contextUsage={branchContextUsage}
+          contextWindow={composer.contextWindow}
           draftState={draftState}
           hasPendingPermissionRequests={pendingPermissionRequests.length > 0 || isResolvingPermissionRequest}
           hasSupplementalSubmitContent={quotes.length > 0}
@@ -1418,13 +1671,6 @@ export function BranchChatPanel({
           unsupportedAttachmentPaths={composer.unsupportedAttachmentPaths}
           workspaceDirectory={workspace?.directory ?? null}
           placeholder={t("branchChat.placeholder")}
-        />
-        <ComposerUtilityBar
-          contextWindow={composer.contextWindow}
-          gitDirectory={null}
-          gitProjectID={null}
-          showGitControls={false}
-          usage={branchContextUsage}
         />
       </div>
     </section>

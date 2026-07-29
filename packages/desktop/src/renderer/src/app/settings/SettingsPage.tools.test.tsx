@@ -2553,6 +2553,8 @@ describe("SettingsPage built-in tools", () => {
     expect(screen.getByText("\u8f93\u5165\u6846\u8fb9\u6846")).toBeInTheDocument()
     expect(screen.getByText("\u9009\u533a\u80cc\u666f")).toBeInTheDocument()
     expect(screen.getByText("Markdown \u6587\u672c\u88ab\u9f20\u6807\u9009\u4e2d\u65f6\u7684\u9ad8\u4eae\u80cc\u666f\u3002")).toBeInTheDocument()
+    expect(screen.getByText("\u8868\u683c\u80cc\u666f")).toBeInTheDocument()
+    expect(screen.getByText("Markdown \u8868\u683c\u5bb9\u5668\u548c\u666e\u901a\u5185\u5bb9\u5355\u5143\u683c\u7684\u9ed8\u8ba4\u80cc\u666f\u3002")).toBeInTheDocument()
     expect(screen.queryByText("The farthest canvas background.")).not.toBeInTheDocument()
 
     const searchBox = screen.getByRole("searchbox", { name: "\u641c\u7d22 semantic token" })
@@ -2564,6 +2566,66 @@ describe("SettingsPage built-in tools", () => {
     expect(screen.getByText("\u5f00\u5173\u8f68\u9053")).toBeInTheDocument()
     expect(screen.getByText("\u5f00\u5173\u63a7\u4ef6\u7684\u9ed8\u8ba4\u8f68\u9053\u586b\u5145\u8272\u3002")).toBeInTheDocument()
     expect(screen.queryByText("\u5e94\u7528\u80cc\u666f")).not.toBeInTheDocument()
+  })
+
+  it("edits the Markdown table surface token from Appearance settings", () => {
+    const appearanceTokenValues = createAppearanceTokenValues("#ffffff")
+    const onAppearanceTokenChange = vi.fn()
+
+    render(
+      <SettingsPage
+        {...createSettingsPageProps({
+          appearanceTokenValues,
+          onAppearanceTokenChange,
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Appearance" }))
+    fireEvent.click(screen.getByRole("button", {
+      name: "Markdown Table Surface Light semantic-markdown-table-surface-light",
+    }))
+
+    const colorInput = screen.getByLabelText(
+      "Markdown Table Surface Light semantic-markdown-table-surface-light color value",
+    )
+    fireEvent.change(colorInput, { target: { value: "#123456" } })
+    fireEvent.blur(colorInput)
+
+    expect(onAppearanceTokenChange).toHaveBeenCalledWith(
+      "semantic-markdown-table-surface-light",
+      "#123456",
+    )
+  })
+
+  it("edits the Markdown divider token from Appearance settings", () => {
+    const appearanceTokenValues = createAppearanceTokenValues("#ffffff")
+    const onAppearanceTokenChange = vi.fn()
+
+    render(
+      <SettingsPage
+        {...createSettingsPageProps({
+          appearanceTokenValues,
+          onAppearanceTokenChange,
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Appearance" }))
+    fireEvent.click(screen.getByRole("button", {
+      name: "Markdown Divider Light semantic-markdown-divider-light",
+    }))
+
+    const colorInput = screen.getByLabelText(
+      "Markdown Divider Light semantic-markdown-divider-light color value",
+    )
+    fireEvent.change(colorInput, { target: { value: "rgba(41, 37, 36, 0.4)" } })
+    fireEvent.blur(colorInput)
+
+    expect(onAppearanceTokenChange).toHaveBeenCalledWith(
+      "semantic-markdown-divider-light",
+      "rgba(41, 37, 36, 0.4)",
+    )
   })
 
   it("edits appearance token alpha values", () => {

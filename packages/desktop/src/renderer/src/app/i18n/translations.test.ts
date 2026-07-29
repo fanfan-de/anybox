@@ -108,6 +108,10 @@ describe("i18n translations", () => {
     expect(getTranslationDictionary("zh-TW")["settings.appearance.languageTitle"]).toBe("顯示語言")
     expect(getTranslationDictionary("ja-JP")["settings.appearance.languageTitle"]).toBe("表示言語")
     expect(getTranslationDictionary("ko-KR")["settings.appearance.languageTitle"]).toBe("표시 언어")
+    expect(getTranslationDictionary("zh-CN")["branchChat.name"]).toBe("分支对话")
+    expect(getTranslationDictionary("zh-TW")["branchChat.name"]).toBe("分支對話")
+    expect(getTranslationDictionary("en-US")["branchChat.name"]).toBe("Branch Chat")
+    expect(translateLiteral("zh-CN", "Branch Chat")).toBe("分支对话")
   })
 
   it("exposes thread trace translations", () => {

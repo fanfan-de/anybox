@@ -1092,7 +1092,7 @@ describe("appearance markdown tokens", () => {
         {
           id: "semantic-markdown-border",
           label: "Border",
-          description: "Default Markdown table, image, and divider border.",
+          description: "Default Markdown table and image border.",
           lightToken: "semantic-markdown-border-light",
           darkToken: "semantic-markdown-border-dark",
         },
@@ -1102,6 +1102,13 @@ describe("appearance markdown tokens", () => {
           description: "Stronger Markdown borders for inline code and table headers.",
           lightToken: "semantic-markdown-border-strong-light",
           darkToken: "semantic-markdown-border-strong-dark",
+        },
+        {
+          id: "semantic-markdown-divider",
+          label: "Divider",
+          description: "Color for thematic breaks rendered from Markdown horizontal rules.",
+          lightToken: "semantic-markdown-divider-light",
+          darkToken: "semantic-markdown-divider-dark",
         },
         {
           id: "semantic-markdown-quote-surface",
@@ -1116,6 +1123,13 @@ describe("appearance markdown tokens", () => {
           description: "Background fill for inline code tokens inside Markdown.",
           lightToken: "semantic-markdown-inline-code-surface-light",
           darkToken: "semantic-markdown-inline-code-surface-dark",
+        },
+        {
+          id: "semantic-markdown-table-surface",
+          label: "Table Surface",
+          description: "Default background fill for Markdown table containers and body cells.",
+          lightToken: "semantic-markdown-table-surface-light",
+          darkToken: "semantic-markdown-table-surface-dark",
         },
         {
           id: "semantic-markdown-table-head-surface",
@@ -1167,6 +1181,7 @@ describe("appearance markdown tokens", () => {
     const document = normalizeAppearanceConfigDocument({
       overrides: {
         "semantic-markdown-inline-code-surface-light": " #123456 ",
+        "semantic-markdown-table-surface-light": " #fedcba ",
         "semantic-markdown-code-surface-dark": "#abcdef",
         "semantic-markdown-code-text": "#000000",
       },
@@ -1177,6 +1192,7 @@ describe("appearance markdown tokens", () => {
 
     expect(cssTokenMap(document.overrides)).toEqual({
       "semantic-markdown-inline-code-surface-light": "#123456",
+      "semantic-markdown-table-surface-light": "#fedcba",
       "semantic-markdown-code-surface-dark": "#abcdef",
       "semantic-markdown-code-text-light": "#000000",
       "semantic-markdown-code-text-dark": "#000000",

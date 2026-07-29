@@ -19,6 +19,7 @@ import type { CodeHighlightTheme } from "../code-theme"
 import {
   listBranchAnchorOptions,
   listRecentBranchThreads,
+  type RecentBranchThread,
   type SessionMessageTree,
 } from "../session-message-tree"
 import type {
@@ -145,6 +146,34 @@ function findWorkspaceBySessionID(workspaces: WorkspaceGroup[], sessionID: strin
   return workspaces.find((workspace) => workspace.sessions.some((session) => session.id === sessionID)) ?? null
 }
 
+function listRecentBranchesWithRuntimeStatus(
+  messageTree: SessionMessageTree | null,
+  runtimeDebug: SessionRuntimeDebugSnapshot | null | undefined,
+): RecentBranchThread[] {
+  const executions =
+    runtimeDebug && messageTree && runtimeDebug.session.id === messageTree.sessionID
+      ? runtimeDebug.executions ?? []
+      : []
+
+  return listRecentBranchThreads(messageTree).map((branch) => {
+    const execution = executions.find(
+      (candidate) =>
+        candidate.targetKind === "detached-branch" &&
+        candidate.headMessageID === branch.headMessageID,
+    )
+    if (!execution) return branch
+    return {
+      ...branch,
+      status:
+        execution.queueLength > 0
+          ? "queued"
+          : execution.status === "running" || execution.status === "cancelling"
+            ? "generating"
+            : branch.status,
+    }
+  })
+}
+
 function getTabIcon(kind: RightSidebarTab["kind"]) {
   switch (kind) {
     case "files":
@@ -250,26 +279,6 @@ export function RightSidebar({
   const branchAnchorOptions = useMemo(
     () => listBranchAnchorOptions(activeMessageTree),
     [activeMessageTree],
-  )
-  const recentBranches = useMemo(
-    () => listRecentBranchThreads(activeMessageTree).map((branch) => {
-      const execution = activeSessionRuntimeDebug?.executions?.find(
-        (candidate) =>
-          candidate.targetKind === "detached-branch" &&
-          candidate.headMessageID === branch.headMessageID,
-      )
-      if (!execution) return branch
-      return {
-        ...branch,
-        status:
-          execution.queueLength > 0
-            ? "queued"
-            : execution.status === "running" || execution.status === "cancelling"
-              ? "generating"
-              : branch.status,
-      }
-    }),
-    [activeMessageTree, activeSessionRuntimeDebug?.executions],
   )
   const launcherCards = useMemo<LauncherCard[]>(() => [
     {
@@ -398,43 +407,6 @@ export function RightSidebar({
             <p className="right-sidebar-launcher-hint">
               {t("branchChat.launcherUnavailable")}
             </p>
-          ) : null}
-          {recentBranches.length > 0 ? (
-            <section className="right-sidebar-recent-branches" aria-label={t("branchChat.recent.region")}>
-              <header>
-                <span>{t("branchChat.recent.title")}</span>
-                <small>{t("branchChat.recent.description")}</small>
-              </header>
-              <div className="right-sidebar-recent-branch-list">
-                {recentBranches.map((branch) => (
-                  <button
-                    key={branch.headMessageID}
-                    type="button"
-                    className="right-sidebar-recent-branch"
-                    onClick={() => {
-                      onOpenBranchChat({
-                        anchorStrategy: "selected",
-                        sessionID: branch.sessionID,
-                        originMessageID: branch.originMessageID,
-                        headMessageID: branch.headMessageID,
-                        phase: "committed",
-                        title: branch.title,
-                      })
-                      setIsLauncherVisible(false)
-                    }}
-                  >
-                    <span className="right-sidebar-recent-branch-main">
-                      <strong>{branch.title}</strong>
-                      <span>{branch.leafPreview}</span>
-                    </span>
-                    <span className="right-sidebar-recent-branch-meta">
-                      <span className={`is-${branch.status}`}>{branch.status.replaceAll("_", " ")}</span>
-                      <time>{new Date(branch.updatedAt).toLocaleString()}</time>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </section>
           ) : null}
         </div>
       </div>
@@ -632,13 +604,18 @@ export function RightSidebar({
           {rightSidebar.tabs.flatMap((tab) => {
             if (tab.kind !== "branch-thread") return []
             const workspace = findWorkspaceBySessionID(workspaces, tab.sessionID)
+            const messageTree = messageTreeBySession[tab.sessionID] ?? null
             return [
               <BranchChatPanel
                 key={tab.id}
                 assistantTraceVisibility={assistantTraceVisibility}
                 codeTheme={codeTheme}
                 isActive={!isLauncherVisible && activeTab?.id === tab.id}
-                messageTree={messageTreeBySession[tab.sessionID] ?? null}
+                messageTree={messageTree}
+                recentBranches={listRecentBranchesWithRuntimeStatus(
+                  messageTree,
+                  activeSessionRuntimeDebug,
+                )}
                 session={findSessionByID(workspaces, tab.sessionID)}
                 tab={tab}
                 threadPaneContext={threadPaneContext}

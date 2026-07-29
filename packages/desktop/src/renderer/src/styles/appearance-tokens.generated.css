@@ -350,10 +350,6 @@
   --semantic-branch-chat-surface-muted-dark: var(--surface-panel-muted-dark);
   --semantic-branch-chat-card-surface-light: var(--semantic-thread-panel-surface-light);
   --semantic-branch-chat-card-surface-dark: var(--semantic-thread-panel-surface-dark);
-  --semantic-branch-chat-row-surface-light: var(--surface-right-sidebar-light);
-  --semantic-branch-chat-row-surface-dark: var(--surface-right-sidebar-dark);
-  --semantic-branch-chat-row-surface-hover-light: var(--semantic-list-detail-row-surface-hover-light);
-  --semantic-branch-chat-row-surface-hover-dark: var(--semantic-list-detail-row-surface-hover-dark);
   --semantic-branch-chat-border-light: var(--border-default-light);
   --semantic-branch-chat-border-dark: var(--border-default-dark);
   --semantic-branch-chat-divider-light: var(--border-subtle-light);
@@ -404,10 +400,14 @@
   --semantic-markdown-border-dark: color-mix(in srgb, var(--border-default-dark) 82%, rgba(0, 0, 0, 0) 18%);
   --semantic-markdown-border-strong-light: color-mix(in srgb, var(--brand-primary) 24%, var(--border-default-light) 76%);
   --semantic-markdown-border-strong-dark: color-mix(in srgb, var(--brand-primary-dark) 24%, var(--border-default-dark) 76%);
+  --semantic-markdown-divider-light: rgba(41, 37, 36, 0);
+  --semantic-markdown-divider-dark: rgba(255, 255, 255, 0);
   --semantic-markdown-quote-surface-light: color-mix(in srgb, var(--brand-primary-soft) 72%, var(--surface-panel-light) 28%);
   --semantic-markdown-quote-surface-dark: color-mix(in srgb, var(--brand-primary-soft-dark) 72%, var(--surface-panel-dark) 28%);
   --semantic-markdown-inline-code-surface-light: color-mix(in srgb, var(--brand-primary-soft) 80%, var(--surface-panel-light) 20%);
   --semantic-markdown-inline-code-surface-dark: color-mix(in srgb, var(--brand-primary-soft-dark) 80%, var(--surface-panel-dark) 20%);
+  --semantic-markdown-table-surface-light: var(--semantic-thread-panel-surface-light);
+  --semantic-markdown-table-surface-dark: var(--semantic-thread-panel-surface-dark);
   --semantic-markdown-table-head-surface-light: color-mix(in srgb, var(--surface-panel-muted-light) 82%, var(--surface-panel-light) 18%);
   --semantic-markdown-table-head-surface-dark: color-mix(in srgb, var(--surface-panel-muted-dark) 82%, var(--surface-panel-dark) 18%);
   --semantic-markdown-table-row-alt-surface-light: color-mix(in srgb, var(--surface-panel-muted-light) 72%, var(--surface-panel-light) 28%);
@@ -783,8 +783,6 @@
   --semantic-branch-chat-surface: var(--semantic-branch-chat-surface-light);
   --semantic-branch-chat-surface-muted: var(--semantic-branch-chat-surface-muted-light);
   --semantic-branch-chat-card-surface: var(--semantic-branch-chat-card-surface-light);
-  --semantic-branch-chat-row-surface: var(--semantic-branch-chat-row-surface-light);
-  --semantic-branch-chat-row-surface-hover: var(--semantic-branch-chat-row-surface-hover-light);
   --semantic-branch-chat-border: var(--semantic-branch-chat-border-light);
   --semantic-branch-chat-divider: var(--semantic-branch-chat-divider-light);
   --semantic-branch-chat-text: var(--semantic-branch-chat-text-light);
@@ -809,8 +807,10 @@
   --semantic-markdown-selection-text: var(--semantic-markdown-selection-text-light);
   --semantic-markdown-border: var(--semantic-markdown-border-light);
   --semantic-markdown-border-strong: var(--semantic-markdown-border-strong-light);
+  --semantic-markdown-divider: var(--semantic-markdown-divider-light);
   --semantic-markdown-quote-surface: var(--semantic-markdown-quote-surface-light);
   --semantic-markdown-inline-code-surface: var(--semantic-markdown-inline-code-surface-light);
+  --semantic-markdown-table-surface: var(--semantic-markdown-table-surface-light);
   --semantic-markdown-table-head-surface: var(--semantic-markdown-table-head-surface-light);
   --semantic-markdown-table-row-alt-surface: var(--semantic-markdown-table-row-alt-surface-light);
   --semantic-markdown-code-surface: var(--semantic-markdown-code-surface-light);
@@ -1242,8 +1242,6 @@
     --semantic-branch-chat-surface: var(--semantic-branch-chat-surface-dark);
     --semantic-branch-chat-surface-muted: var(--semantic-branch-chat-surface-muted-dark);
     --semantic-branch-chat-card-surface: var(--semantic-branch-chat-card-surface-dark);
-    --semantic-branch-chat-row-surface: var(--semantic-branch-chat-row-surface-dark);
-    --semantic-branch-chat-row-surface-hover: var(--semantic-branch-chat-row-surface-hover-dark);
     --semantic-branch-chat-border: var(--semantic-branch-chat-border-dark);
     --semantic-branch-chat-divider: var(--semantic-branch-chat-divider-dark);
     --semantic-branch-chat-text: var(--semantic-branch-chat-text-dark);
@@ -1268,8 +1266,10 @@
     --semantic-markdown-selection-text: var(--semantic-markdown-selection-text-dark);
     --semantic-markdown-border: var(--semantic-markdown-border-dark);
     --semantic-markdown-border-strong: var(--semantic-markdown-border-strong-dark);
+    --semantic-markdown-divider: var(--semantic-markdown-divider-dark);
     --semantic-markdown-quote-surface: var(--semantic-markdown-quote-surface-dark);
     --semantic-markdown-inline-code-surface: var(--semantic-markdown-inline-code-surface-dark);
+    --semantic-markdown-table-surface: var(--semantic-markdown-table-surface-dark);
     --semantic-markdown-table-head-surface: var(--semantic-markdown-table-head-surface-dark);
     --semantic-markdown-table-row-alt-surface: var(--semantic-markdown-table-row-alt-surface-dark);
     --semantic-markdown-code-surface: var(--semantic-markdown-code-surface-dark);
@@ -1526,8 +1526,6 @@
   --semantic-branch-chat-surface: var(--semantic-branch-chat-surface-dark);
   --semantic-branch-chat-surface-muted: var(--semantic-branch-chat-surface-muted-dark);
   --semantic-branch-chat-card-surface: var(--semantic-branch-chat-card-surface-dark);
-  --semantic-branch-chat-row-surface: var(--semantic-branch-chat-row-surface-dark);
-  --semantic-branch-chat-row-surface-hover: var(--semantic-branch-chat-row-surface-hover-dark);
   --semantic-branch-chat-border: var(--semantic-branch-chat-border-dark);
   --semantic-branch-chat-divider: var(--semantic-branch-chat-divider-dark);
   --semantic-branch-chat-text: var(--semantic-branch-chat-text-dark);
@@ -1552,8 +1550,10 @@
   --semantic-markdown-selection-text: var(--semantic-markdown-selection-text-dark);
   --semantic-markdown-border: var(--semantic-markdown-border-dark);
   --semantic-markdown-border-strong: var(--semantic-markdown-border-strong-dark);
+  --semantic-markdown-divider: var(--semantic-markdown-divider-dark);
   --semantic-markdown-quote-surface: var(--semantic-markdown-quote-surface-dark);
   --semantic-markdown-inline-code-surface: var(--semantic-markdown-inline-code-surface-dark);
+  --semantic-markdown-table-surface: var(--semantic-markdown-table-surface-dark);
   --semantic-markdown-table-head-surface: var(--semantic-markdown-table-head-surface-dark);
   --semantic-markdown-table-row-alt-surface: var(--semantic-markdown-table-row-alt-surface-dark);
   --semantic-markdown-code-surface: var(--semantic-markdown-code-surface-dark);

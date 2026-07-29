@@ -839,6 +839,8 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                     attachmentError={composer.attachmentError}
                     canSend={canCreateProjectSession}
                     canPasteImageAttachments={composer.attachmentCapabilities.image && composer.attachmentDisabledReason === null}
+                    contextUsage={null}
+                    contextWindow={composer.contextWindow}
                     draftState={pane.draftState}
                     hasPendingPermissionRequests={false}
                     isCancelling={pane.isCancelling}
@@ -904,11 +906,9 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                   />
                 {createSessionWorkflowBadge ? <ComposerPlanModeNotice workflow={createSessionWorkflowBadge} /> : null}
                 <ComposerUtilityBar
-                  contextWindow={composer.contextWindow}
                   gitDirectory={pane.workspace?.directory ?? null}
                   gitProjectID={pane.projectID}
                   showGitControls={pane.isActivePanel}
-                  usage={null}
                 />
               </div>
             </div>
@@ -919,14 +919,12 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                   initialSnapshot={branchViewSnapshotsRef.current[branchViewSnapshotKey] ?? null}
                   isSessionRunning={pane.isSending || pane.isInterruptible}
                   messageTree={pane.messageTree}
-                  onContinueFromMessage={(messageID) => {
-                    if (pane.tabKey) {
-                      onForkFromMessage(messageID, { tabKey: pane.tabKey })
-                    }
-                  }}
                   onInspectMessage={(messageID) => {
                     if (!pane.sessionID) return
                     onInspectMessageInSidebar(messageID, pane.sessionID, pane.id)
+                    if (pane.tabKey) {
+                      onForkFromMessage(messageID, { tabKey: pane.tabKey })
+                    }
                   }}
                   onSnapshotChange={(snapshot) => {
                     branchViewSnapshotsRef.current[branchViewSnapshotKey] = snapshot
@@ -1057,6 +1055,8 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                     attachmentError={composer.attachmentError}
                     canSend={Boolean(pane.activeSession)}
                     canPasteImageAttachments={composer.attachmentCapabilities.image && composer.attachmentDisabledReason === null}
+                    contextUsage={pane.activeSessionContextUsage}
+                    contextWindow={composer.contextWindow}
                     draftState={pane.draftState}
                     hasBagSubmit={mainSessionBagSessionID !== null}
                     hasCompactCommand={Boolean(pane.activeSession)}
@@ -1140,11 +1140,9 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                 ) : null}
                 {composerWorkflowBadge ? <ComposerPlanModeNotice workflow={composerWorkflowBadge} /> : null}
                 <ComposerUtilityBar
-                  contextWindow={composer.contextWindow}
                   gitDirectory={pane.workspace?.directory ?? null}
                   gitProjectID={pane.projectID}
                   showGitControls={showGitControls}
-                  usage={pane.activeSessionContextUsage}
                 />
               </div>
             </>

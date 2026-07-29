@@ -19,6 +19,8 @@ function renderComposer(input: Partial<Parameters<typeof Composer>[0]> & { withI
       attachmentDisabledReason={null}
       attachmentError={null}
       canSend
+      contextUsage={null}
+      contextWindow={null}
       draftState={createComposerDraftStateFromPlainText("")}
       hasPendingPermissionRequests={false}
       isSending={false}
@@ -60,6 +62,8 @@ describe("Composer", () => {
         attachmentDisabledReason={null}
         attachmentError={null}
         canSend
+        contextUsage={null}
+        contextWindow={null}
         draftState={createComposerDraftStateFromPlainText("")}
         hasPendingPermissionRequests={false}
         isSending={false}
@@ -108,6 +112,8 @@ describe("Composer", () => {
         attachmentDisabledReason={null}
         attachmentError={null}
         canSend
+        contextUsage={null}
+        contextWindow={null}
         draftState={createComposerDraftStateFromPlainText("")}
         hasPendingPermissionRequests={false}
         isSending={false}
@@ -134,6 +140,81 @@ describe("Composer", () => {
     )
 
     expect(screen.getByText("Ask a follow-up about this reply.")).toBeInTheDocument()
+  })
+
+  it("renders context pressure inside composer selectors after reasoning", () => {
+    const { container } = renderComposer({
+      contextUsage: {
+        inputTokens: 25000,
+        outputTokens: 1200,
+        totalTokens: 26200,
+        reasoningTokens: 300,
+        cacheReadTokens: 2000,
+        cacheWriteTokens: 100,
+        measuredAt: 100,
+      },
+      contextWindow: 100000,
+      reasoningEffortOptions: [{ value: "high", label: "High", description: "Maximum reasoning" }],
+      selectedReasoningEffort: "high",
+      selectedReasoningEffortLabel: "High",
+    })
+
+    const composer = container.querySelector(".composer")
+    const selectors = container.querySelector(".composer-selectors")
+    const reasoningButton = screen.getByRole("button", { name: "Select reasoning effort: High" })
+    const contextButton = screen.getByRole("button", {
+      name: "Context pressure 25% (25k / 100k input tokens)",
+    })
+
+    expect(composer).toContainElement(contextButton)
+    expect(selectors).toContainElement(contextButton)
+    expect(reasoningButton.compareDocumentPosition(contextButton) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+  })
+
+  it("closes composer selectors before opening context pressure", () => {
+    renderComposer({
+      attachmentDisabledReason: "Attachments are unavailable for this model.",
+      contextUsage: {
+        inputTokens: 25000,
+        outputTokens: 1200,
+        totalTokens: 26200,
+        reasoningTokens: 300,
+        cacheReadTokens: 2000,
+        cacheWriteTokens: 100,
+        measuredAt: 100,
+      },
+      contextWindow: 100000,
+      modelOptions: [
+        {
+          value: "openai/gpt-4o-mini",
+          label: "GPT-4o mini",
+          providerID: "openai",
+          providerLabel: "OpenAI",
+        },
+      ],
+      selectedModel: "openai/gpt-4o-mini",
+      selectedModelLabel: "GPT-4o mini",
+    })
+
+    const contextButton = screen.getByRole("button", {
+      name: "Context pressure 25% (25k / 100k input tokens)",
+    })
+
+    fireEvent.click(screen.getByRole("button", { name: "Select model: GPT-4o mini" }))
+    expect(screen.getByRole("listbox", { name: "Model selection" })).toBeInTheDocument()
+
+    fireEvent.click(contextButton)
+
+    expect(screen.queryByRole("listbox", { name: "Model selection" })).not.toBeInTheDocument()
+    expect(screen.getByRole("dialog", { name: "Context details" })).toBeInTheDocument()
+
+    fireEvent.click(contextButton)
+    fireEvent.click(screen.getByRole("button", { name: "Add attachments" }))
+    expect(screen.getByRole("dialog", { name: "Attachments unavailable" })).toBeInTheDocument()
+
+    fireEvent.click(contextButton)
+    expect(screen.queryByRole("dialog", { name: "Attachments unavailable" })).not.toBeInTheDocument()
+    expect(screen.getByRole("dialog", { name: "Context details" })).toBeInTheDocument()
   })
 
   it("explains why attachments are unavailable without opening the picker", () => {
@@ -366,6 +447,8 @@ describe("Composer", () => {
           attachmentDisabledReason={null}
           attachmentError={null}
           canSend
+          contextUsage={null}
+          contextWindow={null}
           draftState={createComposerDraftStateFromPlainText("")}
           hasPendingPermissionRequests={false}
           isSending={false}
@@ -425,6 +508,8 @@ describe("Composer", () => {
         attachmentDisabledReason={null}
         attachmentError={null}
         canSend
+        contextUsage={null}
+        contextWindow={null}
         draftState={draftState}
         hasPendingPermissionRequests={false}
         isSending={false}

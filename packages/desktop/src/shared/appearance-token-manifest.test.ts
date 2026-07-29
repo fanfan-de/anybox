@@ -26,6 +26,7 @@ const calendarCss = readFileSync(resolve(stylesRoot, "calendar.css"), "utf8")
 const composerCss = readFileSync(resolve(stylesRoot, "composer.css"), "utf8")
 const rightSidebarCss = readFileSync(resolve(stylesRoot, "right-sidebar.css"), "utf8")
 const settingsCss = readFileSync(resolve(stylesRoot, "settings.css"), "utf8")
+const threadCss = readFileSync(resolve(stylesRoot, "thread.css"), "utf8")
 const manifest = JSON.parse(
   readFileSync(
     resolve(packageRoot, "src/shared/appearance-token-manifest.json"),
@@ -470,6 +471,43 @@ describe("appearance token manifest", () => {
     }
 
     expect(violations).toEqual([])
+  })
+
+  it("routes Markdown table body backgrounds through the Markdown table surface token", () => {
+    expect(threadCss).toMatch(
+      /\.thread-markdown\s*\{[^}]*--md-table-bg:\s*var\(--semantic-markdown-table-surface\);/s,
+    )
+    expect(threadCss).toMatch(
+      /\.thread-markdown-table-scroll\s*\{[^}]*background:\s*var\(--md-table-bg\);/s,
+    )
+    expect(threadCss).toMatch(
+      /\.thread-markdown td\s*\{[^}]*background:\s*var\(--md-table-bg\);/s,
+    )
+
+    const markdownTableStyles = threadCss.slice(
+      threadCss.indexOf(".thread-markdown-table-scroll"),
+      threadCss.indexOf(".thread-markdown hr"),
+    )
+    expect(markdownTableStyles).not.toContain(
+      "background: var(--semantic-thread-panel-surface)",
+    )
+  })
+
+  it("routes Markdown thematic breaks through the dedicated divider token", () => {
+    expect(generatedCss).toMatch(
+      /--semantic-markdown-divider-light:\s*rgba\(41,\s*37,\s*36,\s*0\);/,
+    )
+    expect(generatedCss).toMatch(
+      /--semantic-markdown-divider-dark:\s*rgba\(255,\s*255,\s*255,\s*0\);/,
+    )
+    expect(threadCss).toMatch(
+      /\.thread-markdown\s*\{[^}]*--md-divider:\s*var\(--semantic-markdown-divider\);/s,
+    )
+
+    const horizontalRule = threadCss.match(/\.thread-markdown hr\s*\{([^}]*)\}/s)?.[1] ?? ""
+    expect(horizontalRule).toMatch(/background:\s*var\(--md-divider\);/)
+    expect(horizontalRule).not.toContain("var(--md-border)")
+    expect(horizontalRule).not.toMatch(/\bdisplay:\s*none\b/)
   })
 
   it("keeps manifest-owned declarations out of the manual compatibility token file", () => {

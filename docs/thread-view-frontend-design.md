@@ -92,13 +92,13 @@ section.workbench-pane  # Dockview panel 的内容根
       ├─ Branch: BranchThreadView  # 完整历史的轻量地图
       └─ div.composer-stack  # 底部输入区栈
          ├─ ComposerPendingSteerDrawer  # 已提交但不打断运行的补充输入
-         ├─ Composer  # 主输入框
+         ├─ Composer  # 主输入框；底栏依次包含附件、模型、reasoning、上下文压力和发送/停止
          ├─ ComposerBranchParentNotice  # 分支续写提示
          ├─ ComposerPlanModeNotice  # plan mode 状态提示
-         └─ ComposerUtilityBar  # workspace/model/context 辅助信息
+         └─ ComposerUtilityBar?  # 仅承载可用的 Git 分支控件；无内容时不占位
 ```
 
-Dockview 的 tab/header chrome 位于 `WorkbenchPaneSurface` 外部，不属于 `section.workbench-pane` 内容根。视觉调试截图中，pane 对应的是中间 Dockview 内的内容面板；它包含绿色 `SessionCanvasTopMenu`、蓝色 `ThreadView` 区、紫色 `Composer` 和底部浅绿 `ComposerUtilityBar`。左侧 sidebar、右侧 sidebar、顶层 Dockview tab 条都不是这个 pane 的主体内容。
+Dockview 的 tab/header chrome 位于 `WorkbenchPaneSurface` 外部，不属于 `section.workbench-pane` 内容根。视觉调试截图中，pane 对应的是中间 Dockview 内的内容面板；它包含绿色 `SessionCanvasTopMenu`、蓝色 `ThreadView` 区、紫色 `Composer`，以及仅在 Git 分支控件可用时出现的底部浅绿 `ComposerUtilityBar`。左侧 sidebar、右侧 sidebar、顶层 Dockview tab 条都不是这个 pane 的主体内容。
 
 从用户可见区域看，一个 pane 的主要结构是：
 
@@ -108,7 +108,7 @@ SessionCanvasTopMenu
 ThreadView | BranchThreadView
 ComposerTaskProgress
 Composer
-ComposerUtilityBar
+ComposerUtilityBar?
 ```
 
 `workbench-pane-live-region` 使用 CSS grid 管理这些区域，其中当前 session view 占据 `minmax(0, 1fr)` 主阅读区，composer 固定在底部。`ThreadView` 内部的 `thread-column` 是独立滚动容器；`BranchThreadView` 使用整个主阅读区承载可平移、缩放的分支地图，节点详情交给 Right Sidebar。
@@ -120,14 +120,13 @@ ComposerUtilityBar
 - `sessionViewMode` 属于当前 workbench tab 的 renderer 内存状态，不写回 session，也不调用后端。
 - Linear 继续消费 active history 的 canonical `ThreadTurn[]`，保留 streaming、trace、权限交互、bottom-lock 和虚拟列表。
 - Branch 消费 `view: "all"` 派生的 `SessionMessageTree`，`buildBranchThreadLayout()` 只计算节点坐标和 active-path edge；节点只渲染 role、状态和短摘要。
-- 单击 Branch 节点只改变 `BranchThreadView` 内的 `inspectedMessageID`，同时打开或更新 Right Sidebar 中唯一的上下文页签 `message-inspector`；右侧栏若已折叠会自动展开。Inspect 与主线程续写是两个独立动作。
-- 工具栏的“从所选消息继续主线程”命令才会通过既有 `onForkFromMessage` 链路，把当前 Inspect 节点写入 workbench tab 的 `composerParentMessageID`。
+- 单击 Branch 节点会改变 `BranchThreadView` 内的 `inspectedMessageID`，同时打开或更新 Right Sidebar 中唯一的上下文页签 `message-inspector`；右侧栏若已折叠会自动展开。同一次选择还会通过既有 `onForkFromMessage` 链路，把该节点写入当前 workbench tab 的 `composerParentMessageID`。
 - `message-inspector` 以 `sessionID + messageID` 为目标。选中 assistant 时显示其最近的父级 user message 与该 assistant；选中 user 时默认显示 active-path 上的直接 assistant 回复，有多个直接回复时允许只在详情内切换查看。
 - inspect 不会调用 branch select，也不会立即修改持久化的 `activeMessageID`。它只设置 renderer 内存中的 Composer 续写锚点；右侧栏的“当前”与“正在查看”标记继续区分 session 分支头和瞬时查看目标。
 - `SessionMessageInspectorPanel` 只挂载当前一组 user/assistant Markdown；不会在每个地图节点内挂载完整 `ThreadView`，也不会在中央地图旁保留第二个详情区。
 - 当前 `SessionMessageTree` 只保留 user message 与每个 backend turn 的最终 assistant 文本，且单节点正文有长度上限。因此首版详情不宣称能重放历史 trace、tool、permission 或 file changes；这些能力需要后续保留可索引的全历史 turn projection。
 - Branch 的 `pan / zoom / inspected / keyboard focus` snapshot 以 `tab + session` 为 key 保存在 pane 组件内存中，切回 Linear 再返回时恢复；它不持久化到 session 或磁盘。
-- Composer 仍是两种视图共同的 sibling。只有显式执行“从所选消息继续主线程”后才显示 `ComposerBranchParentNotice`；下一次非并发发送把所选 message ID 作为 `parentMessageID` 交给既有发送服务，成功提交后清除该 tab 的显式 parent。新消息由后端按该 parent 建立分支，其他历史分支保持不变。
+- Composer 仍是两种视图共同的 sibling。Branch 节点选择会显示 `ComposerBranchParentNotice`；下一次非并发发送把所选 message ID 作为 `parentMessageID` 交给既有发送服务，成功提交后清除该 tab 的显式 parent。新消息由后端按该 parent 建立分支，其他历史分支保持不变。
 
 Right Sidebar 的现有 Message Tree 暂时保留，作为迁移期导航器；中央 Branch 视图不复用其“点击节点即切换 active branch”的行为。`message-inspector` 是由 Branch 节点点击打开的上下文页签，不出现在 Right Sidebar 的通用新增页签 launcher 中；再次点击其他节点会复用并更新同一个页签。
 
@@ -178,7 +177,7 @@ Draft 的 `originMessageID` 与 `headMessageID` 相同。首次请求被接受�
 
 右侧 UI 不直接显示完整 root → head：
 
-1. 页签顶部只保留极薄的工具栏：右侧是 `⋯` 高级入口和常驻的“工具只读”安全状态。默认界面不显示来源摘要、选择器、跟随、定位、详情或锁定状态。
+1. 页签顶部只保留极薄的工具栏：左侧是“最近分支”入口，右侧是 `⋯` 高级入口和常驻的“工具只读”安全状态。“最近分支”只展开消息树实时推导的非主 leaf，不在工具栏内常驻列表；没有可用分支时入口保持禁用。默认界面不显示来源摘要、选择器、跟随、定位、详情或锁定状态。
 2. `ThreadView` 只接收 origin 之后的 messages/turns。
 3. Composer、引用卡、Queue / Steer 和权限区域固定在底部。
 
@@ -190,12 +189,12 @@ Draft 的 `originMessageID` 与 `headMessageID` 相同。首次请求被接受�
 - 回复分支按钮、response 文本引用、最近分支、Message Tree / Message Inspector 和高级选择器使用 `anchorStrategy: "selected"`，固定使用明确选择的回复；之后出现的新回复不会改写它。
 - `⋯` 直接打开使用 portal 渲染的高级列表。Draft 沿主 active path 按从旧到新列出有效回复，阅读方向与主 ThreadView 一致；`latest-at-send` 单独取最后一个有效候选，不依赖列表首项。打开列表时自动把当前选择或最新回复滚入视口。文案使用“从哪条回复开始”，不向普通用户暴露“锚点”术语；选择后切换为 `"selected"`，并立即让 focused 主 ThreadView 定位到该回复所属轮次的 user message，使 user message 与 response 开头连续可见。列表保持打开，默认界面不增加来源条或特殊标记。
 - Committed 分支中的同一入口只读展示实际起点，不提供修改操作，并可通过 `paneID + messageID` 在同 Session 的 focused 主线程中定位。
-- 高级列表支持 Escape、方向键、Home / End、Enter / Space、点击外部空白或 Branch Chat Composer 关闭和焦点归还；选项选择与面板内定位动作不关闭列表。列表使用 fixed portal 定位，在窄于 360px 的右侧容器中仍限制于 viewport。
+- 高级列表与最近分支列表都支持 Escape、方向键、Home / End、Enter / Space、点击外部空白或 Branch Chat Composer 关闭和焦点归还；两个弹层互斥。高级列表中的选项选择与面板内定位动作不关闭列表，最近分支选择后关闭弹层并打开或聚焦目标页签。两个列表都使用 fixed portal 定位，在窄于 360px 的右侧容器中仍限制于 viewport。
 - 主 ThreadView 与 Branch Chat 内最终 response 的 branch icon 每次都新建独立 draft 页签；它不再把 parent 写入主 Composer。
 - response 选区右键菜单会创建 draft，并把选中文字作为结构化引用。选区必须完整属于同一条可分支 assistant response；链接内有有效选区时，ThreadView 选区菜单优先于链接菜单。
 - Message Tree / Message Inspector 的 Branch Chat 动作对中间 response 创建 draft；对已有非主 leaf 则使用计算出的 origin/head 重开 committed 分支。
 
-通用入口下的“最近分支”不读取页签历史，而是实时扫描消息树中的非主 leaf。标题取分叉后的第一条 user message，摘要取 leaf response，时间取 leaf；generating、queued、waiting permission 和 error 由 turn parts 与瞬时 execution snapshot 合并显示。相同 leaf 已打开时聚焦已有页签；相同 anchor 的新 draft 不去重。
+Branch Chat 顶部工具栏的“最近分支”不读取页签历史，而是实时扫描当前 Session 消息树中的非主 leaf。标题取分叉后的第一条 user message，摘要取 leaf response，时间取 leaf；generating、queued、waiting permission 和 error 由 turn parts 与瞬时 execution snapshot 合并显示。相同 leaf 已打开时聚焦已有页签；相同 anchor 的新 draft 不去重。Right Sidebar 通用新增页签 launcher 不再常驻渲染最近分支列表。
 
 #### Execution 隔离与只读边界
 
@@ -555,7 +554,7 @@ TraceItemView
       └─ task-state → TaskStateTraceItemView
 ```
 
-注意：主 pane 底部的紫色主输入框 `Composer` 不是主 `ThreadView` 的子组件，它是 `WorkbenchPaneSurface` 中 `ThreadView` 后面的 sibling。Branch Chat 也保持同一结构：右侧 `ThreadView` 与其本地 Composer 是 sibling，草稿、附件、model、reasoning、skills 和 MCP 选择按页签隔离。
+注意：主 pane 底部的紫色主输入框 `Composer` 不是主 `ThreadView` 的子组件，它是 `WorkbenchPaneSurface` 中 `ThreadView` 后面的 sibling。上下文压力入口属于 Composer 底栏，并位于 reasoning selector 之后、发送/停止动作之前。Branch Chat 也保持同一结构：右侧 `ThreadView` 与其本地 Composer 是 sibling，草稿、附件、model、reasoning、上下文压力、skills 和 MCP 选择按页签隔离；Branch Chat 不再挂载独立的 `ComposerUtilityBar`。
 
 ## 5. 视觉层级
 
@@ -692,7 +691,7 @@ agent 提问通过 `question` trace item 渲染：
 
 - 小于 900px 时，assistant response actions 和 session banner 纵向排列。
 - 小屏下 pane content gutter 降低到 10px。
-- composer、utility bar、菜单 panel 会全宽显示。
+- composer、存在时的 Git utility bar、菜单 panel 会全宽显示。
 - permission request grid 在窄屏变成单列。
 - `thread-shell` 使用 inline-size container query：pane 宽度达到 1000px 时，横线导航固定在当前 pane 左侧 16px 的留白轨道；621–999px 时仍邻近居中正文左侧；小于等于 620px 时隐藏横线导航并显示“第 n/m 轮”紧凑按钮。popover 保留全部轮次并可独立滚动，三种布局都不参与正文排版或改变正文宽度。
 
@@ -720,6 +719,8 @@ Thread view 使用项目的语义 token：
 - `--semantic-thread-user-message-diff-preview-surface`
 - 轮次导航复用 `--semantic-thread-divider`、`--seg-text-*`、`--semantic-icon-button-*`、`--semantic-popup-panel-surface` 和 secondary button border token，没有新增硬编码主题颜色。
 - `--semantic-markdown-text`
+- `--semantic-markdown-divider`
+- `--semantic-markdown-table-surface`
 - `--semantic-question-card-surface`
 - `--semantic-proposed-plan-card-surface`
 - `--semantic-warning-*`
@@ -731,7 +732,7 @@ Thread view 的 assistant 文本有两组专用 semantic token：
 
 Thread view 的面板背景使用专用 semantic token，不直接消费全局 `surface-panel` / `seg-panel`：
 
-- `semantic-thread-panel-surface`：thread-owned 面板、默认 assistant card、markdown table / HTML frame 背景。
+- `semantic-thread-panel-surface`：thread-owned 面板、默认 assistant card 和 HTML frame 背景。
 - `semantic-thread-panel-surface-muted`：低强调 trace、metadata、nested panel 背景。
 - `semantic-thread-tool-io-panel-surface`：tool input/output 合并滚动面板背景，可独立于普通 nested panel 调整；对应的 light/dark token 暴露在外观设置的 Thread View 分组。
 - `semantic-thread-panel-surface-hover`：thread 面板内紧凑控件的 hover / focus 背景。
@@ -760,7 +761,7 @@ User-message 文件变更卡片使用一组专用 semantic token：
 - `--semantic-thread-user-message-diff-row-surface-focus`
 - `--semantic-thread-user-message-diff-preview-surface`
 
-它们在 light/dark theme 下分别映射到同名 `-light` / `-dark` token。需要注意，assistant response 如果进入 `ThreadMarkdown`，`.thread-markdown` 内部还会把 `--md-text` 指向 `--semantic-markdown-text`，所以 markdown 段落的最终颜色可能服从 markdown token，而不是 thread response token。
+它们在 light/dark theme 下分别映射到同名 `-light` / `-dark` token。需要注意，assistant response 如果进入 `ThreadMarkdown`，`.thread-markdown` 内部还会把 `--md-text` 指向 `--semantic-markdown-text`，所以 markdown 段落的最终颜色可能服从 markdown token，而不是 thread response token。Markdown 表格容器和普通内容单元格的默认背景使用独立的 `--semantic-markdown-table-surface`，表头和交替行继续分别使用 `--semantic-markdown-table-head-surface` 与 `--semantic-markdown-table-row-alt-surface`；Markdown thematic break 使用独立的 `--semantic-markdown-divider`，内置主题默认为透明但保留 `<hr>` 的章节语义和垂直留白。以上 token 都在 Appearance 的 Markdown 分组中提供 light/dark 配置。
 
 `thread-shell` 和 `thread-column` 的面板背景当前没有对应的 `semantic-*` surface token。普通模式下它们透明；debug UI region 模式下才由 `--debug-region-thread-shell` 涂成蓝色。
 

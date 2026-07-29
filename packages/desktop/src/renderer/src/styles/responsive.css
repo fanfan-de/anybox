@@ -322,6 +322,17 @@
     overflow: visible;
   }
 
+  .context-pressure-anchor {
+    width: var(--icon-button-size);
+    min-width: var(--icon-button-size);
+    align-self: flex-start;
+  }
+
+  .context-pressure-popover {
+    right: auto;
+    left: 0;
+  }
+
   .composer-actions,
   .settings-inline-actions {
     margin-left: 0;

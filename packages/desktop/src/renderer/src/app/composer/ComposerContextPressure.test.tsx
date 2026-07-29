@@ -1,16 +1,13 @@
 import { fireEvent, render, screen, within } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
-import { ComposerUtilityBar } from "./ComposerUtilityBar"
-import { I18nProvider } from "./i18n/I18nProvider"
+import { I18nProvider } from "../i18n/I18nProvider"
+import { ComposerContextPressure } from "./ComposerContextPressure"
 
-describe("ComposerUtilityBar", () => {
+describe("ComposerContextPressure", () => {
   it("opens context details from the pressure indicator and closes from outside click or Escape", () => {
     render(
-      <ComposerUtilityBar
+      <ComposerContextPressure
         contextWindow={100000}
-        gitDirectory={null}
-        gitProjectID={null}
-        showGitControls={false}
         usage={{
           inputTokens: 25000,
           outputTokens: 1200,
@@ -26,6 +23,10 @@ describe("ComposerUtilityBar", () => {
     const contextButton = screen.getByRole("button", {
       name: "Context pressure 25% (25k / 100k input tokens)",
     })
+    const ring = contextButton.querySelector(".context-pressure-ring")
+    expect(ring).toHaveAttribute("viewBox", "0 0 16 16")
+    expect(ring?.querySelectorAll("circle")).toHaveLength(2)
+    expect(ring?.querySelector(".context-pressure-ring-core")).toBeNull()
     expect(contextButton).toHaveAttribute("aria-expanded", "false")
 
     fireEvent.click(contextButton)
@@ -45,6 +46,7 @@ describe("ComposerUtilityBar", () => {
 
     fireEvent.keyDown(document, { key: "Escape" })
     expect(screen.queryByRole("dialog", { name: "Context details" })).not.toBeInTheDocument()
+    expect(contextButton).toHaveFocus()
   })
 
   it("localizes context details in Chinese", () => {
@@ -52,11 +54,8 @@ describe("ComposerUtilityBar", () => {
 
     render(
       <I18nProvider>
-        <ComposerUtilityBar
+        <ComposerContextPressure
           contextWindow={100000}
-          gitDirectory={null}
-          gitProjectID={null}
-          showGitControls={false}
           usage={{
             inputTokens: 25000,
             outputTokens: 1200,

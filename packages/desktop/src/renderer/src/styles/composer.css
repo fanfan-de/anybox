@@ -468,23 +468,26 @@
 .context-pressure-anchor {
   position: relative;
   flex: 0 0 auto;
+  align-self: flex-start;
+  width: 34px;
+  min-width: 34px;
   display: inline-flex;
 }
 
 .context-pressure-indicator.is-low {
-  color: var(--seg-success-text);
+  color: var(--semantic-success-text);
 }
 
 .context-pressure-indicator.is-medium {
-  color: var(--seg-warning-text);
+  color: var(--semantic-warning-text);
 }
 
 .context-pressure-indicator.is-high {
-  color: var(--seg-danger-text);
+  color: var(--semantic-error-text);
 }
 
 .context-pressure-indicator.is-unknown {
-  color: var(--seg-text-3);
+  color: var(--semantic-composer-icon-button-text);
 }
 
 .composer-utility-permission-panel {
@@ -492,59 +495,53 @@
   max-height: none;
 }
 
-.composer-utility-chip.context-pressure-indicator {
-  width: 28px;
-  min-width: 28px;
-  height: 28px;
-  min-height: 28px;
+.composer .context-pressure-indicator {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
   padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--seg-radius-xs);
+  background: var(--semantic-composer-icon-button-surface);
   box-shadow: none;
   cursor: pointer;
   -webkit-app-region: no-drag;
 }
 
-.context-pressure-ring {
-  width: 28px;
-  height: 28px;
+.composer .context-pressure-ring {
+  width: 16px;
+  height: 16px;
   overflow: visible;
 }
 
 .context-pressure-ring-track,
-.context-pressure-ring-progress,
-.context-pressure-ring-core {
+.context-pressure-ring-progress {
   fill: none;
 }
 
-.context-pressure-ring-track,
-.context-pressure-ring-progress {
-  stroke-width: 2.5;
+.composer .context-pressure-ring-track,
+.composer .context-pressure-ring-progress {
+  stroke-width: 2;
 }
 
-.context-pressure-ring-track {
-  stroke: var(--text-tertiary);
-  stroke-opacity: 0.34;
+.composer .context-pressure-ring-track {
+  stroke: var(--semantic-composer-icon-button-text);
+  stroke-opacity: 0.22;
 }
 
-.context-pressure-ring-progress {
+.composer .context-pressure-ring-progress {
   stroke: currentColor;
   stroke-linecap: round;
   transform: rotate(-90deg);
-  transform-origin: 14px 14px;
+  transform-origin: 8px 8px;
   transition: stroke-dashoffset 180ms ease, stroke 180ms ease;
-}
-
-.context-pressure-ring-core {
-  fill: currentColor;
-  opacity: 0.88;
 }
 
 .context-pressure-popover {
   position: absolute;
   bottom: calc(100% + 8px);
-  left: 0;
+  right: 0;
   z-index: 9;
   width: min(320px, calc(100vw - 32px));
   padding: 12px;
@@ -552,7 +549,7 @@
   gap: 10px;
   border: 1px solid var(--seg-border);
   border-radius: var(--semantic-dropdown-menu-radius, var(--seg-radius-md));
-  background: var(--seg-dropdown-menu-surface);
+  background: var(--semantic-popup-panel-surface);
   color: var(--seg-text-1);
   box-shadow: var(--shadow-sm);
 }
@@ -613,21 +610,21 @@
 }
 
 .context-pressure-status.is-low {
-  border-color: var(--seg-success-border);
-  background: var(--seg-success-surface);
-  color: var(--seg-success-text);
+  border-color: var(--semantic-success-border);
+  background: var(--semantic-success-surface);
+  color: var(--semantic-success-text);
 }
 
 .context-pressure-status.is-medium {
-  border-color: var(--seg-warning-border);
-  background: var(--seg-warning-surface);
-  color: var(--seg-warning-text);
+  border-color: var(--semantic-warning-border);
+  background: var(--semantic-warning-surface);
+  color: var(--semantic-warning-text);
 }
 
 .context-pressure-status.is-high {
-  border-color: var(--seg-danger-border);
-  background: var(--seg-danger-surface);
-  color: var(--seg-danger-text);
+  border-color: var(--semantic-error-border);
+  background: var(--semantic-error-surface);
+  color: var(--semantic-error-text);
 }
 
 .context-pressure-meter {
@@ -639,15 +636,15 @@
 }
 
 .context-pressure-meter.is-low {
-  color: var(--seg-success-text);
+  color: var(--semantic-success-text);
 }
 
 .context-pressure-meter.is-medium {
-  color: var(--seg-warning-text);
+  color: var(--semantic-warning-text);
 }
 
 .context-pressure-meter.is-high {
-  color: var(--seg-danger-text);
+  color: var(--semantic-error-text);
 }
 
 .context-pressure-meter-fill {
@@ -1354,7 +1351,8 @@
 }
 
 .composer-selectors:has(.composer-menu-panel),
-.composer-selectors:has(.composer-attachment-unavailable-popover) {
+.composer-selectors:has(.composer-attachment-unavailable-popover),
+.composer-selectors:has(.context-pressure-popover) {
   overflow: visible;
 }
 
@@ -2099,6 +2097,10 @@
   padding: 0;
 }
 
+.composer-utility-bar:empty {
+  display: none;
+}
+
 .composer {
   --composer-editor-min-height: 72px;
   position: relative;
@@ -2492,45 +2494,45 @@
   outline: none;
 }
 
-.composer-utility-bar .context-pressure-indicator {
+.composer .context-pressure-indicator {
   border-color: transparent;
   background: var(--semantic-composer-icon-button-surface);
   box-shadow: none;
 }
 
-.composer-utility-bar .context-pressure-indicator:not(:disabled):hover,
-.composer-utility-bar .context-pressure-indicator:not(:disabled):focus-visible,
-.composer-utility-bar .context-pressure-indicator.is-active {
+.composer .context-pressure-indicator:not(:disabled):hover,
+.composer .context-pressure-indicator:not(:disabled):focus-visible,
+.composer .context-pressure-indicator.is-active {
   border-color: transparent;
   background: var(--semantic-composer-icon-button-surface-hover);
   box-shadow: none;
   outline: none;
 }
 
-.composer-utility-bar .context-pressure-indicator.is-low,
-.composer-utility-bar .context-pressure-indicator.is-low:not(:disabled):hover,
-.composer-utility-bar .context-pressure-indicator.is-low:not(:disabled):focus-visible,
-.composer-utility-bar .context-pressure-indicator.is-low.is-active {
-  color: var(--seg-success-text);
+.composer .context-pressure-indicator.is-low,
+.composer .context-pressure-indicator.is-low:not(:disabled):hover,
+.composer .context-pressure-indicator.is-low:not(:disabled):focus-visible,
+.composer .context-pressure-indicator.is-low.is-active {
+  color: var(--semantic-success-text);
 }
 
-.composer-utility-bar .context-pressure-indicator.is-medium,
-.composer-utility-bar .context-pressure-indicator.is-medium:not(:disabled):hover,
-.composer-utility-bar .context-pressure-indicator.is-medium:not(:disabled):focus-visible,
-.composer-utility-bar .context-pressure-indicator.is-medium.is-active {
-  color: var(--seg-warning-text);
+.composer .context-pressure-indicator.is-medium,
+.composer .context-pressure-indicator.is-medium:not(:disabled):hover,
+.composer .context-pressure-indicator.is-medium:not(:disabled):focus-visible,
+.composer .context-pressure-indicator.is-medium.is-active {
+  color: var(--semantic-warning-text);
 }
 
-.composer-utility-bar .context-pressure-indicator.is-high,
-.composer-utility-bar .context-pressure-indicator.is-high:not(:disabled):hover,
-.composer-utility-bar .context-pressure-indicator.is-high:not(:disabled):focus-visible,
-.composer-utility-bar .context-pressure-indicator.is-high.is-active {
-  color: var(--seg-danger-text);
+.composer .context-pressure-indicator.is-high,
+.composer .context-pressure-indicator.is-high:not(:disabled):hover,
+.composer .context-pressure-indicator.is-high:not(:disabled):focus-visible,
+.composer .context-pressure-indicator.is-high.is-active {
+  color: var(--semantic-error-text);
 }
 
-.composer-utility-bar .context-pressure-indicator.is-unknown,
-.composer-utility-bar .context-pressure-indicator.is-unknown:not(:disabled):hover,
-.composer-utility-bar .context-pressure-indicator.is-unknown:not(:disabled):focus-visible,
-.composer-utility-bar .context-pressure-indicator.is-unknown.is-active {
-  color: var(--seg-text-3);
+.composer .context-pressure-indicator.is-unknown,
+.composer .context-pressure-indicator.is-unknown:not(:disabled):hover,
+.composer .context-pressure-indicator.is-unknown:not(:disabled):focus-visible,
+.composer .context-pressure-indicator.is-unknown.is-active {
+  color: var(--semantic-composer-icon-button-text);
 }

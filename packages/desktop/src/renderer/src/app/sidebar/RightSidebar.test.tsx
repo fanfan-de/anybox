@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import type { ComponentProps } from "react"
 import { describe, expect, it, vi } from "vitest"
 import type { AgentSessionBridgeEvent } from "../agent-session/client"
@@ -537,7 +537,28 @@ describe("RightSidebar", () => {
     expect(onOpenTerminalTab).not.toHaveBeenCalled()
   })
 
-  it("shows queued detached execution state on a recent branch", () => {
+  it("keeps recent branches out of the right sidebar launcher", () => {
+    renderRightSidebar({
+      messageTreeBySession: {
+        "session-1": createBranchChatTree(),
+      },
+      rightSidebar: {
+        activeTabID: null,
+        tabs: [],
+      },
+    })
+
+    expect(screen.queryByRole("button", { name: "Open recent branches" })).not.toBeInTheDocument()
+    expect(screen.queryByText("Recent branches")).not.toBeInTheDocument()
+  })
+
+  it("shows queued detached execution state in the Branch Chat recent menu", async () => {
+    const onOpenBranchChat = vi.fn()
+    const tab = {
+      ...createBranchChatTab(),
+      headMessageID: "assistant-branch",
+      phase: "committed" as const,
+    }
     renderRightSidebar({
       activeSessionRuntimeDebug: {
         generatedAt: 1,
@@ -580,14 +601,48 @@ describe("RightSidebar", () => {
         "session-1": createBranchChatTree(),
       },
       rightSidebar: {
-        activeTabID: null,
-        tabs: [],
+        activeTabID: tab.id,
+        tabs: [tab],
+      },
+      onOpenBranchChat,
+    })
+
+    const recentTrigger = screen.getByRole("button", { name: "Open recent branches" })
+    expect(recentTrigger.closest(".branch-chat-toolbar")).not.toBeNull()
+    fireEvent.click(recentTrigger)
+
+    const recentListbox = await screen.findByRole("listbox", { name: "Recent branches" })
+    const recentOption = within(recentListbox).getByRole("option", { name: /Explore branch/ })
+    expect(recentOption).toHaveAttribute("aria-selected", "true")
+    expect(recentOption).toHaveTextContent("Branch result")
+    expect(recentOption).toHaveTextContent("queued")
+
+    fireEvent.click(recentOption)
+    expect(onOpenBranchChat).toHaveBeenCalledWith({
+      anchorStrategy: "selected",
+      sessionID: "session-1",
+      originMessageID: "assistant-anchor",
+      headMessageID: "assistant-branch",
+      phase: "committed",
+      title: "Explore branch",
+    })
+  })
+
+  it("keeps the Branch Chat recent menu trigger disabled without derived branches", () => {
+    const tab = createBranchChatTab()
+    renderRightSidebar({
+      messageTreeBySession: {},
+      rightSidebar: {
+        activeTabID: tab.id,
+        tabs: [tab],
       },
     })
 
-    expect(screen.getByRole("button", { name: /^Branch Chat/ })).toBeEnabled()
-    expect(screen.getByText("Recent branches")).toBeInTheDocument()
-    expect(screen.getByText("queued")).toBeInTheDocument()
+    const recentTrigger = screen.getByRole("button", { name: "Open recent branches" })
+    expect(recentTrigger).toBeDisabled()
+    expect(recentTrigger).toHaveAttribute("title", "No recent branches yet")
+    fireEvent.click(recentTrigger)
+    expect(screen.queryByRole("listbox", { name: "Recent branches" })).not.toBeInTheDocument()
   })
 
   it("opens a generic Branch Chat with a send-time latest-response strategy", () => {
@@ -624,6 +679,7 @@ describe("RightSidebar", () => {
       },
     })
 
+    expect(screen.getByText("分支对话")).toBeInTheDocument()
     expect(screen.getByText("文件")).toBeInTheDocument()
     expect(screen.getByText("浏览器")).toBeInTheDocument()
     expect(screen.getByText("消息树")).toBeInTheDocument()
@@ -768,7 +824,9 @@ describe("RightSidebar", () => {
       expect(advancedButton.className).not.toBe(defaultTriggerClass)
       expect(branchChat.firstElementChild).not.toHaveTextContent("Main result")
       expect(screen.getByText("Ask about this branch…")).toBeInTheDocument()
-      expect(screen.getByLabelText("Composer utility bar")).toBeInTheDocument()
+      const contextButton = within(branchChat).getByRole("button", { name: /^Context pressure/ })
+      expect(contextButton.closest(".composer")).not.toBeNull()
+      expect(within(branchChat).queryByLabelText("Composer utility bar")).not.toBeInTheDocument()
 
       const editor = screen.getByRole("textbox", { name: "Task draft" })
       fireEvent.pointerDown(editor)
@@ -816,6 +874,37 @@ describe("RightSidebar", () => {
     await screen.findByRole("dialog", { name: "Branch starting point" })
     fireEvent.pointerDown(document.body)
     expect(screen.queryByRole("dialog", { name: "Branch starting point" })).not.toBeInTheDocument()
+  })
+
+  it("supports keyboard access and keeps recent and advanced Branch Chat popovers exclusive", async () => {
+    renderRightSidebar({
+      messageTreeBySession: {
+        "session-1": createBranchChatTree(),
+      },
+      rightSidebar: {
+        activeTabID: "branch-chat-tab",
+        tabs: [createBranchChatTab()],
+      },
+    })
+
+    const recentTrigger = screen.getByRole("button", { name: "Open recent branches" })
+    const advancedButton = screen.getByRole("button", { name: "Advanced Branch Chat options" })
+    recentTrigger.focus()
+    fireEvent.keyDown(recentTrigger, { key: "ArrowDown" })
+
+    const recentListbox = await screen.findByRole("listbox", { name: "Recent branches" })
+    expect(recentListbox).toHaveFocus()
+
+    fireEvent.click(advancedButton)
+    expect(screen.queryByRole("listbox", { name: "Recent branches" })).not.toBeInTheDocument()
+    expect(await screen.findByRole("dialog", { name: "Branch starting point" })).toBeInTheDocument()
+
+    fireEvent.click(recentTrigger)
+    expect(screen.queryByRole("dialog", { name: "Branch starting point" })).not.toBeInTheDocument()
+    const reopenedRecentListbox = await screen.findByRole("listbox", { name: "Recent branches" })
+    fireEvent.keyDown(reopenedRecentListbox, { key: "Escape" })
+    expect(screen.queryByRole("listbox", { name: "Recent branches" })).not.toBeInTheDocument()
+    expect(recentTrigger).toHaveFocus()
   })
 
   it("shows the committed starting point as read-only and locates it in the main thread", async () => {

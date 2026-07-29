@@ -6070,8 +6070,7 @@ body.is-dragging-settings-page {
 }
 
 .right-sidebar-change-type.is-renamed,
-.settings-badge.is-warning,
-.context-pressure-indicator.is-medium {
+.settings-badge.is-warning {
   color: var(--seg-warning);
 }
 
