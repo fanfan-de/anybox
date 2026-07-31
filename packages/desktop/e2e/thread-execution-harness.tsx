@@ -23,7 +23,6 @@ const TARGET_MESSAGE_ID = "assistant-e2e"
 const SECOND_TARGET_MESSAGE_ID = "assistant-e2e-second"
 const PENDING_TURN_ID = "pending:user-e2e"
 const INITIAL_REASONING_TEXT = "Inspecting the renderer before applying the final response."
-const SAME_LINE_REASONING_TOKEN = " More."
 const SECOND_REASONING_LINE = "Checking the compact reasoning viewport on a second line."
 const WRAPPED_REASONING_TAIL = [
   "This deliberately long live reasoning sentence verifies that the browser wraps text at the real pane width",
@@ -281,14 +280,6 @@ function Harness() {
         </button>
         <button id="complete-turn" type="button" disabled={completed} onClick={() => setCompleted(true)}>
           Complete target turn
-        </button>
-        <button
-          id="append-reasoning-token"
-          type="button"
-          disabled={completed || reasoningText.includes(SAME_LINE_REASONING_TOKEN)}
-          onClick={() => setReasoningText((current) => `${current}${SAME_LINE_REASONING_TOKEN}`)}
-        >
-          Token
         </button>
         <button
           id="append-reasoning-line"

@@ -395,6 +395,7 @@
 }
 
 .terminal-xterm .xterm-viewport {
+  background-color: var(--semantic-terminal-surface);
   overflow-y: auto !important;
   scrollbar-gutter: stable;
   overscroll-behavior: contain;

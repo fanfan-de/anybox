@@ -6,7 +6,7 @@ const TARGET_GROUP_ID = "turn:turn-e2e"
 const PENDING_GROUP_ID = "turn:pending:user-e2e"
 const REASONING_ITEM_ID = "process-reasoning"
 
-test("streaming reasoning advances through a fixed one-line viewport", async ({ page }) => {
+test("streaming reasoning updates immediately in a fixed one-line viewport", async ({ page }) => {
   test.setTimeout(60_000)
   const pageErrors: string[] = []
   page.on("pageerror", (error) => pageErrors.push(error.message))
@@ -30,17 +30,19 @@ test("streaming reasoning advances through a fixed one-line viewport", async ({ 
 
   await page.evaluate(() => {
     const typedWindow = window as typeof window & {
-      __reasoningLineAdvanceCount?: number
+      __reasoningLiveAnimationCount?: number
     }
-    typedWindow.__reasoningLineAdvanceCount = 0
+    typedWindow.__reasoningLiveAnimationCount = 0
     document.addEventListener("animationstart", (event) => {
-      if (event.animationName !== "thread-reasoning-line-advance") return
-      typedWindow.__reasoningLineAdvanceCount = (typedWindow.__reasoningLineAdvanceCount ?? 0) + 1
+      if (!(event.target instanceof Element)) return
+      if (!event.target.matches(".trace-item-reasoning-live-content-shell")) return
+      typedWindow.__reasoningLiveAnimationCount =
+        (typedWindow.__reasoningLiveAnimationCount ?? 0) + 1
     })
   })
-  const readLineAdvanceCount = () => page.evaluate(() => (
-    (window as typeof window & { __reasoningLineAdvanceCount?: number })
-      .__reasoningLineAdvanceCount ?? 0
+  const readLiveAnimationCount = () => page.evaluate(() => (
+    (window as typeof window & { __reasoningLiveAnimationCount?: number })
+      .__reasoningLiveAnimationCount ?? 0
   ))
 
   const readLiveMetrics = () => viewport.evaluate((element) => {
@@ -60,13 +62,10 @@ test("streaming reasoning advances through a fixed one-line viewport", async ({ 
   const initialThreadScrollTop = await thread.evaluate((element) => element.scrollTop)
   expect(Math.abs(initialMetrics.viewportHeight - initialMetrics.lineHeight)).toBeLessThanOrEqual(1)
 
-  await page.locator("#append-reasoning-token").click()
-  await page.waitForTimeout(220)
-  expect(await readLineAdvanceCount()).toBe(0)
-
   await page.locator("#append-reasoning-line").click()
   await expect.poll(async () => (await readLiveMetrics()).scrollTop).toBeGreaterThan(initialMetrics.scrollTop)
-  await expect.poll(readLineAdvanceCount).toBe(1)
+  await page.waitForTimeout(220)
+  expect(await readLiveAnimationCount()).toBe(0)
   const explicitLineMetrics = await readLiveMetrics()
   expect(Math.abs(explicitLineMetrics.scrollTop - explicitLineMetrics.maxScrollTop)).toBeLessThanOrEqual(1)
   expect(Math.abs(explicitLineMetrics.rowHeight - initialMetrics.rowHeight)).toBeLessThanOrEqual(1)
@@ -75,14 +74,13 @@ test("streaming reasoning advances through a fixed one-line viewport", async ({ 
     element.style.width = "380px"
   })
   await expect.poll(async () => viewport.evaluate((element) => element.clientWidth)).toBeLessThan(400)
-  await page.waitForTimeout(220)
-  expect(await readLineAdvanceCount()).toBe(1)
 
   await page.locator("#append-reasoning-wrap").click()
   await expect.poll(async () => (await readLiveMetrics()).scrollTop).toBeGreaterThan(
     explicitLineMetrics.scrollTop + explicitLineMetrics.lineHeight,
   )
-  await expect.poll(readLineAdvanceCount).toBe(2)
+  await page.waitForTimeout(220)
+  expect(await readLiveAnimationCount()).toBe(0)
   const wrappedMetrics = await readLiveMetrics()
   expect(Math.abs(wrappedMetrics.scrollTop - wrappedMetrics.maxScrollTop)).toBeLessThanOrEqual(1)
   expect(Math.abs(wrappedMetrics.rowHeight - initialMetrics.rowHeight)).toBeLessThanOrEqual(1)

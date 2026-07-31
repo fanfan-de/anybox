@@ -4209,23 +4209,8 @@ button.user-message-diff-file-row:focus-visible {
   line-height: inherit;
 }
 
-.trace-item-reasoning-live-content-shell.is-line-advancing {
-  will-change: transform;
-  animation: thread-reasoning-line-advance 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
 .trace-item-reasoning-live-content {
   margin: 0;
-}
-
-@keyframes thread-reasoning-line-advance {
-  from {
-    transform: translateY(var(--trace-reasoning-line-advance-distance, 1lh));
-  }
-
-  to {
-    transform: translateY(0);
-  }
 }
 
 .assistant-section.is-response .trace-item-text,
@@ -4549,11 +4534,6 @@ body.is-resizing-sidebar .thread-message {
   box-shadow: none !important;
 }
 
-body.is-resizing-sidebar .trace-item-reasoning-live-content-shell {
-  animation: none !important;
-  transform: none !important;
-}
-
 body.is-resizing-sidebar .trace-tool-status-indicator::before {
   animation: none !important;
 }
@@ -4568,11 +4548,6 @@ body.is-resizing-sidebar .trace-tool-name:is(.is-active, .is-pending, .is-runnin
 @media (prefers-reduced-motion: reduce) {
   .user-message-delivery-status.is-pending svg {
     animation: none;
-  }
-
-  .trace-item-reasoning-live-content-shell {
-    animation: none !important;
-    transform: none !important;
   }
 
   .trace-tool-status-indicator.is-breathing::before {

@@ -3544,52 +3544,20 @@ function ImageTraceItemView({
 function ReasoningLiveLine({ text }: { text: string }) {
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
-  const hasSyncedRef = useRef(false)
-  const lastViewportWidthRef = useRef(0)
 
-  const restartLineAdvanceAnimation = useCallback((distance: number) => {
-    const content = contentRef.current
-    if (!content) return
-
-    content.classList.remove("is-line-advancing")
-    content.style.setProperty("--trace-reasoning-line-advance-distance", `${distance}px`)
-    void content.offsetHeight
-    content.classList.add("is-line-advancing")
-  }, [])
-
-  const followLatestVisualLine = useCallback((animateLineAdvance: boolean) => {
+  const followLatestVisualLine = useCallback(() => {
     const viewport = viewportRef.current
     if (!viewport) return
 
-    const previousScrollTop = viewport.scrollTop
     const nextScrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
-    const viewportWidth = viewport.clientWidth
-    const didViewportWidthChange =
-      hasSyncedRef.current &&
-      Math.abs(viewportWidth - lastViewportWidthRef.current) > 0.5
-    const scrollDistance = nextScrollTop - previousScrollTop
-    const lineAdvanceThreshold = Math.max(1, viewport.clientHeight * 0.5)
-    const shouldAnimateLineAdvance =
-      animateLineAdvance &&
-      hasSyncedRef.current &&
-      !didViewportWidthChange &&
-      scrollDistance >= lineAdvanceThreshold &&
-      !prefersReducedThreadMotion()
 
     if (viewport.scrollTop !== nextScrollTop) {
       viewport.scrollTop = nextScrollTop
     }
-
-    if (shouldAnimateLineAdvance) {
-      restartLineAdvanceAnimation(Math.min(scrollDistance, viewport.clientHeight))
-    }
-
-    lastViewportWidthRef.current = viewportWidth
-    hasSyncedRef.current = true
-  }, [restartLineAdvanceAnimation])
+  }, [])
 
   useLayoutEffect(() => {
-    followLatestVisualLine(true)
+    followLatestVisualLine()
   }, [followLatestVisualLine, text])
 
   useLayoutEffect(() => {
@@ -3597,9 +3565,7 @@ function ReasoningLiveLine({ text }: { text: string }) {
     const content = contentRef.current
     if (!viewport || typeof ResizeObserver === "undefined") return
 
-    const resizeObserver = new ResizeObserver(() => {
-      followLatestVisualLine(false)
-    })
+    const resizeObserver = new ResizeObserver(followLatestVisualLine)
     resizeObserver.observe(viewport)
     if (content) resizeObserver.observe(content)
 
@@ -3617,11 +3583,6 @@ function ReasoningLiveLine({ text }: { text: string }) {
       <div
         ref={contentRef}
         className="trace-item-reasoning-live-content-shell"
-        onAnimationEnd={(event) => {
-          if (event.animationName !== "thread-reasoning-line-advance") return
-          event.currentTarget.classList.remove("is-line-advancing")
-          event.currentTarget.style.removeProperty("--trace-reasoning-line-advance-distance")
-        }}
       >
         <ThreadRichText
           as="div"

@@ -125,6 +125,9 @@ describe("TerminalView", () => {
     expect(styles).toMatch(
       /\.terminal-panel \.terminal-surface\s*\{[^}]*padding:\s*10px 12px 12px;[^}]*border-radius:\s*0;/s,
     )
+    expect(styles).toMatch(
+      /\.terminal-xterm \.xterm-viewport\s*\{[^}]*background-color:\s*var\(--semantic-terminal-surface\);/s,
+    )
     expect(styles).not.toMatch(/\.terminal-xterm \.xterm\s*\{[^}]*padding:/s)
   })
 

@@ -2339,7 +2339,7 @@ describe("ThreadView trace collapse", () => {
     expect(queryByRole("region", { name: "Reasoning content" })).toBeNull()
   })
 
-  it("renders streaming reasoning in a compact live line and follows appended visual lines", () => {
+  it("renders streaming reasoning in a compact live line and immediately follows appended visual lines", () => {
     const buildReasoningItem = (text: string): AssistantTraceItem => ({
       id: "reasoning-live",
       kind: "reasoning",
@@ -2358,12 +2358,10 @@ describe("ThreadView trace collapse", () => {
     )
     const toggle = traceItem?.querySelector(".trace-item-reasoning-toggle")
     const viewport = traceItem?.querySelector<HTMLElement>(".trace-item-reasoning-live-viewport")
-    const contentShell = traceItem?.querySelector<HTMLElement>(".trace-item-reasoning-live-content-shell")
 
     expect(traceItem).toHaveAttribute("data-reasoning-display-mode", "live-compact")
     expect(toggle).toHaveAttribute("aria-expanded", "false")
     expect(viewport).not.toBeNull()
-    expect(contentShell).not.toBeNull()
 
     setScrollMetrics(viewport!, {
       clientHeight: 22,
@@ -2385,19 +2383,9 @@ describe("ThreadView trace collapse", () => {
 
     expect(viewport!.scrollTop).toBe(44)
     expect(traceItem).toHaveTextContent("Verify the latest line")
-    expect(contentShell).toHaveClass("is-line-advancing")
-    expect(contentShell?.style.getPropertyValue("--trace-reasoning-line-advance-distance")).toBe("22px")
-
-    const animationEndEvent = new Event("animationend", { bubbles: true })
-    Object.defineProperty(animationEndEvent, "animationName", {
-      value: "thread-reasoning-line-advance",
-    })
-    fireEvent(contentShell!, animationEndEvent)
-    expect(contentShell).not.toHaveClass("is-line-advancing")
-    expect(contentShell?.style.getPropertyValue("--trace-reasoning-line-advance-distance")).toBe("")
   })
 
-  it("does not animate streaming tokens that remain on the current visual line", () => {
+  it("keeps streaming tokens on the current visual line without scrolling", () => {
     const buildReasoningItem = (text: string): AssistantTraceItem => ({
       id: "reasoning-live",
       kind: "reasoning",
@@ -2411,7 +2399,6 @@ describe("ThreadView trace collapse", () => {
       assistantTraceMessage("assistant-live", [buildReasoningItem("Inspect")], true),
     ])
     const viewport = container.querySelector<HTMLElement>(".trace-item-reasoning-live-viewport")!
-    const contentShell = container.querySelector<HTMLElement>(".trace-item-reasoning-live-content-shell")!
 
     setScrollMetrics(viewport, {
       clientHeight: 22,
@@ -2432,7 +2419,6 @@ describe("ThreadView trace collapse", () => {
     )
 
     expect(viewport.scrollTop).toBe(0)
-    expect(contentShell).not.toHaveClass("is-line-advancing")
   })
 
   it("resynchronizes the compact reasoning line after viewport reflow", () => {
@@ -2496,68 +2482,9 @@ describe("ThreadView trace collapse", () => {
       })
 
       expect(viewport.scrollTop).toBe(66)
-      expect(
-        view.container.querySelector(".trace-item-reasoning-live-content-shell"),
-      ).not.toHaveClass("is-line-advancing")
       view.unmount()
     } finally {
       globalThis.ResizeObserver = originalResizeObserver
-    }
-  })
-
-  it("skips the live line animation when reduced motion is requested", () => {
-    const originalMatchMedia = window.matchMedia
-    Object.defineProperty(window, "matchMedia", {
-      configurable: true,
-      value: vi.fn().mockReturnValue({
-        matches: true,
-        media: "(prefers-reduced-motion: reduce)",
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-      }),
-    })
-
-    try {
-      const buildReasoningItem = (text: string): AssistantTraceItem => ({
-        id: "reasoning-live",
-        kind: "reasoning",
-        timestamp: 1,
-        label: "Reasoning",
-        text,
-        status: "running",
-        isStreaming: true,
-      })
-      const { container, props, rerender } = renderThread([
-        assistantTraceMessage("assistant-live", [buildReasoningItem("Inspect")], true),
-      ])
-      const viewport = container.querySelector<HTMLElement>(".trace-item-reasoning-live-viewport")!
-      const contentShell = container.querySelector<HTMLElement>(".trace-item-reasoning-live-content-shell")!
-
-      setScrollMetrics(viewport, {
-        clientHeight: 22,
-        scrollHeight: 44,
-        scrollTop: 0,
-      })
-      rerender(
-        <ThreadView
-          {...props}
-          activeMessages={[
-            assistantTraceMessage(
-              "assistant-live",
-              [buildReasoningItem("Inspect\nVerify")],
-              true,
-            ),
-          ]}
-        />,
-      )
-
-      expect(viewport.scrollTop).toBe(22)
-      expect(contentShell).not.toHaveClass("is-line-advancing")
-    } finally {
-      Object.defineProperty(window, "matchMedia", {
-        configurable: true,
-        value: originalMatchMedia,
-      })
     }
   })
 
