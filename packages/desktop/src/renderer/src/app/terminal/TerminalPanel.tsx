@@ -1,5 +1,13 @@
-import { memo, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react"
+import {
+  memo,
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react"
 import type { AppearanceCodeFontFamily } from "../../../../shared/appearance"
+import { useI18n } from "../i18n/I18nProvider"
 import type { BrandTheme, ColorMode } from "../types"
 import { TerminalInitialDimensionsProbe } from "./TerminalInitialDimensionsProbe"
 import { TerminalShellPicker, TerminalTabs } from "./TerminalTabs"
@@ -12,6 +20,7 @@ interface TerminalPanelProps {
   codeFontFamily?: AppearanceCodeFontFamily
   colorMode: ColorMode
   creationError?: string | null
+  floatingActions?: ReactNode
   isOpen: boolean
   isCreatingTerminal?: boolean
   layout?: "panel" | "fill"
@@ -49,6 +58,7 @@ export const TerminalPanel = memo(function TerminalPanel({
   codeFontFamily = "default",
   colorMode,
   creationError,
+  floatingActions,
   isOpen,
   isCreatingTerminal = false,
   layout = "panel",
@@ -72,6 +82,7 @@ export const TerminalPanel = memo(function TerminalPanel({
   onTogglePanel,
   subscribeToTerminalStream,
 }: TerminalPanelProps) {
+  const { t } = useI18n()
   const [isResizing, setIsResizing] = useState(false)
   const [previewHeight, setPreviewHeight] = useState(panelHeight)
   const startRef = useRef<{ pointerY: number; height: number } | null>(null)
@@ -171,10 +182,16 @@ export const TerminalPanel = memo(function TerminalPanel({
           className={isResizing ? "terminal-panel-resizer is-active" : "terminal-panel-resizer"}
           onPointerDown={handlePointerDown}
           role="separator"
-          aria-label="Resize terminal panel"
+          aria-label={t("terminal.resizePanel")}
           aria-orientation="horizontal"
         />
       )}
+
+      {floatingActions ? (
+        <div className="terminal-panel-floating-actions">
+          {floatingActions}
+        </div>
+      ) : null}
 
       {isFillLayout ? null : (
         <TerminalTabs
@@ -224,12 +241,12 @@ export const TerminalPanel = memo(function TerminalPanel({
               {creationError}
             </p>
           ) : (
-            <p>No terminal session is open.</p>
+            <p>{t("terminal.emptyState")}</p>
           )}
           <div className={isFillLayout ? "terminal-empty-launcher" : undefined}>
             {isFillLayout ? (
               <div className="terminal-empty-shell-picker">
-                <span className="terminal-shell-picker-label">Shell</span>
+                <span className="terminal-shell-picker-label">{t("tools.shell")}</span>
                 <TerminalShellPicker
                   disabled={isCreatingTerminal}
                   onChange={onShellProfileChange}
@@ -248,7 +265,11 @@ export const TerminalPanel = memo(function TerminalPanel({
               )}
               type="button"
             >
-              {isCreatingTerminal ? "Creating..." : creationError ? "Retry" : "Create terminal"}
+              {isCreatingTerminal
+                ? t("terminal.creating")
+                : creationError
+                  ? t("terminal.retry")
+                  : t("terminal.create")}
             </button>
           </div>
         </div>

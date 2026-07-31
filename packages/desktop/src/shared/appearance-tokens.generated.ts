@@ -255,6 +255,8 @@ export const APPEARANCE_TOKEN_NAMES = [
   "semantic-terminal-surface-dark",
   "semantic-terminal-text-light",
   "semantic-terminal-text-dark",
+  "semantic-terminal-floating-menu-trigger-icon-light",
+  "semantic-terminal-floating-menu-trigger-icon-dark",
   "semantic-popup-panel-surface-light",
   "semantic-popup-panel-surface-dark",
   "semantic-switch-row-surface-focus-light",
@@ -1440,7 +1442,7 @@ export const APPEARANCE_TOKEN_GROUPS = [
     "id": "component-terminal",
     "layer": "component",
     "label": "Terminal",
-    "description": "Dedicated semantic colors for embedded terminal content.",
+    "description": "Dedicated semantic colors for embedded terminal content and the terminal floating menu icon.",
     "rows": [
       {
         "id": "semantic-terminal-surface",
@@ -1455,6 +1457,13 @@ export const APPEARANCE_TOKEN_GROUPS = [
         "description": "Default foreground color for terminal text and neutral ANSI white output.",
         "lightToken": "semantic-terminal-text-light",
         "darkToken": "semantic-terminal-text-dark"
+      },
+      {
+        "id": "semantic-terminal-floating-menu-trigger-icon",
+        "label": "Floating Menu Trigger Icon",
+        "description": "Icon color for the transparent floating terminal actions menu trigger in every interaction state.",
+        "lightToken": "semantic-terminal-floating-menu-trigger-icon-light",
+        "darkToken": "semantic-terminal-floating-menu-trigger-icon-dark"
       }
     ]
   },
@@ -2980,6 +2989,7 @@ export const APPEARANCE_TOKEN_RUNTIME_MAP = {
   "semantic-shell-chrome-tab-indicator-active": "semantic-shell-chrome-tab-indicator-active",
   "semantic-terminal-surface": "semantic-terminal-surface",
   "semantic-terminal-text": "semantic-terminal-text",
+  "semantic-terminal-floating-menu-trigger-icon": "semantic-terminal-floating-menu-trigger-icon",
   "semantic-popup-panel-surface": "semantic-popup-panel-surface",
   "semantic-switch-row-surface-focus": "semantic-switch-row-surface-focus",
   "semantic-switch-track-surface": "semantic-switch-track-surface",
@@ -4925,6 +4935,14 @@ export const APPEARANCE_BRAND_DEFINITIONS = {
       "semantic-terminal-text-dark": {
         "type": "alias",
         "token": "text-primary-dark"
+      },
+      "semantic-terminal-floating-menu-trigger-icon-light": {
+        "type": "alias",
+        "token": "text-secondary-light"
+      },
+      "semantic-terminal-floating-menu-trigger-icon-dark": {
+        "type": "alias",
+        "token": "text-secondary-dark"
       },
       "semantic-popup-panel-surface-light": {
         "type": "alias",
@@ -10780,6 +10798,19 @@ export const APPEARANCE_CONTRAST_CONTRACTS =
       "dark": "semantic-terminal-surface-dark"
     },
     "minimumContrast": 4.5
+  },
+  {
+    "id": "terminal-floating-menu-trigger-icon-on-terminal-surface",
+    "kind": "ui",
+    "foreground": {
+      "light": "semantic-terminal-floating-menu-trigger-icon-light",
+      "dark": "semantic-terminal-floating-menu-trigger-icon-dark"
+    },
+    "background": {
+      "light": "semantic-terminal-surface-light",
+      "dark": "semantic-terminal-surface-dark"
+    },
+    "minimumContrast": 3
   }
 ] as const satisfies readonly AppearanceContrastContract[]
 
@@ -10801,7 +10832,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
   {
     "id": "built-in:classic",
     "name": "经典",
-    "colorMode": "light",
+    "colorMode": "dark",
     "brandTheme": "terra",
     "fontFamily": "default",
     "codeFontFamily": "default",
@@ -12458,6 +12489,45 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#ffffff"
         }
       },
+      "semantic-terminal-surface-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 1,
+          "hex": "#000000"
+        }
+      },
+      "semantic-terminal-surface-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0,
+            0,
+            0
+          ],
+          "alpha": 1,
+          "hex": "#000000"
+        }
+      },
+      "semantic-terminal-text-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 1,
+          "hex": "#ffffff"
+        }
+      },
       "semantic-popup-panel-surface-light": {
         "type": "literal",
         "value": {
@@ -12775,12 +12845,12 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
         "value": {
           "colorSpace": "srgb",
           "components": [
-            0.145098,
-            0.145098,
-            0.145098
+            0.086275,
+            0.086275,
+            0.086275
           ],
           "alpha": 1,
-          "hex": "#252525"
+          "hex": "#161616"
         }
       },
       "semantic-dropdown-option-surface-hover-light": {
@@ -12796,6 +12866,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           "hex": "#dadada"
         }
       },
+      "semantic-dropdown-option-surface-hover-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.321569,
+            0.321569,
+            0.321569
+          ],
+          "alpha": 1,
+          "hex": "#525252"
+        }
+      },
       "semantic-dropdown-option-surface-selected-light": {
         "type": "literal",
         "value": {
@@ -12807,6 +12890,32 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           ],
           "alpha": 0.32,
           "hex": "#01a129"
+        }
+      },
+      "semantic-dropdown-option-surface-selected-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.211765,
+            0.211765,
+            0.211765
+          ],
+          "alpha": 1,
+          "hex": "#363636"
+        }
+      },
+      "semantic-dropdown-option-text-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 1,
+          "hex": "#ffffff"
         }
       },
       "semantic-thread-response-text-light": {
@@ -12885,6 +12994,32 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           ],
           "alpha": 0.08,
           "hex": "#000000"
+        }
+      },
+      "semantic-thread-user-message-diff-card-surface-light": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.792157,
+            0.792157,
+            0.792157
+          ],
+          "alpha": 1,
+          "hex": "#cacaca"
+        }
+      },
+      "semantic-thread-user-message-diff-card-surface-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.086275,
+            0.086275,
+            0.086275
+          ],
+          "alpha": 1,
+          "hex": "#161616"
         }
       },
       "semantic-markdown-text-light": {
@@ -13022,12 +13157,12 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
         "value": {
           "colorSpace": "srgb",
           "components": [
-            1,
-            1,
-            1
+            0.819608,
+            0.819608,
+            0.819608
           ],
           "alpha": 1,
-          "hex": "#ffffff"
+          "hex": "#d1d1d1"
         }
       },
       "semantic-markdown-inline-code-surface-dark": {
@@ -13613,6 +13748,19 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
           ],
           "alpha": 1,
           "hex": "#000000"
+        }
+      },
+      "semantic-workspace-files-code-row-surface-current-dark": {
+        "type": "literal",
+        "value": {
+          "colorSpace": "srgb",
+          "components": [
+            1,
+            1,
+            1
+          ],
+          "alpha": 1,
+          "hex": "#ffffff"
         }
       },
       "semantic-plugin-market-icon-surface-light": {
@@ -17270,13 +17418,13 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
   "schemaVersion": 2,
   "dtcgVersion": "2025.10",
   "groupCount": 30,
-  "pairCount": 281,
-  "modeTokenCount": 562,
-  "runtimeTokenCount": 281,
+  "pairCount": 282,
+  "modeTokenCount": 564,
+  "runtimeTokenCount": 282,
   "derivationCount": 92,
   "canonicalDerivationCount": 92,
   "legacyMixPairCount": 0,
-  "contractCount": 9,
+  "contractCount": 10,
   "modeTokens": [
     "surface-app-light",
     "surface-app-dark",
@@ -17478,6 +17626,8 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
     "semantic-terminal-surface-dark",
     "semantic-terminal-text-light",
     "semantic-terminal-text-dark",
+    "semantic-terminal-floating-menu-trigger-icon-light",
+    "semantic-terminal-floating-menu-trigger-icon-dark",
     "semantic-popup-panel-surface-light",
     "semantic-popup-panel-surface-dark",
     "semantic-switch-row-surface-focus-light",
@@ -17942,6 +18092,7 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
     "semantic-shell-chrome-tab-indicator-active",
     "semantic-terminal-surface",
     "semantic-terminal-text",
+    "semantic-terminal-floating-menu-trigger-icon",
     "semantic-popup-panel-surface",
     "semantic-switch-row-surface-focus",
     "semantic-switch-track-surface",
@@ -18126,13 +18277,13 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
   ],
   "legacyMixRuntimeTokens": [],
   "brandTokenCounts": {
-    "terra": 470,
+    "terra": 472,
     "sage": 141
   },
   "brandValueTypes": {
     "terra": {
       "literal": 156,
-      "alias": 314
+      "alias": 316
     },
     "sage": {
       "literal": 141,

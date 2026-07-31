@@ -42,6 +42,10 @@ describe("TerminalHeaderActions", () => {
     )
 
     fireEvent.click(screen.getByRole("button", { name: "Terminal · Reset / Close" }))
+    expect(screen.getByRole("menu")).toHaveClass(
+      "ui-context-menu",
+      "terminal-header-actions-menu",
+    )
     expect(screen.getByRole("menuitemradio", { name: "Shell · PowerShell 7" }))
       .toHaveAttribute("aria-checked", "true")
 

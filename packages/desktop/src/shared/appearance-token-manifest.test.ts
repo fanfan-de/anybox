@@ -27,6 +27,7 @@ const composerCss = readFileSync(resolve(stylesRoot, "composer.css"), "utf8")
 const rightSidebarCss = readFileSync(resolve(stylesRoot, "right-sidebar.css"), "utf8")
 const settingsCss = readFileSync(resolve(stylesRoot, "settings.css"), "utf8")
 const threadCss = readFileSync(resolve(stylesRoot, "thread.css"), "utf8")
+const terminalCss = readFileSync(resolve(stylesRoot, "terminal.css"), "utf8")
 const terminalViewSource = readFileSync(
   resolve(packageRoot, "src/renderer/src/app/terminal/TerminalView.tsx"),
   "utf8",
@@ -70,6 +71,9 @@ function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }
 
+const terminalFloatingMenuTriggerIconTokenID =
+  "semantic-terminal-floating-menu-trigger-icon"
+
 function definedCustomProperties(source: string) {
   return new Set(
     Array.from(
@@ -80,7 +84,7 @@ function definedCustomProperties(source: string) {
 }
 
 describe("appearance token manifest", () => {
-  it("keeps terminal surface and text independently themeable", () => {
+  it("keeps terminal content and floating controls independently themeable", () => {
     const terminalGroup = APPEARANCE_TOKEN_GROUPS.find(
       (group) => group.id === "component-terminal",
     )
@@ -88,6 +92,7 @@ describe("appearance token manifest", () => {
     expect(terminalGroup?.rows.map((row) => row.id)).toEqual([
       "semantic-terminal-surface",
       "semantic-terminal-text",
+      terminalFloatingMenuTriggerIconTokenID,
     ])
     expect(generatedCss).toMatch(
       /--semantic-terminal-text-light:\s*var\(--text-primary-light\);/,
@@ -104,6 +109,99 @@ describe("appearance token manifest", () => {
     expect(terminalThemeSource).toContain('"--semantic-terminal-text"')
     expect(terminalThemeSource).not.toContain('"--text-primary"')
     expect(terminalThemeSource).not.toContain('"--seg-terminal-surface"')
+
+    const floatingTriggerRows = terminalGroup?.rows.filter((row) =>
+      row.id.startsWith("semantic-terminal-floating-menu-trigger-")
+    ) ?? []
+    expect(floatingTriggerRows.map((row) => row.id)).toEqual([
+      terminalFloatingMenuTriggerIconTokenID,
+    ])
+
+    for (const row of floatingTriggerRows) {
+      expect(generatedCss).toContain(`--${row.lightToken}:`)
+      expect(generatedCss).toContain(`--${row.darkToken}:`)
+      expect(generatedCss).toContain(`--${row.id}:`)
+
+      const lightValue = manifest.brands.terra.tokens[row.lightToken]
+      const darkValue = manifest.brands.terra.tokens[row.darkToken]
+      expect(lightValue?.type).toBe("alias")
+      expect(darkValue?.type).toBe("alias")
+      expect(lightValue?.token).not.toMatch(/^semantic-(?:button|icon-button)-/)
+      expect(darkValue?.token).not.toMatch(/^semantic-(?:button|icon-button)-/)
+    }
+  })
+
+  it("keeps the terminal floating menu trigger transparent and routes only its icon color", () => {
+    const triggerStart = terminalCss.indexOf(".terminal-header-actions-trigger {")
+    const triggerEnd = terminalCss.indexOf(".terminal-header-actions-menu {")
+
+    expect(triggerStart).toBeGreaterThanOrEqual(0)
+    expect(triggerEnd).toBeGreaterThan(triggerStart)
+
+    const triggerStyles = terminalCss.slice(triggerStart, triggerEnd)
+    const triggerTokenUsages = Array.from(
+      triggerStyles.matchAll(
+        /var\(--(semantic-terminal-floating-menu-trigger-[a-z-]+)\)/g,
+      ),
+      (match) => match[1],
+    )
+
+    expect(triggerTokenUsages).toEqual([terminalFloatingMenuTriggerIconTokenID])
+    expect(triggerStyles).toMatch(/border:\s*0;/)
+    expect(triggerStyles).toMatch(/background:\s*transparent;/)
+    expect(triggerStyles).toMatch(/box-shadow:\s*none;/)
+
+    expect(triggerStyles).not.toMatch(
+      /var\(--semantic-(?:button|icon-button)-/,
+    )
+    expect(triggerStyles).not.toMatch(
+      /var\(--(?:surface|text|border|seg|context-menu)-/,
+    )
+    expect(triggerStyles).not.toContain("color-mix(")
+  })
+
+  it("centers the terminal empty state and uses standard dropdown semantics for its shell picker", () => {
+    const emptyStateStart = terminalCss.indexOf(".terminal-empty-state {")
+    const emptyStateEnd = terminalCss.indexOf(".terminal-empty-error {")
+    const pickerStart = terminalCss.indexOf(".terminal-shell-picker-trigger {")
+    const pickerEnd = terminalCss.indexOf(".terminal-panel-toggle-button {")
+
+    expect(emptyStateStart).toBeGreaterThanOrEqual(0)
+    expect(emptyStateEnd).toBeGreaterThan(emptyStateStart)
+    expect(pickerStart).toBeGreaterThanOrEqual(0)
+    expect(pickerEnd).toBeGreaterThan(pickerStart)
+
+    const emptyStateStyles = terminalCss.slice(emptyStateStart, emptyStateEnd)
+    expect(emptyStateStyles).toMatch(/display:\s*flex;/)
+    expect(emptyStateStyles).toMatch(/flex-direction:\s*column;/)
+    expect(emptyStateStyles).toMatch(/align-items:\s*center;/)
+    expect(emptyStateStyles).toMatch(/justify-content:\s*center;/)
+
+    const pickerStyles = terminalCss.slice(pickerStart, pickerEnd)
+    for (const tokenID of [
+      "semantic-button-secondary-surface",
+      "semantic-button-secondary-border",
+      "semantic-button-secondary-text",
+      "semantic-button-secondary-surface-hover",
+      "semantic-button-secondary-border-hover",
+      "semantic-button-secondary-text-hover",
+      "semantic-button-secondary-disabled-surface",
+      "semantic-button-secondary-disabled-border",
+      "semantic-button-secondary-disabled-text",
+      "semantic-dropdown-menu-surface",
+      "semantic-dropdown-option-text",
+      "semantic-dropdown-option-surface-hover",
+      "semantic-dropdown-option-text-hover",
+      "semantic-dropdown-option-surface-selected",
+      "semantic-dropdown-option-text-selected",
+    ]) {
+      expect(pickerStyles).toContain(`var(--${tokenID})`)
+    }
+
+    expect(pickerStyles).not.toMatch(
+      /var\(--(?:seg-|brand-primary-soft-active|surface-panel-muted|text-primary|context-menu-)/,
+    )
+    expect(pickerStyles).not.toContain("color-mix(")
   })
 
   it("keeps public values literal/alias-only and blends internal", () => {

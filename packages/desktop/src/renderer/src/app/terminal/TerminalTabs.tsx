@@ -1,5 +1,6 @@
 import { memo, useEffect, useId, useRef, useState, type KeyboardEvent } from "react"
-import { CloseIcon, PlusIcon } from "../icons"
+import { ChevronDownIcon, CloseIcon, PlusIcon } from "../icons"
+import { useI18n } from "../i18n/I18nProvider"
 import { joinClassNames } from "../shared-ui"
 import { TerminalPanelToggleButton } from "./TerminalPanelToggleButton"
 import type { TerminalSessionRecord, TerminalShellProfile } from "./types"
@@ -64,11 +65,17 @@ export function TerminalShellPicker({
   profiles,
   selectedProfileID,
 }: TerminalShellPickerProps) {
+  const { t } = useI18n()
   const listboxID = useId()
   const buttonRef = useRef<HTMLButtonElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
   const selectedIndex = getSelectedIndex(profiles, selectedProfileID)
   const selectedProfile = selectedIndex >= 0 ? profiles[selectedIndex] : null
+  const selectedProfileLabel = selectedProfile
+    ? selectedProfile.id === "default"
+      ? t("terminal.defaultShell")
+      : selectedProfile.label
+    : t("terminal.defaultShell")
   const [isOpen, setIsOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(() =>
     selectedIndex >= 0 ? selectedIndex : getFirstProfileIndex(profiles),
@@ -186,11 +193,11 @@ export function TerminalShellPicker({
         aria-controls={isOpen ? listboxID : undefined}
         aria-expanded={isOpen}
         aria-haspopup="listbox"
-        aria-label="Terminal shell profile"
+        aria-label={t("terminal.shellProfile")}
         className="terminal-shell-picker-trigger"
         disabled={disabled}
         role="combobox"
-        title={selectedProfile?.label ?? "Default"}
+        title={selectedProfileLabel}
         type="button"
         onClick={() => {
           if (isOpen) {
@@ -202,13 +209,16 @@ export function TerminalShellPicker({
         }}
         onKeyDown={handleTriggerKeyDown}
       >
-        <span className="terminal-shell-picker-value">{selectedProfile?.label ?? "Default"}</span>
+        <span className="terminal-shell-picker-value">
+          {selectedProfileLabel}
+        </span>
+        <ChevronDownIcon aria-hidden="true" />
       </button>
 
       {isOpen ? (
         <div
           ref={panelRef}
-          aria-label="Terminal shell profile"
+          aria-label={t("terminal.shellProfile")}
           className="terminal-shell-picker-panel"
           id={listboxID}
           role="listbox"
@@ -218,6 +228,7 @@ export function TerminalShellPicker({
           {profiles.map((profile, index) => {
             const isSelected = profile.id === selectedProfileID
             const isActive = index === activeIndex
+            const profileLabel = profile.id === "default" ? t("terminal.defaultShell") : profile.label
 
             return (
               <button
@@ -230,12 +241,12 @@ export function TerminalShellPicker({
                 )}
                 role="option"
                 tabIndex={-1}
-                title={profile.label}
+                title={profileLabel}
                 type="button"
                 onClick={() => commitProfile(index)}
                 onMouseEnter={() => setActiveIndex(index)}
               >
-                <span>{profile.label}</span>
+                <span>{profileLabel}</span>
               </button>
             )
           })}
@@ -259,13 +270,19 @@ export const TerminalTabs = memo(function TerminalTabs({
   shellProfiles,
   onTogglePanel,
 }: TerminalTabsProps) {
-  const selectedShellLabel = shellProfiles.find((profile) => profile.id === selectedShellProfileID)?.label ?? "Default"
+  const { t } = useI18n()
+  const selectedShellProfile = shellProfiles.find((profile) => profile.id === selectedShellProfileID)
+  const selectedShellLabel = selectedShellProfile
+    ? selectedShellProfile.id === "default"
+      ? t("terminal.defaultShell")
+      : selectedShellProfile.label
+    : t("terminal.defaultShell")
 
   return (
     <div className="terminal-tabs">
       {showToggleButton ? <TerminalPanelToggleButton isOpen={true} onToggle={onTogglePanel} /> : null}
 
-      <div className="terminal-tabs-list" aria-label="Session terminal">
+      <div className="terminal-tabs-list" aria-label={t("terminal.title")}>
         {sessions.map((session) => {
           const isActive = session.ptyID === activePtyID
           return (
@@ -282,7 +299,7 @@ export const TerminalTabs = memo(function TerminalTabs({
 
               <button
                 className="terminal-tab-close"
-                aria-label={`Close terminal ${session.title}`}
+                aria-label={`${t("terminal.closeTerminal")}: ${session.title}`}
                 onClick={() => void onCloseTerminal(session.ptyID)}
                 type="button"
               >
@@ -295,7 +312,7 @@ export const TerminalTabs = memo(function TerminalTabs({
 
       <div className="terminal-tabs-actions">
         <div className="terminal-shell-picker">
-          <span className="terminal-shell-picker-label">Shell</span>
+          <span className="terminal-shell-picker-label">{t("tools.shell")}</span>
           <TerminalShellPicker
             disabled={!canCreateTerminal || isCreatingTerminal}
             onChange={onShellProfileChange}
@@ -307,9 +324,9 @@ export const TerminalTabs = memo(function TerminalTabs({
         {canCreateTerminal ? (
           <button
             className="terminal-panel-create"
-            aria-label={`Create terminal (${selectedShellLabel})`}
+            aria-label={`${t("terminal.create")} (${selectedShellLabel})`}
             disabled={isCreatingTerminal}
-            title={`New terminal (${selectedShellLabel})`}
+            title={`${t("terminal.newTerminal")} (${selectedShellLabel})`}
             onClick={() => void onCreateTerminal(selectedShellProfileID)}
             type="button"
           >

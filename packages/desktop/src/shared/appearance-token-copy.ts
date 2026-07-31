@@ -65,7 +65,7 @@ const zhCNTokenGroupCopy = {
   },
   "component-terminal": {
     label: "终端",
-    description: "嵌入式终端内容的专用语义颜色。",
+    description: "嵌入式终端内容与终端悬浮菜单图标的专用语义颜色。",
   },
   "component-popup-panel": {
     label: "弹出面板",
@@ -525,6 +525,10 @@ const zhCNTokenRowCopy = {
   "semantic-terminal-text": {
     label: "终端文字",
     description: "终端文字和中性 ANSI 白色输出的默认前景色。",
+  },
+  "semantic-terminal-floating-menu-trigger-icon": {
+    label: "悬浮菜单入口图标",
+    description: "透明终端悬浮操作菜单入口在所有交互状态下使用的图标颜色。",
   },
   "semantic-popup-panel-surface": {
     label: "面板背景",

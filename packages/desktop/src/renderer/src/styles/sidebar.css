@@ -1529,7 +1529,6 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   color: var(--semantic-sidebar-tree-row-text-hover);
 }
 
-.project-row.is-active,
 .session-row.is-active,
 .skill-tree-row.is-active {
   background: var(--semantic-sidebar-tree-row-surface-active);
@@ -1538,7 +1537,6 @@ body.is-resizing-sidebar .sidebar-resizer::before {
   box-shadow: none;
 }
 
-.project-row.is-active .project-row-leading,
 .skill-tree-row.is-active .skill-tree-leading,
 .skill-tree-row.is-active .skill-tree-role-icon {
   color: var(--semantic-sidebar-tree-row-leading-active);

@@ -13,7 +13,6 @@ interface TerminalAreaHostProps {
   collapsedTogglePortalTarget?: Element | null
   colorMode: "system" | "light" | "dark"
   currentSessionID: string | null
-  headerActionsPortalTarget?: Element | null
   layout?: "panel" | "fill"
   onTabTitleChange?: (title: string) => void
   storageKey?: string
@@ -27,7 +26,6 @@ export const TerminalAreaHost = memo(function TerminalAreaHost(props: TerminalAr
     collapsedTogglePortalTarget,
     colorMode,
     currentSessionID,
-    headerActionsPortalTarget,
     layout = "panel",
     onTabTitleChange,
     storageKey,
@@ -95,24 +93,21 @@ export const TerminalAreaHost = memo(function TerminalAreaHost(props: TerminalAr
             </div>
           )
         : null}
-      {isFillLayout && activeSession && headerActionsPortalTarget
-        ? createPortal(
-            <TerminalHeaderActions
-              isBusy={isCreatingTerminal}
-              session={activeSession}
-              shellProfiles={shellProfiles}
-              onCloseTerminal={handleCloseTerminal}
-              onRestartTerminal={handleRestartTerminal}
-            />,
-            headerActionsPortalTarget,
-          )
-        : null}
       <TerminalPanel
         activeSession={activeSession}
         brandTheme={brandTheme}
         codeFontFamily={codeFontFamily}
         colorMode={colorMode}
         creationError={creationError}
+        floatingActions={isFillLayout && activeSession ? (
+          <TerminalHeaderActions
+            isBusy={isCreatingTerminal}
+            session={activeSession}
+            shellProfiles={shellProfiles}
+            onCloseTerminal={handleCloseTerminal}
+            onRestartTerminal={handleRestartTerminal}
+          />
+        ) : null}
         isOpen={effectiveIsOpen}
         isCreatingTerminal={isCreatingTerminal}
         layout={layout}

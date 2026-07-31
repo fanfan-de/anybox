@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import { I18nProvider } from "../i18n/I18nProvider"
 import { TerminalPanel } from "./TerminalPanel"
 import type { TerminalSessionRecord } from "./types"
 
@@ -30,6 +31,10 @@ async function flushFrame() {
     })
   })
 }
+
+afterEach(() => {
+  window.localStorage.removeItem("desktop.locale")
+})
 
 describe("TerminalPanel", () => {
   it("shows terminal creation errors and lets the user retry", () => {
@@ -163,6 +168,7 @@ describe("TerminalPanel", () => {
         activeSession={baseSession}
         brandTheme="terra"
         colorMode="light"
+        floatingActions={<button type="button">Terminal actions</button>}
         isOpen={true}
         layout="fill"
         panelHeight={280}
@@ -186,6 +192,9 @@ describe("TerminalPanel", () => {
     )
 
     expect(container.querySelector(".terminal-tabs")).toBeNull()
+    expect(container.querySelector(".terminal-panel-floating-actions")).toContainElement(
+      screen.getByRole("button", { name: "Terminal actions" }),
+    )
     expect(screen.queryByRole("combobox", { name: "Terminal shell profile" })).toBeNull()
     expect(screen.getByRole("tabpanel", { name: "Terminal" })).toBeInTheDocument()
   })
@@ -225,6 +234,49 @@ describe("TerminalPanel", () => {
     expect(screen.getByRole("combobox", { name: "Terminal shell profile" })).toBeEnabled()
     fireEvent.click(screen.getByRole("button", { name: "Create terminal" }))
     expect(onCreateTerminalForShellProfile).toHaveBeenCalledWith("pwsh")
+  })
+
+  it("localizes the fill-layout empty launcher and shell picker", () => {
+    window.localStorage.setItem("desktop.locale", "zh-CN")
+
+    render(
+      <I18nProvider>
+        <TerminalPanel
+          activeSession={null}
+          brandTheme="terra"
+          colorMode="light"
+          isOpen={true}
+          layout="fill"
+          panelHeight={280}
+          sessions={[]}
+          onCloseTerminal={vi.fn()}
+          onCreateTerminal={vi.fn()}
+          onCreateTerminalForShellProfile={vi.fn()}
+          onTerminalInitialDimensions={vi.fn()}
+          onTerminalInitialDimensionsError={vi.fn()}
+          onPanelHeightChange={vi.fn()}
+          onShellProfileChange={vi.fn()}
+          onSelectTerminal={vi.fn()}
+          selectedShellProfileID="default"
+          shellProfiles={[{ id: "default", label: "Default", shell: null }]}
+          onTerminalInput={vi.fn()}
+          onTerminalResize={vi.fn()}
+          onTerminalSnapshotChange={vi.fn()}
+          onTogglePanel={vi.fn()}
+          subscribeToTerminalStream={() => () => {}}
+        />
+      </I18nProvider>,
+    )
+
+    expect(screen.getByText("当前没有打开的终端会话。")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "创建终端" })).toBeInTheDocument()
+
+    const shellPicker = screen.getByRole("combobox", { name: "终端 Shell 配置" })
+    expect(shellPicker.querySelector("svg")).not.toBeNull()
+    fireEvent.click(shellPicker)
+    const listbox = screen.getByRole("listbox", { name: "终端 Shell 配置" })
+    expect(listbox).toBeInTheDocument()
+    expect(within(listbox).getByRole("option", { name: "默认" })).toBeInTheDocument()
   })
 
   it("renders the shell picker as a styled listbox and selects a profile", () => {

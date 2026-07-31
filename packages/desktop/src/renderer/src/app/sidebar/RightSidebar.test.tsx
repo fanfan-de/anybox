@@ -525,13 +525,10 @@ function renderRightSidebar(input: RenderRightSidebarInput) {
 }
 
 describe("RightSidebar", () => {
-  it("lets the active terminal supply outer-header actions and its live tab title", async () => {
+  it("lets the active terminal sync its live tab title without reserving outer-header actions", () => {
     const onUpdateTab = vi.fn()
     const renderTerminalTab: ComponentProps<typeof RightSidebar>["renderTerminalTab"] = (input) => (
       <div role="region" aria-label="Terminal tab">
-        <span data-testid="terminal-header-target">
-          {input.headerActionsPortalTarget ? "ready" : "pending"}
-        </span>
         <button type="button" onClick={() => input.onTitleChange("Terminal · test")}>Sync terminal title</button>
       </div>
     )
@@ -545,13 +542,10 @@ describe("RightSidebar", () => {
       renderTerminalTab,
     })
 
-    await waitFor(() => {
-      expect(screen.getByTestId("terminal-header-target")).toHaveTextContent("ready")
-    })
     fireEvent.click(screen.getByRole("button", { name: "Sync terminal title" }))
 
     expect(onUpdateTab).toHaveBeenCalledWith("terminal-tab", { title: "Terminal · test" })
-    expect(document.querySelector(".right-sidebar-terminal-actions-slot")).not.toBeNull()
+    expect(document.querySelector(".right-sidebar-terminal-actions-slot")).toBeNull()
   })
 
   it("shows the launcher when there are no right sidebar tabs", () => {

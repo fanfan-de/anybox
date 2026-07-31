@@ -102,6 +102,13 @@ describe("i18n translations", () => {
     expect(t("en-US", "updates.action.downloadInBackground")).toBe("Download in background")
   })
 
+  it("exposes localized terminal empty-state controls", () => {
+    expect(t("zh-CN", "terminal.emptyState")).toBe("当前没有打开的终端会话。")
+    expect(t("zh-TW", "terminal.create")).toBe("建立終端機")
+    expect(t("ja-JP", "terminal.shellProfile")).toBe("ターミナルのシェルプロファイル")
+    expect(t("en-US", "terminal.resizePanel")).toBe("Resize terminal panel")
+  })
+
   it("exposes dictionaries by locale", () => {
     expect(getTranslationDictionary("zh-CN")["settings.appearance.languageTitle"]).toBe("显示语言")
     expect(getTranslationDictionary("en-US")["settings.appearance.languageTitle"]).toBe("Display Language")

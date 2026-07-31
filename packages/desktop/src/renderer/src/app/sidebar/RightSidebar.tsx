@@ -46,7 +46,6 @@ import {
 } from "./BranchChatPanel"
 
 export interface RenderTerminalTabInput {
-  headerActionsPortalTarget: Element | null
   onTitleChange: (title: string) => void
   sessionID: string | null
 }
@@ -278,7 +277,6 @@ export function RightSidebar({
 }: RightSidebarProps) {
   const { t } = useI18n()
   const [isLauncherVisible, setIsLauncherVisible] = useState(() => !rightSidebar.activeTabID)
-  const [terminalHeaderActionsPortalTarget, setTerminalHeaderActionsPortalTarget] = useState<HTMLDivElement | null>(null)
   const lastActiveTabIDRef = useRef<string | null>(null)
   const activeTab = rightSidebar.tabs.find((tab) => tab.id === rightSidebar.activeTabID) ?? null
   const viewHostClassName = getViewHostClassName(activeTab, isLauncherVisible)
@@ -484,7 +482,6 @@ export function RightSidebar({
       }
       case "terminal":
         return renderTerminalTab({
-          headerActionsPortalTarget: terminalHeaderActionsPortalTarget,
           sessionID: activeTab.sessionID,
           onTitleChange: (title) => {
             if (activeTab.title === title) return
@@ -557,21 +554,6 @@ export function RightSidebar({
     }
   }
 
-  const showTerminalHeaderActions = !isLauncherVisible && activeTab?.kind === "terminal"
-  const topMenuTrailing = showTerminalHeaderActions || windowControls
-    ? (
-      <>
-        {showTerminalHeaderActions ? (
-          <div
-            ref={setTerminalHeaderActionsPortalTarget}
-            className="right-sidebar-terminal-actions-slot"
-          />
-        ) : null}
-        {windowControls}
-      </>
-    )
-    : undefined
-
   return (
     <aside id="app-sidebar-right" className="sidebar is-right" aria-label="Inspector sidebar">
       <ShellTopMenu
@@ -624,7 +606,7 @@ export function RightSidebar({
           </>
         )}
         dragRegion
-        trailing={topMenuTrailing}
+        trailing={windowControls}
         trailingClassName="right-sidebar-top-menu-window-controls"
       />
 

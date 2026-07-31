@@ -1312,15 +1312,6 @@
   z-index: 2;
 }
 
-.right-sidebar-terminal-actions-slot {
-  min-width: 28px;
-  min-height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  -webkit-app-region: no-drag;
-}
-
 .left-sidebar-top-menu .top-menu-view-button,
 .right-sidebar-top-menu .top-menu-view-button {
   align-self: center;

@@ -13375,11 +13375,16 @@ describe("App", () => {
       })
     })
 
-    expect(within(inspector).getByRole("button", { name: /^Terminal 1,/ })).toBeInTheDocument()
+    const terminalActions = within(inspector).getByRole("button", { name: "Terminal · Reset / Close" })
+    expect(terminalActions.closest(".terminal-panel-floating-actions")).not.toBeNull()
+    expect(
+      within(screen.getByLabelText("Right sidebar top menu"))
+        .queryByRole("button", { name: "Terminal · Reset / Close" }),
+    ).toBeNull()
     expect(screen.queryByText("New terminal")).not.toBeInTheDocument()
     expect(document.querySelector(".terminal-view-meta")).toBeNull()
 
-    fireEvent.click(within(inspector).getByRole("button", { name: "Close Terminal" }))
+    fireEvent.click(within(inspector).getByRole("button", { name: "Close Terminal · Terminal 1" }))
 
     expect(within(inspector).getByLabelText("Right sidebar launcher")).toBeInTheDocument()
     expect(window.desktop!.deletePtySession).not.toHaveBeenCalled()
@@ -13720,7 +13725,7 @@ describe("App", () => {
     await waitFor(() => {
       expect(window.desktop!.createPtySession).toHaveBeenCalledTimes(1)
     })
-    await screen.findByRole("button", { name: /^Terminal 1,/i })
+    const terminalTab = await screen.findByRole("tab", { name: "Terminal · Terminal 1" })
 
     act(() => {
       ptyListener?.({
@@ -13752,7 +13757,7 @@ describe("App", () => {
     expect(await screen.findByText("first output")).toBeInTheDocument()
 
     expect(screen.queryByRole("button", { name: "New terminal" })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole("button", { name: /^Terminal 1,/i }))
+    fireEvent.click(terminalTab)
     expect(window.desktop!.createPtySession).toHaveBeenCalledTimes(1)
     expect(await screen.findByText("first output")).toBeInTheDocument()
   })
@@ -14100,7 +14105,7 @@ describe("App", () => {
     expect(srcFolderLeading).toHaveAttribute("data-icon", "folder")
   })
 
-  it("routes every left-sidebar tree row state through dedicated semantic tokens", () => {
+  it("keeps active project rows neutral while routing selectable sidebar rows through semantic tokens", () => {
     expect(styles).toMatch(/\.session-tree\s*\{[^}]*padding-left:\s*0;/s)
     expect(styles).toMatch(/\.project-row\s*\{[^}]*border-radius:\s*8px;/s)
     expect(styles).toMatch(/\.session-row\s*\{[^}]*border-radius:\s*8px;/s)
@@ -14111,11 +14116,12 @@ describe("App", () => {
       /\.project-row:hover,\s*\.project-row:focus-visible,\s*\.session-row:hover,\s*\.session-row:focus-visible,\s*\.skill-tree-row:hover,\s*\.skill-tree-row:focus-visible\s*\{[^}]*background:\s*var\(--semantic-sidebar-tree-row-surface-hover\);[^}]*color:\s*var\(--semantic-sidebar-tree-row-text-hover\);/s,
     )
     expect(styles).toMatch(
-      /\.project-row\.is-active,\s*\.session-row\.is-active,\s*\.skill-tree-row\.is-active\s*\{[^}]*background:\s*var\(--semantic-sidebar-tree-row-surface-active\);[^}]*color:\s*var\(--semantic-sidebar-tree-row-text-active\);/s,
+      /\.session-row\.is-active,\s*\.skill-tree-row\.is-active\s*\{[^}]*background:\s*var\(--semantic-sidebar-tree-row-surface-active\);[^}]*color:\s*var\(--semantic-sidebar-tree-row-text-active\);/s,
     )
     expect(styles).toMatch(
-      /\.project-row\.is-active \.project-row-leading,\s*\.skill-tree-row\.is-active \.skill-tree-leading,\s*\.skill-tree-row\.is-active \.skill-tree-role-icon\s*\{[^}]*color:\s*var\(--semantic-sidebar-tree-row-leading-active\);/s,
+      /\.skill-tree-row\.is-active \.skill-tree-leading,\s*\.skill-tree-row\.is-active \.skill-tree-role-icon\s*\{[^}]*color:\s*var\(--semantic-sidebar-tree-row-leading-active\);/s,
     )
+    expect(styles).not.toContain(".project-row.is-active")
     expect(styles).toMatch(
       /\.mcp-server-sidebar-row:hover,\s*\.mcp-server-sidebar-row:focus-visible\s*\{[^}]*background:\s*var\(--semantic-sidebar-tree-row-surface-hover\);[^}]*color:\s*var\(--semantic-sidebar-tree-row-text-hover\);/s,
     )
