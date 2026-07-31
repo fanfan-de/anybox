@@ -1451,7 +1451,7 @@
 }
 
 .right-sidebar-scope code {
-  font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   color: var(--semantic-markdown-code-text);
 }
@@ -1783,7 +1783,7 @@
   overflow: auto;
   background: var(--semantic-markdown-code-surface);
   color: var(--semantic-markdown-code-text);
-  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.55;
   white-space: pre;
@@ -2081,7 +2081,7 @@
 
 .preview-error-state code {
   color: var(--semantic-markdown-code-text);
-  font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
 }
 
@@ -2116,7 +2116,7 @@
 .preview-quick-link {
   min-height: 32px;
   padding: 0 11px;
-  font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
 }
 
@@ -2174,7 +2174,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 650;
 }
@@ -2306,7 +2306,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
+  font-family: var(--font-mono);
   font-weight: 600;
 }
 
@@ -2433,7 +2433,7 @@
 
 .preview-comment-selection span,
 .preview-comment-selector {
-  font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   line-height: 1.5;
 }
@@ -2583,7 +2583,7 @@
 }
 
 .right-sidebar-change-type {
-  font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -2607,7 +2607,7 @@
 
 .right-sidebar-change-stat {
   color: var(--text-secondary);
-  font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   white-space: nowrap;
 }
@@ -2663,7 +2663,7 @@
   display: grid;
   gap: 10px;
   padding: 10px;
-  font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.5;
   min-width: max-content;
@@ -3833,7 +3833,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.4;
   white-space: nowrap;
@@ -4152,7 +4152,7 @@
 
 .workspace-files-line-number {
   color: var(--semantic-markdown-code-muted-text);
-  font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   text-align: right;
   user-select: none;
@@ -4188,7 +4188,7 @@
   margin: 0;
   padding: 0 12px;
   color: var(--code-highlight-fg, var(--semantic-markdown-code-text));
-  font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.7;
   white-space: pre;
@@ -4860,7 +4860,7 @@
 .workspace-files-pathbar-path {
   min-width: 0;
   color: var(--seg-text-1);
-  font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 600;
   overflow: hidden;
@@ -4991,7 +4991,7 @@
 
 .workspace-files-reader-title strong {
   color: var(--seg-text-1);
-  font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 600;
   overflow: hidden;
@@ -5364,7 +5364,7 @@
   align-items: center;
   justify-content: center;
   color: var(--seg-text-2);
-  font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
+  font-family: var(--font-mono);
   font-size: 8px;
   font-weight: 700;
   line-height: 1;

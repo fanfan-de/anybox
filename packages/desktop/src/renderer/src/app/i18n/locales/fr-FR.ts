@@ -381,6 +381,7 @@ export const frFR = {
   "settings.appearance.accentThemeTerra": "Terre chaude et sable",
   "settings.appearance.accentThemeSage": "Sauge / Ardoise",
   "settings.appearance.interfaceFont": "Police d'interface",
+  "settings.appearance.codeFont": "Police du code",
   "settings.appearance.theme": "Thème",
   "settings.appearance.themeLibraryLabel": "Thème",
   "settings.appearance.themeLibraryTitle": "Bibliothèque de thèmes",

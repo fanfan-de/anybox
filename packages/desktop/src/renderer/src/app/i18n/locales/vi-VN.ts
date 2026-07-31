@@ -381,6 +381,7 @@ export const viVN = {
   "settings.appearance.accentThemeTerra": "Terra ấm & Cát",
   "settings.appearance.accentThemeSage": "Sage / Slate",
   "settings.appearance.interfaceFont": "Phông chữ giao diện",
+  "settings.appearance.codeFont": "Phông chữ mã",
   "settings.appearance.theme": "Chủ đề",
   "settings.appearance.themeLibraryLabel": "Chủ đề",
   "settings.appearance.themeLibraryTitle": "Thư viện chủ đề",

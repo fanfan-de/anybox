@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
   APPEARANCE_TOKEN_GROUPS,
+  isAppearanceCodeFontFamily,
   isAppearanceTokenName,
   isAppearanceFontFamily,
   normalizeAppearanceConfigDocument,
   normalizeAppearanceRuntimeState,
   type AppearanceConfigDocument,
+  type AppearanceCodeFontFamily,
   type AppearanceFontFamily,
   type AppearanceRuntimeState,
   type AppearanceTokenMap,
@@ -35,6 +37,7 @@ import type {
   SemanticTokenThemeValueEdit,
 } from "../../../shared/semantic-token-authoring"
 import { applyAppearanceOverrides } from "./appearance-theme"
+import { resolveCodeFontFamilyStack } from "./code-font"
 import {
   normalizeCodeThemePreference,
   resolveCodeHighlightTheme,
@@ -47,6 +50,7 @@ const COLOR_MODE_STORAGE_KEY = "desktop.colorMode"
 const CODE_THEME_STORAGE_KEY = "desktop.codeTheme"
 const BRAND_THEME_STORAGE_KEY = "desktop.brandTheme"
 const FONT_FAMILY_STORAGE_KEY = "desktop.fontFamily"
+const CODE_FONT_FAMILY_STORAGE_KEY = "desktop.codeFontFamily"
 const APPEARANCE_CONFIG_SAVE_DEBOUNCE_MS = 160
 
 const SEMANTIC_RUNTIME_MODE_TOKENS = new Map(
@@ -170,11 +174,25 @@ function readFontFamilyPreference(): AppearanceFontFamily {
   }
 }
 
+function readCodeFontFamilyPreference(): AppearanceCodeFontFamily {
+  if (typeof window === "undefined") return "default"
+  try {
+    const stored = window.localStorage.getItem(CODE_FONT_FAMILY_STORAGE_KEY)
+    if (stored && isAppearanceCodeFontFamily(stored)) {
+      return stored
+    }
+    return "default"
+  } catch {
+    return "default"
+  }
+}
+
 function getAppearanceRuntimeSignature(input: {
   brandTheme: BrandTheme
   codeThemePreference: CodeThemePreference
   colorMode: ColorMode
   fontFamily: AppearanceFontFamily
+  codeFontFamily: AppearanceCodeFontFamily
   overrides: AppearanceTokenMap
   foreignDtcg: Record<string, unknown>
 }) {
@@ -187,6 +205,7 @@ function getAppearanceStateSignature(state: AppearanceRuntimeState) {
     codeThemePreference: state.codeThemePreference,
     colorMode: state.document.colorMode,
     fontFamily: state.document.fontFamily,
+    codeFontFamily: state.document.codeFontFamily,
     overrides: state.document.overrides,
     foreignDtcg: state.document.foreignDtcg,
   })
@@ -201,6 +220,8 @@ export function useAppearanceState(options: {
   const [isSystemDarkMode, setIsSystemDarkMode] = useState(readSystemDarkModePreference)
   const [brandTheme, setBrandTheme] = useState<BrandTheme>(readBrandThemePreference)
   const [fontFamily, setFontFamily] = useState<AppearanceFontFamily>(readFontFamilyPreference)
+  const [codeFontFamily, setCodeFontFamily] =
+    useState<AppearanceCodeFontFamily>(readCodeFontFamilyPreference)
   const [appearanceOverrides, setAppearanceOverrides] = useState<AppearanceTokenMap>({})
   const [appearanceForeignDtcg, setAppearanceForeignDtcg] = useState<Record<string, unknown>>({})
   const [appearanceTokenValues, setAppearanceTokenValues] =
@@ -226,6 +247,7 @@ export function useAppearanceState(options: {
       brandTheme,
       colorMode,
       fontFamily,
+      codeFontFamily,
       overrides: appearanceOverrides,
       foreignDtcg: appearanceForeignDtcg,
     },
@@ -237,6 +259,7 @@ export function useAppearanceState(options: {
     codeThemePreference,
     colorMode,
     fontFamily,
+    codeFontFamily,
     overrides: appearanceOverrides,
     foreignDtcg: appearanceForeignDtcg,
   })
@@ -254,6 +277,7 @@ export function useAppearanceState(options: {
       brandTheme,
       colorMode,
       fontFamily,
+      codeFontFamily,
       overrides: appearanceOverrides,
       foreignDtcg: appearanceForeignDtcg,
       updatedAt: Date.now(),
@@ -290,6 +314,7 @@ export function useAppearanceState(options: {
         setColorMode(nextDocument.colorMode)
         setBrandTheme(nextDocument.brandTheme)
         setFontFamily(nextDocument.fontFamily)
+        setCodeFontFamily(nextDocument.codeFontFamily)
         setAppearanceOverrides(nextDocument.overrides)
         setAppearanceForeignDtcg(nextDocument.foreignDtcg)
       })
@@ -355,6 +380,7 @@ export function useAppearanceState(options: {
       setColorMode(normalizedState.document.colorMode)
       setBrandTheme(normalizedState.document.brandTheme)
       setFontFamily(normalizedState.document.fontFamily)
+      setCodeFontFamily(normalizedState.document.codeFontFamily)
       setAppearanceOverrides(normalizedState.document.overrides)
       setAppearanceForeignDtcg(normalizedState.document.foreignDtcg)
       setCodeThemePreference(normalizedState.codeThemePreference)
@@ -369,6 +395,7 @@ export function useAppearanceState(options: {
     codeThemePreference,
     colorMode,
     fontFamily,
+    codeFontFamily,
   ])
 
   useEffect(() => {
@@ -433,6 +460,19 @@ export function useAppearanceState(options: {
       return
     }
   }, [fontFamily])
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-code-font-family", codeFontFamily)
+    document.documentElement.style.setProperty(
+      "--font-mono",
+      resolveCodeFontFamilyStack(codeFontFamily),
+    )
+    try {
+      window.localStorage.setItem(CODE_FONT_FAMILY_STORAGE_KEY, codeFontFamily)
+    } catch {
+      return
+    }
+  }, [codeFontFamily])
 
   useEffect(() => {
     applyAppearanceOverrides(document.documentElement, appearanceOverrides)
@@ -572,6 +612,7 @@ export function useAppearanceState(options: {
       colorMode,
       brandTheme,
       fontFamily,
+      codeFontFamily,
       codeThemePreference,
       overrides: appearanceOverrides,
       foreignDtcg: appearanceForeignDtcg,
@@ -582,6 +623,7 @@ export function useAppearanceState(options: {
     setColorMode(theme.colorMode)
     setBrandTheme(theme.brandTheme)
     setFontFamily(theme.fontFamily)
+    setCodeFontFamily(theme.codeFontFamily)
     setCodeThemePreference(theme.codeThemePreference)
     setAppearanceOverrides({ ...theme.overrides })
     setAppearanceForeignDtcg(structuredClone(theme.foreignDtcg))
@@ -777,6 +819,7 @@ export function useAppearanceState(options: {
     codeThemePreference,
     colorMode,
     fontFamily,
+    codeFontFamily,
     handleAppearancePaletteReset,
     handleAppearanceThemeApply,
     handleAppearanceThemeDelete,
@@ -792,6 +835,7 @@ export function useAppearanceState(options: {
     handleCodeThemeChange: setCodeThemePreference,
     handleColorModeChange: setColorMode,
     handleFontFamilyChange: setFontFamily,
+    handleCodeFontFamilyChange: setCodeFontFamily,
     resolvedColorMode,
     resolvedCodeTheme,
   }

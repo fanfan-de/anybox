@@ -1,6 +1,7 @@
 import { FitAddon } from "@xterm/addon-fit"
 import { Terminal } from "@xterm/xterm"
 import { memo, useEffect, useEffectEvent, useRef } from "react"
+import type { AppearanceCodeFontFamily } from "../../../../shared/appearance"
 import type { BrandTheme, ColorMode } from "../types"
 import { createTerminalOptions } from "./TerminalView"
 
@@ -9,6 +10,7 @@ const MEASURE_RETRY_DELAY_MS = 40
 
 interface TerminalInitialDimensionsProbeProps {
   brandTheme: BrandTheme
+  codeFontFamily?: AppearanceCodeFontFamily
   colorMode: ColorMode
   panelHeight: number
   requestID: number
@@ -24,6 +26,7 @@ function isUsableDimensions(
 
 export const TerminalInitialDimensionsProbe = memo(function TerminalInitialDimensionsProbe({
   brandTheme,
+  codeFontFamily = "default",
   colorMode,
   panelHeight,
   requestID,
@@ -31,7 +34,7 @@ export const TerminalInitialDimensionsProbe = memo(function TerminalInitialDimen
   onMeasurementError,
 }: TerminalInitialDimensionsProbeProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const themeSignature = `${brandTheme}:${colorMode}`
+  const themeSignature = `${brandTheme}:${colorMode}:${codeFontFamily}`
   const handleDimensions = useEffectEvent(onDimensions)
   const handleMeasurementError = useEffectEvent(onMeasurementError)
 
@@ -39,7 +42,7 @@ export const TerminalInitialDimensionsProbe = memo(function TerminalInitialDimen
     const container = containerRef.current
     if (!container) return
 
-    const terminal = new Terminal(createTerminalOptions())
+    const terminal = new Terminal(createTerminalOptions(codeFontFamily))
     const fitAddon = new FitAddon()
     let frame: number | null = null
     let timer: number | null = null

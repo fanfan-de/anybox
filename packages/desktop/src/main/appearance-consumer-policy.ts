@@ -103,6 +103,7 @@ export function constrainConsumerAppearanceDocument(
     brandTheme: activeTheme.brandTheme,
     colorMode: normalizedInput.colorMode,
     fontFamily: normalizedInput.fontFamily,
+    codeFontFamily: normalizedInput.codeFontFamily,
     overrides: activeTheme.overrides,
     foreignDtcg: activeTheme.foreignDtcg,
     updatedAt: normalizedInput.updatedAt,

@@ -1,5 +1,6 @@
 import { act, render, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { resolveCodeFontFamilyStack } from "../code-font"
 import { TerminalInitialDimensionsProbe } from "./TerminalInitialDimensionsProbe"
 
 function setMockDimensions(dimensions: { rows: number; cols: number } | null | undefined) {
@@ -28,6 +29,7 @@ describe("TerminalInitialDimensionsProbe", () => {
     render(
       <TerminalInitialDimensionsProbe
         brandTheme="terra"
+        codeFontFamily="consolas"
         colorMode="light"
         panelHeight={280}
         requestID={7}
@@ -46,6 +48,9 @@ describe("TerminalInitialDimensionsProbe", () => {
 
     expect(onDimensions).toHaveBeenCalledTimes(1)
     expect(onMeasurementError).not.toHaveBeenCalled()
+    expect((
+      globalThis as { __mockXtermLastOptions?: Record<string, unknown> }
+    ).__mockXtermLastOptions?.fontFamily).toBe(resolveCodeFontFamilyStack("consolas"))
   })
 
   it("reports a measurement error when dimensions stay unavailable", async () => {

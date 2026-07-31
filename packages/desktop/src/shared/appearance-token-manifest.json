@@ -7618,6 +7618,7 @@
       "colorMode": "light",
       "brandTheme": "terra",
       "fontFamily": "default",
+      "codeFontFamily": "default",
       "codeThemePreference": "auto",
       "overrides": {
         "surface-app-light": {
@@ -10592,6 +10593,7 @@
       "colorMode": "light",
       "brandTheme": "terra",
       "fontFamily": "default",
+      "codeFontFamily": "default",
       "codeThemePreference": "auto",
       "overrides": {
         "surface-app-light": {
@@ -13267,6 +13269,7 @@
       "colorMode": "system",
       "brandTheme": "sage",
       "fontFamily": "default",
+      "codeFontFamily": "default",
       "codeThemePreference": "auto",
       "overrides": {}
     },
@@ -13276,6 +13279,7 @@
       "colorMode": "dark",
       "brandTheme": "sage",
       "fontFamily": "default",
+      "codeFontFamily": "default",
       "codeThemePreference": "nord",
       "overrides": {
         "surface-app-dark": {
@@ -13637,6 +13641,7 @@
       "colorMode": "light",
       "brandTheme": "terra",
       "fontFamily": "default",
+      "codeFontFamily": "default",
       "codeThemePreference": "github-light",
       "overrides": {
         "surface-app-light": {

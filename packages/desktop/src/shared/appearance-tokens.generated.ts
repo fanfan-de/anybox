@@ -10773,6 +10773,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
     "colorMode": "light",
     "brandTheme": "terra",
     "fontFamily": "default",
+    "codeFontFamily": "default",
     "codeThemePreference": "auto",
     "overrides": {
       "surface-app-light": {
@@ -13747,6 +13748,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
     "colorMode": "light",
     "brandTheme": "terra",
     "fontFamily": "default",
+    "codeFontFamily": "default",
     "codeThemePreference": "auto",
     "overrides": {
       "surface-app-light": {
@@ -16422,6 +16424,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
     "colorMode": "system",
     "brandTheme": "sage",
     "fontFamily": "default",
+    "codeFontFamily": "default",
     "codeThemePreference": "auto",
     "overrides": {}
   },
@@ -16431,6 +16434,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
     "colorMode": "dark",
     "brandTheme": "sage",
     "fontFamily": "default",
+    "codeFontFamily": "default",
     "codeThemePreference": "nord",
     "overrides": {
       "surface-app-dark": {
@@ -16792,6 +16796,7 @@ export const BUILT_IN_APPEARANCE_THEME_DEFINITIONS = [
     "colorMode": "light",
     "brandTheme": "terra",
     "fontFamily": "default",
+    "codeFontFamily": "default",
     "codeThemePreference": "github-light",
     "overrides": {
       "surface-app-light": {

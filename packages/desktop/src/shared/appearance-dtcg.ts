@@ -308,6 +308,7 @@ function normalizeImportedThemeMetadata(
     brandTheme: theme.brandTheme,
     colorMode: theme.colorMode,
     fontFamily: theme.fontFamily,
+    codeFontFamily: theme.codeFontFamily,
     overrides: {},
   })
 
@@ -319,6 +320,7 @@ function normalizeImportedThemeMetadata(
     colorMode: normalized.colorMode,
     brandTheme: normalized.brandTheme,
     fontFamily: normalized.fontFamily,
+    codeFontFamily: normalized.codeFontFamily,
     codeThemePreference: normalizeAppearanceCodeThemePreference(
       theme.codeThemePreference,
     ),
@@ -432,6 +434,7 @@ export function parseAppearanceDtcgJson(
       colorMode: metadata.colorMode,
       brandTheme: metadata.brandTheme,
       fontFamily: metadata.fontFamily,
+      codeFontFamily: metadata.codeFontFamily,
       codeThemePreference: metadata.codeThemePreference,
       overrides,
       foreignDtcg: cloneJsonRecord(input),
@@ -461,6 +464,7 @@ function readThemeExtensionMetadata(theme: AppearanceTheme) {
     colorMode: theme.colorMode,
     brandTheme: theme.brandTheme,
     fontFamily: theme.fontFamily,
+    codeFontFamily: theme.codeFontFamily,
     codeThemePreference: theme.codeThemePreference,
   }
 }

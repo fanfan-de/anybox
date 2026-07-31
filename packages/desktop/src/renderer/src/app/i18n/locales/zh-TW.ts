@@ -378,6 +378,7 @@ export const zhTW = {
   "settings.appearance.accentThemeTerra": "暖色 Terra 與沙色",
   "settings.appearance.accentThemeSage": "冷色 Sage 與板岩灰",
   "settings.appearance.interfaceFont": "介面字型",
+  "settings.appearance.codeFont": "程式碼字型",
   "settings.appearance.theme": "主題",
   "settings.appearance.themeLibraryLabel": "主題",
   "settings.appearance.themeLibraryTitle": "主題庫",

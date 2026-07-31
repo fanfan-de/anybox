@@ -644,6 +644,7 @@ describe("appearance token manifest", () => {
       brandTheme: DEFAULT_APPEARANCE_THEME_DEFINITION.brandTheme,
       colorMode: DEFAULT_APPEARANCE_THEME_DEFINITION.colorMode,
       fontFamily: DEFAULT_APPEARANCE_THEME_DEFINITION.fontFamily,
+      codeFontFamily: DEFAULT_APPEARANCE_THEME_DEFINITION.codeFontFamily,
       overrides: DEFAULT_APPEARANCE_THEME_DEFINITION.overrides,
       foreignDtcg: {},
     })

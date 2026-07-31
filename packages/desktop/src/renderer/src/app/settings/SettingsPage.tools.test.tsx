@@ -94,6 +94,7 @@ function createAppearanceTheme(overrides: Partial<AppearanceTheme> = {}): Appear
     colorMode: "light",
     brandTheme: "terra",
     fontFamily: "default",
+    codeFontFamily: "default",
     codeThemePreference: "auto",
     overrides: {},
     foreignDtcg: {},
@@ -135,6 +136,7 @@ function createSettingsPageProps(
     cinemaWorkflowCatalogError: null,
     colorMode: "system",
     fontFamily: "default",
+    codeFontFamily: "default",
     deletingArchivedSessionID: null,
     deletingMcpServerID: null,
     deletingProviderID: null,
@@ -181,6 +183,7 @@ function createSettingsPageProps(
     onClose: vi.fn(),
     onColorModeChange: vi.fn(),
     onFontFamilyChange: vi.fn(),
+    onCodeFontFamilyChange: vi.fn(),
     onDebugLineColorsChange: vi.fn(),
     onDebugUiRegionsChange: vi.fn(),
     onMobileConnectionAdvancedInfoChange: vi.fn(),
@@ -2205,6 +2208,41 @@ describe("SettingsPage built-in tools", () => {
     expect(onFontFamilyChange).toHaveBeenCalledWith("microsoft-yahei")
   })
 
+  it("places the code font after the interface font and selects a preset", () => {
+    const onCodeFontFamilyChange = vi.fn()
+
+    render(
+      <SettingsPage
+        {...createSettingsPageProps({
+          codeFontFamily: "system",
+          onCodeFontFamilyChange,
+        })}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Appearance" }))
+
+    const interfaceFont = screen.getByRole("combobox", { name: "Interface Font" })
+    const codeFont = screen.getByRole("combobox", { name: "Code Font" })
+    expect(interfaceFont.closest(".settings-select-row")?.nextElementSibling)
+      .toBe(codeFont.closest(".settings-select-row"))
+
+    fireEvent.keyDown(codeFont, { key: "ArrowDown" })
+    const listbox = screen.getByRole("listbox", { name: "Code Font" })
+    expect(within(listbox).getAllByRole("option").map((option) => option.textContent)).toEqual([
+      "IBM Plex Mono",
+      "System Monospace",
+      "JetBrains Mono",
+      "Cascadia Code",
+      "Consolas",
+    ])
+    fireEvent.keyDown(listbox, { key: "ArrowDown" })
+    fireEvent.keyDown(listbox, { key: "ArrowDown" })
+    fireEvent.keyDown(listbox, { key: "Enter" })
+
+    expect(onCodeFontFamilyChange).toHaveBeenCalledWith("cascadia-code")
+  })
+
   it("selects the color mode from preview cards shown before the theme library", () => {
     const onColorModeChange = vi.fn()
 
@@ -2739,6 +2777,7 @@ describe("SettingsPage built-in tools", () => {
     expect(screen.queryByRole("combobox", { name: "强调主题" })).not.toBeInTheDocument()
     expect(screen.queryByRole("combobox", { name: "代码主题" })).not.toBeInTheDocument()
     expect(screen.getByRole("combobox", { name: "界面字体" })).toBeInTheDocument()
+    expect(screen.getByRole("combobox", { name: "代码字体" })).toBeInTheDocument()
     expect(screen.getByText("行默认背景")).toBeInTheDocument()
     expect(screen.queryByText("选择亮色、暗色或跟随系统的配色方案。")).not.toBeInTheDocument()
     expect(screen.queryByText(/Choose the font used across the desktop interface/i)).not.toBeInTheDocument()

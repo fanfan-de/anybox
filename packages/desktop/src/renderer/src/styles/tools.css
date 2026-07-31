@@ -453,7 +453,7 @@
   flex: 1 1 auto;
   min-width: 0;
   color: var(--text-tertiary);
-  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace);
+  font-family: var(--font-mono);
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -618,7 +618,7 @@
   border-radius: var(--seg-radius-sm);
   background: var(--seg-code-bg, var(--surface-panel-muted));
   color: var(--seg-text-1);
-  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace);
+  font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.45;
   white-space: pre-wrap;
@@ -641,7 +641,7 @@
   box-shadow: none;
   display: inline-flex;
   align-items: center;
-  font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.05em;
   text-transform: uppercase;

@@ -381,6 +381,7 @@ export const idID = {
   "settings.appearance.accentThemeTerra": "Terra Hangat & Pasir",
   "settings.appearance.accentThemeSage": "Sage / Slate",
   "settings.appearance.interfaceFont": "Font Antarmuka",
+  "settings.appearance.codeFont": "Font Kode",
   "settings.appearance.theme": "Tema",
   "settings.appearance.themeLibraryLabel": "Tema",
   "settings.appearance.themeLibraryTitle": "Pustaka Tema",

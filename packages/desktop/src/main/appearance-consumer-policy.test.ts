@@ -81,7 +81,7 @@ describe("consumer appearance policy", () => {
     expect(snapshot.themes.every((theme) => theme.source === "built-in")).toBe(true)
   })
 
-  it("locks theme-owned fields while preserving color mode and font", async () => {
+  it("locks theme-owned fields while preserving color mode and fonts", async () => {
     const themes = await readAppearanceThemesSnapshot()
     const activeTheme = resolveConsumerAppearanceTheme(themes)
     const constrained = constrainConsumerAppearanceDocument({
@@ -89,6 +89,7 @@ describe("consumer appearance policy", () => {
       brandTheme: "sage",
       colorMode: "dark",
       fontFamily: "microsoft-yahei",
+      codeFontFamily: "consolas",
       overrides: {
         "surface-app-light": colorLiteral("#abcdef"),
       },
@@ -101,6 +102,7 @@ describe("consumer appearance policy", () => {
       brandTheme: activeTheme.brandTheme,
       colorMode: "dark",
       fontFamily: "microsoft-yahei",
+      codeFontFamily: "consolas",
       overrides: activeTheme.overrides,
       foreignDtcg: activeTheme.foreignDtcg,
     })
@@ -113,6 +115,7 @@ describe("consumer appearance policy", () => {
       brandTheme: "sage",
       colorMode: "dark",
       fontFamily: "segoe",
+      codeFontFamily: "jetbrains-mono",
       overrides: {
         "surface-app-light": colorLiteral("#654321"),
       },
@@ -134,6 +137,7 @@ describe("consumer appearance policy", () => {
     expect(result.themeSnapshot.document.userThemes).toHaveLength(1)
     expect(result.configSnapshot.document.colorMode).toBe("dark")
     expect(result.configSnapshot.document.fontFamily).toBe("segoe")
+    expect(result.configSnapshot.document.codeFontFamily).toBe("jetbrains-mono")
     const activeTheme = resolveConsumerAppearanceTheme(result.themeSnapshot)
     expect(result.configSnapshot.document.brandTheme).toBe(activeTheme.brandTheme)
     expect(result.configSnapshot.document.overrides).toEqual(activeTheme.overrides)

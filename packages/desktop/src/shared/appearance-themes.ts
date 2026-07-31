@@ -7,6 +7,7 @@ import {
   normalizeAppearanceConfigDocument,
   validateAppearanceConfigDocumentStructure,
   type AppearanceBrandTheme,
+  type AppearanceCodeFontFamily,
   type AppearanceCodeThemePreference,
   type AppearanceColorMode,
   type AppearanceFontFamily,
@@ -27,6 +28,7 @@ export interface AppearanceTheme {
   colorMode: AppearanceColorMode
   brandTheme: AppearanceBrandTheme
   fontFamily: AppearanceFontFamily
+  codeFontFamily: AppearanceCodeFontFamily
   codeThemePreference: AppearanceCodeThemePreference
   overrides: AppearanceTokenMap
   foreignDtcg: Record<string, unknown>
@@ -59,6 +61,7 @@ export interface AppearanceThemeSaveInput {
   colorMode: AppearanceColorMode
   brandTheme: AppearanceBrandTheme
   fontFamily: AppearanceFontFamily
+  codeFontFamily?: AppearanceCodeFontFamily
   codeThemePreference: AppearanceCodeThemePreference
   overrides: AppearanceTokenMap
   foreignDtcg?: Record<string, unknown>
@@ -130,6 +133,7 @@ function normalizeThemeCore(record: Record<string, unknown>) {
     brandTheme: record.brandTheme,
     colorMode: record.colorMode,
     fontFamily: record.fontFamily,
+    codeFontFamily: record.codeFontFamily,
     overrides: record.overrides,
     foreignDtcg: record.foreignDtcg,
     updatedAt: 0,
@@ -139,6 +143,7 @@ function normalizeThemeCore(record: Record<string, unknown>) {
     colorMode: document.colorMode,
     brandTheme: document.brandTheme,
     fontFamily: document.fontFamily,
+    codeFontFamily: document.codeFontFamily,
     codeThemePreference: normalizeAppearanceCodeThemePreference(record.codeThemePreference),
     overrides: document.overrides,
     foreignDtcg: document.foreignDtcg,
@@ -214,6 +219,7 @@ export function validateAppearanceThemeSaveInputStructure(input: unknown): strin
     brandTheme: record.brandTheme,
     colorMode: record.colorMode,
     fontFamily: record.fontFamily,
+    codeFontFamily: record.codeFontFamily,
     overrides: record.overrides,
     foreignDtcg: record.foreignDtcg,
   })

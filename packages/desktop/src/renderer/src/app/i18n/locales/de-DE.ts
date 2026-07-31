@@ -381,6 +381,7 @@ export const deDE = {
   "settings.appearance.accentThemeTerra": "Warm Terra & Sand",
   "settings.appearance.accentThemeSage": "Sage / Slate",
   "settings.appearance.interfaceFont": "Schriftart",
+  "settings.appearance.codeFont": "Code-Schriftart",
   "settings.appearance.theme": "Design",
   "settings.appearance.themeLibraryLabel": "Design",
   "settings.appearance.themeLibraryTitle": "Designbibliothek",

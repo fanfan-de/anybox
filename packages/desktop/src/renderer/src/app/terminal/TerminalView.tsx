@@ -2,6 +2,8 @@ import { FitAddon } from "@xterm/addon-fit"
 import { Terminal } from "@xterm/xterm"
 import { memo, useEffect, useEffectEvent, useRef, useState, type MouseEvent as ReactMouseEvent } from "react"
 import { createPortal } from "react-dom"
+import type { AppearanceCodeFontFamily } from "../../../../shared/appearance"
+import { resolveCodeFontFamilyStack } from "../code-font"
 import { CopyIcon } from "../icons"
 import { useI18n } from "../i18n/I18nProvider"
 import { writeTextToClipboard } from "../shared-ui"
@@ -71,6 +73,7 @@ function shouldAutoFocusTerminal(container: HTMLElement) {
 
 interface TerminalViewProps {
   brandTheme: BrandTheme
+  codeFontFamily?: AppearanceCodeFontFamily
   colorMode: ColorMode
   panelHeight: number
   session: TerminalSessionRecord
@@ -123,12 +126,12 @@ function getTerminalTheme() {
   }
 }
 
-export function createTerminalOptions() {
+export function createTerminalOptions(codeFontFamily: AppearanceCodeFontFamily = "default") {
   return {
     allowProposedApi: false,
     cursorBlink: true,
     cursorInactiveStyle: "outline",
-    fontFamily: "\"IBM Plex Mono\", \"JetBrains Mono\", \"Consolas\", monospace",
+    fontFamily: resolveCodeFontFamilyStack(codeFontFamily),
     fontSize: 13,
     lineHeight: 1.25,
     scrollback: 5_000,
@@ -138,6 +141,7 @@ export function createTerminalOptions() {
 
 export const TerminalView = memo(function TerminalView({
   brandTheme,
+  codeFontFamily = "default",
   colorMode,
   panelHeight,
   session,
@@ -269,7 +273,7 @@ export const TerminalView = memo(function TerminalView({
     if (!container) return
 
     const terminal = new Terminal({
-      ...createTerminalOptions(),
+      ...createTerminalOptions(codeFontFamily),
       rows: session.rows,
       cols: session.cols,
     })
@@ -366,6 +370,20 @@ export const TerminalView = memo(function TerminalView({
       setContextMenu(null)
     }
   }, [session.ptyID])
+
+  useEffect(() => {
+    const terminal = terminalRef.current
+    if (!terminal || !("options" in terminal) || !terminal.options) return
+
+    terminal.options.fontFamily = resolveCodeFontFamilyStack(codeFontFamily)
+    const timer = window.setTimeout(() => {
+      fitTerminal()
+    }, 0)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [codeFontFamily])
 
   useEffect(() => {
     if (!contextMenu) return

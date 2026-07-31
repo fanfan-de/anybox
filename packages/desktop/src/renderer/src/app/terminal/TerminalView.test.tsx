@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
+import type { AppearanceCodeFontFamily } from "../../../../shared/appearance"
+import { resolveCodeFontFamilyStack } from "../code-font"
 import { TerminalView } from "./TerminalView"
 import type { TerminalSessionRecord, TerminalStreamEvent } from "./types"
 
@@ -26,6 +28,7 @@ const baseSession: TerminalSessionRecord = {
 }
 
 function renderTerminalView(input?: {
+  codeFontFamily?: AppearanceCodeFontFamily
   onInput?: (ptyID: string, data: string) => void | Promise<void>
   onResize?: (ptyID: string, rows: number, cols: number) => void
   onSnapshotChange?: (ptyID: string, input: { scrollTop?: number }) => void
@@ -35,6 +38,7 @@ function renderTerminalView(input?: {
   return (
     <TerminalView
       brandTheme="terra"
+      codeFontFamily={input?.codeFontFamily}
       colorMode="light"
       panelHeight={280}
       session={input?.session ?? baseSession}
@@ -59,6 +63,59 @@ async function flushFrame() {
 }
 
 describe("TerminalView", () => {
+  it("updates the code font and refits without recreating the terminal session", async () => {
+    const testState = globalThis as {
+      __mockXtermFitCount?: number
+      __mockXtermInstanceCount?: number
+      __mockXtermLastOptions?: Record<string, unknown>
+    }
+    const previousFitCount = testState.__mockXtermFitCount
+    const previousInstanceCount = testState.__mockXtermInstanceCount
+    const previousOptions = testState.__mockXtermLastOptions
+    const getLastOptions = () => (
+      globalThis as { __mockXtermLastOptions?: Record<string, unknown> }
+    ).__mockXtermLastOptions
+    testState.__mockXtermFitCount = 0
+    testState.__mockXtermInstanceCount = 0
+    testState.__mockXtermLastOptions = undefined
+
+    try {
+      const session = {
+        ...baseSession,
+        buffer: "preserved output",
+      }
+      const { container, rerender } = render(renderTerminalView({
+        codeFontFamily: "default",
+        session,
+      }))
+      await flushTimer()
+
+      const instanceCount = testState.__mockXtermInstanceCount
+      const fitCount = testState.__mockXtermFitCount ?? 0
+      expect(getLastOptions()?.fontFamily).toBe(
+        resolveCodeFontFamilyStack("default"),
+      )
+      expect(container.querySelector(".terminal-xterm")).toHaveTextContent("preserved output")
+
+      rerender(renderTerminalView({
+        codeFontFamily: "cascadia-code",
+        session,
+      }))
+      await flushTimer()
+
+      expect(testState.__mockXtermInstanceCount).toBe(instanceCount)
+      expect(getLastOptions()?.fontFamily).toBe(
+        resolveCodeFontFamilyStack("cascadia-code"),
+      )
+      expect(testState.__mockXtermFitCount).toBeGreaterThan(fitCount)
+      expect(container.querySelector(".terminal-xterm")).toHaveTextContent("preserved output")
+    } finally {
+      testState.__mockXtermFitCount = previousFitCount
+      testState.__mockXtermInstanceCount = previousInstanceCount
+      testState.__mockXtermLastOptions = previousOptions
+    }
+  })
+
   it("keeps terminal spacing outside xterm's native viewport", () => {
     const styles = readFileSync(
       resolve(process.cwd(), "src/renderer/src/styles/terminal.css"),

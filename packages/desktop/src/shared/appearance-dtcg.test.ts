@@ -37,6 +37,7 @@ function createTheme(overrides: Partial<AppearanceTheme> = {}): AppearanceTheme 
 describe("appearance DTCG interchange", () => {
   it("exports resolved standard colors while preserving editable overrides", () => {
     const theme = createTheme({
+      codeFontFamily: "jetbrains-mono",
       overrides: {
         "surface-app-light": literal("#123456"),
         "text-primary-light": {
@@ -67,11 +68,15 @@ describe("appearance DTCG interchange", () => {
     )).toEqual(literal("#123456").value)
     expect(extension.overrides).toEqual(theme.overrides)
     expect(extension.derivations).toBeTruthy()
+    expect(extension.theme).toMatchObject({
+      codeFontFamily: "jetbrains-mono",
+    })
 
     const imported = parseAppearanceDtcgJson(
       serializeAppearanceThemeToDtcg(theme),
     )
     expect(imported.theme.overrides).toEqual(theme.overrides)
+    expect(imported.theme.codeFontFamily).toBe("jetbrains-mono")
     expect(imported.theme.foreignDtcg).toHaveProperty("vendor.swatch")
     expect(imported.ignoredTokenCount).toBe(1)
   })
@@ -98,6 +103,7 @@ describe("appearance DTCG interchange", () => {
     })
 
     expect(imported.theme.name).toBe("Generic")
+    expect(imported.theme.codeFontFamily).toBe("default")
     expect(imported.theme.overrides).toMatchObject({
       "surface-app-light": literal("#123456"),
       "surface-panel-light": {

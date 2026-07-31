@@ -381,6 +381,7 @@ export const koKR = {
   "settings.appearance.accentThemeTerra": "웜 테라 & 샌드",
   "settings.appearance.accentThemeSage": "세이지/슬레이트",
   "settings.appearance.interfaceFont": "인터페이스 폰트",
+  "settings.appearance.codeFont": "코드 글꼴",
   "settings.appearance.theme": "테마",
   "settings.appearance.themeLibraryLabel": "테마",
   "settings.appearance.themeLibraryTitle": "테마 라이브러리",

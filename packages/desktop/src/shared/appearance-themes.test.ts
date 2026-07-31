@@ -25,6 +25,9 @@ describe("appearance theme library", () => {
       "built-in:soft-light",
     ])
     expect(BUILT_IN_APPEARANCE_THEME_PRESETS.every((theme) => theme.readonly)).toBe(true)
+    expect(BUILT_IN_APPEARANCE_THEME_PRESETS.every(
+      (theme) => theme.codeFontFamily === "default",
+    )).toBe(true)
   })
 
   it("normalizes theme library documents and drops invalid user themes", () => {
@@ -42,6 +45,7 @@ describe("appearance theme library", () => {
           colorMode: "dark",
           brandTheme: "sage",
           fontFamily: "microsoft-yahei",
+          codeFontFamily: "jetbrains-mono",
           codeThemePreference: "dracula",
           overrides: {
             "surface-app-light": " #123456 ",
@@ -67,6 +71,7 @@ describe("appearance theme library", () => {
           colorMode: "dark",
           brandTheme: "sage",
           fontFamily: "microsoft-yahei",
+          codeFontFamily: "jetbrains-mono",
           codeThemePreference: "dracula",
           overrides: {
             "surface-app-light": colorLiteral("#123456"),
@@ -109,6 +114,7 @@ describe("appearance theme library", () => {
     expect(snapshot.activeThemeID).toBe("user:one")
     expect(snapshot.builtInThemes).toHaveLength(5)
     expect(snapshot.themes.map((theme) => theme.id)).toContain("user:one")
+    expect(snapshot.themes.find((theme) => theme.id === "user:one")?.codeFontFamily).toBe("default")
   })
 
   it("creates normalized user themes from save input", () => {
@@ -117,6 +123,7 @@ describe("appearance theme library", () => {
       colorMode: "dark",
       brandTheme: "sage",
       fontFamily: "pingfang",
+      codeFontFamily: "cascadia-code",
       codeThemePreference: "nord",
       overrides: {
         "surface-panel-dark": colorLiteral("#111111"),
@@ -134,6 +141,7 @@ describe("appearance theme library", () => {
       colorMode: "dark",
       brandTheme: "sage",
       fontFamily: "pingfang",
+      codeFontFamily: "cascadia-code",
       codeThemePreference: "nord",
       overrides: {
         "surface-panel-dark": colorLiteral("#111111"),

@@ -1,11 +1,13 @@
 import { memo } from "react"
 import { createPortal } from "react-dom"
+import type { AppearanceCodeFontFamily } from "../../../../shared/appearance"
 import { TerminalPanel } from "./TerminalPanel"
 import { TerminalPanelToggleButton } from "./TerminalPanelToggleButton"
 import { useTerminalWorkspace } from "./use-terminal-workspace"
 
 interface TerminalAreaHostProps {
   brandTheme: "terra" | "sage"
+  codeFontFamily?: AppearanceCodeFontFamily
   collapsedTogglePortalTarget?: Element | null
   colorMode: "system" | "light" | "dark"
   currentSessionID: string | null
@@ -17,6 +19,7 @@ interface TerminalAreaHostProps {
 export const TerminalAreaHost = memo(function TerminalAreaHost(props: TerminalAreaHostProps) {
   const {
     brandTheme,
+    codeFontFamily = "default",
     collapsedTogglePortalTarget,
     colorMode,
     currentSessionID,
@@ -77,6 +80,7 @@ export const TerminalAreaHost = memo(function TerminalAreaHost(props: TerminalAr
       <TerminalPanel
         activeSession={activeSession}
         brandTheme={brandTheme}
+        codeFontFamily={codeFontFamily}
         colorMode={colorMode}
         creationError={creationError}
         isOpen={effectiveIsOpen}

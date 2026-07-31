@@ -240,6 +240,7 @@ export function createAppearanceThemeSaveInputFromTheme(
     colorMode: theme.colorMode,
     brandTheme: theme.brandTheme,
     fontFamily: theme.fontFamily,
+    codeFontFamily: theme.codeFontFamily,
     codeThemePreference: theme.codeThemePreference,
     overrides: { ...theme.overrides },
     foreignDtcg: structuredClone(theme.foreignDtcg),

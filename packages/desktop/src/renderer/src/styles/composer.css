@@ -327,7 +327,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   letter-spacing: 0.01em;
 }
@@ -453,7 +453,7 @@
   border: 1px solid var(--seg-border);
   background: var(--surface-panel-muted);
   color: var(--seg-text-2);
-  font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -688,7 +688,7 @@
   max-width: 180px;
   overflow: hidden;
   color: var(--seg-text-1);
-  font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
+  font-family: var(--font-mono);
   font-weight: 600;
   text-align: right;
   text-overflow: ellipsis;
@@ -1238,7 +1238,7 @@
   color: var(--seg-accent-strong);
   box-sizing: border-box;
   white-space: nowrap;
-  font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1;
   vertical-align: text-bottom;
@@ -1290,7 +1290,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
 }
 

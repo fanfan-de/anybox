@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   APPEARANCE_BRAND_DEFINITIONS,
+  APPEARANCE_CODE_FONT_FAMILIES,
   APPEARANCE_FONT_FAMILIES,
   APPEARANCE_TOKEN_GROUPS,
   APPEARANCE_TOKEN_LAYERS,
@@ -10,6 +11,7 @@ import {
   createDefaultAppearanceRuntimeState,
   normalizeAppearanceConfigDocument,
   normalizeAppearanceRuntimeState,
+  validateAppearanceConfigDocumentStructure,
   type AppearanceTokenMap,
 } from "./appearance"
 import { appearanceTokenValueToCss } from "./appearance-color"
@@ -40,6 +42,40 @@ describe("appearance font family", () => {
   })
 })
 
+describe("appearance code font family", () => {
+  it("normalizes code font preferences and accepts legacy v2 documents", () => {
+    expect(APPEARANCE_CODE_FONT_FAMILIES).toEqual([
+      "default",
+      "system",
+      "jetbrains-mono",
+      "cascadia-code",
+      "consolas",
+    ])
+    expect(createDefaultAppearanceConfigDocument().codeFontFamily).toBe("default")
+    expect(normalizeAppearanceConfigDocument({
+      codeFontFamily: "cascadia-code",
+    }).codeFontFamily).toBe("cascadia-code")
+    expect(normalizeAppearanceConfigDocument({
+      codeFontFamily: "invalid-font",
+    }).codeFontFamily).toBe("default")
+
+    const legacyDocument = {
+      version: 2,
+      brandTheme: "terra",
+      colorMode: "system",
+      fontFamily: "default",
+      overrides: {},
+      foreignDtcg: {},
+      updatedAt: 1,
+    }
+    expect(validateAppearanceConfigDocumentStructure(
+      legacyDocument,
+      { requireComplete: true },
+    )).toEqual([])
+    expect(normalizeAppearanceConfigDocument(legacyDocument).codeFontFamily).toBe("default")
+  })
+})
+
 describe("appearance runtime state", () => {
   it("normalizes cross-window appearance runtime payloads", () => {
     const state = normalizeAppearanceRuntimeState({
@@ -47,6 +83,7 @@ describe("appearance runtime state", () => {
         brandTheme: "sage",
         colorMode: "dark",
         fontFamily: "microsoft-yahei",
+        codeFontFamily: "jetbrains-mono",
         overrides: {
           "surface-app-light": " #123456 ",
           "surface-app-dark": "#000000",
@@ -63,6 +100,7 @@ describe("appearance runtime state", () => {
       brandTheme: "sage",
       colorMode: "dark",
       fontFamily: "microsoft-yahei",
+      codeFontFamily: "jetbrains-mono",
       updatedAt: 42,
     })
     expect(cssTokenMap(state.document.overrides)).toEqual({

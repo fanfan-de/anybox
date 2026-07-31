@@ -690,6 +690,7 @@ function AppearanceWindowApp() {
     appearanceTokenValues,
     colorMode,
     fontFamily,
+    codeFontFamily,
     handleAppearancePaletteReset,
     handleAppearanceThemeApply,
     handleAppearanceThemeDelete,
@@ -702,6 +703,7 @@ function AppearanceWindowApp() {
     handleAppearanceTokenReset,
     handleColorModeChange,
     handleFontFamilyChange,
+    handleCodeFontFamilyChange,
   } = useAppearanceState({
     appearanceAuthoringEnabled,
     runtimeCapabilitiesReady,
@@ -741,6 +743,7 @@ function AppearanceWindowApp() {
               appearanceTokenValues={appearanceTokenValues}
               colorMode={colorMode}
               fontFamily={fontFamily}
+              codeFontFamily={codeFontFamily}
               mode="authoring"
               onAppearancePaletteReset={handleAppearancePaletteReset}
               onAppearanceThemeApply={handleAppearanceThemeApply}
@@ -754,6 +757,7 @@ function AppearanceWindowApp() {
               onAppearanceTokenReset={handleAppearanceTokenReset}
               onColorModeChange={handleColorModeChange}
               onFontFamilyChange={handleFontFamilyChange}
+              onCodeFontFamilyChange={handleCodeFontFamilyChange}
             />
           </Suspense>
         </section>
@@ -1121,6 +1125,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     appShellStyle,
     brandTheme,
     fontFamily,
+    codeFontFamily,
     handleActivityRailVisibilityChange,
     handleAppearancePaletteReset,
     handleAppearanceThemeApply,
@@ -1150,6 +1155,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     developmentFeaturesEnabled,
     handleColorModeChange,
     handleFontFamilyChange,
+    handleCodeFontFamilyChange,
     isActivityRailVisible,
     isAgentDebugTraceEnabled,
     isDebugLineColorsEnabled,
@@ -3262,6 +3268,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               renderTerminalTab={(sessionID) => (
                 <TerminalAreaHost
                   brandTheme={brandTheme}
+                  codeFontFamily={codeFontFamily}
                   colorMode={colorMode}
                   currentSessionID={sessionID}
                   layout="fill"
@@ -3311,6 +3318,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               assistantTraceVisibility={assistantTraceVisibility}
               colorMode={colorMode}
               fontFamily={fontFamily}
+              codeFontFamily={codeFontFamily}
               isActivityRailVisible={isActivityRailVisible}
               isAgentDebugTraceEnabled={isAgentDebugTraceEnabled}
               isDebugLineColorsEnabled={isDebugLineColorsEnabled}
@@ -3352,6 +3360,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               selectionDraft={selectionDraft}
               onColorModeChange={handleColorModeChange}
               onFontFamilyChange={handleFontFamilyChange}
+              onCodeFontFamilyChange={handleCodeFontFamilyChange}
               onActivityRailVisibilityChange={handleActivityRailVisibilityChange}
               onAppearancePaletteReset={handleAppearancePaletteReset}
               onAppearanceThemeApply={handleAppearanceThemeApply}

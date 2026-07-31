@@ -381,6 +381,7 @@ export const plPL = {
   "settings.appearance.accentThemeTerra": "Ciepła Terra i Piasek",
   "settings.appearance.accentThemeSage": "Szałwia / Łupek",
   "settings.appearance.interfaceFont": "Czcionka interfejsu",
+  "settings.appearance.codeFont": "Czcionka kodu",
   "settings.appearance.theme": "Motyw",
   "settings.appearance.themeLibraryLabel": "Motyw",
   "settings.appearance.themeLibraryTitle": "Biblioteka motywów",

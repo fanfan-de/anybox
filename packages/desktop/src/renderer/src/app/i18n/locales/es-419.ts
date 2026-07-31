@@ -381,6 +381,7 @@ export const es419 = {
   "settings.appearance.accentThemeTerra": "Terra cálida y arena",
   "settings.appearance.accentThemeSage": "Sage / Pizarra",
   "settings.appearance.interfaceFont": "Fuente de interfaz",
+  "settings.appearance.codeFont": "Fuente de código",
   "settings.appearance.theme": "Tema",
   "settings.appearance.themeLibraryLabel": "Tema",
   "settings.appearance.themeLibraryTitle": "Biblioteca de temas",

@@ -132,6 +132,7 @@ describe("appearance theme library persistence", () => {
       colorMode: "dark",
       brandTheme: "sage",
       fontFamily: "default",
+      codeFontFamily: "cascadia-code",
       codeThemePreference: "dracula",
       overrides: {
         "surface-panel-dark": colorLiteral("#111111"),
@@ -143,6 +144,7 @@ describe("appearance theme library persistence", () => {
       name: "Work",
       source: "user",
       readonly: false,
+      codeFontFamily: "cascadia-code",
       codeThemePreference: "dracula",
       overrides: {
         "surface-panel-dark": colorLiteral("#111111"),
@@ -227,6 +229,7 @@ describe("appearance theme library persistence", () => {
       source: "user",
       readonly: false,
       brandTheme: "sage",
+      codeFontFamily: "default",
     })
     expect(result.theme?.id.startsWith("user:")).toBe(true)
     expect(result.snapshot.document.userThemes).toHaveLength(1)

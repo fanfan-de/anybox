@@ -42,6 +42,12 @@ export type {
 export type AppearanceColorMode = "system" | "light" | "dark"
 export type AppearanceBrandTheme = "terra" | "sage"
 export type AppearanceFontFamily = "default" | "system" | "segoe" | "microsoft-yahei" | "pingfang"
+export type AppearanceCodeFontFamily =
+  | "default"
+  | "system"
+  | "jetbrains-mono"
+  | "cascadia-code"
+  | "consolas"
 
 export const APPEARANCE_FONT_FAMILIES = [
   "default",
@@ -50,6 +56,14 @@ export const APPEARANCE_FONT_FAMILIES = [
   "microsoft-yahei",
   "pingfang",
 ] as const satisfies readonly AppearanceFontFamily[]
+
+export const APPEARANCE_CODE_FONT_FAMILIES = [
+  "default",
+  "system",
+  "jetbrains-mono",
+  "cascadia-code",
+  "consolas",
+] as const satisfies readonly AppearanceCodeFontFamily[]
 
 export const APPEARANCE_CODE_HIGHLIGHT_THEMES = [
   "github-light",
@@ -72,6 +86,7 @@ export interface AppearanceConfigDocument {
   brandTheme: AppearanceBrandTheme
   colorMode: AppearanceColorMode
   fontFamily: AppearanceFontFamily
+  codeFontFamily: AppearanceCodeFontFamily
   overrides: AppearanceTokenMap
   foreignDtcg: Record<string, unknown>
   updatedAt: number
@@ -90,6 +105,7 @@ export interface AppearanceRuntimeState {
 
 const APPEARANCE_TOKEN_NAME_SET = new Set<string>(APPEARANCE_TOKEN_NAMES)
 const APPEARANCE_FONT_FAMILY_SET = new Set<string>(APPEARANCE_FONT_FAMILIES)
+const APPEARANCE_CODE_FONT_FAMILY_SET = new Set<string>(APPEARANCE_CODE_FONT_FAMILIES)
 
 const LEGACY_APPEARANCE_TOKEN_MIGRATIONS: Record<string, readonly AppearanceTokenName[]> = {
   "surface-sidebar": [
@@ -681,12 +697,17 @@ export function isAppearanceFontFamily(value: string): value is AppearanceFontFa
   return APPEARANCE_FONT_FAMILY_SET.has(value)
 }
 
+export function isAppearanceCodeFontFamily(value: string): value is AppearanceCodeFontFamily {
+  return APPEARANCE_CODE_FONT_FAMILY_SET.has(value)
+}
+
 export function createDefaultAppearanceConfigDocument(): AppearanceConfigDocument {
   return {
     version: 2,
     brandTheme: DEFAULT_APPEARANCE_THEME_DEFINITION.brandTheme,
     colorMode: DEFAULT_APPEARANCE_THEME_DEFINITION.colorMode,
     fontFamily: DEFAULT_APPEARANCE_THEME_DEFINITION.fontFamily,
+    codeFontFamily: DEFAULT_APPEARANCE_THEME_DEFINITION.codeFontFamily,
     overrides: { ...DEFAULT_APPEARANCE_THEME_DEFINITION.overrides },
     foreignDtcg: {},
     updatedAt: 0,
@@ -849,6 +870,15 @@ export function validateAppearanceConfigDocumentStructure(
     errors.push("Appearance config fontFamily is unsupported.")
   }
   if (
+    record.codeFontFamily !== undefined &&
+    (
+      typeof record.codeFontFamily !== "string" ||
+      !isAppearanceCodeFontFamily(record.codeFontFamily)
+    )
+  ) {
+    errors.push("Appearance config codeFontFamily is unsupported.")
+  }
+  if (
     record.updatedAt !== undefined &&
     (
       typeof record.updatedAt !== "number" ||
@@ -933,6 +963,10 @@ export function normalizeAppearanceConfigDocument(input: unknown): AppearanceCon
     typeof partial.fontFamily === "string" && isAppearanceFontFamily(partial.fontFamily)
       ? partial.fontFamily
       : defaults.fontFamily
+  const codeFontFamily =
+    typeof partial.codeFontFamily === "string" && isAppearanceCodeFontFamily(partial.codeFontFamily)
+      ? partial.codeFontFamily
+      : defaults.codeFontFamily
   const updatedAt = typeof partial.updatedAt === "number" && Number.isFinite(partial.updatedAt)
     ? partial.updatedAt
     : 0
@@ -942,6 +976,7 @@ export function normalizeAppearanceConfigDocument(input: unknown): AppearanceCon
     brandTheme,
     colorMode,
     fontFamily,
+    codeFontFamily,
     overrides: normalizeAppearanceTokenMap(partial.overrides),
     foreignDtcg: normalizeForeignDtcg(
       (input as { foreignDtcg?: unknown }).foreignDtcg,

@@ -381,6 +381,7 @@ export const trTR = {
   "settings.appearance.accentThemeTerra": "Sıcak Toprak & Kum",
   "settings.appearance.accentThemeSage": "Adaçayı / Arduvaz",
   "settings.appearance.interfaceFont": "Arayüz Yazı Tipi",
+  "settings.appearance.codeFont": "Kod Yazı Tipi",
   "settings.appearance.theme": "Tema",
   "settings.appearance.themeLibraryLabel": "Tema",
   "settings.appearance.themeLibraryTitle": "Tema Kütüphanesi",

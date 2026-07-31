@@ -381,6 +381,7 @@ export const jaJP = {
   "settings.appearance.accentThemeTerra": "ウォームテラ＆サンド",
   "settings.appearance.accentThemeSage": "セージ／スレート",
   "settings.appearance.interfaceFont": "インターフェースフォント",
+  "settings.appearance.codeFont": "コードフォント",
   "settings.appearance.theme": "テーマ",
   "settings.appearance.themeLibraryLabel": "テーマ",
   "settings.appearance.themeLibraryTitle": "テーマライブラリ",

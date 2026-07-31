@@ -1,4 +1,5 @@
 import { memo, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react"
+import type { AppearanceCodeFontFamily } from "../../../../shared/appearance"
 import type { BrandTheme, ColorMode } from "../types"
 import { TerminalInitialDimensionsProbe } from "./TerminalInitialDimensionsProbe"
 import { TerminalTabs } from "./TerminalTabs"
@@ -8,6 +9,7 @@ import type { TerminalSessionRecord, TerminalShellProfile, TerminalStreamEvent }
 interface TerminalPanelProps {
   activeSession: TerminalSessionRecord | null
   brandTheme: BrandTheme
+  codeFontFamily?: AppearanceCodeFontFamily
   colorMode: ColorMode
   creationError?: string | null
   isOpen: boolean
@@ -44,6 +46,7 @@ function clampHeight(value: number) {
 export const TerminalPanel = memo(function TerminalPanel({
   activeSession,
   brandTheme,
+  codeFontFamily = "default",
   colorMode,
   creationError,
   isOpen,
@@ -191,6 +194,7 @@ export const TerminalPanel = memo(function TerminalPanel({
       {activeSession ? (
         <TerminalView
           brandTheme={brandTheme}
+          codeFontFamily={codeFontFamily}
           colorMode={colorMode}
           panelHeight={renderedHeight}
           session={activeSession}
@@ -203,6 +207,7 @@ export const TerminalPanel = memo(function TerminalPanel({
         <TerminalInitialDimensionsProbe
           key={pendingCreateRequestID}
           brandTheme={brandTheme}
+          codeFontFamily={codeFontFamily}
           colorMode={colorMode}
           panelHeight={renderedHeight}
           requestID={pendingCreateRequestID}

@@ -381,6 +381,7 @@ export const itIT = {
   "settings.appearance.accentThemeTerra": "Terra calda e sabbia",
   "settings.appearance.accentThemeSage": "Salvia / Ardesia",
   "settings.appearance.interfaceFont": "Carattere interfaccia",
+  "settings.appearance.codeFont": "Carattere del codice",
   "settings.appearance.theme": "Tema",
   "settings.appearance.themeLibraryLabel": "Tema",
   "settings.appearance.themeLibraryTitle": "Libreria temi",

@@ -105,6 +105,8 @@ describe("i18n translations", () => {
   it("exposes dictionaries by locale", () => {
     expect(getTranslationDictionary("zh-CN")["settings.appearance.languageTitle"]).toBe("显示语言")
     expect(getTranslationDictionary("en-US")["settings.appearance.languageTitle"]).toBe("Display Language")
+    expect(getTranslationDictionary("zh-CN")["settings.appearance.codeFont"]).toBe("代码字体")
+    expect(getTranslationDictionary("en-US")["settings.appearance.codeFont"]).toBe("Code Font")
     expect(getTranslationDictionary("zh-TW")["settings.appearance.languageTitle"]).toBe("顯示語言")
     expect(getTranslationDictionary("ja-JP")["settings.appearance.languageTitle"]).toBe("表示言語")
     expect(getTranslationDictionary("ko-KR")["settings.appearance.languageTitle"]).toBe("표시 언어")

@@ -13,6 +13,7 @@ import {
 import {
   APPEARANCE_TOKEN_LAYERS,
   APPEARANCE_TOKEN_GROUPS,
+  type AppearanceCodeFontFamily,
   type AppearanceFontFamily,
   type AppearanceTokenGroup,
   type AppearanceTokenLayer,
@@ -206,6 +207,17 @@ const fontFamilyOptions: Array<{
     description: "macOS-style Chinese font with cross-platform fallbacks.",
     previewClassName: "is-pingfang",
   },
+]
+
+const codeFontFamilyOptions: Array<{
+  value: AppearanceCodeFontFamily
+  label: string
+}> = [
+  { value: "default", label: "IBM Plex Mono" },
+  { value: "system", label: "System Monospace" },
+  { value: "jetbrains-mono", label: "JetBrains Mono" },
+  { value: "cascadia-code", label: "Cascadia Code" },
+  { value: "consolas", label: "Consolas" },
 ]
 
 function formatContextWindow(value: number) {
@@ -1577,6 +1589,7 @@ interface AppearanceSettingsPanelProps {
   appearanceTokenValues: Record<AppearanceTokenName, string>
   colorMode: ColorMode
   fontFamily: AppearanceFontFamily
+  codeFontFamily: AppearanceCodeFontFamily
   mode?: AppearanceSurfaceMode
   isActivityRailVisible?: boolean
   showShellLayoutSettings?: boolean
@@ -1593,6 +1606,7 @@ interface AppearanceSettingsPanelProps {
   onAppearanceTokenReset: (tokenName: AppearanceTokenName) => void
   onColorModeChange: (mode: ColorMode) => void
   onFontFamilyChange: (fontFamily: AppearanceFontFamily) => void
+  onCodeFontFamilyChange: (codeFontFamily: AppearanceCodeFontFamily) => void
   onOpenAppearanceWindow?: () => void
 }
 
@@ -1609,6 +1623,7 @@ export function AppearanceSettingsPanel({
   appearanceTokenValues,
   colorMode,
   fontFamily,
+  codeFontFamily,
   mode = "consumer",
   isActivityRailVisible = true,
   showShellLayoutSettings = false,
@@ -1625,6 +1640,7 @@ export function AppearanceSettingsPanel({
   onAppearanceTokenReset,
   onColorModeChange,
   onFontFamilyChange,
+  onCodeFontFamilyChange,
   onOpenAppearanceWindow,
 }: AppearanceSettingsPanelProps) {
   const { t } = useI18n()
@@ -1729,6 +1745,19 @@ export function AppearanceSettingsPanel({
                 options={fontFamilyOptions}
                 value={fontFamily}
                 onChange={onFontFamilyChange}
+              />
+            </span>
+          </div>
+          <div className="settings-select-row">
+            <span className="settings-select-copy">
+              <span className="settings-select-title">{t("settings.appearance.codeFont")}</span>
+            </span>
+            <span className="settings-select-control">
+              <SettingsSelect<AppearanceCodeFontFamily>
+                ariaLabel={t("settings.appearance.codeFont")}
+                options={codeFontFamilyOptions}
+                value={codeFontFamily}
+                onChange={onCodeFontFamilyChange}
               />
             </span>
           </div>
@@ -2609,6 +2638,7 @@ interface SettingsPageProps {
   deletingProviderID: string | null
   colorMode: ColorMode
   fontFamily: AppearanceFontFamily
+  codeFontFamily: AppearanceCodeFontFamily
   isActivityRailVisible: boolean
   isAgentDebugTraceEnabled: boolean
   isDebugLineColorsEnabled: boolean
@@ -2650,6 +2680,7 @@ interface SettingsPageProps {
   selectionDraft: ProjectModelSelection
   onColorModeChange: (mode: ColorMode) => void
   onFontFamilyChange: (fontFamily: AppearanceFontFamily) => void
+  onCodeFontFamilyChange: (codeFontFamily: AppearanceCodeFontFamily) => void
   onActivityRailVisibilityChange: (value: boolean) => void
   onAppearancePaletteReset: () => void
   onAppearanceThemeApply?: (themeID: string) => void | Promise<void>
@@ -2751,6 +2782,7 @@ export function SettingsPage({
   deletingProviderID,
   colorMode,
   fontFamily,
+  codeFontFamily,
   isActivityRailVisible,
   isAgentDebugTraceEnabled,
   isDebugLineColorsEnabled,
@@ -2791,6 +2823,7 @@ export function SettingsPage({
   selectionDraft,
   onColorModeChange,
   onFontFamilyChange,
+  onCodeFontFamilyChange,
   onActivityRailVisibilityChange,
   onAppearancePaletteReset,
   onAppearanceThemeApply,
@@ -4125,6 +4158,7 @@ export function SettingsPage({
                   appearanceTokenValues={appearanceTokenValues}
                   colorMode={colorMode}
                   fontFamily={fontFamily}
+                  codeFontFamily={codeFontFamily}
                   isActivityRailVisible={isActivityRailVisible}
                   mode={appearanceSurfaceMode}
                   showShellLayoutSettings
@@ -4141,6 +4175,7 @@ export function SettingsPage({
                   onAppearanceTokenReset={onAppearanceTokenReset}
                   onColorModeChange={onColorModeChange}
                   onFontFamilyChange={onFontFamilyChange}
+                  onCodeFontFamilyChange={onCodeFontFamilyChange}
                   onOpenAppearanceWindow={
                     developmentFeaturesEnabled
                       ? () => void openAppearanceWindow()

@@ -344,6 +344,9 @@ function validateManifest(manifest) {
     if (!Object.hasOwn(manifest.brands, theme.brandTheme)) {
       fail(`theme "${theme.id}" uses unknown brandTheme "${theme.brandTheme}".`)
     }
+    if (!["default", "system", "jetbrains-mono", "cascadia-code", "consolas"].includes(theme.codeFontFamily)) {
+      fail(`theme "${theme.id}" has invalid codeFontFamily "${theme.codeFontFamily}".`)
+    }
     assertRecord(theme.overrides, `theme "${theme.id}" overrides`)
     for (const [tokenName, value] of Object.entries(theme.overrides)) {
       if (!tokenNameSet.has(tokenName)) {

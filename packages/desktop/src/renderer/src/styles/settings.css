@@ -1209,7 +1209,7 @@ body.is-dragging-settings-page {
 
 .mcp-tool-policy-heading code {
   color: var(--seg-text-3);
-  font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   word-break: break-word;
 }
@@ -3958,7 +3958,7 @@ body.is-dragging-settings-page {
   height: 100%;
   width: 100%;
   padding: 14px 16px;
-  font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1.65;
   white-space: pre-wrap;
@@ -4219,7 +4219,7 @@ body.is-dragging-settings-page {
   display: inline-flex;
   align-items: center;
   color: var(--text-secondary);
-  font-family: "IBM Plex Mono", "JetBrains Mono", "Consolas", monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -10499,7 +10499,7 @@ body.is-dragging-settings-page {
   border-radius: 5px;
   background: transparent;
   color: var(--seg-text-1);
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1;
   text-overflow: ellipsis;
@@ -10532,7 +10532,7 @@ body.is-dragging-settings-page {
   background: var(--semantic-field-surface);
   color: var(--semantic-field-text);
   font: inherit;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   outline: none;
 }

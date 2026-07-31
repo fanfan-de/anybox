@@ -78,6 +78,7 @@ if (!globalThis.ResizeObserver) {
 class MockTerminal {
   rows = 24
   cols = 80
+  options: Record<string, unknown>
   buffer = {
     active: {
       viewportY: 0,
@@ -89,6 +90,16 @@ class MockTerminal {
   private readonly scrollListeners = new Set<() => void>()
   private customKeyEventHandler: ((event: KeyboardEvent) => boolean) | null = null
   private handleKeyDown: ((event: KeyboardEvent) => void) | null = null
+
+  constructor(options: Record<string, unknown> = {}) {
+    this.options = { ...options }
+    const testState = globalThis as {
+      __mockXtermInstanceCount?: number
+      __mockXtermLastOptions?: Record<string, unknown>
+    }
+    testState.__mockXtermInstanceCount = (testState.__mockXtermInstanceCount ?? 0) + 1
+    testState.__mockXtermLastOptions = this.options
+  }
 
   loadAddon(addon: { activate?: (terminal: MockTerminal) => void }) {
     addon.activate?.(this)
@@ -194,7 +205,10 @@ class MockFitAddon {
     this.terminal = terminal
   }
 
-  fit() {}
+  fit() {
+    const testState = globalThis as { __mockXtermFitCount?: number }
+    testState.__mockXtermFitCount = (testState.__mockXtermFitCount ?? 0) + 1
+  }
 
   proposeDimensions() {
     const override = (globalThis as { __mockXtermFitDimensions?: { rows: number; cols: number } | null }).__mockXtermFitDimensions

@@ -763,7 +763,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
 }
 
 .session-row {
-  min-height: 32px;
+  min-height: 28px;
   padding: 0 8px;
   border-radius: 8px;
   display: grid;
@@ -906,7 +906,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
 }
 
 .session-row.is-subagent {
-  min-height: 30px;
+  min-height: 28px;
 }
 
 .session-row-copy {
@@ -1001,7 +1001,7 @@ body.is-resizing-sidebar .sidebar-resizer::before {
 .session-row-trailing {
   width: 48px;
   min-width: 48px;
-  height: 30px;
+  height: 28px;
   position: relative;
   display: inline-flex;
   align-items: center;

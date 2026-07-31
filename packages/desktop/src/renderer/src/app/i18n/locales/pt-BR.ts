@@ -381,6 +381,7 @@ export const ptBR = {
   "settings.appearance.accentThemeTerra": "Terra Quente & Areia",
   "settings.appearance.accentThemeSage": "Sálvia / Ardósia",
   "settings.appearance.interfaceFont": "Fonte da Interface",
+  "settings.appearance.codeFont": "Fonte de código",
   "settings.appearance.theme": "Tema",
   "settings.appearance.themeLibraryLabel": "Tema",
   "settings.appearance.themeLibraryTitle": "Biblioteca de Temas",
