@@ -10,7 +10,11 @@ import {
 } from "react"
 import { createPortal } from "react-dom"
 import type { PermissionDecision } from "../../../../shared/permission"
-import { getAgentSessionBridge, type AgentSessionBridgeEvent } from "../agent-session/client"
+import {
+  getAgentSessionBridge,
+  type AgentSessionBridgeEvent,
+  type AgentSessionTurnInput,
+} from "../agent-session/client"
 import { Composer } from "../composer/Composer"
 import { buildComposerAttachment } from "../composer/attachment-utils"
 import {
@@ -36,10 +40,22 @@ import {
   applyAgentStreamEventToThreadMessage,
   buildSessionStreamingAssistantThreadMessage,
   buildThreadTurnsFromHistory,
+  buildUserThreadMessage,
   LIVE_SESSION_ACTIVITY_PRESENTATION,
 } from "../stream"
 import { ThreadView } from "../thread/ThreadView"
-import { deriveActiveMessages } from "../thread-turn-state"
+import {
+  appendMessagesToThreadTurns,
+  bindPendingThreadTurnToCanonical,
+  deriveActiveMessages,
+} from "../thread-turn-state"
+import {
+  applyUserMessageDelivery,
+  isCurrentOptimisticUserAttempt,
+  matchesOptimisticUserAttempt,
+  matchesRetiredOptimisticUserAttempt,
+  readOptimisticSubmissionError,
+} from "../optimistic-user-submission"
 import type { CodeHighlightTheme } from "../code-theme"
 import type {
   AssistantThreadMessage,
@@ -49,6 +65,7 @@ import type {
   ComposerDraftState,
   ComposerPastedImageAttachment,
   LoadedSessionHistoryMessage,
+  OptimisticUserAttempt,
   PermissionRequest,
   ReasoningEffort,
   RightSidebarBranchThreadTab,
@@ -56,6 +73,7 @@ import type {
   SessionContextUsage,
   SessionSummary,
   ThreadTurn,
+  UserThreadMessage,
   WorkspaceGroup,
 } from "../types"
 import { createID } from "../utils"
@@ -115,6 +133,14 @@ interface ExecutionModeEnvelope {
   headMessageID: string | null
   targetKind: string
   turnID: string
+}
+
+interface BranchOptimisticSubmission extends OptimisticUserAttempt<
+  Omit<AgentSessionTurnInput, "clientTurnID" | "executionID">
+> {
+  activeClientTurnID: string
+  executionID: string
+  message: UserThreadMessage
 }
 
 interface BranchToolbarPopoverPosition {
@@ -391,6 +417,36 @@ function overlayLiveAssistantTurns(
   return nextTurns
 }
 
+export function overlayBranchOptimisticUserTurns(
+  turns: ThreadTurn[],
+  submissions: Record<string, BranchOptimisticSubmission>,
+) {
+  let nextTurns = turns
+  for (const submission of Object.values(submissions)) {
+    nextTurns = appendMessagesToThreadTurns(nextTurns, [submission.message])
+    if (!submission.backendTurnID) continue
+    nextTurns = bindPendingThreadTurnToCanonical(nextTurns, {
+      turnID: submission.backendTurnID,
+      optimisticUserMessageID: submission.message.id,
+      backendUserMessageID: submission.backendUserMessageID,
+    })
+  }
+  return nextTurns
+}
+
+function findBranchOptimisticSubmission(
+  submissions: Record<string, BranchOptimisticSubmission>,
+  input: {
+    backendTurnID?: string | null
+    clientTurnID?: string | null
+    executionID?: string | null
+  },
+) {
+  return Object.values(submissions).find((submission) =>
+    matchesOptimisticUserAttempt(submission, input),
+  )
+}
+
 export function BranchChatPanel({
   assistantTraceVisibility,
   codeTheme,
@@ -427,12 +483,16 @@ export function BranchChatPanel({
   const seenRuntimeEventIDsRef = useRef(new Set<string>())
   const activeClientTurnIDsRef = useRef(new Set<string>())
   const lastClientTurnIDRef = useRef<string | null>(null)
+  const optimisticSubmissionsRef = useRef<Record<string, BranchOptimisticSubmission>>({})
   const didRestoreComposerPreferencesRef = useRef(tab.phase === "draft")
   const [history, setHistory] = useState<LoadedSessionHistoryMessage[]>([])
   const [historyError, setHistoryError] = useState<string | null>(null)
   const [isLoadingHistory, setIsLoadingHistory] = useState(true)
   const [liveAssistantByTurnID, setLiveAssistantByTurnID] = useState<
     Record<string, AssistantThreadMessage>
+  >({})
+  const [optimisticSubmissions, setOptimisticSubmissions] = useState<
+    Record<string, BranchOptimisticSubmission>
   >({})
   const [isSending, setIsSending] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
@@ -453,6 +513,16 @@ export function BranchChatPanel({
   const [advancedPopoverPosition, setAdvancedPopoverPosition] = useState<BranchToolbarPopoverPosition | null>(null)
 
   tabRef.current = tab
+
+  const updateOptimisticSubmissions = useCallback((
+    updater: (
+      current: Record<string, BranchOptimisticSubmission>,
+    ) => Record<string, BranchOptimisticSubmission>,
+  ) => {
+    const next = updater(optimisticSubmissionsRef.current)
+    optimisticSubmissionsRef.current = next
+    setOptimisticSubmissions(next)
+  }, [])
 
   const composer = useProjectComposer({
     attachmentPaths: getAttachmentPaths(attachments),
@@ -518,8 +588,11 @@ export function BranchChatPanel({
     [visibleHistory],
   )
   const activeTurns = useMemo(
-    () => overlayLiveAssistantTurns(persistedTurns, liveAssistantByTurnID),
-    [liveAssistantByTurnID, persistedTurns],
+    () => overlayBranchOptimisticUserTurns(
+      overlayLiveAssistantTurns(persistedTurns, liveAssistantByTurnID),
+      optimisticSubmissions,
+    ),
+    [liveAssistantByTurnID, optimisticSubmissions, persistedTurns],
   )
   const activeMessages = useMemo(() => deriveActiveMessages(activeTurns), [activeTurns])
   const visibleTurnIDs = useMemo(
@@ -686,19 +759,143 @@ export function BranchChatPanel({
     void loadPermissionRequests()
   }, [loadHistory, loadPermissionRequests, tab.headMessageID, tab.originMessageID])
 
+  const bindOptimisticSubmissionToTurn = useCallback((
+    userThreadMessageID: string,
+    backendTurnID: string,
+  ) => {
+    updateOptimisticSubmissions((current) => {
+      const submission = current[userThreadMessageID]
+      if (!submission || submission.backendTurnID === backendTurnID) return current
+      return {
+        ...current,
+        [userThreadMessageID]: {
+          ...submission,
+          backendTurnID,
+        },
+      }
+    })
+  }, [updateOptimisticSubmissions])
+
+  const failBranchOptimisticSubmission = useCallback((input: {
+    activeClientTurnID?: string
+    error?: string
+    reason?: "cancelled"
+    userThreadMessageID: string
+  }) => {
+    const currentSubmission = optimisticSubmissionsRef.current[input.userThreadMessageID]
+    if (!currentSubmission || currentSubmission.confirmed) return false
+    if (
+      !isCurrentOptimisticUserAttempt(
+        currentSubmission,
+        input.activeClientTurnID,
+      )
+    ) {
+      return false
+    }
+
+    updateOptimisticSubmissions((current) => {
+      const submission = current[input.userThreadMessageID]
+      if (!submission) return current
+      return {
+        ...current,
+        [input.userThreadMessageID]: {
+          ...submission,
+          message: applyUserMessageDelivery(submission.message, {
+              status: "failed",
+              ...(input.error ? { error: input.error } : {}),
+              ...(input.reason ? { reason: input.reason } : {}),
+          }),
+        },
+      }
+    })
+    if (currentSubmission.backendTurnID) {
+      setLiveAssistantByTurnID((current) => {
+        if (!(currentSubmission.backendTurnID! in current)) return current
+        const next = { ...current }
+        delete next[currentSubmission.backendTurnID!]
+        return next
+      })
+    }
+    return true
+  }, [updateOptimisticSubmissions])
+
+  const confirmBranchOptimisticSubmission = useCallback((input: {
+    backendTurnID: string
+    backendUserMessageID: string
+    userThreadMessageID: string
+  }) => {
+    updateOptimisticSubmissions((current) => {
+      const submission = current[input.userThreadMessageID]
+      if (!submission) return current
+      const { request: _request, ...confirmedSubmission } = submission
+      return {
+        ...current,
+        [input.userThreadMessageID]: {
+          ...confirmedSubmission,
+          backendTurnID: input.backendTurnID,
+          backendUserMessageID: input.backendUserMessageID,
+          confirmed: true,
+          message: applyUserMessageDelivery(submission.message, undefined),
+        },
+      }
+    })
+  }, [updateOptimisticSubmissions])
+
   useEffect(() => {
     if (!bridge) return
 
     return bridge.onEvent((event) => {
       if (event.kind !== "stream" || event.backendSessionID !== tabRef.current.sessionID) return
+      if (event.event === "error" && event.clientTurnID) {
+        const optimisticSubmission = findBranchOptimisticSubmission(
+          optimisticSubmissionsRef.current,
+          { clientTurnID: event.clientTurnID },
+        )
+        if (
+          optimisticSubmission &&
+          failBranchOptimisticSubmission({
+            activeClientTurnID: event.clientTurnID,
+            error: readOptimisticSubmissionError(event.data),
+            userThreadMessageID: optimisticSubmission.message.id,
+          })
+        ) {
+          activeClientTurnIDsRef.current.delete(event.clientTurnID)
+          setIsSending(activeClientTurnIDsRef.current.size > 0)
+          setIsCancelling(false)
+          return
+        }
+      }
       const executionMode = readExecutionModeEnvelope(event)
       if (executionMode) {
+        if (
+          Object.values(optimisticSubmissionsRef.current).some((submission) =>
+            matchesRetiredOptimisticUserAttempt(submission, {
+              backendTurnID: executionMode.turnID,
+              clientTurnID: event.clientTurnID,
+            }),
+          )
+        ) {
+          return
+        }
         const target = tabRef.current
         if (
           executionMode.targetKind === "detached-branch" &&
           executionMode.executionID === target.executionID
         ) {
           ownedTurnIDsRef.current.add(executionMode.turnID)
+          const optimisticSubmission = findBranchOptimisticSubmission(
+            optimisticSubmissionsRef.current,
+            {
+              clientTurnID: event.clientTurnID,
+              executionID: executionMode.executionID,
+            },
+          )
+          if (optimisticSubmission) {
+            bindOptimisticSubmissionToTurn(
+              optimisticSubmission.message.id,
+              executionMode.turnID,
+            )
+          }
           const headMessageID = executionMode.headMessageID ?? target.headMessageID
           tabRef.current = {
             ...target,
@@ -731,12 +928,35 @@ export function BranchChatPanel({
         runtime.executionID ??
         (readString(runtime.payload.executionID).trim() || null)
       if (
+        Object.values(optimisticSubmissionsRef.current).some((submission) =>
+          matchesRetiredOptimisticUserAttempt(submission, {
+            backendTurnID: runtime.turnID,
+            clientTurnID: event.clientTurnID,
+          }),
+        )
+      ) {
+        return
+      }
+      if (
         runtime.type === "turn.started" &&
         runtimeExecutionID === target.executionID &&
         (runtime.targetKind ?? readString(runtime.payload.targetKind)) === "detached-branch" &&
         runtime.turnID
       ) {
         ownedTurnIDsRef.current.add(runtime.turnID)
+        const optimisticSubmission = findBranchOptimisticSubmission(
+          optimisticSubmissionsRef.current,
+          {
+            clientTurnID: event.clientTurnID,
+            executionID: runtimeExecutionID,
+          },
+        )
+        if (optimisticSubmission) {
+          bindOptimisticSubmissionToTurn(
+            optimisticSubmission.message.id,
+            runtime.turnID,
+          )
+        }
         tabRef.current = {
           ...target,
           anchorStrategy: "selected",
@@ -773,6 +993,24 @@ export function BranchChatPanel({
       if (runtime.type === "message.recorded") {
         const message = readRecord(runtime.payload.message)
         const messageID = readString(message?.id).trim()
+        const messageRole = readString(message?.role).trim()
+        if (messageID && messageRole === "user") {
+          const optimisticSubmission = findBranchOptimisticSubmission(
+            optimisticSubmissionsRef.current,
+            {
+              backendTurnID: runtime.turnID,
+              clientTurnID: event.clientTurnID,
+              executionID: runtimeExecutionID,
+            },
+          )
+          if (optimisticSubmission) {
+            confirmBranchOptimisticSubmission({
+              backendTurnID: runtime.turnID,
+              backendUserMessageID: messageID,
+              userThreadMessageID: optimisticSubmission.message.id,
+            })
+          }
+        }
         if (messageID) {
           tabRef.current = {
             ...tabRef.current,
@@ -801,6 +1039,26 @@ export function BranchChatPanel({
       }
 
       if (isTerminalRuntimeEvent(runtime.type)) {
+        if (runtime.type === "turn.failed" || runtime.type === "turn.cancelled") {
+          const optimisticSubmission = findBranchOptimisticSubmission(
+            optimisticSubmissionsRef.current,
+            {
+              backendTurnID: runtime.turnID,
+              clientTurnID: event.clientTurnID,
+              executionID: runtimeExecutionID,
+            },
+          )
+          if (optimisticSubmission) {
+            failBranchOptimisticSubmission({
+              activeClientTurnID: optimisticSubmission.activeClientTurnID,
+              error: runtime.type === "turn.cancelled"
+                ? undefined
+                : readOptimisticSubmissionError(runtime.payload),
+              reason: runtime.type === "turn.cancelled" ? "cancelled" : undefined,
+              userThreadMessageID: optimisticSubmission.message.id,
+            })
+          }
+        }
         setIsSending(activeClientTurnIDsRef.current.size > 0)
         setIsCancelling(false)
         void (async () => {
@@ -814,7 +1072,15 @@ export function BranchChatPanel({
         })()
       }
     })
-  }, [bridge, loadHistory, loadPermissionRequests, onUpdateTab])
+  }, [
+    bindOptimisticSubmissionToTurn,
+    bridge,
+    confirmBranchOptimisticSubmission,
+    failBranchOptimisticSubmission,
+    loadHistory,
+    loadPermissionRequests,
+    onUpdateTab,
+  ])
 
   async function handleSend(draftStateOverride?: ComposerDraftState) {
     if (!bridge || !session) return
@@ -869,6 +1135,53 @@ export function BranchChatPanel({
       tabRef.current = target
       onUpdateTab(target.id, { executionID })
     }
+    const turnMcpServerIDs = [
+      ...new Set([
+        ...composer.selectedMcpServerIDs,
+        ...compiled.taggedMcpServerIDs,
+      ]),
+    ]
+    const sendTurnRequest: Omit<AgentSessionTurnInput, "clientTurnID" | "executionID"> = {
+      backendSessionID: target.sessionID,
+      text: compiled.transportText || undefined,
+      displayText: compiled.displayText || undefined,
+      attachments: submittedAttachments.map((attachment) => ({ ...attachment })),
+      quotes: submittedQuotes.map((quote) => ({ ...quote })),
+      threadTarget: {
+        kind: "detached-branch",
+        parentMessageID: target.headMessageID,
+      },
+      concurrentInputMode: wasRunning ? submissionMode : undefined,
+      model: parseModelSelection(composer.selectedModel),
+      reasoningEffort: composer.selectedReasoningEffort ?? undefined,
+      skills: [...compiled.selectedSkillIDs],
+      turnMcpServerIDs,
+    }
+    if (!wasRunning) {
+      const optimisticMessage: UserThreadMessage = {
+        ...buildUserThreadMessage({
+          attachments: submittedAttachments.map((attachment) => ({
+            name: attachment.name,
+            path: attachment.path,
+          })),
+          displayText: compiled.displayText || undefined,
+          fallbackText: compiled.transportText,
+          messageQuotes: submittedQuotes.map((quote) => ({ ...quote })),
+          turnMcpServerIDs,
+        }),
+        delivery: { status: "pending" },
+      }
+      updateOptimisticSubmissions((current) => ({
+        ...current,
+        [optimisticMessage.id]: {
+          activeClientTurnID: clientTurnID,
+          executionID,
+          message: optimisticMessage,
+          request: sendTurnRequest,
+          userThreadMessageID: optimisticMessage.id,
+        },
+      }))
+    }
     activeClientTurnIDsRef.current.add(clientTurnID)
     lastClientTurnIDRef.current = clientTurnID
     setIsSending(true)
@@ -880,27 +1193,9 @@ export function BranchChatPanel({
     try {
       await composer.awaitPendingModelSelection()
       await bridge.sendTurn({
-        backendSessionID: target.sessionID,
+        ...sendTurnRequest,
         clientTurnID,
         executionID,
-        text: compiled.transportText || undefined,
-        displayText: compiled.displayText || undefined,
-        attachments: submittedAttachments,
-        quotes: submittedQuotes,
-        threadTarget: {
-          kind: "detached-branch",
-          parentMessageID: target.headMessageID,
-        },
-        concurrentInputMode: wasRunning ? submissionMode : undefined,
-        model: parseModelSelection(composer.selectedModel),
-        reasoningEffort: composer.selectedReasoningEffort ?? undefined,
-        skills: compiled.selectedSkillIDs,
-        turnMcpServerIDs: [
-          ...new Set([
-            ...composer.selectedMcpServerIDs,
-            ...compiled.taggedMcpServerIDs,
-          ]),
-        ],
       })
       const acceptedTarget = tabRef.current
       if (
@@ -921,10 +1216,109 @@ export function BranchChatPanel({
     } catch (error) {
       activeClientTurnIDsRef.current.delete(clientTurnID)
       if (activeClientTurnIDsRef.current.size === 0) setIsSending(false)
-      setSendError(error instanceof Error ? error.message : String(error))
-      setDraftState((current) => current.plainText.trim() ? current : submittedDraft)
-      setAttachments((current) => current.length > 0 ? current : submittedAttachments)
-      setQuotes((current) => current.length > 0 ? current : submittedQuotes)
+      const optimisticSubmission = findBranchOptimisticSubmission(
+        optimisticSubmissionsRef.current,
+        { clientTurnID },
+      )
+      if (optimisticSubmission) {
+        failBranchOptimisticSubmission({
+          activeClientTurnID: clientTurnID,
+          error: error instanceof Error ? error.message : String(error),
+          userThreadMessageID: optimisticSubmission.message.id,
+        })
+      } else {
+        setSendError(error instanceof Error ? error.message : String(error))
+        setDraftState((current) => current.plainText.trim() ? current : submittedDraft)
+        setAttachments((current) => current.length > 0 ? current : submittedAttachments)
+        setQuotes((current) => current.length > 0 ? current : submittedQuotes)
+      }
+    }
+  }
+
+  async function handleRetryUserMessage(userThreadMessageID: string) {
+    if (!bridge) return
+    const submission = optimisticSubmissionsRef.current[userThreadMessageID]
+    if (
+      !submission?.request ||
+      submission.confirmed ||
+      submission.message.delivery?.status !== "failed"
+    ) {
+      return
+    }
+
+    const clientTurnID = createID("branch-turn")
+    const executionID = clientTurnID
+    const target = tabRef.current
+    tabRef.current = {
+      ...target,
+      executionID,
+    }
+    onUpdateTab(target.id, { executionID })
+
+    updateOptimisticSubmissions((current) => {
+      const currentSubmission = current[userThreadMessageID]
+      if (!currentSubmission?.request) return current
+      const {
+        backendTurnID: _backendTurnID,
+        backendUserMessageID: _backendUserMessageID,
+        confirmed: _confirmed,
+        ...retrySubmission
+      } = currentSubmission
+      const retiredClientTurnIDs = [
+        ...new Set([
+          ...(currentSubmission.retiredClientTurnIDs ?? []),
+          currentSubmission.activeClientTurnID,
+        ]),
+      ]
+      const retiredBackendTurnIDs = [
+        ...new Set([
+          ...(currentSubmission.retiredBackendTurnIDs ?? []),
+          ...(currentSubmission.backendTurnID
+            ? [currentSubmission.backendTurnID]
+            : []),
+        ]),
+      ]
+      return {
+        ...current,
+        [userThreadMessageID]: {
+          ...retrySubmission,
+          activeClientTurnID: clientTurnID,
+          executionID,
+          ...(retiredBackendTurnIDs.length > 0
+            ? { retiredBackendTurnIDs }
+            : {}),
+          retiredClientTurnIDs,
+          message: {
+            ...applyUserMessageDelivery(
+              currentSubmission.message,
+              { status: "pending" },
+            ),
+          },
+        },
+      }
+    })
+    activeClientTurnIDsRef.current.add(clientTurnID)
+    lastClientTurnIDRef.current = clientTurnID
+    setIsSending(true)
+    setSendError(null)
+
+    try {
+      await bridge.sendTurn({
+        ...submission.request,
+        clientTurnID,
+        executionID,
+      })
+      activeClientTurnIDsRef.current.delete(clientTurnID)
+      if (activeClientTurnIDsRef.current.size === 0) setIsSending(false)
+      await loadHistory()
+    } catch (error) {
+      activeClientTurnIDsRef.current.delete(clientTurnID)
+      if (activeClientTurnIDsRef.current.size === 0) setIsSending(false)
+      failBranchOptimisticSubmission({
+        activeClientTurnID: clientTurnID,
+        error: error instanceof Error ? error.message : String(error),
+        userThreadMessageID,
+      })
     }
   }
 
@@ -934,12 +1328,31 @@ export function BranchChatPanel({
     setSendError(null)
     try {
       const target = tabRef.current
-      await bridge.interrupt({
+      const clientTurnID = lastClientTurnIDRef.current
+      const result = await bridge.interrupt({
         backendSessionID: target.sessionID,
-        clientTurnID: lastClientTurnIDRef.current ?? undefined,
+        clientTurnID: clientTurnID ?? undefined,
         executionID: target.executionID,
         reason: "user-interrupt",
       })
+      if (clientTurnID && (result.backendCancelled || result.localRequestsAborted > 0)) {
+        const optimisticSubmission = findBranchOptimisticSubmission(
+          optimisticSubmissionsRef.current,
+          { clientTurnID },
+        )
+        if (optimisticSubmission) {
+          failBranchOptimisticSubmission({
+            activeClientTurnID: clientTurnID,
+            reason: "cancelled",
+            userThreadMessageID: optimisticSubmission.message.id,
+          })
+        }
+        activeClientTurnIDsRef.current.delete(clientTurnID)
+        setIsSending(activeClientTurnIDsRef.current.size > 0)
+        setIsCancelling(false)
+      } else if (!result.backendCancelled) {
+        setIsCancelling(false)
+      }
     } catch (error) {
       setSendError(error instanceof Error ? error.message : String(error))
       setIsCancelling(false)
@@ -1561,6 +1974,7 @@ export function BranchChatPanel({
             threadColumnRef={threadColumnRef}
             onArtifactLinkOpen={onArtifactLinkOpen}
             onLocalFileLinkOpen={onLocalFileLinkOpen}
+            onRetryUserMessage={handleRetryUserMessage}
             onForkFromMessage={(messageID) => onOpenBranchChat({
               anchorStrategy: "selected",
               sessionID: tab.sessionID,

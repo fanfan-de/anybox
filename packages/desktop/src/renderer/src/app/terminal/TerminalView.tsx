@@ -1,8 +1,57 @@
 import { FitAddon } from "@xterm/addon-fit"
 import { Terminal } from "@xterm/xterm"
-import { memo, useEffect, useEffectEvent, useRef } from "react"
+import { memo, useEffect, useEffectEvent, useRef, useState, type MouseEvent as ReactMouseEvent } from "react"
+import { createPortal } from "react-dom"
+import { CopyIcon } from "../icons"
+import { useI18n } from "../i18n/I18nProvider"
+import { writeTextToClipboard } from "../shared-ui"
 import type { BrandTheme, ColorMode } from "../types"
 import type { TerminalSessionRecord, TerminalStreamEvent } from "./types"
+
+const TERMINAL_CONTEXT_MENU_WIDTH = 184
+const TERMINAL_CONTEXT_MENU_HEIGHT = 44
+const TERMINAL_CONTEXT_MENU_MARGIN = 8
+
+interface TerminalContextMenuState {
+  hasSelection: boolean
+  x: number
+  y: number
+}
+
+function isMacPlatform() {
+  return typeof navigator !== "undefined" && /mac/i.test(navigator.platform)
+}
+
+function isTerminalCopyShortcut(event: KeyboardEvent) {
+  if (event.key.toLowerCase() !== "c" || event.altKey) return false
+
+  const usesTerminalShortcut = event.ctrlKey && event.shiftKey && !event.metaKey
+  const usesMacShortcut = isMacPlatform() && event.metaKey && !event.ctrlKey && !event.shiftKey
+  return usesTerminalShortcut || usesMacShortcut
+}
+
+function clampTerminalContextMenuPosition(x: number, y: number) {
+  if (typeof window === "undefined") return { x, y }
+
+  return {
+    x: Math.max(
+      TERMINAL_CONTEXT_MENU_MARGIN,
+      Math.min(x, window.innerWidth - TERMINAL_CONTEXT_MENU_WIDTH - TERMINAL_CONTEXT_MENU_MARGIN),
+    ),
+    y: Math.max(
+      TERMINAL_CONTEXT_MENU_MARGIN,
+      Math.min(y, window.innerHeight - TERMINAL_CONTEXT_MENU_HEIGHT - TERMINAL_CONTEXT_MENU_MARGIN),
+    ),
+  }
+}
+
+async function copyTerminalSelection(terminal: Terminal) {
+  const selection = terminal.getSelection()
+  if (!selection) return false
+
+  await writeTextToClipboard(selection)
+  return true
+}
 
 function shouldAutoFocusTerminal(container: HTMLElement) {
   const activeElement = document.activeElement
@@ -97,15 +146,19 @@ export const TerminalView = memo(function TerminalView({
   onSnapshotChange,
   subscribeToTerminalStream,
 }: TerminalViewProps) {
+  const { t } = useI18n()
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const contextMenuRef = useRef<HTMLDivElement | null>(null)
   const terminalRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
+  const fitFrameRef = useRef<number | null>(null)
   const flushFrameRef = useRef<number | null>(null)
   const scrollFrameRef = useRef<number | null>(null)
   const lastReportedScrollTopRef = useRef(0)
   const lastMeasuredDimensionsRef = useRef<{ rows: number; cols: number } | null>(null)
   const writeQueueRef = useRef<string[]>([])
   const isFlushingRef = useRef(false)
+  const [contextMenu, setContextMenu] = useState<TerminalContextMenuState | null>(null)
   const themeSignature = `${brandTheme}:${colorMode}`
   const handleInput = useEffectEvent(onInput)
   const handleResize = useEffectEvent(onResize)
@@ -120,8 +173,13 @@ export const TerminalView = memo(function TerminalView({
     const fitAddon = fitAddonRef.current
     if (!fitAddon) return
 
-    fitAddon.fit()
-    const dimensions = fitAddon.proposeDimensions()
+    let dimensions: { rows: number; cols: number } | undefined
+    try {
+      fitAddon.fit()
+      dimensions = fitAddon.proposeDimensions()
+    } catch {
+      return
+    }
     if (!dimensions) return
 
     const lastMeasured = lastMeasuredDimensionsRef.current
@@ -197,22 +255,55 @@ export const TerminalView = memo(function TerminalView({
   const focusTerminal = useEffectEvent(() => {
     terminalRef.current?.focus()
   })
+  const closeContextMenu = useEffectEvent((options?: { restoreTerminalFocus?: boolean }) => {
+    setContextMenu(null)
+    if (options?.restoreTerminalFocus) {
+      window.requestAnimationFrame(() => {
+        terminalRef.current?.focus()
+      })
+    }
+  })
 
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
 
-    const terminal = new Terminal(createTerminalOptions())
+    const terminal = new Terminal({
+      ...createTerminalOptions(),
+      rows: session.rows,
+      cols: session.cols,
+    })
     const fitAddon = new FitAddon()
     fitAddonRef.current = fitAddon
     terminal.loadAddon(fitAddon)
     terminal.open(container)
+    terminalRef.current = terminal
+    lastMeasuredDimensionsRef.current = {
+      rows: session.rows,
+      cols: session.cols,
+    }
+
+    // Match the visible container before replaying PTY history. Replaying at
+    // xterm's default 80 columns can permanently scramble cursor-addressed
+    // output from shells that were already running at a different width.
+    fitTerminal()
     terminal.write(session.buffer)
     lastReportedScrollTopRef.current = session.scrollTop
     terminal.scrollToLine(session.scrollTop)
     if (shouldAutoFocusTerminal(container)) {
       terminal.focus()
     }
+
+    terminal.attachCustomKeyEventHandler((event) => {
+      if (!isTerminalCopyShortcut(event) || !terminal.hasSelection()) return true
+
+      event.preventDefault()
+      event.stopPropagation()
+      void copyTerminalSelection(terminal).catch((error) => {
+        console.error("[desktop] Failed to copy terminal selection:", error)
+      })
+      return false
+    })
 
     const disposeInput = terminal.onData((data) => {
       void handleInput(session.ptyID, data)
@@ -234,20 +325,27 @@ export const TerminalView = memo(function TerminalView({
       })
     })
 
-    terminalRef.current = terminal
-    lastMeasuredDimensionsRef.current = {
-      rows: session.rows,
-      cols: session.cols,
+    const scheduleFit = () => {
+      if (fitFrameRef.current !== null) return
+      fitFrameRef.current = window.requestAnimationFrame(() => {
+        fitFrameRef.current = null
+        fitTerminal()
+      })
     }
-    const fitTimer = window.setTimeout(() => {
-      fitTerminal()
-    }, 0)
-    const handleWindowResize = () => fitTerminal()
-    window.addEventListener("resize", handleWindowResize)
+    const fitTimer = window.setTimeout(scheduleFit, 0)
+    const resizeObserver = typeof ResizeObserver === "undefined"
+      ? null
+      : new ResizeObserver(scheduleFit)
+    resizeObserver?.observe(container)
+    window.addEventListener("resize", scheduleFit)
 
     return () => {
       window.clearTimeout(fitTimer)
-      window.removeEventListener("resize", handleWindowResize)
+      window.removeEventListener("resize", scheduleFit)
+      resizeObserver?.disconnect()
+      if (fitFrameRef.current !== null) {
+        window.cancelAnimationFrame(fitFrameRef.current)
+      }
       if (flushFrameRef.current !== null) {
         window.cancelAnimationFrame(flushFrameRef.current)
       }
@@ -263,9 +361,49 @@ export const TerminalView = memo(function TerminalView({
       lastMeasuredDimensionsRef.current = null
       writeQueueRef.current = []
       isFlushingRef.current = false
+      fitFrameRef.current = null
       flushFrameRef.current = null
+      setContextMenu(null)
     }
   }, [session.ptyID])
+
+  useEffect(() => {
+    if (!contextMenu) return
+
+    const focusFrame = window.requestAnimationFrame(() => {
+      contextMenuRef.current
+        ?.querySelector<HTMLButtonElement>(".ui-context-menu__item:not(:disabled)")
+        ?.focus()
+    })
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null
+      if (target && contextMenuRef.current?.contains(target)) return
+      setContextMenu(null)
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return
+      event.preventDefault()
+      event.stopPropagation()
+      closeContextMenu({ restoreTerminalFocus: true })
+    }
+    const handleViewportChange = () => {
+      setContextMenu(null)
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown)
+    document.addEventListener("keydown", handleKeyDown)
+    window.addEventListener("resize", handleViewportChange)
+    window.addEventListener("scroll", handleViewportChange, true)
+
+    return () => {
+      window.cancelAnimationFrame(focusFrame)
+      document.removeEventListener("pointerdown", handlePointerDown)
+      document.removeEventListener("keydown", handleKeyDown)
+      window.removeEventListener("resize", handleViewportChange)
+      window.removeEventListener("scroll", handleViewportChange, true)
+    }
+  }, [contextMenu])
 
   useEffect(() => {
     applyTerminalTheme()
@@ -322,6 +460,33 @@ export const TerminalView = memo(function TerminalView({
     return subscribeToTerminalStream(session.ptyID, handleTerminalStream)
   }, [session.ptyID, subscribeToTerminalStream])
 
+  const handleContextMenu = (event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+
+    const position = clampTerminalContextMenuPosition(event.clientX, event.clientY)
+    setContextMenu({
+      hasSelection: terminalRef.current?.hasSelection() ?? false,
+      x: position.x,
+      y: position.y,
+    })
+  }
+
+  const handleCopySelection = async () => {
+    const terminal = terminalRef.current
+    if (!terminal) {
+      setContextMenu(null)
+      return
+    }
+
+    try {
+      await copyTerminalSelection(terminal)
+      closeContextMenu({ restoreTerminalFocus: true })
+    } catch (error) {
+      console.error("[desktop] Failed to copy terminal selection:", error)
+    }
+  }
+
   return (
     <div className="terminal-view-shell">
       {session.lastError ? <p className="terminal-view-error">{session.lastError}</p> : null}
@@ -330,11 +495,40 @@ export const TerminalView = memo(function TerminalView({
         id={`terminal-panel-${session.ptyID}`}
         aria-labelledby={`terminal-tab-${session.ptyID}`}
         className="terminal-surface"
+        onContextMenu={handleContextMenu}
         onMouseDown={() => focusTerminal()}
         role="tabpanel"
       >
         <div ref={containerRef} className="terminal-xterm" />
       </div>
+
+      {contextMenu
+        ? createPortal(
+            <div
+              ref={contextMenuRef}
+              className="ui-context-menu terminal-context-menu"
+              role="menu"
+              aria-label={`${t("terminal.title")} ${t("app.copy")}`}
+              style={{ left: contextMenu.x, top: contextMenu.y }}
+              onContextMenu={(event) => event.preventDefault()}
+            >
+              <button
+                className="ui-context-menu__item"
+                role="menuitem"
+                type="button"
+                disabled={!contextMenu.hasSelection}
+                onClick={() => void handleCopySelection()}
+              >
+                <span className="ui-context-menu__icon" aria-hidden="true"><CopyIcon /></span>
+                <span className="ui-context-menu__label">{t("app.copy")}</span>
+                <span className="terminal-context-menu-shortcut" aria-hidden="true">
+                  {isMacPlatform() ? "⌘C" : "Ctrl+Shift+C"}
+                </span>
+              </button>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   )
 })

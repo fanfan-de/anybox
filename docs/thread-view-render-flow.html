@@ -445,6 +445,7 @@
 
         <nav class="toc" aria-label="阅读导航">
           <a href="#main-flow">主链路</a>
+          <a href="#optimistic-delivery">乐观发送</a>
           <a href="#quick-path">快速路径</a>
           <a href="#branches">关键分支</a>
           <a href="#rows">row 类型分发表</a>
@@ -474,7 +475,7 @@
                   </div>
                   <div class="io">
                     <b>处理</b>
-                    <p>调用 <code>updateConversationTurns</code> 或 <code>setConversations</code>；runtime turn identity 到达时在同一 transaction 内把 <code>pending:*</code> 原子绑定/合并到 canonical turn。</p>
+                    <p>普通 Composer submit 先同步写入带 <code>delivery=pending</code> 的 user row；随后调用 <code>updateConversationTurns</code> 或 <code>setConversations</code>。runtime turn identity 到达时在同一 transaction 内把 <code>pending:*</code> 原子绑定/合并到 canonical turn，但不会提前确认 user message。</p>
                   </div>
                   <div class="io">
                     <b>输出</b>
@@ -630,13 +631,46 @@
           </div>
         </section>
 
+        <section class="section" id="optimistic-delivery">
+          <div class="section-header">
+            <h2>用户消息乐观发送生命周期</h2>
+            <p>user row 先出现，后端事件只更新同一 row；message ID 和 virtual row ID 始终稳定。</p>
+          </div>
+          <div class="cards">
+            <article class="card" data-tone="violet">
+              <h3>1. optimistic</h3>
+              <p>普通新回合在 bridge 调用前写入 <code>pending:${messageID}</code>，并在 registry 保存完整 transport request snapshot。新会话在 create tab 切换成 ThreadView 后也先写入 user row，再等待模型与 workflow 的 pre-send 初始化，避免空白 ThreadView。Queue / Steer 不进入这条路径。</p>
+            </article>
+            <article class="card" data-tone="orange">
+              <h3>2. turn bound</h3>
+              <p><code>turn.started</code> 或 <code>execution.mode</code> 只把 pending turn 绑定到 canonical <code>turnID</code>；Loader 继续显示。</p>
+            </article>
+            <article class="card" data-tone="green">
+              <h3>3. recorded</h3>
+              <p>只有当前 attempt 的 <code>message.recorded(role=user)</code> 清除 <code>delivery</code> 并删除完整请求快照。history reconciliation 保留本地 user message ID。</p>
+            </article>
+            <article class="card" data-tone="orange">
+              <h3>4. failed / retry</h3>
+              <p>确认前 error 或 cancel 保留 user row、移除空 assistant placeholder。Retry 复用原 row 与原始请求，生成新 <code>clientTurnID</code>，并清除旧 attempt identity 以隔离迟到事件。</p>
+            </article>
+            <article class="card" data-tone="green">
+              <h3>Branch Chat overlay</h3>
+              <p><code>activeTurns = history + live assistant overlay + optimistic user turns</code>。确认后只在 tab 生命周期内保留轻量 message/turn alias；关闭 tab 后丢弃本地状态。</p>
+            </article>
+            <article class="card" data-tone="violet">
+              <h3>滚动与持久化</h3>
+              <p>首次 append 遵守 follow / detached 规则；pending、failed、confirmed 不创建新 row。带 delivery 的 user message 不写 presentation storage，重载以后端 history 为准。</p>
+            </article>
+          </div>
+        </section>
+
         <section class="section" id="quick-path">
           <div class="section-header">
             <h2>快速路径</h2>
             <p>只想记住主线时，看这一行即可。</p>
           </div>
           <div class="flow-strip" aria-label="简化流程">
-            <span class="pill">Runtime / History / User input</span>
+            <span class="pill">Composer optimistic user / Runtime / History</span>
             <span class="arrow">→</span>
             <span class="pill">ConversationTurnMap</span>
             <span class="arrow">→</span>

@@ -11,11 +11,13 @@ import type {
   ComposerAttachment,
   ComposerDraftState,
   CreateSessionTab,
+  OptimisticUserSubmission,
   PendingAgentStream,
   PendingConversationInput,
   PermissionRequest,
   SessionSummary,
   ThreadMessage,
+  UserThreadMessage,
   WorkspaceGroup,
 } from "../types"
 import { useComposerController, type ComposerCommandStatus } from "./composer-controller"
@@ -79,6 +81,16 @@ function applyUpdate<T>(setValue: Dispatch<SetStateAction<T>>, _current: T, upda
   setValue((current) => (typeof update === "function" ? (update as (value: T) => T)(current) : update))
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, reject, resolve }
+}
+
 function useComposerHarness(input?: {
   activeCreateSessionTabID?: string | null
   activeSessionID?: string | null
@@ -88,10 +100,16 @@ function useComposerHarness(input?: {
   initialAgentSessions?: Record<string, string>
   initialIsSendingByTabKey?: Record<string, boolean>
   initialPendingPermissionRequestsBySession?: Record<string, PermissionRequest[]>
+  sessionModelSelection?: SessionSummary["modelSelection"]
   sessionDraftState?: ComposerDraftState
   sessionDraftText?: string
 }) {
-  const session = createSession("session-1")
+  const session = {
+    ...createSession("session-1"),
+    ...(input?.sessionModelSelection
+      ? { modelSelection: input.sessionModelSelection }
+      : {}),
+  }
   const workspace = createWorkspace(session)
   const [agentSessions, setAgentSessionsState] = useState<Record<string, string>>(input?.initialAgentSessions ?? {})
   const [cancellingSessionIDs, setCancellingSessionIDsState] = useState<Record<string, boolean>>({})
@@ -121,6 +139,7 @@ function useComposerHarness(input?: {
   const [workspaces, setWorkspacesState] = useState<WorkspaceGroup[]>([workspace])
   const messagesRef = useRef<Record<string, ThreadMessage[]>>({})
   const pendingStreamsRef = useRef<Record<string, PendingAgentStream>>({})
+  const optimisticUserSubmissionsRef = useRef<Record<string, OptimisticUserSubmission>>({})
   const permissionRequestsRequestRef = useRef<Record<string, number>>({})
   const reloadSessionHistoryForSession = useRef(vi.fn(async () => undefined)).current
   const updateAssistantConversationMessage = useRef(vi.fn((
@@ -171,12 +190,70 @@ function useComposerHarness(input?: {
     loadSessionRuntimeDebugForSession: vi.fn(async () => undefined),
     pendingConversationInputsBySession,
     pendingPermissionRequestsBySession,
+    optimisticUserSubmissionsRef,
     pendingStreamsRef,
+    failOptimisticUserSubmission: ({
+      activeClientTurnID,
+      error,
+      reason,
+      userThreadMessageID,
+    }) => {
+      const submission =
+        optimisticUserSubmissionsRef.current[userThreadMessageID]
+      if (!submission) return false
+      if (
+        activeClientTurnID &&
+        submission.activeClientTurnID &&
+        submission.activeClientTurnID !== activeClientTurnID
+      ) {
+        return false
+      }
+      messagesRef.current[submission.sessionID] = (
+        messagesRef.current[submission.sessionID] ?? []
+      )
+        .filter(
+          (message) => message.id !== submission.assistantThreadMessageID,
+        )
+        .map((message) =>
+          message.kind === "user" && message.id === userThreadMessageID
+            ? {
+                ...message,
+                delivery: {
+                  status: "failed",
+                  ...(error ? { error } : {}),
+                  ...(reason ? { reason } : {}),
+                },
+              } satisfies UserThreadMessage
+            : message,
+        )
+      return true
+    },
+    prepareUserMessageRetry: (sessionID, userThreadMessageID) => {
+      const messages = messagesRef.current[sessionID] ?? []
+      const userMessageIndex = messages.findIndex(
+        (message) => message.kind === "user" && message.id === userThreadMessageID,
+      )
+      if (userMessageIndex < 0) return false
+      const userMessage = messages[userMessageIndex]
+      if (userMessage?.kind !== "user") return false
+      messagesRef.current[sessionID] = [
+        ...messages.slice(0, userMessageIndex),
+        {
+          ...userMessage,
+          delivery: { status: "pending" },
+        } satisfies UserThreadMessage,
+      ]
+      return true
+    },
     permissionRequestActionRequestID: null,
     permissionRequestsRequestRef,
     platform: "win32",
     refreshWorkspaceForSession: vi.fn(),
     refreshWorkspaceFromDirectory: vi.fn(),
+    removeConversationMessage: (sessionID, messageID) => {
+      messagesRef.current[sessionID] = (messagesRef.current[sessionID] ?? [])
+        .filter((message) => message.id !== messageID)
+    },
     reloadSessionHistoryForSession,
     replaceConversationMessages: (sessionID, nextMessages) => {
       messagesRef.current[sessionID] = nextMessages
@@ -200,6 +277,17 @@ function useComposerHarness(input?: {
     setSessionDirectoryBySession: (update) => applyUpdate(setSessionDirectoryBySessionState, sessionDirectoryBySession, update),
     setWorkspaces: (update) => applyUpdate(setWorkspacesState, workspaces, update),
     updateAssistantConversationMessage,
+    updateUserMessageDelivery: (sessionID, userThreadMessageID, delivery) => {
+      messagesRef.current[sessionID] = (messagesRef.current[sessionID] ?? []).map((message) => {
+        if (message.kind !== "user" || message.id !== userThreadMessageID) return message
+        if (!delivery) {
+          const { delivery: _delivery, ...confirmed } = message
+          return confirmed
+        }
+        return { ...message, delivery }
+      })
+      return true
+    },
     workspaces,
   })
 
@@ -210,6 +298,7 @@ function useComposerHarness(input?: {
     controller,
     createSessionForWorkspace,
     createSessionTabs,
+    optimisticUserSubmissionsRef,
     pendingConversationInputsBySession,
     pendingStreamsRef,
     reloadSessionHistoryForSession,
@@ -220,6 +309,317 @@ function useComposerHarness(input?: {
 }
 
 describe("composer controller", () => {
+  it("shows the optimistic user message before the stream request resolves", async () => {
+    const previousDesktop = window.desktop
+    let resolveModelSelection: (() => void) | undefined
+    const pendingModelSelection = new Promise<void>((resolve) => {
+      resolveModelSelection = resolve
+    })
+    let resolveSendTurn: ((value: { clientTurnID: string }) => void) | undefined
+    const sendTurn = vi.fn((input: { clientTurnID: string }) =>
+      new Promise<{ clientTurnID: string }>((resolve) => {
+        resolveSendTurn = resolve
+      }).then(() => ({ clientTurnID: input.clientTurnID })),
+    )
+
+    Object.defineProperty(window, "desktop", {
+      configurable: true,
+      value: {
+        createAgentSession: vi.fn(),
+        agentSession: {
+          sendTurn,
+        },
+      } as unknown as typeof window.desktop,
+    })
+
+    try {
+      const { result } = renderHook(() =>
+        useComposerHarness({
+          agentConnected: true,
+          initialAgentSessions: {
+            "session-1": "backend-session-1",
+          },
+        }),
+      )
+      let pendingSend: Promise<void> | undefined
+
+      act(() => {
+        pendingSend = result.current.controller.handleSend({
+          waitForPendingModelSelection: () => pendingModelSelection,
+        })
+      })
+
+      expect(sendTurn).not.toHaveBeenCalled()
+      expect(result.current.messagesRef.current["session-1"]?.[0]).toMatchObject({
+        kind: "user",
+        text: "Existing prompt",
+        delivery: { status: "pending" },
+      })
+      expect(result.current.messagesRef.current["session-1"]).toHaveLength(1)
+
+      await act(async () => {
+        resolveModelSelection?.()
+        await pendingModelSelection
+      })
+
+      expect(sendTurn).toHaveBeenCalledTimes(1)
+      expect(result.current.messagesRef.current["session-1"]?.[1]).toMatchObject({
+        kind: "assistant",
+        isStreaming: true,
+      })
+
+      await act(async () => {
+        resolveSendTurn?.({
+          clientTurnID: sendTurn.mock.calls[0]?.[0].clientTurnID ?? "",
+        })
+        await pendingSend
+      })
+    } finally {
+      Object.defineProperty(window, "desktop", {
+        configurable: true,
+        value: previousDesktop,
+      })
+    }
+  })
+
+  it("keeps a failed optimistic user message and removes its empty assistant placeholder", async () => {
+    const previousDesktop = window.desktop
+    const sendTurn = vi.fn(async () => {
+      throw new Error("Transport unavailable")
+    })
+
+    Object.defineProperty(window, "desktop", {
+      configurable: true,
+      value: {
+        createAgentSession: vi.fn(),
+        agentSession: {
+          sendTurn,
+        },
+      } as unknown as typeof window.desktop,
+    })
+
+    try {
+      const { result } = renderHook(() =>
+        useComposerHarness({
+          agentConnected: true,
+          initialAgentSessions: {
+            "session-1": "backend-session-1",
+          },
+        }),
+      )
+
+      await act(async () => {
+        await result.current.controller.handleSend()
+      })
+
+      expect(result.current.messagesRef.current["session-1"]).toEqual([
+        expect.objectContaining({
+          kind: "user",
+          text: "Existing prompt",
+          delivery: {
+            status: "failed",
+            error: "Transport unavailable",
+          },
+        }),
+      ])
+    } finally {
+      Object.defineProperty(window, "desktop", {
+        configurable: true,
+        value: previousDesktop,
+      })
+    }
+  })
+
+  it("retries from the exact request snapshot in the same user row with a new client turn", async () => {
+    const previousDesktop = window.desktop
+    const sendTurn = vi.fn()
+      .mockRejectedValueOnce(new Error("Temporary failure"))
+      .mockImplementationOnce(async (input: { clientTurnID: string }) => ({
+        clientTurnID: input.clientTurnID,
+      }))
+
+    Object.defineProperty(window, "desktop", {
+      configurable: true,
+      value: {
+        createAgentSession: vi.fn(),
+        agentSession: {
+          sendTurn,
+        },
+      } as unknown as typeof window.desktop,
+    })
+
+    try {
+      const { result } = renderHook(() =>
+        useComposerHarness({
+          agentConnected: true,
+          initialAgentSessions: {
+            "session-1": "backend-session-1",
+          },
+          sessionModelSelection: {
+            model: "openai/gpt-5.1",
+            reasoning_effort: "high",
+          },
+        }),
+      )
+
+      await act(async () => {
+        await result.current.controller.handleSend({
+          selectedModel: "openai/gpt-5.1",
+          selectedReasoningEffort: "high",
+        })
+      })
+
+      const failedUser = result.current.messagesRef.current["session-1"]?.[0]
+      expect(failedUser).toMatchObject({
+        kind: "user",
+        delivery: { status: "failed" },
+      })
+      if (!failedUser || failedUser.kind !== "user") {
+        throw new Error("Expected the failed optimistic user message")
+      }
+      const failedSubmission =
+        result.current.optimisticUserSubmissionsRef.current[failedUser.id]
+      if (!failedSubmission) {
+        throw new Error("Expected the optimistic request snapshot")
+      }
+      failedSubmission.backendTurnID = "turn-old-attempt"
+      failedSubmission.assistantThreadMessageID = "assistant-old-attempt"
+
+      await act(async () => {
+        await result.current.controller.handleRetryUserMessage(failedUser.id)
+      })
+
+      expect(sendTurn).toHaveBeenCalledTimes(2)
+      const [firstInput] = sendTurn.mock.calls[0] ?? []
+      const [retryInput] = sendTurn.mock.calls[1] ?? []
+      const {
+        clientTurnID: firstClientTurnID,
+        ...firstRequest
+      } = firstInput as Record<string, unknown> & { clientTurnID: string }
+      const {
+        clientTurnID: retryClientTurnID,
+        ...retryRequest
+      } = retryInput as Record<string, unknown> & { clientTurnID: string }
+
+      expect(retryClientTurnID).not.toBe(firstClientTurnID)
+      expect(retryRequest).toEqual(firstRequest)
+      expect(retryRequest).toMatchObject({
+        model: {
+          providerID: "openai",
+          modelID: "gpt-5.1",
+        },
+        reasoningEffort: "high",
+      })
+      expect(
+        result.current.messagesRef.current["session-1"]?.filter(
+          (message) => message.kind === "user",
+        ),
+      ).toEqual([
+        expect.objectContaining({
+          id: failedUser.id,
+          delivery: { status: "pending" },
+        }),
+      ])
+      expect(
+        Object.keys(result.current.optimisticUserSubmissionsRef.current),
+      ).toEqual([failedUser.id])
+      expect(
+        result.current.optimisticUserSubmissionsRef.current[failedUser.id],
+      ).not.toHaveProperty("backendTurnID")
+      expect(
+        result.current.optimisticUserSubmissionsRef.current[failedUser.id],
+      ).not.toHaveProperty(
+        "assistantThreadMessageID",
+        "assistant-old-attempt",
+      )
+      expect(
+        result.current.optimisticUserSubmissionsRef.current[failedUser.id]
+          ?.retiredBackendTurnIDs,
+      ).toContain("turn-old-attempt")
+      expect(
+        result.current.optimisticUserSubmissionsRef.current[failedUser.id]
+          ?.retiredClientTurnIDs,
+      ).toContain(firstClientTurnID)
+
+      await act(async () => {
+        await result.current.controller.handleRetryUserMessage(failedUser.id)
+      })
+      expect(sendTurn).toHaveBeenCalledTimes(2)
+    } finally {
+      Object.defineProperty(window, "desktop", {
+        configurable: true,
+        value: previousDesktop,
+      })
+    }
+  })
+
+  it("marks an unconfirmed optimistic message cancelled and removes its assistant placeholder", async () => {
+    const previousDesktop = window.desktop
+    let resolveSendTurn: ((value: { clientTurnID: string }) => void) | undefined
+    const sendTurn = vi.fn((input: { clientTurnID: string }) =>
+      new Promise<{ clientTurnID: string }>((resolve) => {
+        resolveSendTurn = resolve
+      }).then(() => ({ clientTurnID: input.clientTurnID })),
+    )
+    const interrupt = vi.fn(async () => ({
+      backendSessionID: "backend-session-1",
+      localRequestsAborted: 1,
+      backendCancelled: true,
+    }))
+
+    Object.defineProperty(window, "desktop", {
+      configurable: true,
+      value: {
+        createAgentSession: vi.fn(),
+        agentSession: {
+          sendTurn,
+          interrupt,
+        },
+      } as unknown as typeof window.desktop,
+    })
+
+    try {
+      const { result } = renderHook(() =>
+        useComposerHarness({
+          agentConnected: true,
+          initialAgentSessions: {
+            "session-1": "backend-session-1",
+          },
+        }),
+      )
+      let pendingSend: Promise<void> | undefined
+
+      act(() => {
+        pendingSend = result.current.controller.handleSend()
+      })
+      await act(async () => {
+        await result.current.controller.handleCancelSend()
+      })
+
+      expect(result.current.messagesRef.current["session-1"]).toEqual([
+        expect.objectContaining({
+          kind: "user",
+          delivery: {
+            status: "failed",
+            reason: "cancelled",
+          },
+        }),
+      ])
+
+      await act(async () => {
+        resolveSendTurn?.({
+          clientTurnID: sendTurn.mock.calls[0]?.[0].clientTurnID ?? "",
+        })
+        await pendingSend
+      })
+    } finally {
+      Object.defineProperty(window, "desktop", {
+        configurable: true,
+        value: previousDesktop,
+      })
+    }
+  })
+
   it("sends an existing session draft through the send service", async () => {
     const { result } = renderHook(() => useComposerHarness())
 
@@ -807,6 +1207,79 @@ describe("composer controller", () => {
     expect(result.current.messagesRef.current["created-session-1"]).toHaveLength(2)
   })
 
+  it("shows the optimistic user message while a new session model selection is still saving", async () => {
+    const previousDesktop = window.desktop
+    const modelSelection = createDeferred<{
+      model: string
+      reasoning_effort: "high"
+    }>()
+    const sendTurn = vi.fn(async (input: { clientTurnID: string }) => ({
+      clientTurnID: input.clientTurnID,
+    }))
+    const updateSessionModelSelection = vi.fn(() => modelSelection.promise)
+
+    Object.defineProperty(window, "desktop", {
+      configurable: true,
+      value: {
+        createAgentSession: vi.fn(),
+        updateProjectModelSelection: vi.fn(async () => ({
+          model: "deepseek/deepseek-reasoner",
+          reasoning_effort: "high" as const,
+        })),
+        updateSessionModelSelection,
+        agentSession: {
+          sendTurn,
+        },
+      } as unknown as typeof window.desktop,
+    })
+
+    try {
+      const { result } = renderHook(() =>
+        useComposerHarness({
+          activeCreateSessionTabID: "create-1",
+          activeSessionID: null,
+          activeTabKey: "create-session:create-1",
+          agentConnected: true,
+        }),
+      )
+      let submissionPromise: Promise<void> | undefined
+
+      await act(async () => {
+        submissionPromise = result.current.controller.handleSend({
+          selectedModel: "deepseek/deepseek-reasoner",
+          selectedReasoningEffort: "high",
+        })
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      expect(updateSessionModelSelection).toHaveBeenCalledTimes(1)
+      expect(sendTurn).not.toHaveBeenCalled()
+      expect(result.current.messagesRef.current["created-session-1"]).toEqual([
+        expect.objectContaining({
+          kind: "user",
+          text: "New prompt",
+          delivery: { status: "pending" },
+        }),
+      ])
+
+      await act(async () => {
+        modelSelection.resolve({
+          model: "deepseek/deepseek-reasoner",
+          reasoning_effort: "high",
+        })
+        await submissionPromise
+      })
+
+      expect(sendTurn).toHaveBeenCalledTimes(1)
+    } finally {
+      Object.defineProperty(window, "desktop", {
+        configurable: true,
+        value: previousDesktop,
+      })
+    }
+  })
+
   it("uses a saved model selection for the first create-session prompt", async () => {
     const previousDesktop = window.desktop
     const sendTurn = vi.fn(async (input: { clientTurnID: string }) => ({
@@ -1074,11 +1547,17 @@ describe("composer controller", () => {
     const updateSessionWorkflow = vi.fn(async () => {
       throw new Error("Cannot enter plan mode")
     })
+    const sendTurn = vi.fn()
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined)
 
     Object.defineProperty(window, "desktop", {
       configurable: true,
       value: {
+        createAgentSession: vi.fn(),
         updateSessionWorkflow,
+        agentSession: {
+          sendTurn,
+        },
       } as unknown as typeof window.desktop,
     })
 
@@ -1088,6 +1567,7 @@ describe("composer controller", () => {
           activeCreateSessionTabID: "create-1",
           activeSessionID: null,
           activeTabKey: "create-session:create-1",
+          agentConnected: true,
           createSessionInitialWorkflowMode: "planning",
         }),
       )
@@ -1100,14 +1580,17 @@ describe("composer controller", () => {
         sessionID: "created-session-1",
         action: "enter-plan",
       })
+      expect(sendTurn).not.toHaveBeenCalled()
       expect(result.current.messagesRef.current["created-session-1"]).toHaveLength(1)
       expect(result.current.messagesRef.current["created-session-1"]?.[0]).toMatchObject({
-        kind: "assistant",
-        runtime: {
-          errorMessage: "Cannot enter plan mode",
+        kind: "user",
+        delivery: {
+          status: "failed",
+          error: "Cannot enter plan mode",
         },
       })
     } finally {
+      consoleError.mockRestore()
       Object.defineProperty(window, "desktop", {
         configurable: true,
         value: previousDesktop,

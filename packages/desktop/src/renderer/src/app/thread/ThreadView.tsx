@@ -15,6 +15,7 @@ import {
   CloseIcon,
   CopyIcon,
   DownloadIcon,
+  ErrorStatusIcon,
   ExpandIcon,
   FileImageIcon,
   InfoIcon,
@@ -22,6 +23,7 @@ import {
   PaperclipIcon,
   PlusIcon,
   ResetIcon,
+  SessionRunningIcon,
   ForkIcon,
 } from "../icons"
 import { joinClassNames, writeTextToClipboard } from "../shared-ui"
@@ -251,7 +253,7 @@ function projectThreadScrollSnapshotToExecutionGroups(
 
 type ProposedPlanCardStatus = "idle" | "cancelled" | "confirming" | "confirmed"
 
-interface ThreadViewProps {
+export interface ThreadViewProps {
   activeSession: SessionSummary | null
   activeSessionDiff?: SessionDiffSummary | null
   activeMessages: ThreadMessage[]
@@ -270,6 +272,7 @@ interface ThreadViewProps {
   onMessageDiffSummaryHydrate?: (messageID: string, diffSummary: SessionDiffSummary) => void | Promise<void>
   onMessageDiffRestore?: (diffs: SessionDiffFile[]) => void | Promise<void>
   onMessageDiffReview?: (files: string[]) => void | Promise<void>
+  onRetryUserMessage?: (messageID: string) => void | Promise<void>
   pendingConversationInputs?: PendingConversationInput[]
   pendingPermissionRequests: PermissionRequest[]
   permissionRequestActionError: string | null
@@ -1007,6 +1010,7 @@ const UserThreadMessageArticle = memo(function UserThreadMessageArticle({
   message,
   motion,
   onCopy,
+  onRetry,
   rowKind = "user-message",
 }: {
   className?: string
@@ -1014,10 +1018,21 @@ const UserThreadMessageArticle = memo(function UserThreadMessageArticle({
   diffCard?: ReactNode
   motion: ThreadMessageMotion
   onCopy: (messageID: string, text: string) => void | Promise<void>
+  onRetry?: (messageID: string) => void | Promise<void>
   message: UserThreadMessage
   rowKind?: string
 }) {
+  const { t } = useI18n()
   const userCopyText = getUserMessageCopyText(message)
+  const delivery = message.delivery
+  const failureLabel = delivery?.status === "failed"
+    ? t(delivery.reason === "cancelled"
+      ? "thread.userMessage.cancelled"
+      : "thread.userMessage.failed")
+    : ""
+  const failureTitle = delivery?.status === "failed" && delivery.error
+    ? `${failureLabel}: ${delivery.error}`
+    : failureLabel
 
   return (
     <article
@@ -1030,7 +1045,47 @@ const UserThreadMessageArticle = memo(function UserThreadMessageArticle({
         <span>You</span>
         <time>{formatTime(message.timestamp)}</time>
       </div>
-      <UserThreadMessageBubble message={message} />
+      <div
+        className={joinClassNames(
+          "user-message-bubble-row",
+          delivery && "has-delivery-status",
+        )}
+      >
+        {delivery?.status === "pending" ? (
+          <span
+            className="user-message-delivery-status is-pending"
+            role="status"
+            aria-label={t("thread.userMessage.sending")}
+            title={t("thread.userMessage.sending")}
+          >
+            <SessionRunningIcon />
+          </span>
+        ) : null}
+        {delivery?.status === "failed" ? (
+          <span
+            className="user-message-delivery-status is-failed"
+            role="group"
+            aria-label={failureTitle}
+            title={failureTitle}
+          >
+            <span className="user-message-delivery-error" aria-hidden="true">
+              <ErrorStatusIcon />
+            </span>
+            {onRetry ? (
+              <button
+                className="message-action-icon-button user-message-delivery-retry"
+                type="button"
+                aria-label={t("thread.userMessage.retry")}
+                title={t("thread.userMessage.retry")}
+                onClick={() => void onRetry(message.id)}
+              >
+                <ResetIcon />
+              </button>
+            ) : null}
+          </span>
+        ) : null}
+        <UserThreadMessageBubble message={message} />
+      </div>
       {diffCard}
       {userCopyText ? (
         <div className="user-message-actions">
@@ -1647,6 +1702,14 @@ function getReasoningDisclosureContent(item: AssistantTraceItem, fallbackLine: s
     firstLine: fallbackLine,
     text: null,
   }
+}
+
+function getReasoningLiveText(item: AssistantTraceItem, fallbackLine: string) {
+  const text = item.text ?? ""
+  const detail = item.detail ?? ""
+
+  if (text && detail) return `${text}\n${detail}`
+  return text || detail || fallbackLine
 }
 
 function normalizeTraceLogText(value?: string | null) {
@@ -3478,6 +3541,100 @@ function ImageTraceItemView({
   )
 }
 
+function ReasoningLiveLine({ text }: { text: string }) {
+  const viewportRef = useRef<HTMLDivElement | null>(null)
+  const contentRef = useRef<HTMLDivElement | null>(null)
+  const hasSyncedRef = useRef(false)
+  const lastViewportWidthRef = useRef(0)
+
+  const restartLineAdvanceAnimation = useCallback((distance: number) => {
+    const content = contentRef.current
+    if (!content) return
+
+    content.classList.remove("is-line-advancing")
+    content.style.setProperty("--trace-reasoning-line-advance-distance", `${distance}px`)
+    void content.offsetHeight
+    content.classList.add("is-line-advancing")
+  }, [])
+
+  const followLatestVisualLine = useCallback((animateLineAdvance: boolean) => {
+    const viewport = viewportRef.current
+    if (!viewport) return
+
+    const previousScrollTop = viewport.scrollTop
+    const nextScrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
+    const viewportWidth = viewport.clientWidth
+    const didViewportWidthChange =
+      hasSyncedRef.current &&
+      Math.abs(viewportWidth - lastViewportWidthRef.current) > 0.5
+    const scrollDistance = nextScrollTop - previousScrollTop
+    const lineAdvanceThreshold = Math.max(1, viewport.clientHeight * 0.5)
+    const shouldAnimateLineAdvance =
+      animateLineAdvance &&
+      hasSyncedRef.current &&
+      !didViewportWidthChange &&
+      scrollDistance >= lineAdvanceThreshold &&
+      !prefersReducedThreadMotion()
+
+    if (viewport.scrollTop !== nextScrollTop) {
+      viewport.scrollTop = nextScrollTop
+    }
+
+    if (shouldAnimateLineAdvance) {
+      restartLineAdvanceAnimation(Math.min(scrollDistance, viewport.clientHeight))
+    }
+
+    lastViewportWidthRef.current = viewportWidth
+    hasSyncedRef.current = true
+  }, [restartLineAdvanceAnimation])
+
+  useLayoutEffect(() => {
+    followLatestVisualLine(true)
+  }, [followLatestVisualLine, text])
+
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current
+    const content = contentRef.current
+    if (!viewport || typeof ResizeObserver === "undefined") return
+
+    const resizeObserver = new ResizeObserver(() => {
+      followLatestVisualLine(false)
+    })
+    resizeObserver.observe(viewport)
+    if (content) resizeObserver.observe(content)
+
+    return () => {
+      resizeObserver.disconnect()
+    }
+  }, [followLatestVisualLine])
+
+  return (
+    <div
+      ref={viewportRef}
+      className="trace-item-reasoning-live-viewport"
+      data-reasoning-live-viewport="true"
+    >
+      <div
+        ref={contentRef}
+        className="trace-item-reasoning-live-content-shell"
+        onAnimationEnd={(event) => {
+          if (event.animationName !== "thread-reasoning-line-advance") return
+          event.currentTarget.classList.remove("is-line-advancing")
+          event.currentTarget.style.removeProperty("--trace-reasoning-line-advance-distance")
+        }}
+      >
+        <ThreadRichText
+          as="div"
+          className="trace-item-text trace-item-plain-text trace-item-reasoning-live-content"
+          text={text}
+        />
+      </div>
+    </div>
+  )
+}
+
+type ReasoningDisclosurePreference = "auto" | "expanded" | "collapsed"
+
 function ReasoningTraceItemView({
   className,
   debugEntries,
@@ -3486,14 +3643,28 @@ function ReasoningTraceItemView({
   suppressReasoningMessageCompletionCollapse,
 }: TraceItemRendererProps) {
   const shouldCollapseTraceItem = shouldCollapseReasoningTraceItem(item, shouldCollapseAfterMessageCompletion)
-  const [isExpanded, setIsExpanded] = useState(() => !shouldCollapseTraceItem)
+  const [isExpanded, setIsExpanded] = useState(() => !item.isStreaming && !shouldCollapseTraceItem)
   const [isCollapsing, setIsCollapsing] = useState(false)
+  const [disclosurePreference, setDisclosurePreference] = useState<{
+    itemID: string
+    value: ReasoningDisclosurePreference
+  }>(() => ({
+    itemID: item.id,
+    value: "auto",
+  }))
   const collapseTimerRef = useRef<number | null>(null)
   const contentID = `trace-item-reasoning-${item.id}`
   const reasoningLabel = item.title || item.label || "Reasoning"
+  const currentDisclosurePreference =
+    disclosurePreference.itemID === item.id ? disclosurePreference.value : "auto"
+  const isLiveCompact = Boolean(item.isStreaming) && !isExpanded && !isCollapsing
   const shouldRenderFullReasoningContent = isExpanded || isCollapsing
   const reasoningPreview = useMemo(
     () => getReasoningDisclosurePreview(item, reasoningLabel),
+    [item.detail, item.text, reasoningLabel],
+  )
+  const reasoningLiveText = useMemo(
+    () => getReasoningLiveText(item, reasoningLabel),
     [item.detail, item.text, reasoningLabel],
   )
   const reasoningContent = shouldRenderFullReasoningContent
@@ -3510,6 +3681,24 @@ function ReasoningTraceItemView({
 
   useLayoutEffect(() => {
     clearReasoningCollapseTimer()
+
+    if (currentDisclosurePreference === "expanded") {
+      setIsCollapsing(false)
+      setIsExpanded(true)
+      return
+    }
+
+    if (currentDisclosurePreference === "collapsed") {
+      setIsCollapsing(false)
+      setIsExpanded(false)
+      return
+    }
+
+    if (item.isStreaming) {
+      setIsCollapsing(false)
+      setIsExpanded(false)
+      return
+    }
 
     if (
       suppressReasoningMessageCompletionCollapse &&
@@ -3543,7 +3732,13 @@ function ReasoningTraceItemView({
     }, THREAD_AUTO_COLLAPSE_MOTION_MS)
 
     return clearReasoningCollapseTimer
-  }, [item.id, shouldCollapseTraceItem, suppressReasoningMessageCompletionCollapse])
+  }, [
+    currentDisclosurePreference,
+    item.id,
+    item.isStreaming,
+    shouldCollapseTraceItem,
+    suppressReasoningMessageCompletionCollapse,
+  ])
 
   useEffect(() => clearReasoningCollapseTimer, [])
 
@@ -3551,7 +3746,12 @@ function ReasoningTraceItemView({
     if (event?.target instanceof Element && event.target.closest("a[href]")) return
     clearReasoningCollapseTimer()
     setIsCollapsing(false)
-    setIsExpanded((current) => !current)
+    const nextIsExpanded = !isExpanded
+    setDisclosurePreference({
+      itemID: item.id,
+      value: nextIsExpanded ? "expanded" : "collapsed",
+    })
+    setIsExpanded(nextIsExpanded)
   }
 
   function handleReasoningKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -3562,8 +3762,16 @@ function ReasoningTraceItemView({
 
   return (
     <article
-      className={joinClassNames(className, isExpanded ? "is-expanded" : "is-collapsed", isCollapsing && "is-collapsing")}
+      className={joinClassNames(
+        className,
+        isExpanded ? "is-expanded" : "is-collapsed",
+        isCollapsing && "is-collapsing",
+        isLiveCompact && "is-live-compact",
+      )}
       data-kind={item.kind}
+      data-reasoning-display-mode={
+        isLiveCompact ? "live-compact" : isExpanded ? "expanded" : "completed-collapsed"
+      }
     >
       <div
         className="trace-item-reasoning-toggle"
@@ -3574,11 +3782,15 @@ function ReasoningTraceItemView({
         onClick={handleReasoningToggle}
         onKeyDown={handleReasoningKeyDown}
       >
-        <ThreadRichText
-          as="div"
-          className={reasoningSummaryClassName}
-          text={reasoningContent?.firstLine ?? reasoningPreview.text}
-        />
+        {isLiveCompact ? (
+          <ReasoningLiveLine text={reasoningLiveText} />
+        ) : (
+          <ThreadRichText
+            as="div"
+            className={reasoningSummaryClassName}
+            text={reasoningContent?.firstLine ?? reasoningPreview.text}
+          />
+        )}
       </div>
       {shouldRenderFullReasoningContent && hasReasoningBodyContent ? (
         <div
@@ -4913,6 +5125,7 @@ function getThreadViewPropsChangeReason(left: ThreadViewViewportProps, right: Th
   if (!areArraysShallowEqual(left.pendingPermissionRequests, right.pendingPermissionRequests)) return "pendingPermissionRequests"
   if (left.permissionRequestActionError !== right.permissionRequestActionError) return "permissionRequestActionError"
   if (left.permissionRequestActionRequestID !== right.permissionRequestActionRequestID) return "permissionRequestActionRequestID"
+  if (left.onRetryUserMessage !== right.onRetryUserMessage) return "onRetryUserMessage"
   if (left.addImageToComposerDisabledReason !== right.addImageToComposerDisabledReason) {
     return "addImageToComposerDisabledReason"
   }
@@ -5033,6 +5246,7 @@ function VisibleThreadView({
   addImageToComposerDisabledReason = null,
   pendingConversationInputs = [],
   pendingPermissionRequests,
+  onRetryUserMessage,
   permissionRequestActionError,
   permissionRequestActionRequestID,
   scrollStateKey,
@@ -6043,6 +6257,7 @@ function VisibleThreadView({
         onOpenImagePreview={handleOpenImagePreview}
         onPermissionRequestResponse={onPermissionRequestResponse}
         onProposedPlanConfirm={onProposedPlanConfirm}
+        onRetryUserMessage={onRetryUserMessage}
         pendingPermissionRequests={pendingPermissionRequests}
         permissionRequestActionError={permissionRequestActionError}
         permissionRequestActionRequestID={permissionRequestActionRequestID}

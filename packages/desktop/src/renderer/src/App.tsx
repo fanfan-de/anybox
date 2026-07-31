@@ -798,6 +798,7 @@ function SessionPopoutApp({ workbenchContext }: { workbenchContext: WorkbenchWin
     handlePickComposerAttachments,
     handlePasteComposerImageAttachments,
     handleRemoveComposerAttachment,
+    handleRetryUserMessage,
     handleSend,
     handlePlanModeToggle,
     handleSessionBranchSelect,
@@ -1043,6 +1044,7 @@ function SessionPopoutApp({ workbenchContext }: { workbenchContext: WorkbenchWin
             onPickComposerAttachments={handlePickComposerAttachments}
             onPlanModeToggle={handlePlanModeToggle}
             onRemoveComposerAttachment={handleRemoveComposerAttachment}
+            onRetryUserMessage={handleRetryUserMessage}
             onSelectCreateSessionTab={() => undefined}
             onSelectSessionTab={handleCanvasSessionTabSelect}
             onSend={handleSend}
@@ -1279,6 +1281,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     handleProjectPin,
     handleProjectRemove,
     handleRemoveComposerAttachment,
+    handleRetryUserMessage,
     handleSend,
     handlePlanModeToggle,
     handleSessionBranchSelect,
@@ -3157,6 +3160,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                 onPickComposerAttachments={handlePickComposerAttachments}
                 onPasteComposerImageAttachments={handlePasteComposerImageAttachments}
                 onRemoveComposerAttachment={handleRemoveComposerAttachment}
+                onRetryUserMessage={handleRetryUserMessage}
                 onSelectCreateSessionTab={handleCreateSessionTabSelect}
                 onSelectSessionTab={handleCanvasSessionTabSelect}
                 onCancelSend={handleCancelSend}

@@ -189,7 +189,7 @@ test("provider imports SDK subpath packages through their install package", asyn
         expect(capturedImports).toEqual([
           {
             pkg: "@ai-sdk/google-vertex",
-            version: "4.0.121",
+            version: "5.0.36",
             importSpecifier: "@ai-sdk/google-vertex/anthropic",
           },
         ])

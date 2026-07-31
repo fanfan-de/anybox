@@ -2,6 +2,7 @@ import { useRef } from "react"
 import { createAgentSessionEventRouter } from "../agent-session/event-router"
 import { createAgentSessionStore } from "../agent-session/store"
 import type {
+  OptimisticUserSubmission,
   PendingAgentStream,
   PendingConversationInput,
   PermissionRequest
@@ -16,6 +17,7 @@ interface StreamPermissionControllerOptions {
 
 export function useStreamPermissionController({ initialSessionID, store }: StreamPermissionControllerOptions) {
   const pendingStreamsRef = useRef<Record<string, PendingAgentStream>>({})
+  const optimisticUserSubmissionsRef = useRef<Record<string, OptimisticUserSubmission>>({})
   const historyRequestRef = useRef<Record<string, number>>({})
   const sessionDataLoadCacheRef = useRef(createSessionDataLoadCache())
   const permissionRequestsRequestRef = useRef<Record<string, number>>({})
@@ -100,6 +102,7 @@ export function useStreamPermissionController({ initialSessionID, store }: Strea
     messageTreeBySession,
     pendingConversationInputsBySession,
     pendingPermissionRequestsBySession,
+    optimisticUserSubmissionsRef,
     pendingStreamsRef,
     permissionRequestActionError,
     permissionRequestActionRequestID,

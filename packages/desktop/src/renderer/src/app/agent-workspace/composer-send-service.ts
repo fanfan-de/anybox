@@ -14,6 +14,7 @@ import type {
   ComposerAttachment,
   ComposerCommentReference,
   ComposerDraftState,
+  OptimisticUserSubmission,
   PendingAgentStream,
   PendingConversationInput,
   ReasoningEffort,
@@ -45,7 +46,7 @@ export function normalizeQuestionAnswerText(input?: {
   return ""
 }
 
-function parseComposerModelValue(value: string | null | undefined) {
+export function parseComposerModelValue(value: string | null | undefined) {
   if (!value) return undefined
   const [providerID, ...rest] = value.split("/")
   const modelID = rest.join("/")
@@ -74,7 +75,12 @@ interface SendPromptToSessionInput {
   backendSessionID?: string | null
   commentReferences?: ComposerCommentReference[]
   displayText?: string
+  modelOverride?: {
+    providerID: string
+    modelID: string
+  }
   parentMessageID?: string | null
+  prepareBeforeSend?: (() => Promise<void>) | null
   preserveComposerState?: boolean
   questionAnswer?: {
     questionID: string
@@ -83,6 +89,11 @@ interface SendPromptToSessionInput {
   }
   reasoningEffort?: ReasoningEffort | null
   references?: UserThreadMessage["references"]
+  resolveModelBeforeSend?: (() => Promise<{
+    providerID: string
+    modelID: string
+  } | undefined>) | null
+  retryUserMessageID?: string
   selectedModel?: string | null
   selectedSkillIDs: string[]
   turnMcpServerIDs: string[]
@@ -90,6 +101,7 @@ interface SendPromptToSessionInput {
   submissionMode?: UserThreadMessage["submissionMode"]
   tabKey: string
   text: string
+  waitForPendingModelSelection?: (() => Promise<void>) | null
   workspace: WorkspaceGroup
 }
 
@@ -100,10 +112,13 @@ interface SendPromptToSessionEnvironment {
   appendConversationMessages: (sessionID: string, nextMessages: ThreadMessage[]) => void
   replaceConversationMessages: (sessionID: string, nextMessages: ThreadMessage[]) => void
   getConversationMessages: (sessionID: string) => ThreadMessage[]
+  optimisticUserSubmissionsRef: MutableRefObject<Record<string, OptimisticUserSubmission>>
   pendingStreamsRef: MutableRefObject<Record<string, PendingAgentStream>>
   platform: string
   refreshWorkspaceFromDirectory: (directory: string) => void | Promise<WorkspaceGroup | null>
   reloadSessionHistoryForSession: (sessionID: string, backendSessionID?: string) => Promise<void>
+  prepareUserMessageRetry: (sessionID: string, userThreadMessageID: string) => boolean
+  removeConversationMessage: (sessionID: string, messageID: string) => void
   sessionDirectoryBySession: Record<string, string>
   setAgentSessions: (update: WorkspaceStateUpdater<Record<string, string>>) => void
   setComposerAttachmentsByTabKey: (
@@ -123,6 +138,11 @@ interface SendPromptToSessionEnvironment {
     assistantMessageID: string,
     updater: (message: AssistantThreadMessage) => AssistantThreadMessage,
   ) => void
+  updateUserMessageDelivery: (
+    sessionID: string,
+    userThreadMessageID: string,
+    delivery: UserThreadMessage["delivery"],
+  ) => boolean
 }
 
 export async function sendPromptToSession(
@@ -136,10 +156,13 @@ export async function sendPromptToSession(
     appendConversationMessages,
     replaceConversationMessages,
     getConversationMessages,
+    optimisticUserSubmissionsRef,
     pendingStreamsRef,
     platform,
     refreshWorkspaceFromDirectory,
     reloadSessionHistoryForSession,
+    prepareUserMessageRetry,
+    removeConversationMessage,
     sessionDirectoryBySession,
     setAgentSessions,
     setComposerAttachmentsByTabKey,
@@ -149,15 +172,18 @@ export async function sendPromptToSession(
     setSessionDirectoryBySession,
     setWorkspaces,
     updateAssistantConversationMessage,
+    updateUserMessageDelivery,
   } = environment
   const {
     attachments,
     displayText,
+    modelOverride,
     parentMessageID,
     preserveComposerState,
     questionAnswer,
     reasoningEffort,
     references = [],
+    retryUserMessageID,
     selectedModel,
     session,
     selectedSkillIDs,
@@ -165,6 +191,7 @@ export async function sendPromptToSession(
     submissionMode,
     tabKey,
     text,
+    waitForPendingModelSelection,
     workspace,
   } = input
   const uiSessionID = session.id
@@ -175,12 +202,13 @@ export async function sendPromptToSession(
   const pendingInputMode = usesBackendStream && (submissionMode === "queued" || submissionMode === "steer")
     ? submissionMode
     : null
+  const usesOptimisticUserMessage = usesBackendStream && !pendingInputMode
   const normalizedText = text.trim() || normalizeQuestionAnswerText(questionAnswer)
   const attachmentInputs = attachments.map((attachment) => ({
     path: attachment.path,
     name: attachment.name,
   }))
-  const model = resolveComposerTurnModel(selectedModel, session)
+  let model = modelOverride ?? resolveComposerTurnModel(selectedModel, session)
   const effectiveSelectedSkillIDs = resolveComposerSkillSelectionForSession(session, selectedSkillIDs)
   const userMessageDisplayText = displayText?.trim() || normalizeQuestionAnswerText(questionAnswer) || undefined
   const userMessage: UserThreadMessage = buildUserThreadMessage({
@@ -190,25 +218,87 @@ export async function sendPromptToSession(
     questionAnswer,
     references,
     turnMcpServerIDs,
+    ...(retryUserMessageID ? { id: retryUserMessageID } : {}),
   })
+  const optimisticUserMessage: UserThreadMessage = usesOptimisticUserMessage
+    ? {
+        ...userMessage,
+        delivery: { status: "pending" },
+      }
+    : userMessage
+  const renderedUserMessage = optimisticUserMessage
   const pendingInput: PendingConversationInput | null = pendingInputMode
     ? {
-        id: userMessage.id,
+        id: renderedUserMessage.id,
         sessionID: uiSessionID,
-        text: userMessage.text,
+        text: renderedUserMessage.text,
         ...(normalizedText ? { transportText: normalizedText } : {}),
-        ...(userMessage.displayText ? { displayText: userMessage.displayText } : {}),
-        ...(userMessage.attachments?.length ? { attachments: userMessage.attachments } : {}),
-        ...(userMessage.references?.length ? { references: userMessage.references } : {}),
-        ...(userMessage.questionAnswer ? { questionAnswer: userMessage.questionAnswer } : {}),
-        ...(userMessage.turnMcpServerIDs?.length ? { turnMcpServerIDs: userMessage.turnMcpServerIDs } : {}),
+        ...(renderedUserMessage.displayText ? { displayText: renderedUserMessage.displayText } : {}),
+        ...(renderedUserMessage.attachments?.length ? { attachments: renderedUserMessage.attachments } : {}),
+        ...(renderedUserMessage.references?.length ? { references: renderedUserMessage.references } : {}),
+        ...(renderedUserMessage.questionAnswer ? { questionAnswer: renderedUserMessage.questionAnswer } : {}),
+        ...(renderedUserMessage.turnMcpServerIDs?.length ? { turnMcpServerIDs: renderedUserMessage.turnMcpServerIDs } : {}),
         mode: pendingInputMode,
         status: "pending",
-        createdAt: userMessage.timestamp,
+        createdAt: renderedUserMessage.timestamp,
       }
     : null
 
-  if (!preserveComposerState) {
+  if (usesOptimisticUserMessage) {
+    const existingSubmission = optimisticUserSubmissionsRef.current[renderedUserMessage.id]
+    const request = existingSubmission?.request ?? {
+      attachments: attachments.map((attachment) => ({ ...attachment })),
+      ...(displayText ? { displayText } : {}),
+      ...(parentMessageID ? { parentMessageID } : {}),
+      ...(questionAnswer
+        ? {
+            questionAnswer: {
+              ...questionAnswer,
+              ...(questionAnswer.selectedOptions
+                ? { selectedOptions: [...questionAnswer.selectedOptions] }
+                : {}),
+            },
+          }
+        : {}),
+      ...(reasoningEffort ? { reasoningEffort } : {}),
+      ...(references.length ? { references: references.map((reference) => ({ ...reference })) } : {}),
+      ...(model ? { model: { ...model } } : {}),
+      selectedSkillIDs: [...effectiveSelectedSkillIDs],
+      tabKey,
+      text: normalizedText,
+      turnMcpServerIDs: [...turnMcpServerIDs],
+    }
+    const retiredClientTurnIDs = [
+      ...new Set([
+        ...(existingSubmission?.retiredClientTurnIDs ?? []),
+        ...(existingSubmission?.activeClientTurnID
+          ? [existingSubmission.activeClientTurnID]
+          : []),
+      ]),
+    ]
+    const retiredBackendTurnIDs = [
+      ...new Set([
+        ...(existingSubmission?.retiredBackendTurnIDs ?? []),
+        ...(existingSubmission?.backendTurnID
+          ? [existingSubmission.backendTurnID]
+          : []),
+      ]),
+    ]
+    optimisticUserSubmissionsRef.current[renderedUserMessage.id] = {
+      ...(existingSubmission?.backendSessionID
+        ? { backendSessionID: existingSubmission.backendSessionID }
+        : {}),
+      ...(input.backendSessionID ? { backendSessionID: input.backendSessionID } : {}),
+      request,
+      ...(retiredBackendTurnIDs.length > 0 ? { retiredBackendTurnIDs } : {}),
+      ...(retiredClientTurnIDs.length > 0 ? { retiredClientTurnIDs } : {}),
+      retrying: Boolean(retryUserMessageID),
+      sessionID: uiSessionID,
+      userThreadMessageID: renderedUserMessage.id,
+    }
+  }
+
+  if (!preserveComposerState && !retryUserMessageID) {
     setComposerDraftStateByTabKey((current) => ({
       ...current,
       [tabKey]: createEmptyComposerDraftState(),
@@ -221,6 +311,8 @@ export async function sendPromptToSession(
 
   if (pendingInput) {
     setPendingConversationInputsBySession((current) => appendPendingConversationInput(current, pendingInput))
+  } else if (retryUserMessageID) {
+    prepareUserMessageRetry(uiSessionID, retryUserMessageID)
   } else if (parentMessageID) {
     const currentMessages = getConversationMessages(uiSessionID)
     const parentMessageIndex = currentMessages.findIndex((message) =>
@@ -229,9 +321,9 @@ export async function sendPromptToSession(
         : message.id === parentMessageID,
     )
     const parentPathMessages = parentMessageIndex >= 0 ? currentMessages.slice(0, parentMessageIndex + 1) : currentMessages
-    replaceConversationMessages(uiSessionID, [...parentPathMessages, userMessage])
+    replaceConversationMessages(uiSessionID, [...parentPathMessages, renderedUserMessage])
   } else {
-    appendConversationMessages(uiSessionID, [userMessage])
+    appendConversationMessages(uiSessionID, [renderedUserMessage])
   }
   setWorkspaces((prev) => {
     const nextUpdatedAt = Date.now()
@@ -243,7 +335,7 @@ export async function sendPromptToSession(
         ? {
             ...currentSession,
             status: "Live",
-            summary: userMessage.text,
+            summary: renderedUserMessage.text,
             updated: nextUpdatedAt,
           }
         : currentSession,
@@ -251,26 +343,59 @@ export async function sendPromptToSession(
     }))
   })
 
-  if (!agentConnected || !window.desktop?.createAgentSession || !agentSession) {
-    const fallback = buildAgentThreadMessage(userMessage.text, session, workspace.name, platform)
-    startTransition(() => {
-      appendConversationMessages(uiSessionID, [fallback])
-    })
-    return
+  const createAgentSession = window.desktop?.createAgentSession
+  const hasAgentTransport = Boolean(
+    agentConnected &&
+    createAgentSession &&
+    agentSession,
+  )
+  if (hasAgentTransport) {
+    setIsSendingByTabKey((current) => ({
+      ...current,
+      [tabKey]: true,
+    }))
   }
-
-  setIsSendingByTabKey((current) => ({
-    ...current,
-    [tabKey]: true,
-  }))
   let streamingMessageID: string | null = null
   let streamID: string | null = null
 
   try {
+    if (waitForPendingModelSelection) {
+      await waitForPendingModelSelection().catch(() => undefined)
+    }
+    if (input.resolveModelBeforeSend) {
+      model = await input.resolveModelBeforeSend()
+      const optimisticSubmission = usesOptimisticUserMessage
+        ? optimisticUserSubmissionsRef.current[renderedUserMessage.id]
+        : undefined
+      if (optimisticSubmission) {
+        const {
+          model: _previousModel,
+          ...requestWithoutModel
+        } = optimisticSubmission.request
+        optimisticSubmission.request = model
+          ? {
+              ...requestWithoutModel,
+              model: { ...model },
+            }
+          : requestWithoutModel
+      }
+    }
+    if (input.prepareBeforeSend) {
+      await input.prepareBeforeSend()
+    }
+
+    if (!hasAgentTransport || !agentSession || !createAgentSession) {
+      const fallback = buildAgentThreadMessage(renderedUserMessage.text, session, workspace.name, platform)
+      startTransition(() => {
+        appendConversationMessages(uiSessionID, [fallback])
+      })
+      return
+    }
+
     let backendSessionID = input.backendSessionID ?? agentSessions[uiSessionID]
     if (!backendSessionID) {
       const requestedSessionDirectory = sessionDirectoryBySession[uiSessionID] ?? workspace.directory
-      const created = await window.desktop.createAgentSession({
+      const created = await createAgentSession({
         directory: requestedSessionDirectory || agentDefaultDirectory || undefined,
       })
       backendSessionID = created.session.id
@@ -287,9 +412,20 @@ export async function sendPromptToSession(
     if (!backendSessionID) {
       throw new Error("Backend session id is missing")
     }
+    const optimisticSubmission = usesOptimisticUserMessage
+      ? optimisticUserSubmissionsRef.current[renderedUserMessage.id]
+      : undefined
+    if (optimisticSubmission) {
+      optimisticSubmission.backendSessionID = backendSessionID
+    }
 
     if (canStream) {
-      const streamingMessage = buildStreamingAssistantThreadMessage(userMessage.text)
+      const streamingMessage = buildStreamingAssistantThreadMessage(
+        renderedUserMessage.text,
+        usesOptimisticUserMessage
+          ? { backendTurnID: `pending:${renderedUserMessage.id}` }
+          : {},
+      )
       const assistantThreadMessageID = streamingMessage.id
       if (!assistantThreadMessageID) {
         throw new Error("Assistant stream target is missing")
@@ -303,9 +439,13 @@ export async function sendPromptToSession(
         assistantThreadMessageID,
         ...(pendingInput ? { pendingInput } : {}),
         ...(pendingInput ? { pendingInputID: pendingInput.id } : {}),
-        userThreadMessageID: userMessage.id,
+        userThreadMessageID: renderedUserMessage.id,
         requestedMode: pendingInput?.mode === "steer" ? "steer" : pendingInput?.mode === "queued" ? "queue" : "new-turn",
         createdAssistantThreadMessageID: streamingMessage.id,
+      }
+      if (optimisticSubmission) {
+        optimisticSubmission.activeClientTurnID = streamID
+        optimisticSubmission.assistantThreadMessageID = streamingMessage.id
       }
 
       if (!pendingInput) {
@@ -349,7 +489,7 @@ export async function sendPromptToSession(
       throw new Error("Desktop preload did not return batch agent events")
     }
 
-    const assistantMessage = buildAgentThreadMessageFromEvents(result.events, userMessage.text)
+    const assistantMessage = buildAgentThreadMessageFromEvents(result.events, renderedUserMessage.text)
     startTransition(() => {
       appendConversationMessages(uiSessionID, [assistantMessage])
     })
@@ -359,6 +499,27 @@ export async function sendPromptToSession(
     void refreshWorkspaceFromDirectory(workspace.directory)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+    const optimisticSubmission = usesOptimisticUserMessage
+      ? optimisticUserSubmissionsRef.current[renderedUserMessage.id]
+      : undefined
+    const failedOptimisticSubmission = Boolean(
+      optimisticSubmission &&
+      (
+        !streamID ||
+        !optimisticSubmission.activeClientTurnID ||
+        optimisticSubmission.activeClientTurnID === streamID
+      ),
+    )
+    if (failedOptimisticSubmission && optimisticSubmission) {
+      optimisticSubmission.retrying = false
+      updateUserMessageDelivery(uiSessionID, renderedUserMessage.id, {
+        status: "failed",
+        error: message,
+      })
+      if (streamingMessageID) {
+        removeConversationMessage(uiSessionID, streamingMessageID)
+      }
+    }
     if (streamID) {
       delete pendingStreamsRef.current[streamID]
     }
@@ -368,21 +529,25 @@ export async function sendPromptToSession(
       )
     }
 
-    startTransition(() => {
-      if (streamingMessageID) {
-        const failedMessageID = streamingMessageID
-        updateAssistantConversationMessage(uiSessionID, failedMessageID, (current) => buildFailureThreadMessage(message, current))
-        return
-      }
+    if (!failedOptimisticSubmission) {
+      startTransition(() => {
+        if (streamingMessageID) {
+          const failedMessageID = streamingMessageID
+          updateAssistantConversationMessage(uiSessionID, failedMessageID, (current) => buildFailureThreadMessage(message, current))
+          return
+        }
 
-      appendConversationMessages(uiSessionID, [buildFailureThreadMessage(message)])
-    })
+        appendConversationMessages(uiSessionID, [buildFailureThreadMessage(message)])
+      })
+    }
   } finally {
-    setIsSendingByTabKey((current) => {
-      if (!(tabKey in current)) return current
-      const next = { ...current }
-      delete next[tabKey]
-      return next
-    })
+    if (hasAgentTransport) {
+      setIsSendingByTabKey((current) => {
+        if (!(tabKey in current)) return current
+        const next = { ...current }
+        delete next[tabKey]
+        return next
+      })
+    }
   }
 }

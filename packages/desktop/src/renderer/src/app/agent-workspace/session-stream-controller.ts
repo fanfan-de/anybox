@@ -31,6 +31,7 @@ import type {
   AssistantThreadMessage,
   ConversationTurnMap,
   LoadedSessionHistoryMessage,
+  OptimisticUserSubmission,
   PendingAgentStream,
   PendingConversationInput,
   PermissionRequest,
@@ -43,6 +44,7 @@ import type {
   ThreadMessage,
   ThreadTurn,
   ThreadTurnStatus,
+  UserMessageDelivery,
   UserThreadMessage,
   WorkspaceGroup,
 } from "../types"
@@ -52,6 +54,13 @@ import {
   removePendingConversationInput,
   updatePendingConversationInput,
 } from "../pending-conversation-inputs"
+import {
+  canBindOptimisticUserAttemptToBackendTurn,
+  isCurrentOptimisticUserAttempt,
+  readOptimisticSubmissionError,
+  resetUserMessageTurnForRetry,
+  updateUserMessageDeliveryInTurns,
+} from "../optimistic-user-submission"
 import { mergeUserMessagePresentationState, persistUserMessages, readPersistedUserMessages } from "../user-message-presentation"
 import { findSession } from "../workspace"
 import {
@@ -1702,6 +1711,7 @@ interface UseSessionStreamControllerOptions {
   visibleCanvasSessionIDs: string[]
   onFocusSession: (sessionID: string, turnID?: string) => void
   onSessionCanvasActivity: (sessionID: string) => void
+  optimisticUserSubmissionsRef: MutableRefObject<Record<string, OptimisticUserSubmission>>
   pendingConversationInputsBySession: Record<string, PendingConversationInput[]>
   pendingStreamsRef: MutableRefObject<Record<string, PendingAgentStream>>
   permissionRequestsRequestRef: MutableRefObject<Record<string, number>>
@@ -1752,6 +1762,7 @@ export function useSessionStreamController({
   visibleCanvasSessionIDs,
   onFocusSession,
   onSessionCanvasActivity,
+  optimisticUserSubmissionsRef,
   pendingConversationInputsBySession,
   pendingStreamsRef,
   permissionRequestsRequestRef,
@@ -2161,6 +2172,49 @@ export function useSessionStreamController({
     )
   }
 
+  function updateUserMessageDelivery(
+    sessionID: string,
+    userThreadMessageID: string,
+    delivery: UserMessageDelivery | undefined,
+  ) {
+    return commitSessionTurnUpdate(
+      sessionID,
+      (currentTurns) =>
+        updateUserMessageDeliveryInTurns(currentTurns, userThreadMessageID, delivery),
+    )
+  }
+
+  function prepareUserMessageRetry(sessionID: string, userThreadMessageID: string) {
+    return commitSessionTurnUpdate(
+      sessionID,
+      (currentTurns) => resetUserMessageTurnForRetry(currentTurns, userThreadMessageID),
+    )
+  }
+
+  function failOptimisticUserSubmission(input: {
+    activeClientTurnID?: string
+    error?: string
+    reason?: "cancelled"
+    userThreadMessageID: string
+  }) {
+    const submission = optimisticUserSubmissionsRef.current[input.userThreadMessageID]
+    if (!submission) return false
+    if (!isCurrentOptimisticUserAttempt(submission, input.activeClientTurnID)) {
+      return false
+    }
+
+    submission.retrying = false
+    updateUserMessageDelivery(submission.sessionID, submission.userThreadMessageID, {
+      status: "failed",
+      ...(input.error ? { error: input.error } : {}),
+      ...(input.reason ? { reason: input.reason } : {}),
+    })
+    if (submission.assistantThreadMessageID) {
+      removeConversationMessage(submission.sessionID, submission.assistantThreadMessageID)
+    }
+    return true
+  }
+
   function clearLatestSteerUserMessageForAssistant(sessionID: string, assistantThreadMessageID: string) {
     commitSessionTurnUpdate(sessionID, (currentTurns) => {
       const current = deriveActiveMessages(currentTurns)
@@ -2223,6 +2277,8 @@ export function useSessionStreamController({
     userThreadMessageID: string
     beforeMessageID?: string
   }) {
+    delete optimisticUserSubmissionsRef.current[input.userThreadMessageID]
+
     if (commitPendingConversationInputAsUserThreadMessage({
       sessionID: input.sessionID,
       inputID: input.userThreadMessageID,
@@ -2235,11 +2291,14 @@ export function useSessionStreamController({
       mapMessageInTurns(currentTurns, (message) => {
         if (message.kind !== "user" || message.id !== input.userThreadMessageID) return message
         const {
+          delivery: _delivery,
           submissionMode: _submissionMode,
           streamInsertion: _streamInsertion,
           ...regularMessage
         } = message
-        return message.submissionMode || message.streamInsertion ? regularMessage : message
+        return message.submissionMode || message.streamInsertion || message.delivery
+          ? regularMessage
+          : message
       }), { persistUsers: true })
   }
 
@@ -2358,11 +2417,21 @@ export function useSessionStreamController({
       target.backendTurnID === input.backendTurnID &&
       Boolean(target.userThreadMessageID)
     )
-    if (!pending?.userThreadMessageID) return
+    const optimisticSubmission = Object.values(optimisticUserSubmissionsRef.current).find((submission) =>
+      submission.sessionID === input.uiSessionID &&
+      (submission.backendSessionID ?? input.backendSessionID) === input.backendSessionID &&
+      submission.backendTurnID === input.backendTurnID
+    )
+    const userThreadMessageID =
+      pending?.userThreadMessageID ??
+      optimisticSubmission?.userThreadMessageID
+    if (!userThreadMessageID) return
     revealBackendRecordedUserThreadMessage({
-      sessionID: pending.sessionID,
-      userThreadMessageID: pending.userThreadMessageID,
-      beforeMessageID: pending.assistantThreadMessageID,
+      sessionID: pending?.sessionID ?? optimisticSubmission!.sessionID,
+      userThreadMessageID,
+      beforeMessageID:
+        pending?.assistantThreadMessageID ??
+        optimisticSubmission?.assistantThreadMessageID,
     })
   }
 
@@ -2793,6 +2862,17 @@ export function useSessionStreamController({
     target.backendSessionID = backendSessionID
     target.backendTurnID = backendTurnID
     target.executionMode = executionMode.mode
+    const optimisticSubmission = target.userThreadMessageID
+      ? optimisticUserSubmissionsRef.current[target.userThreadMessageID]
+      : undefined
+    if (
+      optimisticSubmission &&
+      optimisticSubmission.activeClientTurnID === streamID
+    ) {
+      optimisticSubmission.backendSessionID = backendSessionID
+      optimisticSubmission.backendTurnID = backendTurnID
+      optimisticSubmission.assistantThreadMessageID = target.assistantThreadMessageID
+    }
     commitSessionTurnUpdate(target.sessionID, (currentTurns) => (
       bindExactPendingRequestTurnToCanonical(currentTurns, {
         turnID: backendTurnID,
@@ -2829,6 +2909,12 @@ export function useSessionStreamController({
       appendConversationMessages(target.sessionID, [streamingMessage])
     } else {
       target.assistantThreadMessageID = route.assistantThreadMessageID
+    }
+    if (
+      optimisticSubmission &&
+      optimisticSubmission.activeClientTurnID === streamID
+    ) {
+      optimisticSubmission.assistantThreadMessageID = target.assistantThreadMessageID
     }
 
     if (route.removeAssistantThreadMessageID) {
@@ -2938,6 +3024,16 @@ export function useSessionStreamController({
 
       target.backendSessionID = backendSessionID
       target.backendTurnID = backendTurnID
+      const optimisticSubmission = target.userThreadMessageID
+        ? optimisticUserSubmissionsRef.current[target.userThreadMessageID]
+        : undefined
+      if (
+        optimisticSubmission &&
+        optimisticSubmission.activeClientTurnID === streamEvent.streamID
+      ) {
+        optimisticSubmission.backendSessionID = backendSessionID
+        optimisticSubmission.backendTurnID = backendTurnID
+      }
       applyRuntimeTurnEventToConversationTurns({
         uiSessionID: target.sessionID,
         backendSessionID,
@@ -2976,16 +3072,46 @@ export function useSessionStreamController({
       })
     }
 
-    applyStreamEventToAssistantMessage(
-      {
-        sessionID: target.sessionID,
-        assistantThreadMessageID,
-        identity: llmSegmentIdentity ?? undefined,
-      },
-      streamEvent,
-      LIVE_SESSION_ACTIVITY_PRESENTATION,
+    const runtimeType = readRuntimeStreamType(streamEvent)
+    const failedBeforeUserConfirmation = Boolean(
+      target.userThreadMessageID &&
+      target.requestedMode === "new-turn" &&
+      (
+        streamEvent.event === "error" ||
+        runtimeType === "turn.failed" ||
+        runtimeType === "turn.cancelled"
+      ) &&
+      failOptimisticUserSubmission({
+        activeClientTurnID: streamEvent.streamID,
+        error: runtimeType === "turn.cancelled"
+          ? undefined
+          : readOptimisticSubmissionError(streamEvent.data),
+        reason: runtimeType === "turn.cancelled" ? "cancelled" : undefined,
+        userThreadMessageID: target.userThreadMessageID,
+      }),
     )
-    if (target.userThreadMessageID && isBackendUserMessageRecordedStreamEvent(streamEvent)) {
+    if (!failedBeforeUserConfirmation) {
+      applyStreamEventToAssistantMessage(
+        {
+          sessionID: target.sessionID,
+          assistantThreadMessageID,
+          identity: llmSegmentIdentity ?? undefined,
+        },
+        streamEvent,
+        LIVE_SESSION_ACTIVITY_PRESENTATION,
+      )
+    }
+    const currentOptimisticSubmission = target.userThreadMessageID
+      ? optimisticUserSubmissionsRef.current[target.userThreadMessageID]
+      : undefined
+    const canConfirmTargetUserMessage =
+      !currentOptimisticSubmission ||
+      currentOptimisticSubmission.activeClientTurnID === streamEvent.streamID
+    if (
+      target.userThreadMessageID &&
+      canConfirmTargetUserMessage &&
+      isBackendUserMessageRecordedStreamEvent(streamEvent)
+    ) {
       revealBackendRecordedUserThreadMessage({
         sessionID: target.sessionID,
         userThreadMessageID: target.userThreadMessageID,
@@ -3263,17 +3389,71 @@ export function useSessionStreamController({
       backendSessionID: streamEvent.sessionID,
       turnID: backendTurnID,
     })
+    const sessionOptimisticSubmissions = Object.values(
+      optimisticUserSubmissionsRef.current,
+    ).filter((submission) =>
+      submission.sessionID === uiSessionID &&
+      (submission.backendSessionID ?? streamEvent.sessionID) ===
+        streamEvent.sessionID,
+    )
+    const retiredAttempt = sessionOptimisticSubmissions.find((submission) =>
+      submission.retiredBackendTurnIDs?.includes(backendTurnID),
+    )
+    const eligibleOptimisticSubmissions =
+      sessionOptimisticSubmissions.filter((submission) =>
+        canBindOptimisticUserAttemptToBackendTurn(
+          submission,
+          backendTurnID,
+        ),
+      )
+    const pendingSubmission = pendingTurnTarget?.userThreadMessageID
+      ? optimisticUserSubmissionsRef.current[
+          pendingTurnTarget.userThreadMessageID
+        ]
+      : undefined
+    const pendingTargetBelongsToRetriedAttempt = Boolean(
+      pendingSubmission &&
+      !canBindOptimisticUserAttemptToBackendTurn(
+        pendingSubmission,
+        backendTurnID,
+      ),
+    )
+    const correlatedPendingTurnTarget =
+      retiredAttempt || pendingTargetBelongsToRetriedAttempt
+        ? undefined
+        : pendingTurnTarget
+    const optimisticSubmission = (
+      correlatedPendingTurnTarget?.userThreadMessageID
+        ? optimisticUserSubmissionsRef.current[
+            correlatedPendingTurnTarget.userThreadMessageID
+          ]
+        : undefined
+    ) ??
+      eligibleOptimisticSubmissions.find(
+        (submission) => submission.backendTurnID === backendTurnID,
+      ) ??
+      (eligibleOptimisticSubmissions.length === 1
+        ? eligibleOptimisticSubmissions[0]
+        : undefined)
+    if (optimisticSubmission) {
+      optimisticSubmission.backendSessionID = streamEvent.sessionID
+      optimisticSubmission.backendTurnID = backendTurnID
+    }
     const fallbackAssistantThreadMessageID =
-      existingTurnTarget?.assistantThreadMessageID ?? pendingTurnTarget?.assistantThreadMessageID
-    if (pendingTurnTarget && !pendingTurnTarget.backendTurnID) {
-      pendingTurnTarget.backendTurnID = backendTurnID
+      existingTurnTarget?.assistantThreadMessageID ??
+      correlatedPendingTurnTarget?.assistantThreadMessageID
+    if (
+      correlatedPendingTurnTarget &&
+      !correlatedPendingTurnTarget.backendTurnID
+    ) {
+      correlatedPendingTurnTarget.backendTurnID = backendTurnID
     }
     applyRuntimeTurnEventToConversationTurns({
       uiSessionID,
       backendSessionID: streamEvent.sessionID,
       streamEvent,
       fallbackAssistantThreadMessageID,
-      fallbackUserMessageID: pendingTurnTarget?.userThreadMessageID,
+      fallbackUserMessageID: correlatedPendingTurnTarget?.userThreadMessageID,
     })
     if (runtimeType === "turn.started" && !existingTurnTarget?.assistantThreadMessageID) {
       sessionEventRouterRef.current.setTurnTarget(streamEvent.sessionID, backendTurnID, {
@@ -3332,15 +3512,36 @@ export function useSessionStreamController({
       assistantThreadMessageID,
     })
 
-    applyStreamEventToAssistantMessage(
-      {
-        sessionID: uiSessionID,
-        assistantThreadMessageID,
-        identity: llmSegmentIdentity ?? undefined,
-      },
-      streamEvent,
-      sessionStreamPresentation,
+    if (optimisticSubmission) {
+      optimisticSubmission.assistantThreadMessageID = assistantThreadMessageID
+    }
+    const failedBeforeUserConfirmation = Boolean(
+      optimisticSubmission &&
+      (
+        streamEvent.event === "error" ||
+        runtimeType === "turn.failed" ||
+        runtimeType === "turn.cancelled"
+      ) &&
+      failOptimisticUserSubmission({
+        activeClientTurnID: optimisticSubmission.activeClientTurnID,
+        error: runtimeType === "turn.cancelled"
+          ? undefined
+          : readOptimisticSubmissionError(streamEvent.data),
+        reason: runtimeType === "turn.cancelled" ? "cancelled" : undefined,
+        userThreadMessageID: optimisticSubmission.userThreadMessageID,
+      }),
     )
+    if (!failedBeforeUserConfirmation) {
+      applyStreamEventToAssistantMessage(
+        {
+          sessionID: uiSessionID,
+          assistantThreadMessageID,
+          identity: llmSegmentIdentity ?? undefined,
+        },
+        streamEvent,
+        sessionStreamPresentation,
+      )
+    }
     if (isBackendUserMessageRecordedStreamEvent(streamEvent)) {
       revealPendingUserThreadMessageForBackendEvent({
         uiSessionID,
@@ -3752,14 +3953,18 @@ export function useSessionStreamController({
     loadSessionDiffForSession,
     loadSessionRuntimeDebugForSession,
     loadSessionTasksForSession,
+    failOptimisticUserSubmission,
+    prepareUserMessageRetry,
     refreshWorkspaceForSession,
     refreshWorkspaceFromDirectory,
     reloadSessionHistoryForSession,
     replaceConversationMessages,
+    removeConversationMessage,
     resolveBackendSessionID,
     scheduleRuntimeDebugRefresh,
     scheduleSessionDiffRefreshForSession,
     updateAssistantConversationMessage,
+    updateUserMessageDelivery,
     updateSessionContextUsage,
   }
 }

@@ -87,6 +87,7 @@ class MockTerminal {
   private element: HTMLElement | null = null
   private readonly dataListeners = new Set<(data: string) => void>()
   private readonly scrollListeners = new Set<() => void>()
+  private customKeyEventHandler: ((event: KeyboardEvent) => boolean) | null = null
   private handleKeyDown: ((event: KeyboardEvent) => void) | null = null
 
   loadAddon(addon: { activate?: (terminal: MockTerminal) => void }) {
@@ -101,19 +102,38 @@ class MockTerminal {
     this.element.tabIndex = -1
     this.element.textContent = ""
     this.handleKeyDown = (event) => {
-      const data = event.key === "Enter"
-        ? "\r"
-        : event.key === "Backspace"
-          ? "\x7f"
-          : event.key.length === 1
-            ? event.key
-            : ""
+      if (this.customKeyEventHandler?.(event) === false) return
+
+      let data = ""
+      if (event.ctrlKey && !event.shiftKey && event.key.toLowerCase() === "c") {
+        data = "\x03"
+      } else if (!event.ctrlKey && !event.metaKey && !event.altKey) {
+        data = event.key === "Enter"
+          ? "\r"
+          : event.key === "Backspace"
+            ? "\x7f"
+            : event.key.length === 1
+              ? event.key
+              : ""
+      }
       if (!data) return
       for (const listener of this.dataListeners) {
         listener(data)
       }
     }
     this.element.addEventListener("keydown", this.handleKeyDown)
+  }
+
+  attachCustomKeyEventHandler(handler: (event: KeyboardEvent) => boolean) {
+    this.customKeyEventHandler = handler
+  }
+
+  getSelection() {
+    return (globalThis as { __mockXtermSelection?: string }).__mockXtermSelection ?? ""
+  }
+
+  hasSelection() {
+    return this.getSelection().length > 0
   }
 
   write(data: string, callback?: () => void) {
@@ -162,6 +182,7 @@ class MockTerminal {
     this.dataListeners.clear()
     this.scrollListeners.clear()
     this.element = null
+    this.customKeyEventHandler = null
     this.handleKeyDown = null
   }
 }

@@ -95,7 +95,7 @@ test("provider normalizes models.dev DeepSeek catalog entries to the dedicated a
         expect(capturedImports).toEqual([
           {
             pkg: "@ai-sdk/deepseek",
-            version: "2.0.35",
+            version: "3.0.17",
           },
         ])
         expect(capturedFactoryInputs).toEqual([

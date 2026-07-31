@@ -211,7 +211,10 @@ function writePersistedPresentationMap(value: PersistedUserMessagePresentationMa
 
 function selectPersistableUserMessages(messages: ThreadMessage[]) {
   return messages
-    .filter((message): message is UserThreadMessage => message.kind === "user")
+    .filter(
+      (message): message is UserThreadMessage =>
+        message.kind === "user" && !message.delivery,
+    )
     .slice(-MAX_PERSISTED_USER_MESSAGES_PER_SESSION)
     .map((message) => {
       const {
@@ -310,6 +313,12 @@ export function mergeUserMessagePresentationState(previousMessages: ThreadMessag
 
     return {
       ...message,
+      ...(previousMessage.delivery
+        ? {
+            id: previousMessage.id,
+            timestamp: previousMessage.timestamp,
+          }
+        : {}),
       text: buildUserThreadMessageText({
         text: mergedDisplayText ?? message.displayText ?? message.text,
         attachmentNames: mergedAttachments?.map((attachment) => attachment.name),
@@ -320,6 +329,7 @@ export function mergeUserMessagePresentationState(previousMessages: ThreadMessag
       ...(mergedReferences?.length ? { references: mergedReferences } : {}),
       ...(message.diffSummary ? { diffSummary: message.diffSummary } : {}),
       ...(previousMessage.submissionMode === "steer" ? { submissionMode: previousMessage.submissionMode } : {}),
+      ...(previousMessage.delivery ? { delivery: previousMessage.delivery } : {}),
     }
   })
 

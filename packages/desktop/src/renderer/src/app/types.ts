@@ -887,6 +887,16 @@ export interface SessionContextUsage {
   measuredAt: number
 }
 
+export type UserMessageDelivery =
+  | {
+      status: "pending"
+    }
+  | {
+      status: "failed"
+      error?: string
+      reason?: "cancelled"
+    }
+
 export interface UserThreadMessage {
   id: string
   kind: "user"
@@ -908,6 +918,7 @@ export interface UserThreadMessage {
     afterItemCount: number
     status?: "pending" | "consumed"
   }
+  delivery?: UserMessageDelivery
   timestamp: number
 }
 
@@ -1231,6 +1242,43 @@ export interface PendingAgentStream {
   executionMode?: AgentSessionExecutionMode
   createdAssistantThreadMessageID?: string
   cancelRequested?: boolean
+}
+
+export interface OptimisticUserAttempt<Request = unknown> {
+  activeClientTurnID?: string
+  assistantThreadMessageID?: string
+  backendTurnID?: string
+  backendUserMessageID?: string
+  confirmed?: boolean
+  request?: Request
+  retiredBackendTurnIDs?: string[]
+  retiredClientTurnIDs?: string[]
+  userThreadMessageID: string
+}
+
+export interface OptimisticUserSubmissionRequest {
+  attachments: ComposerAttachment[]
+  displayText?: string
+  parentMessageID?: string | null
+  questionAnswer?: UserThreadMessage["questionAnswer"]
+  reasoningEffort?: ReasoningEffort | null
+  references?: UserThreadMessage["references"]
+  model?: {
+    providerID: string
+    modelID: string
+  }
+  selectedSkillIDs: string[]
+  tabKey: string
+  text: string
+  turnMcpServerIDs: string[]
+}
+
+export interface OptimisticUserSubmission
+  extends OptimisticUserAttempt<OptimisticUserSubmissionRequest> {
+  backendSessionID?: string
+  request: OptimisticUserSubmissionRequest
+  retrying?: boolean
+  sessionID: string
 }
 
 export interface ProviderCatalogItem {

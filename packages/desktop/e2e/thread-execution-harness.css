@@ -29,6 +29,7 @@ body {
 .thread-e2e-controls {
   display: flex;
   align-items: center;
+  gap: 6px;
   min-height: 44px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--seg-border);

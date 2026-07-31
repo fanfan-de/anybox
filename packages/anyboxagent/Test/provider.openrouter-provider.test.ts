@@ -77,7 +77,7 @@ test("provider supports the OpenRouter AI SDK provider for image models", async 
         expect(capturedImports).toEqual([
           {
             pkg: "@openrouter/ai-sdk-provider",
-            version: "2.9.0",
+            version: "3.0.0",
           },
         ])
         expect(capturedFactoryInputs).toEqual([

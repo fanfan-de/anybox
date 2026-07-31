@@ -1,4 +1,6 @@
-import { act, render, screen } from "@testing-library/react"
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 import { TerminalView } from "./TerminalView"
 import type { TerminalSessionRecord, TerminalStreamEvent } from "./types"
@@ -57,6 +59,75 @@ async function flushFrame() {
 }
 
 describe("TerminalView", () => {
+  it("keeps terminal spacing outside xterm's native viewport", () => {
+    const styles = readFileSync(
+      resolve(process.cwd(), "src/renderer/src/styles/terminal.css"),
+      "utf8",
+    )
+
+    expect(styles).toMatch(
+      /\.terminal-panel \.terminal-surface\s*\{[^}]*padding:\s*10px 12px 12px;[^}]*border-radius:\s*0;/s,
+    )
+    expect(styles).not.toMatch(/\.terminal-xterm \.xterm\s*\{[^}]*padding:/s)
+  })
+
+  it("refits when the terminal container changes size without a window resize", async () => {
+    const originalResizeObserver = globalThis.ResizeObserver
+    const originalFitDimensions = (
+      globalThis as { __mockXtermFitDimensions?: { rows: number; cols: number } | null }
+    ).__mockXtermFitDimensions
+    let resizeCallback: ResizeObserverCallback | null = null
+    let resizeObserver: ResizeObserver | null = null
+
+    class ManualResizeObserver implements ResizeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        resizeCallback = callback
+        resizeObserver = this
+      }
+
+      observe() {}
+
+      unobserve() {}
+
+      disconnect() {}
+    }
+
+    globalThis.ResizeObserver = ManualResizeObserver
+    ;(
+      globalThis as { __mockXtermFitDimensions?: { rows: number; cols: number } | null }
+    ).__mockXtermFitDimensions = {
+      rows: 24,
+      cols: 80,
+    }
+
+    try {
+      const onResize = vi.fn()
+      render(renderTerminalView({ onResize }))
+      await flushTimer()
+
+      expect(onResize).not.toHaveBeenCalled()
+
+      ;(
+        globalThis as { __mockXtermFitDimensions?: { rows: number; cols: number } | null }
+      ).__mockXtermFitDimensions = {
+        rows: 32,
+        cols: 132,
+      }
+
+      act(() => {
+        resizeCallback?.([], resizeObserver!)
+      })
+      await flushFrame()
+
+      expect(onResize).toHaveBeenCalledWith("pty-1", 32, 132)
+    } finally {
+      globalThis.ResizeObserver = originalResizeObserver
+      ;(
+        globalThis as { __mockXtermFitDimensions?: { rows: number; cols: number } | null }
+      ).__mockXtermFitDimensions = originalFitDimensions
+    }
+  })
+
   it("does not steal focus from an active composer textarea while mounting", async () => {
     const { rerender } = render(<textarea aria-label="Task draft" />)
 
@@ -173,5 +244,107 @@ describe("TerminalView", () => {
     })
 
     expect(onInput).toHaveBeenCalledWith("pty-focused", "a")
+  })
+
+  it("copies a selection with the terminal shortcut while preserving Ctrl+C as interrupt", async () => {
+    const previousClipboard = navigator.clipboard
+    const previousSelection = (
+      globalThis as { __mockXtermSelection?: string }
+    ).__mockXtermSelection
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    })
+    ;(
+      globalThis as { __mockXtermSelection?: string }
+    ).__mockXtermSelection = "selected terminal output"
+
+    try {
+      const onInput = vi.fn()
+      const { container } = render(renderTerminalView({ onInput }))
+      await flushTimer()
+
+      const terminal = container.querySelector(".terminal-xterm")
+      expect(terminal).not.toBeNull()
+
+      fireEvent.keyDown(terminal!, {
+        key: "c",
+        code: "KeyC",
+        ctrlKey: true,
+      })
+
+      expect(onInput).toHaveBeenCalledWith("pty-1", "\x03")
+      expect(writeText).not.toHaveBeenCalled()
+
+      fireEvent.keyDown(terminal!, {
+        key: "c",
+        code: "KeyC",
+        ctrlKey: true,
+        shiftKey: true,
+      })
+
+      await waitFor(() => {
+        expect(writeText).toHaveBeenCalledWith("selected terminal output")
+      })
+      expect(onInput).toHaveBeenCalledTimes(1)
+    } finally {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: previousClipboard,
+      })
+      ;(
+        globalThis as { __mockXtermSelection?: string }
+      ).__mockXtermSelection = previousSelection
+    }
+  })
+
+  it("copies the current selection from a clamped terminal context menu", async () => {
+    const previousClipboard = navigator.clipboard
+    const previousSelection = (
+      globalThis as { __mockXtermSelection?: string }
+    ).__mockXtermSelection
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    })
+    ;(
+      globalThis as { __mockXtermSelection?: string }
+    ).__mockXtermSelection = "context menu selection"
+
+    try {
+      const { container } = render(renderTerminalView())
+      await flushTimer()
+
+      const surface = container.querySelector(".terminal-surface")
+      expect(surface).not.toBeNull()
+
+      fireEvent.contextMenu(surface!, {
+        clientX: window.innerWidth - 1,
+        clientY: window.innerHeight - 1,
+      })
+
+      const menu = screen.getByRole("menu", { name: "Terminal Copy" })
+      expect(menu).toHaveStyle({
+        left: `${window.innerWidth - 184 - 8}px`,
+        top: `${window.innerHeight - 44 - 8}px`,
+      })
+
+      fireEvent.click(screen.getByRole("menuitem", { name: "Copy" }))
+
+      await waitFor(() => {
+        expect(writeText).toHaveBeenCalledWith("context menu selection")
+        expect(screen.queryByRole("menu", { name: "Terminal Copy" })).toBeNull()
+      })
+    } finally {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: previousClipboard,
+      })
+      ;(
+        globalThis as { __mockXtermSelection?: string }
+      ).__mockXtermSelection = previousSelection
+    }
   })
 })

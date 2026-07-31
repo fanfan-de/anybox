@@ -22,6 +22,14 @@ const TARGET_TURN_ID = "turn-e2e"
 const TARGET_MESSAGE_ID = "assistant-e2e"
 const SECOND_TARGET_MESSAGE_ID = "assistant-e2e-second"
 const PENDING_TURN_ID = "pending:user-e2e"
+const INITIAL_REASONING_TEXT = "Inspecting the renderer before applying the final response."
+const SAME_LINE_REASONING_TOKEN = " More."
+const SECOND_REASONING_LINE = "Checking the compact reasoning viewport on a second line."
+const WRAPPED_REASONING_TAIL = [
+  "This deliberately long live reasoning sentence verifies that the browser wraps text at the real pane width",
+  "and advances the one-line viewport without increasing the outer reasoning row height.",
+  "LIVE_REASONING_WRAP_TAIL",
+].join(" ")
 
 const session: SessionSummary = {
   id: "session-e2e",
@@ -42,7 +50,7 @@ function userMessage(id: string, text: string, timestamp: number): UserThreadMes
   }
 }
 
-function targetAssistantMessage(completed: boolean): AssistantThreadMessage {
+function targetAssistantMessage(completed: boolean, reasoningText: string): AssistantThreadMessage {
   const terminalStatus = completed ? "completed" : "running"
   const items: AssistantThreadMessage["items"] = [
     {
@@ -50,8 +58,9 @@ function targetAssistantMessage(completed: boolean): AssistantThreadMessage {
       kind: "reasoning",
       timestamp: 1_010,
       label: "Reasoning",
-      text: "Inspecting the renderer before applying the final response.",
+      text: reasoningText,
       status: terminalStatus,
+      isStreaming: !completed,
     },
     ...Array.from({ length: 12 }, (_, index) => ({
       id: `process-tool-${index + 1}`,
@@ -209,6 +218,7 @@ function trailingTurn(index: number) {
 function Harness() {
   const [canonicalized, setCanonicalized] = useState(false)
   const [completed, setCompleted] = useState(false)
+  const [reasoningText, setReasoningText] = useState(INITIAL_REASONING_TEXT)
   const threadColumnRef = useRef<HTMLDivElement | null>(null)
   const scrollSnapshotRef = useRef<ThreadScrollSnapshot>({
     scrollTop: 0,
@@ -224,7 +234,10 @@ function Harness() {
     [],
   )
   const tails = useMemo(() => Array.from({ length: 36 }, (_, index) => trailingTurn(index + 1)), [])
-  const targetAssistant = useMemo(() => targetAssistantMessage(completed), [completed])
+  const targetAssistant = useMemo(
+    () => targetAssistantMessage(completed, reasoningText),
+    [completed, reasoningText],
+  )
   const secondTargetAssistant = useMemo(() => targetSecondAssistantMessage(completed), [completed])
   const targetTurns = useMemo(() => {
     const pendingTurn = targetTurn(targetUser, targetAssistant, completed)
@@ -268,6 +281,30 @@ function Harness() {
         </button>
         <button id="complete-turn" type="button" disabled={completed} onClick={() => setCompleted(true)}>
           Complete target turn
+        </button>
+        <button
+          id="append-reasoning-token"
+          type="button"
+          disabled={completed || reasoningText.includes(SAME_LINE_REASONING_TOKEN)}
+          onClick={() => setReasoningText((current) => `${current}${SAME_LINE_REASONING_TOKEN}`)}
+        >
+          Token
+        </button>
+        <button
+          id="append-reasoning-line"
+          type="button"
+          disabled={completed || reasoningText.includes(SECOND_REASONING_LINE)}
+          onClick={() => setReasoningText((current) => `${current}\n${SECOND_REASONING_LINE}`)}
+        >
+          Line
+        </button>
+        <button
+          id="append-reasoning-wrap"
+          type="button"
+          disabled={completed || reasoningText.includes("LIVE_REASONING_WRAP_TAIL")}
+          onClick={() => setReasoningText((current) => `${current}\n${WRAPPED_REASONING_TAIL}`)}
+        >
+          Wrap
         </button>
       </div>
       <div className="thread-e2e-host">

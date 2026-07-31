@@ -8331,7 +8331,11 @@ describe("App", () => {
       await Promise.resolve()
     })
 
-    expect(await within(lowerPane!).findByText("Keep the stacked split")).toBeInTheDocument()
+    expect(
+      await within(lowerPane!).findByText("Keep the stacked split", {
+        selector: ".user-bubble-text",
+      }),
+    ).toBeInTheDocument()
     expect(api.toJSON().grid).toEqual(stackedGrid)
   })
 
@@ -8669,6 +8673,75 @@ describe("App", () => {
 
     expect(await screen.findByRole("button", { name: "Backend chat" })).toBeInTheDocument()
     expect(screen.queryByRole("combobox", { name: "Session project" })).not.toBeInTheDocument()
+  })
+
+  it("shows the first optimistic user message while the new session model selection is still saving", async () => {
+    const pendingModelSelection = createDeferred<{
+      model: string
+    }>()
+    const model = createProviderModelFixture()
+    const modelPayload = {
+      items: [model],
+      selection: {
+        model: "openai/gpt-5",
+      },
+    }
+    window.desktop!.getAgentHealth = vi.fn().mockResolvedValue({
+      ok: true,
+      baseURL: "http://127.0.0.1:4096",
+    })
+    window.desktop!.getProjectModels = vi.fn().mockResolvedValue(modelPayload)
+    window.desktop!.getSessionModels = vi.fn().mockResolvedValue(modelPayload)
+    window.desktop!.updateSessionModelSelection = vi.fn(() => pendingModelSelection.promise)
+    window.desktop!.createFolderSession = vi.fn().mockResolvedValue({
+      session: {
+        id: "session-backend-optimistic",
+        projectID: "project-2",
+        directory: "C:\\Projects\\Project 2\\app",
+        title: "Optimistic backend chat",
+        created: 1,
+        updated: 2,
+      },
+    })
+
+    render(<App />)
+
+    fireEvent.click(getAddSessionTabButton())
+    await screen.findByRole("combobox", { name: "Session project" })
+    await screen.findByRole("button", { name: "Select model: GPT-5" })
+
+    setComposerDraftValue(
+      screen.getByRole("textbox", { name: "Task draft" }),
+      "Show the first optimistic prompt",
+    )
+    fireEvent.click(getComposerSendButton())
+
+    expect(await screen.findByRole("button", { name: "Optimistic backend chat" })).toBeInTheDocument()
+    expect(
+      await screen.findByText("Show the first optimistic prompt", {
+        selector: ".user-bubble-text",
+      }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole("status", { name: /Sending message|正在发送消息/ })).toBeInTheDocument()
+    expect(window.desktop!.agentSession!.sendTurn).not.toHaveBeenCalled()
+
+    await act(async () => {
+      pendingModelSelection.resolve({
+        model: "openai/gpt-5",
+      })
+      await Promise.resolve()
+    })
+
+    await waitFor(() => {
+      expect(window.desktop!.agentSession!.sendTurn).toHaveBeenCalledWith(expect.objectContaining({
+        backendSessionID: "session-backend-optimistic",
+        text: "Show the first optimistic prompt",
+        model: {
+          providerID: "openai",
+          modelID: "gpt-5",
+        },
+      }))
+    })
   })
 
   it("shows one usage tip without prompt examples on the create session canvas", async () => {
@@ -12596,6 +12669,12 @@ describe("App", () => {
     })
 
     expect(screen.getByText("Preparing...")).toBeInTheDocument()
+    expect(
+      screen.getByText("Wait for the first token", {
+        selector: ".user-bubble-text",
+      }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole("status", { name: /Sending message|正在发送消息/ })).toBeInTheDocument()
     expect(getComposerSendButton()).toBeEnabled()
 
     await act(async () => {

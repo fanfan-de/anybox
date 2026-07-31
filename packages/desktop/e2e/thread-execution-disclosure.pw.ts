@@ -4,6 +4,118 @@ const TARGET_MESSAGE_ID = "assistant-e2e"
 const SECOND_TARGET_MESSAGE_ID = "assistant-e2e-second"
 const TARGET_GROUP_ID = "turn:turn-e2e"
 const PENDING_GROUP_ID = "turn:pending:user-e2e"
+const REASONING_ITEM_ID = "process-reasoning"
+
+test("streaming reasoning advances through a fixed one-line viewport", async ({ page }) => {
+  test.setTimeout(60_000)
+  const pageErrors: string[] = []
+  page.on("pageerror", (error) => pageErrors.push(error.message))
+
+  await page.goto("/e2e/thread-execution-harness.html")
+  await page.locator("#canonicalize-turn").click()
+
+  const thread = page.locator(".thread-column.is-virtualized")
+  const summary = thread.locator(
+    `.assistant-execution-summary-button[data-thread-execution-group-id="${TARGET_GROUP_ID}"]`,
+  )
+  const reasoningRow = thread.locator(`[data-assistant-item-id="${REASONING_ITEM_ID}"]`)
+  const traceItem = reasoningRow.locator(".trace-item")
+  const toggle = reasoningRow.locator(".trace-item-reasoning-toggle")
+  const viewport = reasoningRow.locator(".trace-item-reasoning-live-viewport")
+
+  await expect(reasoningRow).toBeVisible()
+  await expect(traceItem).toHaveAttribute("data-reasoning-display-mode", "live-compact")
+  await expect(toggle).toHaveAttribute("aria-expanded", "false")
+  await expect(viewport).toBeVisible()
+
+  await page.evaluate(() => {
+    const typedWindow = window as typeof window & {
+      __reasoningLineAdvanceCount?: number
+    }
+    typedWindow.__reasoningLineAdvanceCount = 0
+    document.addEventListener("animationstart", (event) => {
+      if (event.animationName !== "thread-reasoning-line-advance") return
+      typedWindow.__reasoningLineAdvanceCount = (typedWindow.__reasoningLineAdvanceCount ?? 0) + 1
+    })
+  })
+  const readLineAdvanceCount = () => page.evaluate(() => (
+    (window as typeof window & { __reasoningLineAdvanceCount?: number })
+      .__reasoningLineAdvanceCount ?? 0
+  ))
+
+  const readLiveMetrics = () => viewport.evaluate((element) => {
+    const row = element.closest<HTMLElement>(".trace-item")!
+    const content = element.querySelector<HTMLElement>(".trace-item-reasoning-live-content")!
+    const lineHeight = Number.parseFloat(getComputedStyle(content).lineHeight)
+    return {
+      lineHeight,
+      maxScrollTop: element.scrollHeight - element.clientHeight,
+      rowHeight: row.getBoundingClientRect().height,
+      scrollTop: element.scrollTop,
+      viewportHeight: element.getBoundingClientRect().height,
+    }
+  })
+
+  const initialMetrics = await readLiveMetrics()
+  const initialThreadScrollTop = await thread.evaluate((element) => element.scrollTop)
+  expect(Math.abs(initialMetrics.viewportHeight - initialMetrics.lineHeight)).toBeLessThanOrEqual(1)
+
+  await page.locator("#append-reasoning-token").click()
+  await page.waitForTimeout(220)
+  expect(await readLineAdvanceCount()).toBe(0)
+
+  await page.locator("#append-reasoning-line").click()
+  await expect.poll(async () => (await readLiveMetrics()).scrollTop).toBeGreaterThan(initialMetrics.scrollTop)
+  await expect.poll(readLineAdvanceCount).toBe(1)
+  const explicitLineMetrics = await readLiveMetrics()
+  expect(Math.abs(explicitLineMetrics.scrollTop - explicitLineMetrics.maxScrollTop)).toBeLessThanOrEqual(1)
+  expect(Math.abs(explicitLineMetrics.rowHeight - initialMetrics.rowHeight)).toBeLessThanOrEqual(1)
+
+  await page.locator(".thread-e2e-harness").evaluate((element) => {
+    element.style.width = "380px"
+  })
+  await expect.poll(async () => viewport.evaluate((element) => element.clientWidth)).toBeLessThan(400)
+  await page.waitForTimeout(220)
+  expect(await readLineAdvanceCount()).toBe(1)
+
+  await page.locator("#append-reasoning-wrap").click()
+  await expect.poll(async () => (await readLiveMetrics()).scrollTop).toBeGreaterThan(
+    explicitLineMetrics.scrollTop + explicitLineMetrics.lineHeight,
+  )
+  await expect.poll(readLineAdvanceCount).toBe(2)
+  const wrappedMetrics = await readLiveMetrics()
+  expect(Math.abs(wrappedMetrics.scrollTop - wrappedMetrics.maxScrollTop)).toBeLessThanOrEqual(1)
+  expect(Math.abs(wrappedMetrics.rowHeight - initialMetrics.rowHeight)).toBeLessThanOrEqual(1)
+  expect(Math.abs(
+    await thread.evaluate((element) => element.scrollTop) - initialThreadScrollTop,
+  )).toBeLessThanOrEqual(1)
+
+  await toggle.click()
+  await expect(traceItem).toHaveAttribute("data-reasoning-display-mode", "expanded")
+  await expect(toggle).toHaveAttribute("aria-expanded", "true")
+  await expect(viewport).toHaveCount(0)
+  const expandedHeight = await traceItem.evaluate((element) => element.getBoundingClientRect().height)
+  expect(expandedHeight).toBeGreaterThan(initialMetrics.rowHeight + initialMetrics.lineHeight)
+
+  await toggle.click()
+  await expect(traceItem).toHaveAttribute("data-reasoning-display-mode", "live-compact")
+  await expect(viewport).toBeVisible()
+  await expect.poll(async () => {
+    const metrics = await readLiveMetrics()
+    return Math.abs(metrics.scrollTop - metrics.maxScrollTop)
+  }).toBeLessThanOrEqual(1)
+
+  await page.locator("#complete-turn").click()
+  await expect(summary).toHaveAttribute("aria-expanded", "false")
+  await expect(reasoningRow).toHaveCount(0)
+
+  await summary.click()
+  await expect(reasoningRow).toBeVisible()
+  await expect(traceItem).toHaveAttribute("data-reasoning-display-mode", "completed-collapsed")
+  await expect(reasoningRow).toContainText("Inspecting the renderer before applying the final response.")
+  await expect(reasoningRow).not.toContainText("LIVE_REASONING_WRAP_TAIL")
+  expect(pageErrors).toEqual([])
+})
 
 test("real ThreadView preserves its semantic anchor when a completed turn collapses", async ({ page }) => {
   const pageErrors: string[] = []
@@ -72,6 +184,9 @@ test("real ThreadView preserves its semantic anchor when a completed turn collap
 
   const finalResponse = thread.getByText("E2E final response remains visible.", { exact: true })
   await expect(finalResponse).toBeVisible()
+  // Fractional line-height layout can leave a subpixel remainder after the
+  // semantic anchor transaction even though no visible row jump occurs.
+  const anchorTolerancePx = 1.5
   await expect.poll(async () => {
     return thread.evaluate((column, expectedOffset) => {
       const summaryRow = column.querySelector<HTMLElement>(
@@ -82,7 +197,7 @@ test("real ThreadView preserves its semantic anchor when a completed turn collap
         summaryRow.getBoundingClientRect().top - column.getBoundingClientRect().top - expectedOffset,
       )
     }, before.viewportOffset)
-  }).toBeLessThanOrEqual(1)
+  }).toBeLessThanOrEqual(anchorTolerancePx)
 
   const browserBehavior = await thread.evaluate(async (column) => {
     const overflowAnchor = getComputedStyle(column).overflowAnchor

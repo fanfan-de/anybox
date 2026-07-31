@@ -27,7 +27,7 @@ test("BunProc reuses a cached SDK package without running bun add", async () => 
       JSON.stringify(
         {
           name: "@ai-sdk/openai-compatible",
-          version: "2.0.38",
+          version: "3.0.18",
           main: "index.js",
         },
         null,
@@ -51,17 +51,17 @@ test("BunProc reuses a cached SDK package without running bun add", async () => 
     const { BunProc } = await import("#bun/index.ts")
     restoreCacheDir = BunProc.setCacheDirForTesting(runtimeDir)
 
-    const exact = await BunProc.install("@ai-sdk/openai-compatible", "2.0.38")
-    expect(exact.version).toBe("2.0.38")
+    const exact = await BunProc.install("@ai-sdk/openai-compatible", "3.0.18")
+    expect(exact.version).toBe("3.0.18")
     expect(exact.root).toBe(packageRoot)
     expect(exact.entry).toBe(path.join(packageRoot, "index.js"))
 
     const latest = await BunProc.install("@ai-sdk/openai-compatible", "latest")
-    expect(latest.version).toBe("2.0.38")
+    expect(latest.version).toBe("3.0.18")
     expect(outdatedChecks).toEqual([
       {
         pkg: "@ai-sdk/openai-compatible",
-        version: "2.0.38",
+        version: "3.0.18",
       },
     ])
 
@@ -69,7 +69,7 @@ test("BunProc reuses a cached SDK package without running bun add", async () => 
       createOpenAICompatible: () => {
         languageModel(): { provider: string }
       }
-    }>("@ai-sdk/openai-compatible", "2.0.38")
+    }>("@ai-sdk/openai-compatible", "3.0.18")
 
     expect(typeof loaded.module.createOpenAICompatible).toBe("function")
     expect(loaded.module.createOpenAICompatible().languageModel()).toEqual({

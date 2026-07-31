@@ -1229,7 +1229,7 @@ body.is-resizing-sidebar .trace-log-detail.is-collapsing {
 
 .thread-markdown :where(:not(pre) > code) {
   padding: 0.12em 0.36em;
-  border: 1px solid var(--md-border-strong);
+  border: 0;
   border-radius: 4px;
   background: var(--md-inline-code-bg);
   color: var(--md-strong);
@@ -3271,6 +3271,84 @@ body.is-image-lightbox-open {
   justify-items: end;
 }
 
+.user-message-bubble-row {
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.user-message-bubble-row > .user-bubble {
+  flex: 0 1 auto;
+}
+
+.user-message-delivery-status {
+  flex: 0 0 auto;
+  min-width: 0;
+  margin-top: 16px;
+}
+
+.user-message-delivery-status.is-pending {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--semantic-info-text);
+}
+
+.user-message-delivery-status.is-pending svg {
+  width: 16px;
+  height: 16px;
+  animation: thread-user-message-delivery-spin 900ms linear infinite;
+}
+
+.user-message-delivery-status.is-failed {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.user-message-delivery-error {
+  width: 18px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--semantic-error-text);
+}
+
+.user-message-delivery-error svg,
+.user-message-delivery-retry svg {
+  width: 15px;
+  height: 15px;
+}
+
+.user-message-delivery-retry {
+  border-radius: var(--radius-control);
+  transition:
+    color 160ms ease,
+    background 160ms ease;
+}
+
+.user-message-delivery-retry:hover {
+  background: var(--semantic-icon-button-surface-hover);
+  color: var(--semantic-icon-button-text-hover);
+}
+
+.user-message-delivery-retry:active {
+  background: var(--semantic-icon-button-surface-active);
+  color: var(--semantic-icon-button-text-active);
+}
+
+@keyframes thread-user-message-delivery-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .assistant-stream-insertion-user-message {
   margin: 8px 0;
 }
@@ -4111,6 +4189,45 @@ button.user-message-diff-file-row:focus-visible {
   line-height: 1.55;
 }
 
+.trace-item.is-live-compact .trace-item-reasoning-toggle {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+}
+
+.trace-item-reasoning-live-viewport {
+  width: 100%;
+  min-width: 0;
+  block-size: 1lh;
+  overflow: hidden;
+  line-height: 1.55;
+}
+
+.trace-item-reasoning-live-content-shell,
+.trace-item-reasoning-live-content {
+  min-width: 0;
+  line-height: inherit;
+}
+
+.trace-item-reasoning-live-content-shell.is-line-advancing {
+  will-change: transform;
+  animation: thread-reasoning-line-advance 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.trace-item-reasoning-live-content {
+  margin: 0;
+}
+
+@keyframes thread-reasoning-line-advance {
+  from {
+    transform: translateY(var(--trace-reasoning-line-advance-distance, 1lh));
+  }
+
+  to {
+    transform: translateY(0);
+  }
+}
+
 .assistant-section.is-response .trace-item-text,
 .assistant-section.is-response .trace-item-detail {
   color: var(--semantic-thread-response-text);
@@ -4432,6 +4549,11 @@ body.is-resizing-sidebar .thread-message {
   box-shadow: none !important;
 }
 
+body.is-resizing-sidebar .trace-item-reasoning-live-content-shell {
+  animation: none !important;
+  transform: none !important;
+}
+
 body.is-resizing-sidebar .trace-tool-status-indicator::before {
   animation: none !important;
 }
@@ -4444,6 +4566,15 @@ body.is-resizing-sidebar .trace-tool-name:is(.is-active, .is-pending, .is-runnin
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .user-message-delivery-status.is-pending svg {
+    animation: none;
+  }
+
+  .trace-item-reasoning-live-content-shell {
+    animation: none !important;
+    transform: none !important;
+  }
+
   .trace-tool-status-indicator.is-breathing::before {
     animation: none;
     opacity: 1;

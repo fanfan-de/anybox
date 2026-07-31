@@ -89,6 +89,7 @@ export interface UserThreadMessageArticleRendererProps {
   message: UserThreadMessage
   motion: ThreadMessageMotion
   onCopy: (messageID: string, text: string) => void | Promise<void>
+  onRetry?: (messageID: string) => void | Promise<void>
   rowKind?: string
 }
 
@@ -166,6 +167,7 @@ interface UserDisplayRowViewProps {
   copied: boolean
   motion: ThreadMessageMotion
   onCopy: (messageID: string, text: string) => void | Promise<void>
+  onRetryUserMessage?: (messageID: string) => void | Promise<void>
   onFileChangeSelect?: (file: string) => void
   onMessageDiffRestore?: (diffs: SessionDiffFile[]) => void | Promise<void>
   onMessageDiffReview?: (files: string[]) => void | Promise<void>
@@ -249,6 +251,7 @@ export interface ThreadRowRendererProps {
   onBranchSelect?: (messageID: string) => void | Promise<void>
   onCopyAssistantResponse: (messageID: string, text: string) => void | Promise<void>
   onCopyUserMessage: (messageID: string, text: string) => void | Promise<void>
+  onRetryUserMessage?: (messageID: string) => void | Promise<void>
   onFileChangeSelect?: (file: string) => void
   onForkFromMessage?: (messageID: string) => void | Promise<void>
   onLocalFileLinkOpen?: (target: MarkdownLocalFileLinkTarget) => void
@@ -356,6 +359,7 @@ const UserDisplayRowView = memo(function UserDisplayRowView({
   copied,
   motion,
   onCopy,
+  onRetryUserMessage,
   onFileChangeSelect,
   onMessageDiffRestore,
   onMessageDiffReview,
@@ -371,6 +375,7 @@ const UserDisplayRowView = memo(function UserDisplayRowView({
       copied={copied}
       motion={motion}
       onCopy={onCopy}
+      onRetry={onRetryUserMessage}
       message={message}
       rowKind={row.kind}
       diffCard={
@@ -412,6 +417,7 @@ function areUserDisplayRowViewPropsEqual(left: UserDisplayRowViewProps, right: U
     left.copied === right.copied &&
     left.motion === right.motion &&
     left.onCopy === right.onCopy &&
+    left.onRetryUserMessage === right.onRetryUserMessage &&
     left.onFileChangeSelect === right.onFileChangeSelect &&
     left.onMessageDiffRestore === right.onMessageDiffRestore &&
     left.onMessageDiffReview === right.onMessageDiffReview &&
@@ -914,6 +920,7 @@ export function ThreadRowRenderer({
   onBranchSelect,
   onCopyAssistantResponse,
   onCopyUserMessage,
+  onRetryUserMessage,
   onFileChangeSelect,
   onForkFromMessage,
   onLocalFileLinkOpen,
@@ -939,6 +946,7 @@ export function ThreadRowRenderer({
         copied={copiedUserThreadMessageID === message.id}
         motion={readThreadMessageMotion(message.id)}
         onCopy={onCopyUserMessage}
+        onRetryUserMessage={onRetryUserMessage}
         onFileChangeSelect={onFileChangeSelect}
         onMessageDiffSummaryHydrate={onMessageDiffSummaryHydrate}
         onMessageDiffRestore={onMessageDiffRestore}

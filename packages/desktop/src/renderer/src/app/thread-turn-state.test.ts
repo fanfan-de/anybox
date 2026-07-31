@@ -251,6 +251,7 @@ describe("thread turn state helpers", () => {
       ...userMessage("user-local"),
       displayText: "Local presentation",
       attachments: [{ name: "prompt.txt" }],
+      delivery: { status: "pending" as const },
     }
     const placeholder = assistantMessage({
       id: "assistant-local",
@@ -292,6 +293,7 @@ describe("thread turn state helpers", () => {
     expect(bound[0]?.messages[0]).toMatchObject({
       displayText: "Local presentation",
       attachments: [{ name: "prompt.txt" }],
+      delivery: { status: "pending" },
     })
     expect(bound[0]?.messages[1]).toMatchObject({ backendTurnID: "turn-canonical" })
     expect(bound[1]).toBe(unaffected)

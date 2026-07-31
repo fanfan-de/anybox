@@ -13,7 +13,7 @@
     "typescript": "^6.0.2"
   },
   "dependencies": {
-    "@ai-sdk/provider": "^3.0.10",
+    "@ai-sdk/provider": "^4.0.4",
     "@anybox/platform": "workspace:*",
     "@anybox/shared": "workspace:*",
     "@jitl/quickjs-singlefile-cjs-release-sync": "0.32.0",
@@ -21,7 +21,7 @@
     "@opentui/core": "^0.1.90",
     "@opentui/solid": "^0.1.90",
     "@types/ssh2": "^1.15.5",
-    "ai": "^6.0.205",
+    "ai": "^7.0.44",
     "fuzzysort": "^3.1.0",
     "gray-matter": "^4.0.3",
     "hono": "^4.12.9",

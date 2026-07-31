@@ -265,6 +265,31 @@ Do not treat `activeMessages` as the source of truth. New stream/history state s
 
 Live composer sends initially create a `pending:*` turn. When an authoritative runtime turn ID arrives, `bindPendingThreadTurnToCanonical()` must rename or merge that pending turn in the same conversation-store transaction that applies `turn.started` metadata. Matching is limited to explicit optimistic user IDs, assistant placeholder IDs, or an assistant already carrying the backend turn ID; adjacency, text equality, and timestamps are never identity evidence. Placeholder-to-segment binding performs the same re-homing before updating the assistant identity, so React never observes two assistant-bearing `ThreadTurn` objects for one backend execution.
 
+### 用户消息发送状态与乐观生命周期
+
+普通新回合在调用 bridge 之前同步构造 `UserThreadMessage`，设置 `delivery: { status: "pending" }`，并写入 `pending:${messageID}` turn。新会话 Composer 在 `createFolderSession` 返回并把 create tab 替换成 ThreadView 后，必须先写入这条 optimistic user row，再等待 session model selection、project model preference 或初始 workflow mode 等 pre-send 初始化；这些初始化不能让新 ThreadView 暂时保持空白。`delivery` 缺失表示后端已经确认；它只属于当前 renderer 生命周期，不进入 IPC/后端协议，也不写入 user-message presentation storage。Queue 与 Steer 继续走 pending drawer / stream insertion，不创建第二条 optimistic user row。
+
+发送状态严格按下面的权威边界推进：
+
+```text
+Composer submit
+  └─ pending user row + retry request snapshot
+       ├─ turn.started / execution.mode
+       │    └─ bind pending:* → canonical turnID（仍是 pending）
+       ├─ message.recorded(role=user)
+       │    └─ clear delivery → confirmed；删除完整请求快照
+       └─ request error / turn.failed / turn.cancelled before confirmation
+            └─ failed；保留 user row，移除无有效内容的 assistant placeholder
+                 └─ retry
+                      └─ 同一 message ID / row，新的 clientTurnID，原请求参数
+```
+
+`message.recorded(role="user")` 是唯一确认信号；`sendTurn` Promise、`turn.started`、execution mode 和超时都不能关闭 Loader。确认后的 assistant error/cancel 只更新 assistant runtime UI，不再回写用户消息状态。失败或取消后迟到的同一次权威 user record 仍可确认；一旦用户发起重试，registry 会先清除旧 attempt 的 client/turn/assistant identity，旧事件不能匹配或覆盖新 attempt。
+
+主 Thread 使用工作区级 optimistic registry；每项在确认前保存完整、不可从气泡反推的 transport request snapshot，包括原始 text/display text、附件、引用、question answer、parent、model、reasoning、skills 和 MCP。重试不回填 Composer，不追加第二条 user message。带 `delivery` 的消息不会进入 presentation persistence，所以未落库的失败消息不会跨页面重载恢复；重载始终以 backend history 为准。
+
+Branch Chat 使用页签组件级 registry，渲染 turn 是 `backend branch history + live assistant overlay + optimistic user turns` 的合成。确认后删除完整 request，只保留当前 tab 生命周期内的 message/turn alias，以便 history refresh 继续复用 optimistic message ID 和 virtual row ID。切换 tab 不卸载面板时状态保留；关闭 tab 后自然丢弃本地 optimistic/retry 状态，但不会额外取消已经开始的 detached execution。
+
 ### Turn execution disclosure
 
 桌面端长 turn 会在 semantic rows 生成后派生 `ThreadExecutionGroup`。分组边界来自 canonical `ThreadTurn`、`lastMessageID` 和 `finalSegmentID`，而不是相邻 DOM 或 user row。最终 response block 的边界在 trace visibility 过滤前计算；最终 response、response 后置内容、未解决 permission/question 和用户插入内容始终不会进入可折叠前缀。`completed` 且最终 response 已解析时，response 之前的 error、失败 tool/workflow 属于可恢复执行过程，随 process prefix 折叠；仅非 `completed` 终态，或 `completed` 但仍无可解析最终 response 时，才保护最后一条失败/终态 trace 作为 outcome。
@@ -294,7 +319,8 @@ ConversationTurnMap
          │  ├─ references[]
          │  ├─ attachments[]
          │  ├─ diffSummary?
-         │  └─ submissionMode?
+         │  ├─ submissionMode?
+         │  └─ delivery?  # renderer-only pending / failed; absent = confirmed
          └─ AssistantThreadMessage
             ├─ id  # frontend message instance id
             ├─ messageID?  # backend assistant message id
@@ -364,6 +390,9 @@ streaming 更新需要保持历史 trace 的 structural sharing：
 ```mermaid
 flowchart LR
   subgraph data["数据输入"]
+    composer["Composer 普通提交"]
+    delivery["optimistic registry\nrequest snapshot + active attempt"]
+    recorded["message.recorded(role=user)"]
     turns["ConversationTurnMap / ThreadTurn[]"]
     messages["activeMessages: ThreadMessage[]\n(derived flat view)"]
     session["activeSession / messageTree"]
@@ -408,6 +437,9 @@ flowchart LR
     lightbox["ImageLightbox"]
   end
 
+  composer --> delivery --> turns
+  recorded --> delivery
+  delivery -->|confirm / fail / retry in place| turns
   turns --> derive --> messages --> projection --> context --> baseRows --> displayRows
   session --> projection
   pending --> projection
@@ -579,11 +611,15 @@ Completed Markdown 的 block 仍是单个 semantic response row 内部的渐进�
 用户 message 右对齐：
 
 - `.user-message` 使用 `justify-items: end`。
+- `.user-message-bubble-row` 在气泡左侧保留 delivery status slot；pending 使用 info 语义色的 `SessionRunningIcon`，failed 使用 error 语义图标与标准 icon button 重试动作。
+- pending slot 提供 `role="status"` 和本地化 accessible name；失败详情放入 group label/title，重试按钮具有明确的 `aria-label`。`prefers-reduced-motion: reduce` 下停止旋转，但保留 Loader 图形和状态文本。
 - `.user-bubble` 最大宽度为 `min(100%, 520px)`。
 - 背景使用 `--surface-user-bubble`，区别于 assistant 正文。
 - 附件以 strip 显示：raster 图片在 composer 和 user message 中使用 56px 缩略图，PDF、SVG 和不支持的文件保留文件名 chip，长文件名省略。
 
 用户消息的设计意图是明确“这是输入”，但不占满整个阅读宽度。
+
+pending、failed、confirmed 只替换同一个 `UserThreadMessage` 对象所在的 semantic row，不追加 row。用户处于 follow 模式时首次 optimistic append 继续锁底；用户已向上阅读时不强制跳转。后续 delivery 状态变化不产生新的 row ID，也不触发额外滚动。
 
 ### Reasoning 与 Tools
 
@@ -592,8 +628,10 @@ reasoning 和 tools 默认弱化：
 - 完成后的 reasoning/tool item 会折叠。
 - 样式整体比 response 更低对比。
 - tool row 展开后直接显示 input/output 两个可访问 region，不再提供 input/output 内部二级 disclosure，也不显示可见的“输入/输出”标题。
-- streaming 时用轻微 pulse 和 caret 表达运行中。
-- 折叠状态必须是真 lazy mount：完整 reasoning、tool input/output、patch diff 在对应 row 展开前不进入 DOM，也不交给 Markdown/RichText/DiffPreview 渲染。
+- streaming reasoning 默认进入固定一行的 `live-compact` viewport，继续按真实 token 内容渲染，并通过自身 `scrollTop` 在绘制前跟随最新视觉行；显式换行和 pane 宽度造成的自动折行都会推进到下一行，不调用 `scrollIntoView`，也不改变外层 thread 的 bottom-lock。
+- `live-compact` 点击后展开完整实时内容；该显式展开选择在同一 item 的后续 token 和完成事件中保持。用户再次收起时恢复单行跟随；从未手动展开的 reasoning 完成后回到现有首个非空行摘要。
+- streaming 时继续用轻微 pulse 和 caret 表达运行中。只有最新视觉行前进时，旧行才以约 180ms 向上退出、新行从下方接入；同一行内的 token 更新不重复播放，pane 宽度重排只重新定位，`prefers-reduced-motion: reduce` 下直接切换。流式 reasoning 的 virtual row 使用紧凑单行预估高度，展开后的高度继续由实测 `ResizeObserver` 更新。
+- completed 折叠状态必须是真 lazy mount：完整 reasoning、tool input/output、patch diff 在对应 row 展开前不进入 DOM，也不交给 Markdown/RichText/DiffPreview 渲染。`live-compact` 为了让浏览器按实际宽度计算最新视觉行，会在裁剪 viewport 内保留当前完整流式文本；完成并折叠后立即恢复 bounded preview 与正文卸载。
 - 超大内容先显示 bounded preview：reasoning 首行最多 480 字符；patch preview 最多 200 行或 20000 字符，用户显式展开对应 row 后才挂完整内容。
 - 展开的 tool input/output 在视觉上合并为一个受控高度整体面板；每个 region 短内容自然高度，长内容默认在 180px 内部滚动；命令、路径、patch 和 shell 输出按终端式 `pre` 文本保留原始行，并通过横向滚动查看长行。有效的 JSON input/output 都会在展示层以两空格缩进；含换行的字符串使用 `"""` 边界还原为多行内容，字段字符串若完整地包含 JSON object/array，则使用 `json"""` 边界递归缩进，明确保留其字符串语义。`exec` 是首个工具专用 renderer：仅当 `toolName === "exec"` 且 input 能完整解析为只含一个非空 `code` 字符串字段的 object 时，把该字符串作为 JavaScript async body 交给共享 Shiki 只读代码视图，显示行号并跟随当前代码主题；output 仍走通用 JSON renderer。流式半截 JSON、历史异常参数或 schema 不匹配时自动退回通用 renderer，避免工具 schema 演进后静默隐藏新字段。代码只作为 React text node 展示，不执行、不注入 HTML；复制仍写入该 region 的原始文本。每个 input/output region 右上角都有浮层式 icon-only 复制和展开按钮：展开取消当前 region 的垂直高度限制；展开态只保留横向滚动，不建立纵向内部滚动容器，鼠标 hover 在内容区域时纵向滚轮应继续驱动外层 thread view。按钮不参与内容布局，只在右侧保留避让空间，默认隐藏，仅在对应 region hover 或键盘 focus 进入时显示；默认/hover/focus/active 状态消费 icon button semantic token。面板背景由 `--semantic-thread-tool-io-panel-surface` 单独控制。
 

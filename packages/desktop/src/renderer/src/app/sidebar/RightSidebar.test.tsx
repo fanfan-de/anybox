@@ -1053,9 +1053,192 @@ describe("RightSidebar", () => {
     }
   })
 
-  it("preserves the draft and automatic strategy when the first send fails", async () => {
+  it("shows a Branch Chat user message before the send request resolves", async () => {
     const previousDesktop = window.desktop
-    const sendTurn = vi.fn().mockRejectedValue(new Error("Network unavailable"))
+    let resolveSendTurn: (() => void) | undefined
+    const sendTurn = vi.fn((input: { clientTurnID: string }) => new Promise<{
+      clientTurnID: string
+    }>((resolve) => {
+      resolveSendTurn = () => resolve({ clientTurnID: input.clientTurnID })
+    }))
+    window.desktop = {
+      ...previousDesktop,
+      agentSession: {
+        loadHistory: vi.fn().mockResolvedValue([]),
+        sendTurn,
+        resumeTurn: vi.fn(),
+        cancelTurn: vi.fn(),
+        interrupt: vi.fn(),
+        answerQuestion: vi.fn(),
+        subscribe: vi.fn(),
+        unsubscribe: vi.fn(),
+        loadPermissionRequests: vi.fn().mockResolvedValue([]),
+        respondPermissionRequest: vi.fn(),
+        onEvent: vi.fn(() => () => undefined),
+      },
+    } as typeof window.desktop
+
+    try {
+      renderRightSidebar({
+        messageTreeBySession: {
+          "session-1": createBranchChatTree(),
+        },
+        rightSidebar: {
+          activeTabID: "branch-chat-tab",
+          tabs: [createBranchChatTab()],
+        },
+      })
+
+      const editor = screen.getByRole("textbox", { name: "Task draft" })
+      act(() => {
+        editor.dispatchEvent(new CustomEvent("desktop-composer-change", {
+          bubbles: true,
+          detail: { value: "Optimistic branch request" },
+        }))
+      })
+      fireEvent.click(screen.getByRole("button", { name: "Send task" }))
+
+      expect(await screen.findByText("Optimistic branch request")).toBeInTheDocument()
+      expect(
+        screen.getByRole("status", { name: "Sending message" }),
+      ).toBeInTheDocument()
+      expect(sendTurn).toHaveBeenCalledTimes(1)
+
+      await act(async () => {
+        resolveSendTurn?.()
+      })
+    } finally {
+      window.desktop = previousDesktop
+    }
+  })
+
+  it("confirms a Branch Chat user row from message.recorded without duplicating it", async () => {
+    const previousDesktop = window.desktop
+    let eventListener: ((event: AgentSessionBridgeEvent) => void) | null = null
+    const loadHistory = vi.fn().mockResolvedValue([])
+    const sendTurn = vi.fn().mockResolvedValue(undefined)
+    const onUpdateTab = vi.fn()
+    window.desktop = {
+      ...previousDesktop,
+      agentSession: {
+        loadHistory,
+        sendTurn,
+        resumeTurn: vi.fn(),
+        cancelTurn: vi.fn(),
+        interrupt: vi.fn(),
+        answerQuestion: vi.fn(),
+        subscribe: vi.fn(),
+        unsubscribe: vi.fn(),
+        loadPermissionRequests: vi.fn().mockResolvedValue([]),
+        respondPermissionRequest: vi.fn(),
+        onEvent: vi.fn((listener: (event: AgentSessionBridgeEvent) => void) => {
+          eventListener = listener
+          return () => undefined
+        }),
+      },
+    } as typeof window.desktop
+
+    try {
+      const view = renderRightSidebar({
+        messageTreeBySession: {
+          "session-1": createBranchChatTree(),
+        },
+        rightSidebar: {
+          activeTabID: "branch-chat-tab",
+          tabs: [createBranchChatTab()],
+        },
+        onUpdateTab,
+      })
+
+      const editor = screen.getByRole("textbox", { name: "Task draft" })
+      act(() => {
+        editor.dispatchEvent(new CustomEvent("desktop-composer-change", {
+          bubbles: true,
+          detail: { value: "Record this branch request" },
+        }))
+      })
+      fireEvent.click(screen.getByRole("button", { name: "Send task" }))
+      await waitFor(() => expect(sendTurn).toHaveBeenCalledTimes(1))
+
+      const request = sendTurn.mock.calls[0]?.[0]
+      if (!request) throw new Error("Expected a Branch Chat turn request")
+      view.rerender(createRightSidebarUI({
+        messageTreeBySession: {
+          "session-1": createBranchChatTree(),
+        },
+        rightSidebar: {
+          activeTabID: "branch-chat-tab",
+          tabs: [{
+            ...createBranchChatTab(),
+            executionID: request.executionID ?? request.clientTurnID,
+          }],
+        },
+        onUpdateTab,
+      }))
+
+      act(() => {
+        eventListener?.({
+          kind: "stream",
+          source: "request",
+          backendSessionID: "session-1",
+          clientTurnID: request.clientTurnID,
+          event: "execution.mode",
+          data: {
+            executionID: request.executionID,
+            headMessageID: "assistant-anchor",
+            targetKind: "detached-branch",
+            turnID: "turn-branch-recorded",
+          },
+          receivedAt: 3,
+        })
+        eventListener?.({
+          kind: "stream",
+          source: "request",
+          backendSessionID: "session-1",
+          clientTurnID: request.clientTurnID,
+          event: "runtime",
+          data: {
+            eventID: "event-user-recorded",
+            executionID: request.executionID,
+            payload: {
+              message: {
+                id: "message-user-backend",
+                role: "user",
+              },
+            },
+            targetKind: "detached-branch",
+            turnID: "turn-branch-recorded",
+            type: "message.recorded",
+          },
+          receivedAt: 4,
+        })
+      })
+
+      expect(onUpdateTab).toHaveBeenCalledWith("branch-chat-tab", {
+        anchorStrategy: "selected",
+        headMessageID: "assistant-anchor",
+        phase: "committed",
+      })
+      await waitFor(() => {
+        expect(
+          screen.queryByRole("status", { name: "Sending message" }),
+        ).not.toBeInTheDocument()
+      })
+      expect(screen.getAllByText("Record this branch request")).toHaveLength(1)
+      expect(
+        screen.queryByRole("button", { name: "Retry sending message" }),
+      ).not.toBeInTheDocument()
+      expect(loadHistory).toHaveBeenCalled()
+    } finally {
+      window.desktop = previousDesktop
+    }
+  })
+
+  it("keeps a failed Branch Chat message in place and retries its exact request", async () => {
+    const previousDesktop = window.desktop
+    const sendTurn = vi.fn()
+      .mockRejectedValueOnce(new Error("Network unavailable"))
+      .mockResolvedValueOnce(undefined)
     const onUpdateTab = vi.fn()
     window.desktop = {
       ...previousDesktop,
@@ -1099,11 +1282,45 @@ describe("RightSidebar", () => {
       })
       fireEvent.click(screen.getByRole("button", { name: "Send task" }))
 
-      expect(await screen.findByRole("alert")).toHaveTextContent("Network unavailable")
-      expect(editor.textContent ?? "").toBe("Retry this unchanged")
+      expect(await screen.findByText("Retry this unchanged")).toBeInTheDocument()
+      expect(
+        screen.getByRole("group", {
+          name: "Message failed to send: Network unavailable",
+        }),
+      ).toBeInTheDocument()
+      expect(editor.textContent ?? "").toBe("")
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument()
       expect(onUpdateTab).not.toHaveBeenCalledWith(tab.id, {
         anchorStrategy: "selected",
       })
+
+      fireEvent.click(
+        screen.getByRole("button", { name: "Retry sending message" }),
+      )
+      await waitFor(() => expect(sendTurn).toHaveBeenCalledTimes(2))
+
+      const firstRequest = sendTurn.mock.calls[0]?.[0]
+      const retryRequest = sendTurn.mock.calls[1]?.[0]
+      if (!firstRequest || !retryRequest) {
+        throw new Error("Expected initial and retry Branch Chat requests")
+      }
+      const {
+        clientTurnID: firstClientTurnID,
+        executionID: firstExecutionID,
+        ...firstSnapshot
+      } = firstRequest
+      const {
+        clientTurnID: retryClientTurnID,
+        executionID: retryExecutionID,
+        ...retrySnapshot
+      } = retryRequest
+      expect(retryClientTurnID).not.toBe(firstClientTurnID)
+      expect(retryExecutionID).not.toBe(firstExecutionID)
+      expect(retrySnapshot).toEqual(firstSnapshot)
+      expect(screen.getAllByText("Retry this unchanged")).toHaveLength(1)
+      expect(
+        screen.getByRole("status", { name: "Sending message" }),
+      ).toBeInTheDocument()
     } finally {
       window.desktop = previousDesktop
     }

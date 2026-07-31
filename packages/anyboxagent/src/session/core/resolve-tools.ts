@@ -266,7 +266,7 @@ export async function resolveToolPlan(input: ResolveToolsInput): Promise<Resolve
       continue
     }
 
-    const resolvedTool = tool<any, Tool.ToolOutput>({
+    const resolvedTool = tool<any, Tool.ToolOutput, Record<string, unknown>>({
       title: execution.title,
       description: execution.description,
       inputSchema: item.inputSchema

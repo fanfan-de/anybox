@@ -363,6 +363,7 @@ export function shouldRenderDiffOnStandaloneUserMessage(
 function estimateAssistantTraceItemHeight(item: AssistantTraceItem) {
   const draftPatchFileCount = Array.isArray(item.draftPatch?.fileChanges) ? item.draftPatch.fileChanges.length : 0
   if (item.kind === "tool" && draftPatchFileCount === 0) return 32
+  if (item.kind === "reasoning" && item.isStreaming) return 32
 
   const textLength = `${item.title ?? ""}${item.text ?? ""}${item.detail ?? ""}`.length
   const isResponseText = item.kind === "text" && traceSectionKeyForItem(item) === "response"

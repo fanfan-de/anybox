@@ -318,7 +318,7 @@ test("anybox browser login stores oauth session and runtime uses openai-compatib
     getEnvAll: () => ({}),
     importPackage: async (pkg: string, version?: string) => {
       expect(pkg).toBe("@ai-sdk/openai-compatible")
-      expect(version).toBe("2.0.38")
+      expect(version).toBe("3.0.18")
 
       return {
         name: pkg,
@@ -513,7 +513,7 @@ test("anybox model payload can select sdk package and API URL per model", async 
     getEnvAll: () => ({}),
     importPackage: async (pkg: string, version?: string) => {
       expect(pkg).toBe("@ai-sdk/anthropic")
-      expect(version).toBe("3.0.75")
+      expect(version).toBe("4.0.25")
 
       return {
         name: pkg,

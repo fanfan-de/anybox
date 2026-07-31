@@ -371,9 +371,10 @@
   line-height: 1.5;
 }
 
-.terminal-surface {
+.terminal-panel .terminal-surface {
   min-height: 0;
   flex: 1 1 auto;
+  padding: 10px 12px 12px;
   border: 0;
   border-radius: 0;
   background: var(--seg-terminal-surface);
@@ -390,7 +391,6 @@
 
 .terminal-xterm {
   min-height: 0;
-  padding: 10px 12px 12px;
   background: var(--seg-terminal-surface);
 }
 
@@ -399,6 +399,21 @@
   scrollbar-gutter: stable;
   overscroll-behavior: contain;
   overflow-anchor: none;
+}
+
+.terminal-context-menu {
+  width: max-content;
+  min-width: 0;
+  max-width: min(240px, calc(100vw - 16px));
+  -webkit-app-region: no-drag;
+}
+
+.terminal-context-menu-shortcut {
+  justify-self: end;
+  color: var(--context-menu-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .terminal-empty-state {

@@ -68,7 +68,7 @@ test("provider supports @ai-sdk/openai-compatible with env-only API keys", async
         expect(capturedImports).toEqual([
           {
             pkg: "@ai-sdk/openai-compatible",
-            version: "2.0.38",
+            version: "3.0.18",
           },
         ])
         expect(capturedFactoryInputs).toEqual([

@@ -141,6 +141,55 @@ describe("user message presentation persistence", () => {
     expect(restoredMessage?.submissionMode).toBeUndefined()
   })
 
+  it("does not persist optimistic user messages or their delivery state", () => {
+    persistUserMessages("session-1", [
+      {
+        ...buildUserThreadMessage({
+          displayText: "Send this immediately",
+          timestamp: 10,
+        }),
+        delivery: {
+          status: "failed",
+          error: "Temporary transport failure",
+        },
+      },
+    ])
+
+    expect(readPersistedUserMessages("session-1")).toEqual([])
+  })
+
+  it("keeps in-memory pending delivery state while canonical history is reconciled", () => {
+    const previousMessages = [
+      {
+        ...buildUserThreadMessage({
+          id: "user-local",
+          displayText: "Review this request",
+          timestamp: 10,
+        }),
+        delivery: { status: "pending" as const },
+      },
+    ]
+    const historyMessages = [
+      buildUserThreadMessage({
+        id: "message-user-backend",
+        displayText: "Review this request",
+        timestamp: 10,
+      }),
+    ]
+
+    const mergedMessages = mergeUserMessagePresentationState(
+      previousMessages,
+      historyMessages,
+    )
+
+    expect(mergedMessages).toHaveLength(1)
+    expect(mergedMessages[0]).toMatchObject({
+      id: "user-local",
+      kind: "user",
+      delivery: { status: "pending" },
+    })
+  })
+
   it("keeps backend diff summaries when merging user presentation state", () => {
     const previousMessages = [
       buildUserThreadMessage({

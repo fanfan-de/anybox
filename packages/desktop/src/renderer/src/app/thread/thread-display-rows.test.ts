@@ -245,6 +245,28 @@ describe("thread display rows", () => {
     expect(firstRows[0]?.rowID).toBe(nextRows[0]?.rowID)
   })
 
+  it("keeps streaming reasoning row estimates compact as text accumulates", () => {
+    const buildStreamingReasoningRows = (text: string) => buildRows([
+      assistantMessage(
+        "assistant-1",
+        [reasoningItem("reasoning-1", text, { isStreaming: true, status: "running" })],
+        { isStreaming: true },
+      ),
+    ])
+
+    const shortRows = buildStreamingReasoningRows("Inspecting.")
+    const longRows = buildStreamingReasoningRows("Inspecting the renderer. ".repeat(200))
+
+    expect(shortRows[0]).toMatchObject({
+      kind: "assistant-reasoning-row",
+      estimatedHeight: 32,
+    })
+    expect(longRows[0]).toMatchObject({
+      kind: "assistant-reasoning-row",
+      estimatedHeight: 32,
+    })
+  })
+
   it("creates semantic rows for reasoning, tool, and response items", () => {
     const rows = buildRows([
       assistantMessage("assistant-1", [

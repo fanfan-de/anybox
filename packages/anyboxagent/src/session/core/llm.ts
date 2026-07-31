@@ -85,7 +85,11 @@ export type StreamInput = {
 
 // AI SDK streaming result handle returned by streamText; callers consume its
 // stream/promise properties instead of receiving a completed text string.
-export type StreamOutput = StreamTextResult<ToolSet, never>
+export type StreamOutput = StreamTextResult<
+  ToolSet,
+  Record<string, unknown>,
+  ReturnType<typeof Output.text>
+>
 
 function summarizeModelMessages(messages: ModelMessage[]) {
   let userMessages = 0

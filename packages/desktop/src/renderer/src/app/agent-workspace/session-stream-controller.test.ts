@@ -1554,6 +1554,7 @@ describe("session stream controller helpers", () => {
       {
         ...createUserThreadMessage("user-local", "Create a Markdown document"),
         displayText: "Create a Markdown document",
+        delivery: { status: "pending" },
         timestamp: 18,
       },
       streamingAssistant,
@@ -1571,13 +1572,14 @@ describe("session stream controller helpers", () => {
 
     expect(merged).toHaveLength(2)
     expect(merged.map((message) => message.id)).toEqual([
-      "message-user-backend",
+      "user-local",
       "assistant-streaming",
     ])
     expect(merged[0]).toMatchObject({
       kind: "user",
       displayText: "Create a Markdown document",
       text: "Create a Markdown document",
+      delivery: { status: "pending" },
     })
   })
 

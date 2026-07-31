@@ -417,6 +417,7 @@ export interface WorkbenchPaneSurfaceProps {
   onPickComposerAttachments: (input: { allowImage: boolean; allowPdf: boolean; disabledReason: string | null; tabKey?: string | null }) => Promise<void>
   onPasteComposerImageAttachments: (input: { allowImage: boolean; disabledReason?: string | null; images: ComposerPastedImageAttachment[]; tabKey?: string | null }) => Promise<void>
   onRemoveComposerAttachment: (path: string, tabKey?: string | null) => void
+  onRetryUserMessage?: (messageID: string) => void | Promise<void>
   onCancelSend: (input?: { sessionID?: string | null; tabKey?: string | null }) => Promise<void>
   onPlanModeToggle: (input: { createSessionTabID?: string | null; sessionID?: string | null }) => Promise<void>
   onSend: (input?: {
@@ -569,6 +570,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
   onPickComposerAttachments,
   onPasteComposerImageAttachments,
   onRemoveComposerAttachment,
+  onRetryUserMessage,
   onCancelSend,
   onPlanModeToggle,
   onSend,
@@ -987,6 +989,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                   onMessageDiffRestore={(files) => onMessageDiffRestore(files, pane.sessionID, pane.id)}
                   onMessageDiffReview={(files) => onMessageDiffReview(files, pane.sessionID, pane.id)}
                   onMessageDiffSummaryHydrate={(messageID, diffSummary) => onMessageDiffSummaryHydrate(messageID, diffSummary, pane.sessionID)}
+                  onRetryUserMessage={onRetryUserMessage}
                   onArtifactLinkOpen={(target) =>
                     onArtifactLinkOpen?.({
                       paneID: pane.id,

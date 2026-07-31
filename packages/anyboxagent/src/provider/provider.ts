@@ -395,28 +395,28 @@ function sdkAdapter(version: string, exportName: string, options?: {
 }
 
 const SDK_ADAPTERS: Record<string, SDKAdapter> = {
-  "@ai-sdk/amazon-bedrock": sdkAdapter("4.0.101", "createAmazonBedrock"),
-  "@ai-sdk/anthropic": sdkAdapter("3.0.75", "createAnthropic"),
-  "@ai-sdk/azure": sdkAdapter("3.0.62", "createAzure"),
-  "@ai-sdk/cerebras": sdkAdapter("2.0.50", "createCerebras"),
-  "@ai-sdk/cohere": sdkAdapter("3.0.34", "createCohere"),
+  "@ai-sdk/amazon-bedrock": sdkAdapter("5.0.38", "createAmazonBedrock"),
+  "@ai-sdk/anthropic": sdkAdapter("4.0.25", "createAnthropic"),
+  "@ai-sdk/azure": sdkAdapter("4.0.26", "createAzure"),
+  "@ai-sdk/cerebras": sdkAdapter("3.0.18", "createCerebras"),
+  "@ai-sdk/cohere": sdkAdapter("4.0.16", "createCohere"),
   [DEEPSEEK_SDK_PACKAGE]: {
-    version: "2.0.35",
+    version: "3.0.17",
     exportName: "createDeepSeek",
     create: createSDKProvider,
   },
-  "@ai-sdk/deepinfra": sdkAdapter("2.0.50", "createDeepInfra"),
-  "@ai-sdk/gateway": sdkAdapter("3.0.110", "createGateway"),
-  "@ai-sdk/google": sdkAdapter("3.0.67", "createGoogleGenerativeAI"),
-  [GOOGLE_VERTEX_SDK_PACKAGE]: sdkAdapter("4.0.121", "createVertex"),
-  "@ai-sdk/google-vertex/anthropic": sdkAdapter("4.0.121", "createVertexAnthropic", {
+  "@ai-sdk/deepinfra": sdkAdapter("3.0.18", "createDeepInfra"),
+  "@ai-sdk/gateway": sdkAdapter("4.0.33", "createGateway"),
+  "@ai-sdk/google": sdkAdapter("4.0.29", "createGoogleGenerativeAI"),
+  [GOOGLE_VERTEX_SDK_PACKAGE]: sdkAdapter("5.0.36", "createVertex"),
+  "@ai-sdk/google-vertex/anthropic": sdkAdapter("5.0.36", "createVertexAnthropic", {
     installPackage: GOOGLE_VERTEX_SDK_PACKAGE,
     importSpecifier: "@ai-sdk/google-vertex/anthropic",
   }),
-  "@ai-sdk/groq": sdkAdapter("3.0.38", "createGroq"),
-  "@ai-sdk/mistral": sdkAdapter("3.0.35", "createMistral"),
+  "@ai-sdk/groq": sdkAdapter("4.0.17", "createGroq"),
+  "@ai-sdk/mistral": sdkAdapter("4.0.18", "createMistral"),
   [OPENAI_COMPATIBLE_SDK_PACKAGE]: {
-    version: "2.0.38",
+    version: "3.0.18",
     exportName: "createOpenAICompatible",
     create(input: SDKFactoryInput, factory: SDKModuleFactory) {
       if (!input.baseURL) {
@@ -429,24 +429,24 @@ const SDK_ADAPTERS: Record<string, SDKAdapter> = {
     },
   },
   [OPENAI_SDK_PACKAGE]: {
-    version: "3.0.48",
+    version: "4.0.25",
     exportName: "createOpenAI",
     create: createNamedSDKProvider,
   },
-  "@ai-sdk/perplexity": sdkAdapter("3.0.32", "createPerplexity"),
-  "@ai-sdk/togetherai": sdkAdapter("2.0.50", "createTogetherAI"),
-  "@ai-sdk/vercel": sdkAdapter("2.0.48", "createVercel"),
-  "@ai-sdk/xai": sdkAdapter("3.0.88", "createXai"),
-  "@aihubmix/ai-sdk-provider": sdkAdapter("2.0.6", "createAihubmix"),
-  "@jerome-benoit/sap-ai-provider-v2": sdkAdapter("4.6.9", "createSAPAIProvider"),
+  "@ai-sdk/perplexity": sdkAdapter("4.0.18", "createPerplexity"),
+  "@ai-sdk/togetherai": sdkAdapter("3.0.19", "createTogetherAI"),
+  "@ai-sdk/vercel": sdkAdapter("3.0.18", "createVercel"),
+  "@ai-sdk/xai": sdkAdapter("4.0.23", "createXai"),
+  "@aihubmix/ai-sdk-provider": sdkAdapter("2.2.1", "createAihubmix"),
+  "@jerome-benoit/sap-ai-provider-v2": sdkAdapter("4.8.0", "createSAPAIProvider"),
   [OPENROUTER_SDK_PACKAGE]: {
-    version: "2.9.0",
+    version: "3.0.0",
     exportName: "createOpenRouter",
     create: createSDKProvider,
   },
-  "ai-gateway-provider": sdkAdapter("3.1.3", "createAiGateway"),
-  "gitlab-ai-provider": sdkAdapter("6.6.0", "createGitLab"),
-  "venice-ai-sdk-provider": sdkAdapter("1.1.19", "createVenice"),
+  "ai-gateway-provider": sdkAdapter("4.0.0", "createAiGateway"),
+  "gitlab-ai-provider": sdkAdapter("6.12.1", "createGitLab"),
+  "venice-ai-sdk-provider": sdkAdapter("2.1.1", "createVenice"),
 }
 
 function sdkPackagesFromModelsDev(catalog: Record<string, ModelsDev.DevProvider>) {
@@ -2197,7 +2197,7 @@ function resolveRuntimeFetchURL(input: RuntimeFetchInput) {
 
 function replaceRuntimeFetchURL(input: RuntimeFetchInput, url: URL): RuntimeFetchInput {
   if (input instanceof Request) {
-    return new Request(url.toString(), input)
+    return new Request(url.toString(), input as unknown as RequestInit)
   }
   if (input instanceof URL) {
     return url

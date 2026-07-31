@@ -1,4 +1,8 @@
 const enUS = {
+  "thread.userMessage.sending": "Sending message",
+  "thread.userMessage.failed": "Message failed to send",
+  "thread.userMessage.cancelled": "Message sending was cancelled",
+  "thread.userMessage.retry": "Retry sending message",
   "branchView.modeAria": "Session view",
   "branchView.mode.linear": "Linear",
   "branchView.mode.branch": "Branches",
@@ -67,6 +71,10 @@ const enUS = {
 type BranchViewTranslations = Record<keyof typeof enUS, string>
 
 const zhCN: BranchViewTranslations = {
+  "thread.userMessage.sending": "正在发送消息",
+  "thread.userMessage.failed": "消息发送失败",
+  "thread.userMessage.cancelled": "消息发送已取消",
+  "thread.userMessage.retry": "重新发送消息",
   "branchView.modeAria": "会话视图",
   "branchView.mode.linear": "线性",
   "branchView.mode.branch": "分支",
@@ -133,6 +141,10 @@ const zhCN: BranchViewTranslations = {
 }
 
 const zhTW: BranchViewTranslations = {
+  "thread.userMessage.sending": "正在傳送訊息",
+  "thread.userMessage.failed": "訊息傳送失敗",
+  "thread.userMessage.cancelled": "訊息傳送已取消",
+  "thread.userMessage.retry": "重新傳送訊息",
   "branchView.modeAria": "工作階段檢視",
   "branchView.mode.linear": "線性",
   "branchView.mode.branch": "分支",

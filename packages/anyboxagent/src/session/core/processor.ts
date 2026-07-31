@@ -204,12 +204,10 @@ function applyUsageToAssistantMessage(
         output: usage.outputTokens ?? message.tokens.output,
         reasoning:
             usage.outputTokenDetails?.reasoningTokens ??
-            usage.reasoningTokens ??
             message.tokens.reasoning,
         cache: {
             read:
                 usage.inputTokenDetails?.cacheReadTokens ??
-                usage.cachedInputTokens ??
                 message.tokens.cache.read,
             write:
                 usage.inputTokenDetails?.cacheWriteTokens ??
@@ -226,12 +224,8 @@ function summarizeLlmUsage(usage: LanguageModelUsage | undefined) {
     return {
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens,
-        reasoningTokens:
-            usage.outputTokenDetails?.reasoningTokens ??
-            usage.reasoningTokens,
-        cacheReadTokens:
-            usage.inputTokenDetails?.cacheReadTokens ??
-            usage.cachedInputTokens,
+        reasoningTokens: usage.outputTokenDetails?.reasoningTokens,
+        cacheReadTokens: usage.inputTokenDetails?.cacheReadTokens,
         cacheWriteTokens: usage.inputTokenDetails?.cacheWriteTokens,
     }
 }
@@ -312,9 +306,9 @@ function buildStepTokens(usage: LanguageModelUsage | undefined) {
     return {
         input: usage?.inputTokens ?? 0,
         output: usage?.outputTokens ?? 0,
-        reasoning: usage?.outputTokenDetails?.reasoningTokens ?? usage?.reasoningTokens ?? 0,
+        reasoning: usage?.outputTokenDetails?.reasoningTokens ?? 0,
         cache: {
-            read: usage?.inputTokenDetails?.cacheReadTokens ?? usage?.cachedInputTokens ?? 0,
+            read: usage?.inputTokenDetails?.cacheReadTokens ?? 0,
             write: usage?.inputTokenDetails?.cacheWriteTokens ?? 0,
         },
     }

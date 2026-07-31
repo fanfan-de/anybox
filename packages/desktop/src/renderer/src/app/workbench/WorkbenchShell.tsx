@@ -642,6 +642,7 @@ export interface WorkbenchShellProps {
   onPickComposerAttachments: WorkbenchPaneSurfaceProps["onPickComposerAttachments"]
   onPasteComposerImageAttachments: WorkbenchPaneSurfaceProps["onPasteComposerImageAttachments"]
   onRemoveComposerAttachment: (path: string, tabKey?: string | null) => void
+  onRetryUserMessage?: WorkbenchPaneSurfaceProps["onRetryUserMessage"]
   onSelectCreateSessionTab: (createSessionTabID: string, paneID?: string) => void
   onSelectSessionTab: (sessionID: string, paneID?: string) => void
   onCancelSend: WorkbenchPaneSurfaceProps["onCancelSend"]
@@ -1321,6 +1322,7 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
         onPickComposerAttachments={props.onPickComposerAttachments}
         onPasteComposerImageAttachments={props.onPasteComposerImageAttachments}
         onRemoveComposerAttachment={props.onRemoveComposerAttachment}
+        onRetryUserMessage={props.onRetryUserMessage}
         onCancelSend={props.onCancelSend}
         onPlanModeToggle={props.onPlanModeToggle}
         onSend={props.onSend}

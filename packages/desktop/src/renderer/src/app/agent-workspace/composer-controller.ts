@@ -13,6 +13,7 @@ import type {
   ComposerDraftState,
   ComposerPastedImageAttachment,
   CreateSessionTab,
+  OptimisticUserSubmission,
   PendingAgentStream,
   PendingConversationInput,
   PermissionDecision,
@@ -38,6 +39,7 @@ import {
 } from "../pending-conversation-inputs"
 import {
   normalizeQuestionAnswerText,
+  parseComposerModelValue,
   sendPromptToSession as sendPromptToSessionService,
 } from "./composer-send-service"
 import type { TranslationKey } from "../i18n/translations"
@@ -109,12 +111,21 @@ interface UseComposerControllerOptions {
   loadSessionRuntimeDebugForSession: (sessionID: string, backendSessionID?: string) => Promise<void>
   pendingConversationInputsBySession: Record<string, PendingConversationInput[]>
   pendingPermissionRequestsBySession: Record<string, PermissionRequest[]>
+  optimisticUserSubmissionsRef: MutableRefObject<Record<string, OptimisticUserSubmission>>
   pendingStreamsRef: MutableRefObject<Record<string, PendingAgentStream>>
+  failOptimisticUserSubmission: (input: {
+    activeClientTurnID?: string
+    error?: string
+    reason?: "cancelled"
+    userThreadMessageID: string
+  }) => boolean
+  prepareUserMessageRetry: (sessionID: string, userThreadMessageID: string) => boolean
   permissionRequestActionRequestID: string | null
   permissionRequestsRequestRef: MutableRefObject<Record<string, number>>
   platform: string
   refreshWorkspaceForSession: (sessionID: string) => void
   refreshWorkspaceFromDirectory: (directory: string) => void | Promise<WorkspaceGroup | null>
+  removeConversationMessage: (sessionID: string, messageID: string) => void
   reloadSessionHistoryForSession: (sessionID: string, backendSessionID?: string) => Promise<void>
   sessionDirectoryBySession: Record<string, string>
   setAgentSessions: StateSetter<Record<string, string>>
@@ -136,6 +147,11 @@ interface UseComposerControllerOptions {
     assistantMessageID: string,
     updater: (message: AssistantThreadMessage) => AssistantThreadMessage,
   ) => void
+  updateUserMessageDelivery: (
+    sessionID: string,
+    userThreadMessageID: string,
+    delivery: UserThreadMessage["delivery"],
+  ) => boolean
   workspaces: WorkspaceGroup[]
 }
 
@@ -161,12 +177,16 @@ export function useComposerController({
   loadSessionRuntimeDebugForSession,
   pendingConversationInputsBySession,
   pendingPermissionRequestsBySession,
+  optimisticUserSubmissionsRef,
   pendingStreamsRef,
+  failOptimisticUserSubmission,
+  prepareUserMessageRetry,
   permissionRequestActionRequestID,
   permissionRequestsRequestRef,
   platform,
   refreshWorkspaceForSession,
   refreshWorkspaceFromDirectory,
+  removeConversationMessage,
   reloadSessionHistoryForSession,
   sessionDirectoryBySession,
   setAgentSessions,
@@ -184,6 +204,7 @@ export function useComposerController({
   setSessionDirectoryBySession,
   setWorkspaces,
   updateAssistantConversationMessage,
+  updateUserMessageDelivery,
   workspaces,
 }: UseComposerControllerOptions) {
   const commandStatusTimersRef = useRef<Record<string, number>>({})
@@ -231,6 +252,11 @@ export function useComposerController({
     backendSessionID?: string | null
     commentReferences?: ComposerCommentReference[]
     displayText?: string
+    modelOverride?: {
+      providerID: string
+      modelID: string
+    }
+    prepareBeforeSend?: (() => Promise<void>) | null
     preserveComposerState?: boolean
     parentMessageID?: string | null
     questionAnswer?: {
@@ -240,6 +266,11 @@ export function useComposerController({
     }
     reasoningEffort?: ReasoningEffort | null
     references?: UserThreadMessage["references"]
+    resolveModelBeforeSend?: (() => Promise<{
+      providerID: string
+      modelID: string
+    } | undefined>) | null
+    retryUserMessageID?: string
     selectedModel?: string | null
     session: SessionSummary
     selectedSkillIDs: string[]
@@ -247,6 +278,7 @@ export function useComposerController({
     submissionMode?: UserThreadMessage["submissionMode"]
     tabKey: string
     text: string
+    waitForPendingModelSelection?: (() => Promise<void>) | null
     workspace: WorkspaceGroup
   }) {
     await sendPromptToSessionService(input, {
@@ -256,10 +288,13 @@ export function useComposerController({
       appendConversationMessages,
       replaceConversationMessages,
       getConversationMessages,
+      optimisticUserSubmissionsRef,
       pendingStreamsRef,
       platform,
       refreshWorkspaceFromDirectory,
       reloadSessionHistoryForSession,
+      prepareUserMessageRetry,
+      removeConversationMessage,
       sessionDirectoryBySession,
       setAgentSessions,
       setComposerAttachmentsByTabKey,
@@ -269,6 +304,7 @@ export function useComposerController({
       setSessionDirectoryBySession,
       setWorkspaces,
       updateAssistantConversationMessage,
+      updateUserMessageDelivery,
     })
   }
 
@@ -504,7 +540,7 @@ export function useComposerController({
       (!effectiveText && attachments.length === 0) ||
       pendingPermissionRequests.length > 0
     ) return
-    if (input?.waitForPendingModelSelection) {
+    if (submissionMode && input?.waitForPendingModelSelection) {
       await input.waitForPendingModelSelection().catch(() => undefined)
     }
     if (input?.attachmentError) return
@@ -528,6 +564,8 @@ export function useComposerController({
         submissionMode,
         tabKey: targetTabKey,
         text: effectiveText,
+        waitForPendingModelSelection:
+          submissionMode ? undefined : input?.waitForPendingModelSelection,
         workspace: nextSelection.workspace,
       })
       if (parentMessageID && targetTabKey) {
@@ -558,74 +596,84 @@ export function useComposerController({
     })
     if (!created) return
 
-    let createdSession = created.session
-    if (input?.selectedModel || input?.selectedReasoningEffort) {
-      const selection = await window.desktop?.updateSessionModelSelection?.({
-        sessionID: created.session.id,
-        ...(input.selectedModel ? { model: input.selectedModel } : {}),
-        ...(input.selectedReasoningEffort ? { reasoning_effort: input.selectedReasoningEffort } : {}),
-      }).catch((error) => {
-        console.error("[desktop] updateSessionModelSelection for new session failed:", error)
-        return null
-      })
+    let preparedSession = created.session
+    const resolveModelBeforeSend =
+      input?.selectedModel || input?.selectedReasoningEffort
+        ? async () => {
+            const selection = await window.desktop?.updateSessionModelSelection?.({
+              sessionID: created.session.id,
+              ...(input.selectedModel ? { model: input.selectedModel } : {}),
+              ...(input.selectedReasoningEffort ? { reasoning_effort: input.selectedReasoningEffort } : {}),
+            }).catch((error) => {
+              console.error("[desktop] updateSessionModelSelection for new session failed:", error)
+              return null
+            })
 
-      if (selection) {
-        const modelSelection = normalizeSessionModelSelection(selection)
-        createdSession = {
-          ...created.session,
-          modelSelection,
+            if (!selection) return undefined
+
+            const modelSelection = normalizeSessionModelSelection(selection)
+            preparedSession = {
+              ...preparedSession,
+              modelSelection,
+            }
+            setWorkspaces((current) =>
+              updateSessionModelSelectionInWorkspaces(current, created.session.id, modelSelection),
+            )
+            await rememberProjectModelSelection(created.workspace, modelSelection)
+
+            const selectedModel = input.selectedModel?.trim()
+            return selectedModel && modelSelection?.model?.trim() === selectedModel
+              ? parseComposerModelValue(selectedModel)
+              : undefined
+          }
+        : undefined
+    const prepareBeforeSend = shouldStartInPlanning
+      ? async () => {
+          if (!window.desktop?.updateSessionWorkflow) {
+            throw new Error("Plan Mode is unavailable for this session.")
+          }
+
+          try {
+            const result = await window.desktop.updateSessionWorkflow({
+              sessionID: created.session.id,
+              action: "enter-plan",
+            })
+            preparedSession = {
+              ...preparedSession,
+              ...result.session,
+            }
+            setWorkspaces((currentWorkspaces) =>
+              updateSessionInWorkspaces(currentWorkspaces, created.session.id, (session) => ({
+                ...session,
+                ...result.session,
+              })),
+            )
+          } catch (error) {
+            console.error("[desktop] enter plan mode for new session failed:", error)
+            throw error
+          }
         }
-        setWorkspaces((current) =>
-          updateSessionModelSelectionInWorkspaces(current, created.session.id, modelSelection),
-        )
-        await rememberProjectModelSelection(created.workspace, modelSelection)
-      }
-    }
-
-    if (shouldStartInPlanning) {
-      if (!window.desktop?.updateSessionWorkflow) {
-        appendConversationMessages(created.session.id, [buildFailureThreadMessage("Plan Mode is unavailable for this session.")])
-        return
-      }
-
-      try {
-        const result = await window.desktop.updateSessionWorkflow({
-          sessionID: created.session.id,
-          action: "enter-plan",
-        })
-        createdSession = {
-          ...createdSession,
-          ...result.session,
-        }
-        setWorkspaces((currentWorkspaces) =>
-          updateSessionInWorkspaces(currentWorkspaces, created.session.id, (session) => ({
-            ...session,
-            ...result.session,
-          })),
-        )
-      } catch (error) {
-        console.error("[desktop] enter plan mode for new session failed:", error)
-        appendConversationMessages(created.session.id, [buildFailureThreadMessage(error instanceof Error ? error.message : String(error))])
-        return
-      }
-    }
+      : undefined
 
     await sendPromptToSession({
       attachments,
       backendSessionID: created.backendSessionID,
       commentReferences: compiledSubmission.commentReferences,
       displayText,
+      prepareBeforeSend,
       preserveComposerState: input?.preserveComposerState,
       questionAnswer: input?.questionAnswer,
       reasoningEffort: input?.selectedReasoningEffort,
       references: compiledSubmission.userReferences,
+      resolveModelBeforeSend,
       selectedModel: input?.selectedModel,
       selectedSkillIDs: compiledSubmission.selectedSkillIDs,
       turnMcpServerIDs,
-      session: createdSession,
+      session: created.session,
       submissionMode,
       tabKey: targetTabKey,
       text: effectiveText,
+      waitForPendingModelSelection: input?.waitForPendingModelSelection,
       workspace: created.workspace,
     })
   }
@@ -804,6 +852,55 @@ export function useComposerController({
     })
   }
 
+  async function handleRetryUserMessage(userThreadMessageID: string) {
+    const submission = optimisticUserSubmissionsRef.current[userThreadMessageID]
+    if (!submission || submission.retrying) return
+    const userMessage = getConversationMessages(submission.sessionID).find(
+      (message) =>
+        message.kind === "user" &&
+        message.id === submission.userThreadMessageID,
+    )
+    if (
+      userMessage?.kind !== "user" ||
+      userMessage.delivery?.status !== "failed"
+    ) {
+      return
+    }
+
+    const selection = findSession(workspaces, submission.sessionID)
+    if (!selection.session || !selection.workspace) return
+
+    submission.retrying = true
+    const request = submission.request
+    await sendPromptToSession({
+      attachments: request.attachments.map((attachment) => ({ ...attachment })),
+      backendSessionID:
+        submission.backendSessionID ??
+        agentSessions[submission.sessionID],
+      displayText: request.displayText,
+      modelOverride: request.model ? { ...request.model } : undefined,
+      parentMessageID: request.parentMessageID,
+      preserveComposerState: true,
+      questionAnswer: request.questionAnswer
+        ? {
+            ...request.questionAnswer,
+            ...(request.questionAnswer.selectedOptions
+              ? { selectedOptions: [...request.questionAnswer.selectedOptions] }
+              : {}),
+          }
+        : undefined,
+      reasoningEffort: request.reasoningEffort,
+      references: request.references?.map((reference) => ({ ...reference })),
+      retryUserMessageID: submission.userThreadMessageID,
+      selectedSkillIDs: [...request.selectedSkillIDs],
+      turnMcpServerIDs: [...request.turnMcpServerIDs],
+      session: selection.session,
+      tabKey: request.tabKey,
+      text: request.text,
+      workspace: selection.workspace,
+    })
+  }
+
   async function handleCancelSend(input?: {
     sessionID?: string | null
     tabKey?: string | null
@@ -851,6 +948,27 @@ export function useComposerController({
               backendCancelError: cancelResult.backendCancelError,
             }))
           : null
+
+      if (
+        result &&
+        (result.backendCancelled || result.localRequestsAborted > 0) &&
+        stream?.userThreadMessageID
+      ) {
+        const didFailOptimisticSubmission = failOptimisticUserSubmission({
+          activeClientTurnID: clientTurnID,
+          reason: "cancelled",
+          userThreadMessageID: stream.userThreadMessageID,
+        })
+        if (didFailOptimisticSubmission && clientTurnID) {
+          delete pendingStreamsRef.current[clientTurnID]
+          setCancellingSessionIDs((current) => {
+            if (!current[sessionID]) return current
+            const next = { ...current }
+            delete next[sessionID]
+            return next
+          })
+        }
+      }
 
       if (!result || result.backendCancelError || !result.backendCancelled) {
         if (stream) {
@@ -1034,6 +1152,7 @@ export function useComposerController({
     handleApproveProposedPlan,
     handleCancelSend,
     handlePlanModeToggle,
+    handleRetryUserMessage,
     handleSend,
     sendPromptToSession,
     setDraft,

@@ -2339,6 +2339,366 @@ describe("ThreadView trace collapse", () => {
     expect(queryByRole("region", { name: "Reasoning content" })).toBeNull()
   })
 
+  it("renders streaming reasoning in a compact live line and follows appended visual lines", () => {
+    const buildReasoningItem = (text: string): AssistantTraceItem => ({
+      id: "reasoning-live",
+      kind: "reasoning",
+      timestamp: 1,
+      label: "Reasoning",
+      text,
+      status: "running",
+      isStreaming: true,
+    })
+    const { container, props, rerender } = renderThread([
+      assistantTraceMessage("assistant-live", [buildReasoningItem("Inspect files first")], true),
+    ])
+
+    const traceItem = container.querySelector(
+      '[data-assistant-item-id="reasoning-live"] .trace-item',
+    )
+    const toggle = traceItem?.querySelector(".trace-item-reasoning-toggle")
+    const viewport = traceItem?.querySelector<HTMLElement>(".trace-item-reasoning-live-viewport")
+    const contentShell = traceItem?.querySelector<HTMLElement>(".trace-item-reasoning-live-content-shell")
+
+    expect(traceItem).toHaveAttribute("data-reasoning-display-mode", "live-compact")
+    expect(toggle).toHaveAttribute("aria-expanded", "false")
+    expect(viewport).not.toBeNull()
+    expect(contentShell).not.toBeNull()
+
+    setScrollMetrics(viewport!, {
+      clientHeight: 22,
+      scrollHeight: 66,
+      scrollTop: 0,
+    })
+    rerender(
+      <ThreadView
+        {...props}
+        activeMessages={[
+          assistantTraceMessage(
+            "assistant-live",
+            [buildReasoningItem("Inspect files first\nCompare rendering states\nVerify the latest line")],
+            true,
+          ),
+        ]}
+      />,
+    )
+
+    expect(viewport!.scrollTop).toBe(44)
+    expect(traceItem).toHaveTextContent("Verify the latest line")
+    expect(contentShell).toHaveClass("is-line-advancing")
+    expect(contentShell?.style.getPropertyValue("--trace-reasoning-line-advance-distance")).toBe("22px")
+
+    const animationEndEvent = new Event("animationend", { bubbles: true })
+    Object.defineProperty(animationEndEvent, "animationName", {
+      value: "thread-reasoning-line-advance",
+    })
+    fireEvent(contentShell!, animationEndEvent)
+    expect(contentShell).not.toHaveClass("is-line-advancing")
+    expect(contentShell?.style.getPropertyValue("--trace-reasoning-line-advance-distance")).toBe("")
+  })
+
+  it("does not animate streaming tokens that remain on the current visual line", () => {
+    const buildReasoningItem = (text: string): AssistantTraceItem => ({
+      id: "reasoning-live",
+      kind: "reasoning",
+      timestamp: 1,
+      label: "Reasoning",
+      text,
+      status: "running",
+      isStreaming: true,
+    })
+    const { container, props, rerender } = renderThread([
+      assistantTraceMessage("assistant-live", [buildReasoningItem("Inspect")], true),
+    ])
+    const viewport = container.querySelector<HTMLElement>(".trace-item-reasoning-live-viewport")!
+    const contentShell = container.querySelector<HTMLElement>(".trace-item-reasoning-live-content-shell")!
+
+    setScrollMetrics(viewport, {
+      clientHeight: 22,
+      scrollHeight: 22,
+      scrollTop: 0,
+    })
+    rerender(
+      <ThreadView
+        {...props}
+        activeMessages={[
+          assistantTraceMessage(
+            "assistant-live",
+            [buildReasoningItem("Inspect the renderer")],
+            true,
+          ),
+        ]}
+      />,
+    )
+
+    expect(viewport.scrollTop).toBe(0)
+    expect(contentShell).not.toHaveClass("is-line-advancing")
+  })
+
+  it("resynchronizes the compact reasoning line after viewport reflow", () => {
+    const originalResizeObserver = globalThis.ResizeObserver
+    const observers: ManualResizeObserver[] = []
+
+    class ManualResizeObserver implements ResizeObserver {
+      readonly callback: ResizeObserverCallback
+      readonly targets = new Set<Element>()
+
+      constructor(callback: ResizeObserverCallback) {
+        this.callback = callback
+        observers.push(this)
+      }
+
+      observe(target: Element) {
+        this.targets.add(target)
+      }
+
+      unobserve(target: Element) {
+        this.targets.delete(target)
+      }
+
+      disconnect() {
+        this.targets.clear()
+      }
+    }
+
+    globalThis.ResizeObserver = ManualResizeObserver
+
+    try {
+      const view = renderThread([
+        assistantTraceMessage(
+          "assistant-live",
+          [
+            {
+              id: "reasoning-live",
+              kind: "reasoning",
+              timestamp: 1,
+              label: "Reasoning",
+              text: "A long reasoning line that will wrap when the pane becomes narrower.",
+              status: "running",
+              isStreaming: true,
+            },
+          ],
+          true,
+        ),
+      ])
+      const viewport = view.container.querySelector<HTMLElement>(".trace-item-reasoning-live-viewport")!
+      const liveLineObserver = observers.find((observer) => observer.targets.has(viewport))
+
+      expect(liveLineObserver).toBeDefined()
+
+      setScrollMetrics(viewport, {
+        clientHeight: 22,
+        scrollHeight: 88,
+        scrollTop: 0,
+      })
+      act(() => {
+        liveLineObserver!.callback([], liveLineObserver!)
+      })
+
+      expect(viewport.scrollTop).toBe(66)
+      expect(
+        view.container.querySelector(".trace-item-reasoning-live-content-shell"),
+      ).not.toHaveClass("is-line-advancing")
+      view.unmount()
+    } finally {
+      globalThis.ResizeObserver = originalResizeObserver
+    }
+  })
+
+  it("skips the live line animation when reduced motion is requested", () => {
+    const originalMatchMedia = window.matchMedia
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: vi.fn().mockReturnValue({
+        matches: true,
+        media: "(prefers-reduced-motion: reduce)",
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      }),
+    })
+
+    try {
+      const buildReasoningItem = (text: string): AssistantTraceItem => ({
+        id: "reasoning-live",
+        kind: "reasoning",
+        timestamp: 1,
+        label: "Reasoning",
+        text,
+        status: "running",
+        isStreaming: true,
+      })
+      const { container, props, rerender } = renderThread([
+        assistantTraceMessage("assistant-live", [buildReasoningItem("Inspect")], true),
+      ])
+      const viewport = container.querySelector<HTMLElement>(".trace-item-reasoning-live-viewport")!
+      const contentShell = container.querySelector<HTMLElement>(".trace-item-reasoning-live-content-shell")!
+
+      setScrollMetrics(viewport, {
+        clientHeight: 22,
+        scrollHeight: 44,
+        scrollTop: 0,
+      })
+      rerender(
+        <ThreadView
+          {...props}
+          activeMessages={[
+            assistantTraceMessage(
+              "assistant-live",
+              [buildReasoningItem("Inspect\nVerify")],
+              true,
+            ),
+          ]}
+        />,
+      )
+
+      expect(viewport.scrollTop).toBe(22)
+      expect(contentShell).not.toHaveClass("is-line-advancing")
+    } finally {
+      Object.defineProperty(window, "matchMedia", {
+        configurable: true,
+        value: originalMatchMedia,
+      })
+    }
+  })
+
+  it("preserves an explicit streaming reasoning expansion through updates and completion", () => {
+    const buildReasoningItem = (
+      text: string,
+      isStreaming: boolean,
+    ): AssistantTraceItem => ({
+      id: "reasoning-live",
+      kind: "reasoning",
+      timestamp: 1,
+      label: "Reasoning",
+      text,
+      status: isStreaming ? "running" : "completed",
+      isStreaming,
+    })
+    const { container, props, rerender } = renderThread([
+      assistantTraceMessage(
+        "assistant-live",
+        [buildReasoningItem("Inspect files first\nCompare rendering states", true)],
+        true,
+      ),
+    ])
+    const toggle = container.querySelector<HTMLElement>(".trace-item-reasoning-toggle")!
+
+    fireEvent.click(toggle)
+    expect(toggle).toHaveAttribute("aria-expanded", "true")
+    expect(container.querySelector('[data-reasoning-display-mode="expanded"]')).not.toBeNull()
+    expect(container.textContent).toContain("Compare rendering states")
+
+    rerender(
+      <ThreadView
+        {...props}
+        activeMessages={[
+          assistantTraceMessage(
+            "assistant-live",
+            [buildReasoningItem("Inspect files first\nCompare rendering states\nRun final checks", true)],
+            true,
+          ),
+        ]}
+      />,
+    )
+    expect(toggle).toHaveAttribute("aria-expanded", "true")
+    expect(container.textContent).toContain("Run final checks")
+
+    rerender(
+      <ThreadView
+        {...props}
+        activeMessages={[
+          assistantTraceMessage(
+            "assistant-live",
+            [buildReasoningItem("Inspect files first\nCompare rendering states\nRun final checks", false)],
+            false,
+          ),
+        ]}
+      />,
+    )
+    expect(toggle).toHaveAttribute("aria-expanded", "true")
+    expect(container.querySelector('[data-reasoning-display-mode="expanded"]')).not.toBeNull()
+    expect(container.textContent).toContain("Run final checks")
+  })
+
+  it("returns untouched streaming reasoning to the completed first-line preview", () => {
+    const streamingItem: AssistantTraceItem = {
+      id: "reasoning-live",
+      kind: "reasoning",
+      timestamp: 1,
+      label: "Reasoning",
+      text: "Inspect files first\nCOMPLETED_REASONING_HIDDEN_TAIL",
+      status: "running",
+      isStreaming: true,
+    }
+    const { container, props, rerender } = renderThread([
+      assistantTraceMessage("assistant-live", [streamingItem], true),
+    ])
+
+    expect(container.querySelector('[data-reasoning-display-mode="live-compact"]')).not.toBeNull()
+    expect(container.textContent).toContain("COMPLETED_REASONING_HIDDEN_TAIL")
+
+    rerender(
+      <ThreadView
+        {...props}
+        activeMessages={[
+          assistantTraceMessage(
+            "assistant-live",
+            [{ ...streamingItem, status: "completed", isStreaming: false }],
+            false,
+          ),
+        ]}
+      />,
+    )
+
+    expect(container.querySelector('[data-reasoning-display-mode="completed-collapsed"]')).not.toBeNull()
+    expect(container.textContent).toContain("Inspect files first")
+    expect(container.textContent).not.toContain("COMPLETED_REASONING_HIDDEN_TAIL")
+  })
+
+  it("does not carry a manual reasoning expansion to a new item", () => {
+    const buildReasoningItem = (id: string, text: string): AssistantTraceItem => ({
+      id,
+      kind: "reasoning",
+      timestamp: 1,
+      label: "Reasoning",
+      text,
+      status: "running",
+      isStreaming: true,
+    })
+    const { container, props, rerender } = renderThread([
+      assistantTraceMessage(
+        "assistant-live",
+        [buildReasoningItem("reasoning-first", "First reasoning\nExpanded detail")],
+        true,
+      ),
+    ])
+
+    fireEvent.click(container.querySelector(".trace-item-reasoning-toggle")!)
+    expect(container.querySelector('[data-reasoning-display-mode="expanded"]')).not.toBeNull()
+
+    rerender(
+      <ThreadView
+        {...props}
+        activeMessages={[
+          assistantTraceMessage(
+            "assistant-live",
+            [buildReasoningItem("reasoning-second", "Second reasoning\nCompact detail")],
+            true,
+          ),
+        ]}
+      />,
+    )
+
+    const nextTraceItem = container.querySelector(
+      '[data-assistant-item-id="reasoning-second"] .trace-item',
+    )
+    expect(nextTraceItem).toHaveAttribute("data-reasoning-display-mode", "live-compact")
+    expect(nextTraceItem?.querySelector(".trace-item-reasoning-toggle")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    )
+  })
+
   it("keeps grouped reasoning open while independently closing tool content when the message completes", () => {
     vi.useFakeTimers()
     const streamingItems: AssistantTraceItem[] = [
@@ -2380,6 +2740,11 @@ describe("ThreadView trace collapse", () => {
         assistantTraceMessage("assistant-1", streamingItems, true),
       ])
 
+      fireEvent.click(
+        container.querySelector(
+          '[data-assistant-item-id="reasoning-1"] .trace-item-reasoning-toggle',
+        )!,
+      )
       expect(container.textContent).toContain("Then compare the rendering states")
 
       fireEvent.click(getByRole("button", { name: /Shell/ }))
@@ -2406,7 +2771,7 @@ describe("ThreadView trace collapse", () => {
     }
   })
 
-  it("collapses completed reasoning parts while the assistant message is still streaming", () => {
+  it("keeps completed reasoning folded while active reasoning uses the compact live line", () => {
     const { container, getByText } = renderThread([
       assistantTraceMessage(
         "assistant-1",
@@ -2434,15 +2799,20 @@ describe("ThreadView trace collapse", () => {
     ])
 
     const completedSummary = getByText("Finished planning part")
-    const activeSummary = getByText("Active planning part")
+    const activeTraceItem = container.querySelector(
+      '[data-assistant-item-id="reasoning-2"] .trace-item',
+    )
 
     expect(container.textContent).toContain("Finished planning part")
     expect(container.textContent).not.toContain("The completed details should be folded")
     expect(container.textContent).toContain("The live details should stay open")
     expect(completedSummary).toHaveClass("trace-item-collapsed-line")
     expect(completedSummary.closest('[role="button"]')).toHaveAttribute("aria-expanded", "false")
-    expect(activeSummary).not.toHaveClass("trace-item-collapsed-line")
-    expect(activeSummary.closest('[role="button"]')).toHaveAttribute("aria-expanded", "true")
+    expect(activeTraceItem).toHaveAttribute("data-reasoning-display-mode", "live-compact")
+    expect(activeTraceItem?.querySelector(".trace-item-reasoning-toggle")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    )
   })
 
   it("mounts full long reasoning text only after expansion", () => {
@@ -4757,6 +5127,67 @@ describe("ThreadView assistant response markdown", () => {
 })
 
 describe("ThreadView message actions", () => {
+  it("renders a pending delivery status immediately to the left of the user bubble", () => {
+    const { container } = renderThread([
+      {
+        ...userMessage("user-pending", "Sending now"),
+        delivery: { status: "pending" },
+      },
+    ])
+
+    const status = screen.getByRole("status", { name: "Sending message" })
+    const row = status.closest(".user-message-bubble-row")
+    const bubble = row?.querySelector(".user-bubble")
+
+    expect(status).toHaveClass("user-message-delivery-status", "is-pending")
+    expect(row).toHaveClass("has-delivery-status")
+    expect(bubble).not.toBeNull()
+    expect(
+      status.compareDocumentPosition(bubble!) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(container.querySelector(".user-message-delivery-retry")).toBeNull()
+  })
+
+  it("renders a failed delivery status and retries the same message once", () => {
+    const onRetryUserMessage = vi.fn()
+    renderThread(
+      [
+        {
+          ...userMessage("user-failed", "Please retry this"),
+          delivery: {
+            status: "failed",
+            error: "Network unavailable",
+          },
+        },
+      ],
+      { onRetryUserMessage },
+    )
+
+    expect(
+      screen.getByRole("group", {
+        name: "Message failed to send: Network unavailable",
+      }),
+    ).toHaveClass("is-failed")
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Retry sending message" }),
+    )
+
+    expect(onRetryUserMessage).toHaveBeenCalledTimes(1)
+    expect(onRetryUserMessage).toHaveBeenCalledWith("user-failed")
+  })
+
+  it("renders no delivery status after the user message is confirmed", () => {
+    const { container } = renderThread([
+      userMessage("user-confirmed", "Already recorded"),
+    ])
+
+    expect(container.querySelector(".user-message-delivery-status")).toBeNull()
+    expect(
+      screen.queryByRole("button", { name: "Retry sending message" }),
+    ).toBeNull()
+  })
+
   it("copies user message text from the user message action", () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.defineProperty(navigator, "clipboard", {

@@ -493,6 +493,15 @@ describe("appearance token manifest", () => {
     )
   })
 
+  it("renders Markdown inline code without a border while keeping code block borders", () => {
+    expect(threadCss).toMatch(
+      /\.thread-markdown :where\(:not\(pre\) > code\)\s*\{[^}]*border:\s*0;/s,
+    )
+    expect(threadCss).toMatch(
+      /\.thread-markdown pre\s*\{[^}]*border:\s*1px solid var\(--md-code-border\);/s,
+    )
+  })
+
   it("routes Markdown thematic breaks through the dedicated divider token", () => {
     expect(generatedCss).toMatch(
       /--semantic-markdown-divider-light:\s*rgba\(41,\s*37,\s*36,\s*0\);/,
