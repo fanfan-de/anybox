@@ -704,8 +704,6 @@ export const trTR = {
   "rightSidebar.launcher.filesDescription": "Proje dosyalarına göz at",
   "rightSidebar.launcher.browserTitle": "Tarayıcı",
   "rightSidebar.launcher.browserDescription": "Bir web sitesi aç",
-  "rightSidebar.launcher.messageTreeTitle": "Ağaç",
-  "rightSidebar.launcher.messageTreeDescription": "Mesaj dallarında gezin",
   "rightSidebar.launcher.reviewTitle": "İnceleme",
   "rightSidebar.launcher.reviewDescription": "Kod değişikliklerini denetle",
   "rightSidebar.launcher.terminalTitle": "Terminal",

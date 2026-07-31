@@ -704,8 +704,6 @@ export const itIT = {
   "rightSidebar.launcher.filesDescription": "Sfoglia file del progetto",
   "rightSidebar.launcher.browserTitle": "Browser",
   "rightSidebar.launcher.browserDescription": "Apri un sito web",
-  "rightSidebar.launcher.messageTreeTitle": "Albero",
-  "rightSidebar.launcher.messageTreeDescription": "Naviga tra i rami dei messaggi",
   "rightSidebar.launcher.reviewTitle": "Revisione",
   "rightSidebar.launcher.reviewDescription": "Ispeziona modifiche al codice",
   "rightSidebar.launcher.terminalTitle": "Terminale",

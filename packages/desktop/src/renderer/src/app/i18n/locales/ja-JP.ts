@@ -704,8 +704,6 @@ export const jaJP = {
   "rightSidebar.launcher.filesDescription": "プロジェクトファイルを参照",
   "rightSidebar.launcher.browserTitle": "ブラウザ",
   "rightSidebar.launcher.browserDescription": "ウェブサイトを開く",
-  "rightSidebar.launcher.messageTreeTitle": "ツリー",
-  "rightSidebar.launcher.messageTreeDescription": "メッセージブランチをナビゲート",
   "rightSidebar.launcher.reviewTitle": "レビュー",
   "rightSidebar.launcher.reviewDescription": "コード変更を検査",
   "rightSidebar.launcher.terminalTitle": "ターミナル",

@@ -704,8 +704,6 @@ export const deDE = {
   "rightSidebar.launcher.filesDescription": "Projektdateien durchsuchen",
   "rightSidebar.launcher.browserTitle": "Browser",
   "rightSidebar.launcher.browserDescription": "Website öffnen",
-  "rightSidebar.launcher.messageTreeTitle": "Baum",
-  "rightSidebar.launcher.messageTreeDescription": "Nachrichtenzweige navigieren",
   "rightSidebar.launcher.reviewTitle": "Überprüfung",
   "rightSidebar.launcher.reviewDescription": "Codeänderungen prüfen",
   "rightSidebar.launcher.terminalTitle": "Terminal",

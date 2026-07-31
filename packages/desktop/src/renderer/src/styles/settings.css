@@ -6257,6 +6257,7 @@ body.is-dragging-settings-page {
   border-radius: 0 var(--seg-radius-xs) var(--seg-radius-xs) 0;
 }
 
+.session-canvas-top-menu .canvas-top-menu-view-mode-trigger,
 .session-canvas-top-menu .canvas-top-menu-permission-trigger,
 .session-canvas-top-menu .canvas-top-menu-plugin-trigger,
 .session-canvas-top-menu .canvas-top-menu-mcp-trigger,

@@ -534,7 +534,6 @@ export type RightSidebarTabKind =
   | "browser"
   | "review"
   | "terminal"
-  | "message-tree"
   | "message-inspector"
   | "branch-thread"
 
@@ -570,11 +569,6 @@ export interface RightSidebarTerminalTab extends RightSidebarBaseTab {
   sessionID: string | null
 }
 
-export interface RightSidebarMessageTreeTab extends RightSidebarBaseTab {
-  kind: "message-tree"
-  sessionID: string
-}
-
 export interface RightSidebarMessageInspectorTab extends RightSidebarBaseTab {
   kind: "message-inspector"
   messageID: string
@@ -602,7 +596,6 @@ export type RightSidebarTab =
   | RightSidebarBrowserTab
   | RightSidebarReviewTab
   | RightSidebarTerminalTab
-  | RightSidebarMessageTreeTab
   | RightSidebarMessageInspectorTab
   | RightSidebarBranchThreadTab
 
@@ -637,12 +630,6 @@ export type RightSidebarOpenTabInput =
   | {
       kind: "terminal"
       sessionID: string | null
-      targetKey?: string
-      title?: string
-    }
-  | {
-      kind: "message-tree"
-      sessionID: string
       targetKey?: string
       title?: string
     }

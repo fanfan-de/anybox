@@ -72,14 +72,8 @@ describe("workspace store", () => {
       workspaceRoot: "C:/work/project",
       title: "localhost:3000",
     })
-    const messageTreeTabID = store.getState().sessionsActions.openOrFocusRightSidebarTab({
-      kind: "message-tree",
-      sessionID: "session-1",
-      title: "Tree",
-    })
-
-    expect(store.getState().sessions.rightSidebar.tabs).toHaveLength(3)
-    expect(store.getState().sessions.rightSidebar.activeTabID).toBe(messageTreeTabID)
+    expect(store.getState().sessions.rightSidebar.tabs).toHaveLength(2)
+    expect(store.getState().sessions.rightSidebar.activeTabID).toBe(browserTabID)
 
     const focusedFilesTabID = store.getState().sessionsActions.openOrFocusRightSidebarTab({
       kind: "files",
@@ -89,17 +83,8 @@ describe("workspace store", () => {
     })
 
     expect(focusedFilesTabID).toBe(filesTabID)
-    expect(store.getState().sessions.rightSidebar.tabs).toHaveLength(3)
+    expect(store.getState().sessions.rightSidebar.tabs).toHaveLength(2)
     expect(store.getState().sessions.rightSidebar.activeTabID).toBe(filesTabID)
-
-    const focusedMessageTreeTabID = store.getState().sessionsActions.openOrFocusRightSidebarTab({
-      kind: "message-tree",
-      sessionID: "session-1",
-    })
-
-    expect(focusedMessageTreeTabID).toBe(messageTreeTabID)
-    expect(store.getState().sessions.rightSidebar.tabs).toHaveLength(3)
-    expect(store.getState().sessions.rightSidebar.activeTabID).toBe(messageTreeTabID)
 
     store.getState().sessionsActions.setRightSidebarFileState(filesTabID, (current) => ({
       ...current,
@@ -108,23 +93,11 @@ describe("workspace store", () => {
     store.getState().sessionsActions.updateRightSidebarTab(filesTabID, {
       title: "Renamed",
     })
-    store.getState().sessionsActions.updateRightSidebarTab(messageTreeTabID, {
-      title: "Session tree",
-    })
-
     const filesTab = store.getState().sessions.rightSidebar.tabs.find((tab) => tab.id === filesTabID)
-    const messageTreeTab = store.getState().sessions.rightSidebar.tabs.find((tab) => tab.id === messageTreeTabID)
     expect(filesTab?.title).toBe("Renamed")
     expect(filesTab?.kind === "files" ? filesTab.state.query : "").toBe("App")
-    expect(messageTreeTab?.title).toBe("Session tree")
-    expect(messageTreeTab?.kind === "message-tree" ? messageTreeTab.sessionID : null).toBe("session-1")
 
     store.getState().sessionsActions.closeRightSidebarTab(filesTabID)
-
-    expect(store.getState().sessions.rightSidebar.tabs.map((tab) => tab.id)).toEqual([browserTabID, messageTreeTabID])
-    expect(store.getState().sessions.rightSidebar.activeTabID).toBe(messageTreeTabID)
-
-    store.getState().sessionsActions.closeRightSidebarTab(messageTreeTabID)
 
     expect(store.getState().sessions.rightSidebar.tabs.map((tab) => tab.id)).toEqual([browserTabID])
     expect(store.getState().sessions.rightSidebar.activeTabID).toBe(browserTabID)

@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react"
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react"
+import { createPortal } from "react-dom"
 import { ExternalEditorMenuButton } from "../external-editor/ExternalEditorMenuButton"
 import { GitQuickMenuButton } from "../git/GitQuickMenuButton"
 import { CheckIcon, ChevronDownIcon, CopyIcon, DownloadIcon, FolderIcon, InfoIcon, SessionRunningIcon, SessionTreeIcon } from "../icons"
@@ -39,8 +40,219 @@ const SESSION_INFO_PANEL_THREAD_MARGIN = 16
 
 export type SessionViewMode = "linear" | "branch"
 
+interface SessionViewModeMenuPosition {
+  left: number
+  top: number
+}
+
+const SESSION_VIEW_MODE_MENU_WIDTH = 184
+const SESSION_VIEW_MODE_MENU_HEIGHT = 80
+const SESSION_VIEW_MODE_MENU_GAP = 8
+const SESSION_VIEW_MODE_MENU_VIEWPORT_PADDING = 8
+
+function getSessionViewModeMenuPosition(
+  trigger: HTMLButtonElement,
+  menu?: HTMLDivElement | null,
+): SessionViewModeMenuPosition {
+  const triggerRect = trigger.getBoundingClientRect()
+  const menuRect = menu?.getBoundingClientRect()
+  const width = menuRect?.width || SESSION_VIEW_MODE_MENU_WIDTH
+  const height = menuRect?.height || SESSION_VIEW_MODE_MENU_HEIGHT
+  const viewportPadding = SESSION_VIEW_MODE_MENU_VIEWPORT_PADDING
+  const maxLeft = Math.max(viewportPadding, window.innerWidth - width - viewportPadding)
+  const ownerPaneRect = trigger.closest<HTMLElement>(".workbench-pane")?.getBoundingClientRect()
+  const minLeft = Math.min(
+    maxLeft,
+    Math.max(viewportPadding, (ownerPaneRect?.left ?? 0) + viewportPadding),
+  )
+  const left = Math.max(
+    minLeft,
+    Math.min(triggerRect.right - width, maxLeft),
+  )
+  const availableBelow = window.innerHeight - triggerRect.bottom - SESSION_VIEW_MODE_MENU_GAP - viewportPadding
+  const availableAbove = triggerRect.top - SESSION_VIEW_MODE_MENU_GAP - viewportPadding
+  const opensAbove = availableBelow < height && availableAbove > availableBelow
+  const top = opensAbove
+    ? Math.max(viewportPadding, triggerRect.top - height - SESSION_VIEW_MODE_MENU_GAP)
+    : Math.max(
+        viewportPadding,
+        Math.min(
+          triggerRect.bottom + SESSION_VIEW_MODE_MENU_GAP,
+          window.innerHeight - height - viewportPadding,
+        ),
+      )
+
+  return { left, top }
+}
+
 function getToolPermissionModeLabel(mode: ToolPermissionMode) {
   return TOOL_PERMISSION_MODE_OPTIONS.find((option) => option.value === mode)?.label ?? "默认权限"
+}
+
+function SessionViewModeMenuButton({
+  mode,
+  onModeChange,
+}: {
+  mode: SessionViewMode
+  onModeChange: (mode: SessionViewMode) => void
+}) {
+  const { t } = useI18n()
+  const menuRef = useRef<HTMLDivElement | null>(null)
+  const buttonRef = useRef<HTMLButtonElement | null>(null)
+  const menuID = useId()
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [menuPosition, setMenuPosition] = useState<SessionViewModeMenuPosition | null>(null)
+  const options: Array<{ value: SessionViewMode; label: string }> = [
+    { value: "linear", label: t("branchView.mode.linear") },
+    { value: "branch", label: t("branchView.mode.branch") },
+  ]
+  const selectedLabel = options.find((option) => option.value === mode)?.label ?? options[0]!.label
+  const viewModeLabel = t("branchView.modeAria")
+  const triggerLabel = `${viewModeLabel}: ${selectedLabel}`
+
+  useEffect(() => {
+    if (!isMenuOpen) return
+
+    const focusFrame = window.requestAnimationFrame(() => {
+      menuRef.current
+        ?.querySelector<HTMLButtonElement>('[role="menuitemradio"][aria-checked="true"]')
+        ?.focus()
+    })
+
+    const handlePointerDown = (event: globalThis.PointerEvent) => {
+      const target = event.target as Node | null
+      if (!target) return
+      if (menuRef.current?.contains(target) || buttonRef.current?.contains(target)) return
+      setIsMenuOpen(false)
+    }
+
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault()
+        setIsMenuOpen(false)
+        buttonRef.current?.focus()
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown)
+    document.addEventListener("keydown", handleKeyDown)
+
+    return () => {
+      window.cancelAnimationFrame(focusFrame)
+      document.removeEventListener("pointerdown", handlePointerDown)
+      document.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [isMenuOpen])
+
+  useLayoutEffect(() => {
+    if (!isMenuOpen) {
+      setMenuPosition(null)
+      return
+    }
+
+    function updatePosition() {
+      const trigger = buttonRef.current
+      if (!trigger) return
+      setMenuPosition(getSessionViewModeMenuPosition(trigger, menuRef.current))
+    }
+
+    updatePosition()
+    window.addEventListener("resize", updatePosition)
+    window.addEventListener("scroll", updatePosition, true)
+
+    return () => {
+      window.removeEventListener("resize", updatePosition)
+      window.removeEventListener("scroll", updatePosition, true)
+    }
+  }, [isMenuOpen])
+
+  function handleOptionClick(nextMode: SessionViewMode) {
+    if (nextMode === mode) return
+    setIsMenuOpen(false)
+    onModeChange(nextMode)
+  }
+
+  function handleMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return
+
+    const options = Array.from(
+      menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]') ?? [],
+    )
+    if (options.length === 0) return
+
+    event.preventDefault()
+    const currentIndex = options.findIndex((option) => option === document.activeElement)
+    const nextIndex = event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? options.length - 1
+        : event.key === "ArrowDown"
+          ? (currentIndex + 1 + options.length) % options.length
+          : (currentIndex - 1 + options.length) % options.length
+    options[nextIndex]?.focus()
+  }
+
+  return (
+    <div className="canvas-top-menu-selector-anchor session-view-mode-selector-anchor">
+      <button
+        ref={buttonRef}
+        type="button"
+        className={isMenuOpen ? "canvas-top-menu-button canvas-top-menu-selection-trigger canvas-top-menu-view-mode-trigger is-active" : "canvas-top-menu-button canvas-top-menu-selection-trigger canvas-top-menu-view-mode-trigger"}
+        aria-controls={menuID}
+        aria-expanded={isMenuOpen}
+        aria-haspopup="menu"
+        aria-label={triggerLabel}
+        title={triggerLabel}
+        onClick={() => {
+          if (isMenuOpen) {
+            setIsMenuOpen(false)
+            return
+          }
+          if (buttonRef.current) {
+            setMenuPosition(getSessionViewModeMenuPosition(buttonRef.current))
+          }
+          setIsMenuOpen(true)
+        }}
+      >
+        <span>{selectedLabel}</span>
+        <ChevronDownIcon />
+      </button>
+
+      {isMenuOpen && menuPosition && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              ref={menuRef}
+              id={menuID}
+              className="canvas-top-menu-selector-panel canvas-top-menu-action-selector-panel canvas-top-menu-context-panel canvas-top-menu-selection-panel canvas-top-menu-view-mode-panel is-portal"
+              role="menu"
+              aria-label={viewModeLabel}
+              style={menuPosition}
+              onKeyDown={handleMenuKeyDown}
+            >
+              {options.map((option) => {
+                const isSelected = option.value === mode
+
+                return (
+                  <button
+                    key={option.value}
+                    aria-checked={isSelected}
+                    className={isSelected ? "canvas-top-menu-context-option canvas-top-menu-view-mode-option is-selected" : "canvas-top-menu-context-option canvas-top-menu-view-mode-option"}
+                    onClick={() => handleOptionClick(option.value)}
+                    role="menuitemradio"
+                    type="button"
+                  >
+                    <span className="canvas-top-menu-context-option-label canvas-top-menu-view-mode-option-label">
+                      <strong>{option.label}</strong>
+                    </span>
+                  </button>
+                )
+              })}
+            </div>,
+            document.body,
+          )
+        : null}
+    </div>
+  )
 }
 
 interface SessionCanvasTopMenuProps {
@@ -1099,27 +1311,15 @@ export function SessionCanvasTopMenu({
   selectedSkillLabel,
   onSkillToggle,
 }: SessionCanvasTopMenuProps) {
-  const { t } = useI18n()
   const sessionTitle = activeSession?.title ?? ""
-  const showSessionViewModeSwitch = Boolean(
+  const sessionViewModeControl = (
     activeSession &&
     sessionViewMode &&
-    onSessionViewModeChange,
-  )
-
-  function handleSessionViewModeKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>) {
-    let nextMode: SessionViewMode | null = null
-    if (event.key === "ArrowLeft" || event.key === "Home") nextMode = "linear"
-    if (event.key === "ArrowRight" || event.key === "End") nextMode = "branch"
-    if (!nextMode) return
-
-    event.preventDefault()
-    onSessionViewModeChange?.(nextMode)
-    const nextTab = event.currentTarget.parentElement?.querySelector<HTMLButtonElement>(
-      `[data-session-view-mode="${nextMode}"]`,
-    )
-    nextTab?.focus()
-  }
+    onSessionViewModeChange
+  ) ? {
+    mode: sessionViewMode,
+    onModeChange: onSessionViewModeChange,
+  } : null
 
   return (
     <ShellTopMenu
@@ -1127,40 +1327,14 @@ export function SessionCanvasTopMenu({
       as="div"
       className="session-canvas-top-menu"
       contentClassName="panel-toolbar-copy session-canvas-top-menu-copy"
-      content={sessionTitle || showSessionViewModeSwitch ? (
+      content={sessionTitle || sessionViewModeControl ? (
         <div className="session-canvas-top-menu-copy-main">
           {sessionTitle ? <span className="label" title={sessionTitle}>{sessionTitle}</span> : null}
-          {showSessionViewModeSwitch ? (
-            <nav
-              className="top-menu-segment-list session-view-mode-tabs"
-              role="tablist"
-              aria-label={t("branchView.modeAria")}
-            >
-              <button
-                type="button"
-                role="tab"
-                className={sessionViewMode === "linear" ? "top-menu-segment is-active" : "top-menu-segment"}
-                aria-selected={sessionViewMode === "linear"}
-                data-session-view-mode="linear"
-                tabIndex={sessionViewMode === "linear" ? 0 : -1}
-                onClick={() => onSessionViewModeChange?.("linear")}
-                onKeyDown={handleSessionViewModeKeyDown}
-              >
-                {t("branchView.mode.linear")}
-              </button>
-              <button
-                type="button"
-                role="tab"
-                className={sessionViewMode === "branch" ? "top-menu-segment is-active" : "top-menu-segment"}
-                aria-selected={sessionViewMode === "branch"}
-                data-session-view-mode="branch"
-                tabIndex={sessionViewMode === "branch" ? 0 : -1}
-                onClick={() => onSessionViewModeChange?.("branch")}
-                onKeyDown={handleSessionViewModeKeyDown}
-              >
-                {t("branchView.mode.branch")}
-              </button>
-            </nav>
+          {sessionViewModeControl ? (
+            <SessionViewModeMenuButton
+              mode={sessionViewModeControl.mode}
+              onModeChange={sessionViewModeControl.onModeChange}
+            />
           ) : null}
         </div>
       ) : null}

@@ -704,8 +704,6 @@ export const plPL = {
   "rightSidebar.launcher.filesDescription": "Przeglądaj pliki projektu",
   "rightSidebar.launcher.browserTitle": "Przeglądarka",
   "rightSidebar.launcher.browserDescription": "Otwórz stronę internetową",
-  "rightSidebar.launcher.messageTreeTitle": "Drzewo",
-  "rightSidebar.launcher.messageTreeDescription": "Nawiguj po gałęziach wiadomości",
   "rightSidebar.launcher.reviewTitle": "Przegląd",
   "rightSidebar.launcher.reviewDescription": "Sprawdź zmiany w kodzie",
   "rightSidebar.launcher.terminalTitle": "Terminal",

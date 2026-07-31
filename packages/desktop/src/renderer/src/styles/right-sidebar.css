@@ -21,7 +21,6 @@
 .right-sidebar-view-host.is-files,
 .right-sidebar-view-host.is-changes,
 .right-sidebar-view-host.is-terminal,
-.right-sidebar-view-host.is-message-tree,
 .right-sidebar-view-host.is-message-inspector,
 .right-sidebar-view-host.is-branch-thread {
   overflow: hidden;
@@ -652,8 +651,6 @@
 }
 
 .branch-chat-quote-card button,
-.session-message-tree-node-branch-chat,
-.session-message-tree-response-branch-chat,
 .session-message-inspector-branch-chat {
   border: 0;
   background: transparent;
@@ -669,10 +666,6 @@
 
 .branch-chat-quote-card button:hover,
 .branch-chat-quote-card button:focus-visible,
-.session-message-tree-node-branch-chat:hover,
-.session-message-tree-node-branch-chat:focus-visible,
-.session-message-tree-response-branch-chat:hover,
-.session-message-tree-response-branch-chat:focus-visible,
 .session-message-inspector-branch-chat:hover,
 .session-message-inspector-branch-chat:focus-visible {
   color: var(--semantic-branch-chat-accent);
@@ -735,26 +728,6 @@
   font-size: 11px;
   line-height: 1.45;
   white-space: pre-wrap;
-}
-
-.session-message-tree-node-branch-chat,
-.session-message-tree-response-branch-chat {
-  width: 22px;
-  height: 22px;
-  padding: 4px;
-  flex: 0 0 auto;
-}
-
-.session-message-tree-node-branch-chat {
-  position: absolute;
-  right: 4px;
-  bottom: 4px;
-  opacity: 0;
-}
-
-.session-message-tree-graph-node:hover .session-message-tree-node-branch-chat,
-.session-message-tree-graph-node:focus-within .session-message-tree-node-branch-chat {
-  opacity: 1;
 }
 
 .session-message-inspector-branch-chat {
@@ -1115,7 +1088,6 @@
 
 .right-sidebar-launcher-card.is-branch-thread,
 .right-sidebar-launcher-card.is-browser,
-.right-sidebar-launcher-card.is-message-tree,
 .right-sidebar-launcher-card.is-review,
 .right-sidebar-launcher-card.is-terminal {
   grid-column: span 1;
@@ -1178,7 +1150,6 @@
 .right-sidebar-launcher-card.is-branch-thread .right-sidebar-launcher-card-icon,
 .right-sidebar-launcher-card.is-browser .right-sidebar-launcher-card-icon,
 .right-sidebar-launcher-card.is-files .right-sidebar-launcher-card-icon,
-.right-sidebar-launcher-card.is-message-tree .right-sidebar-launcher-card-icon,
 .right-sidebar-launcher-card.is-review .right-sidebar-launcher-card-icon,
 .right-sidebar-launcher-card.is-terminal .right-sidebar-launcher-card-icon {
   width: min(46%, 112px);
@@ -1215,7 +1186,7 @@
 
   .right-sidebar-launcher-tile-grid {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: repeat(6, minmax(96px, 1fr));
+    grid-template-rows: repeat(5, minmax(96px, 1fr));
   }
 
   .right-sidebar-launcher-card.is-files {
@@ -1225,7 +1196,6 @@
 
   .right-sidebar-launcher-card.is-branch-thread,
   .right-sidebar-launcher-card.is-browser,
-  .right-sidebar-launcher-card.is-message-tree,
   .right-sidebar-launcher-card.is-review,
   .right-sidebar-launcher-card.is-terminal {
     grid-column: span 1;
@@ -1241,7 +1211,6 @@
   .right-sidebar-launcher-card.is-branch-thread .right-sidebar-launcher-card-icon,
   .right-sidebar-launcher-card.is-files .right-sidebar-launcher-card-icon,
   .right-sidebar-launcher-card.is-browser .right-sidebar-launcher-card-icon,
-  .right-sidebar-launcher-card.is-message-tree .right-sidebar-launcher-card-icon,
   .right-sidebar-launcher-card.is-review .right-sidebar-launcher-card-icon,
   .right-sidebar-launcher-card.is-terminal .right-sidebar-launcher-card-icon {
     width: min(24%, 72px);
@@ -1270,7 +1239,7 @@
 
   .right-sidebar-launcher-tile-grid {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: repeat(6, minmax(96px, 1fr));
+    grid-template-rows: repeat(5, minmax(96px, 1fr));
   }
 
   .right-sidebar-launcher-card.is-files {
@@ -1280,7 +1249,6 @@
 
   .right-sidebar-launcher-card.is-branch-thread,
   .right-sidebar-launcher-card.is-browser,
-  .right-sidebar-launcher-card.is-message-tree,
   .right-sidebar-launcher-card.is-review,
   .right-sidebar-launcher-card.is-terminal {
     grid-column: span 1;
@@ -1296,7 +1264,6 @@
   .right-sidebar-launcher-card.is-branch-thread .right-sidebar-launcher-card-icon,
   .right-sidebar-launcher-card.is-files .right-sidebar-launcher-card-icon,
   .right-sidebar-launcher-card.is-browser .right-sidebar-launcher-card-icon,
-  .right-sidebar-launcher-card.is-message-tree .right-sidebar-launcher-card-icon,
   .right-sidebar-launcher-card.is-review .right-sidebar-launcher-card-icon,
   .right-sidebar-launcher-card.is-terminal .right-sidebar-launcher-card-icon {
     width: min(24%, 72px);
@@ -2962,492 +2929,6 @@
   text-align: center;
 }
 
-.session-message-tree-panel {
-  min-height: 0;
-  height: 100%;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  background: transparent;
-  color: var(--seg-text-1);
-  overflow: hidden;
-  contain: layout paint;
-}
-
-.session-message-tree-header {
-  min-width: 0;
-  padding: 12px 14px 10px;
-  border-bottom: 1px solid var(--seg-border);
-  display: grid;
-  gap: 8px;
-}
-
-.session-message-tree-heading-row {
-  min-width: 0;
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.session-message-tree-title-copy {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: grid;
-  gap: 3px;
-}
-
-.session-message-tree-title-copy span {
-  color: var(--seg-text-3);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0;
-  text-transform: uppercase;
-}
-
-.session-message-tree-title-copy h3 {
-  min-width: 0;
-  margin: 0;
-  overflow: hidden;
-  color: var(--seg-text-1);
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0;
-  line-height: 1.3;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.session-message-tree-meta {
-  min-width: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.session-message-tree-meta span {
-  min-height: 20px;
-  padding: 0 7px;
-  border: 1px solid var(--seg-border);
-  border-radius: 5px;
-  display: inline-flex;
-  align-items: center;
-  color: var(--seg-text-2);
-  font-size: 11px;
-  font-weight: 650;
-  letter-spacing: 0;
-}
-
-.session-message-tree-expand-toggle {
-  width: 28px;
-  min-width: 28px;
-  height: 28px;
-  min-height: 28px;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--semantic-accent-icon);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-}
-
-.session-message-tree-expand-toggle:hover,
-.session-message-tree-expand-toggle:focus-visible {
-  border-color: transparent;
-  background: transparent;
-  color: var(--semantic-accent-icon-hover);
-  outline: none;
-}
-
-.session-message-tree-expand-toggle:focus-visible {
-  outline: var(--focus-outline-width) solid var(--focus-outline-color);
-  outline-offset: var(--focus-outline-offset);
-}
-
-.session-message-tree-expand-toggle.is-active {
-  color: var(--semantic-accent-icon-active);
-}
-
-.session-message-tree-expand-toggle svg {
-  width: 16px;
-  height: 16px;
-}
-
-.session-message-tree-canvas {
-  min-height: 0;
-  padding: 12px 12px 18px;
-  overflow: hidden;
-  position: relative;
-  cursor: grab;
-  overscroll-behavior: contain;
-  touch-action: none;
-  contain: layout paint;
-}
-
-.session-message-tree-canvas.is-panning {
-  cursor: grabbing;
-  user-select: none;
-}
-
-.session-message-tree-canvas.is-panning .session-message-tree-graph-node {
-  pointer-events: none;
-}
-
-.session-message-tree-graph {
-  min-width: 260px;
-  min-height: 160px;
-  position: relative;
-  transform-origin: 0 0;
-  will-change: transform;
-}
-
-.session-message-tree-edges {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-.session-message-tree-edge {
-  fill: none;
-  stroke: var(--seg-border);
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.25px;
-  transition:
-    opacity 180ms ease,
-    stroke 180ms ease,
-    stroke-width 180ms ease;
-}
-
-.session-message-tree-edge.is-active-path {
-  stroke: var(--focus-outline-color);
-  stroke-width: 1.7px;
-}
-
-.session-message-tree-edge-arrow {
-  fill: var(--seg-border);
-}
-
-.session-message-tree-edge-arrow.is-active-path {
-  fill: var(--focus-outline-color);
-}
-
-.session-message-tree-graph-node {
-  width: 136px;
-  min-height: 56px;
-  padding: 0 4px;
-  border: 0;
-  background: transparent;
-  color: var(--seg-text-2);
-  cursor: pointer;
-  display: grid;
-  grid-template-rows: 14px minmax(18px, auto);
-  justify-items: center;
-  align-content: start;
-  gap: 3px;
-  position: absolute;
-  text-align: center;
-  transform: translate(-50%, -8px);
-  transition:
-    color 160ms ease,
-    gap 180ms cubic-bezier(0.2, 0, 0, 1),
-    min-height 180ms cubic-bezier(0.2, 0, 0, 1),
-    opacity 160ms ease,
-    width 180ms cubic-bezier(0.2, 0, 0, 1);
-}
-
-.session-message-tree-graph-node.is-expanded-response {
-  width: var(--session-message-tree-expanded-node-width, 576px);
-  min-height: var(--session-message-tree-expanded-node-height, 270px);
-  gap: 6px;
-  z-index: 3;
-}
-
-.session-message-tree-graph-node:focus-visible {
-  outline: 2px solid var(--focus-outline-color);
-  outline-offset: 3px;
-}
-
-.session-message-tree-graph-node[aria-disabled="true"] {
-  cursor: default;
-}
-
-.session-message-tree-dot {
-  width: 12px;
-  height: 12px;
-  border: 2px solid var(--seg-panel);
-  border-radius: 999px;
-  background: var(--text-secondary);
-  box-shadow: none;
-  transition: transform 120ms ease, box-shadow 120ms ease;
-}
-
-.session-message-tree-graph-node:hover .session-message-tree-dot,
-.session-message-tree-graph-node:focus-visible .session-message-tree-dot {
-  transform: scale(1.14);
-  box-shadow: 0 0 0 5px var(--seg-panel-muted), 0 0 0 1px var(--border-default);
-}
-
-.session-message-tree-graph-node.is-user .session-message-tree-dot {
-  background: var(--seg-accent);
-}
-
-.session-message-tree-graph-node.is-assistant .session-message-tree-dot {
-  background: var(--text-secondary);
-}
-
-.session-message-tree-graph-node.is-active-path .session-message-tree-dot {
-  box-shadow: 0 0 0 4px var(--brand-primary-soft-active), 0 0 0 1px var(--seg-accent);
-}
-
-.session-message-tree-graph-node.is-active .session-message-tree-dot {
-  background: var(--seg-accent-strong);
-  box-shadow: 0 0 0 5px var(--brand-primary-soft-active), 0 0 0 1px var(--seg-accent);
-}
-
-.session-message-tree-node-preview {
-  box-sizing: border-box;
-  max-width: 100%;
-  overflow: hidden;
-  color: var(--seg-text-2);
-  display: -webkit-box;
-  font-size: 12px;
-  font-weight: 600;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  letter-spacing: 0;
-  line-height: 1.25;
-  overflow-wrap: anywhere;
-}
-
-.session-message-tree-graph-node.is-assistant .session-message-tree-node-preview {
-  width: 128px;
-  max-width: 128px;
-  min-height: 36px;
-  padding: 5px 7px;
-  border: 1px solid var(--border-default);
-  border-radius: 6px;
-  background: var(--surface-panel);
-  box-shadow: var(--shadow-sm);
-  text-align: left;
-  transition:
-    background 120ms ease,
-    border-color 120ms ease,
-    box-shadow 120ms ease,
-    color 120ms ease;
-}
-
-.session-message-tree-graph-node.is-assistant:hover .session-message-tree-node-preview,
-.session-message-tree-graph-node.is-assistant:focus-visible .session-message-tree-node-preview {
-  border-color: var(--border-default);
-  background: var(--seg-panel-muted);
-}
-
-.session-message-tree-graph-node.is-active .session-message-tree-node-preview,
-.session-message-tree-graph-node.is-active-path .session-message-tree-node-preview {
-  color: var(--seg-text-1);
-}
-
-.session-message-tree-graph-node.is-assistant.is-active-path .session-message-tree-node-preview {
-  border-color: var(--focus-outline-color);
-  background: var(--brand-primary-soft-active);
-}
-
-.session-message-tree-graph-node.is-assistant.is-active .session-message-tree-node-preview {
-  border-color: var(--focus-outline-color);
-  background: var(--brand-primary-soft-strong-active);
-  box-shadow: 0 0 0 3px var(--focus-outline-color);
-}
-
-.session-message-tree-response-card {
-  position: relative;
-  box-sizing: border-box;
-  width: var(--session-message-tree-response-card-width, 560px);
-  height: var(--session-message-tree-response-card-height, var(--session-message-tree-response-card-min-height, 232px));
-  min-height: var(--session-message-tree-response-card-min-height, 232px);
-  max-height: var(--session-message-tree-response-card-height, var(--session-message-tree-response-card-min-height, 232px));
-  overflow: hidden;
-  border: 1px solid var(--border-default);
-  border-radius: 7px;
-  background: var(--surface-panel);
-  box-shadow: var(--shadow-sm);
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  align-content: start;
-  text-align: left;
-  transform-origin: top center;
-  contain: layout paint;
-  transition:
-    background 160ms ease,
-    border-color 160ms ease,
-    box-shadow 160ms ease;
-}
-
-.session-message-tree-graph-node.is-active-path .session-message-tree-response-card {
-  border-color: var(--focus-outline-color);
-  background: var(--brand-primary-soft-active);
-}
-
-.session-message-tree-graph-node.is-active .session-message-tree-response-card {
-  border-color: var(--focus-outline-color);
-  background: var(--brand-primary-soft-strong-active);
-  box-shadow: var(--shadow-sm);
-}
-
-.session-message-tree-graph-node.is-sibling-wheel-target .session-message-tree-response-card {
-  border-color: var(--focus-outline-color);
-  box-shadow: var(--shadow-sm);
-}
-
-.session-message-tree-response-card-header {
-  min-width: 0;
-  min-height: 32px;
-  padding: 4px 5px 4px 9px;
-  border-bottom: 1px solid var(--border-default);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.session-message-tree-response-card-title {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--seg-text-2);
-  font-size: 11px;
-  font-weight: 750;
-  letter-spacing: 0;
-  text-overflow: ellipsis;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.session-message-tree-response-card-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  flex: 0 0 auto;
-}
-
-.session-message-tree-response-collapse {
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--seg-text-3);
-  cursor: pointer;
-  display: inline-grid;
-  flex: 0 0 auto;
-  font: inherit;
-  font-size: 15px;
-  line-height: 1;
-  place-items: center;
-}
-
-.session-message-tree-response-collapse:hover,
-.session-message-tree-response-collapse:focus-visible {
-  background: var(--semantic-icon-button-surface-hover);
-  color: var(--seg-text-1);
-  outline: 0;
-}
-
-.session-message-tree-response-card-main {
-  min-width: 0;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  overflow: hidden;
-}
-
-.session-message-tree-response-card-body-wrap {
-  min-width: 0;
-  min-height: 0;
-  overflow: auto;
-  overscroll-behavior: contain;
-}
-
-.session-message-tree-response-card-body {
-  min-height: 0;
-  padding: 8px 10px 10px;
-  overflow: visible;
-  color: var(--seg-text-1);
-  cursor: text;
-  display: block;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0;
-  line-height: 1.42;
-  overflow-wrap: anywhere;
-  user-select: text;
-  white-space: normal;
-}
-
-.session-message-tree-response-card-body.thread-markdown {
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.session-message-tree-response-card-body.thread-markdown :where(p, blockquote, ul, ol, pre, .thread-markdown-table-scroll, h1, h2, h3, h4, h5, h6) {
-  margin-bottom: 0.62em;
-}
-
-.session-message-tree-response-card-body.thread-markdown :where(h1, h2) {
-  padding-left: 8px;
-}
-
-.session-message-tree-response-card-body.thread-markdown :where(h1, h2)::before {
-  width: 2px;
-}
-
-.session-message-tree-response-card-body.thread-markdown h1 {
-  font-size: 15px;
-}
-
-.session-message-tree-response-card-body.thread-markdown h2 {
-  font-size: 14px;
-}
-
-.session-message-tree-response-card-body.thread-markdown :where(h3, h4, h5, h6) {
-  font-size: 13px;
-}
-
-.session-message-tree-response-card-body.thread-markdown :where(ul, ol) {
-  padding-left: 1.3em;
-}
-
-.session-message-tree-response-card-body.thread-markdown pre {
-  padding: 9px 10px;
-}
-
-.session-message-tree-response-card-body.thread-markdown :where(th, td) {
-  padding: 5px 7px;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .session-message-tree-response-card {
-    animation: session-message-tree-response-card-in 180ms cubic-bezier(0.2, 0, 0, 1);
-  }
-}
-
-@keyframes session-message-tree-response-card-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px) scale(0.985);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.session-message-tree-empty {
-  margin: 12px;
-}
 
 .right-sidebar-changes-panel {
   min-height: 100%;

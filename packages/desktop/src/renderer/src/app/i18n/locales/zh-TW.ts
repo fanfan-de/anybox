@@ -701,8 +701,6 @@ export const zhTW = {
   "rightSidebar.launcher.filesDescription": "瀏覽專案檔案",
   "rightSidebar.launcher.browserTitle": "瀏覽器",
   "rightSidebar.launcher.browserDescription": "開啟網站",
-  "rightSidebar.launcher.messageTreeTitle": "訊息樹",
-  "rightSidebar.launcher.messageTreeDescription": "檢視訊息分支",
   "rightSidebar.launcher.reviewTitle": "程式碼審查",
   "rightSidebar.launcher.reviewDescription": "檢查程式碼變更",
   "rightSidebar.launcher.terminalTitle": "終端機",

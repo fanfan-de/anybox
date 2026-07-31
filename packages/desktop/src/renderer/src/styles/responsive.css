@@ -277,6 +277,7 @@
 
   .composer-utility-git-branch-button,
   .composer-utility-permission-toggle,
+  .canvas-top-menu-view-mode-trigger,
   .canvas-top-menu-permission-trigger,
   .canvas-top-menu-plugin-trigger,
   .canvas-top-menu-mcp-trigger,
@@ -295,6 +296,25 @@
     width: 100%;
     max-width: none;
     margin-top: 8px;
+  }
+
+  .session-view-mode-selector-anchor {
+    width: auto;
+  }
+
+  .session-view-mode-selector-anchor .canvas-top-menu-view-mode-trigger {
+    width: auto;
+    max-width: min(128px, 40vw);
+    justify-content: flex-start;
+  }
+
+  .canvas-top-menu-view-mode-panel.is-portal {
+    position: fixed;
+    right: auto;
+    width: max-content;
+    min-width: 184px;
+    max-width: min(260px, calc(100vw - 32px));
+    margin-top: 0;
   }
 
   .composer-model-picker-body {

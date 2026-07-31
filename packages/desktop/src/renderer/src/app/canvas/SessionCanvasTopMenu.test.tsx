@@ -141,36 +141,79 @@ beforeEach(() => {
 })
 
 describe("SessionCanvasTopMenu session view mode", () => {
-  it("renders an explicit linear and branch switch without changing sessions", () => {
+  it("renders linear and branch as the shared top-menu dropdown style", async () => {
     const onSessionViewModeChange = vi.fn()
-    renderTopMenu({
+    const { container } = renderTopMenu({
       sessionViewMode: "linear",
       onSessionViewModeChange,
     })
 
-    const viewTabs = screen.getByRole("tablist", { name: "Session view" })
-    expect(within(viewTabs).getByRole("tab", { name: "Linear" })).toHaveAttribute(
-      "aria-selected",
+    const trigger = screen.getByRole("button", { name: "Session view: Linear" })
+    expect(trigger).toHaveClass("canvas-top-menu-selection-trigger")
+    fireEvent.click(trigger)
+
+    const menu = screen.getByRole("menu", { name: "Session view" })
+    expect(menu).toHaveClass("canvas-top-menu-selection-panel")
+    expect(menu).toHaveClass("is-portal")
+    expect(container.querySelector('[role="menu"]')).toBeNull()
+    const linearOption = within(menu).getByRole("menuitemradio", { name: "Linear" })
+    const branchOption = within(menu).getByRole("menuitemradio", { name: "Branches" })
+    expect(linearOption).toHaveAttribute(
+      "aria-checked",
       "true",
     )
-    expect(within(viewTabs).getByRole("tab", { name: "Branches" })).toHaveAttribute(
-      "aria-selected",
+    expect(branchOption).toHaveAttribute(
+      "aria-checked",
       "false",
     )
+    await waitFor(() => expect(linearOption).toHaveFocus())
 
-    fireEvent.click(within(viewTabs).getByRole("tab", { name: "Branches" }))
+    fireEvent.keyDown(menu, { key: "ArrowDown" })
+    expect(branchOption).toHaveFocus()
+
+    fireEvent.click(branchOption)
     expect(onSessionViewModeChange).toHaveBeenCalledWith("branch")
-
-    fireEvent.keyDown(within(viewTabs).getByRole("tab", { name: "Linear" }), {
-      key: "ArrowRight",
-    })
-    expect(onSessionViewModeChange).toHaveBeenLastCalledWith("branch")
-    expect(within(viewTabs).getByRole("tab", { name: "Branches" })).toHaveFocus()
+    expect(screen.queryByRole("menu", { name: "Session view" })).not.toBeInTheDocument()
   })
 
   it("does not expose the view switch when the parent has not opted in", () => {
     renderTopMenu()
-    expect(screen.queryByRole("tablist", { name: "Session view" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /Session view:/ })).not.toBeInTheDocument()
+  })
+
+  it("keeps the dropdown inside the owning workbench pane", async () => {
+    const getRect = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      if (this.classList.contains("workbench-pane")) {
+        return createRect({ left: 154, right: 1000, width: 846, top: 0, bottom: 700, height: 700 })
+      }
+      if (this.classList.contains("canvas-top-menu-view-mode-trigger")) {
+        return createRect({ left: 214, right: 303, width: 89, top: 52, bottom: 93, height: 41 })
+      }
+      if (this.classList.contains("canvas-top-menu-view-mode-panel")) {
+        return createRect({ left: 0, right: 230, width: 230, top: 0, bottom: 98, height: 98 })
+      }
+      return createRect({})
+    })
+
+    try {
+      render(
+        <section className="workbench-pane">
+          <SessionCanvasTopMenu
+            {...createTopMenuProps({
+              sessionViewMode: "linear",
+              onSessionViewModeChange: vi.fn(),
+            })}
+          />
+        </section>,
+      )
+
+      fireEvent.click(screen.getByRole("button", { name: "Session view: Linear" }))
+      const menu = screen.getByRole("menu", { name: "Session view" })
+
+      await waitFor(() => expect(menu).toHaveStyle({ left: "162px" }))
+    } finally {
+      getRect.mockRestore()
+    }
   })
 })
 

@@ -704,8 +704,6 @@ export const ptBR = {
   "rightSidebar.launcher.filesDescription": "Navegar pelos arquivos do projeto",
   "rightSidebar.launcher.browserTitle": "Navegador",
   "rightSidebar.launcher.browserDescription": "Abrir um site",
-  "rightSidebar.launcher.messageTreeTitle": "Árvore",
-  "rightSidebar.launcher.messageTreeDescription": "Navegar pelos ramos de mensagens",
   "rightSidebar.launcher.reviewTitle": "Revisar",
   "rightSidebar.launcher.reviewDescription": "Inspecionar alterações de código",
   "rightSidebar.launcher.terminalTitle": "Terminal",

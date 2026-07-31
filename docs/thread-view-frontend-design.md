@@ -1,6 +1,6 @@
 # Thread View 前端设计说明
 
-更新日期：2026-07-29
+更新日期：2026-08-01
 
 ## 1. 文档定位
 
@@ -115,7 +115,7 @@ ComposerUtilityBar?
 
 ### Linear / Branch 视图边界
 
-`SessionCanvasTopMenu` 在普通 session 中显示 `Linear / Branch` tab。当前实现是一个可回退的 Branch 首版：
+`SessionCanvasTopMenu` 在普通 session 中显示与工具权限选择器同构的 `Linear / Branch` 下拉框；触发器展示当前视图，展开项使用单选菜单语义。当前实现是一个可回退的 Branch 首版：
 
 - `sessionViewMode` 属于当前 workbench tab 的 renderer 内存状态，不写回 session，也不调用后端。
 - Linear 继续消费 active history 的 canonical `ThreadTurn[]`，保留 streaming、trace、权限交互、bottom-lock 和虚拟列表。
@@ -128,7 +128,7 @@ ComposerUtilityBar?
 - Branch 的 `pan / zoom / inspected / keyboard focus` snapshot 以 `tab + session` 为 key 保存在 pane 组件内存中，切回 Linear 再返回时恢复；它不持久化到 session 或磁盘。
 - Composer 仍是两种视图共同的 sibling。Branch 节点选择会显示 `ComposerBranchParentNotice`；下一次非并发发送把所选 message ID 作为 `parentMessageID` 交给既有发送服务，成功提交后清除该 tab 的显式 parent。新消息由后端按该 parent 建立分支，其他历史分支保持不变。
 
-Right Sidebar 的现有 Message Tree 暂时保留，作为迁移期导航器；中央 Branch 视图不复用其“点击节点即切换 active branch”的行为。`message-inspector` 是由 Branch 节点点击打开的上下文页签，不出现在 Right Sidebar 的通用新增页签 launcher 中；再次点击其他节点会复用并更新同一个页签。
+中央 Branch 视图是完整消息树拓扑的唯一界面；Right Sidebar 不再提供独立的 Message Tree 入口或页签。`message-inspector` 是由 Branch 节点点击打开的上下文页签，不出现在 Right Sidebar 的通用新增页签 launcher 中；再次点击其他节点会复用并更新同一个页签。
 
 ### Branch Map、主 ThreadView 与 Branch Chat
 
@@ -186,13 +186,13 @@ Draft 的 `originMessageID` 与 `headMessageID` 相同。首次请求被接受�
 #### 入口与分支起点
 
 - Right Sidebar 通用新增入口以 `anchorStrategy: "latest-at-send"` 创建 draft。创建时的 `originMessageID/headMessageID` 只用于临时展示；用户首次发送时重新读取当前 Session active path 上最新的有效完成回复，并把它作为 detached branch 的 parent。没有有效回复时入口禁用；若候选在发送前失效，则不发送并保留草稿。
-- 回复分支按钮、response 文本引用、最近分支、Message Tree / Message Inspector 和高级选择器使用 `anchorStrategy: "selected"`，固定使用明确选择的回复；之后出现的新回复不会改写它。
+- 回复分支按钮、response 文本引用、最近分支、Message Inspector 和高级选择器使用 `anchorStrategy: "selected"`，固定使用明确选择的回复；之后出现的新回复不会改写它。
 - `⋯` 直接打开使用 portal 渲染的高级列表。Draft 沿主 active path 按从旧到新列出有效回复，阅读方向与主 ThreadView 一致；`latest-at-send` 单独取最后一个有效候选，不依赖列表首项。打开列表时自动把当前选择或最新回复滚入视口。文案使用“从哪条回复开始”，不向普通用户暴露“锚点”术语；选择后切换为 `"selected"`，并立即让 focused 主 ThreadView 定位到该回复所属轮次的 user message，使 user message 与 response 开头连续可见。列表保持打开，默认界面不增加来源条或特殊标记。
 - Committed 分支中的同一入口只读展示实际起点，不提供修改操作，并可通过 `paneID + messageID` 在同 Session 的 focused 主线程中定位。
 - 高级列表与最近分支列表都支持 Escape、方向键、Home / End、Enter / Space、点击外部空白或 Branch Chat Composer 关闭和焦点归还；两个弹层互斥。高级列表中的选项选择与面板内定位动作不关闭列表，最近分支选择后关闭弹层并打开或聚焦目标页签。两个列表都使用 fixed portal 定位，在窄于 360px 的右侧容器中仍限制于 viewport。
 - 主 ThreadView 与 Branch Chat 内最终 response 的 branch icon 每次都新建独立 draft 页签；它不再把 parent 写入主 Composer。
 - response 选区右键菜单会创建 draft，并把选中文字作为结构化引用。选区必须完整属于同一条可分支 assistant response；链接内有有效选区时，ThreadView 选区菜单优先于链接菜单。
-- Message Tree / Message Inspector 的 Branch Chat 动作对中间 response 创建 draft；对已有非主 leaf 则使用计算出的 origin/head 重开 committed 分支。
+- Message Inspector 的 Branch Chat 动作对中间 response 创建 draft；对已有非主 leaf 则使用计算出的 origin/head 重开 committed 分支。
 
 Branch Chat 顶部工具栏的“最近分支”不读取页签历史，而是实时扫描当前 Session 消息树中的非主 leaf。标题取分叉后的第一条 user message，摘要取 leaf response，时间取 leaf；generating、queued、waiting permission 和 error 由 turn parts 与瞬时 execution snapshot 合并显示。相同 leaf 已打开时聚焦已有页签；相同 anchor 的新 draft 不去重。Right Sidebar 通用新增页签 launcher 不再常驻渲染最近分支列表。
 

@@ -704,8 +704,6 @@ export const frFR = {
   "rightSidebar.launcher.filesDescription": "Parcourir les fichiers du projet",
   "rightSidebar.launcher.browserTitle": "Navigateur",
   "rightSidebar.launcher.browserDescription": "Ouvrir un site web",
-  "rightSidebar.launcher.messageTreeTitle": "Arborescence",
-  "rightSidebar.launcher.messageTreeDescription": "Naviguer dans les branches de messages",
   "rightSidebar.launcher.reviewTitle": "Révision",
   "rightSidebar.launcher.reviewDescription": "Inspecter les modifications de code",
   "rightSidebar.launcher.terminalTitle": "Terminal",

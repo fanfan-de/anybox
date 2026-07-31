@@ -1729,8 +1729,9 @@ describe("App", () => {
         view: "all",
       })
     })
-    const viewTabs = await screen.findByRole("tablist", { name: "Session view" })
-    fireEvent.click(within(viewTabs).getByRole("tab", { name: "Branches" }))
+    fireEvent.click(await screen.findByRole("button", { name: "Session view: Linear" }))
+    const viewMenu = screen.getByRole("menu", { name: "Session view" })
+    fireEvent.click(within(viewMenu).getByRole("menuitemradio", { name: "Branches" }))
     const branchView = await screen.findByRole("region", { name: "Session branch map" })
     const assistantNode = await within(branchView).findByRole("treeitem", { name: /Inspect this complete answer/ })
 
@@ -14752,9 +14753,6 @@ describe("App", () => {
     )
     expect(styles).toMatch(
       /\.preview-panel-section \.preview-empty-state\s*\{[^}]*background:\s*transparent;/s,
-    )
-    expect(styles).toMatch(
-      /\.session-message-tree-panel\s*\{[^}]*background:\s*transparent;/s,
     )
   })
 

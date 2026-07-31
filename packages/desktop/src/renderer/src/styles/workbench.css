@@ -3437,16 +3437,8 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   color: var(--text-primary);
 }
 
-.session-view-mode-tabs {
+.session-view-mode-selector-anchor {
   flex: 0 0 auto;
-  gap: 2px;
-}
-
-.session-view-mode-tabs > .top-menu-segment {
-  min-height: 26px;
-  padding: 0 8px;
-  border-radius: var(--radius-control);
-  font-size: 11px;
 }
 
 .session-canvas-top-menu-copy-status {
@@ -3658,6 +3650,7 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   gap: 6px;
 }
 
+.canvas-top-menu-view-mode-trigger,
 .canvas-top-menu-permission-trigger,
 .canvas-top-menu-plugin-trigger,
 .canvas-top-menu-mcp-trigger,
@@ -3666,6 +3659,7 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   max-width: min(128px, 22vw);
 }
 
+.canvas-top-menu-view-mode-trigger span,
 .canvas-top-menu-permission-trigger span,
 .canvas-top-menu-plugin-trigger span,
 .canvas-top-menu-mcp-trigger span,
@@ -3781,9 +3775,16 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   background-clip: padding-box;
 }
 
+.canvas-top-menu-view-mode-panel,
 .canvas-top-menu-permission-panel,
 .canvas-top-menu-mcp-panel {
   max-width: min(260px, calc(100vw - 64px));
+}
+
+.canvas-top-menu-view-mode-panel.is-portal {
+  position: fixed;
+  right: auto;
+  z-index: 1000;
 }
 
 .canvas-top-menu-plugin-panel {
@@ -3903,6 +3904,7 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
 }
 
 .canvas-top-menu-context-option-label,
+.canvas-top-menu-view-mode-option-label,
 .canvas-top-menu-permission-option-label {
   min-width: 0;
   overflow: hidden;

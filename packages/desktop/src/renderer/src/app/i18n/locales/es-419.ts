@@ -704,8 +704,6 @@ export const es419 = {
   "rightSidebar.launcher.filesDescription": "Explorar archivos del proyecto",
   "rightSidebar.launcher.browserTitle": "Navegador",
   "rightSidebar.launcher.browserDescription": "Abrir un sitio web",
-  "rightSidebar.launcher.messageTreeTitle": "Árbol",
-  "rightSidebar.launcher.messageTreeDescription": "Navegar ramas de mensajes",
   "rightSidebar.launcher.reviewTitle": "Revisar",
   "rightSidebar.launcher.reviewDescription": "Inspeccionar cambios de código",
   "rightSidebar.launcher.terminalTitle": "Terminal",

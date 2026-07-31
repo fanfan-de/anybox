@@ -704,8 +704,6 @@ export const viVN = {
   "rightSidebar.launcher.filesDescription": "Duyệt tệp dự án",
   "rightSidebar.launcher.browserTitle": "Trình duyệt",
   "rightSidebar.launcher.browserDescription": "Mở trang web",
-  "rightSidebar.launcher.messageTreeTitle": "Cây",
-  "rightSidebar.launcher.messageTreeDescription": "Điều hướng nhánh tin nhắn",
   "rightSidebar.launcher.reviewTitle": "Xem lại",
   "rightSidebar.launcher.reviewDescription": "Kiểm tra thay đổi mã",
   "rightSidebar.launcher.terminalTitle": "Terminal",

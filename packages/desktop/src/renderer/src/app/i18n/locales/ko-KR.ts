@@ -704,8 +704,6 @@ export const koKR = {
   "rightSidebar.launcher.filesDescription": "프로젝트 파일 탐색",
   "rightSidebar.launcher.browserTitle": "브라우저",
   "rightSidebar.launcher.browserDescription": "웹사이트 열기",
-  "rightSidebar.launcher.messageTreeTitle": "트리",
-  "rightSidebar.launcher.messageTreeDescription": "메시지 분기 탐색",
   "rightSidebar.launcher.reviewTitle": "리뷰",
   "rightSidebar.launcher.reviewDescription": "코드 변경 검사",
   "rightSidebar.launcher.terminalTitle": "터미널",

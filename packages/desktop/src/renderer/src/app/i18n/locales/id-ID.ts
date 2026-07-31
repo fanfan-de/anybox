@@ -704,8 +704,6 @@ export const idID = {
   "rightSidebar.launcher.filesDescription": "Jelajahi file proyek",
   "rightSidebar.launcher.browserTitle": "Peramban",
   "rightSidebar.launcher.browserDescription": "Buka situs web",
-  "rightSidebar.launcher.messageTreeTitle": "Pohon",
-  "rightSidebar.launcher.messageTreeDescription": "Navigasi cabang pesan",
   "rightSidebar.launcher.reviewTitle": "Tinjau",
   "rightSidebar.launcher.reviewDescription": "Periksa perubahan kode",
   "rightSidebar.launcher.terminalTitle": "Terminal",

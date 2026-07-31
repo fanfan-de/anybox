@@ -2049,7 +2049,6 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
   )
   const rightSidebarMessageInspectorSelection = activeRightSidebarTab?.kind === "message-inspector"
     || activeRightSidebarTab?.kind === "branch-thread"
-    || activeRightSidebarTab?.kind === "message-tree"
     ? findSession(workspaces, activeRightSidebarTab.sessionID)
     : null
   const rightSidebarThreadLinkContext =
@@ -2111,15 +2110,6 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     })
   }
 
-  function handleOpenRightSidebarMessageTreeTab() {
-    if (!activeSession?.id) return
-    openOrFocusRightSidebarTab({
-      kind: "message-tree",
-      sessionID: activeSession.id,
-      title: "Tree",
-    })
-  }
-
   async function handleOpenSubagentSessionTab(sessionID: string) {
     const trimmedSessionID = sessionID.trim()
     if (!trimmedSessionID) return
@@ -2140,17 +2130,6 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     if (refreshedWorkspace && refreshedSession) {
       handleSessionSelect(refreshedWorkspace.id, refreshedSession.id)
     }
-  }
-
-  async function handleMessageTreeNodeSelect(sessionID: string, messageID: string) {
-    if (!messageID.trim()) return
-
-    const sessionSelection = findSession(workspaces, sessionID)
-    if (sessionSelection.workspace && activeSession?.id !== sessionID) {
-      handleSessionSelect(sessionSelection.workspace.id, sessionID)
-    }
-
-    await handleSessionBranchSelect({ sessionID, messageID })
   }
 
   function handleActivateRightSidebarTab(tabID: string) {
@@ -3259,12 +3238,10 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               onWorkspaceFileSelect={handleWorkspaceFileSelect}
               onOpenBrowserTab={handleOpenRightSidebarBrowserTab}
               onOpenFilesTab={handleOpenRightSidebarFilesTab}
-              onOpenMessageTreeTab={handleOpenRightSidebarMessageTreeTab}
               onOpenReviewTab={handleOpenRightSidebarReviewTab}
               onOpenTerminalTab={handleOpenRightSidebarTerminalTab}
               onOpenBranchChat={handleOpenBranchChat}
               onLocateBranchAnchor={handleLocateBranchAnchor}
-              onMessageTreeNodeSelect={handleMessageTreeNodeSelect}
               renderTerminalTab={({ onTitleChange, sessionID }) => (
                 <TerminalAreaHost
                   brandTheme={brandTheme}

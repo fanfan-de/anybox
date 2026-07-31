@@ -8,7 +8,6 @@ import {
   ForkIcon,
   PlusIcon,
   PreviewIcon,
-  SessionTreeIcon,
   InfoIcon,
   TerminalIcon,
 } from "../icons"
@@ -37,7 +36,6 @@ import type {
   WorkspaceGroup,
 } from "../types"
 import type { MarkdownArtifactLinkTarget, MarkdownLocalFileLinkTarget } from "../thread-markdown"
-import { SessionMessageTreePanel } from "./SessionMessageTreePanel"
 import { SessionMessageInspectorPanel } from "./SessionMessageInspectorPanel"
 import {
   BranchChatPanel,
@@ -78,7 +76,6 @@ interface RightSidebarProps {
   onLocalFileLinkOpen?: (target: MarkdownLocalFileLinkTarget) => void
   onOpenBrowserTab: () => void
   onOpenFilesTab: () => void
-  onOpenMessageTreeTab: () => void
   onOpenReviewTab: () => void
   onOpenTerminalTab: () => void
   onOpenBranchChat: (input: OpenBranchChatInput) => void
@@ -87,7 +84,6 @@ interface RightSidebarProps {
     paneID: string
     sessionID: string
   }) => void
-  onMessageTreeNodeSelect: (sessionID: string, messageID: string) => void | Promise<void>
   onPreviewActiveInteractionChange: (pluginID: PreviewInteractionPluginID | null) => void
   onPreviewBack: () => void
   onPreviewCommitInteraction: (input: PreviewInteractionCommitInput) => void
@@ -189,8 +185,6 @@ function getTabIcon(kind: RightSidebarTab["kind"]) {
       return <ChangesIcon />
     case "terminal":
       return <TerminalIcon />
-    case "message-tree":
-      return <SessionTreeIcon />
     case "message-inspector":
       return <InfoIcon />
     case "branch-thread":
@@ -210,8 +204,6 @@ function getViewHostClassName(tab: RightSidebarTab | null, isLauncherVisible: bo
       return "right-sidebar-view-host is-changes"
     case "terminal":
       return "right-sidebar-view-host is-terminal"
-    case "message-tree":
-      return "right-sidebar-view-host is-message-tree"
     case "message-inspector":
       return "right-sidebar-view-host is-message-inspector"
     case "branch-thread":
@@ -247,12 +239,10 @@ export function RightSidebar({
   onLocalFileLinkOpen,
   onOpenBrowserTab,
   onOpenFilesTab,
-  onOpenMessageTreeTab,
   onOpenReviewTab,
   onOpenTerminalTab,
   onOpenBranchChat,
   onLocateBranchAnchor,
-  onMessageTreeNodeSelect,
   onPreviewActiveInteractionChange,
   onPreviewBack,
   onPreviewCommitInteraction,
@@ -301,12 +291,6 @@ export function RightSidebar({
       key: "browser",
       title: t("rightSidebar.launcher.browserTitle"),
       icon: <PreviewIcon />,
-    },
-    {
-      key: "message-tree",
-      title: t("rightSidebar.launcher.messageTreeTitle"),
-      disabled: !activeSession,
-      icon: <SessionTreeIcon />,
     },
     {
       key: "review",
@@ -369,10 +353,6 @@ export function RightSidebar({
       case "terminal":
         if (!canOpenTerminal) return
         onOpenTerminalTab()
-        break
-      case "message-tree":
-        if (!activeSession) return
-        onOpenMessageTreeTab()
         break
       case "branch-thread": {
         const defaultAnchor = branchAnchorOptions.at(-1)
@@ -488,38 +468,6 @@ export function RightSidebar({
             onUpdateTab(activeTab.id, { title })
           },
         })
-      case "message-tree": {
-        const treeSession = findSessionByID(workspaces, activeTab.sessionID)
-        const messageTree = messageTreeBySession[activeTab.sessionID] ?? null
-        const openTreeNodeInBranchChat = (messageID: string) => {
-          const existingBranch = listRecentBranchThreads(messageTree)
-            .find((branch) => branch.headMessageID === messageID)
-          onOpenBranchChat(existingBranch
-            ? {
-                anchorStrategy: "selected",
-                sessionID: existingBranch.sessionID,
-                originMessageID: existingBranch.originMessageID,
-                headMessageID: existingBranch.headMessageID,
-                phase: "committed",
-                title: existingBranch.title,
-              }
-            : {
-                anchorStrategy: "selected",
-                sessionID: activeTab.sessionID,
-                originMessageID: messageID,
-              })
-        }
-        return (
-          <SessionMessageTreePanel
-            session={treeSession}
-            messageTree={messageTree}
-            onArtifactLinkOpen={onArtifactLinkOpen}
-            onLocalFileLinkOpen={onLocalFileLinkOpen}
-            onSelectMessage={onMessageTreeNodeSelect}
-            onOpenBranchChat={openTreeNodeInBranchChat}
-          />
-        )
-      }
       case "message-inspector": {
         const messageTree = messageTreeBySession[activeTab.sessionID] ?? null
         return (
