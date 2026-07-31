@@ -2,7 +2,7 @@ import { memo, useEffect, useRef, useState, type PointerEvent as ReactPointerEve
 import type { AppearanceCodeFontFamily } from "../../../../shared/appearance"
 import type { BrandTheme, ColorMode } from "../types"
 import { TerminalInitialDimensionsProbe } from "./TerminalInitialDimensionsProbe"
-import { TerminalTabs } from "./TerminalTabs"
+import { TerminalShellPicker, TerminalTabs } from "./TerminalTabs"
 import { TerminalView } from "./TerminalView"
 import type { TerminalSessionRecord, TerminalShellProfile, TerminalStreamEvent } from "./types"
 
@@ -176,20 +176,22 @@ export const TerminalPanel = memo(function TerminalPanel({
         />
       )}
 
-      <TerminalTabs
-        activePtyID={activeSession?.ptyID ?? null}
-        canCreateTerminal={canCreateTerminal}
-        isCreatingTerminal={isCreatingTerminal}
-        showToggleButton={showToggleButton}
-        sessions={sessions}
-        onCloseTerminal={onCloseTerminal}
-        onCreateTerminal={onCreateTerminalForShellProfile}
-        onShellProfileChange={onShellProfileChange}
-        onSelectTerminal={onSelectTerminal}
-        selectedShellProfileID={selectedShellProfileID}
-        shellProfiles={shellProfiles}
-        onTogglePanel={onTogglePanel}
-      />
+      {isFillLayout ? null : (
+        <TerminalTabs
+          activePtyID={activeSession?.ptyID ?? null}
+          canCreateTerminal={canCreateTerminal}
+          isCreatingTerminal={isCreatingTerminal}
+          showToggleButton={showToggleButton}
+          sessions={sessions}
+          onCloseTerminal={onCloseTerminal}
+          onCreateTerminal={onCreateTerminalForShellProfile}
+          onShellProfileChange={onShellProfileChange}
+          onSelectTerminal={onSelectTerminal}
+          selectedShellProfileID={selectedShellProfileID}
+          shellProfiles={shellProfiles}
+          onTogglePanel={onTogglePanel}
+        />
+      )}
 
       {activeSession ? (
         <TerminalView
@@ -198,6 +200,7 @@ export const TerminalPanel = memo(function TerminalPanel({
           colorMode={colorMode}
           panelHeight={renderedHeight}
           session={activeSession}
+          ariaLabel={isFillLayout ? activeSession.title : undefined}
           onInput={onTerminalInput}
           onResize={onTerminalResize}
           onSnapshotChange={onTerminalSnapshotChange}
@@ -223,14 +226,31 @@ export const TerminalPanel = memo(function TerminalPanel({
           ) : (
             <p>No terminal session is open.</p>
           )}
-          <button
-            className="secondary-button"
-            disabled={!canCreateTerminal || isCreatingTerminal}
-            onClick={() => void onCreateTerminal()}
-            type="button"
-          >
-            {isCreatingTerminal ? "Creating..." : creationError ? "Retry" : "Create terminal"}
-          </button>
+          <div className={isFillLayout ? "terminal-empty-launcher" : undefined}>
+            {isFillLayout ? (
+              <div className="terminal-empty-shell-picker">
+                <span className="terminal-shell-picker-label">Shell</span>
+                <TerminalShellPicker
+                  disabled={isCreatingTerminal}
+                  onChange={onShellProfileChange}
+                  profiles={shellProfiles}
+                  selectedProfileID={selectedShellProfileID}
+                />
+              </div>
+            ) : null}
+            <button
+              className="secondary-button"
+              disabled={!canCreateTerminal || isCreatingTerminal}
+              onClick={() => void (
+                isFillLayout
+                  ? onCreateTerminalForShellProfile(selectedShellProfileID)
+                  : onCreateTerminal()
+              )}
+              type="button"
+            >
+              {isCreatingTerminal ? "Creating..." : creationError ? "Retry" : "Create terminal"}
+            </button>
+          </div>
         </div>
       )}
     </section>

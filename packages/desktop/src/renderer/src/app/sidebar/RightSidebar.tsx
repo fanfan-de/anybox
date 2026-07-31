@@ -45,6 +45,12 @@ import {
   type OpenBranchChatInput,
 } from "./BranchChatPanel"
 
+export interface RenderTerminalTabInput {
+  headerActionsPortalTarget: Element | null
+  onTitleChange: (title: string) => void
+  sessionID: string | null
+}
+
 interface RightSidebarProps {
   activeSession: SessionSummary | null
   activeSessionRuntimeDebug?: SessionRuntimeDebugSnapshot | null
@@ -102,7 +108,7 @@ interface RightSidebarProps {
   onWorkspaceFileTreeInvalidate: (paths: string[]) => void
   onWorkspaceFileQueryChange: (value: string) => void
   onWorkspaceFileSelect: (path: string, options?: { linkedLineRange?: MarkdownLocalFileLinkTarget["lineRange"] }) => void
-  renderTerminalTab: (sessionID: string | null) => ReactNode
+  renderTerminalTab: (input: RenderTerminalTabInput) => ReactNode
   windowControls?: ReactNode
 }
 
@@ -272,6 +278,7 @@ export function RightSidebar({
 }: RightSidebarProps) {
   const { t } = useI18n()
   const [isLauncherVisible, setIsLauncherVisible] = useState(() => !rightSidebar.activeTabID)
+  const [terminalHeaderActionsPortalTarget, setTerminalHeaderActionsPortalTarget] = useState<HTMLDivElement | null>(null)
   const lastActiveTabIDRef = useRef<string | null>(null)
   const activeTab = rightSidebar.tabs.find((tab) => tab.id === rightSidebar.activeTabID) ?? null
   const viewHostClassName = getViewHostClassName(activeTab, isLauncherVisible)
@@ -476,7 +483,14 @@ export function RightSidebar({
         )
       }
       case "terminal":
-        return renderTerminalTab(activeTab.sessionID)
+        return renderTerminalTab({
+          headerActionsPortalTarget: terminalHeaderActionsPortalTarget,
+          sessionID: activeTab.sessionID,
+          onTitleChange: (title) => {
+            if (activeTab.title === title) return
+            onUpdateTab(activeTab.id, { title })
+          },
+        })
       case "message-tree": {
         const treeSession = findSessionByID(workspaces, activeTab.sessionID)
         const messageTree = messageTreeBySession[activeTab.sessionID] ?? null
@@ -543,6 +557,21 @@ export function RightSidebar({
     }
   }
 
+  const showTerminalHeaderActions = !isLauncherVisible && activeTab?.kind === "terminal"
+  const topMenuTrailing = showTerminalHeaderActions || windowControls
+    ? (
+      <>
+        {showTerminalHeaderActions ? (
+          <div
+            ref={setTerminalHeaderActionsPortalTarget}
+            className="right-sidebar-terminal-actions-slot"
+          />
+        ) : null}
+        {windowControls}
+      </>
+    )
+    : undefined
+
   return (
     <aside id="app-sidebar-right" className="sidebar is-right" aria-label="Inspector sidebar">
       <ShellTopMenu
@@ -595,7 +624,7 @@ export function RightSidebar({
           </>
         )}
         dragRegion
-        trailing={windowControls}
+        trailing={topMenuTrailing}
         trailingClassName="right-sidebar-top-menu-window-controls"
       />
 

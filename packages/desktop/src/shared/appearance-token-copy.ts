@@ -65,7 +65,7 @@ const zhCNTokenGroupCopy = {
   },
   "component-terminal": {
     label: "终端",
-    description: "嵌入式终端表面的专用语义颜色。",
+    description: "嵌入式终端内容的专用语义颜色。",
   },
   "component-popup-panel": {
     label: "弹出面板",
@@ -521,6 +521,10 @@ const zhCNTokenRowCopy = {
   "semantic-terminal-surface": {
     label: "终端背景",
     description: "终端内容区域的背景。",
+  },
+  "semantic-terminal-text": {
+    label: "终端文字",
+    description: "终端文字和中性 ANSI 白色输出的默认前景色。",
   },
   "semantic-popup-panel-surface": {
     label: "面板背景",

@@ -38,7 +38,7 @@ export const appearanceTokenCopy = {
     },
     "component-terminal": {
       "label": "Terminal",
-      "description": "Gömülü terminal yüzeyleri için özel anlamsal renk."
+      "description": "Gömülü terminal içeriği için özel anlamsal renkler."
     },
     "component-popup-panel": {
       "label": "Popup Paneli",
@@ -429,6 +429,10 @@ export const appearanceTokenCopy = {
     "semantic-terminal-surface": {
       "label": "Terminal Yüzeyi",
       "description": "Terminal içerik yüzeyleri için arka plan dolgusu."
+    },
+    "semantic-terminal-text": {
+      "label": "Terminal Metni",
+      "description": "Terminal metni ve nötr ANSI beyaz çıktısı için varsayılan ön plan rengi."
     },
     "semantic-popup-panel-surface": {
       "label": "Panel Yüzeyi",

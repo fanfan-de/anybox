@@ -38,7 +38,7 @@ export const appearanceTokenCopy = {
     },
     "component-terminal": {
       "label": "Terminal",
-      "description": "Màu ngữ nghĩa chuyên dụng cho bề mặt terminal nhúng."
+      "description": "Màu ngữ nghĩa chuyên dụng cho nội dung terminal nhúng."
     },
     "component-popup-panel": {
       "label": "Bảng Popup",
@@ -429,6 +429,10 @@ export const appearanceTokenCopy = {
     "semantic-terminal-surface": {
       "label": "Bề mặt Terminal",
       "description": "Nền cho bề mặt nội dung terminal."
+    },
+    "semantic-terminal-text": {
+      "label": "Văn bản Terminal",
+      "description": "Màu tiền cảnh mặc định cho văn bản terminal và đầu ra ANSI trắng trung tính."
     },
     "semantic-popup-panel-surface": {
       "label": "Bề mặt Panel",

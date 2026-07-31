@@ -38,7 +38,7 @@ export const appearanceTokenCopy = {
     },
     "component-terminal": {
       "label": "Terminal",
-      "description": "Warna semantik khusus untuk permukaan terminal tertanam."
+      "description": "Warna semantik khusus untuk konten terminal tertanam."
     },
     "component-popup-panel": {
       "label": "Panel Popup",
@@ -429,6 +429,10 @@ export const appearanceTokenCopy = {
     "semantic-terminal-surface": {
       "label": "Permukaan Terminal",
       "description": "Isian latar untuk permukaan konten terminal."
+    },
+    "semantic-terminal-text": {
+      "label": "Teks Terminal",
+      "description": "Warna latar depan default untuk teks terminal dan keluaran putih ANSI netral."
     },
     "semantic-popup-panel-surface": {
       "label": "Permukaan Panel",

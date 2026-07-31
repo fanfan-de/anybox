@@ -38,7 +38,7 @@ export const appearanceTokenCopy = {
     },
     "component-terminal": {
       "label": "Terminale",
-      "description": "Colore semantico dedicato per superfici di terminale incorporate."
+      "description": "Colori semantici dedicati per il contenuto dei terminali incorporati."
     },
     "component-popup-panel": {
       "label": "Pannello Popup",
@@ -429,6 +429,10 @@ export const appearanceTokenCopy = {
     "semantic-terminal-surface": {
       "label": "Superficie Terminale",
       "description": "Sfondo per superfici di contenuto del terminale."
+    },
+    "semantic-terminal-text": {
+      "label": "Testo del terminale",
+      "description": "Colore di primo piano predefinito per il testo del terminale e l’output ANSI bianco neutro."
     },
     "semantic-popup-panel-surface": {
       "label": "Superficie Pannello",

@@ -38,7 +38,7 @@ export const appearanceTokenCopy = {
     },
     "component-terminal": {
       "label": "터미널",
-      "description": "임베디드 터미널 표면을 위한 전용 의미 색상"
+      "description": "임베디드 터미널 콘텐츠를 위한 전용 의미 색상"
     },
     "component-popup-panel": {
       "label": "팝업 패널",
@@ -429,6 +429,10 @@ export const appearanceTokenCopy = {
     "semantic-terminal-surface": {
       "label": "터미널 표면",
       "description": "터미널 콘텐츠 표면의 배경 채움."
+    },
+    "semantic-terminal-text": {
+      "label": "터미널 텍스트",
+      "description": "터미널 텍스트와 중립 ANSI 흰색 출력의 기본 전경색입니다."
     },
     "semantic-popup-panel-surface": {
       "label": "패널 표면",

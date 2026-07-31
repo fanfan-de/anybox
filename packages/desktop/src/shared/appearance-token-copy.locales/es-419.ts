@@ -38,7 +38,7 @@ export const appearanceTokenCopy = {
     },
     "component-terminal": {
       "label": "Terminal",
-      "description": "Color semántico dedicado para superficies de terminal embebidas."
+      "description": "Colores semánticos dedicados para contenido de terminal embebido."
     },
     "component-popup-panel": {
       "label": "Panel Emergente",
@@ -429,6 +429,10 @@ export const appearanceTokenCopy = {
     "semantic-terminal-surface": {
       "label": "Superficie de terminal",
       "description": "Relleno de fondo para superficies de contenido de terminal."
+    },
+    "semantic-terminal-text": {
+      "label": "Texto de terminal",
+      "description": "Color de primer plano predeterminado para el texto de terminal y la salida ANSI blanca neutra."
     },
     "semantic-popup-panel-surface": {
       "label": "Superficie de panel",

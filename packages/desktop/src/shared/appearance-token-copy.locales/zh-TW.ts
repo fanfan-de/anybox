@@ -38,7 +38,7 @@ export const appearanceTokenCopy = {
     },
     "component-terminal": {
       "label": "終端機",
-      "description": "嵌入式終端表面的專用語意顏色。"
+      "description": "嵌入式終端內容的專用語意顏色。"
     },
     "component-popup-panel": {
       "label": "彈出面板",
@@ -429,6 +429,10 @@ export const appearanceTokenCopy = {
     "semantic-terminal-surface": {
       "label": "終端背景",
       "description": "終端內容區域的背景。"
+    },
+    "semantic-terminal-text": {
+      "label": "終端文字",
+      "description": "終端文字和中性 ANSI 白色輸出的預設前景色。"
     },
     "semantic-popup-panel-surface": {
       "label": "面板背景",

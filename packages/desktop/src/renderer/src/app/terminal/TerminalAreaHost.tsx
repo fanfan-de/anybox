@@ -1,6 +1,8 @@
-import { memo } from "react"
+import { memo, useEffect, useEffectEvent } from "react"
 import { createPortal } from "react-dom"
 import type { AppearanceCodeFontFamily } from "../../../../shared/appearance"
+import { useI18n } from "../i18n/I18nProvider"
+import { TerminalHeaderActions } from "./TerminalHeaderActions"
 import { TerminalPanel } from "./TerminalPanel"
 import { TerminalPanelToggleButton } from "./TerminalPanelToggleButton"
 import { useTerminalWorkspace } from "./use-terminal-workspace"
@@ -11,7 +13,9 @@ interface TerminalAreaHostProps {
   collapsedTogglePortalTarget?: Element | null
   colorMode: "system" | "light" | "dark"
   currentSessionID: string | null
+  headerActionsPortalTarget?: Element | null
   layout?: "panel" | "fill"
+  onTabTitleChange?: (title: string) => void
   storageKey?: string
   togglePortalTarget?: Element | null
 }
@@ -23,7 +27,9 @@ export const TerminalAreaHost = memo(function TerminalAreaHost(props: TerminalAr
     collapsedTogglePortalTarget,
     colorMode,
     currentSessionID,
+    headerActionsPortalTarget,
     layout = "panel",
+    onTabTitleChange,
     storageKey,
     togglePortalTarget,
   } = props
@@ -34,6 +40,7 @@ export const TerminalAreaHost = memo(function TerminalAreaHost(props: TerminalAr
     handleCreateTerminal,
     handleCreateTerminalForShellProfile,
     handlePanelHeightChange,
+    handleRestartTerminal,
     handleShellProfileChange,
     handleSelectTerminal,
     handleTerminalInitialDimensions,
@@ -55,6 +62,17 @@ export const TerminalAreaHost = memo(function TerminalAreaHost(props: TerminalAr
     storageKey,
   })
 
+  const { t } = useI18n()
+  const emitTabTitleChange = useEffectEvent((title: string) => onTabTitleChange?.(title))
+  const tabTitle = activeSession
+    ? `${t("terminal.title")} · ${activeSession.title}`
+    : t("terminal.title")
+
+  useEffect(() => {
+    if (layout !== "fill" || !currentSessionID) return
+    emitTabTitleChange(tabTitle)
+  }, [currentSessionID, layout, tabTitle])
+
   if (!currentSessionID) return null
 
   const isFillLayout = layout === "fill"
@@ -75,6 +93,18 @@ export const TerminalAreaHost = memo(function TerminalAreaHost(props: TerminalAr
             <div className="canvas-terminal-toggle-anchor">
               {toggleButton}
             </div>
+          )
+        : null}
+      {isFillLayout && activeSession && headerActionsPortalTarget
+        ? createPortal(
+            <TerminalHeaderActions
+              isBusy={isCreatingTerminal}
+              session={activeSession}
+              shellProfiles={shellProfiles}
+              onCloseTerminal={handleCloseTerminal}
+              onRestartTerminal={handleRestartTerminal}
+            />,
+            headerActionsPortalTarget,
           )
         : null}
       <TerminalPanel

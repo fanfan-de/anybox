@@ -224,6 +224,8 @@
   /* Terminal */
   --semantic-terminal-surface-light: #ffffff;
   --semantic-terminal-surface-dark: #000000;
+  --semantic-terminal-text-light: var(--text-primary-light);
+  --semantic-terminal-text-dark: var(--text-primary-dark);
 
   /* Popup Panel */
   --semantic-popup-panel-surface-light: var(--surface-shell-light);
@@ -728,6 +730,7 @@
   --semantic-shell-chrome-tab-surface-active: var(--semantic-shell-chrome-tab-surface-active-light);
   --semantic-shell-chrome-tab-indicator-active: var(--semantic-shell-chrome-tab-indicator-active-light);
   --semantic-terminal-surface: var(--semantic-terminal-surface-light);
+  --semantic-terminal-text: var(--semantic-terminal-text-light);
   --semantic-popup-panel-surface: var(--semantic-popup-panel-surface-light);
   --semantic-switch-row-surface-focus: var(--semantic-switch-row-surface-focus-light);
   --semantic-switch-track-surface: var(--semantic-switch-track-surface-light);
@@ -1187,6 +1190,7 @@
     --semantic-shell-chrome-tab-surface-active: var(--semantic-shell-chrome-tab-surface-active-dark);
     --semantic-shell-chrome-tab-indicator-active: var(--semantic-shell-chrome-tab-indicator-active-dark);
     --semantic-terminal-surface: var(--semantic-terminal-surface-dark);
+    --semantic-terminal-text: var(--semantic-terminal-text-dark);
     --semantic-popup-panel-surface: var(--semantic-popup-panel-surface-dark);
     --semantic-switch-row-surface-focus: var(--semantic-switch-row-surface-focus-dark);
     --semantic-switch-track-surface: var(--semantic-switch-track-surface-dark);
@@ -1471,6 +1475,7 @@
   --semantic-shell-chrome-tab-surface-active: var(--semantic-shell-chrome-tab-surface-active-dark);
   --semantic-shell-chrome-tab-indicator-active: var(--semantic-shell-chrome-tab-indicator-active-dark);
   --semantic-terminal-surface: var(--semantic-terminal-surface-dark);
+  --semantic-terminal-text: var(--semantic-terminal-text-dark);
   --semantic-popup-panel-surface: var(--semantic-popup-panel-surface-dark);
   --semantic-switch-row-surface-focus: var(--semantic-switch-row-surface-focus-dark);
   --semantic-switch-track-surface: var(--semantic-switch-track-surface-dark);

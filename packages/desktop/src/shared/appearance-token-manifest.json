@@ -877,7 +877,7 @@
       "id": "component-terminal",
       "layer": "component",
       "label": "Terminal",
-      "description": "Dedicated semantic color for embedded terminal surfaces.",
+      "description": "Dedicated semantic colors for embedded terminal content.",
       "rows": [
         {
           "id": "semantic-terminal-surface",
@@ -886,6 +886,14 @@
           "lightToken": "semantic-terminal-surface-light",
           "darkToken": "semantic-terminal-surface-dark",
           "runtimeToken": "semantic-terminal-surface"
+        },
+        {
+          "id": "semantic-terminal-text",
+          "label": "Terminal Text",
+          "description": "Default foreground color for terminal text and neutral ANSI white output.",
+          "lightToken": "semantic-terminal-text-light",
+          "darkToken": "semantic-terminal-text-dark",
+          "runtimeToken": "semantic-terminal-text"
         }
       ]
     },
@@ -4207,6 +4215,14 @@
             "alpha": 1,
             "hex": "#000000"
           }
+        },
+        "semantic-terminal-text-light": {
+          "type": "alias",
+          "token": "text-primary-light"
+        },
+        "semantic-terminal-text-dark": {
+          "type": "alias",
+          "token": "text-primary-dark"
         },
         "semantic-popup-panel-surface-light": {
           "type": "alias",
@@ -16511,6 +16527,19 @@
         "dark": "semantic-field-surface-focus-dark"
       },
       "minimumContrast": 3
+    },
+    {
+      "id": "terminal-text-on-terminal-surface",
+      "kind": "text",
+      "foreground": {
+        "light": "semantic-terminal-text-light",
+        "dark": "semantic-terminal-text-dark"
+      },
+      "background": {
+        "light": "semantic-terminal-surface-light",
+        "dark": "semantic-terminal-surface-dark"
+      },
+      "minimumContrast": 4.5
     }
   ],
   "compatibility": {

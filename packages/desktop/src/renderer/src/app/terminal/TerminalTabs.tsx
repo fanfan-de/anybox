@@ -51,14 +51,14 @@ function getNextEnabledIndex(options: TerminalShellProfile[], currentIndex: numb
   return -1
 }
 
-interface TerminalShellPickerProps {
+export interface TerminalShellPickerProps {
   disabled: boolean
   onChange: (profileID: string) => void
   profiles: TerminalShellProfile[]
   selectedProfileID: string
 }
 
-function TerminalShellPicker({
+export function TerminalShellPicker({
   disabled,
   onChange,
   profiles,

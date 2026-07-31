@@ -738,7 +738,9 @@ export function useTerminalWorkspace({ currentSessionID, storageKey }: UseTermin
       return
     }
 
-    const shell = shellOverride ?? resolveShellFromProfile(shellProfilesRef.current, workspaceRef.current.preferredShellProfileID)
+    const shell = shellOverride !== undefined
+      ? shellOverride
+      : resolveShellFromProfile(shellProfilesRef.current, workspaceRef.current.preferredShellProfileID)
     const requestID = nextCreateRequestIDRef.current + 1
     nextCreateRequestIDRef.current = requestID
     pendingCreateRef.current = {
@@ -937,7 +939,7 @@ export function useTerminalWorkspace({ currentSessionID, storageKey }: UseTermin
       }
     }
 
-    updateWorkspace((current) => {
+    const removeClosedSession = (current: TerminalWorkspaceState) => {
       const nextOrder = current.order.filter((id) => id !== ptyID)
       const nextSessions = { ...current.sessions }
       delete nextSessions[ptyID]
@@ -956,10 +958,28 @@ export function useTerminalWorkspace({ currentSessionID, storageKey }: UseTermin
         order: nextOrder,
         sessions: nextSessions,
       }
-    })
+    }
+    workspaceRef.current = removeClosedSession(workspaceRef.current)
+    updateWorkspace(removeClosedSession)
     delete liveSessionsRef.current[ptyID]
     delete terminalStreamListenersRef.current[ptyID]
     delete pendingInputRef.current[ptyID]
+  }
+
+  async function handleRestartTerminal(ptyID: string, profileID?: string) {
+    const session = workspaceRef.current.sessions[ptyID]
+    if (!session) return
+
+    const shell = profileID === undefined
+      ? session.shell
+      : resolveShellFromProfile(shellProfilesRef.current, profileID)
+
+    if (profileID !== undefined) {
+      handleShellProfileChange(profileID)
+    }
+
+    await handleCloseTerminal(ptyID)
+    await handleCreateTerminal(true, shell)
   }
 
   function handlePanelHeightChange(height: number) {
@@ -1061,6 +1081,7 @@ export function useTerminalWorkspace({ currentSessionID, storageKey }: UseTermin
     sessions,
     handleCloseTerminal,
     handleCreateTerminal,
+    handleRestartTerminal,
     handleShellProfileChange,
     handlePanelHeightChange,
     handleOpenPtySession,

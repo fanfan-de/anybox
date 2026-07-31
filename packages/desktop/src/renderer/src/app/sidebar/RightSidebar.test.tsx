@@ -80,6 +80,17 @@ function createMessageTreeTab(): RightSidebarTab {
   }
 }
 
+function createTerminalTab(): RightSidebarTab {
+  return {
+    id: "terminal-tab",
+    kind: "terminal",
+    title: "Terminal",
+    targetKey: "terminal:session-1",
+    createdAt: 4,
+    sessionID: "session-1",
+  }
+}
+
 function createMessageInspectorTab(messageID = "assistant-2"): RightSidebarTab {
   return {
     id: "message-inspector-tab",
@@ -442,6 +453,7 @@ type RenderRightSidebarInput = {
   onLocateBranchAnchor?: ComponentProps<typeof RightSidebar>["onLocateBranchAnchor"]
   onMessageTreeNodeSelect?: (sessionID: string, messageID: string) => void
   onUpdateTab?: ComponentProps<typeof RightSidebar>["onUpdateTab"]
+  renderTerminalTab?: ComponentProps<typeof RightSidebar>["renderTerminalTab"]
   threadPaneContext?: ComponentProps<typeof RightSidebar>["threadPaneContext"]
   withI18n?: boolean
 }
@@ -500,7 +512,7 @@ function createRightSidebarUI(input: RenderRightSidebarInput) {
         onWorkspaceFileTreeInvalidate={vi.fn()}
         onWorkspaceFileQueryChange={vi.fn()}
         onWorkspaceFileSelect={vi.fn()}
-        renderTerminalTab={() => <div role="region" aria-label="Terminal tab" />}
+        renderTerminalTab={input.renderTerminalTab ?? (() => <div role="region" aria-label="Terminal tab" />)}
       />
     </ToastProvider>
   )
@@ -513,6 +525,35 @@ function renderRightSidebar(input: RenderRightSidebarInput) {
 }
 
 describe("RightSidebar", () => {
+  it("lets the active terminal supply outer-header actions and its live tab title", async () => {
+    const onUpdateTab = vi.fn()
+    const renderTerminalTab: ComponentProps<typeof RightSidebar>["renderTerminalTab"] = (input) => (
+      <div role="region" aria-label="Terminal tab">
+        <span data-testid="terminal-header-target">
+          {input.headerActionsPortalTarget ? "ready" : "pending"}
+        </span>
+        <button type="button" onClick={() => input.onTitleChange("Terminal · test")}>Sync terminal title</button>
+      </div>
+    )
+
+    renderRightSidebar({
+      rightSidebar: {
+        activeTabID: "terminal-tab",
+        tabs: [createTerminalTab()],
+      },
+      onUpdateTab,
+      renderTerminalTab,
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId("terminal-header-target")).toHaveTextContent("ready")
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Sync terminal title" }))
+
+    expect(onUpdateTab).toHaveBeenCalledWith("terminal-tab", { title: "Terminal · test" })
+    expect(document.querySelector(".right-sidebar-terminal-actions-slot")).not.toBeNull()
+  })
+
   it("shows the launcher when there are no right sidebar tabs", () => {
     const onOpenFilesTab = vi.fn()
     const onOpenMessageTreeTab = vi.fn()

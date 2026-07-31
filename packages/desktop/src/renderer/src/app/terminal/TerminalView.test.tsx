@@ -4,7 +4,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 import type { AppearanceCodeFontFamily } from "../../../../shared/appearance"
 import { resolveCodeFontFamilyStack } from "../code-font"
-import { TerminalView } from "./TerminalView"
+import { createTerminalOptions, TerminalView } from "./TerminalView"
 import type { TerminalSessionRecord, TerminalStreamEvent } from "./types"
 
 const baseSession: TerminalSessionRecord = {
@@ -63,6 +63,38 @@ async function flushFrame() {
 }
 
 describe("TerminalView", () => {
+  it("uses the terminal text semantic token while keeping the configured code font", () => {
+    const root = document.documentElement
+    const previousTerminalText = root.style.getPropertyValue("--semantic-terminal-text")
+    root.style.setProperty("--semantic-terminal-text", "rgb(12, 34, 56)")
+
+    try {
+      const options = createTerminalOptions("consolas")
+
+      expect(options.fontFamily).toBe(resolveCodeFontFamilyStack("consolas"))
+      expect(options.theme.foreground).toBe("rgb(12, 34, 56)")
+      expect(options.theme.white).toBe("rgb(12, 34, 56)")
+      expect(options.theme.brightWhite).toBe("rgb(12, 34, 56)")
+
+      const source = readFileSync(
+        resolve(process.cwd(), "src/renderer/src/app/terminal/TerminalView.tsx"),
+        "utf8",
+      )
+      const terminalThemeSource = source.slice(
+        source.indexOf("function getTerminalTheme"),
+        source.indexOf("export function createTerminalOptions"),
+      )
+      expect(terminalThemeSource).toContain('"--semantic-terminal-text"')
+      expect(terminalThemeSource).not.toContain('"--text-primary"')
+    } finally {
+      if (previousTerminalText) {
+        root.style.setProperty("--semantic-terminal-text", previousTerminalText)
+      } else {
+        root.style.removeProperty("--semantic-terminal-text")
+      }
+    }
+  })
+
   it("updates the code font and refits without recreating the terminal session", async () => {
     const testState = globalThis as {
       __mockXtermFitCount?: number

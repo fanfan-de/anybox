@@ -67,6 +67,16 @@ function Harness() {
         disabled={!terminal.activeSession}
         onClick={() =>
           terminal.activeSession &&
+          void terminal.handleRestartTerminal(terminal.activeSession.ptyID, "zsh")
+        }
+        type="button"
+      >
+        Restart zsh
+      </button>
+      <button
+        disabled={!terminal.activeSession}
+        onClick={() =>
+          terminal.activeSession &&
           terminal.handleTerminalSnapshotChange(terminal.activeSession.ptyID, {
             scrollTop: 42,
           })
@@ -225,6 +235,38 @@ describe("useTerminalWorkspace", () => {
         cols: 100,
         shell: "zsh",
       })
+    })
+  })
+
+  it("restarts the active terminal with another shell profile", async () => {
+    window.desktop!.platform = "darwin"
+
+    render(<Harness />)
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle" }))
+    await finishInitialTerminalMeasurement()
+    await waitFor(() => {
+      expect(screen.getByTestId("active-id")).toHaveTextContent("pty-1")
+    })
+
+    fireEvent.click(screen.getByRole("button", { name: "Restart zsh" }))
+
+    await waitFor(() => {
+      expect(window.desktop?.deletePtySession).toHaveBeenCalledWith({ id: "pty-1" })
+      expect(screen.getByTestId("pending-create-id")).not.toHaveTextContent("none")
+    })
+
+    await finishInitialTerminalMeasurement()
+
+    await waitFor(() => {
+      expect(window.desktop?.createPtySession).toHaveBeenCalledTimes(2)
+      expect(window.desktop?.createPtySession).toHaveBeenLastCalledWith({
+        sessionID: TEST_SESSION_ID,
+        rows: 30,
+        cols: 100,
+        shell: "zsh",
+      })
+      expect(screen.getByTestId("active-id")).toHaveTextContent("pty-2")
     })
   })
 

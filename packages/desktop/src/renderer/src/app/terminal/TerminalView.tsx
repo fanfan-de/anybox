@@ -72,6 +72,7 @@ function shouldAutoFocusTerminal(container: HTMLElement) {
 }
 
 interface TerminalViewProps {
+  ariaLabel?: string
   brandTheme: BrandTheme
   codeFontFamily?: AppearanceCodeFontFamily
   colorMode: ColorMode
@@ -88,11 +89,15 @@ function readCssVariable(styles: CSSStyleDeclaration, name: string, fallback: st
   return value || fallback
 }
 
+function readThemeVariable(styles: CSSStyleDeclaration, name: string) {
+  return styles.getPropertyValue(name).trim()
+}
+
 function getTerminalTheme() {
   const styles = getComputedStyle(document.documentElement)
   const background = readCssVariable(styles, "--semantic-terminal-surface", "#ffffff")
   const surface = readCssVariable(styles, "--surface-code", "#27272a")
-  const foreground = readCssVariable(styles, "--text-primary", "#292524")
+  const foreground = readThemeVariable(styles, "--semantic-terminal-text")
   const accent = readCssVariable(styles, "--brand-accent-active", "#fca5a5")
   const brand = readCssVariable(styles, "--brand-primary-active", "#d46b63")
   // 终端里的 ANSI 颜色需要更高对比度，所以优先读取强调态语义色。
@@ -140,6 +145,7 @@ export function createTerminalOptions(codeFontFamily: AppearanceCodeFontFamily =
 }
 
 export const TerminalView = memo(function TerminalView({
+  ariaLabel,
   brandTheme,
   codeFontFamily = "default",
   colorMode,
@@ -511,7 +517,8 @@ export const TerminalView = memo(function TerminalView({
 
       <div
         id={`terminal-panel-${session.ptyID}`}
-        aria-labelledby={`terminal-tab-${session.ptyID}`}
+        aria-label={ariaLabel}
+        aria-labelledby={ariaLabel ? undefined : `terminal-tab-${session.ptyID}`}
         className="terminal-surface"
         onContextMenu={handleContextMenu}
         onMouseDown={() => focusTerminal()}

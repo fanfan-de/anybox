@@ -38,7 +38,7 @@ export const appearanceTokenCopy = {
     },
     "component-terminal": {
       "label": "ターミナル",
-      "description": "埋め込みターミナルサーフェス専用のセマンティックカラー。"
+      "description": "埋め込みターミナルコンテンツ専用のセマンティックカラー。"
     },
     "component-popup-panel": {
       "label": "ポップアップパネル",
@@ -429,6 +429,10 @@ export const appearanceTokenCopy = {
     "semantic-terminal-surface": {
       "label": "ターミナルサーフェス",
       "description": "ターミナルコンテンツサーフェスの背景塗りつぶし。"
+    },
+    "semantic-terminal-text": {
+      "label": "ターミナルテキスト",
+      "description": "ターミナルテキストとニュートラルな ANSI 白出力の既定の前景色。"
     },
     "semantic-popup-panel-surface": {
       "label": "パネルサーフェス",

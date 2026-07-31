@@ -157,6 +157,76 @@ describe("TerminalPanel", () => {
     expect(screen.getByRole("combobox", { name: "Terminal shell profile" })).toBeDisabled()
   })
 
+  it("uses the outer sidebar chrome instead of rendering nested tabs in fill layout", () => {
+    const { container } = render(
+      <TerminalPanel
+        activeSession={baseSession}
+        brandTheme="terra"
+        colorMode="light"
+        isOpen={true}
+        layout="fill"
+        panelHeight={280}
+        sessions={[baseSession]}
+        onCloseTerminal={vi.fn()}
+        onCreateTerminal={vi.fn()}
+        onCreateTerminalForShellProfile={vi.fn()}
+        onTerminalInitialDimensions={vi.fn()}
+        onTerminalInitialDimensionsError={vi.fn()}
+        onPanelHeightChange={vi.fn()}
+        onShellProfileChange={vi.fn()}
+        onSelectTerminal={vi.fn()}
+        selectedShellProfileID="default"
+        shellProfiles={[{ id: "default", label: "Default", shell: null }]}
+        onTerminalInput={vi.fn()}
+        onTerminalResize={vi.fn()}
+        onTerminalSnapshotChange={vi.fn()}
+        onTogglePanel={vi.fn()}
+        subscribeToTerminalStream={() => () => {}}
+      />,
+    )
+
+    expect(container.querySelector(".terminal-tabs")).toBeNull()
+    expect(screen.queryByRole("combobox", { name: "Terminal shell profile" })).toBeNull()
+    expect(screen.getByRole("tabpanel", { name: "Terminal" })).toBeInTheDocument()
+  })
+
+  it("shows the shell selector only in the fill-layout empty state", () => {
+    const onCreateTerminalForShellProfile = vi.fn()
+    render(
+      <TerminalPanel
+        activeSession={null}
+        brandTheme="terra"
+        colorMode="light"
+        isOpen={true}
+        layout="fill"
+        panelHeight={280}
+        sessions={[]}
+        onCloseTerminal={vi.fn()}
+        onCreateTerminal={vi.fn()}
+        onCreateTerminalForShellProfile={onCreateTerminalForShellProfile}
+        onTerminalInitialDimensions={vi.fn()}
+        onTerminalInitialDimensionsError={vi.fn()}
+        onPanelHeightChange={vi.fn()}
+        onShellProfileChange={vi.fn()}
+        onSelectTerminal={vi.fn()}
+        selectedShellProfileID="pwsh"
+        shellProfiles={[
+          { id: "default", label: "Default", shell: null },
+          { id: "pwsh", label: "PowerShell 7", shell: "pwsh.exe" },
+        ]}
+        onTerminalInput={vi.fn()}
+        onTerminalResize={vi.fn()}
+        onTerminalSnapshotChange={vi.fn()}
+        onTogglePanel={vi.fn()}
+        subscribeToTerminalStream={() => () => {}}
+      />,
+    )
+
+    expect(screen.getByRole("combobox", { name: "Terminal shell profile" })).toBeEnabled()
+    fireEvent.click(screen.getByRole("button", { name: "Create terminal" }))
+    expect(onCreateTerminalForShellProfile).toHaveBeenCalledWith("pwsh")
+  })
+
   it("renders the shell picker as a styled listbox and selects a profile", () => {
     const onShellProfileChange = vi.fn()
 

@@ -27,6 +27,10 @@ const composerCss = readFileSync(resolve(stylesRoot, "composer.css"), "utf8")
 const rightSidebarCss = readFileSync(resolve(stylesRoot, "right-sidebar.css"), "utf8")
 const settingsCss = readFileSync(resolve(stylesRoot, "settings.css"), "utf8")
 const threadCss = readFileSync(resolve(stylesRoot, "thread.css"), "utf8")
+const terminalViewSource = readFileSync(
+  resolve(packageRoot, "src/renderer/src/app/terminal/TerminalView.tsx"),
+  "utf8",
+)
 const manifest = JSON.parse(
   readFileSync(
     resolve(packageRoot, "src/shared/appearance-token-manifest.json"),
@@ -76,6 +80,32 @@ function definedCustomProperties(source: string) {
 }
 
 describe("appearance token manifest", () => {
+  it("keeps terminal surface and text independently themeable", () => {
+    const terminalGroup = APPEARANCE_TOKEN_GROUPS.find(
+      (group) => group.id === "component-terminal",
+    )
+
+    expect(terminalGroup?.rows.map((row) => row.id)).toEqual([
+      "semantic-terminal-surface",
+      "semantic-terminal-text",
+    ])
+    expect(generatedCss).toMatch(
+      /--semantic-terminal-text-light:\s*var\(--text-primary-light\);/,
+    )
+    expect(generatedCss).toMatch(
+      /--semantic-terminal-text-dark:\s*var\(--text-primary-dark\);/,
+    )
+
+    const terminalThemeSource = terminalViewSource.slice(
+      terminalViewSource.indexOf("function getTerminalTheme"),
+      terminalViewSource.indexOf("export function createTerminalOptions"),
+    )
+    expect(terminalThemeSource).toContain('"--semantic-terminal-surface"')
+    expect(terminalThemeSource).toContain('"--semantic-terminal-text"')
+    expect(terminalThemeSource).not.toContain('"--text-primary"')
+    expect(terminalThemeSource).not.toContain('"--seg-terminal-surface"')
+  })
+
   it("keeps public values literal/alias-only and blends internal", () => {
     const modeTokenNames = new Set<string>(APPEARANCE_TOKEN_NAMES)
     const publicValues = [

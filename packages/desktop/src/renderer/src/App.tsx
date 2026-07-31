@@ -3265,13 +3265,15 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               onOpenBranchChat={handleOpenBranchChat}
               onLocateBranchAnchor={handleLocateBranchAnchor}
               onMessageTreeNodeSelect={handleMessageTreeNodeSelect}
-              renderTerminalTab={(sessionID) => (
+              renderTerminalTab={({ headerActionsPortalTarget, onTitleChange, sessionID }) => (
                 <TerminalAreaHost
                   brandTheme={brandTheme}
                   codeFontFamily={codeFontFamily}
                   colorMode={colorMode}
                   currentSessionID={sessionID}
+                  headerActionsPortalTarget={headerActionsPortalTarget}
                   layout="fill"
+                  onTabTitleChange={onTitleChange}
                   storageKey={WORKBENCH_TERMINAL_STORAGE_KEY}
                 />
               )}

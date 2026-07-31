@@ -253,6 +253,8 @@ export const APPEARANCE_TOKEN_NAMES = [
   "semantic-shell-chrome-tab-indicator-active-dark",
   "semantic-terminal-surface-light",
   "semantic-terminal-surface-dark",
+  "semantic-terminal-text-light",
+  "semantic-terminal-text-dark",
   "semantic-popup-panel-surface-light",
   "semantic-popup-panel-surface-dark",
   "semantic-switch-row-surface-focus-light",
@@ -1438,7 +1440,7 @@ export const APPEARANCE_TOKEN_GROUPS = [
     "id": "component-terminal",
     "layer": "component",
     "label": "Terminal",
-    "description": "Dedicated semantic color for embedded terminal surfaces.",
+    "description": "Dedicated semantic colors for embedded terminal content.",
     "rows": [
       {
         "id": "semantic-terminal-surface",
@@ -1446,6 +1448,13 @@ export const APPEARANCE_TOKEN_GROUPS = [
         "description": "Background fill for terminal content surfaces.",
         "lightToken": "semantic-terminal-surface-light",
         "darkToken": "semantic-terminal-surface-dark"
+      },
+      {
+        "id": "semantic-terminal-text",
+        "label": "Terminal Text",
+        "description": "Default foreground color for terminal text and neutral ANSI white output.",
+        "lightToken": "semantic-terminal-text-light",
+        "darkToken": "semantic-terminal-text-dark"
       }
     ]
   },
@@ -2970,6 +2979,7 @@ export const APPEARANCE_TOKEN_RUNTIME_MAP = {
   "semantic-shell-chrome-tab-surface-active": "semantic-shell-chrome-tab-surface-active",
   "semantic-shell-chrome-tab-indicator-active": "semantic-shell-chrome-tab-indicator-active",
   "semantic-terminal-surface": "semantic-terminal-surface",
+  "semantic-terminal-text": "semantic-terminal-text",
   "semantic-popup-panel-surface": "semantic-popup-panel-surface",
   "semantic-switch-row-surface-focus": "semantic-switch-row-surface-focus",
   "semantic-switch-track-surface": "semantic-switch-track-surface",
@@ -4907,6 +4917,14 @@ export const APPEARANCE_BRAND_DEFINITIONS = {
           "alpha": 1,
           "hex": "#000000"
         }
+      },
+      "semantic-terminal-text-light": {
+        "type": "alias",
+        "token": "text-primary-light"
+      },
+      "semantic-terminal-text-dark": {
+        "type": "alias",
+        "token": "text-primary-dark"
       },
       "semantic-popup-panel-surface-light": {
         "type": "alias",
@@ -10749,6 +10767,19 @@ export const APPEARANCE_CONTRAST_CONTRACTS =
       "dark": "semantic-field-surface-focus-dark"
     },
     "minimumContrast": 3
+  },
+  {
+    "id": "terminal-text-on-terminal-surface",
+    "kind": "text",
+    "foreground": {
+      "light": "semantic-terminal-text-light",
+      "dark": "semantic-terminal-text-dark"
+    },
+    "background": {
+      "light": "semantic-terminal-surface-light",
+      "dark": "semantic-terminal-surface-dark"
+    },
+    "minimumContrast": 4.5
   }
 ] as const satisfies readonly AppearanceContrastContract[]
 
@@ -17239,13 +17270,13 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
   "schemaVersion": 2,
   "dtcgVersion": "2025.10",
   "groupCount": 30,
-  "pairCount": 280,
-  "modeTokenCount": 560,
-  "runtimeTokenCount": 280,
+  "pairCount": 281,
+  "modeTokenCount": 562,
+  "runtimeTokenCount": 281,
   "derivationCount": 92,
   "canonicalDerivationCount": 92,
   "legacyMixPairCount": 0,
-  "contractCount": 8,
+  "contractCount": 9,
   "modeTokens": [
     "surface-app-light",
     "surface-app-dark",
@@ -17445,6 +17476,8 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
     "semantic-shell-chrome-tab-indicator-active-dark",
     "semantic-terminal-surface-light",
     "semantic-terminal-surface-dark",
+    "semantic-terminal-text-light",
+    "semantic-terminal-text-dark",
     "semantic-popup-panel-surface-light",
     "semantic-popup-panel-surface-dark",
     "semantic-switch-row-surface-focus-light",
@@ -17908,6 +17941,7 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
     "semantic-shell-chrome-tab-surface-active",
     "semantic-shell-chrome-tab-indicator-active",
     "semantic-terminal-surface",
+    "semantic-terminal-text",
     "semantic-popup-panel-surface",
     "semantic-switch-row-surface-focus",
     "semantic-switch-track-surface",
@@ -18092,13 +18126,13 @@ export const APPEARANCE_TOKEN_TEST_DATA = {
   ],
   "legacyMixRuntimeTokens": [],
   "brandTokenCounts": {
-    "terra": 468,
+    "terra": 470,
     "sage": 141
   },
   "brandValueTypes": {
     "terra": {
       "literal": 156,
-      "alias": 312
+      "alias": 314
     },
     "sage": {
       "literal": 141,
