@@ -4534,6 +4534,27 @@ body.is-resizing-sidebar .thread-message {
   box-shadow: none !important;
 }
 
+.trace-tool-source-chip {
+  max-width: 148px;
+  padding: 1px 5px;
+  overflow: hidden;
+  border: 1px solid var(--seg-divider);
+  border-radius: var(--seg-radius-xs);
+  color: var(--seg-text-3);
+  background: var(--seg-panel-muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trace-log-row:hover .trace-tool-source-chip,
+.trace-log-row:focus-visible .trace-tool-source-chip {
+  color: var(--seg-text-2);
+  background: var(--seg-panel);
+}
+
 body.is-resizing-sidebar .trace-tool-status-indicator::before {
   animation: none !important;
 }

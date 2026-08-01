@@ -5,6 +5,7 @@ import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary"
 import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin"
 import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin"
 import { PlainTextPlugin } from "@lexical/react/LexicalPlainTextPlugin"
+import { PLANNER_CORE_TOOL_MODULE_ID } from "@anybox/shared"
 import {
   $createParagraphNode,
   $createTextNode,
@@ -44,6 +45,7 @@ import type {
   ComposerReasoningEffortOption,
   ComposerSkillOption,
   ComposerTagData,
+  ComposerToolModuleOption,
   ComposerLongTextTagData,
   ReasoningEffort,
   SessionContextUsage,
@@ -59,6 +61,7 @@ import {
   createComposerMcpTagData,
   createComposerPluginTagData,
   createComposerSkillTagData,
+  createComposerToolModuleTagData,
   normalizeComposerDraftState,
   readComposerLongTextStats,
   readComposerTagIdentity,
@@ -119,7 +122,7 @@ interface ComposerProps {
 }
 
 type ComposerMenuKey = "model" | "reasoning" | null
-type ComposerCommandKey = "attach" | "bag" | "compact" | "file" | "mcp" | "plan" | "plugin" | "skill"
+type ComposerCommandKey = "attach" | "bag" | "compact" | "file" | "mcp" | "plan" | "planner" | "plugin" | "skill"
 type ComposerCommandTriggerPrefix = "~" | "/"
 
 interface ComposerModelProviderGroup {
@@ -208,6 +211,13 @@ const LEXICAL_INITIAL_CONFIG = {
 
 const EMPTY_PLUGIN_OPTIONS: ComposerPluginOption[] = []
 const EMPTY_SELECTED_PLUGIN_IDS: string[] = []
+const COMPOSER_TOOL_MODULE_OPTIONS: ComposerToolModuleOption[] = [
+  {
+    value: PLANNER_CORE_TOOL_MODULE_ID,
+    label: "计划",
+    description: "Load Planner todo and scheduling tools for this message only.",
+  },
+]
 
 const COMPOSER_COMMAND_TRIGGER_PREFIX = "~"
 const COMPOSER_CLASSIC_COMMAND_TRIGGER_PREFIX = "/"
@@ -252,6 +262,11 @@ const COMPOSER_COMMANDS: Array<{
     value: "plan",
     label: `${COMPOSER_COMMAND_TRIGGER_PREFIX}plan`,
     description: "Toggle Plan Mode for this session.",
+  },
+  {
+    value: "planner",
+    label: `${COMPOSER_COMMAND_TRIGGER_PREFIX}计划`,
+    description: "Load Planner todo and scheduling tools for this message only.",
   },
   {
     value: "compact",
@@ -1298,12 +1313,32 @@ export function Composer({
       .filter(({ label }) => visibleLabels.has(label))
       .map(({ command, label }) => ({
         type: "command",
-        key: `command:${command.value}`,
+        key: `command:${label}`,
         group: "Commands",
         label,
         description: command.descriptionKey ? t(command.descriptionKey) : command.description ?? "",
         value: command.value,
       } satisfies ComposerCommandMenuItem))
+  }
+
+  function buildToolModuleTagItems(query: string) {
+    const currentTagIdentities = getCurrentTagIdentities()
+
+    return COMPOSER_TOOL_MODULE_OPTIONS
+      .filter((option) => matchesQuery(option.label, query) || matchesQuery(option.value, query))
+      .map((option) => {
+        const tagData = createComposerToolModuleTagData(option)
+        const disabled = currentTagIdentities.has(readComposerTagIdentity(tagData))
+        return {
+          type: "tag",
+          key: `tool-module:${option.value}`,
+          group: "Anybox tools",
+          label: option.label,
+          description: disabled ? "Already loaded for this message." : option.description,
+          disabled,
+          tagData,
+        } satisfies ComposerCommandMenuItem
+      })
   }
 
   function buildSkillTagItems(query: string) {
@@ -1406,7 +1441,7 @@ export function Composer({
       return []
     }
 
-    return []
+    return buildToolModuleTagItems(state.query)
   }
 
   function readCommandMenuStateFromEditor() {
@@ -1701,14 +1736,13 @@ export function Composer({
       return
     }
 
-    setCommandMenuItemsWithRef([])
+    const toolModuleItems = buildToolModuleTagItems(commandMenuState.query)
     const pluginItems = buildPluginTagItems(commandMenuState.query)
-    if (pluginItems.length > 0) {
-      setCommandMenuItemsWithRef(pluginItems)
-    }
+    const immediateItems = [...toolModuleItems, ...pluginItems]
+    setCommandMenuItemsWithRef(immediateItems)
     void buildFileTagItems(commandMenuState.query).then((fileItems) => {
       if (!fileItems) return
-      setCommandMenuItemsWithRef([...pluginItems, ...fileItems])
+      setCommandMenuItemsWithRef([...immediateItems, ...fileItems])
     })
   }, [
     commandMenuState,
@@ -1799,6 +1833,16 @@ export function Composer({
     const editor = editorRef.current
     const currentCommandMenuState = commandMenuStateRef.current ?? readCommandMenuStateFromEditor()
     if (!editor || !currentCommandMenuState || currentCommandMenuState.kind !== "command-trigger") return
+
+    if (command === "planner") {
+      insertTagAtMatch(
+        editor,
+        currentCommandMenuState.match,
+        createComposerToolModuleTagData(COMPOSER_TOOL_MODULE_OPTIONS[0]!),
+      )
+      setCommandMenuStateWithRef(null)
+      return
+    }
 
     if (command === "file" || command === "skill" || command === "mcp" || command === "plugin") {
       createTextReplacement(editor, currentCommandMenuState.match, `${currentCommandMenuState.triggerPrefix}${command} `)

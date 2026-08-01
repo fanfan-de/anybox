@@ -6,6 +6,7 @@ import { environmentZhCN } from "../environment-translations"
 import { cinemaWorkflowTranslations } from "../cinema-workflow-translations"
 import { branchViewTranslations } from "../branch-view-translations"
 import { threadErrorTranslations } from "../thread-error-translations"
+import { plannerTranslations } from "../planner-translations"
 
 export const zhTW = {
   "app.loading": "載入中",
@@ -1433,5 +1434,6 @@ export const zhTW = {
   ...environmentZhCN,
   ...cinemaWorkflowTranslations.zhTW,
   ...branchViewTranslations.zhTW,
+  ...plannerTranslations.zhTW,
   ...threadErrorTranslations["zh-TW"],
 } as const satisfies Record<TranslationKey, string>

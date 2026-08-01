@@ -679,7 +679,10 @@ async function extractToolResultState(
         }
 
         if (candidate.metadata && typeof candidate.metadata === "object" && !Array.isArray(candidate.metadata)) {
-            metadata = candidate.metadata as Record<string, unknown>
+            metadata = {
+                ...metadata,
+                ...candidate.metadata as Record<string, unknown>,
+            }
         }
 
         data = candidate.data
@@ -886,6 +889,7 @@ export function create(input: {
     Assistant: Message.Assistant
     abort?: AbortSignal
     turn?: TurnContext
+    toolSources?: Readonly<Record<string, Tool.ToolSource>>
 }) {
     const toolcalls: Record<string, Message.ToolPart> = {}
     const pendingToolInputChunks: Record<string, string[]> = {}
@@ -899,6 +903,22 @@ export function create(input: {
     const emitStreamRuntimeEvent = input.turn?.emitStream?.bind(input.turn) ?? emitRuntimeEvent
     const emittedCanonicalPartIDs = new Set<string>()
     let currentPhase: string | undefined
+    const metadataWithToolSource = (
+        toolName: string,
+        ...metadataValues: Array<Record<string, unknown> | undefined>
+    ) => {
+        const metadata = Object.assign({}, ...metadataValues.filter(Boolean)) as Record<string, unknown>
+        const source = input.toolSources?.[toolName]
+        if (source) {
+            metadata.toolSource = {
+                kind: source.kind,
+                id: source.id,
+                name: source.name,
+                description: source.description,
+            }
+        }
+        return Object.keys(metadata).length > 0 ? metadata : undefined
+    }
     const persistPart = async (part: Message.Part) => {
         if (emitRuntimeEvent) {
             return
@@ -1760,7 +1780,11 @@ export function create(input: {
                                         toolCallID: value.toolCallId,
                                     })
                                     : undefined
-                                const runningStateMetadata = askUserQuestionMetadata ?? value.providerMetadata
+                                const runningStateMetadata = metadataWithToolSource(
+                                    value.toolName,
+                                    value.providerMetadata,
+                                    askUserQuestionMetadata,
+                                )
                                 const part: Message.ToolPart = {
                                     ...(match ?? {
                                         id: Identifier.ascending("part"),
@@ -1800,7 +1824,10 @@ export function create(input: {
                                     const normalized = await extractToolResultState(
                                         rawToolOutput,
                                         value.title,
-                                        value.providerMetadata ?? {},
+                                        metadataWithToolSource(
+                                            current.tool,
+                                            value.providerMetadata,
+                                        ) ?? {},
                                         current,
                                     )
                                     const normalizedInput = normalizeToolInput(value.input, readToolRaw(current.state))
@@ -1857,7 +1884,10 @@ export function create(input: {
                                             input: normalizedInput.input,
                                             raw: normalizedInput.raw,
                                             error: normalizeToolError(value.error),
-                                            metadata: value.providerMetadata ?? {},
+                                            metadata: metadataWithToolSource(
+                                                current.tool,
+                                                value.providerMetadata,
+                                            ) ?? {},
                                             time: {
                                                 start: (current.state as Message.ToolStateRunning).time.start,
                                                 end: Date.now(),

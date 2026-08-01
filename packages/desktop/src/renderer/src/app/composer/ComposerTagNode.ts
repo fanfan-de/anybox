@@ -24,6 +24,7 @@ function readComposerTagTitle(tagData: ComposerTagData) {
     case "mcp":
     case "plugin":
     case "skill":
+    case "tool-module":
       return tagData.description ?? tagData.label
   }
 }

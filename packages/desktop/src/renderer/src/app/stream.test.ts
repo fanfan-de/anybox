@@ -3015,6 +3015,38 @@ describe("stream trace reducer", () => {
     expect(message.items[3]?.title).toBe("Response complete")
   })
 
+  it("preserves native tool module provenance on completed tool trace items", () => {
+    let message = buildStreamingAssistantThreadMessage("Planner provenance")
+    message = applyAgentStreamEventToThreadMessage(message, {
+      event: "done",
+      data: {
+        parts: [{
+          id: "tool-planner",
+          type: "tool",
+          tool: "planner_list_todos",
+          state: {
+            status: "completed",
+            output: "ok",
+            metadata: {
+              toolSource: {
+                kind: "native-module",
+                id: "planner.core",
+                name: "Planner",
+              },
+            },
+          },
+        }],
+      },
+    })
+
+    expect(message.items.find((item) => item.kind === "tool")?.toolSource).toEqual({
+      kind: "native-module",
+      id: "planner.core",
+      name: "Planner",
+      description: undefined,
+    })
+  })
+
   it("updates the original text trace item when the same text part resumes after a tool event", () => {
     let message = buildStreamingAssistantThreadMessage("Resume text after tool")
 

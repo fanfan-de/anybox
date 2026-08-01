@@ -5,6 +5,7 @@ import {
   appendComposerTagToDraftState,
   createComposerDraftStateFromPlainText,
   createComposerMcpTagData,
+  createComposerToolModuleTagData,
 } from "../composer/draft-state"
 import type {
   AssistantThreadMessage,
@@ -449,6 +450,14 @@ describe("composer controller", () => {
     })
 
     try {
+      const plannerDraft = appendComposerTagToDraftState(
+        createComposerDraftStateFromPlainText("Existing prompt"),
+        createComposerToolModuleTagData({
+          value: "planner.core",
+          label: "计划",
+          description: "Planner",
+        }),
+      )
       const { result } = renderHook(() =>
         useComposerHarness({
           agentConnected: true,
@@ -459,6 +468,7 @@ describe("composer controller", () => {
             model: "openai/gpt-5.1",
             reasoning_effort: "high",
           },
+          sessionDraftState: plannerDraft,
         }),
       )
 
@@ -509,6 +519,7 @@ describe("composer controller", () => {
           modelID: "gpt-5.1",
         },
         reasoningEffort: "high",
+        turnToolModuleIDs: ["planner.core"],
       })
       expect(
         result.current.messagesRef.current["session-1"]?.filter(
@@ -918,12 +929,20 @@ describe("composer controller", () => {
     })
 
     try {
-      const taggedDraft = appendComposerTagToDraftState(
+      let taggedDraft = appendComposerTagToDraftState(
         createComposerDraftStateFromPlainText("Existing prompt"),
         createComposerMcpTagData({
           value: "gmail",
           label: "Gmail",
           description: "Email",
+        }),
+      )
+      taggedDraft = appendComposerTagToDraftState(
+        taggedDraft,
+        createComposerToolModuleTagData({
+          value: "planner.core",
+          label: "计划",
+          description: "Planner",
         }),
       )
       const { result } = renderHook(() =>
@@ -984,8 +1003,10 @@ describe("composer controller", () => {
         concurrentInputMode: "steer",
         text: "Existing prompt @Gmail",
         turnMcpServerIDs: ["gmail"],
+        turnToolModuleIDs: ["planner.core"],
       }))
       expect(queuedInput.turnMcpServerIDs).toEqual(["gmail"])
+      expect(queuedInput.turnToolModuleIDs).toEqual(["planner.core"])
       expect(queuedInput.transportText).toBe("Existing prompt @Gmail")
 
       const steerStreamEntry = Object.entries(result.current.pendingStreamsRef.current).find(
@@ -1010,7 +1031,9 @@ describe("composer controller", () => {
       expect(steerInput).toMatchObject({
         mode: "steer",
         status: "pending",
-        text: "Existing prompt @Gmail",
+        text: "Existing prompt @Gmail @计划",
+        transportText: "Existing prompt @Gmail",
+        turnToolModuleIDs: ["planner.core"],
       })
       expect(result.current.pendingStreamsRef.current[queuedStreamEntry[0]]).toBeUndefined()
       expect(Object.values(result.current.pendingStreamsRef.current)).toContainEqual(

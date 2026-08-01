@@ -1,6 +1,5 @@
 import type { JSONValue } from "@ai-sdk/provider"
 import { jsonSchema, tool, type ToolSet } from "ai"
-import z from "zod"
 import * as Agent from "#agent/agent.ts"
 import * as Config from "#config/config.ts"
 import { Flag } from "#flag/flag.ts"
@@ -8,6 +7,8 @@ import { Instance } from "#project/instance.ts"
 import type * as Message from "#session/core/message.ts"
 import {
   createToolSearchIndex,
+  type ToolModuleSearchDefinition,
+  type ToolSearchCandidate,
   type ToolSearchDefinition,
 } from "#session/core/tool-search.ts"
 import * as Tool from "#tool/tool.ts"
@@ -17,6 +18,7 @@ import {
   readOnlyToolsOnlyForSession,
 } from "#tool/execution.ts"
 import * as ToolRegistry from "#tool/registry.ts"
+import * as ToolModule from "#tool/module.ts"
 import {
   TOOL_SEARCH_ID,
   TOOL_SEARCH_MODEL_NAME,
@@ -39,7 +41,9 @@ export type ResolvedToolEntry = {
 export type ResolvedToolPlan = {
   registryTools: ToolSet
   activeToolNames: string[]
+  activeToolModuleIDs: string[]
   visibleTools: ToolSet
+  toolSources: Record<string, Tool.ToolSource>
   entries: ResolvedToolEntry[]
 }
 
@@ -52,7 +56,9 @@ export type ResolveToolsInput = {
   messages?: Message.WithParts[]
   turnUserMessageID?: string
   turnMcpServerIDs?: string[]
+  turnToolModuleIDs?: string[]
   discoveredToolNames?: Iterable<string>
+  discoveredToolModuleIDs?: Iterable<string>
   toolSearchEnabled?: boolean
 }
 
@@ -71,10 +77,15 @@ function uniqueStrings(values: Iterable<string> | undefined) {
 function readToolSearchMetadata(part: Message.ToolPart) {
   if (part.state.status !== "completed") return undefined
   const metadata = part.state.metadata
-  if (metadata.kind !== "tool-search" || !Array.isArray(metadata.loadedToolNames)) {
-    return undefined
+  if (metadata.kind !== "tool-search") return undefined
+  return {
+    toolNames: Array.isArray(metadata.loadedToolNames)
+      ? metadata.loadedToolNames.filter((value): value is string => typeof value === "string")
+      : [],
+    toolModuleIDs: Array.isArray(metadata.loadedToolModuleIDs)
+      ? metadata.loadedToolModuleIDs.filter((value): value is string => typeof value === "string")
+      : [],
   }
-  return metadata.loadedToolNames.filter((value): value is string => typeof value === "string")
 }
 
 export function readTurnDiscoveredToolNames(
@@ -100,7 +111,7 @@ export function readTurnDiscoveredToolNames(
       // Accept the old model-facing name so unfinished or persisted turns from
       // before the OpenAI reserved-name fix can still restore discoveries.
       if (modelName !== TOOL_SEARCH_MODEL_NAME && modelName !== TOOL_SEARCH_ID) continue
-      for (const toolName of readToolSearchMetadata(part) ?? []) {
+      for (const toolName of readToolSearchMetadata(part)?.toolNames ?? []) {
         result.add(Tool.toModelToolName(toolName))
       }
     }
@@ -109,68 +120,73 @@ export function readTurnDiscoveredToolNames(
   return result
 }
 
-function toJsonSchema(schema: z.ZodType): Record<string, unknown> {
-  try {
-    const value = z.toJSONSchema(schema)
-    if (value && typeof value === "object" && !Array.isArray(value)) {
-      return value as Record<string, unknown>
+export function readTurnDiscoveredToolModuleIDs(
+  messages: Message.WithParts[] | undefined,
+  turnUserMessageID: string | undefined,
+) {
+  const result = new Set<string>()
+  if (!messages || !turnUserMessageID) return result
+
+  let withinTurn = false
+  for (const message of messages) {
+    if (message.info.id === turnUserMessageID && message.info.role === "user") {
+      withinTurn = true
+      continue
     }
-  } catch (error) {
-    log.warn("failed to convert tool schema for search", {
-      error: error instanceof Error ? error.message : String(error),
-    })
+    if (!withinTurn) continue
+    if (message.info.role === "user" && !message.info.internal) break
+    if (message.info.role !== "assistant") continue
+
+    for (const part of message.parts) {
+      if (part.type !== "tool") continue
+      const modelName = Tool.toModelToolName(part.tool)
+      if (modelName !== TOOL_SEARCH_MODEL_NAME && modelName !== TOOL_SEARCH_ID) continue
+      for (const moduleID of readToolSearchMetadata(part)?.toolModuleIDs ?? []) {
+        const normalizedID = moduleID.trim()
+        if (normalizedID) result.add(normalizedID)
+      }
+    }
   }
 
-  return {
-    type: "object",
-    additionalProperties: true,
-  }
+  return result
 }
 
-function describeDeferredSources(definitions: ToolSearchDefinition[]) {
-  const sources = new Map<string, Tool.ToolSource>()
-  for (const definition of definitions) {
-    sources.set(definition.source.id, definition.source)
-  }
+const TOOL_SEARCH_DESCRIPTION =
+  "Search and load optional Anybox capability modules or deferred tools needed for the current request. Loaded tools are available on the next model call in this user turn only."
+const MAX_MODULES_PER_SEARCH = 3
 
-  const lines = [...sources.values()]
-    .toSorted((left, right) => left.id.localeCompare(right.id))
-    .map((source) => {
-      const description = source.description?.trim()
-      return `- ${source.id}: ${source.name}${description ? ` — ${description}` : ""}`
-    })
-
-  return [
-    "Search currently registered deferred MCP tools and load matching full tool definitions for the next model call.",
-    "Only deferred tools from this turn are searched. Direct tools are intentionally excluded.",
-    "",
-    "Available deferred MCP sources:",
-    ...lines,
-  ].join("\n")
-}
-
-function createSearchTool(definitions: ToolSearchDefinition[]) {
+function createSearchTool(definitions: ToolSearchCandidate[]) {
   const index = createToolSearchIndex(definitions)
   return tool({
     title: "Tool Search",
-    description: describeDeferredSources(definitions),
+    description: TOOL_SEARCH_DESCRIPTION,
     inputSchema: ToolSearchParameters,
     execute: async ({ query, limit }) => {
       const matches = index.search(query, limit)
-      const data = { tools: matches }
+      const tools = matches.filter((match): match is ToolSearchDefinition => match.kind !== "module")
+      const modules = matches
+        .filter((match): match is ToolModuleSearchDefinition => match.kind === "module")
+        .slice(0, MAX_MODULES_PER_SEARCH)
+        .map((match) => ({
+          id: match.id,
+          title: match.title,
+          description: match.description,
+        }))
+      const data = { tools, modules }
       return {
         title: "Tool Search",
         text: JSON.stringify(data),
         metadata: {
           kind: "tool-search",
-          loadedToolNames: matches.map((match) => match.name),
+          loadedToolNames: tools.map((match) => match.name),
+          loadedToolModuleIDs: modules.map((match) => match.id),
         },
         data,
       } satisfies Tool.ToolOutput<Record<string, unknown>, typeof data>
     },
     toModelOutput: async ({ output }) => ({
       type: "json",
-      value: (output.data ?? { tools: [] }) as unknown as JSONValue,
+      value: (output.data ?? { tools: [], modules: [] }) as unknown as JSONValue,
     }),
   })
 }
@@ -191,17 +207,19 @@ async function isToolSearchEnabled(input: ResolveToolsInput) {
 
 export async function resolveToolPlan(input: ResolveToolsInput): Promise<ResolvedToolPlan> {
   const [
-    registry,
+    baseRegistry,
     builtinRegistry,
     globalToolSelection,
     persistentMcpServers,
     toolSearchFeatureEnabled,
+    moduleDescriptors,
   ] = await Promise.all([
     ToolRegistry.tools(),
     ToolRegistry.builtinTools(),
     Config.getToolSelection(Config.GLOBAL_CONFIG_ID),
     Config.resolveProjectMcpServers(Instance.project.id),
     isToolSearchEnabled(input),
+    ToolModule.descriptors(),
   ])
   const builtinToolIDs = new Set(builtinRegistry.map((item) => item.id))
   const persistentMcpServerIDs = new Set(persistentMcpServers.map((server) => server.id))
@@ -210,6 +228,50 @@ export async function resolveToolPlan(input: ResolveToolsInput): Promise<Resolve
   for (const name of input.discoveredToolNames ?? []) {
     discoveredToolNames.add(Tool.toModelToolName(name))
   }
+
+  const requestedToolModuleIDs = uniqueStrings(input.turnToolModuleIDs)
+  const discoveredToolModuleIDs = readTurnDiscoveredToolModuleIDs(
+    input.messages,
+    input.turnUserMessageID,
+  )
+  for (const moduleID of input.discoveredToolModuleIDs ?? []) {
+    const normalizedID = moduleID.trim()
+    if (normalizedID) discoveredToolModuleIDs.add(normalizedID)
+  }
+  const requestedOrDiscoveredToolModuleIDs = uniqueStrings([
+    ...requestedToolModuleIDs,
+    ...discoveredToolModuleIDs,
+  ])
+  const moduleDescriptorByID = new Map(
+    moduleDescriptors.map((descriptor) => [descriptor.id, descriptor]),
+  )
+  const activeToolModuleIDs: string[] = []
+  const moduleTools: Tool.ToolInfo[] = []
+  for (const moduleID of requestedOrDiscoveredToolModuleIDs) {
+    if (!moduleDescriptorByID.has(moduleID)) {
+      log.warn("turn-scoped native tool module is unavailable and will be ignored", {
+        sessionID: input.sessionID,
+        moduleID,
+      })
+      continue
+    }
+
+    try {
+      const loaded = await ToolModule.load(moduleID)
+      if (!loaded) continue
+      moduleTools.push(...loaded)
+      activeToolModuleIDs.push(moduleID)
+    } catch (error) {
+      log.warn("failed to load turn-scoped native tool module", {
+        sessionID: input.sessionID,
+        moduleID,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  const registry = [...baseRegistry, ...moduleTools]
+  ToolRegistry.assertUniqueToolNames(registry)
 
   const readOnlyToolsOnly = readOnlyToolsOnlyForSession(input.agent, input.sessionID, input.turnID)
   const toolSearchCatalogItem = builtinRegistry.find((item) => item.id === TOOL_SEARCH_ID)
@@ -228,7 +290,22 @@ export async function resolveToolPlan(input: ResolveToolsInput): Promise<Resolve
     !toolSearchAccessFailure
   const registryTools: ToolSet = {}
   const entries: ResolvedToolEntry[] = []
-  const searchDefinitions: ToolSearchDefinition[] = []
+  const searchDefinitions: ToolSearchCandidate[] = moduleDescriptors
+    .filter((descriptor) => !requestedOrDiscoveredToolModuleIDs.includes(descriptor.id))
+    .map((descriptor): ToolModuleSearchDefinition => ({
+      kind: "module",
+      id: descriptor.id,
+      name: descriptor.id,
+      title: descriptor.title,
+      description: descriptor.description,
+      keywords: descriptor.keywords,
+      source: {
+        kind: "native-module",
+        id: descriptor.id,
+        name: descriptor.title,
+        description: descriptor.description,
+      },
+    }))
   const registeredMcpServerIDs = new Set<string>()
 
   for (const item of registry) {
@@ -246,6 +323,46 @@ export async function resolveToolPlan(input: ResolveToolsInput): Promise<Resolve
       continue
     }
 
+    const modelName = Tool.toModelToolName(item.id)
+    if (!isProviderSafeToolName(modelName)) {
+      throw new Error(`Tool "${item.id}" does not expose a provider-safe snake_case name.`)
+    }
+
+    const source = item.source
+    if (source?.kind === "mcp") registeredMcpServerIDs.add(source.id)
+    const exposure: ToolExposure =
+      !progressiveDisclosureEnabled ||
+      !source ||
+      source.kind === "native-module" ||
+      persistentMcpServerIDs.has(source.id) ||
+      turnMcpServerIDs.has(source.id)
+        ? "direct"
+        : "deferred"
+    const discovered = exposure === "deferred" && discoveredToolNames.has(modelName)
+
+    entries.push({
+      item,
+      modelName,
+      exposure,
+      discovered,
+    })
+
+    if (source?.kind === "mcp" && exposure === "deferred" && !discovered) {
+      searchDefinitions.push({
+        kind: "tool",
+        id: item.id,
+        name: modelName,
+        title: item.title,
+        description: item.description ?? item.title ?? item.id,
+        inputSchema: item.inputSchema ?? {
+          type: "object",
+          additionalProperties: true,
+        },
+        source,
+      })
+      continue
+    }
+
     let execution: Awaited<ReturnType<typeof createToolExecution>>
     try {
       execution = await createToolExecution({
@@ -258,15 +375,20 @@ export async function resolveToolPlan(input: ResolveToolsInput): Promise<Resolve
       })
     } catch (error) {
       if (!item.source) throw error
-      log.warn("failed to initialize deferred-capable MCP tool", {
+      log.warn("failed to initialize visible tool", {
         toolID: item.id,
-        serverID: item.source.id,
+        sourceKind: item.source.kind,
+        sourceID: item.source.id,
         error: error instanceof Error ? error.message : String(error),
       })
       continue
     }
 
-    const resolvedTool = tool<any, Tool.ToolOutput, Record<string, unknown>>({
+    if (registryTools[modelName]) {
+      throw new Error(`Duplicate resolved tool name "${modelName}".`)
+    }
+
+    registryTools[modelName] = tool<any, Tool.ToolOutput, Record<string, unknown>>({
       title: execution.title,
       description: execution.description,
       inputSchema: item.inputSchema
@@ -282,44 +404,6 @@ export async function resolveToolPlan(input: ResolveToolsInput): Promise<Resolve
         return execution.toModelOutput(output as Tool.ToolOutput)
       },
     })
-
-    const modelName = Tool.toModelToolName(item.id)
-    if (!isProviderSafeToolName(modelName)) {
-      throw new Error(`Tool "${item.id}" does not expose a provider-safe snake_case name.`)
-    }
-    if (registryTools[modelName]) {
-      throw new Error(`Duplicate resolved tool name "${modelName}".`)
-    }
-
-    const source = item.source
-    if (source) registeredMcpServerIDs.add(source.id)
-    const exposure: ToolExposure =
-      !progressiveDisclosureEnabled ||
-      !source ||
-      persistentMcpServerIDs.has(source.id) ||
-      turnMcpServerIDs.has(source.id)
-        ? "direct"
-        : "deferred"
-    const discovered = exposure === "deferred" && discoveredToolNames.has(modelName)
-
-    registryTools[modelName] = resolvedTool
-    entries.push({
-      item,
-      modelName,
-      exposure,
-      discovered,
-    })
-
-    if (source && exposure === "deferred" && !discovered) {
-      searchDefinitions.push({
-        id: item.id,
-        name: modelName,
-        title: execution.title,
-        description: execution.description,
-        inputSchema: item.inputSchema ?? toJsonSchema(execution.parameters),
-        source,
-      })
-    }
   }
 
   for (const serverID of turnMcpServerIDs) {
@@ -345,19 +429,27 @@ export async function resolveToolPlan(input: ResolveToolsInput): Promise<Resolve
   }
 
   const activeToolNames = entries
-    .filter((entry) => entry.exposure === "direct" || entry.discovered)
+    .filter((entry) =>
+      (entry.exposure === "direct" || entry.discovered) &&
+      Boolean(registryTools[entry.modelName]),
+    )
     .map((entry) => entry.modelName)
 
   const visibleTools: ToolSet = {}
+  const toolSources: Record<string, Tool.ToolSource> = {}
   for (const name of activeToolNames) {
     const resolved = registryTools[name]
     if (resolved) visibleTools[name] = resolved
+    const source = entries.find((entry) => entry.modelName === name)?.item.source
+    if (source) toolSources[name] = source
   }
 
   return {
     registryTools,
     activeToolNames,
+    activeToolModuleIDs,
     visibleTools,
+    toolSources,
     entries,
   }
 }

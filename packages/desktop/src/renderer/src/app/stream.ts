@@ -1419,6 +1419,25 @@ function buildTraceItemFromPart(
 
   if (type === "tool") {
     const state = readRecord(part.state)
+    const stateMetadata = readRecord(state?.metadata)
+    const rawToolSource = readRecord(stateMetadata?.toolSource)
+    const rawToolSourceKind = readString(rawToolSource?.kind)
+    const toolSourceKind: "mcp" | "native-module" | undefined =
+      rawToolSourceKind === "mcp" || rawToolSourceKind === "native-module"
+        ? rawToolSourceKind
+        : undefined
+    const toolSource = (
+      toolSourceKind
+      && readString(rawToolSource?.id)
+      && readString(rawToolSource?.name)
+    )
+      ? {
+          kind: toolSourceKind,
+          id: readString(rawToolSource?.id),
+          name: readString(rawToolSource?.name),
+          description: readString(rawToolSource?.description) || undefined,
+        }
+      : undefined
     const rawStatus = readString(state?.status)
     const status: AssistantTraceStatus =
       rawStatus === "completed"
@@ -1486,6 +1505,7 @@ function buildTraceItemFromPart(
         label: "Tool",
         title: toolName,
         toolName,
+        toolSource,
         text: toolOutputText ?? toolInputText,
         detail: createToolTraceDetail(status, state),
         toolInputText,
@@ -2026,6 +2046,7 @@ export function buildUserThreadMessage(input: {
   submissionMode?: UserThreadMessage["submissionMode"]
   streamInsertion?: UserThreadMessage["streamInsertion"]
   turnMcpServerIDs?: string[]
+  turnToolModuleIDs?: string[]
   timestamp?: number
 }) {
   const displayText = readString(input.displayText).trim()
@@ -2048,6 +2069,7 @@ export function buildUserThreadMessage(input: {
     ...(references.length > 0 ? { references } : {}),
     ...(input.questionAnswer ? { questionAnswer: input.questionAnswer } : {}),
     ...(input.turnMcpServerIDs?.length ? { turnMcpServerIDs: [...new Set(input.turnMcpServerIDs)] } : {}),
+    ...(input.turnToolModuleIDs?.length ? { turnToolModuleIDs: [...new Set(input.turnToolModuleIDs)] } : {}),
     ...(input.diffSummary?.diffs.length ? { diffSummary: input.diffSummary } : {}),
     ...(input.submissionMode ? { submissionMode: input.submissionMode } : {}),
     ...(input.streamInsertion ? { streamInsertion: input.streamInsertion } : {}),
@@ -2333,6 +2355,9 @@ function buildUserThreadMessageFromHistory(message: LoadedSessionHistoryMessage)
     references: presentation.references,
     turnMcpServerIDs: Array.isArray(message.info.turnMcpServerIDs)
       ? message.info.turnMcpServerIDs.filter((value): value is string => typeof value === "string")
+      : undefined,
+    turnToolModuleIDs: Array.isArray(message.info.turnToolModuleIDs)
+      ? message.info.turnToolModuleIDs.filter((value): value is string => typeof value === "string")
       : undefined,
     timestamp: readNumber(message.info.created) || Date.now(),
   }) satisfies ThreadMessage

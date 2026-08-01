@@ -388,6 +388,16 @@ afterEach(() => {
 })
 
 describe("CalendarPage", () => {
+  it("embeds as a secondary view without duplicating the Planner shell", async () => {
+    render(<CalendarPage embedded projects={testProjects} quickAddProjects={[testProjects[0]!]} />)
+
+    expect(screen.getByRole("region", { name: "Calendar" })).toHaveClass("is-embedded")
+    expect(screen.queryByRole("banner", { name: "Calendar top menu" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("complementary", { name: "Calendar sidebar" })).not.toBeInTheDocument()
+    expect(screen.getByRole("main", { name: "week calendar view" })).toBeInTheDocument()
+    await waitFor(() => expect(listCalendarTodosMock).toHaveBeenCalled())
+  })
+
   it("loads Todo-only sidebar sections without calendar source controls", async () => {
     renderCalendarPage()
 

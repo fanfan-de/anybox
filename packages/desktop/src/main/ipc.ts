@@ -7269,6 +7269,7 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
       agent: input.agent,
       skills: input.skills,
       turnMcpServerIDs: input.turnMcpServerIDs,
+      turnToolModuleIDs: input.turnToolModuleIDs,
     }
   }
 

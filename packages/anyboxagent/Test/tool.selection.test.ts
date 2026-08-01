@@ -65,6 +65,7 @@ describe("global built-in tool selection", () => {
         expect(toolNames).not.toContain("calendar_create_todo")
         expect(toolNames).not.toContain("calendar_create_event")
         expect(toolNames).not.toContain("calendar_list_items")
+        expect(toolNames.some((name) => name.startsWith("planner_"))).toBe(false)
         for (const shellToolID of shellToolIDs) {
           expect(toolNames).toContain(shellToolID)
         }
@@ -233,6 +234,23 @@ describe("global built-in tool selection", () => {
           expect(toolNames).toContain("read_file")
           expect(toolNames).toContain("exec")
           expect(toolNames).not.toContain("apply_patch")
+
+          const plannerToolNames = Object.keys(await resolveTools({
+            agent,
+            sessionID: session.id,
+            messageID: "msg_read_only_planner_module",
+            abort: new AbortController().signal,
+            turnToolModuleIDs: ["planner.core"],
+          }))
+          expect(plannerToolNames).toEqual(expect.arrayContaining([
+            "planner_list_todos",
+            "planner_get_todo",
+            "planner_find_free_time",
+          ]))
+          expect(plannerToolNames).not.toContain("planner_create_todo")
+          expect(plannerToolNames).not.toContain("planner_update_todo")
+          expect(plannerToolNames).not.toContain("planner_complete_todo")
+          expect(plannerToolNames).not.toContain("planner_schedule_todo")
 
           const agentPolicyToolNames = Object.keys(await resolveTools({
             agent: {

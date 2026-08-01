@@ -1,5 +1,8 @@
 # Todo Calendar Design
 
+> [!NOTE]
+> **状态：历史领域分析。** 本文保留 `Todo + optional time` 的核心判断，但不再作为完整产品规范。当前权威入口为 [Anybox 计划模块产品需求（PRD）](./planner-product-requirements.md)，工具架构见 [原生 Tool Module ADR](./native-tool-module-architecture-decision.md)。
+
 ## 背景
 
 当前 Calendar 设计里存在多个看起来相似的分类：

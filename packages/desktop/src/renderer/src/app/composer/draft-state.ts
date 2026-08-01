@@ -8,6 +8,7 @@ import {
   type EditorState,
   type LexicalEditor,
 } from "lexical"
+import { PLANNER_CORE_TOOL_MODULE_ID } from "@anybox/shared"
 import type {
   ComposerCommentReference,
   ComposerDraftState,
@@ -15,6 +16,7 @@ import type {
   ComposerPluginOption,
   ComposerSkillOption,
   ComposerTagData,
+  ComposerToolModuleOption,
   UserThreadMessageReference,
 } from "../types"
 import { formatPreviewInteractionContext } from "../preview/interactions/registry"
@@ -30,6 +32,7 @@ export interface CompiledComposerSubmission {
   taggedFilePaths: string[]
   taggedMcpServerIDs: string[]
   taggedPluginIDs: string[]
+  taggedToolModuleIDs: string[]
   userReferences: UserThreadMessageReference[]
   transportText: string
 }
@@ -240,6 +243,8 @@ function getComposerTagIdentity(tag: ComposerTagData) {
       return `mcp:${tag.serverID}`
     case "plugin":
       return `plugin:${tag.pluginID}`
+    case "tool-module":
+      return `tool-module:${tag.moduleID}`
     case "skill":
       return `skill:${tag.skillID}`
   }
@@ -539,6 +544,31 @@ export function createComposerPluginTagData(option: ComposerPluginOption): Compo
   }
 }
 
+export function createComposerToolModuleTagData(option: ComposerToolModuleOption): ComposerTagData {
+  return {
+    kind: "tool-module",
+    id: `tool-module:${option.value}`,
+    label: option.label,
+    moduleID: option.value,
+    description: option.description,
+  }
+}
+
+function readExplicitToolModuleIDs(text: string) {
+  return /(^|\s)(?:@计划|\/计划|\/planner)(?=\s|$)/iu.test(text)
+    ? [PLANNER_CORE_TOOL_MODULE_ID]
+    : []
+}
+
+function stripExplicitToolModuleTokens(text: string) {
+  return text
+    .replace(/(^|\s)(?:@计划|\/计划|\/planner)(?=\s|$)/giu, "$1")
+    .replace(/[ \t]+/g, " ")
+    .replace(/[ \t]*\n[ \t]*/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+}
+
 export function compileComposerSubmission(input: {
   draftState: ComposerDraftState
   selectedSkillIDs?: string[]
@@ -574,7 +604,13 @@ export function compileComposerSubmission(input: {
   }
 
   const displayText = expandedDisplayText.trim()
-  const requestText = stripComposerTagTokens(displayText, tags)
+  const taggedToolModuleIDs = [
+    ...new Set([
+      ...tags.flatMap((tag) => (tag.kind === "tool-module" ? [tag.moduleID] : [])),
+      ...readExplicitToolModuleIDs(displayText),
+    ]),
+  ]
+  const requestText = stripExplicitToolModuleTokens(stripComposerTagTokens(displayText, tags))
   const previewInteractionPrompt = formatPreviewInteractionContext(
     previewInteractionReferences.map((reference) => reference.interaction),
     requestText,
@@ -582,7 +618,14 @@ export function compileComposerSubmission(input: {
   if (previewInteractionPrompt) {
     transportSections.push(previewInteractionPrompt)
   }
-  const leadingText = previewInteractionReferences.length > 0 ? "" : displayText
+  const leadingText = previewInteractionReferences.length > 0
+    ? ""
+    : stripExplicitToolModuleTokens(
+        stripComposerTagTokens(
+          displayText,
+          tags.filter((tag) => tag.kind === "tool-module"),
+        ),
+      )
 
   return {
     commentReferences,
@@ -591,6 +634,7 @@ export function compileComposerSubmission(input: {
     taggedFilePaths,
     taggedMcpServerIDs,
     taggedPluginIDs,
+    taggedToolModuleIDs,
     userReferences,
     transportText: [leadingText, ...transportSections].filter(Boolean).join("\n\n"),
   } satisfies CompiledComposerSubmission
@@ -602,6 +646,12 @@ export function readTaggedMcpServerIDsFromDraftState(draftState: ComposerDraftSt
 
 export function readTaggedPluginIDsFromDraftState(draftState: ComposerDraftState) {
   return readComposerTagsFromDraftState(draftState).flatMap((tag) => (tag.kind === "plugin" ? [tag.pluginID] : []))
+}
+
+export function readTaggedToolModuleIDsFromDraftState(draftState: ComposerDraftState) {
+  return readComposerTagsFromDraftState(draftState).flatMap((tag) =>
+    tag.kind === "tool-module" ? [tag.moduleID] : [],
+  )
 }
 
 export function readComposerTagIdentity(tag: ComposerTagData) {

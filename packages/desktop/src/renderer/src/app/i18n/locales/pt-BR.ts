@@ -6,6 +6,7 @@ import { environmentEnUS } from "../environment-translations"
 import { cinemaWorkflowTranslations } from "../cinema-workflow-translations"
 import { branchViewTranslations } from "../branch-view-translations"
 import { threadErrorTranslations } from "../thread-error-translations"
+import { plannerTranslations } from "../planner-translations"
 
 export const ptBR = {
   "app.loading": "Carregando",
@@ -1433,5 +1434,6 @@ export const ptBR = {
   ...environmentEnUS,
   ...cinemaWorkflowTranslations.enUS,
   ...branchViewTranslations.enUS,
+  ...plannerTranslations.enUS,
   ...threadErrorTranslations["pt-BR"],
 } as const satisfies Record<TranslationKey, string>

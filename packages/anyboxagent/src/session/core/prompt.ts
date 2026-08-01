@@ -1,4 +1,5 @@
 import { Instance } from "#project/instance.ts";
+import { ToolModuleIDSchema } from "@anybox/shared"
 import * as Log from "#util/log.ts";
 import z from "zod";
 import * as Identifier from "#id/id.ts";
@@ -87,6 +88,7 @@ export const PromptInput = z.object({
     displayText: z.string().optional(),
     skills: z.array(z.string()).optional(),
     turnMcpServerIDs: z.array(z.string()).optional(),
+    turnToolModuleIDs: z.array(ToolModuleIDSchema).optional(),
     concurrentInputMode: z.enum(["queue", "steer"]).optional(),
     variant: z.string().optional(),
     reasoningEffort: Message.ReasoningEffort.optional(),
@@ -856,6 +858,7 @@ async function runLoop(input: LoopRuntimeInput): Promise<RunLoopResult> {
                 messages,
                 turnUserMessageID: lastUser.id,
                 turnMcpServerIDs: lastUser.turnMcpServerIDs,
+                turnToolModuleIDs: lastUser.turnToolModuleIDs,
             });
             throwIfAborted(abort)
 
@@ -915,6 +918,7 @@ async function runLoop(input: LoopRuntimeInput): Promise<RunLoopResult> {
                 Assistant: assistantMessage,
                 abort,
                 turn,
+                toolSources: toolPlan.toolSources,
             });
 
             const modelCallSnapshot = await Snapshot.track().catch((error) => {
@@ -2020,6 +2024,11 @@ async function createUserMessage(input: PromptInput, options?: { snapshot?: stri
             .map((serverID) => serverID.trim())
             .filter(Boolean),
     )]
+    const turnToolModuleIDs = [...new Set(
+        (input.turnToolModuleIDs ?? [])
+            .map((moduleID) => moduleID.trim())
+            .filter(Boolean),
+    )]
     const messageinfo: Message.User = {
         id: Identifier.ascending("message"),
         sessionID: input.sessionID,
@@ -2032,6 +2041,7 @@ async function createUserMessage(input: PromptInput, options?: { snapshot?: stri
         displayText: input.displayText?.trim() || undefined,
         skills: input.skills,
         turnMcpServerIDs: turnMcpServerIDs.length > 0 ? turnMcpServerIDs : undefined,
+        turnToolModuleIDs: turnToolModuleIDs.length > 0 ? turnToolModuleIDs : undefined,
         internal: input.internal,
         reasoningEffort: input.reasoningEffort,
     };

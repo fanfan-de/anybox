@@ -42,6 +42,7 @@ import {
   KeyRound,
   LayoutPanelLeft,
   Link2,
+  ListTodo,
   ListTree,
   Lock,
   LocateFixed,
@@ -220,6 +221,7 @@ export const ToolsIcon = createIcon(Wrench)
 export const AutomationIcon = createIcon(Clock)
 export const CalendarIcon = createIcon(CalendarDays)
 export const CalendarNavigationIcon = createIcon(Calendar)
+export const PlannerNavigationIcon = createIcon(ListTodo)
 export const ArrowUpIcon = createIcon(ArrowUp)
 export const StopIcon = createIcon(Square, { fill: "currentColor", strokeWidth: 0 })
 export const PaletteIcon = createIcon(Palette)

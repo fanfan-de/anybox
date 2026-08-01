@@ -97,6 +97,7 @@ interface SendPromptToSessionInput {
   selectedModel?: string | null
   selectedSkillIDs: string[]
   turnMcpServerIDs: string[]
+  turnToolModuleIDs: string[]
   session: SessionSummary
   submissionMode?: UserThreadMessage["submissionMode"]
   tabKey: string
@@ -188,6 +189,7 @@ export async function sendPromptToSession(
     session,
     selectedSkillIDs,
     turnMcpServerIDs,
+    turnToolModuleIDs,
     submissionMode,
     tabKey,
     text,
@@ -218,6 +220,7 @@ export async function sendPromptToSession(
     questionAnswer,
     references,
     turnMcpServerIDs,
+    turnToolModuleIDs,
     ...(retryUserMessageID ? { id: retryUserMessageID } : {}),
   })
   const optimisticUserMessage: UserThreadMessage = usesOptimisticUserMessage
@@ -238,6 +241,7 @@ export async function sendPromptToSession(
         ...(renderedUserMessage.references?.length ? { references: renderedUserMessage.references } : {}),
         ...(renderedUserMessage.questionAnswer ? { questionAnswer: renderedUserMessage.questionAnswer } : {}),
         ...(renderedUserMessage.turnMcpServerIDs?.length ? { turnMcpServerIDs: renderedUserMessage.turnMcpServerIDs } : {}),
+        ...(renderedUserMessage.turnToolModuleIDs?.length ? { turnToolModuleIDs: renderedUserMessage.turnToolModuleIDs } : {}),
         mode: pendingInputMode,
         status: "pending",
         createdAt: renderedUserMessage.timestamp,
@@ -267,6 +271,7 @@ export async function sendPromptToSession(
       tabKey,
       text: normalizedText,
       turnMcpServerIDs: [...turnMcpServerIDs],
+      turnToolModuleIDs: [...turnToolModuleIDs],
     }
     const retiredClientTurnIDs = [
       ...new Set([
@@ -465,6 +470,7 @@ export async function sendPromptToSession(
         ...(model ? { model } : {}),
         skills: effectiveSelectedSkillIDs,
         turnMcpServerIDs,
+        turnToolModuleIDs,
       })
 
       return
@@ -483,6 +489,7 @@ export async function sendPromptToSession(
       ...(model ? { model } : {}),
       skills: effectiveSelectedSkillIDs,
       turnMcpServerIDs,
+      turnToolModuleIDs,
     })
 
     if (!result.events) {

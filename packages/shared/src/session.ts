@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { ReasoningEffortSchema } from "./reasoning"
+import { ToolModuleIDSchema } from "./tool-module"
 
 export const SessionAttachmentBodySchema = z.object({
   path: z.string().min(1),
@@ -73,6 +74,7 @@ export const StreamSessionMessageBodySchema = z
     agent: z.string().optional(),
     skills: z.array(z.string()).optional(),
     turnMcpServerIDs: z.array(z.string()).optional(),
+    turnToolModuleIDs: z.array(ToolModuleIDSchema).optional(),
     reasoningEffort: ReasoningEffortSchema.optional(),
     model: AgentModelReferenceSchema.optional(),
   })

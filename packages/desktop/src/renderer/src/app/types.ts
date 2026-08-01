@@ -898,6 +898,7 @@ export interface UserThreadMessage {
     freeformText?: string
   }
   turnMcpServerIDs?: string[]
+  turnToolModuleIDs?: string[]
   diffSummary?: SessionDiffSummary
   submissionMode?: "steer" | "queued"
   streamInsertion?: {
@@ -919,6 +920,7 @@ export interface PendingConversationInput {
   references?: UserThreadMessageReference[]
   questionAnswer?: UserThreadMessage["questionAnswer"]
   turnMcpServerIDs?: string[]
+  turnToolModuleIDs?: string[]
   mode: "queued" | "steer"
   status: "pending" | "accepted" | "consumed" | "cancelled" | "failed"
   targetAssistantThreadMessageID?: string
@@ -1130,6 +1132,12 @@ export interface AssistantTraceItem {
   label: string
   title?: string
   toolName?: string
+  toolSource?: {
+    kind: "mcp" | "native-module"
+    id: string
+    name: string
+    description?: string
+  }
   text?: string
   detail?: string
   src?: string
@@ -1277,6 +1285,7 @@ export interface OptimisticUserSubmissionRequest {
   tabKey: string
   text: string
   turnMcpServerIDs: string[]
+  turnToolModuleIDs: string[]
 }
 
 export interface OptimisticUserSubmission
@@ -1688,6 +1697,14 @@ export interface ComposerPluginTagData {
   description?: string
 }
 
+export interface ComposerToolModuleTagData {
+  kind: "tool-module"
+  id: string
+  label: string
+  moduleID: string
+  description?: string
+}
+
 export interface ComposerLongTextTagData {
   kind: "long-text"
   id: string
@@ -1703,6 +1720,7 @@ export type ComposerTagData =
   | ComposerSkillTagData
   | ComposerMcpTagData
   | ComposerPluginTagData
+  | ComposerToolModuleTagData
   | ComposerLongTextTagData
 
 export type ColorMode = "system" | "light" | "dark"
@@ -1742,6 +1760,12 @@ export interface ComposerPluginOption {
   description: string
   icon?: string
   iconUrl?: string
+}
+
+export interface ComposerToolModuleOption {
+  value: string
+  label: string
+  description: string
 }
 
 export interface ProviderDraftState {

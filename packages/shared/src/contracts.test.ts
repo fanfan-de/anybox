@@ -33,12 +33,25 @@ describe("shared contracts", () => {
         text: "hello",
         concurrentInputMode: "steer",
         turnMcpServerIDs: ["gmail", "feishu"],
+        turnToolModuleIDs: ["planner.core"],
       }).success,
     ).toBe(true)
     expect(
       AgentRouteSchemas.sessions.streamMessage.body.safeParse({
         text: "hello",
         turnMcpServerIDs: "gmail",
+      }).success,
+    ).toBe(false)
+    expect(
+      AgentRouteSchemas.sessions.streamMessage.body.safeParse({
+        text: "hello",
+        turnToolModuleIDs: "planner.core",
+      }).success,
+    ).toBe(false)
+    expect(
+      AgentRouteSchemas.sessions.streamMessage.body.safeParse({
+        text: "hello",
+        turnToolModuleIDs: ["Planner Core"],
       }).success,
     ).toBe(false)
     expect(

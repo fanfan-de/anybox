@@ -245,6 +245,12 @@ describe("getComposerKeyAction", () => {
 })
 
 describe("getVisibleComposerCommandLabels", () => {
+  it("always exposes the turn-scoped Planner shortcut", () => {
+    expect(getVisibleComposerCommandLabels({ triggerPrefix: "~" })).toContain("~计划")
+    expect(getVisibleComposerCommandLabels({ triggerPrefix: "/" })).toContain("/计划")
+    expect(getVisibleComposerCommandLabels({ query: "计划", triggerPrefix: "/" })).toEqual(["/计划"])
+  })
+
   it("shows ~plan when plan mode toggling is available", () => {
     expect(getVisibleComposerCommandLabels({ hasPlanModeToggle: true })).toContain("~plan")
   })

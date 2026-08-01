@@ -24,12 +24,19 @@ export interface ToolCapabilities {
   needsShell?: boolean
 }
 
-export interface ToolSource {
-  kind: "mcp"
-  id: string
-  name: string
-  description?: string
-}
+export type ToolSource =
+  | {
+      kind: "mcp"
+      id: string
+      name: string
+      description?: string
+    }
+  | {
+      kind: "native-module"
+      id: string
+      name: string
+      description?: string
+    }
 
 export interface InitContext {
   agent?: Agent.AgentInfo
@@ -145,6 +152,7 @@ export interface ToolInfo<
 > {
   id: string
   title?: string
+  description?: string
   aliases?: string[]
   capabilities?: ToolCapabilities
   source?: ToolSource

@@ -1,5 +1,8 @@
 # Anybox 自动化功能设计方案
 
+> [!NOTE]
+> 本文继续定义后台 Automation 子系统。待办、排期、Agent 单次委托及其与 Automation 的边界，以 [Anybox 计划模块产品需求（PRD）](./planner-product-requirements.md) 为准；原生工具的当前轮加载机制见 [原生 Tool Module ADR](./native-tool-module-architecture-decision.md)。
+
 ## 目标
 
 在 Anybox 中加入类似 Codex App Automations 的后台自动化能力：用户可以创建定时或持续跟进任务，让 agent 在指定项目、会话或多个项目上自动运行，并把有价值的结果收敛到一个可 triage 的收件箱中。

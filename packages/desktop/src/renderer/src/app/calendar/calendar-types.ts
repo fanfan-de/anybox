@@ -2,8 +2,8 @@ export type CalendarViewMode = "day" | "week" | "month" | "schedule"
 export type CalendarEntityType = "event" | "task" | "project" | "reminder" | "agent_suggestion"
 export type CalendarDisplayKind = "external_event" | "scheduled_todo" | "deadline" | "reminder" | "agent_suggestion"
 export type CalendarEventStatus = "scheduled" | "canceled"
-export type PlannerTaskStatus = "todo" | "done"
-export type PlannerTaskPriority = "low" | "medium" | "high"
+export type PlannerTaskStatus = "inbox" | "todo" | "doing" | "waiting" | "done" | "canceled"
+export type PlannerTaskPriority = "low" | "medium" | "high" | "urgent"
 export type CalendarItemStatus = CalendarEventStatus | PlannerTaskStatus | "pending" | "blocked"
 
 export interface CalendarSource {
@@ -40,6 +40,8 @@ export interface PlannerTaskRecord {
   estimateMinutes?: number
   id: string
   priority: PlannerTaskPriority
+  projectId?: string
+  parentTodoId?: string
   properties?: Record<string, unknown>
   reminderAt?: number
   scheduledEndAt?: number
@@ -48,6 +50,7 @@ export interface PlannerTaskRecord {
   timezone?: string
   title: string
   updatedAt: number
+  completedAt?: number
   workspaceId?: string
 }
 
@@ -125,6 +128,8 @@ export interface CreateCalendarTaskInput {
   dueAt?: number
   estimateMinutes?: number
   priority?: PlannerTaskPriority
+  projectId?: string
+  parentTodoId?: string
   properties?: Record<string, unknown>
   reminderAt?: number
   scheduledEndAt?: number
@@ -140,6 +145,8 @@ export interface UpdateCalendarTaskInput {
   dueAt?: number | null
   estimateMinutes?: number
   priority?: PlannerTaskPriority
+  projectId?: string | null
+  parentTodoId?: string | null
   properties?: Record<string, unknown>
   reminderAt?: number | null
   scheduledEndAt?: number | null

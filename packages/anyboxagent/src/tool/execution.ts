@@ -214,9 +214,23 @@ export async function createToolExecution(input: {
         throw new Error("Tool execution requires approval before it can continue.")
       }
 
-      const output = Tool.normalizeToolOutput(
+      const normalizedOutput = Tool.normalizeToolOutput(
         await runtime.execute(args, runtimeContext(toolCallID)),
       )
+      const output = input.item.source
+        ? {
+            ...normalizedOutput,
+            metadata: {
+              ...normalizedOutput.metadata,
+              toolSource: {
+                kind: input.item.source.kind,
+                id: input.item.source.id,
+                name: input.item.source.name,
+                description: input.item.source.description,
+              },
+            },
+          }
+        : normalizedOutput
 
       return persistOutputIfLarge(output, toolCallID)
     },

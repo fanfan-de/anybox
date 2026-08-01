@@ -28,6 +28,7 @@ import type {
 } from "./calendar-types"
 
 interface CalendarPageProps {
+  embedded?: boolean
   projects?: CalendarProjectOption[]
   quickAddProjects?: CalendarProjectOption[]
   windowControls?: ReactNode
@@ -512,7 +513,7 @@ function formatQuickAddContext(context: QuickAddContext, locale: AppLocale, t: C
   })
 }
 
-export function CalendarPage({ projects = [], quickAddProjects = [], windowControls }: CalendarPageProps) {
+export function CalendarPage({ embedded = false, projects = [], quickAddProjects = [], windowControls }: CalendarPageProps) {
   const { locale, t } = useI18n()
   const [anchorDate, setAnchorDate] = useState(() => startOfDay(new Date()))
   const [viewMode, setViewMode] = useState<CalendarViewMode>("week")
@@ -1031,22 +1032,24 @@ export function CalendarPage({ projects = [], quickAddProjects = [], windowContr
   }
 
   return (
-    <section className="calendar-page" aria-label={t("calendar.title")}>
-      <ShellTopMenu
-        as="header"
-        ariaLabel={t("calendar.topMenu")}
-        className="calendar-top-menu"
-        contentClassName="calendar-top-menu-content"
-        content={(
-          <div className="calendar-top-menu-title">
-            <CalendarIcon />
-            <span>{t("calendar.title")}</span>
-          </div>
-        )}
-        dragRegion
-        trailing={windowControls}
-        trailingClassName="calendar-top-menu-window-controls"
-      />
+    <section className={joinClassNames("calendar-page", embedded && "is-embedded")} aria-label={t("calendar.title")}>
+      {!embedded ? (
+        <ShellTopMenu
+          as="header"
+          ariaLabel={t("calendar.topMenu")}
+          className="calendar-top-menu"
+          contentClassName="calendar-top-menu-content"
+          content={(
+            <div className="calendar-top-menu-title">
+              <CalendarIcon />
+              <span>{t("calendar.title")}</span>
+            </div>
+          )}
+          dragRegion
+          trailing={windowControls}
+          trailingClassName="calendar-top-menu-window-controls"
+        />
+      ) : null}
 
       <div className="calendar-toolbar">
         <div className="calendar-toolbar-spacer" aria-hidden="true" />
@@ -1335,29 +1338,31 @@ export function CalendarPage({ projects = [], quickAddProjects = [], windowContr
       ) : null}
 
       <div className="calendar-shell">
-        <CalendarSourcesPanel
-          isQuickAddOpen={isQuickAddOpen}
-          isProjectFilterOpen={isTodoProjectFilterOpen}
-          locale={locale}
-          projects={projects}
-          projectFilterOptions={todoProjectFilterOptions}
-          searchQuery={searchQuery}
-          selectedItemId={selectedItem?.id ?? ""}
-          selectedProjectFilterID={activeTodoProjectID}
-          todoSummary={todoSummary}
-          todoItems={unscheduledTasks}
-          t={t}
-          onCreateTodo={() => openQuickAddDialog("todo", null, getSidebarQuickAddWorkspace())}
-          onSearchQueryChange={setSearchQuery}
-          onItemSelect={setSelectedItemId}
-          onTodoDragOver={handleUnscheduledTodoDragOver}
-          onTodoDrop={handleUnscheduledTodoDrop}
-          onProjectFilterSelect={(projectId) => {
-            setSelectedTodoProjectID(projectId)
-            setIsTodoProjectFilterOpen(false)
-          }}
-          onProjectFilterToggle={() => setIsTodoProjectFilterOpen((current) => !current)}
-        />
+        {!embedded ? (
+          <CalendarSourcesPanel
+            isQuickAddOpen={isQuickAddOpen}
+            isProjectFilterOpen={isTodoProjectFilterOpen}
+            locale={locale}
+            projects={projects}
+            projectFilterOptions={todoProjectFilterOptions}
+            searchQuery={searchQuery}
+            selectedItemId={selectedItem?.id ?? ""}
+            selectedProjectFilterID={activeTodoProjectID}
+            todoSummary={todoSummary}
+            todoItems={unscheduledTasks}
+            t={t}
+            onCreateTodo={() => openQuickAddDialog("todo", null, getSidebarQuickAddWorkspace())}
+            onSearchQueryChange={setSearchQuery}
+            onItemSelect={setSelectedItemId}
+            onTodoDragOver={handleUnscheduledTodoDragOver}
+            onTodoDrop={handleUnscheduledTodoDrop}
+            onProjectFilterSelect={(projectId) => {
+              setSelectedTodoProjectID(projectId)
+              setIsTodoProjectFilterOpen(false)
+            }}
+            onProjectFilterToggle={() => setIsTodoProjectFilterOpen((current) => !current)}
+          />
+        ) : null}
 
         <main className="calendar-main" aria-label={t("calendar.viewAria", { view: getViewModeLabel(viewMode, t) })}>
           {calendarData.error ? (

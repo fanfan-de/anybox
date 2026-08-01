@@ -9,7 +9,7 @@ export const TOOL_SEARCH_ID = "tool_search"
 export const TOOL_SEARCH_MODEL_NAME = "anybox_tool_search"
 
 export const ToolSearchParameters = z.object({
-  query: z.string().min(1).describe("Capability, MCP source, tool name, or schema field to search for."),
+  query: z.string().min(1).describe("Capability or action needed for the current user request."),
   limit: z.number().int().min(1).max(32).optional().describe("Maximum matches to return. Defaults to 8."),
 })
 
@@ -18,7 +18,7 @@ export const ToolSearchTool = Tool.define(
   async () => ({
     title: "Tool Search",
     description:
-      "Search currently registered deferred MCP tools. The runtime activates this tool only for turns that have eligible deferred candidates.",
+      "Search and load optional Anybox capability modules or deferred tools needed for the current request. Loaded tools are available on the next model call in this user turn only.",
     parameters: ToolSearchParameters,
     execute: async () => {
       throw new Error(

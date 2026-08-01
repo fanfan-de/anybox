@@ -126,6 +126,8 @@ describe("i18n translations", () => {
     expect(getTranslationDictionary("zh-TW")["branchChat.name"]).toBe("分支對話")
     expect(getTranslationDictionary("en-US")["branchChat.name"]).toBe("Branch Chat")
     expect(translateLiteral("zh-CN", "Branch Chat")).toBe("分支对话")
+    expect(getTranslationDictionary("zh-CN")["planner.title"]).toBe("计划")
+    expect(getTranslationDictionary("en-US")["shell.openPlanner"]).toBe("Open Planner")
   })
 
   it("exposes thread trace translations", () => {

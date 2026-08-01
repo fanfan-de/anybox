@@ -1,0 +1,1286 @@
+.planner-page,
+.planner-shell,
+.planner-main,
+.planner-calendar {
+  min-width: 0;
+  min-height: 0;
+}
+
+.planner-page {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  color: var(--text-primary);
+  background: var(--surface-app, var(--surface-panel));
+}
+
+.planner-top-menu {
+  height: var(--top-chrome-height, var(--section-toolbar-height, 40px));
+  min-height: var(--top-chrome-height, var(--section-toolbar-height, 40px));
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  border-bottom: 1px solid var(--top-chrome-border, var(--border-default));
+  background: var(--top-chrome-surface, var(--surface-shell));
+}
+
+.planner-top-menu-content {
+  grid-column: 2;
+  justify-self: center;
+  justify-content: center;
+}
+
+.planner-top-menu-window-controls {
+  grid-column: 3;
+}
+
+.planner-top-menu-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.planner-top-menu-title svg {
+  width: var(--section-toolbar-icon-size, 16px);
+  height: var(--section-toolbar-icon-size, 16px);
+  stroke-width: 1.8;
+}
+
+.planner-shell {
+  display: grid;
+  grid-template-columns: 244px minmax(0, 1fr) 340px;
+  overflow: hidden;
+}
+
+.planner-page.is-calendar .planner-shell {
+  grid-template-columns: 244px minmax(0, 1fr);
+}
+
+.planner-navigation {
+  min-width: 0;
+  min-height: 0;
+  padding: 18px 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow: auto;
+  border-right: 1px solid var(--border-default);
+  background: var(--surface-shell);
+  scrollbar-width: thin;
+  scrollbar-color: var(--semantic-scrollbar-thumb-surface) transparent;
+}
+
+.planner-navigation::-webkit-scrollbar,
+.planner-main::-webkit-scrollbar,
+.planner-inspector::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.planner-navigation::-webkit-scrollbar-thumb,
+.planner-main::-webkit-scrollbar-thumb,
+.planner-inspector::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: var(--semantic-scrollbar-thumb-surface);
+  background-clip: padding-box;
+}
+
+.planner-navigation::-webkit-scrollbar-thumb:hover,
+.planner-main::-webkit-scrollbar-thumb:hover,
+.planner-inspector::-webkit-scrollbar-thumb:hover {
+  background: var(--semantic-scrollbar-thumb-surface-hover);
+  background-clip: padding-box;
+}
+
+.planner-navigation nav,
+.planner-navigation-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.planner-navigation-group {
+  min-height: 0;
+}
+
+.planner-navigation-group h2 {
+  margin: 6px 8px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.planner-navigation-footer {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.planner-navigation-row {
+  position: relative;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 8px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: var(--radius-control);
+  color: var(--semantic-sidebar-tree-row-text);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.planner-navigation-row:hover,
+.planner-navigation-row:focus-visible {
+  color: var(--semantic-sidebar-tree-row-text-hover);
+  background: var(--semantic-sidebar-tree-row-surface-hover);
+}
+
+.planner-navigation-row.is-active {
+  color: var(--semantic-sidebar-tree-row-text-active);
+  background: var(--semantic-sidebar-tree-row-surface-active);
+}
+
+.planner-navigation-row.is-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--semantic-sidebar-tree-row-leading-active);
+}
+
+.planner-navigation-row svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.8;
+}
+
+.planner-navigation-row span {
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.planner-navigation-row small {
+  min-width: 20px;
+  color: inherit;
+  font-size: 11px;
+  text-align: right;
+  opacity: 0.75;
+}
+
+.planner-main {
+  padding: 28px clamp(22px, 3vw, 44px) 36px;
+  overflow: auto;
+  background: var(--surface-app, var(--surface-panel));
+  scrollbar-width: thin;
+  scrollbar-color: var(--semantic-scrollbar-thumb-surface) transparent;
+}
+
+.planner-view-header {
+  margin: 0 auto 22px;
+  max-width: 860px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.planner-view-header h1 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 25px;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.planner-view-header p {
+  margin: 6px 0 0;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.planner-search {
+  width: min(260px, 36%);
+  min-width: 180px;
+  height: 34px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--semantic-field-border);
+  border-radius: var(--radius-control);
+  color: var(--semantic-field-text);
+  background: var(--semantic-field-surface);
+}
+
+.planner-search:focus-within {
+  border-color: var(--semantic-field-border-focus);
+  color: var(--semantic-field-text);
+  background: var(--semantic-field-surface-focus);
+}
+
+.planner-search svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  color: var(--text-tertiary);
+}
+
+.planner-search input,
+.planner-quick-add input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+}
+
+.planner-search input::placeholder,
+.planner-quick-add input::placeholder,
+.planner-inspector-form input::placeholder,
+.planner-inspector-form textarea::placeholder {
+  color: var(--semantic-field-placeholder);
+}
+
+.planner-proposal-banner {
+  width: min(100%, 860px);
+  min-height: 62px;
+  margin: 0 auto 14px;
+  padding: 10px 13px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-panel);
+  color: var(--semantic-list-detail-row-primary-text);
+  background: var(--semantic-list-detail-row-surface);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.planner-proposal-banner:hover,
+.planner-proposal-banner:focus-visible {
+  color: var(--semantic-list-detail-row-primary-text);
+  background: var(--semantic-list-detail-row-surface-hover);
+}
+
+.planner-proposal-banner > svg {
+  width: 20px;
+  height: 20px;
+  color: var(--semantic-info-text);
+}
+
+.planner-proposal-banner span {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.planner-proposal-banner strong,
+.planner-proposal-banner small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.planner-proposal-banner strong {
+  font-size: 13px;
+}
+
+.planner-proposal-banner small {
+  color: var(--semantic-list-detail-row-secondary-text);
+  font-size: 11px;
+}
+
+.planner-proposal-banner b {
+  color: var(--semantic-list-detail-row-current-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.planner-quick-add {
+  width: min(100%, 860px);
+  min-height: 42px;
+  margin: 0 auto 14px;
+  padding: 5px 6px 5px 12px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid var(--semantic-field-border);
+  border-radius: var(--radius-control);
+  color: var(--semantic-field-text);
+  background: var(--semantic-field-surface);
+}
+
+.planner-quick-add:focus-within {
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
+}
+
+.planner-quick-add > svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  color: var(--text-tertiary);
+}
+
+.planner-quick-add button,
+.planner-empty-state button,
+.planner-primary-action,
+.planner-proposal-actions button,
+.planner-inspector-actions button {
+  min-height: 30px;
+  padding: 5px 11px;
+  border: 1px solid var(--semantic-button-secondary-border);
+  border-radius: var(--radius-control);
+  color: var(--semantic-button-secondary-text);
+  background: var(--semantic-button-secondary-surface);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.planner-quick-add button:hover,
+.planner-quick-add button:focus-visible,
+.planner-empty-state button:hover,
+.planner-empty-state button:focus-visible,
+.planner-proposal-actions button:hover,
+.planner-proposal-actions button:focus-visible,
+.planner-inspector-actions button:hover,
+.planner-inspector-actions button:focus-visible {
+  border-color: var(--semantic-button-secondary-border-hover);
+  color: var(--semantic-button-secondary-text-hover);
+  background: var(--semantic-button-secondary-surface-hover);
+}
+
+.planner-quick-add button:disabled,
+.planner-primary-action:disabled,
+.planner-proposal-actions button:disabled {
+  border-color: var(--semantic-button-secondary-disabled-border);
+  color: var(--semantic-button-secondary-disabled-text);
+  background: var(--semantic-button-secondary-disabled-surface);
+  cursor: default;
+}
+
+.planner-primary-action {
+  border-color: var(--semantic-button-primary-border);
+  color: var(--semantic-button-primary-text);
+  background: var(--semantic-button-primary-surface);
+}
+
+.planner-primary-action:hover,
+.planner-primary-action:focus-visible {
+  border-color: var(--semantic-button-primary-border-hover);
+  color: var(--semantic-button-primary-text-hover);
+  background: var(--semantic-button-primary-surface-hover);
+}
+
+.planner-primary-action:disabled {
+  border-color: var(--semantic-button-primary-disabled-border);
+  color: var(--semantic-button-primary-disabled-text);
+  background: var(--semantic-button-primary-disabled-surface);
+}
+
+.planner-todo-list,
+.planner-proposal-list {
+  width: min(100%, 860px);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.planner-todo-row {
+  min-width: 0;
+  min-height: 58px;
+  padding: 6px 8px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 5px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--semantic-list-detail-row-primary-text);
+  background: var(--semantic-list-detail-row-surface);
+}
+
+.planner-todo-row:hover {
+  background: var(--semantic-list-detail-row-surface-hover);
+}
+
+.planner-todo-row.is-current {
+  color: var(--semantic-list-detail-row-current-text);
+  background: var(--semantic-list-detail-row-surface-current);
+}
+
+.planner-complete-button {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--semantic-icon-button-text);
+  border-radius: 999px;
+  color: var(--semantic-icon-button-text);
+  background: transparent;
+  cursor: pointer;
+}
+
+.planner-complete-button:hover,
+.planner-complete-button:focus-visible {
+  border-color: var(--semantic-icon-button-text-hover);
+  color: var(--semantic-icon-button-text-hover);
+  background: var(--semantic-icon-button-surface-hover);
+}
+
+.planner-complete-button.is-complete {
+  border-color: var(--semantic-icon-button-text-active);
+  color: var(--semantic-icon-button-text-active);
+  background: var(--semantic-icon-button-surface-active);
+}
+
+.planner-complete-button svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 2.2;
+}
+
+.planner-todo-row-content {
+  min-width: 0;
+  padding: 4px 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.planner-todo-row-content:focus-visible {
+  color: var(--semantic-list-detail-row-current-text);
+}
+
+.planner-todo-row-title,
+.planner-todo-row-meta {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.planner-todo-row-title strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 580;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.planner-todo-row-title i {
+  padding: 1px 5px;
+  border-radius: var(--radius-control);
+  color: var(--text-tertiary);
+  background: var(--surface-panel-muted);
+  font-size: 10px;
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.planner-todo-row-title i.is-urgent {
+  color: var(--semantic-error-text);
+}
+
+.planner-todo-row-title i.is-high {
+  color: var(--semantic-warning-text);
+}
+
+.planner-todo-row-title i.is-low {
+  color: var(--text-tertiary);
+}
+
+.planner-todo-row-meta {
+  color: var(--semantic-list-detail-row-secondary-text);
+}
+
+.planner-todo-row-meta small:not(:last-child)::after {
+  content: "·";
+  margin-left: 8px;
+  color: var(--text-tertiary);
+}
+
+.planner-loading,
+.planner-empty-state {
+  width: min(100%, 860px);
+  margin: 52px auto;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  text-align: center;
+}
+
+.planner-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+}
+
+.planner-empty-state strong {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.planner-empty-state button {
+  margin-top: 5px;
+}
+
+.planner-action-error {
+  position: sticky;
+  bottom: 8px;
+  width: min(100%, 860px);
+  margin: 12px auto 0;
+  padding: 8px 10px;
+  border: 1px solid var(--semantic-field-border-invalid);
+  border-radius: var(--radius-control);
+  color: var(--semantic-error-text);
+  background: var(--surface-panel);
+  font-size: 12px;
+}
+
+.planner-inspector {
+  min-width: 0;
+  min-height: 0;
+  padding: 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow: auto;
+  border-left: 1px solid var(--border-default);
+  background: var(--surface-shell);
+  scrollbar-width: thin;
+  scrollbar-color: var(--semantic-scrollbar-thumb-surface) transparent;
+}
+
+.planner-inspector > header {
+  min-height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.planner-inspector > header i,
+.planner-inspector > header time {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 400;
+}
+
+.planner-inspector-empty {
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+.planner-inspector-empty > svg {
+  width: 24px;
+  height: 24px;
+  margin-bottom: 2px;
+}
+
+.planner-inspector-empty strong {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.planner-inspector-empty span {
+  max-width: 230px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.planner-inspector-form {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+
+.planner-inspector-form label {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.planner-inspector-form input,
+.planner-inspector-form textarea,
+.planner-inspector-form select {
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 1px solid var(--semantic-field-border);
+  border-radius: var(--radius-control);
+  color: var(--semantic-field-text);
+  caret-color: var(--semantic-field-caret);
+  background: var(--semantic-field-surface);
+  font: inherit;
+  font-size: 12px;
+}
+
+.planner-inspector-form textarea {
+  min-height: 92px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.planner-inspector-form input:focus,
+.planner-inspector-form textarea:focus,
+.planner-inspector-form select:focus {
+  border-color: var(--semantic-field-border-focus);
+  color: var(--semantic-field-text);
+  background: var(--semantic-field-surface-focus);
+}
+
+.planner-inspector-fields {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.planner-inspector-form .planner-primary-action {
+  margin-top: 3px;
+}
+
+.planner-agent-section {
+  padding-top: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.planner-agent-section > header,
+.planner-agent-section > header > span {
+  display: flex;
+  align-items: center;
+}
+
+.planner-agent-section > header {
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.planner-agent-section > header > span {
+  gap: 6px;
+}
+
+.planner-agent-section > header svg,
+.planner-agent-launch-actions svg,
+.planner-run-history article header svg,
+.planner-run-history article > div svg {
+  width: 14px;
+  height: 14px;
+}
+
+.planner-agent-section > header small {
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.planner-agent-provenance,
+.planner-agent-confirmation > p {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.planner-agent-provenance {
+  padding: 8px 9px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-panel-muted);
+}
+
+.planner-agent-launch-actions,
+.planner-agent-confirmation-actions,
+.planner-run-history article > div {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.planner-agent-launch-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.planner-agent-launch-actions button,
+.planner-agent-confirmation-actions button,
+.planner-automation-links button,
+.planner-run-history article > div button {
+  min-height: 30px;
+  padding: 5px 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--semantic-button-secondary-border);
+  border-radius: var(--radius-control);
+  color: var(--semantic-button-secondary-text);
+  background: var(--semantic-button-secondary-surface);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 550;
+}
+
+.planner-agent-launch-actions button:hover,
+.planner-agent-launch-actions button:focus-visible,
+.planner-agent-confirmation-actions button:hover,
+.planner-agent-confirmation-actions button:focus-visible,
+.planner-automation-links button:hover,
+.planner-automation-links button:focus-visible,
+.planner-run-history article > div button:hover,
+.planner-run-history article > div button:focus-visible {
+  border-color: var(--semantic-button-secondary-border-hover);
+  color: var(--semantic-button-secondary-text-hover);
+  background: var(--semantic-button-secondary-surface-hover);
+}
+
+.planner-agent-launch-actions button:disabled,
+.planner-agent-confirmation-actions button:disabled,
+.planner-automation-links button:disabled,
+.planner-run-history article > div button:disabled {
+  border-color: var(--semantic-button-secondary-disabled-border);
+  color: var(--semantic-button-secondary-disabled-text);
+  background: var(--semantic-button-secondary-disabled-surface);
+  cursor: default;
+}
+
+.planner-agent-confirmation {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-panel);
+  background: var(--surface-panel-muted);
+}
+
+.planner-agent-confirmation > strong {
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.planner-agent-confirmation label {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.planner-agent-confirmation input,
+.planner-agent-confirmation textarea,
+.planner-agent-confirmation select {
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  padding: 6px 8px;
+  border: 1px solid var(--semantic-field-border);
+  border-radius: var(--radius-control);
+  color: var(--semantic-field-text);
+  caret-color: var(--semantic-field-caret);
+  background: var(--semantic-field-surface);
+  font: inherit;
+  font-size: 11px;
+}
+
+.planner-agent-confirmation textarea {
+  min-height: 66px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.planner-agent-confirmation input:focus,
+.planner-agent-confirmation textarea:focus,
+.planner-agent-confirmation select:focus {
+  border-color: var(--semantic-field-border-focus);
+  background: var(--semantic-field-surface-focus);
+}
+
+.planner-agent-confirmation-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 7px;
+}
+
+.planner-agent-confirmation dl {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.planner-agent-confirmation dl > div {
+  display: grid;
+  grid-template-columns: minmax(80px, 0.7fr) minmax(0, 1.3fr);
+  gap: 8px;
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.planner-agent-confirmation dt,
+.planner-agent-confirmation dd {
+  margin: 0;
+}
+
+.planner-agent-confirmation dd {
+  color: var(--text-secondary);
+  text-align: right;
+}
+
+.planner-agent-confirmation-actions {
+  justify-content: flex-end;
+}
+
+.planner-agent-confirmation-actions .planner-primary-action {
+  border-color: var(--semantic-button-primary-border);
+  color: var(--semantic-button-primary-text);
+  background: var(--semantic-button-primary-surface);
+}
+
+.planner-agent-confirmation-actions .planner-primary-action:hover,
+.planner-agent-confirmation-actions .planner-primary-action:focus-visible {
+  border-color: var(--semantic-button-primary-border-hover);
+  color: var(--semantic-button-primary-text-hover);
+  background: var(--semantic-button-primary-surface-hover);
+}
+
+.planner-agent-error,
+.planner-run-error {
+  margin: 0;
+  color: var(--semantic-error-text);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.planner-automation-links,
+.planner-run-history {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.planner-automation-links h3,
+.planner-run-history h3 {
+  margin: 2px 0 0;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.planner-automation-links > div {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.planner-automation-links code {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.planner-run-history > p {
+  margin: 0;
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.planner-run-history article {
+  padding: 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  background: var(--semantic-list-detail-row-surface);
+}
+
+.planner-run-history article.is-running,
+.planner-run-history article.is-queued {
+  border-color: var(--semantic-field-border-focus);
+}
+
+.planner-run-history article.is-failed,
+.planner-run-history article.is-blocked {
+  border-color: var(--semantic-field-border-invalid);
+}
+
+.planner-run-history article header {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.planner-run-history article header svg {
+  color: var(--semantic-info-text);
+}
+
+.planner-run-history article header strong {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.planner-run-history article header time,
+.planner-run-history article > small {
+  color: var(--text-tertiary);
+  font-size: 9px;
+}
+
+.planner-run-history article > p {
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.planner-run-history article > div {
+  justify-content: flex-end;
+}
+
+.planner-run-history article > div button {
+  min-height: 26px;
+  padding: 3px 7px;
+  font-size: 10px;
+}
+
+.planner-inspector-actions {
+  margin-top: auto;
+  padding-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.planner-inspector-actions button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.planner-inspector-actions button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.planner-inspector-actions button.is-danger {
+  border-color: var(--semantic-button-danger-border);
+  color: var(--semantic-button-danger-text);
+  background: var(--semantic-button-danger-surface);
+}
+
+.planner-inspector-actions button.is-danger:hover,
+.planner-inspector-actions button.is-danger:focus-visible {
+  border-color: var(--semantic-button-danger-border-hover);
+  color: var(--semantic-button-danger-text-hover);
+  background: var(--semantic-button-danger-surface-hover);
+}
+
+.planner-proposal-list {
+  gap: 6px;
+  border-top: 0;
+}
+
+.planner-proposal-row {
+  width: 100%;
+  min-width: 0;
+  min-height: 66px;
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  color: var(--semantic-list-detail-row-primary-text);
+  background: var(--semantic-list-detail-row-surface);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.planner-proposal-row:hover,
+.planner-proposal-row:focus-visible {
+  background: var(--semantic-list-detail-row-surface-hover);
+}
+
+.planner-proposal-row.is-current {
+  color: var(--semantic-list-detail-row-current-text);
+  background: var(--semantic-list-detail-row-surface-current);
+}
+
+.planner-proposal-row > svg {
+  width: 18px;
+  height: 18px;
+  color: var(--semantic-info-text);
+}
+
+.planner-proposal-row > span {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.planner-proposal-row strong {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 580;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.planner-proposal-row small,
+.planner-proposal-row time {
+  color: var(--semantic-list-detail-row-secondary-text);
+  font-size: 11px;
+}
+
+.planner-proposal-inspector h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 620;
+  line-height: 1.4;
+}
+
+.planner-proposal-inspector section h3 {
+  margin: 0 0 8px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.planner-proposal-inspector ol {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+}
+
+.planner-proposal-inspector li {
+  min-width: 0;
+  padding: 9px;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--radius-control);
+  color: var(--semantic-list-detail-row-primary-text);
+  background: var(--semantic-list-detail-row-surface);
+}
+
+.planner-proposal-inspector li span {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: var(--semantic-list-detail-row-current-text);
+  background: var(--semantic-list-detail-row-surface-current);
+  font-size: 10px;
+}
+
+.planner-proposal-inspector li > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.planner-proposal-inspector li strong {
+  font-size: 12px;
+  font-weight: 520;
+  line-height: 1.4;
+}
+
+.planner-proposal-inspector li small {
+  overflow: hidden;
+  color: var(--semantic-list-detail-row-secondary-text);
+  font-size: 10px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+}
+
+.planner-proposal-warning {
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  color: var(--text-tertiary);
+  background: var(--surface-panel-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.planner-proposal-actions {
+  margin-top: auto;
+  padding-top: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.planner-calendar {
+  overflow: hidden;
+}
+
+.calendar-page.is-embedded {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.calendar-page.is-embedded .calendar-toolbar {
+  grid-template-columns: minmax(0, 1fr) var(--calendar-right-sidebar-width);
+}
+
+.calendar-page.is-embedded .calendar-toolbar-spacer {
+  display: none;
+}
+
+.calendar-page.is-embedded .calendar-date-controls {
+  grid-column: 1;
+}
+
+.calendar-page.is-embedded .calendar-toolbar-actions {
+  grid-column: 2;
+}
+
+.calendar-page.is-embedded .calendar-shell {
+  grid-template-columns: minmax(0, 1fr) var(--calendar-right-sidebar-width);
+}
+
+@media (max-width: 1180px) {
+  .planner-shell {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .planner-inspector {
+    display: none;
+  }
+
+  .planner-page.is-calendar .planner-shell {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1120px) {
+  .calendar-page.is-embedded .calendar-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .calendar-page.is-embedded .calendar-date-controls,
+  .calendar-page.is-embedded .calendar-toolbar-actions {
+    grid-column: 1;
+  }
+
+  .calendar-page.is-embedded .calendar-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 820px) {
+  .planner-shell,
+  .planner-page.is-calendar .planner-shell {
+    grid-template-columns: 190px minmax(0, 1fr);
+  }
+
+  .planner-main {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .planner-view-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .planner-search {
+    width: 100%;
+  }
+}
+
+@media (max-width: 680px) {
+  .planner-shell,
+  .planner-page.is-calendar .planner-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .planner-navigation {
+    display: none;
+  }
+
+  .planner-inspector-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

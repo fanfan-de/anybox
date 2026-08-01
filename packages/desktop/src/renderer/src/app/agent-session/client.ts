@@ -74,6 +74,7 @@ export interface AgentSessionTurnInput {
   agent?: string
   skills?: string[]
   turnMcpServerIDs?: string[]
+  turnToolModuleIDs?: string[]
 }
 
 export interface AgentSessionSendTurnResult {

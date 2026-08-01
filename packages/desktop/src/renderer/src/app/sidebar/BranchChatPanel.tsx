@@ -1141,6 +1141,7 @@ export function BranchChatPanel({
         ...compiled.taggedMcpServerIDs,
       ]),
     ]
+    const turnToolModuleIDs = [...new Set(compiled.taggedToolModuleIDs)]
     const sendTurnRequest: Omit<AgentSessionTurnInput, "clientTurnID" | "executionID"> = {
       backendSessionID: target.sessionID,
       text: compiled.transportText || undefined,
@@ -1156,6 +1157,7 @@ export function BranchChatPanel({
       reasoningEffort: composer.selectedReasoningEffort ?? undefined,
       skills: [...compiled.selectedSkillIDs],
       turnMcpServerIDs,
+      turnToolModuleIDs,
     }
     if (!wasRunning) {
       const optimisticMessage: UserThreadMessage = {
@@ -1168,6 +1170,7 @@ export function BranchChatPanel({
           fallbackText: compiled.transportText,
           messageQuotes: submittedQuotes.map((quote) => ({ ...quote })),
           turnMcpServerIDs,
+          turnToolModuleIDs,
         }),
         delivery: { status: "pending" },
       }

@@ -34,12 +34,12 @@ describe("ActivityRail", () => {
     expect(connectionsButton.querySelector(".lucide-plug")).not.toBeNull()
   })
 
-  it("uses the calendar icon for the calendar entry", () => {
+  it("uses the Planner icon for the Planner entry", () => {
     renderActivityRail()
 
-    const calendarButton = screen.getByRole("button", { name: "Open calendar" })
-    expect(calendarButton.querySelector(".lucide-calendar")).not.toBeNull()
-    expect(calendarButton.querySelector(".lucide-calendar-days")).toBeNull()
+    const calendarButton = screen.getByRole("button", { name: "Open Planner" })
+    expect(calendarButton.querySelector(".lucide-list-todo")).not.toBeNull()
+    expect(calendarButton.querySelector(".lucide-calendar")).toBeNull()
   })
 
   it("places mobile as a primary rail entry after connections", () => {
@@ -52,7 +52,7 @@ describe("ActivityRail", () => {
       "Open workspace",
       "Open connections and extensions",
       "Open mobile",
-      "Open calendar",
+      "Open Planner",
       "Open automations",
     ])
 

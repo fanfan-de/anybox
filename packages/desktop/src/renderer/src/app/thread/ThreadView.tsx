@@ -4493,6 +4493,14 @@ function ToolTraceItemView({
   const rowContent = (
     <>
       <span className={toolNameClassName} title={summaryTitle}>{summaryTitle}</span>
+      {item.toolSource ? (
+        <span
+          className="trace-tool-source-chip"
+          title={`${item.toolSource.name} · ${item.toolSource.kind}`}
+        >
+          {item.toolSource.id}
+        </span>
+      ) : null}
       {draftPatch ? (
         <ToolDraftPatchSummaryButton
           fileChanges={draftPatch.fileChanges}

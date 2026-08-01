@@ -1,5 +1,6 @@
 import z from "zod"
 import * as Calendar from "#calendar/calendar.ts"
+import * as PlannerService from "#planner/service.ts"
 import { ApiError } from "#server/error.ts"
 
 const TrimmedString = z.string().transform((value) => value.trim()).pipe(z.string().min(1))
@@ -141,15 +142,32 @@ function requireEvent(id: string) {
   return event
 }
 
-function requireTask(id: string) {
-  const task = Calendar.getTask(id)
-  if (!task) throw new ApiError(404, "CALENDAR_TASK_NOT_FOUND", `Calendar task '${id}' not found`)
-  return task
-}
-
 function validateEventRange(input: { startAt: number; endAt: number }) {
   if (input.endAt < input.startAt) {
     throw new ApiError(400, "INVALID_CALENDAR_EVENT_RANGE", "Calendar event endAt must be greater than or equal to startAt")
+  }
+}
+
+function plannerCall<T>(fn: () => T): T {
+  try {
+    return fn()
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      throw new ApiError(400, "INVALID_CALENDAR_TASK_INPUT", "Calendar task input is invalid", {
+        issues: error.issues,
+      })
+    }
+    if (!PlannerService.isPlannerError(error)) throw error
+    if (error.code === "PLANNER_TODO_NOT_FOUND") {
+      throw new ApiError(404, "CALENDAR_TASK_NOT_FOUND", error.message, error.data)
+    }
+    if (error.code === "INVALID_PLANNER_SCHEDULE") {
+      throw new ApiError(400, "INVALID_CALENDAR_TASK_SCHEDULE", error.message, error.data)
+    }
+    if (error.code === "PLANNER_TODO_HAS_CHILDREN") {
+      throw new ApiError(409, "CALENDAR_TASK_HAS_CHILDREN", error.message, error.data)
+    }
+    throw new ApiError(400, error.code, error.message, error.data)
   }
 }
 
@@ -235,7 +253,7 @@ export function deleteEvent(id: string) {
 }
 
 export function listTasks() {
-  return Calendar.listTasks()
+  return PlannerService.listAllTodos()
 }
 
 export function listTodos() {
@@ -244,9 +262,7 @@ export function listTodos() {
 
 export function createTask(input: CreateCalendarTaskInput) {
   validateTaskSchedule(input)
-  const now = Date.now()
-  return Calendar.insertTask(Calendar.PlannerTask.parse({
-    id: Calendar.createPlannerTaskID(),
+  return plannerCall(() => PlannerService.createTodo({
     title: input.title,
     description: input.description || undefined,
     status: input.status,
@@ -256,12 +272,11 @@ export function createTask(input: CreateCalendarTaskInput) {
     scheduledStartAt: input.scheduledStartAt,
     scheduledEndAt: input.scheduledEndAt,
     estimateMinutes: input.estimateMinutes,
+    projectId: input.workspaceId || undefined,
     workspaceId: input.workspaceId || undefined,
     properties: input.properties,
     timezone: input.timezone || undefined,
-    createdAt: now,
-    updatedAt: now,
-  }))
+  }, { actor: "calendar" }))
 }
 
 export function createTodo(input: CreateCalendarTaskInput) {
@@ -269,32 +284,32 @@ export function createTodo(input: CreateCalendarTaskInput) {
 }
 
 export function updateTask(id: string, input: UpdateCalendarTaskInput) {
-  const existing = requireTask(id)
-  const next = Calendar.PlannerTask.parse({
-    ...existing,
-    ...input,
-    description: input.description === "" || input.description === null
-      ? undefined
-      : input.description ?? existing.description,
-    dueAt: input.dueAt === null ? undefined : input.dueAt ?? existing.dueAt,
-    reminderAt: input.reminderAt === null ? undefined : input.reminderAt ?? existing.reminderAt,
-    scheduledStartAt: input.scheduledStartAt === null
-      ? undefined
-      : input.scheduledStartAt ?? existing.scheduledStartAt,
-    scheduledEndAt: input.scheduledEndAt === null
-      ? undefined
-      : input.scheduledEndAt ?? existing.scheduledEndAt,
-    workspaceId: input.workspaceId === "" || input.workspaceId === null
-      ? undefined
-      : input.workspaceId ?? existing.workspaceId,
-    properties: input.properties ?? existing.properties,
-    timezone: input.timezone === "" || input.timezone === null
-      ? undefined
-      : input.timezone ?? existing.timezone,
-    updatedAt: Date.now(),
-  })
-  validateTaskSchedule(next)
-  return Calendar.updateTaskRecord(next)
+  const {
+    scheduledStartAt,
+    scheduledEndAt,
+    ...fields
+  } = input
+  const todoFields = {
+    ...fields,
+    ...(Object.prototype.hasOwnProperty.call(input, "description")
+      ? { description: fields.description === "" ? null : fields.description }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(input, "workspaceId")
+      ? { workspaceId: fields.workspaceId === "" ? null : fields.workspaceId }
+      : {}),
+    ...(Object.prototype.hasOwnProperty.call(input, "timezone")
+      ? { timezone: fields.timezone === "" ? null : fields.timezone }
+      : {}),
+  }
+  return plannerCall(() => PlannerService.updateTodoAndSchedule(
+    id,
+    todoFields,
+    {
+      ...(Object.prototype.hasOwnProperty.call(input, "scheduledStartAt") ? { scheduledStartAt } : {}),
+      ...(Object.prototype.hasOwnProperty.call(input, "scheduledEndAt") ? { scheduledEndAt } : {}),
+    },
+    { actor: "calendar" },
+  ))
 }
 
 export function updateTodo(id: string, input: UpdateCalendarTaskInput) {
@@ -302,20 +317,12 @@ export function updateTodo(id: string, input: UpdateCalendarTaskInput) {
 }
 
 export function scheduleTask(id: string, input: ScheduleCalendarTaskInput) {
-  const existing = requireTask(id)
-  const clearSchedule = input.scheduledStartAt === null || input.scheduledEndAt === null
-  const next = Calendar.PlannerTask.parse({
-    ...existing,
-    scheduledStartAt: clearSchedule
-      ? undefined
-      : input.scheduledStartAt ?? existing.scheduledStartAt,
-    scheduledEndAt: clearSchedule
-      ? undefined
-      : input.scheduledEndAt ?? existing.scheduledEndAt,
-    updatedAt: Date.now(),
-  })
-  validateTaskSchedule(next)
-  return Calendar.updateTaskRecord(next)
+  return plannerCall(() => PlannerService.updateTodoAndSchedule(
+    id,
+    {},
+    input,
+    { actor: "calendar" },
+  ))
 }
 
 export function scheduleTodo(id: string, input: ScheduleCalendarTaskInput) {
@@ -323,8 +330,7 @@ export function scheduleTodo(id: string, input: ScheduleCalendarTaskInput) {
 }
 
 export function deleteTask(id: string) {
-  requireTask(id)
-  Calendar.deleteTask(id)
+  plannerCall(() => PlannerService.deleteTodo(id, { actor: "calendar" }))
   return {
     taskID: id,
     todoID: id,

@@ -1,9 +1,9 @@
 import {
   AutomationIcon,
-  CalendarNavigationIcon,
   ConnectionsIcon,
   FileTextIcon,
   LayoutSidebarLeftIcon,
+  PlannerNavigationIcon,
   SettingsIcon,
   SmartphoneIcon,
   ToolsIcon,
@@ -29,7 +29,7 @@ const primaryLeftRailViews = [
   { view: "workspace" as const, labelKey: "shell.openWorkspace", Icon: WorkspaceIcon },
   { view: "connections" as const, labelKey: "shell.openConnectionsAndExtensions", Icon: ConnectionsIcon },
   { view: "mobile" as const, labelKey: "shell.openMobile", Icon: SmartphoneIcon },
-  { view: "calendar" as const, labelKey: "shell.openCalendar", Icon: CalendarNavigationIcon },
+  { view: "calendar" as const, labelKey: "shell.openPlanner", Icon: PlannerNavigationIcon },
   { view: "automations" as const, labelKey: "shell.openAutomations", Icon: AutomationIcon },
 ]
 

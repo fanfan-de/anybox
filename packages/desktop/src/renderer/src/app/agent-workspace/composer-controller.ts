@@ -275,6 +275,7 @@ export function useComposerController({
     session: SessionSummary
     selectedSkillIDs: string[]
     turnMcpServerIDs: string[]
+    turnToolModuleIDs: string[]
     submissionMode?: UserThreadMessage["submissionMode"]
     tabKey: string
     text: string
@@ -476,6 +477,7 @@ export function useComposerController({
     selectedModel?: string | null
     selectedSkillIDs?: string[]
     turnMcpServerIDsOverride?: string[]
+    turnToolModuleIDsOverride?: string[]
     sessionID?: string | null
     steerQueuedMessageID?: string
     submissionMode?: UserThreadMessage["submissionMode"]
@@ -496,6 +498,7 @@ export function useComposerController({
       selectedSkillIDs: input?.selectedSkillIDs ?? [],
     })
     const turnMcpServerIDs = input?.turnMcpServerIDsOverride ?? compiledSubmission.taggedMcpServerIDs
+    const turnToolModuleIDs = input?.turnToolModuleIDsOverride ?? compiledSubmission.taggedToolModuleIDs
     const normalizedQuestionAnswerText = normalizeQuestionAnswerText(input?.questionAnswer)
     const effectiveText =
       input?.transportTextOverride ??
@@ -560,6 +563,7 @@ export function useComposerController({
         selectedModel: input?.selectedModel,
         selectedSkillIDs: compiledSubmission.selectedSkillIDs,
         turnMcpServerIDs,
+        turnToolModuleIDs,
         session: nextSelection.session,
         submissionMode,
         tabKey: targetTabKey,
@@ -669,6 +673,7 @@ export function useComposerController({
       selectedModel: input?.selectedModel,
       selectedSkillIDs: compiledSubmission.selectedSkillIDs,
       turnMcpServerIDs,
+      turnToolModuleIDs,
       session: created.session,
       submissionMode,
       tabKey: targetTabKey,
@@ -757,6 +762,7 @@ export function useComposerController({
       selectedModel: input.selectedModel,
       selectedSkillIDs: input.selectedSkillIDs,
       turnMcpServerIDsOverride: queuedInput.turnMcpServerIDs ?? [],
+      turnToolModuleIDsOverride: queuedInput.turnToolModuleIDs ?? [],
       sessionID,
       submissionMode: "steer",
       tabKey,
@@ -894,6 +900,7 @@ export function useComposerController({
       retryUserMessageID: submission.userThreadMessageID,
       selectedSkillIDs: [...request.selectedSkillIDs],
       turnMcpServerIDs: [...request.turnMcpServerIDs],
+      turnToolModuleIDs: [...request.turnToolModuleIDs],
       session: selection.session,
       tabKey: request.tabKey,
       text: request.text,

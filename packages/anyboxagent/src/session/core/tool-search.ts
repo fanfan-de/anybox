@@ -6,6 +6,7 @@ const DEFAULT_LIMIT = 8
 const MAX_LIMIT = 32
 
 export interface ToolSearchDefinition {
+  kind?: "tool"
   id: string
   name: string
   title?: string
@@ -14,8 +15,20 @@ export interface ToolSearchDefinition {
   source: Tool.ToolSource
 }
 
+export interface ToolModuleSearchDefinition {
+  kind: "module"
+  id: string
+  name: string
+  title: string
+  description: string
+  keywords: string[]
+  source: Extract<Tool.ToolSource, { kind: "native-module" }>
+}
+
+export type ToolSearchCandidate = ToolSearchDefinition | ToolModuleSearchDefinition
+
 type IndexedDocument = {
-  definition: ToolSearchDefinition
+  definition: ToolSearchCandidate
   frequencies: Map<string, number>
   length: number
   normalizedFields: string[]
@@ -51,7 +64,7 @@ export function tokenizeToolSearchText(value: string) {
   return [...tokens, ...segmented, ...cjkNgrams(normalized)].filter(Boolean)
 }
 
-function searchableText(definition: ToolSearchDefinition) {
+function searchableText(definition: ToolSearchCandidate) {
   return [
     definition.id,
     definition.name,
@@ -60,11 +73,13 @@ function searchableText(definition: ToolSearchDefinition) {
     definition.source.id,
     definition.source.name,
     definition.source.description,
-    JSON.stringify(definition.inputSchema),
+    ...(definition.kind === "module"
+      ? definition.keywords
+      : [JSON.stringify(definition.inputSchema)]),
   ].filter((value): value is string => typeof value === "string" && value.length > 0)
 }
 
-function indexDocument(definition: ToolSearchDefinition): IndexedDocument {
+function indexDocument(definition: ToolSearchCandidate): IndexedDocument {
   const fields = searchableText(definition)
   const tokens = tokenizeToolSearchText(fields.join("\n"))
   const frequencies = new Map<string, number>()
@@ -90,7 +105,7 @@ export class ToolSearchIndex {
   private readonly documentFrequency = new Map<string, number>()
   private readonly averageDocumentLength: number
 
-  constructor(definitions: ToolSearchDefinition[]) {
+  constructor(definitions: ToolSearchCandidate[]) {
     this.documents = definitions.map(indexDocument)
     this.averageDocumentLength =
       this.documents.reduce((total, document) => total + document.length, 0) /
@@ -152,6 +167,6 @@ export class ToolSearchIndex {
   }
 }
 
-export function createToolSearchIndex(definitions: ToolSearchDefinition[]) {
+export function createToolSearchIndex(definitions: ToolSearchCandidate[]) {
   return new ToolSearchIndex(definitions)
 }

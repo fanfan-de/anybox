@@ -44,8 +44,9 @@ function isAllDayScheduledRange(startAt: number | undefined, endAt: number | und
 }
 
 function normalizeItemStatus(apiItem: CalendarApiItem): CalendarItemStatus | undefined {
-  if (apiItem.entityType === "task" && (apiItem.status === "doing" || apiItem.status === "canceled")) {
-    return "todo"
+  if (apiItem.entityType === "task") {
+    if (apiItem.status === "done") return "done"
+    if (["inbox", "todo", "doing", "waiting", "canceled"].includes(apiItem.status ?? "")) return "todo"
   }
   return apiItem.status && KNOWN_STATUSES.has(apiItem.status as CalendarItemStatus)
     ? apiItem.status as CalendarItemStatus
@@ -82,7 +83,7 @@ function toTodoItem(todo: PlannerTaskRecord): CalendarItem {
     status: todo.status === "done" ? "done" : "todo",
     isReadOnly: false,
     isSuggestion: false,
-    workspace: todo.workspaceId,
+    workspace: todo.projectId ?? todo.workspaceId,
     properties: todo.properties,
     reminderAt: todo.reminderAt === undefined ? undefined : new Date(todo.reminderAt),
     timezone: todo.timezone,

@@ -31,7 +31,7 @@ import * as Log from "#util/log.ts"
 import * as ToolResultPersistence from "#session/support/tool-result-persistence.ts"
 import * as Tool from "#tool/tool.ts"
 import { TOOL_SEARCH_ID, TOOL_SEARCH_MODEL_NAME } from "#tool/tool-search.ts"
-import { ReasoningEffortSchema } from "@anybox/shared"
+import { ReasoningEffortSchema, ToolModuleIDSchema } from "@anybox/shared"
 
 export const OutputLengthError = NamedError.create("MessageOutputLengthError", z.object({}))
 export const AbortedError = NamedError.create("MessageAbortedError", z.object({ message: z.string() }))
@@ -677,6 +677,7 @@ export const User = Base.extend({
     displayText: z.string().optional(),
     skills: z.array(z.string()).optional(),
     turnMcpServerIDs: z.array(z.string()).optional(),
+    turnToolModuleIDs: z.array(ToolModuleIDSchema).optional(),
     tools: z.record(z.string(), z.boolean()).optional(),
     internal: z.boolean().optional(),
     variant: z.string().optional(),

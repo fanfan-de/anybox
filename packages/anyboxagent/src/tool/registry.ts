@@ -32,6 +32,7 @@ import { SshShellCommandTool } from "#tool/ssh-shell-command.ts"
 import { TerminalReadTool, TerminalRunCommandTool, TerminalWriteInputTool } from "#tool/terminal-tools.ts"
 import { TaskCreateTool, TaskGetTool, TaskListTool, TaskUpdateTool } from "#tool/task-tools.ts"
 import { ToolSearchTool } from "#tool/tool-search.ts"
+import * as ToolModule from "#tool/module.ts"
 import { ViewImageTool } from "#tool/view-image.ts"
 import { WaitSubagentTool } from "#tool/wait-subagent.ts"
 import { WebFetchTool } from "#tool/web-fetch.ts"
@@ -43,7 +44,7 @@ function exposedNames(tool: Tool.ToolInfo): string[] {
   return [tool.id, ...(tool.aliases ?? [])]
 }
 
-function assertUniqueToolNames(tools: Tool.ToolInfo[]) {
+export function assertUniqueToolNames(tools: Tool.ToolInfo[]) {
   const seen = new Map<string, string>()
   const seenModelNames = new Map<string, string>()
 
@@ -168,7 +169,9 @@ export async function tools(): Promise<Tool.ToolInfo[]> {
 }
 
 export async function get(id: string): Promise<Tool.ToolInfo | undefined> {
-  return (await tools()).find((tool) => Tool.toolMatchesName(tool, id))
+  const registered = (await tools()).find((tool) => Tool.toolMatchesName(tool, id))
+  if (registered) return registered
+  return ToolModule.getTool(id)
 }
 
 export async function names(): Promise<string[]> {

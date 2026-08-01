@@ -1,5 +1,8 @@
 # Anybox Calendar 模块设计方案
 
+> [!WARNING]
+> **状态：已废弃（Calendar-first 历史方案）。** 当前产品以待办事项为核心，权威规范见 [Anybox 计划模块产品需求（PRD）](./planner-product-requirements.md)；工具按需加载架构见 [原生 Tool Module ADR](./native-tool-module-architecture-decision.md)。本文仅保留为决策背景，不再指导新功能实现。
+
 ## 目标
 
 在 Anybox 中新增一个和 `Workspace` 平级的顶层页面：`Calendar`。该页面参考 Notion Calendar 的产品思路，将日历事件、任务、项目、Workspace 页面和 Agent 计划统一显示在一个时间视图中。

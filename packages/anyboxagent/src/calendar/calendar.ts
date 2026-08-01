@@ -1,6 +1,8 @@
 import z from "zod"
 import * as db from "#database/Sqlite.ts"
 import * as Identifier from "#id/id.ts"
+import * as Planner from "#planner/model.ts"
+import * as PlannerRepository from "#planner/repository.ts"
 
 export const CalendarSourceKind = z.enum([
   "external_calendar",
@@ -26,11 +28,11 @@ export type CalendarDisplayKind = z.output<typeof CalendarDisplayKind>
 export const CalendarEventStatus = z.enum(["scheduled", "canceled"])
 export type CalendarEventStatus = z.output<typeof CalendarEventStatus>
 
-export const PlannerTaskStatus = z.enum(["todo", "done"])
-export type PlannerTaskStatus = z.output<typeof PlannerTaskStatus>
+export const PlannerTaskStatus = Planner.PlannerTodoStatus
+export type PlannerTaskStatus = Planner.PlannerTodoStatus
 
-export const PlannerTaskPriority = z.enum(["low", "medium", "high"])
-export type PlannerTaskPriority = z.output<typeof PlannerTaskPriority>
+export const PlannerTaskPriority = Planner.PlannerTodoPriority
+export type PlannerTaskPriority = Planner.PlannerTodoPriority
 
 export const CalendarSource = z.object({
   id: z.string().trim().min(1),
@@ -64,24 +66,8 @@ export const CalendarEvent = z.object({
 })
 export type CalendarEvent = z.output<typeof CalendarEvent>
 
-export const PlannerTask = z.object({
-  id: Identifier.schema("task"),
-  title: z.string().trim().min(1),
-  description: z.string().optional(),
-  status: PlannerTaskStatus,
-  priority: PlannerTaskPriority,
-  dueAt: z.number().int().nonnegative().optional(),
-  reminderAt: z.number().int().nonnegative().optional(),
-  scheduledStartAt: z.number().int().nonnegative().optional(),
-  scheduledEndAt: z.number().int().nonnegative().optional(),
-  estimateMinutes: z.number().int().positive().optional(),
-  workspaceId: z.string().optional(),
-  properties: z.record(z.string(), z.unknown()).optional(),
-  timezone: z.string().optional(),
-  createdAt: z.number().int().nonnegative(),
-  updatedAt: z.number().int().nonnegative(),
-})
-export type PlannerTask = z.output<typeof PlannerTask>
+export const PlannerTask = Planner.PlannerTodo
+export type PlannerTask = Planner.PlannerTodo
 
 export const CalendarItem = z.object({
   id: z.string(),
@@ -107,7 +93,6 @@ export type CalendarItem = z.output<typeof CalendarItem>
 
 const CALENDAR_SOURCES_TABLE = "calendar_sources"
 const CALENDAR_EVENTS_TABLE = "calendar_events"
-const PLANNER_TASKS_TABLE = "planner_tasks"
 export const TASK_SOURCE_ID = "tasks"
 export const TODO_SOURCE_ID = "todos"
 export const DEADLINE_SOURCE_ID = "deadlines"
@@ -140,7 +125,7 @@ function ensureCalendarTables() {
 
   db.syncTableColumnsWithZodObject(CALENDAR_SOURCES_TABLE, CalendarSource)
   db.syncTableColumnsWithZodObject(CALENDAR_EVENTS_TABLE, CalendarEvent)
-  db.syncTableColumnsWithZodObject(PLANNER_TASKS_TABLE, PlannerTask)
+  PlannerRepository.ensurePlannerTables()
 
   db.db.run(`
     CREATE INDEX IF NOT EXISTS "idx_calendar_events_range"
@@ -150,27 +135,10 @@ function ensureCalendarTables() {
     CREATE INDEX IF NOT EXISTS "idx_calendar_sources_enabled"
     ON "calendar_sources" ("enabled");
   `)
-  db.db.run(`
-    CREATE INDEX IF NOT EXISTS "idx_planner_tasks_schedule"
-    ON "planner_tasks" ("scheduledStartAt", "scheduledEndAt");
-  `)
-  db.db.run(`
-    CREATE INDEX IF NOT EXISTS "idx_planner_tasks_status"
-    ON "planner_tasks" ("status", "updatedAt");
-  `)
-  normalizeLegacyTaskStatuses()
   removeLegacyEventCalendarData()
 
   seedDefaultSources()
   calendarTablesGeneration = db.getDatabaseGeneration()
-}
-
-function normalizeLegacyTaskStatuses() {
-  db.db.run(`
-    UPDATE "${PLANNER_TASKS_TABLE}"
-    SET "status" = 'todo'
-    WHERE "status" IN ('doing', 'canceled');
-  `)
 }
 
 function removeLegacyEventCalendarData() {
@@ -199,7 +167,7 @@ export function createCalendarEventID() {
 }
 
 export function createPlannerTaskID() {
-  return Identifier.descending("task")
+  return PlannerRepository.createTodoID()
 }
 
 export function listSources() {
@@ -243,35 +211,23 @@ export function deleteEvent(id: string) {
 }
 
 export function listTasks() {
-  ensureCalendarTables()
-  return db.findManyWithSchema(PLANNER_TASKS_TABLE, PlannerTask, {
-    orderBy: [
-      { column: "createdAt", direction: "DESC" },
-      { column: "id", direction: "ASC" },
-    ],
-  })
+  return PlannerRepository.listTodos()
 }
 
 export function getTask(id: string) {
-  ensureCalendarTables()
-  return db.findById(PLANNER_TASKS_TABLE, PlannerTask, id)
+  return PlannerRepository.getTodo(id)
 }
 
 export function insertTask(task: PlannerTask) {
-  ensureCalendarTables()
-  db.insertOneWithSchema(PLANNER_TASKS_TABLE, task, PlannerTask)
-  return task
+  return PlannerRepository.insertTodo(task)
 }
 
 export function updateTaskRecord(task: PlannerTask) {
-  ensureCalendarTables()
-  db.updateByIdWithSchema(PLANNER_TASKS_TABLE, task.id, task, PlannerTask)
-  return task
+  return PlannerRepository.updateTodo(task)
 }
 
 export function deleteTask(id: string) {
-  ensureCalendarTables()
-  return db.deleteById(PLANNER_TASKS_TABLE, id)
+  return PlannerRepository.deleteTodo(id)
 }
 
 export function listEvents(input: {
@@ -301,11 +257,19 @@ export function listItems(input: {
 } = {}) {
   const sourceIdFilter = new Set(input.sourceIds?.filter(Boolean))
   const hasSourceFilter = sourceIdFilter.size > 0
+  const enabledEventSources = new Map(
+    listSources()
+      .filter((source) => source.enabled)
+      .map((source) => [source.id, source]),
+  )
+  const eventItems = listEvents(input)
+    .filter((event) => enabledEventSources.has(event.sourceId))
+    .map((event) => toCalendarItem(event, enabledEventSources.get(event.sourceId)))
   const taskItems = listTasks()
     .flatMap((task) => toTaskCalendarItems(task, input))
     .filter((item) => !hasSourceFilter || sourceIdFilter.has(item.sourceId))
 
-  return taskItems
+  return [...eventItems, ...taskItems]
 }
 
 export function toCalendarItem(event: CalendarEvent, source?: CalendarSource): CalendarItem {
@@ -347,7 +311,7 @@ export function toTaskCalendarItem(task: PlannerTask, source?: CalendarSource): 
     status: task.status,
     isReadOnly: false,
     isSuggestion: false,
-    workspace: task.workspaceId,
+    workspace: task.projectId ?? task.workspaceId,
     properties: task.properties,
     timezone: task.timezone,
   })
@@ -379,7 +343,7 @@ function toScheduledTodoCalendarItem(task: PlannerTask, source?: CalendarSource)
     status: task.status,
     isReadOnly: false,
     isSuggestion: false,
-    workspace: task.workspaceId,
+    workspace: task.projectId ?? task.workspaceId,
     properties: task.properties,
     timezone: task.timezone,
   })
@@ -404,7 +368,7 @@ function toDeadlineCalendarItem(task: PlannerTask) {
     status: task.status,
     isReadOnly: false,
     isSuggestion: false,
-    workspace: task.workspaceId,
+    workspace: task.projectId ?? task.workspaceId,
     properties: task.properties,
     timezone: task.timezone,
   })
@@ -428,7 +392,7 @@ function toReminderCalendarItem(task: PlannerTask) {
     status: task.status,
     isReadOnly: false,
     isSuggestion: false,
-    workspace: task.workspaceId,
+    workspace: task.projectId ?? task.workspaceId,
     properties: task.properties,
     timezone: task.timezone,
   })

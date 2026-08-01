@@ -81,7 +81,7 @@ const PluginsPage = lazy(() => import("./app/plugins/PluginsPage").then((module)
 const PromptPresetsPage = lazy(() => import("./app/prompts/PromptPresetsPage").then((module) => ({ default: module.PromptPresetsPage })))
 const AutomationsPage = lazy(() => import("./app/automations/AutomationsPage").then((module) => ({ default: module.AutomationsPage })))
 const AutomationCreatePanel = lazy(() => import("./app/automations/AutomationsPage").then((module) => ({ default: module.AutomationCreatePanel })))
-const CalendarPage = lazy(() => import("./app/calendar/CalendarPage").then((module) => ({ default: module.CalendarPage })))
+const PlannerPage = lazy(() => import("./app/planner/PlannerPage").then((module) => ({ default: module.PlannerPage })))
 
 function importSettingsPage() {
   return import("./app/settings/SettingsPage").then((module) => ({ default: module.SettingsPage }))
@@ -2926,7 +2926,8 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
             </PromptSkillsPage>
           ) : isCalendarView ? (
             <Suspense fallback={null}>
-              <CalendarPage
+              <PlannerPage
+                onOpenSession={(sessionID) => handleCanvasSessionTabSelect(sessionID)}
                 projects={calendarProjects}
                 quickAddProjects={openCalendarProjects}
                 windowControls={windowControls}

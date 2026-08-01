@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest"
-import type { ComposerCommentReference, ComposerMcpOption, ComposerPluginOption, ComposerSkillOption } from "../types"
+import type {
+  ComposerCommentReference,
+  ComposerMcpOption,
+  ComposerPluginOption,
+  ComposerSkillOption,
+  ComposerToolModuleOption,
+} from "../types"
 import {
   appendComposerTagToDraftState,
   appendTextToComposerDraftState,
@@ -11,6 +17,7 @@ import {
   createComposerMcpTagData,
   createComposerPluginTagData,
   createComposerSkillTagData,
+  createComposerToolModuleTagData,
   createEmptyComposerDraftState,
   readTaggedPluginIDsFromDraftState,
   readComposerTagsFromDraftState,
@@ -41,6 +48,12 @@ const PLUGIN_OPTION: ComposerPluginOption = {
   value: "build-web-apps",
   label: "Build Web Apps",
   description: "Frontend app tools and skills",
+}
+
+const TOOL_MODULE_OPTION: ComposerToolModuleOption = {
+  value: "planner.core",
+  label: "计划",
+  description: "Load Planner tools for this message only",
 }
 
 function createCommentReference(): ComposerCommentReference {
@@ -106,6 +119,7 @@ describe("composer draft-state", () => {
     draftState = appendComposerTagToDraftState(draftState, createComposerSkillTagData(SKILL_OPTION))
     draftState = appendComposerTagToDraftState(draftState, createComposerMcpTagData(MCP_OPTIONS[0]!))
     draftState = appendComposerTagToDraftState(draftState, createComposerPluginTagData(PLUGIN_OPTION))
+    draftState = appendComposerTagToDraftState(draftState, createComposerToolModuleTagData(TOOL_MODULE_OPTION))
 
     const compiled = compileComposerSubmission({
       draftState,
@@ -118,6 +132,8 @@ describe("composer draft-state", () => {
     expect(compiled.taggedFilePaths).toEqual(["src/app/components.tsx"])
     expect(compiled.taggedMcpServerIDs).toEqual(["filesystem"])
     expect(compiled.taggedPluginIDs).toEqual(["build-web-apps"])
+    expect(compiled.taggedToolModuleIDs).toEqual(["planner.core"])
+    expect(compiled.transportText).not.toContain("@计划")
     expect(compiled.commentReferences).toHaveLength(1)
     expect(compiled.userReferences).toEqual([
       {
@@ -136,6 +152,18 @@ describe("composer draft-state", () => {
     expect(compiled.selectedSkillIDs).toEqual(["existing-skill", SKILL_OPTION.value])
     expect(compiled.transportText).toContain("Referenced files:\n- src/app/components.tsx")
     expect(compiled.transportText).toContain("Review the selected lines before making changes.")
+  })
+
+  it("compiles explicit Planner shortcuts into a turn-scoped tool module", () => {
+    for (const shortcut of ["@计划", "/计划", "/planner"]) {
+      const compiled = compileComposerSubmission({
+        draftState: createComposerDraftStateFromPlainText(`${shortcut} 安排今天的待办`),
+      })
+
+      expect(compiled.taggedToolModuleIDs).toEqual(["planner.core"])
+      expect(compiled.transportText).toBe("安排今天的待办")
+      expect(compiled.displayText).toContain(shortcut)
+    }
   })
 
   it("reads plugin tags from the composer draft state", () => {

@@ -280,6 +280,14 @@ describe("processor tool persistence", () => {
       const processor = Processor.create({
         Assistant: assistant,
         turn: recorded.turn,
+        toolSources: {
+          custom: {
+            kind: "native-module",
+            id: "planner.core",
+            name: "Planner",
+            description: "Plan and delegate Todo work.",
+          },
+        },
       })
 
       expect(await processor.process(createStreamInput())).toBe("continue")
@@ -303,7 +311,15 @@ describe("processor tool persistence", () => {
       expect(completed).toBeDefined()
       expect(completed?.payload.part.state.output).toBe("alpha")
       expect(completed?.payload.part.state.title).toBe("Read a.txt")
-      expect(completed?.payload.part.state.metadata).toEqual({ source: "unit" })
+      expect(completed?.payload.part.state.metadata).toEqual({
+        source: "unit",
+        toolSource: {
+          kind: "native-module",
+          id: "planner.core",
+          name: "Planner",
+          description: "Plan and delegate Todo work.",
+        },
+      })
       const attachments = completed?.payload.part.state.attachments
       expect(attachments).toHaveLength(2)
       expect(attachments?.[0]).toMatchObject({
@@ -335,7 +351,15 @@ describe("processor tool persistence", () => {
       )
       expect(failed).toBeDefined()
       expect(failed?.payload.part.state.error).toBe("boom")
-      expect(failed?.payload.part.state.metadata).toEqual({ source: "unit" })
+      expect(failed?.payload.part.state.metadata).toEqual({
+        source: "unit",
+        toolSource: {
+          kind: "native-module",
+          id: "planner.core",
+          name: "Planner",
+          description: "Plan and delegate Todo work.",
+        },
+      })
 
       expect(processor.partFromToolCall("tool-1")?.state.status).toBe("completed")
       expect(processor.partFromToolCall("tool-2")?.state.status).toBe("error")
@@ -460,7 +484,7 @@ describe("processor tool persistence", () => {
     })
   })
 
-  it("does not persist raw oversized tool results that bypass the tool wrapper", async () => {
+  it("persists raw oversized tool results that bypass the tool wrapper", async () => {
     const sessionID = "ses_processor_large"
     const largeOutput = `${"large-output ".repeat(5_000)}tail-marker`
 
@@ -551,24 +575,21 @@ describe("processor tool persistence", () => {
 
       expect(completed).toBeDefined()
       const state = completed?.payload.part.state
-      expect(state.output).toBe(largeOutput)
-      expect(state.output).toContain("tail-marker")
-      expect(state.modelOutput).toEqual({
-        text: largeOutput,
-        title: "Large output",
-        metadata: {
-          stdout: largeOutput,
-          keep: "small",
-        },
-      })
+      expect(state.output).toContain("<persisted-output>")
+      expect(state.output).toContain("large-output")
+      expect(state.output).not.toContain("tail-marker")
+      expect(state.modelOutput).toBeUndefined()
       expect(state.metadata.keep).toBe("small")
-      expect(state.metadata.stdout).toBe(largeOutput)
-      expect(state.metadata.persistedOutput).toBeUndefined()
-      expect(existsSync(ToolResultPersistence.getSessionDirectory(sessionID))).toBe(false)
+      expect(state.metadata.stdout).toContain("[omitted from context; full tool result is saved at")
+      expect(state.metadata.persistedOutput).toMatchObject({
+        kind: "persisted-tool-output",
+        hasMore: true,
+      })
+      expect(existsSync(ToolResultPersistence.getSessionDirectory(sessionID))).toBe(true)
 
       const stored = processor.partFromToolCall("tool-large")
       expect(stored?.state.status).toBe("completed")
-      expect((stored?.state as any).output).toContain("tail-marker")
+      expect((stored?.state as any).output).toContain("<persisted-output>")
     } finally {
       ToolResultPersistence.removeSessionOutputDirectory(sessionID)
     }

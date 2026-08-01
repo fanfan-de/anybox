@@ -17,6 +17,7 @@ import { subscriptionTranslations } from "./subscription-translations"
 import { environmentEnUS, environmentZhCN } from "./environment-translations"
 import { branchViewTranslations } from "./branch-view-translations"
 import { threadErrorTranslations } from "./thread-error-translations"
+import { plannerTranslations } from "./planner-translations"
 
 export const zhCN = {
   "app.loading": "加载中",
@@ -1616,6 +1617,7 @@ export const zhCN = {
   ...threadErrorTranslations["zh-CN"],
   ...environmentZhCN,
   ...branchViewTranslations.zhCN,
+  ...plannerTranslations.zhCN,
 } as const
 
 export type TranslationKey = keyof typeof zhCN
@@ -3218,6 +3220,7 @@ export const enUS = {
   ...threadErrorTranslations["en-US"],
   ...environmentEnUS,
   ...branchViewTranslations.enUS,
+  ...plannerTranslations.enUS,
 } as const satisfies Record<TranslationKey, string>
 
 const translations = {

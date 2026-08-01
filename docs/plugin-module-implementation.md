@@ -1,5 +1,8 @@
 # Anybox 插件模块实现机制技术介绍
 
+> [!NOTE]
+> 本文描述持久化安装的插件、Skill、Connector 与 MCP 能力，不定义 Anybox 原生 Tool Module。Planner 等内部工具的当前轮渐进式披露见 [原生 Tool Module ADR](./native-tool-module-architecture-decision.md)。
+
 本文说明当前 Anybox 插件模块的实现机制，面向需要维护插件运行时、开发插件包、调试插件安装/启用链路的工程人员。代码实现以 `packages/anyboxagent/src/plugin/plugin.ts` 为准；当本文与旧文档不一致时，以运行时代码为准。
 
 ## 1. 模块定位

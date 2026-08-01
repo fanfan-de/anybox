@@ -20,6 +20,9 @@ const prefixes = {
   part: "prt",
   pty: "pty",
   task: "tsk",
+  plannerProposal: "plp",
+  plannerRun: "plr",
+  plannerAudit: "pla",
   tool: "tool",
 } as const
 

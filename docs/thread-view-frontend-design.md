@@ -286,9 +286,19 @@ Composer submit
 
 `message.recorded(role="user")` 是唯一确认信号；`sendTurn` Promise、`turn.started`、execution mode 和超时都不能关闭 Loader。确认后的 assistant error/cancel 只更新 assistant runtime UI，不再回写用户消息状态。失败或取消后迟到的同一次权威 user record 仍可确认；一旦用户发起重试，registry 会先清除旧 attempt 的 client/turn/assistant identity，旧事件不能匹配或覆盖新 attempt。
 
-主 Thread 使用工作区级 optimistic registry；每项在确认前保存完整、不可从气泡反推的 transport request snapshot，包括原始 text/display text、附件、引用、question answer、parent、model、reasoning、skills 和 MCP。重试不回填 Composer，不追加第二条 user message。带 `delivery` 的消息不会进入 presentation persistence，所以未落库的失败消息不会跨页面重载恢复；重载始终以 backend history 为准。
+主 Thread 使用工作区级 optimistic registry；每项在确认前保存完整、不可从气泡反推的 transport request snapshot，包括原始 text/display text、附件、引用、question answer、parent、model、reasoning、skills、MCP 和当前轮原生 Tool Module。重试不回填 Composer，不追加第二条 user message。带 `delivery` 的消息不会进入 presentation persistence，所以未落库的失败消息不会跨页面重载恢复；重载始终以 backend history 为准。
 
 Branch Chat 使用页签组件级 registry，渲染 turn 是 `backend branch history + live assistant overlay + optimistic user turns` 的合成。确认后删除完整 request，只保留当前 tab 生命周期内的 message/turn alias，以便 history refresh 继续复用 optimistic message ID 和 virtual row ID。切换 tab 不卸载面板时状态保留；关闭 tab 后自然丢弃本地 optimistic/retry 状态，但不会额外取消已经开始的 detached execution。
+
+### Composer 当前轮 Tool Module 标签
+
+Composer 的 `tool-module` 标签用于一次性加载 Anybox 原生能力，不属于项目插件选择。当前 `@计划`、`/计划`、`/planner` 以及命令菜单中的“计划”入口统一编译为 `turnToolModuleIDs: ["planner.core"]`：
+
+- `displayText` 保留用户可见的 `@计划`，用于 optimistic row、历史呈现和重试识别；发送给模型的 `transportText` 去除该控制 token。
+- 结构化 module ID 必须随 Queue、Steer、retry、新会话首发和 Branch Chat 发送快照一起传播。
+- 标签只作用于该 user turn，不写入 `selected_plugins`，也不自动继承到下一份 Composer 草稿或下一条普通 user message。
+- `/计划` 是加载 Planner 工具的确定性快捷指令；英文 `/plan` 继续只切换 Plan Mode，两者语义不得合并。
+- 普通自然语言不在 renderer 中做模块意图判断；未显式标记时，由主 LLM 自行调用通用工具搜索完成渐进式发现。
 
 ### Turn execution disclosure
 

@@ -663,6 +663,7 @@ export class McpManager {
       },
       {
         title: getMcpToolDisplayName(server, definition),
+        description: definition.description ?? `${definition.name} (from MCP server ${server.name ?? server.id})`,
         capabilities: toolCapabilities(definition),
         source: {
           kind: "mcp",
