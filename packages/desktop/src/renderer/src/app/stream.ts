@@ -4,6 +4,8 @@ import type {
   AssistantQuestionPrompt,
   AssistantTraceDebugEntry,
   AssistantTraceDraftPatchPreview,
+  AssistantTraceErrorContext,
+  AssistantTraceErrorInfo,
   AssistantTraceItem,
   AssistantTraceSectionKey,
   AssistantTraceStatus,
@@ -2059,6 +2061,8 @@ type HistoryErrorPresentation = {
   code?: string
   statusCode?: number
   retryable?: boolean
+  providerID?: string
+  modelID?: string
 }
 
 function readHistoryErrorPresentation(value: unknown): HistoryErrorPresentation | null {
@@ -2072,6 +2076,8 @@ function readHistoryErrorPresentation(value: unknown): HistoryErrorPresentation 
     code: readString(record.code).trim() || undefined,
     statusCode: readOptionalNumber(record.statusCode),
     retryable: typeof record.retryable === "boolean" ? record.retryable : undefined,
+    providerID: readString(record.providerID).trim() || undefined,
+    modelID: readString(record.modelID).trim() || undefined,
   }
 }
 
@@ -2129,12 +2135,33 @@ function formatErrorTraceTitle(baseTitle: string, error: HistoryErrorPresentatio
   return error?.name ? `${baseTitle}: ${error.name}` : baseTitle
 }
 
+function createAssistantTraceErrorInfo(
+  context: AssistantTraceErrorContext,
+  message: string,
+  error: HistoryErrorPresentation | null = null,
+): AssistantTraceErrorInfo {
+  return {
+    context,
+    message,
+    ...(error?.name ? { name: error.name } : {}),
+    ...(error?.code ? { code: error.code } : {}),
+    ...(error?.statusCode !== undefined ? { statusCode: error.statusCode } : {}),
+    ...(error?.retryable !== undefined ? { retryable: error.retryable } : {}),
+    ...(error?.providerID ? { providerID: error.providerID } : {}),
+    ...(error?.modelID ? { modelID: error.modelID } : {}),
+  }
+}
+
 function isToolArgumentValidationFailure(error: HistoryErrorPresentation | null) {
   return readString(error?.message).toLowerCase().includes("tool argument validation failed")
 }
 
 function assistantFailureBaseTitle(error: HistoryErrorPresentation | null) {
   return isToolArgumentValidationFailure(error) ? "Tool argument validation failed" : "Backend request failed"
+}
+
+function assistantFailureErrorContext(error: HistoryErrorPresentation | null): AssistantTraceErrorContext {
+  return isToolArgumentValidationFailure(error) ? "tool-argument-validation" : "backend-request"
 }
 
 function isAssistantHistoryFailed(message: LoadedSessionHistoryMessage) {
@@ -2329,6 +2356,7 @@ function buildAssistantThreadMessageFromHistory(message: LoadedSessionHistoryMes
         title: formatErrorTraceTitle(assistantFailureBaseTitle(failure), failure),
         detail: errorMessage,
         status: "error",
+        errorInfo: createAssistantTraceErrorInfo(assistantFailureErrorContext(failure), errorMessage, failure),
         messageID: ownership.messageID,
         backendTurnID: ownership.backendTurnID,
       }),
@@ -2647,6 +2675,7 @@ export function buildFailureThreadMessage(
       title: "Stream request failed",
       detail: message,
       status: "error",
+      errorInfo: createAssistantTraceErrorInfo("stream-request", message),
       debugEntries,
     }),
   )
@@ -3377,6 +3406,7 @@ function applyRuntimeEventToMessage(
         title: formatErrorTraceTitle("Runtime execution failed", failure),
         detail: message,
         status: "error",
+        errorInfo: createAssistantTraceErrorInfo("runtime-execution", message, failure),
         messageID: ownership.messageID,
         backendTurnID: ownership.backendTurnID,
         debugEntries,
@@ -3614,7 +3644,8 @@ export function applyAgentStreamEventToThreadMessage(assistantMessage: Assistant
   }
 
   if (item.event === "error") {
-    const message = readString(payload?.message) || "Unknown backend error"
+    const failure = readHistoryErrorPresentation(payload?.errorInfo) ?? readHistoryErrorPresentation(payload)
+    const message = failure?.message || readString(payload?.message) || "Unknown backend error"
     const messageID = resolvePayloadMessageID(payload ?? {}) || assistantMessage.messageID
     const ownership = payloadOwnership(messageID)
     const debugEntries = buildStreamEventDebugEntries("error", payload)
@@ -3626,6 +3657,7 @@ export function applyAgentStreamEventToThreadMessage(assistantMessage: Assistant
         title: "API stream error",
         detail: message,
         status: "error",
+        errorInfo: createAssistantTraceErrorInfo("api-stream", message, failure),
         messageID: ownership.messageID,
         backendTurnID: ownership.backendTurnID,
         debugEntries,

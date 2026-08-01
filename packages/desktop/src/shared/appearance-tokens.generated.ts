@@ -2166,7 +2166,7 @@ export const APPEARANCE_TOKEN_GROUPS = [
     "id": "component-sidebar-tree-rows",
     "layer": "product",
     "label": "Sidebar Tree Rows",
-    "description": "Dedicated state tokens for conversation, workspace, prompt, skill, MCP, and tool rows in the left sidebar.",
+    "description": "Dedicated state tokens for conversation, workspace, prompt, skill, MCP, tool, and file-tree rows across application sidebars.",
     "rows": [
       {
         "id": "semantic-sidebar-tree-row-text",
@@ -2206,7 +2206,7 @@ export const APPEARANCE_TOKEN_GROUPS = [
       {
         "id": "semantic-sidebar-tree-row-leading-active",
         "label": "Leading Icon Active",
-        "description": "Selected-row leading icon color for left sidebar tree rows.",
+        "description": "Selected-row leading icon color for sidebar tree rows.",
         "lightToken": "semantic-sidebar-tree-row-leading-active-light",
         "darkToken": "semantic-sidebar-tree-row-leading-active-dark"
       }

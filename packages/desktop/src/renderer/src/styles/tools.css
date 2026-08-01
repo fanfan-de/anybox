@@ -717,9 +717,6 @@
   --tools-obs-text: var(--text-primary);
   --tools-obs-text-muted: var(--text-secondary);
   --tools-obs-text-faint: var(--text-tertiary);
-  --tools-obs-accent: var(--brand-primary-active);
-  --tools-obs-accent-hover: var(--brand-primary-strong);
-  --tools-obs-accent-soft: var(--brand-primary-soft-active);
   background: var(--tools-obs-bg);
 }
 
@@ -937,8 +934,8 @@
 
 .builtin-tools-page .tools-badge.is-highlight {
   border-color: var(--semantic-info-border);
-  background: var(--tools-obs-accent-soft);
-  color: var(--brand-primary-strong);
+  background: var(--semantic-info-surface);
+  color: var(--semantic-info-text);
 }
 
 .builtin-tools-page .tools-badge.is-warning {
@@ -1065,7 +1062,7 @@
 }
 
 :root[data-theme="dark"] .builtin-tools-page .tools-detail-actions .secondary-button,
-:root[data-theme="dark"] .builtin-tools-page .tools-badge,
+:root[data-theme="dark"] .builtin-tools-page .tools-badge:not(.is-highlight):not(.is-warning),
 :root[data-theme="dark"] .builtin-tools-page .tools-card-detail-item,
 :root[data-theme="dark"] .builtin-tools-page .tools-card-input-schema pre {
   background: var(--seg-panel-muted);

@@ -5,6 +5,7 @@ import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
 import { environmentEnUS } from "../environment-translations"
 import { cinemaWorkflowTranslations } from "../cinema-workflow-translations"
 import { branchViewTranslations } from "../branch-view-translations"
+import { threadErrorTranslations } from "../thread-error-translations"
 
 export const viVN = {
   "app.loading": "Đang tải",
@@ -580,6 +581,11 @@ export const viVN = {
   "tools.fetching": "Đang tải công cụ tích hợp",
   "tools.fetchingCopy": "Đang đọc registry tích hợp và giới hạn khả dụng toàn cục đã lưu.",
   "tools.shell": "Shell",
+  "tools.files": "Công cụ tệp",
+  "tools.multiAgent": "Công cụ đa tác tử",
+  "tools.productInteraction": "Công cụ tương tác sản phẩm",
+  "tools.code": "Công cụ mã nguồn",
+  "tools.pluginSkillMcp": "Công cụ plugin, Skill và MCP",
   "tools.write": "Ghi",
   "tools.search": "Tìm kiếm",
   "tools.read": "Đọc",
@@ -1427,4 +1433,5 @@ export const viVN = {
   ...environmentEnUS,
   ...cinemaWorkflowTranslations.enUS,
   ...branchViewTranslations.enUS,
+  ...threadErrorTranslations["vi-VN"],
 } as const satisfies Record<TranslationKey, string>

@@ -141,6 +141,17 @@ beforeEach(() => {
 })
 
 describe("SessionCanvasTopMenu session view mode", () => {
+  it("does not repeat the active session title below the pane tab", () => {
+    renderTopMenu({
+      sessionViewMode: "linear",
+      onSessionViewModeChange: vi.fn(),
+    })
+
+    const topMenu = screen.getByLabelText("Session canvas top menu")
+    expect(within(topMenu).queryByText(session.title)).not.toBeInTheDocument()
+    expect(within(topMenu).getByRole("button", { name: "Session view: Linear" })).toBeInTheDocument()
+  })
+
   it("renders linear and branch as the shared top-menu dropdown style", async () => {
     const onSessionViewModeChange = vi.fn()
     const { container } = renderTopMenu({

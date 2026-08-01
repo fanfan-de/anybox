@@ -4788,7 +4788,7 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: var(--seg-text-1);
+  color: var(--semantic-sidebar-tree-row-text);
   display: grid;
   grid-template-columns: 14px 18px minmax(0, 1fr);
   align-items: center;
@@ -4802,14 +4802,29 @@
 
 .workspace-files-tree-row:hover,
 .workspace-files-tree-row:focus-visible {
-  background: var(--surface-panel-muted);
-  color: var(--text-primary);
+  background: var(--semantic-sidebar-tree-row-surface-hover);
+  color: var(--semantic-sidebar-tree-row-text-hover);
   outline: none;
 }
 
 .workspace-files-tree-row.is-active {
-  background: var(--brand-primary-soft-active);
-  color: var(--brand-primary-strong);
+  background: var(--semantic-sidebar-tree-row-surface-active);
+  color: var(--semantic-sidebar-tree-row-text-active);
+}
+
+.workspace-files-tree-row:hover .workspace-files-tree-chevron,
+.workspace-files-tree-row:hover .workspace-files-tree-icon,
+.workspace-files-tree-row:hover .workspace-files-tree-file-badge,
+.workspace-files-tree-row:focus-visible .workspace-files-tree-chevron,
+.workspace-files-tree-row:focus-visible .workspace-files-tree-icon,
+.workspace-files-tree-row:focus-visible .workspace-files-tree-file-badge {
+  color: var(--semantic-sidebar-tree-row-text-hover);
+}
+
+.workspace-files-tree-row.is-active .workspace-files-tree-chevron,
+.workspace-files-tree-row.is-active .workspace-files-tree-icon,
+.workspace-files-tree-row.is-active .workspace-files-tree-file-badge {
+  color: var(--semantic-sidebar-tree-row-leading-active);
 }
 
 .workspace-files-tree-chevron,
@@ -4817,17 +4832,13 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--seg-text-3);
+  color: var(--semantic-sidebar-tree-row-text);
 }
 
 .workspace-files-tree-chevron svg,
 .workspace-files-tree-icon svg {
   width: 14px;
   height: 14px;
-}
-
-.workspace-files-tree-row.is-directory .workspace-files-tree-icon {
-  color: var(--seg-text-2);
 }
 
 .workspace-files-tree-name {
@@ -4844,7 +4855,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--seg-text-2);
+  color: var(--semantic-sidebar-tree-row-text);
   font-family: var(--font-mono);
   font-size: 8px;
   font-weight: 700;

@@ -16,6 +16,7 @@ import { pluginOwnershipTranslations } from "./plugin-ownership-translations"
 import { subscriptionTranslations } from "./subscription-translations"
 import { environmentEnUS, environmentZhCN } from "./environment-translations"
 import { branchViewTranslations } from "./branch-view-translations"
+import { threadErrorTranslations } from "./thread-error-translations"
 
 export const zhCN = {
   "app.loading": "加载中",
@@ -760,6 +761,11 @@ export const zhCN = {
   "tools.fetching": "正在读取内置工具",
   "tools.fetchingCopy": "正在读取内置注册表和已保存的全局可用性限制。",
   "tools.shell": "Shell",
+  "tools.files": "文件工具",
+  "tools.multiAgent": "多智能体工具",
+  "tools.productInteraction": "产品交互体验工具",
+  "tools.code": "代码工具",
+  "tools.pluginSkillMcp": "插件 skill MCP 类工具",
   "tools.write": "写入",
   "tools.search": "搜索",
   "tools.read": "读取",
@@ -1607,6 +1613,7 @@ export const zhCN = {
   "settings.account.communityTitle": "\u4ea7\u54c1\u4ea4\u6d41\u7fa4",
   "settings.account.communityDescription": "\u5fae\u4fe1\u626b\u7801\u52a0\u5165 Anybox \u7528\u6237\u4ea4\u6d41\u7fa4",
   "settings.account.communityQrAlt": "Anybox \u7528\u6237\u4ea4\u6d41\u7fa4\u4e8c\u7ef4\u7801",
+  ...threadErrorTranslations["zh-CN"],
   ...environmentZhCN,
   ...branchViewTranslations.zhCN,
 } as const
@@ -2359,6 +2366,11 @@ export const enUS = {
   "tools.fetching": "Fetching built-in tools",
   "tools.fetchingCopy": "Reading the built-in registry and saved global availability limits.",
   "tools.shell": "Shell",
+  "tools.files": "File Tools",
+  "tools.multiAgent": "Multi-Agent Tools",
+  "tools.productInteraction": "Product Interaction Tools",
+  "tools.code": "Code Tools",
+  "tools.pluginSkillMcp": "Plugin, Skill & MCP Tools",
   "tools.write": "Write",
   "tools.search": "Search",
   "tools.read": "Read",
@@ -3203,6 +3215,7 @@ export const enUS = {
   "mcp.validation.requireUrl": "Remote MCP servers require a server URL.",
   "mcp.validation.requireConnectorId": "Connector MCP servers require a connector id.",
   "mcp.validation.requireToolNames": "Named tool filters require at least one tool name.",
+  ...threadErrorTranslations["en-US"],
   ...environmentEnUS,
   ...branchViewTranslations.enUS,
 } as const satisfies Record<TranslationKey, string>

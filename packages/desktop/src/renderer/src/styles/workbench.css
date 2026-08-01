@@ -3421,22 +3421,6 @@ body.is-resizing-workbench-pane .workbench-pane-resizer::before {
   overflow: hidden;
 }
 
-.session-canvas-top-menu-copy .label {
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: 0.01em;
-  text-transform: none;
-  color: var(--text-primary);
-}
-
 .session-view-mode-selector-anchor {
   flex: 0 0 auto;
 }

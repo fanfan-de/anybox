@@ -87,6 +87,10 @@ import { ThreadTurnNavigator } from "./ThreadTurnNavigator"
 import { CompletedThreadMarkdown } from "./CompletedThreadMarkdown"
 import { SizeAwareStreamingMarkdown } from "./SizeAwareStreamingMarkdown"
 import {
+  getAssistantTraceErrorDiagnosticEntry,
+  getAssistantTraceErrorPresentation,
+} from "./thread-error-presentation"
+import {
   createThreadInteractionStore,
   selectThreadInteractionEntry,
   type ThreadInteractionRowRef,
@@ -2394,7 +2398,7 @@ function TraceItemDebugEntries({
       {debugEntries.map((entry) => (
         <div key={`${itemID}-${entry.label}`} className="trace-item-debug-row">
           <span className="trace-item-debug-label">{entry.label}</span>
-          <span className="trace-item-debug-value">{entry.value}</span>
+          <span className="trace-item-debug-value" data-i18n-skip>{entry.value}</span>
         </div>
       ))}
     </div>
@@ -3186,15 +3190,17 @@ function GenericTraceItemView({
   onArtifactLinkOpen,
   onLocalFileLinkOpen,
   showFileActions = false,
+  statusText,
 }: TraceItemRendererProps & {
   showFileActions?: boolean
+  statusText?: string | null
 }) {
   const resolvedInteractionRowID = interactionRowID ?? item.id
   const selectableFilePaths = showFileActions ? item.filePaths?.filter(Boolean) ?? [] : []
 
   return (
     <article className={className} data-kind={item.kind} data-trace-item-id={item.id}>
-      <TraceItemHeader item={item} />
+      <TraceItemHeader item={item} statusText={statusText} />
       <TraceItemTextBody
         interactionRowID={resolvedInteractionRowID}
         item={item}
@@ -3504,8 +3510,34 @@ function SnapshotTraceItemView(props: TraceItemRendererProps) {
   return <WorkflowLogTraceItemView {...props} />
 }
 
-function ErrorTraceItemView(props: TraceItemRendererProps) {
-  return <GenericTraceItemView {...props} />
+function ErrorTraceItemView({
+  debugEntries,
+  item,
+  traceVisibility,
+  ...props
+}: TraceItemRendererProps) {
+  const { t } = useI18n()
+  const presentation = getAssistantTraceErrorPresentation(item, t)
+  const renderedItem: AssistantTraceItem = {
+    ...item,
+    label: presentation.label,
+    title: presentation.title,
+    text: undefined,
+    detail: presentation.detail,
+  }
+  const renderedDebugEntries = traceVisibility.debugMetadata
+    ? [getAssistantTraceErrorDiagnosticEntry(item, t), ...debugEntries]
+    : debugEntries
+
+  return (
+    <GenericTraceItemView
+      {...props}
+      debugEntries={renderedDebugEntries}
+      item={renderedItem}
+      statusText={presentation.status}
+      traceVisibility={traceVisibility}
+    />
+  )
 }
 
 function ImageTraceItemView({

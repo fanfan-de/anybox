@@ -5,6 +5,7 @@ import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
 import { environmentEnUS } from "../environment-translations"
 import { cinemaWorkflowTranslations } from "../cinema-workflow-translations"
 import { branchViewTranslations } from "../branch-view-translations"
+import { threadErrorTranslations } from "../thread-error-translations"
 
 export const trTR = {
   "app.loading": "Yükleniyor",
@@ -580,6 +581,11 @@ export const trTR = {
   "tools.fetching": "Yerleşik araçlar getiriliyor",
   "tools.fetchingCopy": "Yerleşik kayıt defteri ve kaydedilmiş genel kullanılabilirlik sınırları okunuyor.",
   "tools.shell": "Shell",
+  "tools.files": "Dosya araçları",
+  "tools.multiAgent": "Çoklu ajan araçları",
+  "tools.productInteraction": "Ürün etkileşim araçları",
+  "tools.code": "Kod araçları",
+  "tools.pluginSkillMcp": "Eklenti, Skill ve MCP araçları",
   "tools.write": "Yazma",
   "tools.search": "Ara",
   "tools.read": "Okuma",
@@ -1427,4 +1433,5 @@ export const trTR = {
   ...environmentEnUS,
   ...cinemaWorkflowTranslations.enUS,
   ...branchViewTranslations.enUS,
+  ...threadErrorTranslations["tr-TR"],
 } as const satisfies Record<TranslationKey, string>

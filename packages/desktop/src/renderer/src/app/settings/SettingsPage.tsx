@@ -3913,8 +3913,11 @@ export function SettingsPage({
       </section>
     )
 
-    const accountRelatedSection = (
-      <section className="settings-panel settings-account-panel" aria-label={t("settings.account.related")}>
+    const accountProviderSection = (
+      <section
+        className="settings-panel settings-account-panel"
+        aria-label={t("settings.account.providerDashboard")}
+      >
         <div className="settings-account-list">
           <div className="settings-account-row">
             <span className="settings-account-title">{t("settings.account.providerDashboard")}</span>
@@ -3926,7 +3929,13 @@ export function SettingsPage({
               provider.anybox.com.cn
             </button>
           </div>
+        </div>
+      </section>
+    )
 
+    const generalProductSection = (
+      <section className="settings-panel settings-account-panel" aria-label={t("settings.account.related")}>
+        <div className="settings-account-list">
           <div className="settings-account-row">
             <span className="settings-account-title">{t("settings.account.productPage")}</span>
             <button
@@ -4001,11 +4010,11 @@ export function SettingsPage({
                 view={accountSettingsView}
                 onViewChange={setAccountSettingsView}
               />
-              {accountSettingsView === "overview" ? accountRelatedSection : null}
+              {accountSettingsView === "overview" ? accountProviderSection : null}
             </div>
           </>
         ) : (
-          accountRelatedSection
+          accountProviderSection
         )}
       </div>
     )
@@ -4141,6 +4150,8 @@ export function SettingsPage({
                   {updateSettingsSection}
 
                   {languageSection}
+
+                  {generalProductSection}
                 </div>
               ) : activeSection === "account" ? (
                 accountSection

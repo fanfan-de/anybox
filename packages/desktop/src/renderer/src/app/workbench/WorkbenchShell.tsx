@@ -1433,18 +1433,37 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
     const paneID = pane?.id ?? headerProps.group.id
     if (props.isDetachedWindow) return null
     if (pane?.location === "popout") return null
-    if (paneID !== firstPaneID || props.isActivityRailVisible || !props.isSidebarCollapsed) {
-      return null
-    }
+    const shouldShowLeftSidebarToggle = paneID === firstPaneID && !props.isActivityRailVisible && props.isSidebarCollapsed
 
     return (
       <div className="dockview-workbench-header-actions dockview-workbench-header-leading">
-        <SidebarToggleButton
-          isSidebarCollapsed={true}
-          onToggleSidebar={props.onToggleLeftSidebar}
-          side="left"
-          variant="top-menu"
-        />
+        <button
+          className="canvas-region-top-menu-add-button dockview-workbench-add-tab-button"
+          aria-label="Add session tab"
+          title="Add session tab"
+          type="button"
+          onClick={() => {
+            const existingCreateTab = pane?.tabs.find((tab) => tab.kind === "create-session")
+            if (existingCreateTab?.kind === "create-session") {
+              const panel = headerProps.panels.find(
+                (item) => item.id === `create-session:${existingCreateTab.createSessionTabID}`,
+              )
+              panel?.api.setActive()
+              return
+            }
+            props.onOpenCreateSessionTab(null, paneID)
+          }}
+        >
+          <PlusIcon />
+        </button>
+        {shouldShowLeftSidebarToggle ? (
+          <SidebarToggleButton
+            isSidebarCollapsed={true}
+            onToggleSidebar={props.onToggleLeftSidebar}
+            side="left"
+            variant="top-menu"
+          />
+        ) : null}
       </div>
     )
   }, [])
@@ -1476,25 +1495,6 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
 
     return (
       <div className="dockview-workbench-header-actions dockview-workbench-header-trailing">
-        <button
-          className="canvas-region-top-menu-add-button dockview-workbench-add-tab-button"
-          aria-label="Add session tab"
-          title="Add session tab"
-          type="button"
-          onClick={() => {
-            const existingCreateTab = pane?.tabs.find((tab) => tab.kind === "create-session")
-            if (existingCreateTab?.kind === "create-session") {
-              const panel = headerProps.panels.find(
-                (item) => item.id === `create-session:${existingCreateTab.createSessionTabID}`,
-              )
-              panel?.api.setActive()
-              return
-            }
-            props.onOpenCreateSessionTab(null, paneID)
-          }}
-        >
-          <PlusIcon />
-        </button>
         {isLastPane ? (
           <>
             <SidebarToggleButton

@@ -487,7 +487,19 @@ describe("WorkspaceFilesPanel", () => {
       /\.workspace-files-tree\s*\{[^}]*grid-template-rows:\s*auto minmax\(0,\s*1fr\);[^}]*background:\s*transparent;/s,
     )
     expect(styles).toMatch(
-      /\.workspace-files-tree-row\s*\{[^}]*min-height:\s*24px;[^}]*grid-template-columns:\s*14px 18px minmax\(0,\s*1fr\);/s,
+      /\.workspace-files-tree-row\s*\{[^}]*min-height:\s*24px;[^}]*background:\s*transparent;[^}]*color:\s*var\(--semantic-sidebar-tree-row-text\);[^}]*grid-template-columns:\s*14px 18px minmax\(0,\s*1fr\);/s,
+    )
+    expect(styles).toMatch(
+      /\.workspace-files-tree-row:hover,\s*\.workspace-files-tree-row:focus-visible\s*\{[^}]*background:\s*var\(--semantic-sidebar-tree-row-surface-hover\);[^}]*color:\s*var\(--semantic-sidebar-tree-row-text-hover\);/s,
+    )
+    expect(styles).toMatch(
+      /\.workspace-files-tree-row\.is-active\s*\{[^}]*background:\s*var\(--semantic-sidebar-tree-row-surface-active\);[^}]*color:\s*var\(--semantic-sidebar-tree-row-text-active\);/s,
+    )
+    expect(styles).toMatch(
+      /\.workspace-files-tree-row\.is-active \.workspace-files-tree-chevron,\s*\.workspace-files-tree-row\.is-active \.workspace-files-tree-icon,\s*\.workspace-files-tree-row\.is-active \.workspace-files-tree-file-badge\s*\{[^}]*color:\s*var\(--semantic-sidebar-tree-row-leading-active\);/s,
+    )
+    expect(styles).not.toMatch(
+      /\.workspace-files-tree-row(?:\s*|:hover,\s*\.workspace-files-tree-row:focus-visible\s*|\.is-active\s*)\{[^}]*(?:--seg-text-|--surface-panel-muted|--text-primary|--brand-primary-soft-active|--brand-primary-strong)/s,
     )
     expect(styles).toMatch(
       /\.workspace-files-markdown-stage\s*\{[^}]*background:\s*transparent;[^}]*scrollbar-color:\s*var\(--semantic-scrollbar-thumb-surface-hover\) transparent;/s,

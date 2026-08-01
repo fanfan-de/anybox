@@ -5,6 +5,7 @@ import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
 import { environmentEnUS } from "../environment-translations"
 import { cinemaWorkflowTranslations } from "../cinema-workflow-translations"
 import { branchViewTranslations } from "../branch-view-translations"
+import { threadErrorTranslations } from "../thread-error-translations"
 
 export const frFR = {
   "app.loading": "Chargement",
@@ -580,6 +581,11 @@ export const frFR = {
   "tools.fetching": "Récupération des outils intégrés",
   "tools.fetchingCopy": "Lecture du registre intégré et des limites de disponibilité globales enregistrées.",
   "tools.shell": "Shell",
+  "tools.files": "Outils de fichiers",
+  "tools.multiAgent": "Outils multi-agents",
+  "tools.productInteraction": "Outils d’interaction produit",
+  "tools.code": "Outils de code",
+  "tools.pluginSkillMcp": "Outils de plugins, Skills et MCP",
   "tools.write": "Écriture",
   "tools.search": "Rechercher",
   "tools.read": "Lecture",
@@ -1427,4 +1433,5 @@ export const frFR = {
   ...environmentEnUS,
   ...cinemaWorkflowTranslations.enUS,
   ...branchViewTranslations.enUS,
+  ...threadErrorTranslations["fr-FR"],
 } as const satisfies Record<TranslationKey, string>

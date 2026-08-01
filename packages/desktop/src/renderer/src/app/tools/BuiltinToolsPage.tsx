@@ -34,11 +34,7 @@ function formatJson(value: unknown) {
   }
 }
 
-function getBuiltinToolKindLabel(tool: BuiltinToolSummary) {
-  return getBuiltinToolGroupLabel(tool.capabilities.kind ?? "other")
-}
-
-function getBuiltinToolGroupLabel(kind: BuiltinToolSummary["capabilities"]["kind"] | "other") {
+function getBuiltinToolKindLabelForKind(kind: BuiltinToolSummary["capabilities"]["kind"] | "other") {
   switch (kind) {
     case "exec":
       return "Shell"
@@ -57,6 +53,20 @@ function getBuiltinToolGroupLabel(kind: BuiltinToolSummary["capabilities"]["kind
     default:
       return "Other"
   }
+}
+
+function getBuiltinToolKindLabel(tool: BuiltinToolSummary) {
+  return getBuiltinToolKindLabelForKind(tool.capabilities.kind ?? "other")
+}
+
+function getBuiltinToolGroupLabel(kind: BuiltinToolKindKey) {
+  if (kind === "shell") return "Shell"
+  if (kind === "files") return "File Tools"
+  if (kind === "delegation") return "Multi-Agent Tools"
+  if (kind === "product_interaction") return "Product Interaction Tools"
+  if (kind === "code") return "Code Tools"
+  if (kind === "plugin_skill_mcp") return "Plugin, Skill & MCP Tools"
+  return getBuiltinToolKindLabelForKind(kind)
 }
 
 function getBuiltinToolRiskLabel(tool: BuiltinToolSummary) {
@@ -85,8 +95,63 @@ function getBuiltinToolRiskBadgeClassName(tool: BuiltinToolSummary) {
   return "tools-badge"
 }
 
-export const builtinToolKindOrder = ["exec", "write", "delegation", "workflow", "interaction", "search", "read", "other"] as const
+export const builtinToolKindOrder = [
+  "shell",
+  "files",
+  "delegation",
+  "product_interaction",
+  "code",
+  "plugin_skill_mcp",
+  "workflow",
+  "interaction",
+  "search",
+  "read",
+  "other",
+] as const
 export type BuiltinToolKindKey = (typeof builtinToolKindOrder)[number]
+
+const shellToolIDs = new Set([
+  "git_bash_command",
+  "powershell_command",
+  "cmd_command",
+  "wsl_bash_command",
+  "macos_shell_command",
+  "ssh_shell_command",
+])
+
+const fileToolIDs = new Set([
+  "read_file",
+  "list_directory",
+  "replace_text",
+  "apply_patch",
+  "view_image",
+  "glob",
+  "grep",
+])
+
+const productInteractionToolIDs = new Set([
+  "ask_user_question",
+  "task_create",
+  "task_get",
+  "task_list",
+  "task_update",
+])
+
+const codeToolIDs = new Set([
+  "lsp_definition",
+  "lsp_references",
+  "lsp_hover",
+  "lsp_workspace_symbols",
+])
+
+const pluginSkillMcpToolIDs = new Set([
+  "load_skill",
+  "read_skill_resource",
+  "list_mcp_resources",
+  "list_mcp_resource_templates",
+  "read_mcp_resource",
+  "tool_search",
+])
 
 interface BuiltinToolGroup {
   kind: BuiltinToolKindKey
@@ -95,25 +160,50 @@ interface BuiltinToolGroup {
   enabledCount: number
 }
 
-function getBuiltinToolGroupDescription(groupLabel: string) {
-  switch (groupLabel) {
-    case "Shell":
-      return "Shell-facing commands and process controls available to the agent."
-    case "Write":
-      return "File mutation tools that can change workspace content."
-    case "Delegation":
+function getBuiltinToolGroupToolsLabel(group: BuiltinToolGroup) {
+  return group.label.endsWith("Tools") ? group.label : `${group.label} tools`
+}
+
+function getBuiltinToolGroupDescription(kind: BuiltinToolKindKey) {
+  switch (kind) {
+    case "shell":
+      return "Platform-specific shell commands available to the agent."
+    case "files":
+      return "Tools for reading, browsing, searching, and modifying workspace files."
+    case "delegation":
       return "Subagent coordination tools for delegated work and status checks."
-    case "Workflow":
+    case "product_interaction":
+      return "Tools that improve how users and agents clarify, structure, and track work."
+    case "code":
+      return "Language-aware tools for navigating symbols, definitions, references, and code information."
+    case "plugin_skill_mcp":
+      return "Tools for loading Skills and discovering or reading plugin and MCP capabilities and resources."
+    case "workflow":
       return "Workflow controls that affect task execution and continuation."
-    case "Interaction":
+    case "interaction":
       return "User-facing interaction tools that ask for input or confirmation."
-    case "Search":
+    case "search":
       return "Search and discovery tools used to locate project context."
-    case "Read":
+    case "read":
       return "Read-only tools used to inspect files, state, and context."
     default:
       return "Built-in tools that do not fit another category."
   }
+}
+
+function toolMatchesID(tool: BuiltinToolSummary, toolIDs: ReadonlySet<string>) {
+  return toolIDs.has(tool.id) || tool.aliases.some((alias) => toolIDs.has(alias))
+}
+
+function getBuiltinToolGroupKind(tool: BuiltinToolSummary): BuiltinToolKindKey {
+  if (toolMatchesID(tool, shellToolIDs)) return "shell"
+  if (toolMatchesID(tool, fileToolIDs)) return "files"
+  if (toolMatchesID(tool, productInteractionToolIDs)) return "product_interaction"
+  if (toolMatchesID(tool, codeToolIDs)) return "code"
+  if (toolMatchesID(tool, pluginSkillMcpToolIDs)) return "plugin_skill_mcp"
+
+  const kind = tool.capabilities.kind ?? "other"
+  return kind === "exec" || kind === "write" ? "other" : kind
 }
 
 export function BuiltinToolsSidebarView({
@@ -133,7 +223,7 @@ export function BuiltinToolsSidebarView({
             <button
               key={group.kind}
               className={isActive ? "skill-tree-row tools-category-item is-active" : "skill-tree-row tools-category-item"}
-              aria-label={`${group.label} tools, ${group.enabledCount} of ${group.items.length} enabled`}
+              aria-label={`${getBuiltinToolGroupToolsLabel(group)}, ${group.enabledCount} of ${group.items.length} enabled`}
               aria-pressed={isActive}
               type="button"
               onClick={() => onActiveToolKindChange(group.kind)}
@@ -156,7 +246,7 @@ export function BuiltinToolsSidebarView({
 function buildBuiltinToolGroups(builtinTools: BuiltinToolSummary[]): BuiltinToolGroup[] {
   return builtinToolKindOrder
     .map((kind) => {
-      const items = builtinTools.filter((tool) => (tool.capabilities.kind ?? "other") === kind)
+      const items = builtinTools.filter((tool) => getBuiltinToolGroupKind(tool) === kind)
       return {
         kind,
         label: getBuiltinToolGroupLabel(kind),
@@ -273,7 +363,7 @@ export function BuiltinToolsPage({
                       <span className="label">Built-in tools</span>
                       <h3>{activeToolGroup.label}</h3>
                       <p className="tools-page-copy">
-                        {getBuiltinToolGroupDescription(activeToolGroup.label)}
+                        {getBuiltinToolGroupDescription(activeToolGroup.kind)}
                       </p>
                     </div>
 
@@ -287,7 +377,7 @@ export function BuiltinToolsPage({
                     </div>
                   </div>
 
-                  <section className="tools-panel tools-detail-section" aria-label={`${activeToolGroup.label} tools`}>
+                  <section className="tools-panel tools-detail-section" aria-label={getBuiltinToolGroupToolsLabel(activeToolGroup)}>
                     <div className="tools-detail-header">
                       <div>
                         <span className="label">Availability</span>

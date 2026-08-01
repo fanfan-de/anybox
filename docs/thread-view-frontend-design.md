@@ -339,6 +339,7 @@ ConversationTurnMap
                ├─ filePaths?
                ├─ draftPatch?
                ├─ debugEntries?
+               ├─ errorInfo?  # error context + 原始 name/message/code/status/provider/model
                └─ questionPrompt? / image src? / patch payload?
 ```
 
@@ -565,7 +566,7 @@ TraceItemView
       ├─ system → SystemTraceItemView → GenericTraceItemView
       ├─ source → SourceTraceItemView → GenericTraceItemView
       ├─ file → FileTraceItemView → GenericTraceItemView
-      ├─ error → ErrorTraceItemView → GenericTraceItemView
+      ├─ error → ErrorTraceItemView → 本地化错误 presentation → GenericTraceItemView
       ├─ text → TextTraceItemView  # 普通文本或 proposed plan
       │  ├─ ProposedPlanCard?
       │  └─ GenericTraceItemView
@@ -649,6 +650,8 @@ file-change row 保留对应原始 patch/file/image item 的位置；相邻 file
 ### Debug
 
 debug 信息由 developer mode 和 trace visibility 控制。默认不应该干扰普通使用者阅读。
+
+error trace 通过结构化 `errorInfo` 保存错误来源、原始消息、错误码、HTTP 状态和 provider/model 上下文。`ErrorTraceItemView` 在渲染时按当前 locale 将稳定的 error context/code 映射为用户标题与说明；余额不足等已知错误显示可操作的本地化文案，未知错误显示本地化通用提示。`AI_APICallError`、服务端原始消息等技术信息不进入普通阅读层，仅在启用 `debugMetadata` 后以 `data-i18n-skip` 的诊断值展示，避免原文被 DOM 兼容翻译器改写。
 
 ## 6. 交互行为
 

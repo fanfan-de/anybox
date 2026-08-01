@@ -1149,6 +1149,71 @@ describe("ThreadView trace item renderers", () => {
     }
   })
 
+  it("localizes structured thread errors while keeping raw provider details in debug metadata", async () => {
+    const previousDesktop = window.desktop
+    window.desktop = undefined
+    window.localStorage.setItem("desktop.locale", "zh-CN")
+
+    const errorTraceItem: AssistantTraceItem = {
+      id: "provider-error",
+      kind: "error",
+      timestamp: 1,
+      label: "Error",
+      title: "Backend request failed: AI_APICallError",
+      detail: "Insufficient Balance",
+      status: "error",
+      errorInfo: {
+        context: "backend-request",
+        message: "Insufficient Balance",
+        name: "AI_APICallError",
+        code: "INSUFFICIENT_BALANCE",
+        statusCode: 402,
+        retryable: false,
+      },
+    }
+    const threadColumnRef = createRef<HTMLDivElement | null>()
+    const props = createThreadProps(
+      [assistantTraceMessage("assistant-error", [errorTraceItem], false)],
+      threadColumnRef,
+    )
+    const view = render(
+      <I18nProvider>
+        <ThreadView {...props} />
+      </I18nProvider>,
+    )
+
+    try {
+      expect(await screen.findByText("后端请求失败")).toBeInTheDocument()
+      expect(screen.getByText("余额不足，请充值后重试。")).toBeInTheDocument()
+      expect(screen.getAllByText("错误")).toHaveLength(2)
+      expect(view.container).not.toHaveTextContent("Insufficient Balance")
+      expect(view.container).not.toHaveTextContent("AI_APICallError")
+
+      view.rerender(
+        <I18nProvider>
+          <ThreadView
+            {...props}
+            assistantTraceVisibility={{
+              ...DEFAULT_ASSISTANT_TRACE_VISIBILITY,
+              debugMetadata: true,
+            }}
+          />
+        </I18nProvider>,
+      )
+
+      const diagnostic = await screen.findByText("错误诊断")
+      const diagnosticValue = diagnostic.closest(".trace-item-debug-row")?.querySelector(".trace-item-debug-value")
+      expect(diagnosticValue).toHaveAttribute("data-i18n-skip")
+      expect(diagnosticValue).toHaveTextContent("Insufficient Balance")
+      expect(diagnosticValue).toHaveTextContent("AI_APICallError")
+      expect(diagnosticValue).toHaveTextContent("INSUFFICIENT_BALANCE")
+    } finally {
+      view.unmount()
+      window.localStorage.removeItem("desktop.locale")
+      window.desktop = previousDesktop
+    }
+  })
+
   it("does not mount tool debug entries while disclosure content is collapsed", () => {
     const toolItem: AssistantTraceItem = {
       ...toolStatusTraceItem("completed"),

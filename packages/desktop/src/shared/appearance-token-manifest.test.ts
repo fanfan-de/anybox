@@ -28,6 +28,7 @@ const rightSidebarCss = readFileSync(resolve(stylesRoot, "right-sidebar.css"), "
 const settingsCss = readFileSync(resolve(stylesRoot, "settings.css"), "utf8")
 const threadCss = readFileSync(resolve(stylesRoot, "thread.css"), "utf8")
 const terminalCss = readFileSync(resolve(stylesRoot, "terminal.css"), "utf8")
+const toolsCss = readFileSync(resolve(stylesRoot, "tools.css"), "utf8")
 const terminalViewSource = readFileSync(
   resolve(packageRoot, "src/renderer/src/app/terminal/TerminalView.tsx"),
   "utf8",
@@ -84,6 +85,48 @@ function definedCustomProperties(source: string) {
 }
 
 describe("appearance token manifest", () => {
+  it("keeps highlighted service badges on readable status semantics", () => {
+    const highlightedServiceBadgeRule = settingsCss.match(
+      /\.settings-page-main\.is-services \.settings-badge\.is-highlight\s*\{[^}]*\}/s,
+    )?.[0] ?? ""
+
+    expect(highlightedServiceBadgeRule).toContain(
+      "border-color: var(--semantic-info-border);",
+    )
+    expect(highlightedServiceBadgeRule).toContain(
+      "background: var(--semantic-info-surface);",
+    )
+    expect(highlightedServiceBadgeRule).toContain(
+      "color: var(--semantic-info-text);",
+    )
+    expect(highlightedServiceBadgeRule).not.toMatch(
+      /var\(--(?:brand-|seg-|focus-outline)/,
+    )
+  })
+
+  it("keeps read-only tool badges on readable status semantics", () => {
+    const readOnlyToolBadgeRule = toolsCss.match(
+      /\.builtin-tools-page \.tools-badge\.is-highlight\s*\{[^}]*\}/s,
+    )?.[0] ?? ""
+
+    expect(readOnlyToolBadgeRule).toContain(
+      "border-color: var(--semantic-info-border);",
+    )
+    expect(readOnlyToolBadgeRule).toContain(
+      "background: var(--semantic-info-surface);",
+    )
+    expect(readOnlyToolBadgeRule).toContain(
+      "color: var(--semantic-info-text);",
+    )
+    expect(readOnlyToolBadgeRule).not.toMatch(
+      /var\(--(?:brand-|seg-|tools-obs-accent|focus-outline)/,
+    )
+    expect(toolsCss).toContain(
+      ':root[data-theme="dark"] .builtin-tools-page .tools-badge:not(.is-highlight):not(.is-warning)',
+    )
+    expect(toolsCss).not.toContain("--tools-obs-accent")
+  })
+
   it("keeps terminal content and floating controls independently themeable", () => {
     const terminalGroup = APPEARANCE_TOKEN_GROUPS.find(
       (group) => group.id === "component-terminal",

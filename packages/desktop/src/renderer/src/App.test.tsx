@@ -1621,8 +1621,12 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Chat 1" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Switch to session Chat 1" })).toBeInTheDocument()
     const addSessionTabButton = screen.getByRole("button", { name: "Add session tab" })
+    const dockviewTabs = container.querySelector(".dockview-theme-anybox .dv-tabs-container")
+    const dockviewTabActions = addSessionTabButton.closest(".dv-left-actions-container")
     expect(addSessionTabButton.closest(".dockview-workbench-header-actions")).not.toBeNull()
-    expect(addSessionTabButton.closest(".dockview-workbench-header-trailing")).not.toBeNull()
+    expect(addSessionTabButton.closest(".dockview-workbench-header-leading")).not.toBeNull()
+    expect(dockviewTabActions).not.toBeNull()
+    expect(dockviewTabs?.nextElementSibling).toBe(dockviewTabActions)
     expect(screen.queryByRole("button", { name: "Split pane" })).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Switch to session Chat 1" }).closest(".dv-tabs-and-actions-container")).not.toBeNull()
     expect(await screen.findByRole("button", { name: "Git" })).toBeInTheDocument()
@@ -9855,7 +9859,7 @@ describe("App", () => {
           },
         },
         {
-          id: "read-file",
+          id: "read_file",
           title: "Read File",
           description: "Read a text file or a line range from the current project.",
           aliases: [],
@@ -9869,7 +9873,7 @@ describe("App", () => {
       ],
       selection: {
         tools: {
-          "read-file": false,
+          read_file: false,
         },
       },
     })
@@ -9889,7 +9893,7 @@ describe("App", () => {
     expect(screen.getByText("Git Bash")).toBeInTheDocument()
     expect(screen.queryByText("Read File")).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole("button", { name: "Read tools, 0 of 1 enabled" }))
+    fireEvent.click(screen.getByRole("button", { name: "File Tools, 0 of 1 enabled" }))
     expect(screen.getByText("Read File")).toBeInTheDocument()
 
     await waitFor(() => {
@@ -14136,24 +14140,30 @@ describe("App", () => {
     expect(styles).not.toMatch(/\.project-row:focus-within/)
   })
 
-  it("keeps left-sidebar row tokens out of unrelated component styles", () => {
+  it("keeps sidebar tree row tokens scoped to sidebar tree consumers", () => {
     const stylesRoot = resolve(process.cwd(), "src/renderer/src/styles")
     const unrelatedStyles = [
       "automations.css",
       "calendar.css",
       "composer.css",
-      "right-sidebar.css",
       "terminal.css",
       "thread.css",
       "workbench.css",
     ]
       .map((fileName) => readFileSync(resolve(stylesRoot, fileName), "utf8"))
       .join("\n")
+    const rightSidebarStyles = readFileSync(resolve(stylesRoot, "right-sidebar.css"), "utf8")
+    const rightSidebarRulesUsingSidebarTokens =
+      rightSidebarStyles.match(/[^{}]+\{[^{}]*var\(--semantic-sidebar-tree-row-[^{}]*\}/g) ?? []
     const settingsStyles = readFileSync(resolve(stylesRoot, "settings.css"), "utf8")
     const settingsRulesUsingSidebarTokens =
       settingsStyles.match(/[^{}]+\{[^{}]*var\(--semantic-sidebar-tree-row-[^{}]*\}/g) ?? []
 
     expect(unrelatedStyles).not.toContain("--semantic-sidebar-tree-row-")
+    expect(rightSidebarRulesUsingSidebarTokens.length).toBeGreaterThan(0)
+    for (const rule of rightSidebarRulesUsingSidebarTokens) {
+      expect(rule).toContain(".workspace-files-tree-")
+    }
     expect(settingsRulesUsingSidebarTokens.length).toBeGreaterThan(0)
     for (const rule of settingsRulesUsingSidebarTokens) {
       expect(rule).toContain(".mcp-server-sidebar-row")

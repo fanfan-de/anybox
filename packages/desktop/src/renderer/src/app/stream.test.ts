@@ -3534,6 +3534,10 @@ describe("stream trace reducer", () => {
       kind: "error",
       title: "Tool argument validation failed",
       detail: "Tool argument validation failed: Invalid input: expected record, received string",
+      errorInfo: {
+        context: "tool-argument-validation",
+        message: "Tool argument validation failed: Invalid input: expected record, received string",
+      },
     })
   })
 
@@ -3585,6 +3589,15 @@ describe("stream trace reducer", () => {
       kind: "error",
       title: "Backend request failed: AI_APICallError",
       detail: "Internal server error",
+      errorInfo: {
+        context: "backend-request",
+        name: "AI_APICallError",
+        message: "Internal server error",
+        statusCode: 500,
+        retryable: false,
+        providerID: "anybox",
+        modelID: "deepseek-chat",
+      },
     })
   })
 })

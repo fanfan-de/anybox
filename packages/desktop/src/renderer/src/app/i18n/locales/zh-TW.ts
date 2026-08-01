@@ -5,6 +5,7 @@ import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
 import { environmentZhCN } from "../environment-translations"
 import { cinemaWorkflowTranslations } from "../cinema-workflow-translations"
 import { branchViewTranslations } from "../branch-view-translations"
+import { threadErrorTranslations } from "../thread-error-translations"
 
 export const zhTW = {
   "app.loading": "載入中",
@@ -577,6 +578,11 @@ export const zhTW = {
   "tools.fetching": "正在讀取內建工具",
   "tools.fetchingCopy": "正在讀取內建註冊表和已儲存的全域可用性限制。",
   "tools.shell": "Shell",
+  "tools.files": "檔案工具",
+  "tools.multiAgent": "多智能體工具",
+  "tools.productInteraction": "產品互動體驗工具",
+  "tools.code": "程式碼工具",
+  "tools.pluginSkillMcp": "插件 skill MCP 類工具",
   "tools.write": "寫入",
   "tools.search": "搜尋",
   "tools.read": "讀取",
@@ -1427,4 +1433,5 @@ export const zhTW = {
   ...environmentZhCN,
   ...cinemaWorkflowTranslations.zhTW,
   ...branchViewTranslations.zhTW,
+  ...threadErrorTranslations["zh-TW"],
 } as const satisfies Record<TranslationKey, string>

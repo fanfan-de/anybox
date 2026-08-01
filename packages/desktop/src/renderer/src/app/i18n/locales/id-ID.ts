@@ -5,6 +5,7 @@ import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
 import { environmentEnUS } from "../environment-translations"
 import { cinemaWorkflowTranslations } from "../cinema-workflow-translations"
 import { branchViewTranslations } from "../branch-view-translations"
+import { threadErrorTranslations } from "../thread-error-translations"
 
 export const idID = {
   "app.loading": "Memuat",
@@ -580,6 +581,11 @@ export const idID = {
   "tools.fetching": "Mengambil alat bawaan",
   "tools.fetchingCopy": "Membaca registry bawaan dan batas ketersediaan global yang disimpan.",
   "tools.shell": "Shell",
+  "tools.files": "Alat file",
+  "tools.multiAgent": "Alat multiagen",
+  "tools.productInteraction": "Alat interaksi produk",
+  "tools.code": "Alat kode",
+  "tools.pluginSkillMcp": "Alat plugin, Skill, dan MCP",
   "tools.write": "Tulis",
   "tools.search": "Cari",
   "tools.read": "Baca",
@@ -1427,4 +1433,5 @@ export const idID = {
   ...environmentEnUS,
   ...cinemaWorkflowTranslations.enUS,
   ...branchViewTranslations.enUS,
+  ...threadErrorTranslations["id-ID"],
 } as const satisfies Record<TranslationKey, string>

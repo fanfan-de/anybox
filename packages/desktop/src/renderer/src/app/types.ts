@@ -1043,6 +1043,24 @@ export interface AssistantTraceDebugEntry {
   value: string
 }
 
+export type AssistantTraceErrorContext =
+  | "backend-request"
+  | "stream-request"
+  | "runtime-execution"
+  | "api-stream"
+  | "tool-argument-validation"
+
+export interface AssistantTraceErrorInfo {
+  context: AssistantTraceErrorContext
+  message: string
+  name?: string
+  code?: string
+  statusCode?: number
+  retryable?: boolean
+  providerID?: string
+  modelID?: string
+}
+
 export interface AssistantQuestionOption {
   label: string
   value: string
@@ -1135,6 +1153,7 @@ export interface AssistantTraceItem {
   visibilityKey?: AssistantTraceVisibilityKey
   isStreaming?: boolean
   debugEntries?: AssistantTraceDebugEntry[]
+  errorInfo?: AssistantTraceErrorInfo
   questionPrompt?: AssistantQuestionPrompt
   progressItems?: AssistantTraceProgressItem[]
 }

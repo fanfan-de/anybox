@@ -1032,6 +1032,23 @@ describe("SettingsPage built-in tools", () => {
     expect(onCancelProviderAuthFlow).toHaveBeenCalledWith("anybox")
   })
 
+  it("shows the product homepage and community in General instead of Account", () => {
+    const openExternalUrl = vi.fn().mockResolvedValue({ ok: true, url: "https://www.anybox.com.cn" })
+    setDesktopMock({ openExternalUrl })
+
+    render(<SettingsPage {...createSettingsPageProps()} />)
+
+    fireEvent.click(screen.getByRole("button", { name: "www.anybox.com.cn" }))
+    expect(openExternalUrl).toHaveBeenCalledWith({ url: "https://www.anybox.com.cn" })
+    expect(screen.getByRole("img", { name: "Anybox user community QR code" })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("button", { name: "Account" }))
+
+    expect(screen.queryByRole("button", { name: "www.anybox.com.cn" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("img", { name: "Anybox user community QR code" })).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "provider.anybox.com.cn" })).toBeInTheDocument()
+  })
+
   it("shows connected Anybox account details and signs out from the account page", async () => {
     const onDeleteProviderAuthSession = vi.fn()
     const openExternalUrl = vi.fn().mockResolvedValue({ ok: true, url: "https://provider.example/billing" })
@@ -1108,13 +1125,10 @@ describe("SettingsPage built-in tools", () => {
     fireEvent.click(screen.getByRole("button", { name: "provider.anybox.com.cn" }))
     expect(openExternalUrl).toHaveBeenCalledWith({ url: "https://provider.anybox.com.cn/app/dashboard" })
 
-    fireEvent.click(screen.getByRole("button", { name: "www.anybox.com.cn" }))
-    expect(openExternalUrl).toHaveBeenCalledWith({ url: "https://www.anybox.com.cn" })
-
     fireEvent.click(screen.getByRole("button", { name: "Recharge" }))
     expect(screen.getByRole("tab", { name: "Balance & recharge" })).toHaveAttribute("aria-selected", "true")
     expect(await screen.findByRole("heading", { name: "Add prepaid balance" })).toBeInTheDocument()
-    expect(openExternalUrl).toHaveBeenCalledTimes(2)
+    expect(openExternalUrl).toHaveBeenCalledTimes(1)
 
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }))
     expect(onDeleteProviderAuthSession).toHaveBeenCalledWith("anybox")

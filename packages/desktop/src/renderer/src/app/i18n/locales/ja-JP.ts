@@ -5,6 +5,7 @@ import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
 import { environmentEnUS } from "../environment-translations"
 import { cinemaWorkflowTranslations } from "../cinema-workflow-translations"
 import { branchViewTranslations } from "../branch-view-translations"
+import { threadErrorTranslations } from "../thread-error-translations"
 
 export const jaJP = {
   "app.loading": "読み込み中",
@@ -580,6 +581,11 @@ export const jaJP = {
   "tools.fetching": "組み込みツールを取得中",
   "tools.fetchingCopy": "組み込みレジストリと保存されたグローバル利用可否制限を読み取っています。",
   "tools.shell": "シェル",
+  "tools.files": "ファイルツール",
+  "tools.multiAgent": "マルチエージェントツール",
+  "tools.productInteraction": "プロダクトインタラクションツール",
+  "tools.code": "コードツール",
+  "tools.pluginSkillMcp": "プラグイン・Skill・MCP ツール",
   "tools.write": "書き込み",
   "tools.search": "検索",
   "tools.read": "読み取り",
@@ -1427,4 +1433,5 @@ export const jaJP = {
   ...environmentEnUS,
   ...cinemaWorkflowTranslations.enUS,
   ...branchViewTranslations.enUS,
+  ...threadErrorTranslations["ja-JP"],
 } as const satisfies Record<TranslationKey, string>

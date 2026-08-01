@@ -30,6 +30,11 @@ describe("i18n translations", () => {
   it("translates known literals in both directions", () => {
     expect(translateLiteral("zh-CN", "Open settings")).toBe("打开设置")
     expect(translateLiteral("en-US", "关闭设置")).toBe("Close settings")
+    expect(translateLiteral("zh-CN", "File Tools")).toBe("文件工具")
+    expect(translateLiteral("zh-CN", "Multi-Agent Tools")).toBe("多智能体工具")
+    expect(translateLiteral("zh-CN", "Product Interaction Tools")).toBe("产品交互体验工具")
+    expect(translateLiteral("zh-CN", "Code Tools")).toBe("代码工具")
+    expect(translateLiteral("zh-CN", "Plugin, Skill & MCP Tools")).toBe("插件 skill MCP 类工具")
   })
 
   it("formats common count literals", () => {
@@ -126,6 +131,11 @@ describe("i18n translations", () => {
   it("exposes thread trace translations", () => {
     expect(getTranslationDictionary("zh-CN")["thread.toolTrace.inputLabel"]).toBe("\u8f93\u5165")
     expect(getTranslationDictionary("en-US")["thread.toolTrace.inputLabel"]).toBe("Input")
+    expect(t("zh-CN", "thread.error.title.backendRequestFailed")).toBe("后端请求失败")
+    expect(t("zh-CN", "thread.error.message.insufficientBalance")).toBe("余额不足，请充值后重试。")
+    expect(t("en-US", "thread.error.message.insufficientBalance")).toBe(
+      "Your balance is insufficient. Add funds and try again.",
+    )
     expect(getTranslationDictionary("zh-CN")["thread.permission.trace.requested"]).toBe("请求权限")
     expect(translateLiteral("zh-CN", "Run MCP tool resolve-library-id from Context7 Docs.")).toBe(
       "运行 Context7 Docs 的 MCP 工具 resolve-library-id。",

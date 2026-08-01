@@ -14992,9 +14992,9 @@ body.is-dragging-settings-page {
 }
 
 .settings-page-main.is-services .settings-badge.is-highlight {
-  border-color: var(--focus-outline-color);
-  background: var(--brand-primary-soft-active);
-  color: var(--brand-primary-strong);
+  border-color: var(--semantic-info-border);
+  background: var(--semantic-info-surface);
+  color: var(--semantic-info-text);
 }
 
 @media (max-width: 1280px) {

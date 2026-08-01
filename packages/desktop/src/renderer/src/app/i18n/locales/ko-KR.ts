@@ -5,6 +5,7 @@ import { pluginOwnershipTranslations } from "../plugin-ownership-translations"
 import { environmentEnUS } from "../environment-translations"
 import { cinemaWorkflowTranslations } from "../cinema-workflow-translations"
 import { branchViewTranslations } from "../branch-view-translations"
+import { threadErrorTranslations } from "../thread-error-translations"
 
 export const koKR = {
   "app.loading": "로딩 중",
@@ -580,6 +581,11 @@ export const koKR = {
   "tools.fetching": "내장 도구 가져오는 중",
   "tools.fetchingCopy": "내장 레지스트리와 저장된 전역 사용 가능 제한을 읽는 중입니다.",
   "tools.shell": "셸",
+  "tools.files": "파일 도구",
+  "tools.multiAgent": "멀티 에이전트 도구",
+  "tools.productInteraction": "제품 상호작용 도구",
+  "tools.code": "코드 도구",
+  "tools.pluginSkillMcp": "플러그인, Skill 및 MCP 도구",
   "tools.write": "쓰기",
   "tools.search": "검색",
   "tools.read": "읽기",
@@ -1427,4 +1433,5 @@ export const koKR = {
   ...environmentEnUS,
   ...cinemaWorkflowTranslations.enUS,
   ...branchViewTranslations.enUS,
+  ...threadErrorTranslations["ko-KR"],
 } as const satisfies Record<TranslationKey, string>

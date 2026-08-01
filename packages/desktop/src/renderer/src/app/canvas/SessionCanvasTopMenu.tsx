@@ -1311,7 +1311,6 @@ export function SessionCanvasTopMenu({
   selectedSkillLabel,
   onSkillToggle,
 }: SessionCanvasTopMenuProps) {
-  const sessionTitle = activeSession?.title ?? ""
   const sessionViewModeControl = (
     activeSession &&
     sessionViewMode &&
@@ -1327,15 +1326,12 @@ export function SessionCanvasTopMenu({
       as="div"
       className="session-canvas-top-menu"
       contentClassName="panel-toolbar-copy session-canvas-top-menu-copy"
-      content={sessionTitle || sessionViewModeControl ? (
+      content={sessionViewModeControl ? (
         <div className="session-canvas-top-menu-copy-main">
-          {sessionTitle ? <span className="label" title={sessionTitle}>{sessionTitle}</span> : null}
-          {sessionViewModeControl ? (
-            <SessionViewModeMenuButton
-              mode={sessionViewModeControl.mode}
-              onModeChange={sessionViewModeControl.onModeChange}
-            />
-          ) : null}
+          <SessionViewModeMenuButton
+            mode={sessionViewModeControl.mode}
+            onModeChange={sessionViewModeControl.onModeChange}
+          />
         </div>
       ) : null}
       controlsSpacerVariant="canvas"
