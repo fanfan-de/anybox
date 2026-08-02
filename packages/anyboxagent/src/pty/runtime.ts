@@ -14,6 +14,9 @@ import { getProcessEnvValue } from "#env/compat.ts"
 type MaybePromise<T> = T | Promise<T>
 type NodePtyModule = typeof import("node-pty")
 
+export const DEFAULT_PTY_COLS = 120
+export const DEFAULT_PTY_ROWS = 32
+
 const nodeRequire = createRequire(import.meta.url)
 
 export type PtyRuntimeErrorCode = "PTY_RUNTIME_UNAVAILABLE" | "PTY_CREATE_FAILED"
@@ -36,9 +39,9 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error)
 }
 
-export function toPtyCreateError(error: unknown, shell: string) {
+export function toPtyCreateError(error: unknown, executable: string) {
   if (isPtyRuntimeError(error)) return error
-  return new PtyRuntimeError("PTY_CREATE_FAILED", `Failed to start terminal shell '${shell}': ${errorMessage(error)}`)
+  return new PtyRuntimeError("PTY_CREATE_FAILED", `Failed to start PTY process '${executable}': ${errorMessage(error)}`)
 }
 
 export interface PtyRuntimeHandle {
@@ -50,14 +53,17 @@ export interface PtyRuntimeHandle {
   onExit(listener: (event: { exitCode: number | null; signal?: number }) => void): () => void
 }
 
+export interface PtyRuntimeSpawnInput {
+  executable: string
+  args?: string[]
+  cwd: string
+  rows?: number
+  cols?: number
+  env?: NodeJS.ProcessEnv
+}
+
 export interface PtyRuntimeAdapter {
-  spawn(input: {
-    shell: string
-    cwd: string
-    rows: number
-    cols: number
-    env: Record<string, string>
-  }): MaybePromise<PtyRuntimeHandle>
+  spawn(input: PtyRuntimeSpawnInput): MaybePromise<PtyRuntimeHandle>
 }
 
 type NodePtyWorkerEvent =
@@ -289,6 +295,33 @@ export function buildPtyEnvironment(cwd: string, shell: string) {
 }
 
 function wrapRuntimeHandle(term: IPty): PtyRuntimeHandle {
+  const dataListeners = new Set<(data: string) => void>()
+  const exitListeners = new Set<(event: { exitCode: number | null; signal?: number }) => void>()
+  const pendingData: string[] = []
+  let exitEvent: { exitCode: number | null; signal?: number } | null = null
+
+  term.onData((data) => {
+    if (dataListeners.size === 0) {
+      pendingData.push(data)
+      return
+    }
+
+    for (const listener of [...dataListeners]) {
+      listener(data)
+    }
+  })
+
+  term.onExit((event) => {
+    if (exitEvent) return
+    exitEvent = {
+      exitCode: event.exitCode ?? null,
+      signal: event.signal,
+    }
+    for (const listener of [...exitListeners]) {
+      listener(exitEvent)
+    }
+  })
+
   return {
     pid: term.pid,
     write(data) {
@@ -301,17 +334,26 @@ function wrapRuntimeHandle(term: IPty): PtyRuntimeHandle {
       term.kill()
     },
     onData(listener) {
-      const disposable = term.onData(listener)
-      return () => disposable.dispose()
+      dataListeners.add(listener)
+      if (pendingData.length > 0) {
+        const replay = pendingData.splice(0)
+        for (const data of replay) listener(data)
+      }
+      return () => {
+        dataListeners.delete(listener)
+      }
     },
     onExit(listener) {
-      const disposable = term.onExit((event) => {
-        listener({
-          exitCode: event.exitCode ?? null,
-          signal: event.signal,
+      exitListeners.add(listener)
+      if (exitEvent) {
+        const retainedEvent = exitEvent
+        queueMicrotask(() => {
+          if (exitListeners.has(listener)) listener(retainedEvent)
         })
-      })
-      return () => disposable.dispose()
+      }
+      return () => {
+        exitListeners.delete(listener)
+      }
     },
   }
 }
@@ -333,10 +375,24 @@ function buildNodeSidecarEnvironment() {
   return env
 }
 
+function normalizePtySpawnInput(input: PtyRuntimeSpawnInput) {
+  return {
+    executable: input.executable,
+    args: input.args ?? [],
+    cwd: input.cwd,
+    rows: input.rows ?? DEFAULT_PTY_ROWS,
+    cols: input.cols ?? DEFAULT_PTY_COLS,
+    env: input.env,
+  }
+}
+
 function createNodePtySidecarRuntimeAdapter(): PtyRuntimeAdapter {
   const nodeBinary = resolveNodeBinary()
   if (!nodeBinary) {
-    throw new Error("Node.js is required to host PTY sessions when running the server with Bun")
+    throw new PtyRuntimeError(
+      "PTY_RUNTIME_UNAVAILABLE",
+      "Node.js is required to host PTY sessions when running the server with Bun",
+    )
   }
 
   const workerPath = fileURLToPath(new URL("./node-pty-worker.mjs", import.meta.url))
@@ -344,6 +400,7 @@ function createNodePtySidecarRuntimeAdapter(): PtyRuntimeAdapter {
   return {
     async spawn(input) {
       await ensureMacOSNodePtySpawnHelperExecutable()
+      const normalized = normalizePtySpawnInput(input)
 
       const child = spawnChild(nodeBinary, [workerPath], {
         stdio: ["pipe", "pipe", "pipe"],
@@ -352,12 +409,20 @@ function createNodePtySidecarRuntimeAdapter(): PtyRuntimeAdapter {
       })
       const dataListeners = new Set<(data: string) => void>()
       const exitListeners = new Set<(event: { exitCode: number | null; signal?: number }) => void>()
+      const pendingData: string[] = []
       let stdoutBuffer = ""
       let hasExited = false
       let startupSettled = false
+      let startupReady = false
       let runtimePid = child.pid ?? 0
+      let forceKillTimer: ReturnType<typeof setTimeout> | null = null
+      let retainedExitEvent: { exitCode: number | null; signal?: number } | null = null
 
       function emitData(data: string) {
+        if (dataListeners.size === 0) {
+          pendingData.push(data)
+          return
+        }
         for (const listener of [...dataListeners]) {
           listener(data)
         }
@@ -366,6 +431,11 @@ function createNodePtySidecarRuntimeAdapter(): PtyRuntimeAdapter {
       function emitExit(event: { exitCode: number | null; signal?: number }) {
         if (hasExited) return
         hasExited = true
+        retainedExitEvent = event
+        if (forceKillTimer) {
+          clearTimeout(forceKillTimer)
+          forceKillTimer = null
+        }
         for (const listener of [...exitListeners]) {
           listener(event)
         }
@@ -397,18 +467,31 @@ function createNodePtySidecarRuntimeAdapter(): PtyRuntimeAdapter {
             // The worker may already be gone.
           }
 
-          if (!child.killed) {
-            child.kill()
+          if (!child.killed && !forceKillTimer) {
+            forceKillTimer = setTimeout(() => {
+              forceKillTimer = null
+              if (!child.killed) child.kill()
+            }, 1_000)
+            forceKillTimer.unref?.()
           }
         },
         onData(listener) {
           dataListeners.add(listener)
+          if (pendingData.length > 0) {
+            const replay = pendingData.splice(0)
+            for (const data of replay) listener(data)
+          }
           return () => {
             dataListeners.delete(listener)
           }
         },
         onExit(listener) {
           exitListeners.add(listener)
+          if (hasExited) {
+            queueMicrotask(() => {
+              if (exitListeners.has(listener) && retainedExitEvent) listener(retainedExitEvent)
+            })
+          }
           return () => {
             exitListeners.delete(listener)
           }
@@ -427,6 +510,7 @@ function createNodePtySidecarRuntimeAdapter(): PtyRuntimeAdapter {
         function failStartup(message: string) {
           if (startupSettled) return
           startupSettled = true
+          startupReady = false
           clearTimeout(startupTimer)
           if (!child.killed) {
             child.kill()
@@ -442,6 +526,7 @@ function createNodePtySidecarRuntimeAdapter(): PtyRuntimeAdapter {
         function finishStartup() {
           if (startupSettled) return false
           startupSettled = true
+          startupReady = true
           clearTimeout(startupTimer)
           resolve(handle)
           return true
@@ -512,25 +597,30 @@ function createNodePtySidecarRuntimeAdapter(): PtyRuntimeAdapter {
           })
         })
 
-        child.once("exit", (code, signal) => {
-          if (!startupSettled) {
-            failStartup(`PTY worker exited before ready (code=${code ?? "null"}, signal=${signal ?? "none"})`)
+        child.once("close", (code, signal) => {
+          if (!startupReady) {
+            if (!startupSettled) {
+              failStartup(`PTY worker exited before ready (code=${code ?? "null"}, signal=${signal ?? "none"})`)
+            }
             return
           }
-          emitExit({
-            exitCode: typeof code === "number" ? code : null,
-            signal: typeof signal === "string" ? undefined : signal ?? undefined,
-          })
+          if (!hasExited) {
+            emitData(`\r\n[pty worker error] PTY worker closed without reporting the process exit.\r\n`)
+            emitExit({
+              exitCode: null,
+            })
+          }
         })
 
         try {
           sendCommand({
             type: "start",
-            shell: input.shell,
-            cwd: input.cwd,
-            rows: input.rows,
-            cols: input.cols,
-            env: input.env,
+            executable: normalized.executable,
+            args: normalized.args,
+            cwd: normalized.cwd,
+            rows: normalized.rows,
+            cols: normalized.cols,
+            env: normalized.env,
           })
         } catch (error) {
           failStartup(`Failed to initialize PTY worker: ${errorMessage(error)}`)
@@ -548,19 +638,20 @@ export function createNodePtyRuntimeAdapter(): PtyRuntimeAdapter {
   return {
     async spawn(input) {
       const nodePty = await loadNodePtyModule()
+      const normalized = normalizePtySpawnInput(input)
       try {
-        const term = nodePty.spawn(input.shell, [], {
+        const term = nodePty.spawn(normalized.executable, normalized.args, {
           name: "xterm-256color",
-          cwd: input.cwd,
-          cols: input.cols,
-          rows: input.rows,
-          env: input.env,
+          cwd: normalized.cwd,
+          cols: normalized.cols,
+          rows: normalized.rows,
+          env: normalized.env,
           useConpty: process.platform === "win32" ? true : undefined,
         })
 
         return wrapRuntimeHandle(term)
       } catch (error) {
-        throw toPtyCreateError(error, input.shell)
+        throw toPtyCreateError(error, normalized.executable)
       }
     },
   }

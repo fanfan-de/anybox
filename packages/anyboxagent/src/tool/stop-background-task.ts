@@ -15,6 +15,7 @@ interface StopBackgroundTaskMetadata extends Record<string, unknown> {
   cwd: string
   displayCwd: string
   shell: string
+  tty: boolean
   status: string
   exitCode: number | null
   signal: NodeJS.Signals | null
@@ -27,7 +28,7 @@ export const StopBackgroundTaskTool = Tool.define(
   async (): Promise<Tool.ToolRuntime<typeof StopBackgroundTaskParameters, StopBackgroundTaskMetadata>> => {
     return {
       title: "Stop Background Task",
-      description: "Deprecated compatibility tool for terminating a background shell task. Prefer write_stdin with chars=\\u0003.",
+      description: "Deprecated compatibility tool for force-terminating a background shell task. For tty=true sessions, use this when terminal Ctrl-C should not or did not close the session.",
       parameters: StopBackgroundTaskParameters,
       execute: async (parameters, ctx) => {
         const task = await getShellTaskRegistry().stop(parameters.id, ctx.sessionID)
@@ -45,6 +46,7 @@ export const StopBackgroundTaskTool = Tool.define(
             `Command: ${task.command}`,
             `Workdir: ${displayCwd}`,
             `Shell: ${task.shell}`,
+            `TTY: ${task.tty ? "yes" : "no"}`,
             `Status: ${task.status}`,
             `Exit: ${task.exitCode ?? "unknown"}`,
             `Timed Out: ${task.timedOut ? "yes" : "no"}`,
@@ -56,6 +58,7 @@ export const StopBackgroundTaskTool = Tool.define(
             cwd: task.cwd,
             displayCwd,
             shell: task.shell,
+            tty: task.tty,
             status: task.status,
             exitCode: task.exitCode,
             signal: task.signal,
@@ -81,6 +84,7 @@ export const StopBackgroundTaskTool = Tool.define(
             command: metadata.command,
             workdir: metadata.displayCwd,
             shell: metadata.shell,
+            tty: metadata.tty,
             status: metadata.status,
             exitCode: metadata.exitCode,
             signal: metadata.signal,

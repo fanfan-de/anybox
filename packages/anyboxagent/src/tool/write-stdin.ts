@@ -1,6 +1,7 @@
 import z from "zod"
 import * as Identifier from "#id/id.ts"
 import { getShellTaskRegistry } from "#shell/task-registry.ts"
+import { normalizeTerminalOutput } from "#shell/terminal-output.ts"
 import { isCriticalShellCommand, type ShellKind } from "#tool/shell-command.ts"
 import * as Tool from "#tool/tool.ts"
 import { toDisplayPath } from "#tool/shared.ts"
@@ -34,6 +35,7 @@ interface WriteStdinMetadata extends Record<string, unknown> {
   status: string
   exitCode: number | null
   signal: NodeJS.Signals | null
+  tty: boolean
   timedOut: boolean
   interrupted: boolean
   inputChars: number
@@ -94,7 +96,7 @@ export const WriteStdinTool = Tool.define(
   "write_stdin",
   async (): Promise<Tool.ToolRuntime<typeof WriteStdinParameters, WriteStdinMetadata>> => ({
     title: "Write Stdin",
-    description: "Write characters to an existing managed shell session and return new output. Pass empty chars to poll, or \\u0003 to interrupt it.",
+    description: "Poll a managed shell session or interact with a tty=true terminal. Pipe sessions accept only empty polls and \\u0003 interruption; ordinary input requires restarting the command with tty=true.",
     parameters: WriteStdinParameters,
     validate: (parameters, ctx) => {
       const task = getShellTaskRegistry().info(parameters.session_id, ctx.sessionID)
@@ -103,6 +105,10 @@ export const WriteStdinTool = Tool.define(
       }
       if ((parameters.chars ?? "") && task.status !== "running") {
         return `Shell session '${parameters.session_id}' is not running.`
+      }
+      const chars = parameters.chars ?? ""
+      if (chars && chars !== INTERRUPT && !task.tty) {
+        return "Pipe shell sessions do not accept ordinary stdin. Stop the current task if needed, then restart the original shell command with tty=true."
       }
     },
     assessPermission: (parameters, ctx) => {
@@ -123,6 +129,13 @@ export const WriteStdinTool = Tool.define(
         }
       }
       const task = getShellTaskRegistry().info(parameters.session_id, ctx.sessionID)
+      if (task && !task.tty) {
+        return {
+          action: "deny",
+          risk: "low",
+          reason: "Pipe shell sessions do not accept ordinary stdin; restart the command with tty=true.",
+        }
+      }
       if (task && isCriticalShellCommand(detectShellKind(task.shell), chars)) {
         return {
           action: "deny",
@@ -174,8 +187,11 @@ export const WriteStdinTool = Tool.define(
         throw new Error(`Shell session '${parameters.session_id}' was not found.`)
       }
 
+      const replayOutput = interaction.task.tty
+        ? normalizeTerminalOutput(interaction.replay.output)
+        : interaction.replay.output
       const retained = retainRecentOutput(
-        interaction.replay.output,
+        replayOutput,
         parameters.max_output_tokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
       )
       const outputTruncated = retained.truncated || (
@@ -192,6 +208,7 @@ export const WriteStdinTool = Tool.define(
           `Command: ${interaction.task.command}`,
           `Workdir: ${displayCwd}`,
           `Shell: ${interaction.task.shell}`,
+          `TTY: ${interaction.task.tty ? "yes" : "no"}`,
           `Status: ${interaction.task.status}`,
           `Exit: ${interaction.task.exitCode ?? (running ? "running" : "unknown")}`,
           `Timed Out: ${interaction.task.timedOut ? "yes" : "no"}`,
@@ -209,6 +226,7 @@ export const WriteStdinTool = Tool.define(
           cwd: interaction.task.cwd,
           displayCwd,
           shell: interaction.task.shell,
+          tty: interaction.task.tty,
           status: interaction.task.status,
           exitCode: interaction.task.exitCode,
           signal: interaction.task.signal,
@@ -237,6 +255,7 @@ export const WriteStdinTool = Tool.define(
           ...(metadata.sessionID ? { session_id: metadata.sessionID } : {}),
           ...(typeof metadata.exitCode === "number" ? { exit_code: metadata.exitCode } : {}),
           status: metadata.status,
+          tty: metadata.tty,
           signal: metadata.signal,
           timed_out: metadata.timedOut,
           interrupted: metadata.interrupted,

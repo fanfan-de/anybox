@@ -7,6 +7,8 @@ import { createManagedPtySession, type ManagedPtySession } from "#pty/session.ts
 import {
   buildPtyEnvironment,
   createNodePtyRuntimeAdapter,
+  DEFAULT_PTY_COLS,
+  DEFAULT_PTY_ROWS,
   resolveDefaultPtyShell,
   toPtyCreateError,
   type PtyRuntimeAdapter,
@@ -14,8 +16,6 @@ import {
 import { PtyEvents, publishPtyEvent } from "#pty/events.ts"
 import type { CreatePtySessionBody, PtyReplayPayload, PtySessionInfo, UpdatePtySessionBody } from "#pty/types.ts"
 
-const DEFAULT_COLS = 120
-const DEFAULT_ROWS = 32
 const DEFAULT_BUFFER_CHARS = 200_000
 const DEFAULT_EXIT_RETENTION_MS = 5 * 60 * 1000
 const DEFAULT_DELETE_RETENTION_MS = 15_000
@@ -141,8 +141,8 @@ export class PtyRegistry {
 
     const cwd = await this.resolveAllowedCwd(input.cwd)
     const shell = await resolveDefaultPtyShell(input.shell)
-    const rows = input.rows ?? DEFAULT_ROWS
-    const cols = input.cols ?? DEFAULT_COLS
+    const rows = input.rows ?? DEFAULT_PTY_ROWS
+    const cols = input.cols ?? DEFAULT_PTY_COLS
     const id = Identifier.descending("pty")
     const env = buildPtyEnvironment(cwd, shell)
     const runtime: PtyRuntimeAdapter = {

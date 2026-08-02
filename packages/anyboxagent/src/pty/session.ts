@@ -80,7 +80,8 @@ export async function createManagedPtySession(options: CreateManagedPtySessionOp
   }
   const listeners = new Set<(event: PtySessionEvent) => void>()
   const runtime = await options.runtime.spawn({
-    shell: options.shell,
+    executable: options.shell,
+    args: [],
     cwd: options.cwd,
     rows: options.rows,
     cols: options.cols,

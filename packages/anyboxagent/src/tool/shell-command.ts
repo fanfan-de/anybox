@@ -6,6 +6,7 @@ import { Flag } from "#flag/flag.ts"
 import { Instance } from "#project/instance.ts"
 import { withMacOSDefaultPath } from "#shell/environment.ts"
 import { getShellTaskRegistry, type ShellTaskResult } from "#shell/task-registry.ts"
+import { normalizeTerminalOutput } from "#shell/terminal-output.ts"
 import { resolveToolPath, toDisplayPath } from "#tool/shared.ts"
 import { which } from "#util/which.ts"
 
@@ -78,6 +79,7 @@ export type ShellCommandInput = {
   runInBackground?: boolean
   run_in_background?: boolean
   distro?: string
+  tty?: boolean
 }
 
 interface ShellCommandMetadata extends Record<string, unknown> {
@@ -89,12 +91,15 @@ interface ShellCommandMetadata extends Record<string, unknown> {
   yieldTimeMs?: number
   exitCode: number | null
   signal: NodeJS.Signals | null
+  tty: boolean
   timedOut: boolean
   aborted: boolean
   stdoutTruncated: boolean
   stderrTruncated: boolean
   stdout: string
   stderr: string
+  terminalOutput: string
+  terminalOutputTruncated: boolean
   runInBackground?: boolean
   backgroundTaskId?: string | null
   backgroundTaskCursor?: number | null
@@ -161,7 +166,8 @@ function shellCommandParameters(input: {
     workdir: z.string().optional().describe("Working directory. Defaults to the current project directory."),
     timeoutMs: z.number().int().positive().max(10 * 60 * 1000).optional().describe("Optional hard runtime limit in milliseconds. A task that exceeds it is terminated."),
     "yield-time_ms": z.number().int().nonnegative().max(MAX_YIELD_TIME_MS).optional().describe("How long to wait before returning a background task id for a still-running command. Defaults to 10000 ms; use 0 to return immediately."),
-    maxOutputChars: z.number().int().positive().max(200_000).optional().describe("Maximum chars kept for stdout and stderr."),
+    maxOutputChars: z.number().int().positive().max(200_000).optional().describe("Maximum chars kept per pipe stream, or for the merged terminal stream when tty=true."),
+    tty: z.boolean().optional().default(false).describe("Allocate a real terminal for interactive or TTY-dependent programs. Defaults to false."),
     allowUnsafe: z.boolean().optional().describe("Allow known dangerous command patterns."),
     description: z.string().optional().describe("Short description for the command intent."),
     runInBackground: z.boolean().optional().describe("Compatibility shortcut for yield-time_ms=0. True returns a managed background task immediately."),
@@ -617,6 +623,10 @@ export async function resolvePowerShellExecutable(options?: ResolverOptions) {
   throw new Error("No PowerShell executable was found. Install Windows PowerShell or add powershell.exe to PATH.")
 }
 
+export function buildPowerShellArgs(command: string, tty = false) {
+  return ["-NoLogo", "-NoProfile", ...(tty ? [] : ["-NonInteractive"]), "-Command", command]
+}
+
 export async function resolveCmdExecutable(options?: ResolverOptions) {
   const { env, platform, whichCommand, isFile } = getResolverParts(options)
   const comspec = env.ComSpec ?? env.comspec
@@ -709,6 +719,7 @@ function createShellCommandTool<Parameters extends z.ZodType>(
             summary: `Run a ${config.title} command in ${displayCwd}.`,
             details: {
               command: input.command.trim(),
+              tty: input.tty ?? false,
               workdir: displayCwd,
               paths: [displayCwd],
             },
@@ -748,17 +759,19 @@ function createShellCommandTool<Parameters extends z.ZodType>(
           const invocation = await config.resolveInvocation(parameters, cwd)
           const title = input.description?.trim() || `${config.id}: ${command}`
           const registry = getShellTaskRegistry()
-          const task = registry.start({
+          const task = await registry.start({
             ownerSessionID: ctx.sessionID,
             title: input.description?.trim(),
             command,
             cwd,
             shell: invocation.shell,
+            tty: input.tty ?? false,
             executable: invocation.executable,
             args: invocation.args,
             env: invocation.env,
             maxOutputChars,
             timeoutMs,
+            abort: ctx.abort,
           })
 
           const formatCompleted = (result: ShellTaskResult, aborted: boolean) => {
@@ -767,12 +780,25 @@ function createShellCommandTool<Parameters extends z.ZodType>(
             if (aborted) suffix.push("aborted")
 
             const notes: string[] = []
-            if (result.stdoutTruncated || result.stderrTruncated) {
+            if (result.tty ? result.terminalOutputTruncated : result.stdoutTruncated || result.stderrTruncated) {
               notes.push("Output was truncated. Increase maxOutputChars to inspect more.")
             }
 
             const normalizedStdout = result.stdout.trimEnd()
             const normalizedStderr = result.stderr.trimEnd()
+            const normalizedTerminalOutput = normalizeTerminalOutput(result.terminalOutput).trimEnd()
+            const outputSections = result.tty
+              ? [
+                  "TERMINAL OUTPUT:",
+                  normalizedTerminalOutput || "(no terminal output)",
+                ]
+              : [
+                  "STDOUT:",
+                  normalizedStdout || "(no stdout)",
+                  "",
+                  "STDERR:",
+                  normalizedStderr || "(no stderr)",
+                ]
 
             return {
               title,
@@ -780,14 +806,11 @@ function createShellCommandTool<Parameters extends z.ZodType>(
                 `Command: ${command}`,
                 `Workdir: ${displayCwd}`,
                 `Shell: ${invocation.shell}`,
+                `TTY: ${result.tty ? "yes" : "no"}`,
                 `Exit: ${result.exitCode ?? "unknown"}${suffix.length ? ` (${suffix.join(", ")})` : ""}`,
                 notes.length ? `Note: ${notes.join(" ")}` : undefined,
                 "",
-                "STDOUT:",
-                normalizedStdout || "(no stdout)",
-                "",
-                "STDERR:",
-                normalizedStderr || "(no stderr)",
+                ...outputSections,
               ].filter(Boolean).join("\n"),
               metadata: {
                 command,
@@ -798,12 +821,15 @@ function createShellCommandTool<Parameters extends z.ZodType>(
                 yieldTimeMs,
                 exitCode: result.exitCode,
                 signal: result.signal,
+                tty: result.tty,
                 timedOut: result.timedOut,
                 aborted,
                 stdoutTruncated: result.stdoutTruncated,
                 stderrTruncated: result.stderrTruncated,
+                terminalOutputTruncated: result.terminalOutputTruncated,
                 stdout: normalizedStdout,
                 stderr: normalizedStderr,
+                terminalOutput: normalizedTerminalOutput,
                 runInBackground: false,
                 backgroundTaskId: null,
                 backgroundTaskCursor: null,
@@ -862,10 +888,23 @@ function createShellCommandTool<Parameters extends z.ZodType>(
           const explicitBackground = shouldRunInBackground(input)
           const normalizedStdout = snapshot.stdout.trimEnd()
           const normalizedStderr = snapshot.stderr.trimEnd()
+          const normalizedTerminalOutput = normalizeTerminalOutput(snapshot.terminalOutput).trimEnd()
           const notes: string[] = []
-          if (snapshot.stdoutTruncated || snapshot.stderrTruncated) {
+          if (snapshot.tty ? snapshot.terminalOutputTruncated : snapshot.stdoutTruncated || snapshot.stderrTruncated) {
             notes.push("Initial output was truncated. Later write_stdin calls return only newer output.")
           }
+          const outputSections = snapshot.tty
+            ? [
+                "TERMINAL OUTPUT SO FAR:",
+                normalizedTerminalOutput || "(no terminal output)",
+              ]
+            : [
+                "STDOUT SO FAR:",
+                normalizedStdout || "(no stdout)",
+                "",
+                "STDERR SO FAR:",
+                normalizedStderr || "(no stderr)",
+              ]
 
           return {
             title,
@@ -873,6 +912,7 @@ function createShellCommandTool<Parameters extends z.ZodType>(
               `Command: ${command}`,
               `Workdir: ${displayCwd}`,
               `Shell: ${invocation.shell}`,
+              `TTY: ${snapshot.tty ? "yes" : "no"}`,
               `Session ID: ${task.id}`,
               explicitBackground
                 ? "Status: started in background"
@@ -880,13 +920,11 @@ function createShellCommandTool<Parameters extends z.ZodType>(
               timeoutMs !== undefined ? `Hard timeout: ${timeoutMs} ms` : undefined,
               notes.length ? `Note: ${notes.join(" ")}` : undefined,
               "",
-              "STDOUT SO FAR:",
-              normalizedStdout || "(no stdout)",
+              ...outputSections,
               "",
-              "STDERR SO FAR:",
-              normalizedStderr || "(no stderr)",
-              "",
-              `Use write_stdin with session_id=${task.id} and empty chars to read new output, or chars=\\u0003 to interrupt it.`,
+              snapshot.tty
+                ? `Use write_stdin with session_id=${task.id} to send terminal input; use empty chars to poll, or chars=\\u0003 for Ctrl-C.`
+                : `Use write_stdin with session_id=${task.id} and empty chars to read new output, or chars=\\u0003 to interrupt it.`,
             ].filter(Boolean).join("\n"),
             metadata: {
               command,
@@ -897,12 +935,15 @@ function createShellCommandTool<Parameters extends z.ZodType>(
               yieldTimeMs,
               exitCode: null,
               signal: null,
+              tty: snapshot.tty,
               timedOut: false,
               aborted: false,
               stdoutTruncated: snapshot.stdoutTruncated,
               stderrTruncated: snapshot.stderrTruncated,
+              terminalOutputTruncated: snapshot.terminalOutputTruncated,
               stdout: normalizedStdout,
               stderr: normalizedStderr,
+              terminalOutput: normalizedTerminalOutput,
               runInBackground: true,
               backgroundTaskId: task.id,
               backgroundTaskCursor: snapshot.cursor,
@@ -926,6 +967,7 @@ function createShellCommandTool<Parameters extends z.ZodType>(
               command: metadata.command,
               workdir: metadata.displayCwd,
               shell: metadata.shell,
+              tty: metadata.tty,
               exitCode: metadata.exitCode,
               signal: metadata.signal,
               timedOut: metadata.timedOut,
@@ -949,10 +991,17 @@ function createShellCommandTool<Parameters extends z.ZodType>(
                 ? { yieldTimeMs: metadata.yieldTimeMs }
                 : {}),
               runInBackground: metadata.runInBackground,
-              stdoutTruncated: metadata.stdoutTruncated,
-              stderrTruncated: metadata.stderrTruncated,
-              stdout: metadata.stdout,
-              stderr: metadata.stderr,
+              ...(metadata.tty
+                ? {
+                    terminalOutputTruncated: metadata.terminalOutputTruncated,
+                    terminalOutput: metadata.terminalOutput,
+                  }
+                : {
+                    stdoutTruncated: metadata.stdoutTruncated,
+                    stderrTruncated: metadata.stderrTruncated,
+                    stdout: metadata.stdout,
+                    stderr: metadata.stderr,
+                  }),
             },
           }
         },
@@ -979,7 +1028,8 @@ export const GitBashCommandTool = createShellCommandTool({
   parameters: GitBashCommandParameters,
   async resolveInvocation(parameters) {
     const executable = await resolveGitBashExecutable()
-    const command = shellInput(parameters).command.trim()
+    const input = shellInput(parameters)
+    const command = input.command.trim()
     return {
       executable,
       args: ["-lc", command],
@@ -1014,10 +1064,11 @@ export const PowerShellCommandTool = createShellCommandTool({
   parameters: PowerShellCommandParameters,
   async resolveInvocation(parameters) {
     const executable = await resolvePowerShellExecutable()
-    const command = shellInput(parameters).command.trim()
+    const input = shellInput(parameters)
+    const command = input.command.trim()
     return {
       executable,
-      args: ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command],
+      args: buildPowerShellArgs(command, input.tty ?? false),
       shell: executable,
     }
   },

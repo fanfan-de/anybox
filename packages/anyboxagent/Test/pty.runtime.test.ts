@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import {
   ensureMacOSNodePtySpawnHelperExecutable,
+  createNodePtyRuntimeAdapter,
   isPtyRuntimeError,
   resolveDefaultPtyShell,
   shouldUseNodePtySidecar,
@@ -23,7 +24,7 @@ afterEach(async () => {
 })
 
 describe("pty runtime", () => {
-  test("makes the macOS node-pty spawn helper executable", async () => {
+  test.skipIf(process.platform === "win32")("makes the macOS node-pty spawn helper executable", async () => {
     const packageRoot = await makeTempRoot()
     const helperPath = path.join(packageRoot, "prebuilds", "darwin-arm64", "spawn-helper")
     await mkdir(path.dirname(helperPath), { recursive: true })
@@ -70,4 +71,31 @@ describe("pty runtime", () => {
     expect(shouldUseNodePtySidecar({ isBun: true })).toBe(true)
     expect(shouldUseNodePtySidecar({ isBun: false })).toBe(false)
   })
+
+  test("sidecar preserves quick output, argv, and the real non-zero PTY exit code", async () => {
+    const runtime = createNodePtyRuntimeAdapter()
+    const script = [
+      "const ok = process.argv.includes('anybox-pty-argv')",
+      "process.stdout.write(ok ? 'argv-ok' : 'argv-missing')",
+      "process.exit(7)",
+    ].join(";")
+    const handle = await runtime.spawn({
+      executable: process.execPath,
+      args: ["-e", script, "anybox-pty-argv"],
+      cwd: process.cwd(),
+      env: process.env,
+    })
+
+    await Bun.sleep(100)
+    let output = ""
+    handle.onData((data) => {
+      output += data
+    })
+    const exit = await new Promise<{ exitCode: number | null; signal?: number }>((resolve) => {
+      handle.onExit(resolve)
+    })
+
+    expect(output).toContain("argv-ok")
+    expect(exit.exitCode).toBe(7)
+  }, 30_000)
 })

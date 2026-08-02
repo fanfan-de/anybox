@@ -1,5 +1,5 @@
 import fs from "node:fs"
-import { spawnSync } from "node:child_process"
+import { spawn, spawnSync } from "node:child_process"
 import { createHash } from "node:crypto"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -136,6 +136,87 @@ if (missing.length > 0) {
     console.error(`- ${filePath}`)
   }
   process.exit(1)
+}
+
+async function verifyPackagedPtyWorker() {
+  const workerPath = path.join(runtimeDir, "node-pty-worker.mjs")
+  await new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [workerPath], {
+      cwd: runtimeDir,
+      env: process.env,
+      stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
+    })
+    let stdoutBuffer = ""
+    let stderr = ""
+    let ready = false
+    let terminalOutput = ""
+    let terminalExitCode
+    let settled = false
+
+    const finish = (error) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      if (error) {
+        if (!child.killed) child.kill()
+        reject(error)
+      }
+      else resolve()
+    }
+
+    const timer = setTimeout(() => {
+      child.kill()
+      finish(new Error("Packaged node-pty worker smoke test timed out"))
+    }, 10_000)
+    timer.unref?.()
+
+    child.stdout.setEncoding("utf8")
+    child.stdout.on("data", (chunk) => {
+      stdoutBuffer += chunk
+      const lines = stdoutBuffer.split(/\r?\n/)
+      stdoutBuffer = lines.pop() ?? ""
+      for (const line of lines) {
+        if (!line.trim()) continue
+        let event
+        try {
+          event = JSON.parse(line)
+        } catch {
+          continue
+        }
+        if (event.type === "ready") ready = true
+        if (event.type === "data") terminalOutput += event.data
+        if (event.type === "exit") terminalExitCode = event.exitCode
+        if (event.type === "error") {
+          finish(new Error(`Packaged node-pty worker error: ${event.message}`))
+        }
+      }
+    })
+    child.stderr.setEncoding("utf8")
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk
+    })
+    child.once("error", (error) => finish(error))
+    child.once("close", () => {
+      if (!ready || !terminalOutput.includes("packaged-pty-ok") || terminalExitCode !== 7) {
+        finish(new Error(
+          `Packaged node-pty worker smoke failed (ready=${ready}, exit=${terminalExitCode ?? "missing"}): ${stderr || terminalOutput || "no output"}`,
+        ))
+        return
+      }
+      finish()
+    })
+
+    child.stdin.write(`${JSON.stringify({
+      type: "start",
+      executable: process.execPath,
+      args: ["-e", "process.stdout.write('packaged-pty-ok');process.exit(7)"],
+      cwd: runtimeDir,
+      rows: 32,
+      cols: 120,
+      env: process.env,
+    })}\n`)
+  })
 }
 
 const cinemaCatalogSource = path.join(agentDir, "src", "cinema", "provider-manifests.json")
@@ -295,6 +376,8 @@ if (nodeSmoke.status !== 0) {
   console.error((nodeSmoke.stderr || nodeSmoke.stdout || "unknown Bun error").trim())
   process.exit(1)
 }
+
+await verifyPackagedPtyWorker()
 
 try {
   const mediaToolsDir = path.join(runtimeDir, "media-tools")

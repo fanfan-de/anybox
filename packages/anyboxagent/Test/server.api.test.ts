@@ -950,7 +950,11 @@ describe("server api", () => {
           needsShell: true,
         },
       })
-      expect(JSON.stringify(listBody.data?.items.find((tool) => tool.id === "git_bash_command")?.inputSchema)).toContain("command")
+      const gitBashInputSchema = JSON.stringify(
+        listBody.data?.items.find((tool) => tool.id === "git_bash_command")?.inputSchema,
+      )
+      expect(gitBashInputSchema).toContain("command")
+      expect(gitBashInputSchema).toContain("tty")
       expect(listBody.data?.items.find((tool) => tool.id === "powershell_command")).toMatchObject({
         enabled: true,
         capabilities: {

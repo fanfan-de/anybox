@@ -79,6 +79,10 @@ jobs:
       - name: Typecheck agent
         run: pnpm --filter anyboxagent exec tsc --noEmit -p tsconfig.json
 
+      - name: Test agent shell and PTY runtime
+        working-directory: packages/anyboxagent
+        run: bun run test:shell
+
       - name: Test desktop
         run: pnpm --filter anybox-desktop-agent test
 

@@ -1,10 +1,19 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process"
+import os from "node:os"
+import { spawn, type ChildProcessByStdio } from "node:child_process"
+import type { Readable } from "node:stream"
 import * as Identifier from "#id/id.ts"
 import { PtyBuffer } from "#pty/buffer.ts"
+import {
+  createNodePtyRuntimeAdapter,
+  DEFAULT_PTY_COLS,
+  DEFAULT_PTY_ROWS,
+  type PtyRuntimeAdapter,
+  type PtyRuntimeHandle,
+} from "#pty/runtime.ts"
 import { terminateProcessTree } from "#shell/terminate.ts"
 
 export type ShellTaskStatus = "running" | "exited" | "deleted"
-export type ShellTaskOutputStream = "stdout" | "stderr"
+export type ShellTaskOutputStream = "stdout" | "stderr" | "terminal"
 
 export interface ShellTaskOutputEvent {
   stream: ShellTaskOutputStream
@@ -18,6 +27,7 @@ export interface ShellTaskInfo {
   command: string
   cwd: string
   shell: string
+  tty: boolean
   status: ShellTaskStatus
   exitCode: number | null
   signal: NodeJS.Signals | null
@@ -30,8 +40,10 @@ export interface ShellTaskInfo {
 export interface ShellTaskResult extends ShellTaskInfo {
   stdout: string
   stderr: string
+  terminalOutput: string
   stdoutTruncated: boolean
   stderrTruncated: boolean
+  terminalOutputTruncated: boolean
 }
 
 export interface ShellTaskReplay {
@@ -65,16 +77,24 @@ export interface ShellTaskRuntimeAdapter {
     args: string[]
     cwd: string
     env?: NodeJS.ProcessEnv
-  }): ShellTaskRuntimeHandle
+  }): ShellTaskRuntimeHandle | Promise<ShellTaskRuntimeHandle>
 }
 
-function createShellTaskRuntimeHandle(child: ChildProcessWithoutNullStreams): ShellTaskRuntimeHandle {
+type PipeShellChild = ChildProcessByStdio<null, Readable, Readable>
+
+function createShellTaskRuntimeHandle(child: PipeShellChild): ShellTaskRuntimeHandle {
   const outputListeners = new Set<(event: ShellTaskOutputEvent) => void>()
   const exitListeners = new Set<(event: { exitCode: number | null; signal: NodeJS.Signals | null }) => void>()
+  const pendingOutput: ShellTaskOutputEvent[] = []
   let finished = false
+  let retainedExitEvent: { exitCode: number | null; signal: NodeJS.Signals | null } | null = null
 
   const emitOutput = (stream: ShellTaskOutputStream, data: string) => {
     if (!data) return
+    if (outputListeners.size === 0) {
+      pendingOutput.push({ stream, data })
+      return
+    }
     for (const listener of [...outputListeners]) {
       listener({ stream, data })
     }
@@ -83,6 +103,7 @@ function createShellTaskRuntimeHandle(child: ChildProcessWithoutNullStreams): Sh
   const emitExit = (event: { exitCode: number | null; signal: NodeJS.Signals | null }) => {
     if (finished) return
     finished = true
+    retainedExitEvent = event
     for (const listener of [...exitListeners]) {
       listener(event)
     }
@@ -96,10 +117,6 @@ function createShellTaskRuntimeHandle(child: ChildProcessWithoutNullStreams): Sh
   child.stderr.setEncoding("utf8")
   child.stderr.on("data", (chunk: string) => {
     emitOutput("stderr", chunk)
-  })
-
-  child.stdin.on("error", (error) => {
-    emitOutput("stderr", `Failed to write process stdin: ${error.message}\n`)
   })
 
   child.once("exit", (code, signal) => {
@@ -122,10 +139,8 @@ function createShellTaskRuntimeHandle(child: ChildProcessWithoutNullStreams): Sh
       return child.pid ?? null
     },
     write(data) {
-      if (finished || child.stdin.destroyed || !child.stdin.writable) {
-        throw new Error("Shell task stdin is unavailable")
-      }
-      child.stdin.write(data)
+      void data
+      throw new Error("Pipe shell tasks do not accept stdin; restart the command with tty=true for interactive input")
     },
     interrupt() {
       if (finished) return
@@ -143,12 +158,22 @@ function createShellTaskRuntimeHandle(child: ChildProcessWithoutNullStreams): Sh
     },
     onOutput(listener) {
       outputListeners.add(listener)
+      if (pendingOutput.length > 0) {
+        const replay = pendingOutput.splice(0)
+        for (const event of replay) listener(event)
+      }
       return () => {
         outputListeners.delete(listener)
       }
     },
     onExit(listener) {
       exitListeners.add(listener)
+      if (retainedExitEvent) {
+        const event = retainedExitEvent
+        queueMicrotask(() => {
+          if (exitListeners.has(listener)) listener(event)
+        })
+      }
       return () => {
         exitListeners.delete(listener)
       }
@@ -162,10 +187,47 @@ export function createShellTaskRuntimeAdapter(): ShellTaskRuntimeAdapter {
       const child = spawn(input.executable, input.args, {
         cwd: input.cwd,
         ...(input.env ? { env: input.env } : {}),
+        stdio: ["ignore", "pipe", "pipe"],
         windowsHide: true,
       })
 
       return createShellTaskRuntimeHandle(child)
+    },
+  }
+}
+
+function signalName(signal: number | undefined): NodeJS.Signals | null {
+  if (!signal) return null
+  for (const [name, value] of Object.entries(os.constants.signals)) {
+    if (value === signal) return name as NodeJS.Signals
+  }
+  return null
+}
+
+function createPtyShellTaskRuntimeHandle(pty: PtyRuntimeHandle): ShellTaskRuntimeHandle {
+  return {
+    get pid() {
+      return pty.pid
+    },
+    write(data) {
+      pty.write(data)
+    },
+    interrupt() {
+      pty.write("\x03")
+    },
+    kill() {
+      pty.kill()
+    },
+    onOutput(listener) {
+      return pty.onData((data) => listener({ stream: "terminal", data }))
+    },
+    onExit(listener) {
+      return pty.onExit((event) => {
+        listener({
+          exitCode: event.exitCode,
+          signal: signalName(event.signal),
+        })
+      })
     },
   }
 }
@@ -183,6 +245,9 @@ interface ManagedShellTask {
 
 export interface ShellTaskRegistryOptions {
   runtime?: ShellTaskRuntimeAdapter
+  pipeRuntime?: ShellTaskRuntimeAdapter
+  ptyRuntime?: PtyRuntimeAdapter
+  ptyRuntimeFactory?: () => PtyRuntimeAdapter
   now?: () => number
   bufferChars?: number
   exitRetentionMs?: number
@@ -199,7 +264,7 @@ function defaultTitle(command: string) {
   return `${collapsed.slice(0, 77)}...`
 }
 
-function createManagedShellTask(
+async function createManagedShellTask(
   input: {
     id: string
     ownerSessionID?: string
@@ -207,6 +272,7 @@ function createManagedShellTask(
     command: string
     cwd: string
     shell: string
+    tty: boolean
     executable: string
     args: string[]
     env?: NodeJS.ProcessEnv
@@ -214,16 +280,19 @@ function createManagedShellTask(
     maxOutputChars: number
     timeoutMs?: number
     runtime: ShellTaskRuntimeAdapter
+    abort?: AbortSignal
     now: () => number
     onExited?: (task: ShellTaskInfo) => void
     onDeleted?: (task: ShellTaskInfo) => void
   },
-): ManagedShellTask {
+): Promise<ManagedShellTask> {
   const buffer = new PtyBuffer(input.bufferChars)
   let stdout = ""
   let stderr = ""
+  let terminalOutput = ""
   let stdoutTruncated = false
   let stderrTruncated = false
+  let terminalOutputTruncated = false
   const createdAt = input.now()
   let info: ShellTaskInfo = {
     id: input.id,
@@ -232,6 +301,7 @@ function createManagedShellTask(
     command: input.command,
     cwd: input.cwd,
     shell: input.shell,
+    tty: input.tty,
     status: "running",
     exitCode: null,
     signal: null,
@@ -241,12 +311,20 @@ function createManagedShellTask(
     timedOut: false,
   }
   let cleaned = false
-  const runtime = input.runtime.spawn({
+  const runtime = await input.runtime.spawn({
     executable: input.executable,
     args: input.args,
     cwd: input.cwd,
     env: input.env,
   })
+  if (input.abort?.aborted) {
+    try {
+      runtime.kill()
+    } catch {
+      // The process may have exited while the async backend was starting.
+    }
+    throw new Error("Shell task start was cancelled")
+  }
   let onOutputDispose: (() => void) | null = null
   let onExitDispose: (() => void) | null = null
   let resolveExit: (() => void) | null = null
@@ -257,6 +335,7 @@ function createManagedShellTask(
   let interruptFallbackTimer: ReturnType<typeof setTimeout> | null = null
   let deliveredCursor = 0
   let interactionQueue: Promise<void> = Promise.resolve()
+  let stopPromise: Promise<ShellTaskInfo> | null = null
 
   function serialize() {
     return { ...info }
@@ -272,7 +351,11 @@ function createManagedShellTask(
   }
 
   function appendOutput(stream: ShellTaskOutputStream, data: string) {
-    const current = stream === "stdout" ? stdout : stderr
+    const current = stream === "stdout"
+      ? stdout
+      : stream === "stderr"
+        ? stderr
+        : terminalOutput
     const remaining = input.maxOutputChars - current.length
     const retained = remaining > 0 ? data.slice(0, remaining) : ""
     const truncated = retained.length < data.length
@@ -280,9 +363,12 @@ function createManagedShellTask(
     if (stream === "stdout") {
       stdout += retained
       stdoutTruncated ||= truncated
-    } else {
+    } else if (stream === "stderr") {
       stderr += retained
       stderrTruncated ||= truncated
+    } else {
+      terminalOutput += retained
+      terminalOutputTruncated ||= truncated
     }
   }
 
@@ -291,8 +377,10 @@ function createManagedShellTask(
       ...serialize(),
       stdout,
       stderr,
+      terminalOutput,
       stdoutTruncated,
       stderrTruncated,
+      terminalOutputTruncated,
     }
   }
 
@@ -338,35 +426,45 @@ function createManagedShellTask(
     return next
   }
 
-  onOutputDispose = runtime.onOutput(({ stream, data }) => {
-    if (cleaned || !data) return
-    const cursor = buffer.append(data)
-    appendOutput(stream, data)
-    updateInfo({ cursor })
-  })
+  try {
+    onOutputDispose = runtime.onOutput(({ stream, data }) => {
+      if (cleaned || !data) return
+      const cursor = buffer.append(data)
+      appendOutput(stream, data)
+      updateInfo({ cursor })
+    })
 
-  onExitDispose = runtime.onExit((event) => {
-    resolveExit?.()
-    clearTimeoutTimer()
-    clearInterruptFallbackTimer()
-    if (cleaned) return
-    if (info.status === "deleted") {
-      updateInfo({
+    onExitDispose = runtime.onExit((event) => {
+      resolveExit?.()
+      clearTimeoutTimer()
+      clearInterruptFallbackTimer()
+      if (cleaned) return
+      if (info.status === "deleted") {
+        updateInfo({
+          exitCode: event.exitCode,
+          signal: event.signal,
+          cursor: buffer.cursor,
+        })
+        return
+      }
+      if (info.status === "exited") return
+      const task = updateInfo({
+        status: "exited",
         exitCode: event.exitCode,
         signal: event.signal,
         cursor: buffer.cursor,
       })
-      return
-    }
-    if (info.status === "exited") return
-    const task = updateInfo({
-      status: "exited",
-      exitCode: event.exitCode,
-      signal: event.signal,
-      cursor: buffer.cursor,
+      input.onExited?.(task)
     })
-    input.onExited?.(task)
-  })
+  } catch (error) {
+    onOutputDispose?.()
+    try {
+      runtime.kill()
+    } catch {
+      // Preserve the listener setup failure as the actionable error.
+    }
+    throw error
+  }
 
   if (input.timeoutMs !== undefined) {
     timeoutTimer = setTimeout(() => {
@@ -376,9 +474,31 @@ function createManagedShellTask(
         timedOut: true,
         cursor: buffer.cursor,
       })
-      runtime.kill()
+      try {
+        runtime.kill()
+      } catch {
+        // The task may already be exiting.
+      }
     }, input.timeoutMs)
     timeoutTimer.unref?.()
+  }
+
+  function dispose() {
+    if (cleaned) return
+    cleaned = true
+    clearTimeoutTimer()
+    clearInterruptFallbackTimer()
+    onOutputDispose?.()
+    onExitDispose?.()
+    onOutputDispose = null
+    onExitDispose = null
+    if (info.status === "running") {
+      try {
+        runtime.kill()
+      } catch {
+        // Disposing is best-effort after the runtime has already failed.
+      }
+    }
   }
 
   return {
@@ -417,15 +537,24 @@ function createManagedShellTask(
 
           if (interaction.data === "\x03") {
             runtime.interrupt()
-            clearInterruptFallbackTimer()
-            interruptFallbackTimer = setTimeout(() => {
-              interruptFallbackTimer = null
-              if (!cleaned && info.status === "running") {
-                runtime.kill()
-              }
-            }, 1_000)
-            interruptFallbackTimer.unref?.()
+            if (!info.tty) {
+              clearInterruptFallbackTimer()
+              interruptFallbackTimer = setTimeout(() => {
+                interruptFallbackTimer = null
+                if (!cleaned && info.status === "running") {
+                  try {
+                    runtime.kill()
+                  } catch {
+                    // The process may have exited after ignoring the first interrupt.
+                  }
+                }
+              }, 1_000)
+              interruptFallbackTimer.unref?.()
+            }
           } else {
+            if (!info.tty) {
+              throw new Error("Pipe shell sessions do not accept ordinary stdin; restart the command with tty=true")
+            }
             runtime.write(interaction.data)
           }
         }
@@ -449,60 +578,69 @@ function createManagedShellTask(
       await waitForExit(yieldTimeMs)
       return result()
     },
-    async stop() {
-      if (info.status === "deleted") return serialize()
-      const wasExited = info.status === "exited"
+    stop() {
+      if (stopPromise) return stopPromise
+      stopPromise = (async () => {
+        if (info.status === "deleted") return serialize()
+        const wasExited = info.status === "exited"
 
-      updateInfo({
-        status: "deleted",
-        cursor: buffer.cursor,
-      })
-      input.onDeleted?.(serialize())
-      if (!cleaned && !wasExited) {
-        runtime.kill()
-        await Promise.race([
-          exitPromise,
-          new Promise<void>((resolve) => {
-            const timer = setTimeout(resolve, 1_000)
-            timer.unref?.()
-          }),
-        ])
-      }
-      const task = serialize()
-      this.dispose()
-      return task
+        updateInfo({
+          status: "deleted",
+          cursor: buffer.cursor,
+        })
+        input.onDeleted?.(serialize())
+        if (!cleaned && !wasExited) {
+          try {
+            runtime.kill()
+          } catch {
+            // The task may already be exiting.
+          }
+          await Promise.race([
+            exitPromise,
+            new Promise<void>((resolve) => {
+              const timer = setTimeout(resolve, 1_000)
+              timer.unref?.()
+            }),
+          ])
+        }
+        const task = serialize()
+        dispose()
+        return task
+      })()
+      return stopPromise
     },
-    dispose() {
-      if (cleaned) return
-      cleaned = true
-      clearTimeoutTimer()
-      clearInterruptFallbackTimer()
-      onOutputDispose?.()
-      onExitDispose?.()
-      onOutputDispose = null
-      onExitDispose = null
-      if (info.status === "running") {
-        runtime.kill()
-      }
-    },
+    dispose,
   }
 }
 
 export class ShellTaskRegistry {
   private readonly tasks = new Map<string, ManagedShellTask>()
   private readonly pruneTimers = new Map<string, ReturnType<typeof setTimeout>>()
-  private readonly runtime: ShellTaskRuntimeAdapter
+  private readonly pendingStarts = new Set<Promise<ShellTaskInfo>>()
+  private readonly pipeRuntime: ShellTaskRuntimeAdapter
+  private ptyRuntime: PtyRuntimeAdapter | undefined
+  private readonly ptyRuntimeFactory: () => PtyRuntimeAdapter
   private readonly now: () => number
   private readonly bufferChars: number
   private readonly exitRetentionMs: number
   private readonly deleteRetentionMs: number
+  private disposing = false
 
   constructor(options: ShellTaskRegistryOptions = {}) {
-    this.runtime = options.runtime ?? createShellTaskRuntimeAdapter()
+    this.pipeRuntime = options.pipeRuntime ?? options.runtime ?? createShellTaskRuntimeAdapter()
+    this.ptyRuntime = options.ptyRuntime
+    this.ptyRuntimeFactory = options.ptyRuntimeFactory ?? createNodePtyRuntimeAdapter
     this.now = options.now ?? Date.now
     this.bufferChars = options.bufferChars ?? DEFAULT_BUFFER_CHARS
     this.exitRetentionMs = options.exitRetentionMs ?? DEFAULT_EXIT_RETENTION_MS
     this.deleteRetentionMs = options.deleteRetentionMs ?? DEFAULT_DELETE_RETENTION_MS
+  }
+
+  private getPtyRuntime() {
+    if (!this.ptyRuntime) {
+      this.ptyRuntime = this.ptyRuntimeFactory()
+    }
+    return this.ptyRuntime
   }
 
   private schedulePrune(id: string, delayMs: number) {
@@ -522,44 +660,79 @@ export class ShellTaskRegistry {
     this.pruneTimers.set(id, timer)
   }
 
-  start(input: {
+  async start(input: {
     ownerSessionID?: string
     title?: string
     command: string
     cwd: string
     shell: string
+    tty?: boolean
     executable: string
     args: string[]
     env?: NodeJS.ProcessEnv
     maxOutputChars: number
     timeoutMs?: number
+    abort?: AbortSignal
   }) {
+    if (this.disposing) {
+      throw new Error("Shell task registry is shutting down")
+    }
     const id = Identifier.descending("task")
-    const task = createManagedShellTask({
-      id,
-      ownerSessionID: input.ownerSessionID,
-      title: input.title,
-      command: input.command,
-      cwd: input.cwd,
-      shell: input.shell,
-      executable: input.executable,
-      args: input.args,
-      env: input.env,
-      bufferChars: this.bufferChars,
-      maxOutputChars: input.maxOutputChars,
-      timeoutMs: input.timeoutMs,
-      runtime: this.runtime,
-      now: this.now,
-      onExited: (info) => {
-        this.schedulePrune(info.id, this.exitRetentionMs)
-      },
-      onDeleted: (info) => {
-        this.schedulePrune(info.id, this.deleteRetentionMs)
-      },
-    })
+    const tty = input.tty ?? false
+    const runtime: ShellTaskRuntimeAdapter = tty
+      ? {
+          spawn: async (spawnInput) => {
+            const handle = await this.getPtyRuntime().spawn({
+              executable: spawnInput.executable,
+              args: spawnInput.args,
+              cwd: spawnInput.cwd,
+              env: spawnInput.env ?? process.env,
+              cols: DEFAULT_PTY_COLS,
+              rows: DEFAULT_PTY_ROWS,
+            })
+            return createPtyShellTaskRuntimeHandle(handle)
+          },
+        }
+      : this.pipeRuntime
+    const operation = (async () => {
+      const task = await createManagedShellTask({
+        id,
+        ownerSessionID: input.ownerSessionID,
+        title: input.title,
+        command: input.command,
+        cwd: input.cwd,
+        shell: input.shell,
+        tty,
+        executable: input.executable,
+        args: input.args,
+        env: input.env,
+        bufferChars: this.bufferChars,
+        maxOutputChars: input.maxOutputChars,
+        timeoutMs: input.timeoutMs,
+        runtime,
+        abort: input.abort,
+        now: this.now,
+        onExited: (info) => {
+          this.schedulePrune(info.id, this.exitRetentionMs)
+        },
+        onDeleted: (info) => {
+          this.schedulePrune(info.id, this.deleteRetentionMs)
+        },
+      })
 
-    this.tasks.set(id, task)
-    return task.info()
+      if (this.disposing) {
+        await task.stop()
+        throw new Error("Shell task registry shut down while the task was starting")
+      }
+      this.tasks.set(id, task)
+      return task.info()
+    })()
+    this.pendingStarts.add(operation)
+    try {
+      return await operation
+    } finally {
+      this.pendingStarts.delete(operation)
+    }
   }
 
   info(id: string, ownerSessionID?: string) {
@@ -626,6 +799,32 @@ export class ShellTaskRegistry {
     if (!task) return null
     return await task.stop()
   }
+
+  async stopByOwnerSession(ownerSessionID: string) {
+    const tasks = [...this.tasks.values()].filter((task) => task.info().ownerSessionID === ownerSessionID)
+    return await Promise.all(tasks.map((task) => task.stop()))
+  }
+
+  async disposeAll() {
+    this.disposing = true
+    await Promise.allSettled([...this.pendingStarts])
+    const tasks = [...this.tasks.values()]
+    const results = await Promise.allSettled(tasks.map((task) => task.stop()))
+    for (const timer of this.pruneTimers.values()) clearTimeout(timer)
+    this.pruneTimers.clear()
+    this.tasks.clear()
+    for (const task of tasks) task.dispose()
+    const stopped: ShellTaskInfo[] = []
+    const errors: unknown[] = []
+    for (const result of results) {
+      if (result.status === "fulfilled") stopped.push(result.value)
+      else errors.push(result.reason)
+    }
+    if (errors.length > 0) {
+      throw new AggregateError(errors, "Failed to stop every managed shell task")
+    }
+    return stopped
+  }
 }
 
 let activeShellTaskRegistry: ShellTaskRegistry | undefined
@@ -640,4 +839,16 @@ export function getShellTaskRegistry() {
 
 export function createShellTaskRegistry(options?: ShellTaskRegistryOptions) {
   return new ShellTaskRegistry(options)
+}
+
+export async function disposeShellTaskRegistry() {
+  const registry = activeShellTaskRegistry
+  if (!registry) return []
+  try {
+    return await registry.disposeAll()
+  } finally {
+    if (activeShellTaskRegistry === registry) {
+      activeShellTaskRegistry = undefined
+    }
+  }
 }

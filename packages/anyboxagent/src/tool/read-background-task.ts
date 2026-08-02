@@ -2,6 +2,7 @@ import z from "zod"
 import { Flag } from "#flag/flag.ts"
 import * as Identifier from "#id/id.ts"
 import { getShellTaskRegistry } from "#shell/task-registry.ts"
+import { normalizeTerminalOutput } from "#shell/terminal-output.ts"
 import * as Tool from "#tool/tool.ts"
 import { toDisplayPath } from "#tool/shared.ts"
 
@@ -20,6 +21,7 @@ interface ReadBackgroundTaskMetadata extends Record<string, unknown> {
   cwd: string
   displayCwd: string
   shell: string
+  tty: boolean
   status: string
   exitCode: number | null
   signal: NodeJS.Signals | null
@@ -59,7 +61,10 @@ export const ReadBackgroundTaskTool = Tool.define(
         }
 
         const maxOutputChars = parameters.maxOutputChars ?? DEFAULT_MAX_OUTPUT_CHARS
-        const retained = retainRecentOutput(result.replay.output, maxOutputChars)
+        const replayOutput = result.task.tty
+          ? normalizeTerminalOutput(result.replay.output)
+          : result.replay.output
+        const retained = retainRecentOutput(replayOutput, maxOutputChars)
         const displayCwd = toDisplayPath(result.task.cwd)
 
         return {
@@ -70,6 +75,7 @@ export const ReadBackgroundTaskTool = Tool.define(
             `Command: ${result.task.command}`,
             `Workdir: ${displayCwd}`,
             `Shell: ${result.task.shell}`,
+            `TTY: ${result.task.tty ? "yes" : "no"}`,
             `Status: ${result.task.status}`,
             `Exit: ${result.task.exitCode ?? "running"}`,
             `Timed Out: ${result.task.timedOut ? "yes" : "no"}`,
@@ -88,6 +94,7 @@ export const ReadBackgroundTaskTool = Tool.define(
             cwd: result.task.cwd,
             displayCwd,
             shell: result.task.shell,
+            tty: result.task.tty,
             status: result.task.status,
             exitCode: result.task.exitCode,
             signal: result.task.signal,
@@ -117,6 +124,7 @@ export const ReadBackgroundTaskTool = Tool.define(
             command: metadata.command,
             workdir: metadata.displayCwd,
             shell: metadata.shell,
+            tty: metadata.tty,
             status: metadata.status,
             exitCode: metadata.exitCode,
             signal: metadata.signal,

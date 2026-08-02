@@ -4,7 +4,13 @@ import { spawn } from "node-pty";
 let term = null;
 
 function send(payload) {
-  process.stdout.write(`${JSON.stringify(payload)}\n`);
+  return process.stdout.write(`${JSON.stringify(payload)}\n`);
+}
+
+function sendAndExit(payload, code = 0) {
+  process.stdout.write(`${JSON.stringify(payload)}\n`, () => {
+    process.exit(code);
+  });
 }
 
 function fail(message) {
@@ -12,6 +18,13 @@ function fail(message) {
     type: "error",
     message,
   });
+}
+
+function failAndExit(message, code = 1) {
+  sendAndExit({
+    type: "error",
+    message,
+  }, code);
 }
 
 function disposeAndExit(code = 0) {
@@ -49,7 +62,7 @@ input.on("line", (line) => {
     }
 
     try {
-      term = spawn(message.shell, [], {
+      term = spawn(message.executable, Array.isArray(message.args) ? message.args : [], {
         name: "xterm-256color",
         cwd: message.cwd,
         cols: message.cols,
@@ -58,8 +71,7 @@ input.on("line", (line) => {
         useConpty: process.platform === "win32" ? true : undefined,
       });
     } catch (error) {
-      fail(error instanceof Error ? error.message : String(error));
-      disposeAndExit(1);
+      failAndExit(error instanceof Error ? error.message : String(error));
       return;
     }
 
@@ -71,12 +83,12 @@ input.on("line", (line) => {
     });
 
     term.onExit((event) => {
-      send({
+      term = null;
+      sendAndExit({
         type: "exit",
         exitCode: event.exitCode ?? null,
         signal: event.signal,
       });
-      process.exit(0);
     });
 
     send({
@@ -110,7 +122,11 @@ input.on("line", (line) => {
   }
 
   if (message.type === "kill") {
-    disposeAndExit(0);
+    try {
+      term.kill();
+    } catch {
+      disposeAndExit(0);
+    }
     return;
   }
 

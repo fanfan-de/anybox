@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import "./sqlite.cleanup.ts"
 import { createServerRuntime } from "#server/server.ts"
 import { createPtyRegistry } from "#pty/registry.ts"
 import type { PtyRuntimeAdapter, PtyRuntimeHandle } from "#pty/runtime.ts"
@@ -77,11 +78,12 @@ class FakePtyHandle implements PtyRuntimeHandle {
 class FakePtyRuntime implements PtyRuntimeAdapter {
   readonly handles: FakePtyHandle[] = []
 
-  spawn(input: { shell: string; cwd: string; rows: number; cols: number; env: Record<string, string> }) {
-    void input.shell
+  spawn(input: { executable: string; args?: string[]; cwd: string; rows?: number; cols?: number; env?: NodeJS.ProcessEnv }) {
+    void input.executable
+    void input.args
     void input.cwd
     void input.env
-    const handle = new FakePtyHandle(input.cols, input.rows)
+    const handle = new FakePtyHandle(input.cols ?? 120, input.rows ?? 32)
     this.handles.push(handle)
     return handle
   }
@@ -96,11 +98,12 @@ class ThrowingPtyRuntime implements PtyRuntimeAdapter {
 class ThrowingResizePtyRuntime implements PtyRuntimeAdapter {
   readonly handles: FakePtyHandle[] = []
 
-  spawn(input: { shell: string; cwd: string; rows: number; cols: number; env: Record<string, string> }) {
-    void input.shell
+  spawn(input: { executable: string; args?: string[]; cwd: string; rows?: number; cols?: number; env?: NodeJS.ProcessEnv }) {
+    void input.executable
+    void input.args
     void input.cwd
     void input.env
-    const handle = new FakePtyHandle(input.cols, input.rows)
+    const handle = new FakePtyHandle(input.cols ?? 120, input.rows ?? 32)
     handle.resize = () => {
       throw new Error("ioctl(2) failed")
     }

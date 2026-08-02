@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test"
+import "./sqlite.cleanup.ts"
 import { $ } from "bun"
 import { assistantModelMessageSchema } from "ai"
 import { EventEmitter } from "node:events"
@@ -21,6 +22,7 @@ import {
   PowerShellCommandTool,
   WslBashCommandTool,
   assessShellPermission,
+  buildPowerShellArgs,
   resolveCmdExecutable,
   resolveGitBashExecutable,
   resolveMacOSShellExecutable,
@@ -1107,7 +1109,7 @@ describe("tool contract", () => {
             ),
           ).rejects.toThrow("Invalid git_bash_command arguments. command:")
 
-          await expect(runtime.validate?.({ command: "   " }, ctx)).resolves.toBe(
+          await expect(runtime.validate?.({ command: "   ", tty: false }, ctx)).resolves.toBe(
             "Command must contain non-whitespace characters.",
           )
 
@@ -1116,6 +1118,7 @@ describe("tool contract", () => {
               {
                 command: "pwd",
                 workdir: "missing",
+                tty: false,
               },
               ctx,
             ),
@@ -1125,6 +1128,7 @@ describe("tool contract", () => {
             runtime.authorize?.(
               {
                 command: "rm -rf /",
+                tty: false,
               },
               ctx,
             ),
@@ -1144,12 +1148,15 @@ describe("tool contract", () => {
               timeoutMs: 60_000,
               exitCode: 0,
               signal: null,
+              tty: false,
               timedOut: false,
               aborted: false,
               stdoutTruncated: false,
               stderrTruncated: false,
               stdout: "hello",
               stderr: "",
+              terminalOutput: "",
+              terminalOutputTruncated: false,
               runInBackground: false,
               backgroundTaskId: null,
             },
@@ -1162,6 +1169,7 @@ describe("tool contract", () => {
               command: "printf hello",
               workdir: ".",
               shell: "/bin/bash",
+              tty: false,
               exitCode: 0,
               signal: null,
               timedOut: false,
@@ -1219,6 +1227,7 @@ describe("tool contract", () => {
           {
             command: "printf hello && exec sleep 30",
             run_in_background: true,
+            tty: false,
           },
           ctx,
         ))
@@ -1308,6 +1317,7 @@ describe("tool contract", () => {
           {
             command: shellCase.command,
             "yield-time_ms": 100,
+            tty: false,
           },
           ctx,
         ))
@@ -1393,6 +1403,7 @@ describe("tool contract", () => {
           {
             command: shellCase.command,
             "yield-time_ms": 5_000,
+            tty: false,
           },
           {
             sessionID: "session-shell-short-command",
@@ -1406,6 +1417,53 @@ describe("tool contract", () => {
           backgroundTaskId: null,
           stdout: expect.stringContaining("short-result"),
         })
+      },
+    })
+  }, 120000)
+
+  it("formats completed tty commands as merged terminal output", async () => {
+    await Instance.provide({
+      directory: process.cwd(),
+      async fn() {
+        const shellCase = process.platform === "darwin"
+          ? {
+              tool: MacOSShellCommandTool,
+              command: "printf '\\033[32mterminal-short\\033[0m\\n'",
+            }
+          : process.platform === "win32"
+            ? {
+                tool: PowerShellCommandTool,
+                command: "Write-Host \"$([char]27)[32mterminal-short$([char]27)[0m\"",
+              }
+            : null
+        if (!shellCase) return
+
+        const runtime = await shellCase.tool.init()
+        const result = Tool.normalizeToolOutput(await runtime.execute(
+          {
+            command: shellCase.command,
+            tty: true,
+            "yield-time_ms": 5_000,
+          },
+          {
+            sessionID: "session-shell-short-tty",
+            messageID: "message-shell-short-tty",
+          },
+        ))
+
+        expect(result.text).toContain("TERMINAL OUTPUT:")
+        expect(result.text).not.toContain("STDOUT:")
+        expect(result.metadata).toMatchObject({
+          tty: true,
+          exitCode: 0,
+          terminalOutputTruncated: false,
+        })
+        expect(String((result.metadata as any)?.terminalOutput)).toContain("terminal-short")
+        expect(String((result.metadata as any)?.terminalOutput)).not.toContain("\x1b[")
+        const modelOutput = await runtime.toModelOutput!(result)
+        expect((modelOutput as any).type).toBe("json")
+        expect((modelOutput as any).value.tty).toBe(true)
+        expect((modelOutput as any).value.terminalOutput).toContain("terminal-short")
       },
     })
   }, 120000)
@@ -1437,6 +1495,7 @@ describe("tool contract", () => {
           {
             command: shellCase.command,
             "yield-time_ms": 50,
+            tty: false,
           },
           ctx,
         ))
@@ -1504,6 +1563,7 @@ describe("tool contract", () => {
           {
             command: shellCase.command,
             "yield-time_ms": 50,
+            tty: false,
           },
           ctx,
         ))
@@ -1530,19 +1590,102 @@ describe("tool contract", () => {
     })
   }, 120000)
 
-  it("writes ordinary stdin to a yielded shell session", async () => {
+  it("closes pipe stdin by default so readers receive EOF", async () => {
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
         const shellCase = process.platform === "darwin"
           ? {
               tool: MacOSShellCommandTool,
-              command: "IFS= read -r value; printf 'got:%s' \"$value\"",
+              command: "if IFS= read -r value; then printf 'stdin:unexpected'; else printf 'stdin:eof'; fi",
             }
           : process.platform === "win32"
             ? {
                 tool: PowerShellCommandTool,
-                command: "$value = [Console]::In.ReadLine(); Write-Output \"got:$value\"",
+                command: "$value = [Console]::In.ReadLine(); if ($null -eq $value) { Write-Output 'stdin:eof' } else { Write-Output 'stdin:unexpected' }",
+              }
+            : null
+        if (!shellCase) return
+
+        const runtime = await shellCase.tool.init()
+        const result = Tool.normalizeToolOutput(await runtime.execute(
+          {
+            command: shellCase.command,
+            tty: false,
+            "yield-time_ms": 5_000,
+          },
+          {
+            sessionID: "session-pipe-stdin-eof",
+            messageID: "message-pipe-stdin-eof",
+          },
+        ))
+
+        expect(result.metadata).toMatchObject({
+          tty: false,
+          exitCode: 0,
+          runInBackground: false,
+          stdout: expect.stringContaining("stdin:eof"),
+        })
+      },
+    })
+  }, 120000)
+
+  it("rejects ordinary write_stdin input for pipe sessions with an actionable tty hint", async () => {
+    await Instance.provide({
+      directory: process.cwd(),
+      async fn() {
+        const shellCase = process.platform === "darwin"
+          ? {
+              tool: MacOSShellCommandTool,
+              command: "exec sleep 30",
+            }
+          : process.platform === "win32"
+            ? {
+                tool: PowerShellCommandTool,
+                command: "Start-Sleep -Seconds 30",
+              }
+            : null
+        if (!shellCase) return
+
+        const execRuntime = await shellCase.tool.init()
+        const writeRuntime = await WriteStdinTool.init()
+        const stopRuntime = await StopBackgroundTaskTool.init()
+        const ctx = {
+          sessionID: "session-pipe-stdin-rejected",
+          messageID: "message-pipe-stdin-rejected",
+        }
+        const started = Tool.normalizeToolOutput(await execRuntime.execute(
+          {
+            command: shellCase.command,
+            tty: false,
+            "yield-time_ms": 50,
+          },
+          ctx,
+        ))
+        const sessionID = String((started.metadata as any)?.sessionID)
+
+        await expect(writeRuntime.execute({
+          session_id: sessionID,
+          chars: "yes\n",
+        }, ctx)).rejects.toThrow("tty=true")
+        await stopRuntime.execute({ id: sessionID }, ctx)
+      },
+    })
+  }, 120000)
+
+  it("writes ordinary stdin to a yielded tty shell session", async () => {
+    await Instance.provide({
+      directory: process.cwd(),
+      async fn() {
+        const shellCase = process.platform === "darwin"
+          ? {
+              tool: MacOSShellCommandTool,
+              command: "if [ -t 0 ] && [ -t 1 ]; then printf 'tty:true\\n'; else printf 'tty:false\\n'; fi; IFS= read -r value; printf 'got:%s' \"$value\"",
+            }
+          : process.platform === "win32"
+            ? {
+                tool: PowerShellCommandTool,
+                command: "Write-Output \"tty:$(-not [Console]::IsInputRedirected -and -not [Console]::IsOutputRedirected)\"; $value = [Console]::In.ReadLine(); Write-Output \"got:$value\"",
               }
             : null
         if (!shellCase) return
@@ -1557,6 +1700,7 @@ describe("tool contract", () => {
           {
             command: shellCase.command,
             "yield-time_ms": 50,
+            tty: true,
           },
           ctx,
         ))
@@ -1564,7 +1708,7 @@ describe("tool contract", () => {
         const completed = Tool.normalizeToolOutput(await writeRuntime.execute(
           {
             session_id: sessionID,
-            chars: "yes\n",
+            chars: "yes\r",
             "yield-time_ms": 2_000,
           },
           ctx,
@@ -1574,9 +1718,56 @@ describe("tool contract", () => {
           id: sessionID,
           status: "exited",
           exitCode: 0,
+          tty: true,
           inputChars: 4,
         })
-        expect(String((completed.metadata as any)?.output ?? "")).toContain("got:yes")
+        const output = String((completed.metadata as any)?.output ?? "")
+        expect(output.toLowerCase()).toContain("tty:true")
+        expect(output).toContain("got:yes")
+      },
+    })
+  }, 120000)
+
+  it("sends terminal Ctrl-C without force-killing a tty session that handles SIGINT", async () => {
+    await Instance.provide({
+      directory: process.cwd(),
+      async fn() {
+        if (process.platform !== "darwin" && process.platform !== "win32") return
+        const tool = process.platform === "darwin" ? MacOSShellCommandTool : PowerShellCommandTool
+        const command = "node -e \"process.on('SIGINT',()=>console.log('interrupt-kept-alive'));console.log('ready');setInterval(()=>{},1000)\""
+        const execRuntime = await tool.init()
+        const writeRuntime = await WriteStdinTool.init()
+        const stopRuntime = await StopBackgroundTaskTool.init()
+        const ctx = {
+          sessionID: "session-tty-interrupt-handler",
+          messageID: "message-tty-interrupt-handler",
+        }
+        const started = Tool.normalizeToolOutput(await execRuntime.execute(
+          {
+            command,
+            tty: true,
+            "yield-time_ms": 500,
+          },
+          ctx,
+        ))
+        const sessionID = String((started.metadata as any)?.sessionID)
+        const interrupted = Tool.normalizeToolOutput(await writeRuntime.execute(
+          {
+            session_id: sessionID,
+            chars: "\x03",
+            "yield-time_ms": 1_500,
+          },
+          ctx,
+        ))
+
+        expect(interrupted.metadata).toMatchObject({
+          id: sessionID,
+          tty: true,
+          status: "running",
+          interrupted: true,
+        })
+        expect(String((interrupted.metadata as any)?.output ?? "")).toContain("interrupt-kept-alive")
+        await stopRuntime.execute({ id: sessionID }, ctx)
       },
     })
   }, 120000)
@@ -1764,11 +1955,18 @@ describe("tool contract", () => {
       expect(runtime.description).toBeString()
 
       const shape = (runtime.parameters as z.ZodObject<any>).shape
+      expect(Boolean(shape.tty)).toBe(true)
+      expect(shape.tty.parse(undefined)).toBe(false)
       expect(Boolean(shape["yield-time_ms"])).toBe(true)
       expect(Boolean(shape.runInBackground)).toBe(true)
       expect(Boolean(shape.run_in_background)).toBe(true)
       expect(Boolean(shape.distro)).toBe(item.distro)
     }
+  })
+
+  it("keeps PowerShell non-interactive by default and removes the flag for tty sessions", () => {
+    expect(buildPowerShellArgs("python", false)).toContain("-NonInteractive")
+    expect(buildPowerShellArgs("python", true)).not.toContain("-NonInteractive")
   })
 
   it("selects one-time shell tools by host platform", () => {

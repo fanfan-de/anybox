@@ -11,6 +11,7 @@ import * as Mcp from "#mcp/manager.ts"
 import * as Project from "#project/project.ts"
 import { clearInProcessPermissionSession } from "#permission/permission.ts"
 import type { PtyRegistry } from "#pty/registry.ts"
+import { getShellTaskRegistry } from "#shell/task-registry.ts"
 import { Instance } from "#project/instance.ts"
 import { ApiError } from "#server/error.ts"
 import * as ContextWindow from "#session/core/context-window.ts"
@@ -389,6 +390,7 @@ export function archiveSession(sessionID: string, options?: { ptyRegistry?: PtyR
     throw new ApiError(404, "SESSION_NOT_FOUND", `Session '${sessionID}' not found`)
   }
   options?.ptyRegistry?.deleteBySession(archived.sessionID)
+  void getShellTaskRegistry().stopByOwnerSession(archived.sessionID).catch(() => undefined)
 
   return {
     sessionID: archived.sessionID,
@@ -842,6 +844,7 @@ export async function deleteSession(sessionID: string, options?: { ptyRegistry?:
   })
   Session.removeSession(sessionID)
   options?.ptyRegistry?.deleteBySession(sessionID)
+  await getShellTaskRegistry().stopByOwnerSession(sessionID)
 
   return {
     sessionID: session.id,

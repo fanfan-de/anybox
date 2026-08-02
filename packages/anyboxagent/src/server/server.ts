@@ -25,6 +25,7 @@ import { isApiError } from "#server/error.ts"
 import { isSessionLimitError } from "#session/runtime/session-limits.ts"
 import type { AppEnv } from "#server/types.ts"
 import { getPtyRegistry, type PtyRegistry } from "#pty/registry.ts"
+import { disposeShellTaskRegistry } from "#shell/task-registry.ts"
 import { isPtyRuntimeError } from "#pty/runtime.ts"
 import * as Log from "#util/log.ts"
 import { getProcessEnvValue } from "#env/compat.ts"
@@ -222,6 +223,7 @@ export async function stopServer() {
   if (activeServer) {
     await EnvironmentRunner.cancelAllRuns()
     if (activePtyRegistry) await EnvironmentActions.cancelAllActions(activePtyRegistry)
+    await disposeShellTaskRegistry()
     activeServer.stop(true)
     activeServer = undefined
     activePtyRegistry = undefined

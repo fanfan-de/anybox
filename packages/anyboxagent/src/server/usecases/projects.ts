@@ -13,6 +13,7 @@ import * as GitCommitMessage from "#git/commit-message.ts"
 import * as Git from "#git/git.ts"
 import * as Mcp from "#mcp/manager.ts"
 import type { PtyRegistry } from "#pty/registry.ts"
+import { getShellTaskRegistry } from "#shell/task-registry.ts"
 import { Instance } from "#project/instance.ts"
 import * as Project from "#project/project.ts"
 import * as Worktree from "#project/worktree.ts"
@@ -898,6 +899,7 @@ export async function deleteProject(projectID: string, options?: { ptyRegistry?:
   const deletedSessions = Session.removeProjectSessions(projectID)
   for (const session of deletedSessions) {
     options?.ptyRegistry?.deleteBySession(session.id)
+    await getShellTaskRegistry().stopByOwnerSession(session.id)
   }
   db.deleteById("projects", projectID)
   db.deleteById("project_configs", projectID, "projectID")
