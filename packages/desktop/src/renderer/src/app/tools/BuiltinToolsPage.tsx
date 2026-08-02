@@ -264,6 +264,11 @@ export function BuiltinToolsPage({
   const activeModuleCopy = activeModuleGroup
     ? getLocalizedModuleCopy(activeModuleGroup.module, locale, t)
     : null
+  const activeModuleIsPartiallyEnabled = Boolean(
+    activeModuleGroup &&
+    activeModuleGroup.enabledCount > 0 &&
+    activeModuleGroup.enabledCount < activeModuleGroup.items.length,
+  )
 
   function setActiveModuleID(nextModuleID: BuiltinToolModuleID | null) {
     if (onActiveModuleChange) {
@@ -400,9 +405,7 @@ export function BuiltinToolsPage({
                     <button
                       className={[
                         "tools-module-availability",
-                        activeModuleGroup.enabledCount > 0 && activeModuleGroup.enabledCount < activeModuleGroup.items.length
-                          ? "is-partial"
-                          : "",
+                        activeModuleIsPartiallyEnabled ? "is-partial" : "",
                       ].filter(Boolean).join(" ")}
                       type="button"
                       role="switch"

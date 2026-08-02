@@ -179,6 +179,9 @@ import type {
   AgentProviderModel,
   AgentPtySessionInfo,
   AgentSessionArchiveResult,
+  AgentSessionBackgroundProcessList,
+  AgentSessionBackgroundProcessesTerminateAllResult,
+  AgentSessionBackgroundProcessTerminateResult,
   AgentSessionBridgeIPCEvent,
   AgentSessionCompactResult,
   AgentSessionDeleteResult,
@@ -2947,6 +2950,42 @@ async function getSessionTraceExport(input: SessionTraceExportInput) {
   const sessionID = input.sessionID.trim()
   const result = await requestAgentJSON<AgentSessionTraceExport>(
     `/api/debug/sessions/${encodeURIComponent(sessionID)}/trace-export`,
+  )
+
+  return result.data
+}
+
+async function getSessionBackgroundProcesses(
+  input: DesktopIpcInput<"desktop:get-session-background-processes">,
+) {
+  const sessionID = input.sessionID.trim()
+  const result = await requestAgentJSON<AgentSessionBackgroundProcessList>(
+    `/api/sessions/${encodeURIComponent(sessionID)}/background-processes`,
+  )
+
+  return result.data
+}
+
+async function terminateSessionBackgroundProcess(
+  input: DesktopIpcInput<"desktop:terminate-session-background-process">,
+) {
+  const sessionID = input.sessionID.trim()
+  const processID = input.processID.trim()
+  const result = await requestAgentJSON<AgentSessionBackgroundProcessTerminateResult>(
+    `/api/sessions/${encodeURIComponent(sessionID)}/background-processes/${encodeURIComponent(processID)}/terminate`,
+    { method: "POST" },
+  )
+
+  return result.data
+}
+
+async function terminateAllSessionBackgroundProcesses(
+  input: DesktopIpcInput<"desktop:terminate-all-session-background-processes">,
+) {
+  const sessionID = input.sessionID.trim()
+  const result = await requestAgentJSON<AgentSessionBackgroundProcessesTerminateAllResult>(
+    `/api/sessions/${encodeURIComponent(sessionID)}/background-processes/terminate-all`,
+    { method: "POST" },
   )
 
   return result.data
@@ -5969,6 +6008,15 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
     return result.data
   })
 
+  handleDesktopIpc("desktop:get-session-background-processes", async (_event, input) =>
+    getSessionBackgroundProcesses(input))
+
+  handleDesktopIpc("desktop:terminate-session-background-process", async (_event, input) =>
+    terminateSessionBackgroundProcess(input))
+
+  handleDesktopIpc("desktop:terminate-all-session-background-processes", async (_event, input) =>
+    terminateAllSessionBackgroundProcesses(input))
+
   handleDesktopIpc(
     "desktop:save-connector-config",
     async (_event, input: { connectorID: string; config: Record<string, string | null | undefined> }) => {
@@ -7578,6 +7626,7 @@ export const internal = {
   discardSessionBagSubmission,
   downloadSkillRegistrySkill,
   disposeSessionStreamSubscriptionsForWebContents,
+  getSessionBackgroundProcesses,
   getSessionTraceExport,
   getAnyboxSubscriptionOverview,
   getAnyboxRechargeOrder,
@@ -7597,6 +7646,8 @@ export const internal = {
   saveSessionTraceExportToProject,
   setDownloadedRegistrySkillEnabled,
   translatePromptPreset,
+  terminateAllSessionBackgroundProcesses,
+  terminateSessionBackgroundProcess,
   updateAgentSessionPinned,
   updateAgentSessionTitle,
   updatePromptPresetSelection,

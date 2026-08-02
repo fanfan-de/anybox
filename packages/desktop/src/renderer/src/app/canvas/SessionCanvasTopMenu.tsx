@@ -17,6 +17,7 @@ import type {
   ToolPermissionMode,
 } from "../types"
 import { EnvironmentActionsMenuButton } from "./EnvironmentActionsMenuButton"
+import { SessionBackgroundProcessesSection } from "./SessionBackgroundProcessesSection"
 
 const TOOL_PERMISSION_MODE_OPTIONS: Array<{
   value: ToolPermissionMode
@@ -861,6 +862,7 @@ function SessionInfoMenuButton({
     const handlePointerDown = (event: globalThis.PointerEvent) => {
       const target = event.target as Node | null
       if (!target) return
+      if (target instanceof Element && target.closest('[data-session-info-popover="true"]')) return
       if (menuRef.current?.contains(target) || buttonRef.current?.contains(target)) return
       userToggledRef.current = true
       setIsMenuOpen(false)
@@ -868,6 +870,8 @@ function SessionInfoMenuButton({
 
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") {
+        const target = event.target
+        if (target instanceof Element && target.closest('[data-session-info-popover="true"]')) return
         userToggledRef.current = true
         setIsMenuOpen(false)
       }
@@ -965,6 +969,7 @@ function SessionInfoMenuButton({
             )
           ) : null}
           <div className="task-progress-menu-divider" />
+          <SessionBackgroundProcessesSection key={sessionID} sessionID={sessionID} />
           {hasSubagents ? (
             <>
               <button

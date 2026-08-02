@@ -63,6 +63,27 @@ describe("desktop preload bridge", () => {
     expect(electronMock.invoke).toHaveBeenCalledWith("desktop:get-storage-usage")
   })
 
+  it("exposes session background process controls", async () => {
+    const api = electronMock.exposedDesktopApi as Record<string, (...args: unknown[]) => Promise<unknown>>
+    const listInput = { sessionID: "session-1" }
+    const terminateInput = { sessionID: "session-1", processID: "process-1" }
+    const list = { sessionID: "session-1", generatedAt: 1, items: [] }
+    const terminated = { sessionID: "session-1", processID: "process-1", terminated: true }
+    const terminatedAll = { sessionID: "session-1", terminatedProcessIDs: ["process-2"] }
+    electronMock.invoke
+      .mockResolvedValueOnce(list)
+      .mockResolvedValueOnce(terminated)
+      .mockResolvedValueOnce(terminatedAll)
+
+    await expect(api.getSessionBackgroundProcesses(listInput)).resolves.toEqual(list)
+    await expect(api.terminateSessionBackgroundProcess(terminateInput)).resolves.toEqual(terminated)
+    await expect(api.terminateAllSessionBackgroundProcesses(listInput)).resolves.toEqual(terminatedAll)
+
+    expect(electronMock.invoke).toHaveBeenNthCalledWith(1, "desktop:get-session-background-processes", listInput)
+    expect(electronMock.invoke).toHaveBeenNthCalledWith(2, "desktop:terminate-session-background-process", terminateInput)
+    expect(electronMock.invoke).toHaveBeenNthCalledWith(3, "desktop:terminate-all-session-background-processes", listInput)
+  })
+
   it("exposes the bounded semantic token inspector bridge and detach events", async () => {
     const api = electronMock.exposedDesktopApi as Record<string, (...args: unknown[]) => unknown>
     const input = {

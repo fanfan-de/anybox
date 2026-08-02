@@ -27,6 +27,11 @@ import * as SettingsUseCase from "#server/usecases/settings.ts"
 import * as Skill from "#skill/skill.ts"
 import * as Log from "#util/log.ts"
 import * as db from "#database/Sqlite.ts"
+import {
+  createShellTaskRegistry,
+  type ShellTaskOutputEvent,
+  type ShellTaskRuntimeHandle,
+} from "#shell/task-registry.ts"
 
 interface JsonEnvelope<T = Record<string, unknown>> {
   success: boolean
@@ -35,6 +40,41 @@ interface JsonEnvelope<T = Record<string, unknown>> {
   error?: {
     code: string
     message: string
+  }
+}
+
+class ApiShellTaskHandle implements ShellTaskRuntimeHandle {
+  readonly pid = 42
+  killed = 0
+  private readonly outputListeners = new Set<(event: ShellTaskOutputEvent) => void>()
+  private readonly exitListeners = new Set<(
+    event: { exitCode: number | null; signal: NodeJS.Signals | null },
+  ) => void>()
+  private finished = false
+
+  write() {}
+
+  interrupt() {}
+
+  kill() {
+    this.killed += 1
+    queueMicrotask(() => this.exit(null, "SIGTERM"))
+  }
+
+  onOutput(listener: (event: ShellTaskOutputEvent) => void) {
+    this.outputListeners.add(listener)
+    return () => this.outputListeners.delete(listener)
+  }
+
+  onExit(listener: (event: { exitCode: number | null; signal: NodeJS.Signals | null }) => void) {
+    this.exitListeners.add(listener)
+    return () => this.exitListeners.delete(listener)
+  }
+
+  exit(exitCode: number | null, signal: NodeJS.Signals | null = null) {
+    if (this.finished) return
+    this.finished = true
+    for (const listener of this.exitListeners) listener({ exitCode, signal })
   }
 }
 
@@ -887,6 +927,122 @@ describe("server api", () => {
     expect(body.requestId).toBeString()
   })
 
+  test("session background process routes list and terminate only owned running tasks", async () => {
+    const handles: ApiShellTaskHandle[] = []
+    let now = 1_000
+    const registry = createShellTaskRegistry({
+      now: () => now++,
+      runtime: {
+        spawn() {
+          const handle = new ApiShellTaskHandle()
+          handles.push(handle)
+          return handle
+        },
+      },
+    })
+    const app = createServerApp({ shellTaskRegistry: registry })
+    const session = await Session.createSession({
+      directory: process.cwd(),
+      projectID: "project_background_processes",
+      title: "Background process owner",
+    })
+    const otherSession = await Session.createSession({
+      directory: process.cwd(),
+      projectID: "project_background_processes",
+      title: "Other background process owner",
+    })
+    const start = (ownerSessionID: string, command: string) => registry.start({
+      ownerSessionID,
+      command,
+      cwd: process.cwd(),
+      shell: "PowerShell",
+      executable: "powershell.exe",
+      args: ["-Command", command],
+      maxOutputChars: 100,
+    })
+
+    try {
+      const first = await start(session.id, "first")
+      const exited = await start(session.id, "already-finished")
+      const other = await start(otherSession.id, "other-session")
+      handles[1]!.exit(0)
+      const newest = await start(session.id, "newest")
+
+      const listResponse = await app.request(
+        `http://localhost/api/sessions/${session.id}/background-processes`,
+      )
+      const listBody = (await listResponse.json()) as JsonEnvelope<{
+        sessionID: string
+        generatedAt: number
+        items: Array<{ id: string; command: string; status: string; cursor?: number }>
+      }>
+      expect(listResponse.status).toBe(200)
+      expect(listBody.data?.sessionID).toBe(session.id)
+      expect(listBody.data?.items.map((item) => item.id)).toEqual([newest.id, first.id])
+      expect(listBody.data?.items.every((item) => item.status === "running")).toBe(true)
+      expect(listBody.data?.items.some((item) => "cursor" in item)).toBe(false)
+      expect(listBody.data?.items[0]).toMatchObject({
+        id: newest.id,
+        title: "newest",
+        command: "newest",
+        cwd: process.cwd(),
+        shell: "PowerShell",
+        tty: false,
+        status: "running",
+        createdAt: expect.any(Number),
+        updatedAt: expect.any(Number),
+      })
+      expect(Object.keys(listBody.data?.items[0] ?? {}).sort()).toEqual([
+        "command",
+        "createdAt",
+        "cwd",
+        "id",
+        "shell",
+        "status",
+        "title",
+        "tty",
+        "updatedAt",
+      ])
+
+      const exitedResponse = await app.request(
+        `http://localhost/api/sessions/${session.id}/background-processes/${exited.id}/terminate`,
+        { method: "POST" },
+      )
+      expect(exitedResponse.status).toBe(200)
+      expect((await exitedResponse.json() as JsonEnvelope<{ terminated: boolean }>).data?.terminated).toBe(false)
+
+      const crossSessionResponse = await app.request(
+        `http://localhost/api/sessions/${session.id}/background-processes/${other.id}/terminate`,
+        { method: "POST" },
+      )
+      const crossSessionBody = await crossSessionResponse.json() as JsonEnvelope
+      expect(crossSessionResponse.status).toBe(404)
+      expect(crossSessionBody.error?.code).toBe("BACKGROUND_PROCESS_NOT_FOUND")
+
+      const terminateResponse = await app.request(
+        `http://localhost/api/sessions/${session.id}/background-processes/${first.id}/terminate`,
+        { method: "POST" },
+      )
+      expect(terminateResponse.status).toBe(200)
+      expect((await terminateResponse.json() as JsonEnvelope<{ terminated: boolean }>).data?.terminated).toBe(true)
+      expect(handles[0]!.killed).toBe(1)
+
+      const terminateAllResponse = await app.request(
+        `http://localhost/api/sessions/${session.id}/background-processes/terminate-all`,
+        { method: "POST" },
+      )
+      const terminateAllBody = await terminateAllResponse.json() as JsonEnvelope<{
+        terminatedProcessIDs: string[]
+      }>
+      expect(terminateAllResponse.status).toBe(200)
+      expect(terminateAllBody.data?.terminatedProcessIDs).toEqual([newest.id])
+      expect(handles[3]!.killed).toBe(1)
+      expect(handles[2]!.killed).toBe(0)
+    } finally {
+      await registry.disposeAll()
+    }
+  })
+
   test("built-in tool settings routes list, persist, reset, and validate selections", async () => {
     const app = createServerApp()
     await Config.setToolSelection(Config.GLOBAL_CONFIG_ID, {})
@@ -1043,6 +1199,32 @@ describe("server api", () => {
 
       expect(invalidResponse.status).toBe(400)
       expect(invalidBody.error?.code).toBe("UNKNOWN_BUILTIN_TOOL")
+    } finally {
+      await Config.setToolSelection(Config.GLOBAL_CONFIG_ID, {})
+    }
+  })
+
+  test("built-in tool catalog filters removed tool selections without rewriting stored config", async () => {
+    const app = createServerApp()
+    const storedTools = {
+      read_background_task: false,
+      "read-background-task": false,
+      stop_background_task: false,
+      "stop-background-task": false,
+      "replace-text": false,
+    }
+    await Config.setToolSelection(Config.GLOBAL_CONFIG_ID, storedTools)
+
+    try {
+      const response = await app.request("http://localhost/api/tools/builtins")
+      const body = (await response.json()) as BuiltinToolListEnvelope
+
+      expect(response.status).toBe(200)
+      expect(body.data?.selection.tools).toEqual({ replace_text: false })
+      expect(body.data?.items.some((tool) => tool.id === "read_background_task")).toBe(false)
+      expect(body.data?.items.some((tool) => tool.id === "stop_background_task")).toBe(false)
+      expect(body.data?.items.find((tool) => tool.id === "replace_text")?.enabled).toBe(false)
+      expect(await Config.getToolSelection(Config.GLOBAL_CONFIG_ID)).toEqual({ tools: storedTools })
     } finally {
       await Config.setToolSelection(Config.GLOBAL_CONFIG_ID, {})
     }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test"
 import { ToolModuleIDSchema } from "@anybox/shared"
 import z from "zod"
+import * as Agent from "#agent/agent.ts"
 import { Instance } from "#project/instance.ts"
 import * as Tool from "#tool/tool.ts"
 import * as ToolModule from "#tool/module.ts"
@@ -79,6 +80,23 @@ describe("universal tool module catalog", () => {
         expect(builtinEntries.every((entry) => entry.active && entry.exposure === "direct")).toBe(true)
       },
     })
+  })
+
+  it("does not register removed background task tools or aliases", async () => {
+    const tools = await ToolRegistry.builtinTools()
+    const exposedNames = tools.flatMap((tool) => [tool.id, ...(tool.aliases ?? [])])
+    const removedNames = [
+      "read_background_task",
+      "read-background-task",
+      "stop_background_task",
+      "stop-background-task",
+    ]
+
+    for (const name of removedNames) expect(exposedNames).not.toContain(name)
+    expect(JSON.stringify(ToolModule.catalogRegisteredTools({ tools }))).not.toContain("background_task")
+    expect(Agent.planAgent.tools?.write_stdin).toBe(true)
+    expect(Agent.planAgent.tools).not.toHaveProperty("read_background_task")
+    expect(Agent.planAgent.tools).not.toHaveProperty("stop_background_task")
   })
 
   it("groups legacy MCP tools by server while preserving configured and turn activation", async () => {

@@ -446,6 +446,12 @@ try {
       invokeDesktop("desktop:get-session-diff", input) as Promise<DesktopIpcOutput<"desktop:get-session-diff">>,
     getSessionTasks: (input: DesktopIpcInput<"desktop:get-session-tasks">) =>
       invokeDesktop("desktop:get-session-tasks", input) as Promise<DesktopIpcOutput<"desktop:get-session-tasks">>,
+    getSessionBackgroundProcesses: (input: DesktopIpcInput<"desktop:get-session-background-processes">) =>
+      invokeDesktop("desktop:get-session-background-processes", input) as Promise<DesktopIpcOutput<"desktop:get-session-background-processes">>,
+    terminateSessionBackgroundProcess: (input: DesktopIpcInput<"desktop:terminate-session-background-process">) =>
+      invokeDesktop("desktop:terminate-session-background-process", input) as Promise<DesktopIpcOutput<"desktop:terminate-session-background-process">>,
+    terminateAllSessionBackgroundProcesses: (input: DesktopIpcInput<"desktop:terminate-all-session-background-processes">) =>
+      invokeDesktop("desktop:terminate-all-session-background-processes", input) as Promise<DesktopIpcOutput<"desktop:terminate-all-session-background-processes">>,
     restoreWorkspaceDiffFile: (input: { directory: string; file: string }) =>
       invokeDesktop("desktop:restore-workspace-diff-file", input) as Promise<WorkspaceDiffFileRestoreResult>,
     stageWorkspaceDiffFile: (input: { directory: string; file: string }) =>

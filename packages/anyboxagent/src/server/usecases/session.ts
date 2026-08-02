@@ -11,7 +11,11 @@ import * as Mcp from "#mcp/manager.ts"
 import * as Project from "#project/project.ts"
 import { clearInProcessPermissionSession } from "#permission/permission.ts"
 import type { PtyRegistry } from "#pty/registry.ts"
-import { getShellTaskRegistry } from "#shell/task-registry.ts"
+import {
+  getShellTaskRegistry,
+  type ShellTaskInfo,
+  type ShellTaskRegistry,
+} from "#shell/task-registry.ts"
 import { Instance } from "#project/instance.ts"
 import { ApiError } from "#server/error.ts"
 import * as ContextWindow from "#session/core/context-window.ts"
@@ -337,6 +341,20 @@ function mapSessionSummary(session: Session.SessionInfo) {
   }
 }
 
+function mapSessionBackgroundProcess(task: ShellTaskInfo) {
+  return {
+    id: task.id,
+    title: task.title,
+    command: task.command,
+    cwd: task.cwd,
+    shell: task.shell,
+    tty: task.tty,
+    status: "running" as const,
+    createdAt: task.createdAt,
+    updatedAt: task.updatedAt,
+  }
+}
+
 function mapArchivedSessionSummary(record: Session.ArchivedSessionRecord | Session.ArchivedSessionSummaryRecord) {
   const project = Project.get(record.projectID)
   const normalized = "snapshot" in record ? Session.normalizeSessionInfo(record.snapshot.session) : null
@@ -440,6 +458,68 @@ export function deleteArchivedSession(sessionID: string) {
 
 export function getSession(sessionID: string) {
   return mapSessionSummary(requireSession(sessionID))
+}
+
+export function listSessionBackgroundProcesses(
+  sessionID: string,
+  options: { shellTaskRegistry?: ShellTaskRegistry } = {},
+) {
+  requireSession(sessionID)
+  const shellTaskRegistry = options.shellTaskRegistry ?? getShellTaskRegistry()
+  const items = shellTaskRegistry
+    .listByOwnerSession(sessionID, { status: "running" })
+    .sort((left, right) => right.createdAt - left.createdAt)
+    .map(mapSessionBackgroundProcess)
+
+  return {
+    sessionID,
+    generatedAt: Date.now(),
+    items,
+  }
+}
+
+export async function terminateSessionBackgroundProcess(
+  sessionID: string,
+  processID: string,
+  options: { shellTaskRegistry?: ShellTaskRegistry } = {},
+) {
+  requireSession(sessionID)
+  const shellTaskRegistry = options.shellTaskRegistry ?? getShellTaskRegistry()
+  const task = shellTaskRegistry.info(processID, sessionID)
+  if (!task) {
+    throw new ApiError(
+      404,
+      "BACKGROUND_PROCESS_NOT_FOUND",
+      `Background process '${processID}' was not found in this session`,
+    )
+  }
+  if (task.status !== "running") {
+    return {
+      sessionID,
+      processID,
+      terminated: false,
+    }
+  }
+
+  const terminated = await shellTaskRegistry.stop(processID, sessionID)
+  return {
+    sessionID,
+    processID,
+    terminated: Boolean(terminated),
+  }
+}
+
+export async function terminateAllSessionBackgroundProcesses(
+  sessionID: string,
+  options: { shellTaskRegistry?: ShellTaskRegistry } = {},
+) {
+  requireSession(sessionID)
+  const shellTaskRegistry = options.shellTaskRegistry ?? getShellTaskRegistry()
+  const terminated = await shellTaskRegistry.stopRunningByOwnerSession(sessionID)
+  return {
+    sessionID,
+    terminatedProcessIDs: terminated.map((task) => task.id),
+  }
 }
 
 export function updateSessionActiveMessage(

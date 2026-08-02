@@ -401,6 +401,35 @@ export interface AgentSessionTaskListView {
   }
 }
 
+export interface AgentSessionBackgroundProcess {
+  id: string
+  title: string
+  command: string
+  cwd: string
+  shell: string
+  tty: boolean
+  status: "running"
+  createdAt: number
+  updatedAt: number
+}
+
+export interface AgentSessionBackgroundProcessList {
+  sessionID: string
+  generatedAt: number
+  items: AgentSessionBackgroundProcess[]
+}
+
+export interface AgentSessionBackgroundProcessTerminateResult {
+  sessionID: string
+  processID: string
+  terminated: boolean
+}
+
+export interface AgentSessionBackgroundProcessesTerminateAllResult {
+  sessionID: string
+  terminatedProcessIDs: string[]
+}
+
 export type AgentSessionToolPolicy = "default" | "read-only"
 
 export interface AgentSessionPolicy {

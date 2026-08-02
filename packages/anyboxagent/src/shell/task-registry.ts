@@ -144,14 +144,8 @@ function createShellTaskRuntimeHandle(child: PipeShellChild): ShellTaskRuntimeHa
     },
     interrupt() {
       if (finished) return
-      if (process.platform === "win32") {
-        terminateProcessTree(child)
-        return
-      }
-
-      if (!child.kill("SIGINT")) {
-        terminateProcessTree(child)
-      }
+      if (process.platform === "win32") return
+      child.kill("SIGINT")
     },
     kill() {
       terminateProcessTree(child)
@@ -332,7 +326,6 @@ async function createManagedShellTask(
     resolveExit = resolve
   })
   let timeoutTimer: ReturnType<typeof setTimeout> | null = null
-  let interruptFallbackTimer: ReturnType<typeof setTimeout> | null = null
   let deliveredCursor = 0
   let interactionQueue: Promise<void> = Promise.resolve()
   let stopPromise: Promise<ShellTaskInfo> | null = null
@@ -390,12 +383,6 @@ async function createManagedShellTask(
     timeoutTimer = null
   }
 
-  function clearInterruptFallbackTimer() {
-    if (!interruptFallbackTimer) return
-    clearTimeout(interruptFallbackTimer)
-    interruptFallbackTimer = null
-  }
-
   async function waitForExit(yieldTimeMs: number, abort?: AbortSignal) {
     if (info.status !== "running" || yieldTimeMs <= 0 || abort?.aborted) return
 
@@ -437,7 +424,6 @@ async function createManagedShellTask(
     onExitDispose = runtime.onExit((event) => {
       resolveExit?.()
       clearTimeoutTimer()
-      clearInterruptFallbackTimer()
       if (cleaned) return
       if (info.status === "deleted") {
         updateInfo({
@@ -487,7 +473,6 @@ async function createManagedShellTask(
     if (cleaned) return
     cleaned = true
     clearTimeoutTimer()
-    clearInterruptFallbackTimer()
     onOutputDispose?.()
     onExitDispose?.()
     onOutputDispose = null
@@ -537,20 +522,6 @@ async function createManagedShellTask(
 
           if (interaction.data === "\x03") {
             runtime.interrupt()
-            if (!info.tty) {
-              clearInterruptFallbackTimer()
-              interruptFallbackTimer = setTimeout(() => {
-                interruptFallbackTimer = null
-                if (!cleaned && info.status === "running") {
-                  try {
-                    runtime.kill()
-                  } catch {
-                    // The process may have exited after ignoring the first interrupt.
-                  }
-                }
-              }, 1_000)
-              interruptFallbackTimer.unref?.()
-            }
           } else {
             if (!info.tty) {
               throw new Error("Pipe shell sessions do not accept ordinary stdin; restart the command with tty=true")
@@ -739,6 +710,15 @@ export class ShellTaskRegistry {
     return this.accessibleTask(id, ownerSessionID)?.info() ?? null
   }
 
+  listByOwnerSession(ownerSessionID: string, options: { status?: ShellTaskStatus } = {}) {
+    return [...this.tasks.values()]
+      .map((task) => task.info())
+      .filter((task) => (
+        task.ownerSessionID === ownerSessionID &&
+        (!options.status || task.status === options.status)
+      ))
+  }
+
   private accessibleTask(id: string, ownerSessionID?: string) {
     const task = this.tasks.get(id)
     if (!task) return null
@@ -802,6 +782,14 @@ export class ShellTaskRegistry {
 
   async stopByOwnerSession(ownerSessionID: string) {
     const tasks = [...this.tasks.values()].filter((task) => task.info().ownerSessionID === ownerSessionID)
+    return await Promise.all(tasks.map((task) => task.stop()))
+  }
+
+  async stopRunningByOwnerSession(ownerSessionID: string) {
+    const tasks = [...this.tasks.values()].filter((task) => {
+      const info = task.info()
+      return info.ownerSessionID === ownerSessionID && info.status === "running"
+    })
     return await Promise.all(tasks.map((task) => task.stop()))
   }
 

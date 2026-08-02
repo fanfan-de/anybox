@@ -706,6 +706,59 @@ describe("SessionCanvasTopMenu task progress", () => {
     expect(onOpenSubagentSession).toHaveBeenCalledWith("child-session", "Write intro doc")
   })
 
+  it("keeps background process portal menus inside the information interaction and out of the task badge", async () => {
+    const getSessionBackgroundProcesses = vi.fn().mockResolvedValue({
+      sessionID: session.id,
+      generatedAt: 2,
+      items: [
+        {
+          id: "process-1",
+          title: "Compile docs",
+          command: "pnpm docs:build --watch",
+          cwd: "C:\\Projects\\Docs",
+          shell: "powershell.exe",
+          tty: true,
+          status: "running" as const,
+          createdAt: 1,
+          updatedAt: 2,
+        },
+      ],
+    })
+    setDesktopApi({ getSessionBackgroundProcesses })
+    const { container } = renderTopMenu({
+      sessionTasks: createTaskList([], [
+        {
+          id: "subagent-1",
+          owner: "codex",
+          title: "Review output",
+          status: "running",
+          active: true,
+          childSessionID: "child-session",
+        },
+      ]),
+    })
+
+    const infoTrigger = screen.getByRole("button", { name: "Session information: no tasks" })
+    expect(container.querySelector(".canvas-top-menu-info-badge")).toBeNull()
+    fireEvent.click(infoTrigger)
+
+    fireEvent.click(await screen.findByRole("button", { name: "后台进程操作：Compile docs" }))
+    const dialog = screen.getByRole("dialog", { name: "Session information" })
+    const progressToggle = within(dialog).getByRole("button", { name: "展开进度" })
+    const backgroundSection = within(dialog).getByRole("region", { name: "后台进程" })
+    const subagentToggle = within(dialog).getByRole("button", { name: "收起子 Agent" })
+    expect(progressToggle.compareDocumentPosition(backgroundSection) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+    expect(backgroundSection.compareDocumentPosition(subagentToggle) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+    const terminateItem = screen.getByRole("menuitem", { name: "强制终止" })
+    fireEvent.pointerDown(terminateItem)
+    expect(screen.getByRole("dialog", { name: "Session information" })).toBeInTheDocument()
+
+    fireEvent.keyDown(terminateItem, { key: "Escape" })
+    expect(screen.queryByRole("menuitem", { name: "强制终止" })).not.toBeInTheDocument()
+    expect(screen.getByRole("dialog", { name: "Session information" })).toBeInTheDocument()
+    expect(container.querySelector(".canvas-top-menu-info-badge")).toBeNull()
+  })
+
   it("hides the task trigger without an active session", () => {
     renderTopMenu({ activeSession: null, sessionTasks: null })
 

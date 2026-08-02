@@ -25,7 +25,11 @@ import { isApiError } from "#server/error.ts"
 import { isSessionLimitError } from "#session/runtime/session-limits.ts"
 import type { AppEnv } from "#server/types.ts"
 import { getPtyRegistry, type PtyRegistry } from "#pty/registry.ts"
-import { disposeShellTaskRegistry } from "#shell/task-registry.ts"
+import {
+  disposeShellTaskRegistry,
+  getShellTaskRegistry,
+  type ShellTaskRegistry,
+} from "#shell/task-registry.ts"
 import { isPtyRuntimeError } from "#pty/runtime.ts"
 import * as Log from "#util/log.ts"
 import { getProcessEnvValue } from "#env/compat.ts"
@@ -41,6 +45,10 @@ export interface ServerOptions {
   idleTimeout?: number
   corsWhitelist?: string[]
   ptyRegistry?: PtyRegistry
+}
+
+interface ServerRuntimeOptions extends Pick<ServerOptions, "corsWhitelist" | "ptyRegistry"> {
+  shellTaskRegistry?: ShellTaskRegistry
 }
 
 const log = Log.create({ service: "server" })
@@ -84,15 +92,18 @@ function parseIdleTimeout(input: string | undefined, fallback: number) {
   return Math.min(parsed, 255)
 }
 
-export function createServerApp(options: Pick<ServerOptions, "corsWhitelist"> = {}) {
+export function createServerApp(options: Pick<ServerOptions, "corsWhitelist"> & {
+  shellTaskRegistry?: ShellTaskRegistry
+} = {}) {
   return createServerRuntime(options).app
 }
 
-export function createServerRuntime(options: Pick<ServerOptions, "corsWhitelist" | "ptyRegistry"> = {}) {
+export function createServerRuntime(options: ServerRuntimeOptions = {}) {
   const app = new Hono<AppEnv>()
   const whitelist = (options.corsWhitelist ?? []).filter(Boolean)
   const { upgradeWebSocket, websocket } = createBunWebSocket()
   const ptyRegistry = options.ptyRegistry ?? getPtyRegistry()
+  const shellTaskRegistry = options.shellTaskRegistry ?? getShellTaskRegistry()
 
   app.use("*", async (c, next) => {
     const requestId = crypto.randomUUID()
@@ -153,7 +164,7 @@ export function createServerRuntime(options: Pick<ServerOptions, "corsWhitelist"
   app.route("/api/cinema", CinemaRoutes())
   app.route("/api/cinema", CinemaAssetLibraryRoutes())
   app.route("/api/projects", ProjectRoutes({ ptyRegistry }))
-  app.route("/api/sessions", SessionRoutes({ ptyRegistry }))
+  app.route("/api/sessions", SessionRoutes({ ptyRegistry, shellTaskRegistry }))
   app.route("/api/storage", StorageRoutes())
   app.route("/api/skill-registry", SkillRegistryRoutes())
   app.route("/", CinemaWebRoutes())

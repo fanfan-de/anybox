@@ -1509,11 +1509,32 @@ export async function getInstalledPluginConnectorDiagnostic(pluginID: string, ap
   }
 }
 
+function normalizeRegisteredBuiltinToolSelection(
+  items: Array<{ id: string; aliases?: string[] }>,
+  selection: { tools: Record<string, boolean> },
+) {
+  const canonicalToolIDByName = new Map<string, string>()
+  for (const item of items) {
+    canonicalToolIDByName.set(item.id, item.id)
+    for (const alias of item.aliases ?? []) canonicalToolIDByName.set(alias, item.id)
+  }
+
+  const tools: Record<string, boolean> = {}
+  for (const [name, enabled] of Object.entries(selection.tools)) {
+    const canonicalToolID = canonicalToolIDByName.get(name.trim())
+    if (!canonicalToolID) continue
+    tools[canonicalToolID] = tools[canonicalToolID] === false ? false : enabled
+  }
+
+  return { tools }
+}
+
 export async function listBuiltinTools() {
-  const [items, selection] = await Promise.all([
+  const [items, storedSelection] = await Promise.all([
     ToolRegistry.builtinTools(),
     Config.getToolSelection(Config.GLOBAL_CONFIG_ID),
   ])
+  const selection = normalizeRegisteredBuiltinToolSelection(items, storedSelection)
   const catalog = ToolModule.catalogRegisteredTools({ tools: items })
   const builtinModules = catalog.entries
     .filter((entry) => entry.descriptor.provider.kind === "builtin" && entry.tools.length > 0)

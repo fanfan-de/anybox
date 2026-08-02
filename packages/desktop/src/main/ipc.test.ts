@@ -111,6 +111,51 @@ describe("session metadata IPC helpers", () => {
   })
 })
 
+describe("session background process IPC helpers", () => {
+  it("proxies list and termination requests with trimmed encoded identifiers", async () => {
+    const list = {
+      sessionID: "session / 1",
+      generatedAt: 10,
+      items: [],
+    }
+    const terminated = {
+      sessionID: "session / 1",
+      processID: "process / 1",
+      terminated: true,
+    }
+    const terminatedAll = {
+      sessionID: "session / 1",
+      terminatedProcessIDs: ["process / 2"],
+    }
+    requestAgentJSONMock
+      .mockResolvedValueOnce({ data: list })
+      .mockResolvedValueOnce({ data: terminated })
+      .mockResolvedValueOnce({ data: terminatedAll })
+
+    await expect(internal.getSessionBackgroundProcesses({ sessionID: " session / 1 " })).resolves.toEqual(list)
+    await expect(internal.terminateSessionBackgroundProcess({
+      sessionID: " session / 1 ",
+      processID: " process / 1 ",
+    })).resolves.toEqual(terminated)
+    await expect(internal.terminateAllSessionBackgroundProcesses({ sessionID: " session / 1 " })).resolves.toEqual(terminatedAll)
+
+    expect(requestAgentJSONMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/sessions/session%20%2F%201/background-processes",
+    )
+    expect(requestAgentJSONMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/sessions/session%20%2F%201/background-processes/process%20%2F%201/terminate",
+      { method: "POST" },
+    )
+    expect(requestAgentJSONMock).toHaveBeenNthCalledWith(
+      3,
+      "/api/sessions/session%20%2F%201/background-processes/terminate-all",
+      { method: "POST" },
+    )
+  })
+})
+
 describe("skill registry IPC helpers", () => {
   it("downloads by stable registry reference without accepting a client descriptor", async () => {
     requestAgentJSONMock.mockResolvedValue({ data: { id: "registry:clawhub:demo/docs" } })

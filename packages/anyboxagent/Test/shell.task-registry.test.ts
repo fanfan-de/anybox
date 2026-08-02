@@ -85,6 +85,67 @@ class FakePtyHandle implements PtyRuntimeHandle {
 }
 
 describe("shell task registry", () => {
+  it("lists and stops only running tasks owned by one session", async () => {
+    const first = new FakeShellTaskHandle()
+    const other = new FakeShellTaskHandle()
+    const exited = new FakeShellTaskHandle()
+    const handles = [first, other, exited]
+    const registry = createShellTaskRegistry({
+      runtime: {
+        spawn() {
+          return handles.shift()!
+        },
+      },
+    })
+
+    const firstTask = await registry.start({
+      ownerSessionID: "session-owned",
+      command: "first",
+      cwd: "C:\\workspace",
+      shell: "PowerShell",
+      executable: "powershell.exe",
+      args: ["-Command", "first"],
+      maxOutputChars: 100,
+    })
+    await registry.start({
+      ownerSessionID: "session-other",
+      command: "other",
+      cwd: "C:\\workspace",
+      shell: "PowerShell",
+      executable: "powershell.exe",
+      args: ["-Command", "other"],
+      maxOutputChars: 100,
+    })
+    const exitedTask = await registry.start({
+      ownerSessionID: "session-owned",
+      command: "exited",
+      cwd: "C:\\workspace",
+      shell: "PowerShell",
+      executable: "powershell.exe",
+      args: ["-Command", "exited"],
+      maxOutputChars: 100,
+    })
+    exited.exit(0)
+
+    expect(registry.listByOwnerSession("session-owned").map((task) => task.id)).toEqual([
+      firstTask.id,
+      exitedTask.id,
+    ])
+    expect(registry.listByOwnerSession("session-owned", { status: "running" }).map((task) => task.id)).toEqual([
+      firstTask.id,
+    ])
+
+    const stopping = registry.stopRunningByOwnerSession("session-owned")
+    expect(first.killed).toBe(1)
+    expect(other.killed).toBe(0)
+    expect(exited.killed).toBe(0)
+    first.exit(null, "SIGTERM")
+
+    expect((await stopping).map((task) => task.id)).toEqual([firstTask.id])
+    other.exit(0)
+    await registry.disposeAll()
+  })
+
   it("runs an arbitrary executable invocation and returns separated output after exit", async () => {
     const handle = new FakeShellTaskHandle()
     let invocation: Parameters<ShellTaskRuntimeAdapter["spawn"]>[0] | undefined
@@ -256,6 +317,8 @@ describe("shell task registry", () => {
 
     expect(handle.writes).toEqual([])
     expect(handle.interrupted).toBe(1)
+    await Bun.sleep(1_050)
+    expect(handle.killed).toBe(0)
     handle.exit(null, "SIGINT")
     registry.take(task.id, "session-a")
   })

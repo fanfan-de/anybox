@@ -67,6 +67,9 @@ import type {
   AgentProviderModel,
   AgentPtySessionInfo,
   AgentSessionArchiveResult,
+  AgentSessionBackgroundProcessList,
+  AgentSessionBackgroundProcessesTerminateAllResult,
+  AgentSessionBackgroundProcessTerminateResult,
   AgentSessionBridgeIPCEvent,
   AgentSessionCompactResult,
   AgentSessionDeleteResult,
@@ -292,6 +295,9 @@ export type {
   AgentProviderModel,
   AgentPtySessionInfo,
   AgentSessionArchiveResult,
+  AgentSessionBackgroundProcessList,
+  AgentSessionBackgroundProcessesTerminateAllResult,
+  AgentSessionBackgroundProcessTerminateResult,
   AgentSessionBridgeIPCEvent,
   AgentSessionCompactResult,
   AgentSessionDeleteResult,
@@ -1819,6 +1825,18 @@ export interface DesktopIpcContract {
     input: { sessionID: string }
     output: AgentSessionTaskListView
   }
+  "desktop:get-session-background-processes": {
+    input: { sessionID: string }
+    output: AgentSessionBackgroundProcessList
+  }
+  "desktop:terminate-session-background-process": {
+    input: { sessionID: string; processID: string }
+    output: AgentSessionBackgroundProcessTerminateResult
+  }
+  "desktop:terminate-all-session-background-processes": {
+    input: { sessionID: string }
+    output: AgentSessionBackgroundProcessesTerminateAllResult
+  }
   "desktop:restore-workspace-diff-file": {
     input: { directory: string; file: string }
     output: WorkspaceDiffFileRestoreResult
@@ -2722,6 +2740,9 @@ export interface DesktopApiMethods {
   deleteArchivedSession(input: DesktopIpcInput<"desktop:delete-archived-session">): Promise<DesktopIpcOutput<"desktop:delete-archived-session">>
   getSessionDiff(input: DesktopIpcInput<"desktop:get-session-diff">): Promise<DesktopIpcOutput<"desktop:get-session-diff">>
   getSessionTasks(input: DesktopIpcInput<"desktop:get-session-tasks">): Promise<DesktopIpcOutput<"desktop:get-session-tasks">>
+  getSessionBackgroundProcesses(input: DesktopIpcInput<"desktop:get-session-background-processes">): Promise<DesktopIpcOutput<"desktop:get-session-background-processes">>
+  terminateSessionBackgroundProcess(input: DesktopIpcInput<"desktop:terminate-session-background-process">): Promise<DesktopIpcOutput<"desktop:terminate-session-background-process">>
+  terminateAllSessionBackgroundProcesses(input: DesktopIpcInput<"desktop:terminate-all-session-background-processes">): Promise<DesktopIpcOutput<"desktop:terminate-all-session-background-processes">>
   restoreWorkspaceDiffFile(input: DesktopIpcInput<"desktop:restore-workspace-diff-file">): Promise<DesktopIpcOutput<"desktop:restore-workspace-diff-file">>
   stageWorkspaceDiffFile(input: DesktopIpcInput<"desktop:stage-workspace-diff-file">): Promise<DesktopIpcOutput<"desktop:stage-workspace-diff-file">>
   unstageWorkspaceDiffFile(input: DesktopIpcInput<"desktop:unstage-workspace-diff-file">): Promise<DesktopIpcOutput<"desktop:unstage-workspace-diff-file">>

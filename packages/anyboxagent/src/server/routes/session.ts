@@ -4,12 +4,13 @@ import { ok, parseJsonBody } from "#server/http.ts"
 import { ApiError } from "#server/error.ts"
 import type { AppEnv } from "#server/types.ts"
 import type { PtyRegistry } from "#pty/registry.ts"
+import type { ShellTaskRegistry } from "#shell/task-registry.ts"
 import * as SessionUseCase from "#server/usecases/session.ts"
 import * as ImageAssets from "#session/support/image-assets.ts"
 
 export { createSessionExecutionStream } from "#server/usecases/session.ts"
 
-export function SessionRoutes(options: { ptyRegistry: PtyRegistry }) {
+export function SessionRoutes(options: { ptyRegistry: PtyRegistry; shellTaskRegistry: ShellTaskRegistry }) {
   const app = new Hono<AppEnv>()
 
   app.get("/", (c) =>
@@ -52,6 +53,22 @@ export function SessionRoutes(options: { ptyRegistry: PtyRegistry }) {
 
   app.get("/:id/tasks/:taskID", (c) =>
     ok(c, SessionUseCase.getSessionTask(c.req.param("id"), c.req.param("taskID"))),
+  )
+
+  app.get("/:id/background-processes", (c) =>
+    ok(c, SessionUseCase.listSessionBackgroundProcesses(c.req.param("id"), options)),
+  )
+
+  app.post("/:id/background-processes/terminate-all", async (c) =>
+    ok(c, await SessionUseCase.terminateAllSessionBackgroundProcesses(c.req.param("id"), options)),
+  )
+
+  app.post("/:id/background-processes/:processID/terminate", async (c) =>
+    ok(c, await SessionUseCase.terminateSessionBackgroundProcess(
+      c.req.param("id"),
+      c.req.param("processID"),
+      options,
+    )),
   )
 
   app.get("/:id", (c) => ok(c, SessionUseCase.getSession(c.req.param("id"))))

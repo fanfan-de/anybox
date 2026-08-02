@@ -19,7 +19,7 @@ const CHARS_PER_TOKEN = 4
 
 const WriteStdinParameters = z.object({
   session_id: Identifier.schema("task").describe("Identifier of the running shell session."),
-  chars: z.string().max(100_000).optional().describe("Characters to write to stdin. Defaults to empty, which polls without writing. Use \\u0003 to interrupt the process."),
+  chars: z.string().max(100_000).optional().describe("Characters to write to stdin. Omit or pass an empty string to poll without writing. \\u0003 sends a cooperative Ctrl-C and does not guarantee that the process exits."),
   "yield-time_ms": z.number().int().nonnegative().max(MAX_POLL_YIELD_TIME_MS).optional().describe("Wait before yielding output. Empty polls clamp to 5000-300000 ms; non-empty writes clamp to 250-30000 ms."),
   max_output_tokens: z.number().int().positive().max(MAX_OUTPUT_TOKENS).optional().describe("Approximate output token budget. Defaults to 10000 tokens."),
 }).strict()
@@ -96,7 +96,7 @@ export const WriteStdinTool = Tool.define(
   "write_stdin",
   async (): Promise<Tool.ToolRuntime<typeof WriteStdinParameters, WriteStdinMetadata>> => ({
     title: "Write Stdin",
-    description: "Poll a managed shell session or interact with a tty=true terminal. Pipe sessions accept only empty polls and \\u0003 interruption; ordinary input requires restarting the command with tty=true.",
+    description: "Poll a managed shell session with empty chars, or interact with a tty=true terminal. \\u0003 sends a cooperative Ctrl-C and may leave the process running; if it does, tell the user to force terminate it from Session Information > Background Processes.",
     parameters: WriteStdinParameters,
     validate: (parameters, ctx) => {
       const task = getShellTaskRegistry().info(parameters.session_id, ctx.sessionID)
@@ -108,7 +108,7 @@ export const WriteStdinTool = Tool.define(
       }
       const chars = parameters.chars ?? ""
       if (chars && chars !== INTERRUPT && !task.tty) {
-        return "Pipe shell sessions do not accept ordinary stdin. Stop the current task if needed, then restart the original shell command with tty=true."
+        return "Pipe shell sessions do not accept ordinary stdin. Restart the original shell command with tty=true, or ask the user to force terminate it from Session Information > Background Processes."
       }
     },
     assessPermission: (parameters, ctx) => {
@@ -125,7 +125,7 @@ export const WriteStdinTool = Tool.define(
         return {
           action: "allow",
           risk: "medium",
-          reason: "Ctrl-C interrupts a shell process that was already started by this session.",
+          reason: "Ctrl-C cooperatively interrupts a shell process that was already started by this session, but may not end it.",
         }
       }
       const task = getShellTaskRegistry().info(parameters.session_id, ctx.sessionID)
@@ -214,6 +214,9 @@ export const WriteStdinTool = Tool.define(
           `Timed Out: ${interaction.task.timedOut ? "yes" : "no"}`,
           `Wall Time: ${wallTimeSeconds.toFixed(3)} seconds`,
           outputTruncated ? "Note: Output was truncated to the configured token budget." : undefined,
+          chars === INTERRUPT && running
+            ? "Note: Ctrl-C was requested, but the process is still running. Tell the user to force terminate it from Session Information > Background Processes."
+            : undefined,
           "",
           "OUTPUT:",
           retained.output || "(no new output)",

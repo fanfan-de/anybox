@@ -208,8 +208,6 @@ const EXECUTION_TOOL_IDS = new Set([
   "wsl_bash_command",
   "ssh_shell_command",
   "write_stdin",
-  "read_background_task",
-  "stop_background_task",
 ])
 const CODE_TOOL_IDS = new Set(["lsp_definition", "lsp_references", "lsp_hover", "lsp_workspace_symbols"])
 const RECOVERY_TOOL_IDS = new Set(["list_rollback_checkpoints", "rollback_to_checkpoint"])

@@ -10,6 +10,7 @@ import z from "zod"
 import * as Agent from "#agent/agent.ts"
 import * as Identifier from "#id/id.ts"
 import { Instance } from "#project/instance.ts"
+import { getShellTaskRegistry } from "#shell/task-registry.ts"
 import * as Message from "#session/core/message.ts"
 import { resolveTools } from "#session/core/resolve-tools.ts"
 import * as ImageAssets from "#session/support/image-assets.ts"
@@ -32,10 +33,8 @@ import {
 } from "#tool/shell-command.ts"
 import { GlobTool } from "#tool/glob.ts"
 import { GrepTool } from "#tool/grep.ts"
-import { ReadBackgroundTaskTool } from "#tool/read-background-task.ts"
 import { ReadFileTool } from "#tool/read-file.ts"
 import { ReplaceTextTool } from "#tool/replace-text.ts"
-import { StopBackgroundTaskTool } from "#tool/stop-background-task.ts"
 import { TerminalReadTool, TerminalRunCommandTool, TerminalWriteInputTool } from "#tool/terminal-tools.ts"
 import * as Tool from "#tool/tool.ts"
 import * as ToolRegistry from "#tool/registry.ts"
@@ -1205,7 +1204,7 @@ describe("tool contract", () => {
     })
   })
 
-  it("starts background shell tasks and lets companion tools read and stop them", async () => {
+  it("starts background shell tasks, polls them with write_stdin, and cleans them up through the registry", async () => {
     await Instance.provide({
       directory: process.cwd(),
       async fn() {
@@ -1216,8 +1215,7 @@ describe("tool contract", () => {
             : null
         if (!execTool) return
         const execRuntime = await execTool.init()
-        const readRuntime = await ReadBackgroundTaskTool.init()
-        const stopRuntime = await StopBackgroundTaskTool.init()
+        const writeRuntime = await WriteStdinTool.init()
         const ctx = {
           sessionID: "session-background-task",
           messageID: "message-background-task",
@@ -1235,6 +1233,7 @@ describe("tool contract", () => {
         const backgroundTaskId = String((started.metadata as any)?.backgroundTaskId)
         const modelOutput = await execRuntime.toModelOutput?.(started as any)
         expect(started.text).toContain("Status: started in background")
+        expect(started.text).toContain("Session Information > Background Processes")
         expect(started.metadata).toMatchObject({
           runInBackground: true,
           backgroundTaskId: expect.stringMatching(/^tsk_/),
@@ -1250,35 +1249,22 @@ describe("tool contract", () => {
         expect((normalizedModelOutput.value as any).session_id).toBe(backgroundTaskId)
         expect((normalizedModelOutput.value as any).runInBackground).toBe(true)
 
-        let snapshot = Tool.normalizeToolOutput(await readRuntime.execute(
+        const snapshot = Tool.normalizeToolOutput(await writeRuntime.execute(
           {
-            id: backgroundTaskId,
+            session_id: backgroundTaskId,
+            chars: "",
+            "yield-time_ms": 5_000,
           },
           ctx,
         ))
-        const deadline = Date.now() + 5_000
-        while (!String((snapshot.metadata as any)?.output ?? "").includes("hello") && Date.now() < deadline) {
-          await Bun.sleep(25)
-          snapshot = Tool.normalizeToolOutput(await readRuntime.execute(
-            {
-              id: backgroundTaskId,
-            },
-            ctx,
-          ))
-        }
 
         expect(snapshot.text).toContain("OUTPUT:")
         expect(String((snapshot.metadata as any)?.output ?? "")).toContain("hello")
         expect((snapshot.metadata as any)?.status).toBe("running")
 
-        const stopped = Tool.normalizeToolOutput(await stopRuntime.execute(
-          {
-            id: backgroundTaskId,
-          },
-          ctx,
-        ))
+        const stopped = await getShellTaskRegistry().stop(backgroundTaskId, ctx.sessionID)
 
-        expect(stopped.metadata).toMatchObject({
+        expect(stopped).toMatchObject({
           id: backgroundTaskId,
           status: "deleted",
         })
@@ -1306,8 +1292,7 @@ describe("tool contract", () => {
         if (!shellCase) return
 
         const execRuntime = await shellCase.tool.init()
-        const readRuntime = await ReadBackgroundTaskTool.init()
-        const stopRuntime = await StopBackgroundTaskTool.init()
+        const writeRuntime = await WriteStdinTool.init()
         const ctx = {
           sessionID: "session-shell-auto-yield",
           messageID: "message-shell-auto-yield",
@@ -1340,40 +1325,21 @@ describe("tool contract", () => {
           },
         })
 
-        let snapshot = Tool.normalizeToolOutput(await readRuntime.execute(
+        const snapshot = Tool.normalizeToolOutput(await writeRuntime.execute(
           {
-            id: backgroundTaskId,
-            cursor,
+            session_id: backgroundTaskId,
+            chars: "",
+            "yield-time_ms": 5_000,
           },
           ctx,
         ))
-        const deadline = Date.now() + 5_000
-        while (
-          !String((started.metadata as any)?.stdout ?? "").includes("hello") &&
-          !String((snapshot.metadata as any)?.output ?? "").includes("hello") &&
-          Date.now() < deadline
-        ) {
-          await Bun.sleep(25)
-          snapshot = Tool.normalizeToolOutput(await readRuntime.execute(
-            {
-              id: backgroundTaskId,
-              cursor,
-            },
-            ctx,
-          ))
-        }
 
         expect(
           `${String((started.metadata as any)?.stdout ?? "")}\n${String((snapshot.metadata as any)?.output ?? "")}`,
         ).toContain("hello")
 
-        const stopped = Tool.normalizeToolOutput(await stopRuntime.execute(
-          {
-            id: backgroundTaskId,
-          },
-          ctx,
-        ))
-        expect(stopped.metadata).toMatchObject({
+        const stopped = await getShellTaskRegistry().stop(backgroundTaskId, ctx.sessionID)
+        expect(stopped).toMatchObject({
           id: backgroundTaskId,
           status: "deleted",
         })
@@ -1554,7 +1520,6 @@ describe("tool contract", () => {
 
         const execRuntime = await shellCase.tool.init()
         const writeRuntime = await WriteStdinTool.init()
-        const stopRuntime = await StopBackgroundTaskTool.init()
         const ctx = {
           sessionID: "session-write-stdin-interrupt",
           messageID: "message-write-stdin-interrupt",
@@ -1581,8 +1546,12 @@ describe("tool contract", () => {
           id: sessionID,
           interrupted: true,
         })
+        if (process.platform === "win32") {
+          expect((interrupted.metadata as any)?.status).toBe("running")
+          expect(interrupted.text).toContain("Session Information > Background Processes")
+        }
         if ((interrupted.metadata as any)?.status === "running") {
-          await stopRuntime.execute({ id: sessionID }, ctx)
+          await getShellTaskRegistry().stop(sessionID, ctx.sessionID)
         } else {
           expect((interrupted.metadata as any)?.status).toBe("exited")
         }
@@ -1649,7 +1618,6 @@ describe("tool contract", () => {
 
         const execRuntime = await shellCase.tool.init()
         const writeRuntime = await WriteStdinTool.init()
-        const stopRuntime = await StopBackgroundTaskTool.init()
         const ctx = {
           sessionID: "session-pipe-stdin-rejected",
           messageID: "message-pipe-stdin-rejected",
@@ -1668,7 +1636,7 @@ describe("tool contract", () => {
           session_id: sessionID,
           chars: "yes\n",
         }, ctx)).rejects.toThrow("tty=true")
-        await stopRuntime.execute({ id: sessionID }, ctx)
+        await getShellTaskRegistry().stop(sessionID, ctx.sessionID)
       },
     })
   }, 120000)
@@ -1737,7 +1705,6 @@ describe("tool contract", () => {
         const command = "node -e \"process.on('SIGINT',()=>console.log('interrupt-kept-alive'));console.log('ready');setInterval(()=>{},1000)\""
         const execRuntime = await tool.init()
         const writeRuntime = await WriteStdinTool.init()
-        const stopRuntime = await StopBackgroundTaskTool.init()
         const ctx = {
           sessionID: "session-tty-interrupt-handler",
           messageID: "message-tty-interrupt-handler",
@@ -1767,7 +1734,8 @@ describe("tool contract", () => {
           interrupted: true,
         })
         expect(String((interrupted.metadata as any)?.output ?? "")).toContain("interrupt-kept-alive")
-        await stopRuntime.execute({ id: sessionID }, ctx)
+        expect(interrupted.text).toContain("Session Information > Background Processes")
+        await getShellTaskRegistry().stop(sessionID, ctx.sessionID)
       },
     })
   }, 120000)
@@ -1784,6 +1752,8 @@ describe("tool contract", () => {
     expect(Boolean(shape.chars)).toBe(true)
     expect(Boolean(shape["yield-time_ms"])).toBe(true)
     expect(Boolean(shape.max_output_tokens)).toBe(true)
+    expect(runtime.description).toContain("empty chars")
+    expect(runtime.description).toContain("Session Information > Background Processes")
     expect(WriteStdinTool.capabilities).toMatchObject({
       kind: "exec",
       readOnly: false,

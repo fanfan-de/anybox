@@ -33,7 +33,6 @@ const PLAN_AGENT_TOOL_POLICY: Record<string, boolean> = {
   ask_user_question: true,
   read_file: true,
   "write_stdin": true,
-  "read_background_task": true,
   "read_subagent": true,
   load_skill: true,
   "read_skill_resource": true,

@@ -923,8 +923,9 @@ function createShellCommandTool<Parameters extends z.ZodType>(
               ...outputSections,
               "",
               snapshot.tty
-                ? `Use write_stdin with session_id=${task.id} to send terminal input; use empty chars to poll, or chars=\\u0003 for Ctrl-C.`
-                : `Use write_stdin with session_id=${task.id} and empty chars to read new output, or chars=\\u0003 to interrupt it.`,
+                ? `Use write_stdin with session_id=${task.id} to send terminal input; use empty chars to poll, or chars=\\u0003 for cooperative Ctrl-C.`
+                : `Use write_stdin with session_id=${task.id} and empty chars to read new output, or chars=\\u0003 for cooperative Ctrl-C.`,
+              "Ctrl-C does not guarantee that the process exits. If it remains running, tell the user to force terminate it from Session Information > Background Processes.",
             ].filter(Boolean).join("\n"),
             metadata: {
               command,
