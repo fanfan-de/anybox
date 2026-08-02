@@ -1528,6 +1528,9 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     builtinToolModules,
     builtinTools,
     builtinToolsError,
+    onDemandToolFailures,
+    onDemandToolModules,
+    onDemandTools,
     cancelConnectorAuthFlow,
     cancelInstalledPluginConnectorAuthFlow,
     catalog,
@@ -2691,6 +2694,8 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                 activeModuleID: activeBuiltinToolModuleID,
                 builtinToolModules,
                 builtinTools,
+                onDemandToolModules,
+                onDemandTools,
                 onActiveModuleChange: setActiveBuiltinToolModuleID,
               }}
               projectRowRefs={projectRowRefs}
@@ -3088,6 +3093,9 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               builtinToolModules={builtinToolModules}
               builtinTools={builtinTools}
               builtinToolsError={builtinToolsError}
+              onDemandToolFailures={onDemandToolFailures}
+              onDemandToolModules={onDemandToolModules}
+              onDemandTools={onDemandTools}
               hideNavigator
               isBuiltinToolSelectionDirty={isBuiltinToolSelectionDirty}
               isLoadingBuiltinTools={isLoadingBuiltinTools}

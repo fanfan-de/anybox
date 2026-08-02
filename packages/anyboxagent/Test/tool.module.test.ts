@@ -53,6 +53,55 @@ describe("universal tool module catalog", () => {
     })
   })
 
+  it("inspects platform native modules without activating or exposing them", async () => {
+    const inspected = await ToolModule.inspectNativeModules()
+    const planner = inspected.entries.find((entry) => entry.descriptor.id === "planner.core")
+
+    expect(inspected.failures).toEqual([])
+    expect(planner).toMatchObject({
+      active: false,
+      exposure: "hidden",
+      turnActivated: false,
+      descriptor: {
+        provider: {
+          kind: "native",
+          id: "anybox",
+        },
+        activation: {
+          mode: "search-or-explicit",
+          scope: "turn",
+          discovery: "module",
+        },
+      },
+    })
+    expect(planner?.tools).toHaveLength(12)
+    expect(planner?.tools.map((tool) => tool.id)).toEqual(planner?.descriptor.toolIDs)
+    expect(planner?.tools.every((tool) => tool.source?.moduleID === "planner.core")).toBe(true)
+
+    await Instance.provide({
+      directory: process.cwd(),
+      async fn() {
+        const inactive = await ToolModule.catalog({ tools: [] })
+        expect(inactive.entries.find((entry) => entry.descriptor.id === "planner.core")).toMatchObject({
+          active: false,
+          exposure: "hidden",
+          tools: [],
+        })
+
+        const activated = await ToolModule.catalog({
+          tools: [],
+          activatedModuleIDs: ["planner.core"],
+        })
+        expect(activated.entries.find((entry) => entry.descriptor.id === "planner.core")).toMatchObject({
+          active: true,
+          exposure: "direct",
+          turnActivated: true,
+        })
+        expect(activated.entries.find((entry) => entry.descriptor.id === "planner.core")?.tools).toHaveLength(12)
+      },
+    })
+  })
+
   it("assigns every builtin tool to a stable capability module", async () => {
     await Instance.provide({
       directory: process.cwd(),

@@ -623,6 +623,13 @@ export interface AgentBuiltinToolSummary {
   enabled: boolean
 }
 
+export type AgentOnDemandToolSummary = Omit<AgentBuiltinToolSummary, "enabled">
+
+export interface AgentToolModuleInspectionFailure {
+  moduleID: string
+  message: string
+}
+
 export interface AgentBuiltinToolSelection {
   tools: Record<string, boolean>
 }
@@ -631,6 +638,11 @@ export interface AgentBuiltinToolsPayload {
   modules: AgentBuiltinToolModuleSummary[]
   items: AgentBuiltinToolSummary[]
   selection: AgentBuiltinToolSelection
+  onDemand: {
+    modules: AgentBuiltinToolModuleSummary[]
+    items: AgentOnDemandToolSummary[]
+    failures: AgentToolModuleInspectionFailure[]
+  }
 }
 
 export interface AgentSSEEvent {

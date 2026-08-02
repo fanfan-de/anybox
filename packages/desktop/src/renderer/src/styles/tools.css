@@ -91,8 +91,19 @@
   background: var(--semantic-error-surface);
 }
 
+.tools-banner.is-warning {
+  border-color: var(--semantic-warning-border);
+  color: var(--semantic-warning-text);
+  background: var(--semantic-warning-surface);
+}
+
 .tools-banner-text {
   min-width: 0;
+}
+
+.tools-banner-text p {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
 }
 
 .tools-banner-dismiss {
@@ -206,6 +217,34 @@
   gap: 10px;
 }
 
+.tools-category-section,
+.tools-category-section-list {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+}
+
+.tools-category-section {
+  gap: 6px;
+}
+
+.tools-category-section-list {
+  gap: 4px;
+}
+
+.tools-category-module-item {
+  min-width: 0;
+}
+
+.tools-category-section-title {
+  margin: 0;
+  padding: 0 10px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
 .tools-category-item {
   width: 100%;
   padding: 14px;
@@ -251,7 +290,7 @@
 }
 
 .sidebar-view-tools .tools-category-list {
-  gap: 4px;
+  gap: 16px;
 }
 
 .sidebar-view-tools .tools-category-item {
@@ -717,14 +756,57 @@
   --tools-obs-text: var(--text-primary);
   --tools-obs-text-muted: var(--text-secondary);
   --tools-obs-text-faint: var(--text-tertiary);
+  --tools-scrollbar-size: 10px;
+  --tools-scrollbar-thumb: var(--semantic-scrollbar-thumb-surface);
+  --tools-scrollbar-thumb-hover: var(--semantic-scrollbar-thumb-surface-hover);
+  --tools-scrollbar-track: transparent;
   background: var(--tools-obs-bg);
 }
 
 .builtin-tools-page .tools-page-main {
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
   scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--tools-scrollbar-thumb) var(--tools-scrollbar-track);
   padding: 16px 20px 28px;
   background: var(--tools-obs-bg);
+}
+
+.builtin-tools-page .tools-page-main::-webkit-scrollbar,
+.builtin-tools-page .tools-detail-panel::-webkit-scrollbar {
+  width: var(--tools-scrollbar-size);
+  height: var(--tools-scrollbar-size);
+}
+
+.builtin-tools-page .tools-page-main::-webkit-scrollbar-track,
+.builtin-tools-page .tools-detail-panel::-webkit-scrollbar-track {
+  background: var(--tools-scrollbar-track);
+}
+
+.builtin-tools-page .tools-page-main::-webkit-scrollbar-thumb,
+.builtin-tools-page .tools-detail-panel::-webkit-scrollbar-thumb {
+  min-height: 32px;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-color: var(--tools-scrollbar-thumb);
+  background-clip: content-box;
+}
+
+.builtin-tools-page .tools-page-main:hover::-webkit-scrollbar-thumb,
+.builtin-tools-page .tools-page-main:focus-within::-webkit-scrollbar-thumb,
+.builtin-tools-page .tools-page-main::-webkit-scrollbar-thumb:hover,
+.builtin-tools-page .tools-detail-panel:hover::-webkit-scrollbar-thumb,
+.builtin-tools-page .tools-detail-panel:focus-within::-webkit-scrollbar-thumb,
+.builtin-tools-page .tools-detail-panel::-webkit-scrollbar-thumb:hover {
+  background-color: var(--tools-scrollbar-thumb-hover);
+  background-clip: content-box;
+}
+
+.builtin-tools-page .tools-page-main::-webkit-scrollbar-corner,
+.builtin-tools-page .tools-detail-panel::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 .builtin-tools-page .tools-layout {
@@ -746,8 +828,13 @@
 }
 
 .builtin-tools-page .tools-detail-panel {
-  overflow: visible;
-  padding-right: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--tools-scrollbar-thumb) var(--tools-scrollbar-track);
+  padding-right: 4px;
 }
 
 .builtin-tools-page .tools-banner,
@@ -919,6 +1006,27 @@
 
 .builtin-tools-page .tools-module-availability:disabled .tools-toggle-thumb {
   background: var(--semantic-switch-thumb-surface-disabled);
+}
+
+.builtin-tools-page .tools-on-demand-notice {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--semantic-info-border);
+  border-radius: 6px;
+  background: var(--semantic-info-surface);
+  color: var(--semantic-info-text);
+  display: grid;
+  gap: 3px;
+}
+
+.builtin-tools-page .tools-on-demand-notice strong {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.builtin-tools-page .tools-on-demand-notice span {
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .builtin-tools-page .tools-card-list {

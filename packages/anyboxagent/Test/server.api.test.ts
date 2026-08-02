@@ -465,6 +465,43 @@ type BuiltinToolListEnvelope = JsonEnvelope<{
   selection: {
     tools: Record<string, boolean>
   }
+  onDemand: {
+    modules: Array<{
+      id: string
+      title: string
+      description: string
+      provider: {
+        kind: "native"
+        id: string
+        name?: string
+      }
+      activation: {
+        mode: "search-or-explicit"
+        scope: "turn"
+        discovery: "module"
+      }
+      toolIDs: string[]
+    }>
+    items: Array<{
+      id: string
+      title: string
+      description: string
+      inputSchema?: unknown
+      aliases: string[]
+      capabilities: {
+        kind?: "read" | "write" | "search" | "exec" | "workflow" | "interaction" | "delegation" | "other"
+        readOnly?: boolean
+        destructive?: boolean
+        concurrency?: "safe" | "exclusive"
+        needsShell?: boolean
+      }
+      moduleID: string
+    }>
+    failures: Array<{
+      moduleID: string
+      message: string
+    }>
+  }
 }>
 
 type BuiltinToolSelectionEnvelope = JsonEnvelope<{
@@ -1095,6 +1132,41 @@ describe("server api", () => {
           concurrency: "safe",
         },
       })
+      expect(listBody.data?.onDemand.failures).toEqual([])
+      expect(listBody.data?.onDemand.modules).toHaveLength(1)
+      expect(listBody.data?.onDemand.modules[0]).toMatchObject({
+        id: "planner.core",
+        title: "Planner",
+        provider: {
+          kind: "native",
+          id: "anybox",
+        },
+        activation: {
+          mode: "search-or-explicit",
+          scope: "turn",
+          discovery: "module",
+        },
+      })
+      expect(listBody.data?.onDemand.modules[0]?.toolIDs).toHaveLength(12)
+      expect(listBody.data?.onDemand.items).toHaveLength(12)
+      expect(listBody.data?.onDemand.items.map((tool) => tool.id)).toEqual(
+        listBody.data?.onDemand.modules[0]?.toolIDs,
+      )
+      const plannerListTodos = listBody.data?.onDemand.items.find((tool) => tool.id === "planner_list_todos")
+      expect(plannerListTodos).toMatchObject({
+        title: "List Planner Todos",
+        moduleID: "planner.core",
+        capabilities: {
+          kind: "read",
+          readOnly: true,
+          destructive: false,
+          concurrency: "safe",
+        },
+        inputSchema: {
+          type: "object",
+        },
+      })
+      expect(plannerListTodos).not.toHaveProperty("enabled")
       expect(listBody.data?.items.find((tool) => tool.id === "git_bash_command")).toMatchObject({
         enabled: true,
         moduleID: "workspace.shell",
@@ -1199,6 +1271,25 @@ describe("server api", () => {
 
       expect(invalidResponse.status).toBe(400)
       expect(invalidBody.error?.code).toBe("UNKNOWN_BUILTIN_TOOL")
+
+      const plannerSelectionResponse = await app.request("http://localhost/api/tools/builtins/selection", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          tools: {
+            planner_list_todos: false,
+          },
+        }),
+      })
+      const plannerSelectionBody = (await plannerSelectionResponse.json()) as JsonEnvelope
+
+      expect(plannerSelectionResponse.status).toBe(400)
+      expect(plannerSelectionBody.error?.code).toBe("UNKNOWN_BUILTIN_TOOL")
+      expect(await Config.getToolSelection(Config.GLOBAL_CONFIG_ID)).toEqual({
+        tools: {
+          replace_text: false,
+        },
+      })
     } finally {
       await Config.setToolSelection(Config.GLOBAL_CONFIG_ID, {})
     }

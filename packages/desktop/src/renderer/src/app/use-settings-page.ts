@@ -19,6 +19,7 @@ import type {
   McpToolPolicies,
   McpToolPolicyValue,
   ModelCatalogItem,
+  OnDemandToolSummary,
   PluginCatalogItem,
   PluginConnectorStatus,
   PluginDraftState,
@@ -33,6 +34,7 @@ import type {
   ProviderCatalogItem,
   ProviderDraftState,
   ProviderModel,
+  ToolModuleInspectionFailure,
 } from "./types"
 import { mergeMcpToolPolicyDefaults } from "./mcp/mcp-tool-policies"
 import { parseMcpConfigJson } from "./mcp/mcp-config-import"
@@ -675,6 +677,9 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
   const [pluginDraft, setPluginDraft] = useState<PluginDraftState>(() => buildPluginDraft(undefined))
   const [builtinToolModules, setBuiltinToolModules] = useState<BuiltinToolModuleSummary[]>([])
   const [builtinTools, setBuiltinTools] = useState<BuiltinToolSummary[]>([])
+  const [onDemandToolModules, setOnDemandToolModules] = useState<BuiltinToolModuleSummary[]>([])
+  const [onDemandTools, setOnDemandTools] = useState<OnDemandToolSummary[]>([])
+  const [onDemandToolFailures, setOnDemandToolFailures] = useState<ToolModuleInspectionFailure[]>([])
   const [builtinToolSelection, setBuiltinToolSelection] = useState<BuiltinToolSelection>(EMPTY_BUILTIN_TOOL_SELECTION)
   const [savedBuiltinToolSelection, setSavedBuiltinToolSelection] =
     useState<BuiltinToolSelection>(EMPTY_BUILTIN_TOOL_SELECTION)
@@ -1744,6 +1749,9 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     if (!getBuiltinTools) {
       setBuiltinToolModules([])
       setBuiltinTools([])
+      setOnDemandToolModules([])
+      setOnDemandTools([])
+      setOnDemandToolFailures([])
       setBuiltinToolSelection(normalizeBuiltinToolSelection())
       setSavedBuiltinToolSelection(normalizeBuiltinToolSelection())
       setBuiltinToolsError("Desktop built-in tool settings APIs are unavailable.")
@@ -1765,10 +1773,16 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       setSavedBuiltinToolSelection(selection)
       setBuiltinToolModules(payload.modules)
       setBuiltinTools(applyBuiltinToolSelection(payload.items, selection))
+      setOnDemandToolModules(payload.onDemand?.modules ?? [])
+      setOnDemandTools(payload.onDemand?.items ?? [])
+      setOnDemandToolFailures(payload.onDemand?.failures ?? [])
     } catch (error) {
       if (builtinToolsRequestIDRef.current !== requestID) return
       setBuiltinToolModules([])
       setBuiltinTools([])
+      setOnDemandToolModules([])
+      setOnDemandTools([])
+      setOnDemandToolFailures([])
       setBuiltinToolSelection(normalizeBuiltinToolSelection())
       setSavedBuiltinToolSelection(normalizeBuiltinToolSelection())
       setBuiltinToolsError(getErrorMessage(error))
@@ -4145,6 +4159,9 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     builtinToolModules,
     builtinTools,
     builtinToolsError,
+    onDemandToolFailures,
+    onDemandToolModules,
+    onDemandTools,
     cancelConnectorAuthFlow,
     cancelInstalledPluginConnectorAuthFlow,
     cancelProviderAuthFlow,

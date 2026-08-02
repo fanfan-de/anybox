@@ -1530,9 +1530,10 @@ function normalizeRegisteredBuiltinToolSelection(
 }
 
 export async function listBuiltinTools() {
-  const [items, storedSelection] = await Promise.all([
+  const [items, storedSelection, inspectedNativeModules] = await Promise.all([
     ToolRegistry.builtinTools(),
     Config.getToolSelection(Config.GLOBAL_CONFIG_ID),
+    ToolModule.inspectNativeModules(),
   ])
   const selection = normalizeRegisteredBuiltinToolSelection(items, storedSelection)
   const catalog = ToolModule.catalogRegisteredTools({ tools: items })
@@ -1542,6 +1543,50 @@ export async function listBuiltinTools() {
     builtinModules.flatMap((entry) =>
       entry.tools.map((item) => [item.id, entry.descriptor.id] as const),
     ),
+  )
+  const inspectedOnDemandModules = await Promise.all(
+    inspectedNativeModules.entries
+      .filter((entry) => entry.descriptor.provider.kind === "native" && entry.tools.length > 0)
+      .map(async ({ descriptor, tools }) => {
+        try {
+          const inspectedItems = await Promise.all(
+            tools.map(async (item) => {
+              const runtime = await item.init()
+              return {
+                id: item.id,
+                title: runtime.title ?? item.title ?? item.id,
+                description: runtime.description,
+                inputSchema: toToolInputSchema(runtime.parameters),
+                aliases: item.aliases ?? [],
+                capabilities: item.capabilities ?? {},
+                moduleID: descriptor.id,
+              }
+            }),
+          )
+
+          return {
+            module: {
+              id: descriptor.id,
+              title: descriptor.title,
+              description: descriptor.description,
+              provider: descriptor.provider,
+              activation: descriptor.activation,
+              toolIDs: tools.map((item) => item.id),
+            },
+            items: inspectedItems,
+            failure: undefined,
+          }
+        } catch (error) {
+          return {
+            module: undefined,
+            items: [],
+            failure: {
+              moduleID: descriptor.id,
+              message: error instanceof Error ? error.message : String(error),
+            },
+          }
+        }
+      }),
   )
 
   return {
@@ -1577,6 +1622,17 @@ export async function listBuiltinTools() {
       }),
     ),
     selection,
+    onDemand: {
+      modules: inspectedOnDemandModules.flatMap((entry) => entry.module ? [entry.module] : []),
+      items: inspectedOnDemandModules.flatMap((entry) => entry.items),
+      failures: [
+        ...inspectedNativeModules.failures.map(({ moduleID, error }) => ({
+          moduleID,
+          message: error instanceof Error ? error.message : String(error),
+        })),
+        ...inspectedOnDemandModules.flatMap((entry) => entry.failure ? [entry.failure] : []),
+      ],
+    },
   }
 }
 

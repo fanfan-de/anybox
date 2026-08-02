@@ -105,6 +105,8 @@ function renderSidebar(overrides: Partial<ComponentProps<typeof Sidebar>> = {}) 
       activeModuleID: null,
       builtinToolModules: [],
       builtinTools: [],
+      onDemandToolModules: [],
+      onDemandTools: [],
       onActiveModuleChange: vi.fn(),
     },
     visibleCanvasSessionIDs: [],

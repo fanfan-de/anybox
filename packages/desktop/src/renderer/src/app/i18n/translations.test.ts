@@ -108,6 +108,7 @@ describe("i18n translations", () => {
   })
 
   it("exposes localized Tool Module catalog and availability copy", () => {
+    expect(t("zh-CN", "tools.modules.pageAria")).toBe("工具模块")
     expect(t("zh-CN", "tools.modules.catalog.workspace.shell.title")).toBe("Shell")
     expect(t("zh-CN", "tools.modules.catalog.runtime.progressive-disclosure.description")).toBe(
       "仅在需要时发现可选工具、Skills、MCP 资源及内置工作区运行环境。",
@@ -115,6 +116,12 @@ describe("i18n translations", () => {
     expect(t("zh-CN", "tools.modules.catalog.agent.metacognition.title")).toBe("元认知工具")
     expect(t("zh-CN", "tools.modules.catalog.network.web.title")).toBe("网络")
     expect(t("zh-CN", "tools.modules.catalog.media.visual-generation.title")).toBe("视觉生成")
+    expect(t("zh-CN", "tools.modules.catalog.planner.core.title")).toBe("Planner")
+    expect(t("zh-CN", "tools.modules.tool.planner_list_todos.title")).toBe("列出 Planner 待办")
+    expect(t("zh-TW", "tools.modules.tool.planner_create_todo.description")).toBe(
+      "建立一個 Anybox Planner 待辦，並可選擇安排執行時間。",
+    )
+    expect(t("zh-CN", "tools.modules.onDemand.noticeTitle")).toBe("仅为当前轮次加载")
     expect(t("zh-CN", "tools.modules.tool.tool_search.title")).toBe("工具搜索")
     expect(t("zh-TW", "tools.modules.catalog.workspace.file-io.title")).toBe("檔案讀寫")
     expect(t("en-US", "tools.modules.catalog.agent.multiagent.title")).toBe("Multi-agent")

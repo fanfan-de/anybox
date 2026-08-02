@@ -320,6 +320,45 @@ export async function descriptors() {
   return allDescriptors((await state()).custom)
 }
 
+/**
+ * Loads platform-owned native module definitions for read-only catalog
+ * inspection. This does not activate a module, mutate module state, or expose
+ * its tools to an Agent turn.
+ */
+export async function inspectNativeModules(): Promise<ToolModuleCatalog> {
+  const entries: ToolModuleCatalogEntry[] = []
+  const failures: ToolModuleLoadFailure[] = []
+
+  for (const descriptor of allDescriptors([])) {
+    if (descriptor.provider.kind !== "native") continue
+
+    try {
+      if (!descriptor.load) {
+        throw new Error(`Tool module "${descriptor.id}" does not define a provider loader.`)
+      }
+      const tools = attachModuleSource(descriptor, await descriptor.load(), true)
+      entries.push({
+        descriptor,
+        tools,
+        exposure: "hidden",
+        active: false,
+        turnActivated: false,
+      })
+    } catch (error) {
+      failures.push({ moduleID: descriptor.id, error })
+      entries.push({
+        descriptor,
+        tools: [],
+        exposure: "hidden",
+        active: false,
+        turnActivated: false,
+      })
+    }
+  }
+
+  return { entries, failures }
+}
+
 export async function get(id: string) {
   const parsed = ToolModuleIDSchema.safeParse(id.trim())
   if (!parsed.success) return undefined

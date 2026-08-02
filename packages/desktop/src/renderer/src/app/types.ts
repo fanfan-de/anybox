@@ -1619,6 +1619,13 @@ export interface BuiltinToolSummary {
   enabled: boolean
 }
 
+export type OnDemandToolSummary = Omit<BuiltinToolSummary, "enabled">
+
+export interface ToolModuleInspectionFailure {
+  moduleID: string
+  message: string
+}
+
 export interface BuiltinToolSelection {
   tools: Record<string, boolean>
 }
@@ -1627,6 +1634,11 @@ export interface BuiltinToolsPayload {
   modules: BuiltinToolModuleSummary[]
   items: BuiltinToolSummary[]
   selection: BuiltinToolSelection
+  onDemand: {
+    modules: BuiltinToolModuleSummary[]
+    items: OnDemandToolSummary[]
+    failures: ToolModuleInspectionFailure[]
+  }
 }
 
 export interface ComposerAttachment {

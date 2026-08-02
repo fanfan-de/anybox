@@ -9913,6 +9913,38 @@ describe("App", () => {
           read_file: false,
         },
       },
+      onDemand: {
+        modules: [{
+          id: "planner.core",
+          title: "Planner",
+          description: "Manage Anybox todos and schedules.",
+          provider: {
+            kind: "native",
+            id: "anybox",
+            name: "Anybox",
+          },
+          activation: {
+            mode: "search-or-explicit",
+            scope: "turn",
+            discovery: "module",
+          },
+          toolIDs: ["planner_list_todos"],
+        }],
+        items: [{
+          id: "planner_list_todos",
+          title: "List Planner Todos",
+          description: "List Anybox Planner todos.",
+          aliases: [],
+          capabilities: {
+            kind: "read",
+            readOnly: true,
+            destructive: false,
+            concurrency: "safe",
+          },
+          moduleID: "planner.core",
+        }],
+        failures: [],
+      },
     })
 
     render(<App />)
@@ -9932,6 +9964,12 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "File Read and Write module, 0 of 1 tools enabled" }))
     expect(screen.getByText("Read File")).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("button", { name: "Planner module, 1 tools, on demand" }))
+    expect(screen.getByText("List Planner Todos")).toBeInTheDocument()
+    expect(screen.getByText("Current-turn scope")).toBeInTheDocument()
+    expect(screen.queryByText("Global tool availability")).not.toBeInTheDocument()
+    expect(screen.queryByRole("switch")).not.toBeInTheDocument()
 
     await waitFor(() => {
       expect(window.desktop!.getBuiltinTools).toHaveBeenCalledTimes(1)
@@ -14800,6 +14838,12 @@ describe("App", () => {
     )
     expect(styles).toMatch(
       /\.preview-panel-section \.preview-empty-state\s*\{[^}]*background:\s*transparent;/s,
+    )
+  })
+
+  it("constrains the app shell row so long page content scrolls inside the canvas", () => {
+    expect(styles).toMatch(
+      /\.app-shell\s*\{[^}]*min-height:\s*0;[^}]*overflow:\s*hidden;[^}]*display:\s*grid;[^}]*grid-template-columns:[^;]+;[^}]*grid-template-rows:\s*minmax\(0,\s*1fr\);/s,
     )
   })
 

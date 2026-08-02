@@ -179,6 +179,7 @@
     minmax(0, 1fr)
     var(--right-sidebar-resizer-width)
     var(--right-sidebar-display-width);
+  grid-template-rows: minmax(0, 1fr);
   gap: 0;
   border: 0;
   border-top: 1px solid var(--seg-border);

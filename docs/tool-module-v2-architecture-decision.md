@@ -151,7 +151,7 @@ Builtin 工具按稳定的能力边界分组：
 
 - 每个 MCP server 映射为一个 `mcp.<server-id>` 模块，当前仍以 tool 粒度渐进披露。
 - 每个项目的无来源 custom tools 归入 `custom.project`。
-- Planner 原生工具归入 `planner.core`，只有激活后才动态 import 和初始化。
+- Planner 原生工具归入 `planner.core`；运行时只有激活后才暴露和初始化，工具模块页可单独只读导入定义以展示 metadata/schema。
 - 未来 plugin-native runtime 可以声明 `plugin-module` source；通过 MCP 提供工具的插件仍以 MCP Provider 进入 Catalog，插件分发所有权保持在 Plugin 系统。
 
 ## 7. Source、Provider 与可观测性
@@ -201,14 +201,14 @@ type ToolSource = {
 | shared contract | `packages/shared/src/tool-module.ts` |
 | universal catalog | `packages/anyboxagent/src/tool/module.ts` |
 | inventory/source adapter | `packages/anyboxagent/src/tool/registry.ts` |
-| global built-in settings catalog | `packages/anyboxagent/src/server/usecases/settings.ts` |
+| global and on-demand settings catalog | `packages/anyboxagent/src/server/usecases/settings.ts` |
 | turn resolver/disclosure | `packages/anyboxagent/src/session/core/resolve-tools.ts` |
 | execution provenance | `packages/anyboxagent/src/tool/execution.ts`、`packages/anyboxagent/src/session/core/processor.ts` |
 | desktop trace | `packages/desktop/src/renderer/src/app/stream.ts`、`ThreadView.tsx` |
-| desktop built-in module settings | `packages/desktop/src/renderer/src/app/tools/BuiltinToolsPage.tsx` |
+| desktop tool module settings | `packages/desktop/src/renderer/src/app/tools/BuiltinToolsPage.tsx` |
 | regression tests | `packages/anyboxagent/Test/tool.module.test.ts`、`tool.search.test.ts`、`planner.tools.test.ts` |
 
-内置工具设置页按服务端 Catalog 返回的 Module 分组，不再维护前端工具 ID 分类白名单。页面中的 Module 开关是所属工具可用性的批量编辑器，最终仍保存为逐工具的全局 selection；它不会修改 `activation`、提前加载 lazy module，或把模块工具默认注册给 LLM。全局设置接口使用仅聚合已注册工具的无项目上下文 Catalog 路径，因此读取设置不会创建会话、连接 Provider 或加载按需模块。
+工具模块页分为“常驻工具模块”和“按需工具模块”。常驻模块继续按服务端 Catalog 分组，Module 开关是所属工具可用性的批量编辑器，最终保存为逐工具的全局 selection。按需区域通过只读检查入口导入平台 native 模块定义并展示工具 metadata/schema，但条目仍保持 inactive/hidden，不写入 selection、不改变 `activation`，也不会把工具注册给当前或后续 LLM turn；`planner.core` 只有被 Tool Search、显式模块请求或 Planner 委派激活后才进入当前轮次工具集。按需检查失败与常驻目录隔离，不能阻断全局工具配置。
 
 ## 11. 后续演进边界
 
@@ -216,7 +216,7 @@ type ToolSource = {
 
 - 将 Composer 当前的 Planner 快捷入口改为读取服务端允许展示的 module catalog，而不是继续增加前端硬编码模块。
 - 为项目级 Module 配置增加显式持久化模型，并把 `configuredModuleIDs` 接入 settings API。
-- 为非 builtin Provider 增加 module 级配置、加载失败和 Provider 健康度诊断页；当前内置工具设置页只呈现聚合后的工具可用性。
+- 为非 builtin Provider 增加 module 级配置和 Provider 健康度诊断；当前页面只对平台 native 模块提供只读目录与加载失败提示。
 - 根据实际使用数据决定是否把大型 MCP server 从 tool-level discovery 升级为真正的 server/module lazy connection。
 - 在存在第二种 plugin-native runtime 后，补齐 Plugin manifest 到 Tool Module descriptor 的声明与签名校验；不提前让 manifest 自报工具 schema 成为执行真相。
 

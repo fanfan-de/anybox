@@ -1,8 +1,12 @@
 import { fireEvent, render, screen } from "@testing-library/react"
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { I18nProvider } from "../i18n/I18nProvider"
-import type { BuiltinToolModuleSummary, BuiltinToolSummary } from "../types"
+import type { BuiltinToolModuleSummary, BuiltinToolSummary, OnDemandToolSummary } from "../types"
 import { BuiltinToolsPage } from "./BuiltinToolsPage"
+
+const toolsStyles = readFileSync(resolve(process.cwd(), "src/renderer/src/styles/tools.css"), "utf8")
 
 function createModule(
   id: string,
@@ -126,6 +130,53 @@ const builtinTools: BuiltinToolSummary[] = [
   },
 ]
 
+const onDemandToolModules: BuiltinToolModuleSummary[] = [{
+  id: "planner.core",
+  title: "Planner",
+  description: "Manage Anybox todos and schedules.",
+  provider: {
+    kind: "native",
+    id: "anybox",
+    name: "Anybox",
+  },
+  activation: {
+    mode: "search-or-explicit",
+    scope: "turn",
+    discovery: "module",
+  },
+  toolIDs: ["planner_list_todos", "planner_create_todo"],
+}]
+
+const onDemandTools: OnDemandToolSummary[] = [
+  {
+    id: "planner_list_todos",
+    title: "List Planner Todos",
+    description: "List Anybox Planner todos.",
+    inputSchema: { type: "object", properties: { status: { type: "string" } } },
+    aliases: [],
+    capabilities: {
+      kind: "read",
+      readOnly: true,
+      destructive: false,
+      concurrency: "safe",
+    },
+    moduleID: "planner.core",
+  },
+  {
+    id: "planner_create_todo",
+    title: "Create Planner Todo",
+    description: "Create one Anybox Planner todo.",
+    aliases: [],
+    capabilities: {
+      kind: "write",
+      readOnly: false,
+      destructive: false,
+      concurrency: "exclusive",
+    },
+    moduleID: "planner.core",
+  },
+]
+
 function createTool(
   id: string,
   title: string,
@@ -159,6 +210,9 @@ function renderBuiltinToolsPage(
     isBuiltinToolSelectionDirty: true,
     isLoadingBuiltinTools: false,
     isSavingBuiltinTools: false,
+    onDemandToolFailures: [],
+    onDemandToolModules,
+    onDemandTools,
     onBuiltinToolModuleToggle: vi.fn(),
     onBuiltinToolToggle: vi.fn(),
     onResetBuiltinTools: vi.fn(),
@@ -180,6 +234,18 @@ afterEach(() => {
 })
 
 describe("BuiltinToolsPage", () => {
+  it("keeps long tool catalogs inside a themed detail-panel scroll region", () => {
+    expect(toolsStyles).toMatch(
+      /\.builtin-tools-page \.tools-page-main\s*\{[^}]*overflow-x:\s*hidden;[^}]*overflow-y:\s*auto;[^}]*overscroll-behavior-y:\s*contain;[^}]*scrollbar-gutter:\s*stable;[^}]*scrollbar-width:\s*thin;[^}]*scrollbar-color:\s*var\(--tools-scrollbar-thumb\) var\(--tools-scrollbar-track\);/s,
+    )
+    expect(toolsStyles).toMatch(
+      /\.builtin-tools-page \.tools-detail-panel\s*\{[^}]*overflow-x:\s*hidden;[^}]*overflow-y:\s*auto;[^}]*overscroll-behavior-y:\s*contain;[^}]*scrollbar-gutter:\s*stable;[^}]*scrollbar-width:\s*thin;[^}]*scrollbar-color:\s*var\(--tools-scrollbar-thumb\) var\(--tools-scrollbar-track\);/s,
+    )
+    expect(toolsStyles).toMatch(
+      /\.builtin-tools-page \.tools-page-main::-webkit-scrollbar-thumb,\s*\.builtin-tools-page \.tools-detail-panel::-webkit-scrollbar-thumb\s*\{[^}]*min-height:\s*32px;[^}]*background-color:\s*var\(--tools-scrollbar-thumb\);[^}]*background-clip:\s*content-box;/s,
+    )
+  })
+
   it("renders server-defined Tool Modules and keeps per-tool controls", () => {
     const props = renderBuiltinToolsPage()
 
@@ -187,9 +253,12 @@ describe("BuiltinToolsPage", () => {
     expect(screen.getByText("Global tool availability")).toBeInTheDocument()
     expect(screen.getByText("2 of 4 built-in tools enabled.")).toBeInTheDocument()
 
-    const moduleList = screen.getByRole("list", { name: "Tool Modules" })
+    expect(screen.getByRole("heading", { name: "Always-on Tool Modules" })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "On-demand Tool Modules" })).toBeInTheDocument()
+    const moduleList = screen.getByRole("list", { name: "Always-on Tool Modules" })
     expect(moduleList).toBeInTheDocument()
     expect(moduleList.querySelector(".skill-tree-role-icon")).toBeNull()
+    expect(screen.getByRole("list", { name: "On-demand Tool Modules" })).toBeInTheDocument()
 
     const executionModule = screen.getByRole("button", {
       name: "Shell module, 1 of 1 tools enabled",
@@ -284,7 +353,7 @@ describe("BuiltinToolsPage", () => {
       builtinTools: tools,
     })
 
-    const moduleList = screen.getByRole("list", { name: "Tool Modules" })
+    const moduleList = screen.getByRole("list", { name: "Always-on Tool Modules" })
     const labels = Array.from(moduleList.querySelectorAll(".skill-tree-label")).map((element) => element.textContent)
     expect(labels).toEqual(["LSP Tools", "Shell"])
     expect(screen.getByText("Code Probe")).toBeInTheDocument()
@@ -298,6 +367,47 @@ describe("BuiltinToolsPage", () => {
     expect(screen.getByRole("switch", { name: "Git Bash" })).toBeDisabled()
   })
 
+  it("shows Planner tools as read-only current-turn capabilities", () => {
+    const props = renderBuiltinToolsPage()
+
+    const plannerModule = screen.getByRole("button", {
+      name: "Planner module, 2 tools, on demand",
+    })
+    fireEvent.click(plannerModule)
+
+    expect(screen.getByText("planner.core")).toBeInTheDocument()
+    expect(screen.getByText("Native · Anybox")).toBeInTheDocument()
+    expect(screen.getAllByText("On demand")).toHaveLength(2)
+    expect(screen.getByText("Current-turn scope")).toBeInTheDocument()
+    expect(screen.getByText("On-demand tool catalog")).toBeInTheDocument()
+    expect(screen.getByText("This module contains 2 tools.")).toBeInTheDocument()
+    expect(screen.getByText("Loaded for the current turn only")).toBeInTheDocument()
+    expect(screen.getByText("List Planner Todos")).toBeInTheDocument()
+    expect(screen.getByText("Create Planner Todo")).toBeInTheDocument()
+    expect(screen.queryByText("Global tool availability")).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Reset to default" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("switch")).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("button", { name: "Show details for List Planner Todos" }))
+    expect(props.container.querySelector(".tools-card-input-schema pre")?.textContent).toContain('"status"')
+    expect(props.onBuiltinToolToggle).not.toHaveBeenCalled()
+    expect(props.onBuiltinToolModuleToggle).not.toHaveBeenCalled()
+  })
+
+  it("keeps always-on modules usable when on-demand inspection reports a failure", () => {
+    renderBuiltinToolsPage({
+      onDemandToolFailures: [{ moduleID: "planner.core", message: "Planner metadata unavailable" }],
+      onDemandToolModules: [],
+      onDemandTools: [],
+    })
+
+    expect(screen.getByText("Some on-demand modules could not be inspected.")).toBeInTheDocument()
+    expect(screen.getByText("planner.core: Planner metadata unavailable")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Shell module, 1 of 1 tools enabled" })).toBeInTheDocument()
+    expect(screen.getByRole("switch", { name: "Change availability for Shell" })).toBeInTheDocument()
+  })
+
   it("renders load error, loading, and empty states", () => {
     const { rerender } = render(
       <BuiltinToolsPage
@@ -307,6 +417,9 @@ describe("BuiltinToolsPage", () => {
         isBuiltinToolSelectionDirty={false}
         isLoadingBuiltinTools={false}
         isSavingBuiltinTools={false}
+        onDemandToolFailures={[]}
+        onDemandToolModules={[]}
+        onDemandTools={[]}
         onBuiltinToolModuleToggle={vi.fn()}
         onBuiltinToolToggle={vi.fn()}
         onResetBuiltinTools={vi.fn()}
@@ -315,7 +428,7 @@ describe("BuiltinToolsPage", () => {
     )
 
     expect(screen.getByText("Unable to read tools.")).toBeInTheDocument()
-    expect(screen.getByText("No built-in Tool Modules")).toBeInTheDocument()
+    expect(screen.getByText("No Tool Modules")).toBeInTheDocument()
 
     rerender(
       <BuiltinToolsPage
@@ -325,6 +438,9 @@ describe("BuiltinToolsPage", () => {
         isBuiltinToolSelectionDirty={false}
         isLoadingBuiltinTools
         isSavingBuiltinTools={false}
+        onDemandToolFailures={[]}
+        onDemandToolModules={[]}
+        onDemandTools={[]}
         onBuiltinToolModuleToggle={vi.fn()}
         onBuiltinToolToggle={vi.fn()}
         onResetBuiltinTools={vi.fn()}
@@ -339,7 +455,8 @@ describe("BuiltinToolsPage", () => {
     renderBuiltinToolsPage({}, "zh-CN")
 
     expect(screen.getByLabelText("工具顶部菜单")).toBeInTheDocument()
-    expect(screen.getByRole("list", { name: "工具模块" })).toBeInTheDocument()
+    expect(screen.getByRole("list", { name: "常驻工具模块" })).toBeInTheDocument()
+    expect(screen.getByRole("list", { name: "按需工具模块" })).toBeInTheDocument()
     expect(screen.getByRole("button", {
       name: "Shell 模块，已启用 1/1 个工具",
     })).toBeInTheDocument()
@@ -366,5 +483,13 @@ describe("BuiltinToolsPage", () => {
     expect(screen.getByText("工具搜索")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "保存更改" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "恢复默认" })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("button", {
+      name: "Planner 模块，共 2 个工具，按需加载",
+    }))
+    expect(screen.getByText("按需工具目录")).toBeInTheDocument()
+    expect(screen.getByText("列出 Planner 待办")).toBeInTheDocument()
+    expect(screen.getByText("仅为当前轮次加载")).toBeInTheDocument()
+    expect(screen.queryByRole("switch")).not.toBeInTheDocument()
   })
 })

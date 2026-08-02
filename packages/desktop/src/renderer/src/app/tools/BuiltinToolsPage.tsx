@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react"
+import { useEffect, useId, useMemo, useState, type ReactNode } from "react"
 import type { AppLocale } from "../../../../shared/locale"
 import { ChevronDownIcon, ChevronRightIcon, ToolsIcon } from "../icons"
 import { useI18n } from "../i18n/I18nProvider"
@@ -8,7 +8,12 @@ import {
 } from "../i18n/tool-module-translations"
 import type { TranslationKey } from "../i18n/translations"
 import { ShellTopMenu } from "../shared-ui"
-import type { BuiltinToolModuleSummary, BuiltinToolSummary } from "../types"
+import type {
+  BuiltinToolModuleSummary,
+  BuiltinToolSummary,
+  OnDemandToolSummary,
+  ToolModuleInspectionFailure,
+} from "../types"
 
 export type BuiltinToolModuleID = BuiltinToolModuleSummary["id"]
 
@@ -21,6 +26,9 @@ interface BuiltinToolsPageProps {
   isBuiltinToolSelectionDirty: boolean
   isLoadingBuiltinTools: boolean
   isSavingBuiltinTools: boolean
+  onDemandToolFailures: ToolModuleInspectionFailure[]
+  onDemandToolModules: BuiltinToolModuleSummary[]
+  onDemandTools: OnDemandToolSummary[]
   windowControls?: ReactNode
   onActiveModuleChange?: (moduleID: BuiltinToolModuleID | null) => void
   onBuiltinToolModuleToggle: (toolIDs: string[], enabled: boolean) => void
@@ -33,14 +41,26 @@ export interface BuiltinToolsSidebarViewProps {
   activeModuleID: BuiltinToolModuleID | null
   builtinToolModules: BuiltinToolModuleSummary[]
   builtinTools: BuiltinToolSummary[]
+  onDemandToolModules: BuiltinToolModuleSummary[]
+  onDemandTools: OnDemandToolSummary[]
   onActiveModuleChange: (moduleID: BuiltinToolModuleID) => void
 }
 
 interface BuiltinToolModuleGroup {
+  kind: "builtin"
   module: BuiltinToolModuleSummary
   items: BuiltinToolSummary[]
   enabledCount: number
 }
+
+interface OnDemandToolModuleGroup {
+  kind: "on-demand"
+  module: BuiltinToolModuleSummary
+  items: OnDemandToolSummary[]
+}
+
+type ToolModuleGroup = BuiltinToolModuleGroup | OnDemandToolModuleGroup
+type ToolSummary = BuiltinToolSummary | OnDemandToolSummary
 
 type Translate = (key: TranslationKey, params?: Record<string, string | number>) => string
 
@@ -55,7 +75,7 @@ function formatJson(value: unknown) {
 }
 
 function getBuiltinToolKindLabelForKind(
-  kind: BuiltinToolSummary["capabilities"]["kind"] | "other",
+  kind: ToolSummary["capabilities"]["kind"] | "other",
   t: Translate,
 ) {
   switch (kind) {
@@ -78,11 +98,11 @@ function getBuiltinToolKindLabelForKind(
   }
 }
 
-function getBuiltinToolKindLabel(tool: BuiltinToolSummary, t: Translate) {
+function getBuiltinToolKindLabel(tool: ToolSummary, t: Translate) {
   return getBuiltinToolKindLabelForKind(tool.capabilities.kind ?? "other", t)
 }
 
-function getBuiltinToolRiskLabel(tool: BuiltinToolSummary, t: Translate) {
+function getBuiltinToolRiskLabel(tool: ToolSummary, t: Translate) {
   if (tool.capabilities.needsShell || tool.capabilities.kind === "exec") return t("tools.shellAccess")
   if (tool.capabilities.kind === "delegation") {
     return tool.capabilities.readOnly ? t("tools.delegationStatus") : t("tools.delegatesWork")
@@ -94,7 +114,7 @@ function getBuiltinToolRiskLabel(tool: BuiltinToolSummary, t: Translate) {
   return t("tools.moderate")
 }
 
-function getBuiltinToolRiskBadgeClassName(tool: BuiltinToolSummary) {
+function getBuiltinToolRiskBadgeClassName(tool: ToolSummary) {
   if (
     tool.capabilities.needsShell ||
     tool.capabilities.kind === "exec" ||
@@ -153,7 +173,7 @@ function getLocalizedModuleCopy(module: BuiltinToolModuleSummary, locale: AppLoc
     : { title: module.title, description: module.description }
 }
 
-function getLocalizedToolCopy(tool: BuiltinToolSummary, locale: AppLocale, t: Translate) {
+function getLocalizedToolCopy(tool: ToolSummary, locale: AppLocale, t: Translate) {
   if (locale === "en-US") {
     return { title: tool.title, description: tool.description }
   }
@@ -179,6 +199,7 @@ export function buildBuiltinToolModuleGroups(
     const items = itemsByModuleID.get(module.id) ?? []
     if (items.length === 0) return []
     return [{
+      kind: "builtin" as const,
       module,
       items,
       enabledCount: items.filter((tool) => tool.enabled).length,
@@ -186,48 +207,105 @@ export function buildBuiltinToolModuleGroups(
   })
 }
 
+export function buildOnDemandToolModuleGroups(
+  onDemandToolModules: BuiltinToolModuleSummary[],
+  onDemandTools: OnDemandToolSummary[],
+): OnDemandToolModuleGroup[] {
+  const itemsByModuleID = new Map<string, OnDemandToolSummary[]>()
+  for (const tool of onDemandTools) {
+    const items = itemsByModuleID.get(tool.moduleID) ?? []
+    items.push(tool)
+    itemsByModuleID.set(tool.moduleID, items)
+  }
+
+  return onDemandToolModules.flatMap((module) => {
+    const items = itemsByModuleID.get(module.id) ?? []
+    if (items.length === 0) return []
+    return [{ kind: "on-demand" as const, module, items }]
+  })
+}
+
 export function BuiltinToolsSidebarView({
   activeModuleID,
   builtinToolModules,
   builtinTools,
+  onDemandToolModules,
+  onDemandTools,
   onActiveModuleChange,
 }: BuiltinToolsSidebarViewProps) {
   const { locale, t } = useI18n()
-  const moduleGroups = useMemo(
+  const headingIDPrefix = useId()
+  const builtinHeadingID = `${headingIDPrefix}-builtin`
+  const onDemandHeadingID = `${headingIDPrefix}-on-demand`
+  const builtinModuleGroups = useMemo(
     () => buildBuiltinToolModuleGroups(builtinToolModules, builtinTools),
     [builtinToolModules, builtinTools],
   )
+  const onDemandModuleGroups = useMemo(
+    () => buildOnDemandToolModuleGroups(onDemandToolModules, onDemandTools),
+    [onDemandToolModules, onDemandTools],
+  )
+
+  const renderModuleButton = (group: ToolModuleGroup) => {
+    const isActive = group.module.id === activeModuleID
+    const moduleTitle = getLocalizedModuleCopy(group.module, locale, t).title
+    const ariaLabel = group.kind === "builtin"
+      ? t("tools.modules.rowAria", {
+          title: moduleTitle,
+          enabled: group.enabledCount,
+          total: group.items.length,
+        })
+      : t("tools.modules.onDemandRowAria", {
+          title: moduleTitle,
+          total: group.items.length,
+        })
+
+    return (
+      <div className="tools-category-module-item" key={group.module.id} role="listitem">
+        <button
+          className={isActive ? "skill-tree-row tools-category-item is-active" : "skill-tree-row tools-category-item"}
+          aria-label={ariaLabel}
+          aria-pressed={isActive}
+          type="button"
+          onClick={() => onActiveModuleChange(group.module.id)}
+        >
+          <span className="skill-tree-label">{moduleTitle}</span>
+          <span className="prompt-tree-row-badges" aria-hidden="true">
+            <span className="tools-badge">{group.items.length}</span>
+            <span className="tools-badge">
+              {group.kind === "builtin"
+                ? `${group.enabledCount}/${group.items.length}`
+                : t("tools.modules.onDemandBadge")}
+            </span>
+          </span>
+        </button>
+      </div>
+    )
+  }
 
   return (
     <section className="sidebar-view sidebar-view-tools" aria-label={t("tools.modules.sidebarAria")}>
-      <div className="skills-tree-root tools-category-list" role="list" aria-label={t("tools.modules.listAria")}>
-        {moduleGroups.map((group) => {
-          const isActive = group.module.id === activeModuleID
-          const moduleTitle = getLocalizedModuleCopy(group.module, locale, t).title
-
-          return (
-            <button
-              key={group.module.id}
-              className={isActive ? "skill-tree-row tools-category-item is-active" : "skill-tree-row tools-category-item"}
-              aria-label={t("tools.modules.rowAria", {
-                title: moduleTitle,
-                enabled: group.enabledCount,
-                total: group.items.length,
-              })}
-              aria-pressed={isActive}
-              type="button"
-              onClick={() => onActiveModuleChange(group.module.id)}
-            >
-              <span className="skill-tree-label">{moduleTitle}</span>
-              <span className="prompt-tree-row-badges" aria-hidden="true">
-                <span className="tools-badge">{group.items.length}</span>
-                <span className="tools-badge">
-                  {group.enabledCount}/{group.items.length}
-                </span>
-              </span>
-            </button>
-          )
-        })}
+      <div className="skills-tree-root tools-category-list" aria-label={t("tools.modules.listAria")}>
+        {builtinModuleGroups.length > 0 ? (
+          <section className="tools-category-section" aria-labelledby={builtinHeadingID}>
+            <h2 className="tools-category-section-title" id={builtinHeadingID}>
+              {t("tools.modules.sections.builtin")}
+            </h2>
+            <div className="tools-category-section-list" role="list" aria-labelledby={builtinHeadingID}>
+              {builtinModuleGroups.map(renderModuleButton)}
+            </div>
+          </section>
+        ) : null}
+        {onDemandModuleGroups.length > 0 ? (
+          <section className="tools-category-section" aria-labelledby={onDemandHeadingID}>
+            <h2 className="tools-category-section-title" id={onDemandHeadingID}>
+              {t("tools.modules.sections.onDemand")}
+            </h2>
+            <div className="tools-category-section-list" role="list" aria-labelledby={onDemandHeadingID}>
+              {onDemandModuleGroups.map(renderModuleButton)}
+            </div>
+          </section>
+        ) : null}
       </div>
     </section>
   )
@@ -242,6 +320,9 @@ export function BuiltinToolsPage({
   isBuiltinToolSelectionDirty,
   isLoadingBuiltinTools,
   isSavingBuiltinTools,
+  onDemandToolFailures,
+  onDemandToolModules,
+  onDemandTools,
   windowControls,
   onActiveModuleChange,
   onBuiltinToolModuleToggle,
@@ -253,9 +334,17 @@ export function BuiltinToolsPage({
   const [internalActiveModuleID, setInternalActiveModuleID] = useState<BuiltinToolModuleID | null>(null)
   const [expandedToolIDs, setExpandedToolIDs] = useState<Set<string>>(() => new Set())
   const enabledBuiltinToolCount = builtinTools.filter((tool) => tool.enabled).length
-  const moduleGroups = useMemo(
+  const builtinModuleGroups = useMemo(
     () => buildBuiltinToolModuleGroups(builtinToolModules, builtinTools),
     [builtinToolModules, builtinTools],
+  )
+  const onDemandModuleGroups = useMemo(
+    () => buildOnDemandToolModuleGroups(onDemandToolModules, onDemandTools),
+    [onDemandToolModules, onDemandTools],
+  )
+  const moduleGroups: ToolModuleGroup[] = useMemo(
+    () => [...builtinModuleGroups, ...onDemandModuleGroups],
+    [builtinModuleGroups, onDemandModuleGroups],
   )
   const activeModuleID = controlledActiveModuleID !== undefined
     ? controlledActiveModuleID
@@ -266,6 +355,7 @@ export function BuiltinToolsPage({
     : null
   const activeModuleIsPartiallyEnabled = Boolean(
     activeModuleGroup &&
+    activeModuleGroup.kind === "builtin" &&
     activeModuleGroup.enabledCount > 0 &&
     activeModuleGroup.enabledCount < activeModuleGroup.items.length,
   )
@@ -326,6 +416,18 @@ export function BuiltinToolsPage({
 
       <div className="tools-page-main">
         {builtinToolsError ? <div className="tools-banner is-error">{builtinToolsError}</div> : null}
+        {onDemandToolFailures.length > 0 ? (
+          <div className="tools-banner is-warning" role="status">
+            <div className="tools-banner-text">
+              <strong>{t("tools.modules.onDemandFailureTitle")}</strong>
+              <p>
+                {onDemandToolFailures
+                  .map((failure) => `${failure.moduleID}: ${failure.message}`)
+                  .join("; ")}
+              </p>
+            </div>
+          </div>
+        ) : null}
 
         {isLoadingBuiltinTools ? (
           <article className="tools-empty-state">
@@ -345,6 +447,8 @@ export function BuiltinToolsPage({
                     activeModuleID={activeModuleGroup?.module.id ?? null}
                     builtinToolModules={builtinToolModules}
                     builtinTools={builtinTools}
+                    onDemandToolModules={onDemandToolModules}
+                    onDemandTools={onDemandTools}
                     onActiveModuleChange={setActiveModuleID}
                   />
                 </div>
@@ -373,74 +477,95 @@ export function BuiltinToolsPage({
                     className="tools-panel tools-detail-section"
                     aria-label={t("tools.modules.toolsAria", { title: activeModuleCopy?.title ?? activeModuleGroup.module.title })}
                   >
-                    <div className="tools-detail-header">
-                      <div>
-                        <span className="label">{t("tools.availability")}</span>
-                        <h2>{t("tools.globalAvailability")}</h2>
-                        <p>{t("tools.modules.enabledSummary", {
-                          enabled: enabledBuiltinToolCount,
-                          total: builtinTools.length,
-                        })}</p>
-                      </div>
-                      <div className="tools-detail-actions">
-                        <button
-                          className="secondary-button"
-                          type="button"
-                          disabled={isSavingBuiltinTools}
-                          onClick={() => void onResetBuiltinTools()}
-                        >
-                          {isSavingBuiltinTools ? t("app.resetting") : t("tools.resetDefault")}
-                        </button>
-                        <button
-                          className="primary-button"
-                          type="button"
-                          disabled={!isBuiltinToolSelectionDirty || isSavingBuiltinTools}
-                          onClick={() => void onSaveBuiltinTools()}
-                        >
-                          {isSavingBuiltinTools ? t("app.saving") : t("app.saveChanges")}
-                        </button>
-                      </div>
-                    </div>
+                    {activeModuleGroup.kind === "builtin" ? (
+                      <>
+                        <div className="tools-detail-header">
+                          <div>
+                            <span className="label">{t("tools.availability")}</span>
+                            <h2>{t("tools.globalAvailability")}</h2>
+                            <p>{t("tools.modules.enabledSummary", {
+                              enabled: enabledBuiltinToolCount,
+                              total: builtinTools.length,
+                            })}</p>
+                          </div>
+                          <div className="tools-detail-actions">
+                            <button
+                              className="secondary-button"
+                              type="button"
+                              disabled={isSavingBuiltinTools}
+                              onClick={() => void onResetBuiltinTools()}
+                            >
+                              {isSavingBuiltinTools ? t("app.resetting") : t("tools.resetDefault")}
+                            </button>
+                            <button
+                              className="primary-button"
+                              type="button"
+                              disabled={!isBuiltinToolSelectionDirty || isSavingBuiltinTools}
+                              onClick={() => void onSaveBuiltinTools()}
+                            >
+                              {isSavingBuiltinTools ? t("app.saving") : t("app.saveChanges")}
+                            </button>
+                          </div>
+                        </div>
 
-                    <button
-                      className={[
-                        "tools-module-availability",
-                        activeModuleIsPartiallyEnabled ? "is-partial" : "",
-                      ].filter(Boolean).join(" ")}
-                      type="button"
-                      role="switch"
-                      aria-checked={activeModuleGroup.enabledCount === activeModuleGroup.items.length}
-                      aria-label={t("tools.modules.toggleAria", {
-                        title: activeModuleCopy?.title ?? activeModuleGroup.module.title,
-                      })}
-                      disabled={isSavingBuiltinTools}
-                      onClick={() => onBuiltinToolModuleToggle(
-                        activeModuleGroup.items.map((tool) => tool.id),
-                        activeModuleGroup.enabledCount !== activeModuleGroup.items.length,
-                      )}
-                    >
-                      <span className="tools-module-availability-copy">
-                        <strong>
-                          {activeModuleGroup.enabledCount === activeModuleGroup.items.length
-                            ? t("tools.modules.state.allowed")
-                            : activeModuleGroup.enabledCount === 0
-                              ? t("tools.modules.state.disabled")
-                              : t("tools.modules.state.partial")}
-                        </strong>
-                        <span>{t("tools.modules.availabilityCopy", {
-                          enabled: activeModuleGroup.enabledCount,
-                          total: activeModuleGroup.items.length,
-                        })}</span>
-                      </span>
-                      <span className="tools-toggle-control" aria-hidden="true">
-                        <span className="tools-toggle-thumb" />
-                      </span>
-                    </button>
+                        <button
+                          className={[
+                            "tools-module-availability",
+                            activeModuleIsPartiallyEnabled ? "is-partial" : "",
+                          ].filter(Boolean).join(" ")}
+                          type="button"
+                          role="switch"
+                          aria-checked={activeModuleGroup.enabledCount === activeModuleGroup.items.length}
+                          aria-label={t("tools.modules.toggleAria", {
+                            title: activeModuleCopy?.title ?? activeModuleGroup.module.title,
+                          })}
+                          disabled={isSavingBuiltinTools}
+                          onClick={() => onBuiltinToolModuleToggle(
+                            activeModuleGroup.items.map((tool) => tool.id),
+                            activeModuleGroup.enabledCount !== activeModuleGroup.items.length,
+                          )}
+                        >
+                          <span className="tools-module-availability-copy">
+                            <strong>
+                              {activeModuleGroup.enabledCount === activeModuleGroup.items.length
+                                ? t("tools.modules.state.allowed")
+                                : activeModuleGroup.enabledCount === 0
+                                  ? t("tools.modules.state.disabled")
+                                  : t("tools.modules.state.partial")}
+                            </strong>
+                            <span>{t("tools.modules.availabilityCopy", {
+                              enabled: activeModuleGroup.enabledCount,
+                              total: activeModuleGroup.items.length,
+                            })}</span>
+                          </span>
+                          <span className="tools-toggle-control" aria-hidden="true">
+                            <span className="tools-toggle-thumb" />
+                          </span>
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="tools-detail-header">
+                          <div>
+                            <span className="label">{t("tools.modules.onDemand.contentsLabel")}</span>
+                            <h2>{t("tools.modules.onDemand.contentsTitle")}</h2>
+                            <p>{t("tools.modules.onDemand.contentsSummary", {
+                              total: activeModuleGroup.items.length,
+                            })}</p>
+                          </div>
+                        </div>
+                        <div className="tools-on-demand-notice" role="note">
+                          <strong>{t("tools.modules.onDemand.noticeTitle")}</strong>
+                          <span>{t("tools.modules.onDemand.noticeCopy")}</span>
+                        </div>
+                      </>
+                    )}
 
                     <div className="tools-card-list">
                       {activeModuleGroup.items.map((tool) => {
                         const isExpanded = expandedToolIDs.has(tool.id)
-                        const detailsID = `builtin-tool-details-${tool.id}`
+                        const isConfigurable = "enabled" in tool
+                        const detailsID = `tool-module-details-${tool.id}`
                         const toolCopy = getLocalizedToolCopy(tool, locale, t)
 
                         return (
@@ -450,7 +575,8 @@ export function BuiltinToolsPage({
                               "tools-toggle-card",
                               "tools-card",
                               "tools-card-accordion",
-                              tool.enabled ? "is-active" : "",
+                              isConfigurable && tool.enabled ? "is-active" : "",
+                              !isConfigurable ? "is-read-only" : "",
                               isExpanded ? "is-expanded" : "",
                             ].filter(Boolean).join(" ")}
                           >
@@ -482,19 +608,21 @@ export function BuiltinToolsPage({
                                     <span className="tools-badge">{t("tools.modules.aliasCount", { count: tool.aliases.length })}</span>
                                   ) : null}
                                 </span>
-                                <button
-                                  className="tools-card-toggle-button"
-                                  type="button"
-                                  role="switch"
-                                  aria-checked={tool.enabled}
-                                  aria-label={toolCopy.title}
-                                  disabled={isSavingBuiltinTools}
-                                  onClick={() => onBuiltinToolToggle(tool.id, !tool.enabled)}
-                                >
-                                  <span className="tools-toggle-control" aria-hidden="true">
-                                    <span className="tools-toggle-thumb" />
-                                  </span>
-                                </button>
+                                {isConfigurable ? (
+                                  <button
+                                    className="tools-card-toggle-button"
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={tool.enabled}
+                                    aria-label={toolCopy.title}
+                                    disabled={isSavingBuiltinTools}
+                                    onClick={() => onBuiltinToolToggle(tool.id, !tool.enabled)}
+                                  >
+                                    <span className="tools-toggle-control" aria-hidden="true">
+                                      <span className="tools-toggle-thumb" />
+                                    </span>
+                                  </button>
+                                ) : null}
                               </div>
                             </div>
 
