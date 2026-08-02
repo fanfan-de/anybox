@@ -38,7 +38,7 @@ import { useGlobalSkills } from "./app/use-global-skills"
 import { useSettingsPage } from "./app/use-settings-page"
 import { ToastProvider, useToast } from "./app/toast"
 import { SemanticTokenInspectorOverlay } from "./app/debug/SemanticTokenInspectorOverlay"
-import type { BuiltinToolKindKey } from "./app/tools/BuiltinToolsPage"
+import type { BuiltinToolModuleID } from "./app/tools/BuiltinToolsPage"
 import { findSession, isGitWorkspaceProject, sameWorkspaceDirectory } from "./app/workspace"
 import { WorkbenchShell } from "./app/workbench/WorkbenchShell"
 import {
@@ -1525,6 +1525,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     activePluginID,
     archivedSessions,
     archivedSessionsError,
+    builtinToolModules,
     builtinTools,
     builtinToolsError,
     cancelConnectorAuthFlow,
@@ -1685,6 +1686,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     setPluginDraftAppApiKey,
     setPluginDraftConfigValue,
     setBuiltinToolEnabled,
+    setBuiltinToolModuleEnabled,
     setPromptDraftValue,
     setProviderDraftValue,
     setCinemaVideoProviderDraftValue,
@@ -2012,7 +2014,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     workspaceStore,
     (state) => Object.values(state.composer.isCreatingSessionByTabKey).some(Boolean),
   )
-  const [activeBuiltinToolKind, setActiveBuiltinToolKind] = useState<BuiltinToolKindKey | null>(null)
+  const [activeBuiltinToolModuleID, setActiveBuiltinToolModuleID] = useState<BuiltinToolModuleID | null>(null)
   const [activeConnectionsTab, setActiveConnectionsTab] = useState<ConnectionsTab>("plugins")
   const [activeMobileConnectionPanel, setActiveMobileConnectionPanel] = useState<MobileConnectionPanel>("this-mac")
   const [connectionSearchQueries, setConnectionSearchQueries] = useState<Record<ConnectionsTab, string>>(
@@ -2686,9 +2688,10 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               showSettingsButton={!isActivityRailVisible}
               showSidebarToggleButton={!isActivityRailVisible}
               builtinToolsSidebarProps={{
-                activeToolKind: activeBuiltinToolKind,
+                activeModuleID: activeBuiltinToolModuleID,
+                builtinToolModules,
                 builtinTools,
-                onActiveToolKindChange: setActiveBuiltinToolKind,
+                onActiveModuleChange: setActiveBuiltinToolModuleID,
               }}
               projectRowRefs={projectRowRefs}
               conversationWorkspaceID={conversationWorkspaceID}
@@ -3081,7 +3084,8 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
             </ConnectionsPage>
           ) : isBuiltinToolsView ? (
             <BuiltinToolsPage
-              activeToolKind={activeBuiltinToolKind}
+              activeModuleID={activeBuiltinToolModuleID}
+              builtinToolModules={builtinToolModules}
               builtinTools={builtinTools}
               builtinToolsError={builtinToolsError}
               hideNavigator
@@ -3089,7 +3093,8 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               isLoadingBuiltinTools={isLoadingBuiltinTools}
               isSavingBuiltinTools={isSavingBuiltinTools}
               windowControls={windowControls}
-              onActiveToolKindChange={setActiveBuiltinToolKind}
+              onActiveModuleChange={setActiveBuiltinToolModuleID}
+              onBuiltinToolModuleToggle={setBuiltinToolModuleEnabled}
               onBuiltinToolToggle={setBuiltinToolEnabled}
               onResetBuiltinTools={resetBuiltinTools}
               onSaveBuiltinTools={saveBuiltinTools}

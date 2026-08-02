@@ -1,5 +1,6 @@
 import z from "zod"
 import type { JSONValue } from "@ai-sdk/provider"
+import type { ToolModuleProviderKind } from "@anybox/shared"
 import type * as Agent from "#agent/agent.ts"
 
 type Metadata = Record<string, unknown>
@@ -24,7 +25,20 @@ export interface ToolCapabilities {
   needsShell?: boolean
 }
 
-export type ToolSource =
+export interface ToolProviderSource {
+  kind: ToolModuleProviderKind
+  id: string
+  name?: string
+}
+
+interface ToolModuleSourceMetadata {
+  /** Stable capability module ownership. Optional only for legacy callers during migration. */
+  moduleID?: string
+  /** Transport/loading provenance. Module ownership and provider transport are intentionally separate. */
+  provider?: ToolProviderSource
+}
+
+export type ToolSource = ToolModuleSourceMetadata & (
   | {
       kind: "mcp"
       id: string
@@ -37,6 +51,25 @@ export type ToolSource =
       name: string
       description?: string
     }
+  | {
+      kind: "builtin-module"
+      id: string
+      name: string
+      description?: string
+    }
+  | {
+      kind: "custom-module"
+      id: string
+      name: string
+      description?: string
+    }
+  | {
+      kind: "plugin-module"
+      id: string
+      name: string
+      description?: string
+    }
+)
 
 export interface InitContext {
   agent?: Agent.AgentInfo

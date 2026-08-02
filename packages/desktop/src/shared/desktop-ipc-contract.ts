@@ -11,6 +11,7 @@ import type {
   AgentAutomationTriageStatus,
   AgentAutomationUpdateInput,
   AgentBuiltinToolSelection,
+  AgentBuiltinToolModuleSummary,
   AgentBuiltinToolSummary,
   AgentBuiltinToolsPayload,
   AgentConfig,
@@ -236,6 +237,7 @@ export type {
   AgentAutomationTriageStatus,
   AgentAutomationUpdateInput,
   AgentBuiltinToolSelection,
+  AgentBuiltinToolModuleSummary,
   AgentBuiltinToolSummary,
   AgentBuiltinToolsPayload,
   AgentConfig,
@@ -470,6 +472,7 @@ export type PromptUrlInstallCandidate = AgentPromptUrlInstallCandidate
 export type PromptUrlInstallPreview = AgentPromptUrlInstallPreview
 export type PromptUrlInstallResult = AgentPromptUrlInstallResult
 export type BuiltinToolSummary = AgentBuiltinToolSummary
+export type BuiltinToolModuleSummary = AgentBuiltinToolModuleSummary
 export type BuiltinToolSelection = AgentBuiltinToolSelection
 export type BuiltinToolsPayload = AgentBuiltinToolsPayload
 export type ToolPermissionModePayload = AgentToolPermissionModePayload

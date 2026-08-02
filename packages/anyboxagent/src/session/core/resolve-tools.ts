@@ -33,6 +33,7 @@ export type ToolExposure = "direct" | "deferred"
 
 export type ResolvedToolEntry = {
   item: Tool.ToolInfo
+  moduleID: string
   modelName: string
   exposure: ToolExposure
   discovered: boolean
@@ -44,6 +45,7 @@ export type ResolvedToolPlan = {
   activeToolModuleIDs: string[]
   visibleTools: ToolSet
   toolSources: Record<string, Tool.ToolSource>
+  modules: ToolModule.ToolModuleCatalogEntry[]
   entries: ResolvedToolEntry[]
 }
 
@@ -207,20 +209,17 @@ async function isToolSearchEnabled(input: ResolveToolsInput) {
 
 export async function resolveToolPlan(input: ResolveToolsInput): Promise<ResolvedToolPlan> {
   const [
-    baseRegistry,
-    builtinRegistry,
+    inventory,
     globalToolSelection,
     persistentMcpServers,
     toolSearchFeatureEnabled,
-    moduleDescriptors,
   ] = await Promise.all([
-    ToolRegistry.tools(),
-    ToolRegistry.builtinTools(),
+    ToolRegistry.inventory(),
     Config.getToolSelection(Config.GLOBAL_CONFIG_ID),
     Config.resolveProjectMcpServers(Instance.project.id),
     isToolSearchEnabled(input),
-    ToolModule.descriptors(),
   ])
+  const builtinRegistry = inventory.builtin
   const builtinToolIDs = new Set(builtinRegistry.map((item) => item.id))
   const persistentMcpServerIDs = new Set(persistentMcpServers.map((server) => server.id))
   const turnMcpServerIDs = new Set(uniqueStrings(input.turnMcpServerIDs))
@@ -242,35 +241,37 @@ export async function resolveToolPlan(input: ResolveToolsInput): Promise<Resolve
     ...requestedToolModuleIDs,
     ...discoveredToolModuleIDs,
   ])
-  const moduleDescriptorByID = new Map(
-    moduleDescriptors.map((descriptor) => [descriptor.id, descriptor]),
-  )
-  const activeToolModuleIDs: string[] = []
-  const moduleTools: Tool.ToolInfo[] = []
-  for (const moduleID of requestedOrDiscoveredToolModuleIDs) {
-    if (!moduleDescriptorByID.has(moduleID)) {
-      log.warn("turn-scoped native tool module is unavailable and will be ignored", {
-        sessionID: input.sessionID,
-        moduleID,
-      })
-      continue
-    }
 
-    try {
-      const loaded = await ToolModule.load(moduleID)
-      if (!loaded) continue
-      moduleTools.push(...loaded)
-      activeToolModuleIDs.push(moduleID)
-    } catch (error) {
-      log.warn("failed to load turn-scoped native tool module", {
+  const moduleCatalog = await ToolModule.catalog({
+    tools: inventory.all,
+    activatedModuleIDs: requestedOrDiscoveredToolModuleIDs,
+    persistentMcpServerIDs,
+    turnMcpServerIDs,
+  })
+  const moduleByID = new Map(
+    moduleCatalog.entries.map((entry) => [entry.descriptor.id, entry]),
+  )
+  for (const moduleID of requestedOrDiscoveredToolModuleIDs) {
+    if (!moduleByID.has(moduleID)) {
+      log.warn("turn-scoped tool module is unavailable and will be ignored", {
         sessionID: input.sessionID,
         moduleID,
-        error: error instanceof Error ? error.message : String(error),
       })
     }
   }
+  for (const failure of moduleCatalog.failures) {
+    log.warn("failed to load tool module", {
+      sessionID: input.sessionID,
+      moduleID: failure.moduleID,
+      error: failure.error instanceof Error ? failure.error.message : String(failure.error),
+    })
+  }
 
-  const registry = [...baseRegistry, ...moduleTools]
+  const activeToolModuleIDs = moduleCatalog.entries
+    .filter((entry) => entry.active && entry.turnActivated)
+    .map((entry) => entry.descriptor.id)
+
+  const registry = moduleCatalog.entries.flatMap((entry) => entry.tools)
   ToolRegistry.assertUniqueToolNames(registry)
 
   const readOnlyToolsOnly = readOnlyToolsOnlyForSession(input.agent, input.sessionID, input.turnID)
@@ -290,120 +291,129 @@ export async function resolveToolPlan(input: ResolveToolsInput): Promise<Resolve
     !toolSearchAccessFailure
   const registryTools: ToolSet = {}
   const entries: ResolvedToolEntry[] = []
-  const searchDefinitions: ToolSearchCandidate[] = moduleDescriptors
-    .filter((descriptor) => !requestedOrDiscoveredToolModuleIDs.includes(descriptor.id))
-    .map((descriptor): ToolModuleSearchDefinition => ({
+  const searchDefinitions: ToolSearchCandidate[] = moduleCatalog.entries
+    .filter((entry) =>
+      !entry.active &&
+      entry.descriptor.activation.discovery === "module" &&
+      !requestedOrDiscoveredToolModuleIDs.includes(entry.descriptor.id),
+    )
+    .map(({ descriptor }): ToolModuleSearchDefinition => ({
       kind: "module",
       id: descriptor.id,
       name: descriptor.id,
       title: descriptor.title,
       description: descriptor.description,
       keywords: descriptor.keywords,
-      source: {
-        kind: "native-module",
-        id: descriptor.id,
-        name: descriptor.title,
-        description: descriptor.description,
-      },
+      source: ToolModule.sourceForDescriptor(descriptor),
     }))
   const registeredMcpServerIDs = new Set<string>()
 
-  for (const item of registry) {
-    // The search tool is statically cataloged under TOOL_SEARCH_ID, but its
-    // executable model alias is bound to this Turn's deferred candidates below.
-    if (item.id === TOOL_SEARCH_ID) continue
-
-    if (getToolAccessFailure({
-      item,
-      agent: input.agent,
-      builtinToolIDs,
-      globalToolSelection,
-      readOnlyToolsOnly,
-    })) {
-      continue
+  for (const moduleEntry of moduleCatalog.entries) {
+    const descriptor = moduleEntry.descriptor
+    if (descriptor.provider.kind === "mcp" && moduleEntry.tools.length > 0) {
+      registeredMcpServerIDs.add(descriptor.provider.id)
     }
 
-    const modelName = Tool.toModelToolName(item.id)
-    if (!isProviderSafeToolName(modelName)) {
-      throw new Error(`Tool "${item.id}" does not expose a provider-safe snake_case name.`)
-    }
-
-    const source = item.source
-    if (source?.kind === "mcp") registeredMcpServerIDs.add(source.id)
-    const exposure: ToolExposure =
-      !progressiveDisclosureEnabled ||
-      !source ||
-      source.kind === "native-module" ||
-      persistentMcpServerIDs.has(source.id) ||
-      turnMcpServerIDs.has(source.id)
+    const moduleExposure: ToolExposure | "hidden" =
+      !progressiveDisclosureEnabled && moduleEntry.exposure === "deferred"
         ? "direct"
-        : "deferred"
-    const discovered = exposure === "deferred" && discoveredToolNames.has(modelName)
+        : moduleEntry.exposure
+    if (moduleExposure === "hidden") continue
 
-    entries.push({
-      item,
-      modelName,
-      exposure,
-      discovered,
-    })
+    for (const item of moduleEntry.tools) {
+      // The search tool is statically cataloged under TOOL_SEARCH_ID, but its
+      // executable model alias is bound to this Turn's deferred candidates below.
+      if (item.id === TOOL_SEARCH_ID) continue
 
-    if (source?.kind === "mcp" && exposure === "deferred" && !discovered) {
-      searchDefinitions.push({
-        kind: "tool",
-        id: item.id,
-        name: modelName,
-        title: item.title,
-        description: item.description ?? item.title ?? item.id,
-        inputSchema: item.inputSchema ?? {
-          type: "object",
-          additionalProperties: true,
-        },
-        source,
-      })
-      continue
-    }
-
-    let execution: Awaited<ReturnType<typeof createToolExecution>>
-    try {
-      execution = await createToolExecution({
+      if (getToolAccessFailure({
         item,
         agent: input.agent,
-        sessionID: input.sessionID,
-        turnID: input.turnID,
-        messageID: input.messageID,
-        abort: input.abort,
-      })
-    } catch (error) {
-      if (!item.source) throw error
-      log.warn("failed to initialize visible tool", {
-        toolID: item.id,
-        sourceKind: item.source.kind,
-        sourceID: item.source.id,
-        error: error instanceof Error ? error.message : String(error),
-      })
-      continue
-    }
+        builtinToolIDs,
+        globalToolSelection,
+        readOnlyToolsOnly,
+      })) {
+        continue
+      }
 
-    if (registryTools[modelName]) {
-      throw new Error(`Duplicate resolved tool name "${modelName}".`)
-    }
+      const modelName = Tool.toModelToolName(item.id)
+      if (!isProviderSafeToolName(modelName)) {
+        throw new Error(`Tool "${item.id}" does not expose a provider-safe snake_case name.`)
+      }
 
-    registryTools[modelName] = tool<any, Tool.ToolOutput, Record<string, unknown>>({
-      title: execution.title,
-      description: execution.description,
-      inputSchema: item.inputSchema
-        ? jsonSchema(item.inputSchema)
-        : execution.parameters,
-      needsApproval: async (args, options) => {
-        return execution.needsApproval(args, options.toolCallId)
-      },
-      execute: async (args, options) => {
-        return execution.execute(args, { toolCallID: options.toolCallId })
-      },
-      toModelOutput: async ({ output }) => {
-        return execution.toModelOutput(output as Tool.ToolOutput)
-      },
-    })
+      const exposure: ToolExposure = moduleExposure
+      const discovered = exposure === "deferred" && discoveredToolNames.has(modelName)
+
+      entries.push({
+        item,
+        moduleID: descriptor.id,
+        modelName,
+        exposure,
+        discovered,
+      })
+
+      if (
+        descriptor.activation.discovery === "tool" &&
+        exposure === "deferred" &&
+        !discovered
+      ) {
+        searchDefinitions.push({
+          kind: "tool",
+          id: item.id,
+          name: modelName,
+          title: item.title,
+          description: item.description ?? item.title ?? item.id,
+          inputSchema: item.inputSchema ?? {
+            type: "object",
+            additionalProperties: true,
+          },
+          source: item.source!,
+        })
+        continue
+      }
+
+      let execution: Awaited<ReturnType<typeof createToolExecution>>
+      try {
+        execution = await createToolExecution({
+          item,
+          agent: input.agent,
+          sessionID: input.sessionID,
+          turnID: input.turnID,
+          messageID: input.messageID,
+          abort: input.abort,
+        })
+      } catch (error) {
+        if (descriptor.failureMode === "throw") throw error
+        log.warn("failed to initialize visible tool", {
+          toolID: item.id,
+          moduleID: descriptor.id,
+          providerKind: descriptor.provider.kind,
+          providerID: descriptor.provider.id,
+          error: error instanceof Error ? error.message : String(error),
+        })
+        continue
+      }
+
+      if (registryTools[modelName]) {
+        throw new Error(`Duplicate resolved tool name "${modelName}".`)
+      }
+
+      registryTools[modelName] = tool<any, Tool.ToolOutput, Record<string, unknown>>({
+        title: execution.title,
+        description: execution.description,
+        inputSchema: item.inputSchema
+          ? jsonSchema(item.inputSchema)
+          : execution.parameters,
+        needsApproval: async (args, options) => {
+          return execution.needsApproval(args, options.toolCallId)
+        },
+        execute: async (args, options) => {
+          return execution.execute(args, { toolCallID: options.toolCallId })
+        },
+        toModelOutput: async ({ output }) => {
+          return execution.toModelOutput(output as Tool.ToolOutput)
+        },
+      })
+    }
   }
 
   for (const serverID of turnMcpServerIDs) {
@@ -422,6 +432,7 @@ export async function resolveToolPlan(input: ResolveToolsInput): Promise<Resolve
     registryTools[TOOL_SEARCH_MODEL_NAME] = createSearchTool(searchDefinitions)
     entries.push({
       item: toolSearchCatalogItem,
+      moduleID: toolSearchCatalogItem.source?.moduleID ?? "runtime.bootstrap",
       modelName: TOOL_SEARCH_MODEL_NAME,
       exposure: "direct",
       discovered: false,
@@ -450,6 +461,7 @@ export async function resolveToolPlan(input: ResolveToolsInput): Promise<Resolve
     activeToolModuleIDs,
     visibleTools,
     toolSources,
+    modules: moduleCatalog.entries,
     entries,
   }
 }

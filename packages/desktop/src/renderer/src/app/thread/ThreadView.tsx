@@ -4496,9 +4496,9 @@ function ToolTraceItemView({
       {item.toolSource ? (
         <span
           className="trace-tool-source-chip"
-          title={`${item.toolSource.name} · ${item.toolSource.kind}`}
+          title={`${item.toolSource.name} · ${item.toolSource.provider?.kind ?? item.toolSource.kind}`}
         >
-          {item.toolSource.id}
+          {item.toolSource.moduleID ?? item.toolSource.id}
         </span>
       ) : null}
       {draftPatch ? (

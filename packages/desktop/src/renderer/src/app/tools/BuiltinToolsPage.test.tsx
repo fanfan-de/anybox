@@ -1,7 +1,53 @@
 import { fireEvent, render, screen } from "@testing-library/react"
-import { describe, expect, it, vi } from "vitest"
-import type { BuiltinToolSummary } from "../types"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import { I18nProvider } from "../i18n/I18nProvider"
+import type { BuiltinToolModuleSummary, BuiltinToolSummary } from "../types"
 import { BuiltinToolsPage } from "./BuiltinToolsPage"
+
+function createModule(
+  id: string,
+  title: string,
+  description: string,
+  toolIDs: string[],
+): BuiltinToolModuleSummary {
+  return {
+    id,
+    title,
+    description,
+    provider: {
+      kind: "builtin",
+      id: "anybox",
+      name: "Anybox",
+    },
+    activation: {
+      mode: "always",
+      scope: "global",
+      discovery: "none",
+    },
+    toolIDs,
+  }
+}
+
+const builtinToolModules: BuiltinToolModuleSummary[] = [
+  createModule(
+    "workspace.execution",
+    "Workspace Execution",
+    "Run commands, terminals, and background processes in the workspace.",
+    ["git_bash_command"],
+  ),
+  createModule(
+    "workspace.files",
+    "Workspace Files",
+    "Read, list, search, and inspect workspace files and images.",
+    ["read_file", "apply_patch"],
+  ),
+  createModule(
+    "runtime.bootstrap",
+    "Runtime Bootstrap",
+    "Discover optional capabilities and interact with the user.",
+    ["tool_search"],
+  ),
+]
 
 const builtinTools: BuiltinToolSummary[] = [
   {
@@ -25,6 +71,7 @@ const builtinTools: BuiltinToolSummary[] = [
       concurrency: "exclusive",
       needsShell: true,
     },
+    moduleID: "workspace.execution",
     enabled: true,
   },
   {
@@ -38,6 +85,7 @@ const builtinTools: BuiltinToolSummary[] = [
       destructive: false,
       concurrency: "safe",
     },
+    moduleID: "workspace.files",
     enabled: false,
   },
   {
@@ -51,21 +99,18 @@ const builtinTools: BuiltinToolSummary[] = [
       destructive: true,
       concurrency: "exclusive",
     },
+    moduleID: "workspace.files",
     enabled: false,
   },
   {
     id: "tool_search",
     title: "Tool Search",
-    description:
-      "Search currently registered deferred MCP tools. The runtime activates this tool only for turns that have eligible deferred candidates.",
+    description: "Search and load optional capability modules or deferred tools.",
     inputSchema: {
       type: "object",
       properties: {
         query: {
           type: "string",
-        },
-        limit: {
-          type: "number",
         },
       },
       required: ["query"],
@@ -76,6 +121,7 @@ const builtinTools: BuiltinToolSummary[] = [
       readOnly: true,
       destructive: false,
     },
+    moduleID: "runtime.bootstrap",
     enabled: true,
   },
 ]
@@ -84,6 +130,8 @@ function createTool(
   id: string,
   title: string,
   kind: NonNullable<BuiltinToolSummary["capabilities"]["kind"]>,
+  moduleID: string,
+  enabled = true,
 ): BuiltinToolSummary {
   return {
     id,
@@ -95,63 +143,82 @@ function createTool(
       readOnly: kind === "read" || kind === "search",
       destructive: kind === "write" || kind === "exec",
     },
-    enabled: true,
+    moduleID,
+    enabled,
   }
 }
 
-function renderBuiltinToolsPage(overrides: Partial<Parameters<typeof BuiltinToolsPage>[0]> = {}) {
+function renderBuiltinToolsPage(
+  overrides: Partial<Parameters<typeof BuiltinToolsPage>[0]> = {},
+  locale?: "zh-CN" | "en-US",
+) {
   const props: Parameters<typeof BuiltinToolsPage>[0] = {
+    builtinToolModules,
     builtinTools,
     builtinToolsError: null,
     isBuiltinToolSelectionDirty: true,
     isLoadingBuiltinTools: false,
     isSavingBuiltinTools: false,
+    onBuiltinToolModuleToggle: vi.fn(),
     onBuiltinToolToggle: vi.fn(),
     onResetBuiltinTools: vi.fn(),
     onSaveBuiltinTools: vi.fn(),
     ...overrides,
   }
 
-  const renderResult = render(<BuiltinToolsPage {...props} />)
+  if (locale) {
+    window.localStorage.setItem("desktop.locale", locale)
+  }
+
+  const page = <BuiltinToolsPage {...props} />
+  const renderResult = render(locale ? <I18nProvider>{page}</I18nProvider> : page)
   return { ...props, container: renderResult.container }
 }
 
+afterEach(() => {
+  window.localStorage.removeItem("desktop.locale")
+})
+
 describe("BuiltinToolsPage", () => {
-  it("renders built-in tools, toggles selection, saves, and resets", () => {
+  it("renders server-defined Tool Modules and keeps per-tool controls", () => {
     const props = renderBuiltinToolsPage()
 
     expect(screen.getByLabelText("Tools top menu")).toBeInTheDocument()
     expect(screen.getByText("Global tool availability")).toBeInTheDocument()
     expect(screen.getByText("2 of 4 built-in tools enabled.")).toBeInTheDocument()
-    const toolCategories = screen.getByRole("list", { name: "Tool categories" })
-    expect(toolCategories).toBeInTheDocument()
-    expect(toolCategories.querySelector(".skill-tree-role-icon")).toBeNull()
 
-    const shellCategory = screen.getByRole("button", { name: "Shell tools, 1 of 1 enabled" })
-    expect(shellCategory).toHaveAttribute("aria-pressed", "true")
-    expect(screen.getByRole("button", { name: "File Tools, 0 of 2 enabled" })).toBeInTheDocument()
-    expect(screen.queryByRole("button", { name: /^Write tools,/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole("button", { name: /^Read tools,/ })).not.toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Plugin, Skill & MCP Tools, 1 of 1 enabled" })).toBeInTheDocument()
+    const moduleList = screen.getByRole("list", { name: "Tool Modules" })
+    expect(moduleList).toBeInTheDocument()
+    expect(moduleList.querySelector(".skill-tree-role-icon")).toBeNull()
+
+    const executionModule = screen.getByRole("button", {
+      name: "Workspace Execution module, 1 of 1 tools enabled",
+    })
+    expect(executionModule).toHaveAttribute("aria-pressed", "true")
+    expect(screen.getByRole("button", {
+      name: "Workspace Files module, 0 of 2 tools enabled",
+    })).toBeInTheDocument()
+    expect(screen.getByText("workspace.execution")).toBeInTheDocument()
+    expect(screen.getByText("Built-in · Anybox")).toBeInTheDocument()
+    expect(screen.getByText("Always available")).toBeInTheDocument()
+    expect(screen.getByText("Global scope")).toBeInTheDocument()
     expect(screen.getByText("Git Bash")).toBeInTheDocument()
     expect(screen.getByText("Shell access")).toBeInTheDocument()
     expect(props.container.querySelector("[class*='settings-']")).toBeNull()
-    expect(screen.queryByText("Run a Git Bash/MSYS Bash command inside the current project boundary.")).not.toBeInTheDocument()
-    expect(screen.queryByText("Read File")).not.toBeInTheDocument()
+
+    const moduleSwitch = screen.getByRole("switch", { name: "Change availability for Workspace Execution" })
+    expect(moduleSwitch).toHaveAttribute("aria-checked", "true")
 
     fireEvent.click(screen.getByRole("button", { name: "Show details for Git Bash" }))
-    expect(screen.getByText("Description")).toBeInTheDocument()
     expect(screen.getByText("Run a Git Bash/MSYS Bash command inside the current project boundary.")).toBeInTheDocument()
-    expect(screen.getByText("Input schema")).toBeInTheDocument()
     expect(props.container.querySelector(".tools-card-input-schema pre")?.textContent).toContain('"command"')
-    expect(screen.getByText("Concurrency")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Hide details for Git Bash" })).toHaveAttribute("aria-expanded", "true")
 
-    fireEvent.click(screen.getByRole("button", { name: "File Tools, 0 of 2 enabled" }))
+    fireEvent.click(screen.getByRole("button", {
+      name: "Workspace Files module, 0 of 2 tools enabled",
+    }))
+    expect(screen.getByText("workspace.files")).toBeInTheDocument()
     expect(screen.getByText("Apply Patch")).toBeInTheDocument()
     expect(screen.getByText("Read File")).toBeInTheDocument()
-    expect(screen.getByText("High risk")).toBeInTheDocument()
-    expect(screen.getAllByText("1 aliases")).toHaveLength(2)
     expect(screen.queryByText("Git Bash")).not.toBeInTheDocument()
 
     const applyPatchSwitch = screen.getByRole("switch", { name: "Apply Patch" })
@@ -159,223 +226,88 @@ describe("BuiltinToolsPage", () => {
     fireEvent.click(applyPatchSwitch)
     expect(props.onBuiltinToolToggle).toHaveBeenCalledWith("apply_patch", true)
 
-    expect(screen.getByText("Read-only")).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole("button", { name: "Plugin, Skill & MCP Tools, 1 of 1 enabled" }))
-    expect(screen.getByText("Tool Search")).toBeInTheDocument()
-    expect(screen.getByText("Read-only")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", {
+      name: "Runtime Bootstrap module, 1 of 1 tools enabled",
+    }))
     fireEvent.click(screen.getByRole("button", { name: "Show details for Tool Search" }))
     expect(props.container.querySelector(".tools-card-input-schema pre")?.textContent).toContain('"query"')
 
-    const toolSearchSwitch = screen.getByRole("switch", { name: "Tool Search" })
-    expect(toolSearchSwitch).toHaveAttribute("aria-checked", "true")
-    fireEvent.click(toolSearchSwitch)
-    expect(props.onBuiltinToolToggle).toHaveBeenCalledWith("tool_search", false)
-
-    fireEvent.click(shellCategory)
-    const gitBashSwitch = screen.getByRole("switch", { name: "Git Bash" })
-    expect(gitBashSwitch).toHaveAttribute("aria-checked", "true")
-    fireEvent.click(gitBashSwitch)
-    expect(props.onBuiltinToolToggle).toHaveBeenCalledWith("git_bash_command", false)
-
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }))
     expect(props.onSaveBuiltinTools).toHaveBeenCalled()
-
     fireEvent.click(screen.getByRole("button", { name: "Reset to default" }))
     expect(props.onResetBuiltinTools).toHaveBeenCalled()
   })
 
-  it("disables tool switches while availability changes are being saved", () => {
-    renderBuiltinToolsPage({ isSavingBuiltinTools: true })
+  it("uses the Module switch as a bulk availability control", () => {
+    const props = renderBuiltinToolsPage()
 
-    expect(screen.getByRole("switch", { name: "Git Bash" })).toBeDisabled()
+    fireEvent.click(screen.getByRole("button", {
+      name: "Workspace Files module, 0 of 2 tools enabled",
+    }))
+    const moduleSwitch = screen.getByRole("switch", { name: "Change availability for Workspace Files" })
+    expect(moduleSwitch).toHaveAttribute("aria-checked", "false")
+    expect(screen.getByText("All module tools disabled")).toBeInTheDocument()
+
+    fireEvent.click(moduleSwitch)
+    expect(props.onBuiltinToolModuleToggle).toHaveBeenCalledWith(["read_file", "apply_patch"], true)
   })
 
-  it("keeps platform shells and file operations in their dedicated categories", () => {
-    const categorizedTools = [
-      createTool("git_bash_command", "Git Bash", "exec"),
-      createTool("powershell_command", "PowerShell", "exec"),
-      createTool("cmd_command", "Command Prompt", "exec"),
-      createTool("wsl_bash_command", "WSL Bash", "exec"),
-      createTool("terminal_run_command", "Run Terminal Command", "exec"),
-      createTool("terminal_write_input", "Write Terminal Input", "exec"),
-      createTool("stop_background_task", "Stop Background Task", "exec"),
-      createTool("read_file", "Read File", "read"),
-      createTool("list_directory", "List Directory", "read"),
-      createTool("replace_text", "Replace Text", "write"),
-      createTool("apply_patch", "Apply Patch", "write"),
-      createTool("view_image", "View Image", "read"),
-      createTool("glob", "Glob", "search"),
-      createTool("grep", "Grep", "search"),
+  it("makes a partially enabled Module explicit and enables it as a unit", () => {
+    const tools = builtinTools.map((tool) => (
+      tool.id === "read_file" ? { ...tool, enabled: true } : tool
+    ))
+    const props = renderBuiltinToolsPage({ builtinTools: tools })
+
+    fireEvent.click(screen.getByRole("button", {
+      name: "Workspace Files module, 1 of 2 tools enabled",
+    }))
+    expect(screen.getByText("Some module tools available")).toBeInTheDocument()
+    const moduleSwitch = screen.getByRole("switch", { name: "Change availability for Workspace Files" })
+    expect(moduleSwitch).toHaveAttribute("aria-checked", "false")
+
+    fireEvent.click(moduleSwitch)
+    expect(props.onBuiltinToolModuleToggle).toHaveBeenCalledWith(["read_file", "apply_patch"], true)
+  })
+
+  it("follows Module Catalog order instead of inferring groups from tool kind", () => {
+    const modules = [
+      createModule("workspace.code", "Code Intelligence", "Code navigation.", ["code_probe"]),
+      createModule("workspace.execution", "Workspace Execution", "Command execution.", ["execution_probe"]),
+    ]
+    const tools = [
+      createTool("execution_probe", "Execution Probe", "search", "workspace.execution"),
+      createTool("code_probe", "Code Probe", "exec", "workspace.code"),
     ]
 
-    renderBuiltinToolsPage({ builtinTools: categorizedTools })
-
-    const shellCategory = screen.getByRole("button", { name: "Shell tools, 4 of 4 enabled" })
-    const fileCategory = screen.getByRole("button", { name: "File Tools, 7 of 7 enabled" })
-    const otherCategory = screen.getByRole("button", { name: "Other tools, 3 of 3 enabled" })
-
-    expect(screen.getByText("Git Bash")).toBeInTheDocument()
-    expect(screen.getByText("PowerShell")).toBeInTheDocument()
-    expect(screen.getByText("Command Prompt")).toBeInTheDocument()
-    expect(screen.getByText("WSL Bash")).toBeInTheDocument()
-    expect(screen.queryByText("Run Terminal Command")).not.toBeInTheDocument()
-
-    fireEvent.click(fileCategory)
-    expect(screen.getByText("Read File")).toBeInTheDocument()
-    expect(screen.getByText("List Directory")).toBeInTheDocument()
-    expect(screen.getByText("Replace Text")).toBeInTheDocument()
-    expect(screen.getByText("Apply Patch")).toBeInTheDocument()
-    expect(screen.getByText("View Image")).toBeInTheDocument()
-    expect(screen.getByText("Glob")).toBeInTheDocument()
-    expect(screen.getByText("Grep")).toBeInTheDocument()
-    expect(screen.queryByText("Git Bash")).not.toBeInTheDocument()
-
-    fireEvent.click(otherCategory)
-    expect(screen.getByText("Run Terminal Command")).toBeInTheDocument()
-    expect(screen.getByText("Write Terminal Input")).toBeInTheDocument()
-    expect(screen.getByText("Stop Background Task")).toBeInTheDocument()
-    expect(screen.queryByText("PowerShell")).not.toBeInTheDocument()
-
-    fireEvent.click(shellCategory)
-    expect(screen.getByText("Git Bash")).toBeInTheDocument()
-  })
-
-  it("labels delegation tools as the Multi-Agent Tools category", () => {
     renderBuiltinToolsPage({
-      builtinTools: [
-        createTool("spawn_subagent", "Spawn Subagent", "delegation"),
-        createTool("read_subagent", "Read Subagent", "delegation"),
-        createTool("wait_subagent", "Wait Subagent", "delegation"),
-        createTool("cancel_subagent", "Cancel Subagent", "delegation"),
-      ],
+      builtinToolModules: modules,
+      builtinTools: tools,
     })
 
-    expect(screen.getByRole("button", { name: "Multi-Agent Tools, 4 of 4 enabled" })).toBeInTheDocument()
-    expect(screen.queryByRole("button", { name: /^Delegation tools,/ })).not.toBeInTheDocument()
-    expect(screen.getByText("Spawn Subagent")).toBeInTheDocument()
-    expect(screen.getByText("Read Subagent")).toBeInTheDocument()
-    expect(screen.getByText("Wait Subagent")).toBeInTheDocument()
-    expect(screen.getByText("Cancel Subagent")).toBeInTheDocument()
+    const moduleList = screen.getByRole("list", { name: "Tool Modules" })
+    const labels = Array.from(moduleList.querySelectorAll(".skill-tree-label")).map((element) => element.textContent)
+    expect(labels).toEqual(["Code Intelligence", "Workspace Execution"])
+    expect(screen.getByText("Code Probe")).toBeInTheDocument()
+    expect(screen.queryByText("Execution Probe")).not.toBeInTheDocument()
   })
 
-  it("groups user questions and task tools as Product Interaction Tools", () => {
-    renderBuiltinToolsPage({
-      builtinTools: [
-        createTool("ask_user_question", "Ask User Question", "interaction"),
-        createTool("task_create", "Create Tasks", "workflow"),
-        createTool("task_get", "Get Task", "workflow"),
-        createTool("task_list", "List Tasks", "workflow"),
-        createTool("task_update", "Update Task", "workflow"),
-      ],
-    })
+  it("disables Module and tool switches while changes are being saved", () => {
+    renderBuiltinToolsPage({ isSavingBuiltinTools: true })
 
-    expect(screen.getByRole("button", { name: "Product Interaction Tools, 5 of 5 enabled" })).toBeInTheDocument()
-    expect(screen.queryByRole("button", { name: /^Interaction tools,/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole("button", { name: /^Workflow tools,/ })).not.toBeInTheDocument()
-    expect(screen.getByText("Ask User Question")).toBeInTheDocument()
-    expect(screen.getByText("Create Tasks")).toBeInTheDocument()
-    expect(screen.getByText("Get Task")).toBeInTheDocument()
-    expect(screen.getByText("List Tasks")).toBeInTheDocument()
-    expect(screen.getByText("Update Task")).toBeInTheDocument()
-  })
-
-  it("groups every LSP operation as Code Tools", () => {
-    renderBuiltinToolsPage({
-      builtinTools: [
-        createTool("lsp_definition", "LSP Definition", "search"),
-        createTool("lsp_references", "LSP References", "search"),
-        createTool("lsp_hover", "LSP Hover", "read"),
-        createTool("lsp_workspace_symbols", "LSP Workspace Symbols", "search"),
-      ],
-    })
-
-    expect(screen.getByRole("button", { name: "Code Tools, 4 of 4 enabled" })).toBeInTheDocument()
-    expect(screen.queryByRole("button", { name: /^Search tools,/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole("button", { name: /^Read tools,/ })).not.toBeInTheDocument()
-    expect(screen.getByText("LSP Definition")).toBeInTheDocument()
-    expect(screen.getByText("LSP References")).toBeInTheDocument()
-    expect(screen.getByText("LSP Hover")).toBeInTheDocument()
-    expect(screen.getByText("LSP Workspace Symbols")).toBeInTheDocument()
-  })
-
-  it("groups Skill and MCP entry points as Plugin, Skill & MCP Tools", () => {
-    renderBuiltinToolsPage({
-      builtinTools: [
-        createTool("load_skill", "Load Skill", "read"),
-        createTool("read_skill_resource", "Read Skill Resource", "read"),
-        createTool("list_mcp_resources", "List MCP Resources", "read"),
-        createTool("list_mcp_resource_templates", "List MCP Resource Templates", "read"),
-        createTool("read_mcp_resource", "Read MCP Resource", "read"),
-        createTool("tool_search", "Tool Search", "search"),
-      ],
-    })
-
-    expect(screen.getByRole("button", { name: "Plugin, Skill & MCP Tools, 6 of 6 enabled" })).toBeInTheDocument()
-    expect(screen.queryByRole("button", { name: /^Search tools,/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole("button", { name: /^Read tools,/ })).not.toBeInTheDocument()
-    expect(screen.getByText("Load Skill")).toBeInTheDocument()
-    expect(screen.getByText("Read Skill Resource")).toBeInTheDocument()
-    expect(screen.getByText("List MCP Resources")).toBeInTheDocument()
-    expect(screen.getByText("List MCP Resource Templates")).toBeInTheDocument()
-    expect(screen.getByText("Read MCP Resource")).toBeInTheDocument()
-    expect(screen.getByText("Tool Search")).toBeInTheDocument()
-  })
-
-  it("keeps the user-defined tool categories in the requested order", () => {
-    renderBuiltinToolsPage({
-      builtinTools: [
-        createTool("git_bash_command", "Git Bash", "exec"),
-        createTool("read_file", "Read File", "read"),
-        createTool("spawn_subagent", "Spawn Subagent", "delegation"),
-        createTool("ask_user_question", "Ask User Question", "interaction"),
-        createTool("lsp_definition", "LSP Definition", "search"),
-        createTool("load_skill", "Load Skill", "read"),
-      ],
-    })
-
-    const categories = screen.getByRole("list", { name: "Tool categories" })
-    const labels = Array.from(categories.querySelectorAll(".skill-tree-label")).map((element) => element.textContent)
-    expect(labels).toEqual([
-      "Shell",
-      "File Tools",
-      "Multi-Agent Tools",
-      "Product Interaction Tools",
-      "Code Tools",
-      "Plugin, Skill & MCP Tools",
-    ])
-  })
-
-  it("recognizes the macOS shell tool as the platform Shell category", () => {
-    renderBuiltinToolsPage({
-      builtinTools: [{
-        id: "macos_shell_command",
-        title: "macOS Shell",
-        description: "Run a macOS shell command.",
-        aliases: [],
-        capabilities: {
-          kind: "exec",
-          readOnly: false,
-          destructive: true,
-          needsShell: true,
-        },
-        enabled: true,
-      }],
-    })
-
-    expect(screen.getByRole("button", { name: "Shell tools, 1 of 1 enabled" })).toBeInTheDocument()
-    expect(screen.getByText("macOS Shell")).toBeInTheDocument()
-    expect(screen.queryByRole("button", { name: /^Other tools,/ })).not.toBeInTheDocument()
+    expect(screen.getByRole("switch", { name: "Change availability for Workspace Execution" })).toBeDisabled()
+    expect(screen.getByRole("switch", { name: "Git Bash" })).toBeDisabled()
   })
 
   it("renders load error, loading, and empty states", () => {
     const { rerender } = render(
       <BuiltinToolsPage
+        builtinToolModules={[]}
         builtinTools={[]}
         builtinToolsError="Unable to read tools."
         isBuiltinToolSelectionDirty={false}
         isLoadingBuiltinTools={false}
         isSavingBuiltinTools={false}
+        onBuiltinToolModuleToggle={vi.fn()}
         onBuiltinToolToggle={vi.fn()}
         onResetBuiltinTools={vi.fn()}
         onSaveBuiltinTools={vi.fn()}
@@ -383,22 +315,56 @@ describe("BuiltinToolsPage", () => {
     )
 
     expect(screen.getByText("Unable to read tools.")).toBeInTheDocument()
-    expect(screen.getByText("No built-in tools")).toBeInTheDocument()
-    expect(screen.queryByRole("button", { name: "Dismiss tools message" })).not.toBeInTheDocument()
+    expect(screen.getByText("No built-in Tool Modules")).toBeInTheDocument()
 
     rerender(
       <BuiltinToolsPage
+        builtinToolModules={[]}
         builtinTools={[]}
         builtinToolsError={null}
         isBuiltinToolSelectionDirty={false}
         isLoadingBuiltinTools
         isSavingBuiltinTools={false}
+        onBuiltinToolModuleToggle={vi.fn()}
         onBuiltinToolToggle={vi.fn()}
         onResetBuiltinTools={vi.fn()}
         onSaveBuiltinTools={vi.fn()}
       />,
     )
 
-    expect(screen.getByText("Fetching built-in tools")).toBeInTheDocument()
+    expect(screen.getByText("Fetching Tool Modules")).toBeInTheDocument()
+  })
+
+  it("localizes built-in Module and tool catalog copy from stable IDs", () => {
+    renderBuiltinToolsPage({}, "zh-CN")
+
+    expect(screen.getByLabelText("工具顶部菜单")).toBeInTheDocument()
+    expect(screen.getByRole("list", { name: "工具模块" })).toBeInTheDocument()
+    expect(screen.getByRole("button", {
+      name: "工作区执行 模块，已启用 1/1 个工具",
+    })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "工作区执行" })).toBeInTheDocument()
+    expect(screen.getByText("在工作区中运行命令、终端和后台进程。")).toBeInTheDocument()
+    expect(screen.getByText("内置 · Anybox")).toBeInTheDocument()
+    expect(screen.getByText("始终可用")).toBeInTheDocument()
+    expect(screen.getByText("全局作用域")).toBeInTheDocument()
+    expect(screen.getByText("全局工具可用性")).toBeInTheDocument()
+    expect(screen.getByText("模块内工具全部可用")).toBeInTheDocument()
+    expect(screen.getByRole("switch", {
+      name: "切换 工作区执行 模块内工具的可用性",
+    })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("button", { name: "显示 Git Bash 的详情" }))
+    expect(screen.getByText("在当前项目边界内运行 Git Bash/MSYS Bash 命令。")).toBeInTheDocument()
+    expect(screen.getByText("说明")).toBeInTheDocument()
+    expect(screen.getByText("输入 Schema")).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole("button", {
+      name: "运行时引导 模块，已启用 1/1 个工具",
+    }))
+    expect(screen.getByRole("heading", { name: "运行时引导" })).toBeInTheDocument()
+    expect(screen.getByText("工具搜索")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "保存更改" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "恢复默认" })).toBeInTheDocument()
   })
 })

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import type {
   ArchivedSessionSummary,
+  BuiltinToolModuleSummary,
   BuiltinToolSelection,
   BuiltinToolSummary,
   ConnectorDefinition,
@@ -672,6 +673,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
   const [activePluginID, setActivePluginID] = useState<string | null>(null)
   const activePluginIDRef = useRef<string | null>(null)
   const [pluginDraft, setPluginDraft] = useState<PluginDraftState>(() => buildPluginDraft(undefined))
+  const [builtinToolModules, setBuiltinToolModules] = useState<BuiltinToolModuleSummary[]>([])
   const [builtinTools, setBuiltinTools] = useState<BuiltinToolSummary[]>([])
   const [builtinToolSelection, setBuiltinToolSelection] = useState<BuiltinToolSelection>(EMPTY_BUILTIN_TOOL_SELECTION)
   const [savedBuiltinToolSelection, setSavedBuiltinToolSelection] =
@@ -1740,6 +1742,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
   async function loadBuiltinTools(optionsArg?: LoadSettingsOptions) {
     const getBuiltinTools = window.desktop?.getBuiltinTools
     if (!getBuiltinTools) {
+      setBuiltinToolModules([])
       setBuiltinTools([])
       setBuiltinToolSelection(normalizeBuiltinToolSelection())
       setSavedBuiltinToolSelection(normalizeBuiltinToolSelection())
@@ -1760,9 +1763,11 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       const selection = normalizeBuiltinToolSelection(payload.selection)
       setBuiltinToolSelection(selection)
       setSavedBuiltinToolSelection(selection)
+      setBuiltinToolModules(payload.modules)
       setBuiltinTools(applyBuiltinToolSelection(payload.items, selection))
     } catch (error) {
       if (builtinToolsRequestIDRef.current !== requestID) return
+      setBuiltinToolModules([])
       setBuiltinTools([])
       setBuiltinToolSelection(normalizeBuiltinToolSelection())
       setSavedBuiltinToolSelection(normalizeBuiltinToolSelection())
@@ -2057,6 +2062,19 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       }
     })
     setBuiltinTools((items) => items.map((tool) => (tool.id === toolID ? { ...tool, enabled } : tool)))
+  }
+
+  function setBuiltinToolModuleEnabled(toolIDs: string[], enabled: boolean) {
+    const moduleToolIDs = new Set(toolIDs)
+    setBuiltinToolSelection((current) => ({
+      tools: {
+        ...current.tools,
+        ...Object.fromEntries(toolIDs.map((toolID) => [toolID, enabled])),
+      },
+    }))
+    setBuiltinTools((items) => items.map((tool) => (
+      moduleToolIDs.has(tool.id) ? { ...tool, enabled } : tool
+    )))
   }
 
   async function saveBuiltinTools() {
@@ -4124,6 +4142,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     activePluginID,
     archivedSessions,
     archivedSessionsError,
+    builtinToolModules,
     builtinTools,
     builtinToolsError,
     cancelConnectorAuthFlow,
@@ -4293,6 +4312,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     setSelectionDraftValue,
     togglePromptUrlInstallPrompt,
     setBuiltinToolEnabled,
+    setBuiltinToolModuleEnabled,
     startInstalledPluginConnectorAuthFlow,
     startConnectorAuthFlow,
     startProviderAuthFlow,

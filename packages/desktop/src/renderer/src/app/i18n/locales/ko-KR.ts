@@ -7,6 +7,7 @@ import { cinemaWorkflowTranslations } from "../cinema-workflow-translations"
 import { branchViewTranslations } from "../branch-view-translations"
 import { threadErrorTranslations } from "../thread-error-translations"
 import { plannerTranslations } from "../planner-translations"
+import { toolModuleTranslations } from "../tool-module-translations"
 
 export const koKR = {
   "app.loading": "로딩 중",
@@ -1435,5 +1436,6 @@ export const koKR = {
   ...cinemaWorkflowTranslations.enUS,
   ...branchViewTranslations.enUS,
   ...plannerTranslations.enUS,
+  ...toolModuleTranslations.enUS,
   ...threadErrorTranslations["ko-KR"],
 } as const satisfies Record<TranslationKey, string>

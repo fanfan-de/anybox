@@ -10,7 +10,13 @@ import type {
   ToolPermissionMode as AgentToolPermissionMode,
   ToolPermissionModePayload as AgentToolPermissionModePayload,
 } from "../shared/permission"
-import type { ReasoningEffort } from "@anybox/shared"
+import type {
+  ReasoningEffort,
+  ToolModuleActivationMode,
+  ToolModuleActivationScope,
+  ToolModuleDiscoveryMode,
+  ToolModuleProviderKind,
+} from "@anybox/shared"
 
 export type MenuKey = "file" | "edit" | "view" | "window" | "help"
 export type WindowAction = "minimize" | "toggle-maximize" | "close"
@@ -560,6 +566,23 @@ export interface AgentBuiltinToolCapabilities {
   needsShell?: boolean
 }
 
+export interface AgentBuiltinToolModuleSummary {
+  id: string
+  title: string
+  description: string
+  provider: {
+    kind: ToolModuleProviderKind
+    id: string
+    name?: string
+  }
+  activation: {
+    mode: ToolModuleActivationMode
+    scope: ToolModuleActivationScope
+    discovery: ToolModuleDiscoveryMode
+  }
+  toolIDs: string[]
+}
+
 export interface AgentBuiltinToolSummary {
   id: string
   title: string
@@ -567,6 +590,7 @@ export interface AgentBuiltinToolSummary {
   inputSchema?: unknown
   aliases: string[]
   capabilities: AgentBuiltinToolCapabilities
+  moduleID: string
   enabled: boolean
 }
 
@@ -575,6 +599,7 @@ export interface AgentBuiltinToolSelection {
 }
 
 export interface AgentBuiltinToolsPayload {
+  modules: AgentBuiltinToolModuleSummary[]
   items: AgentBuiltinToolSummary[]
   selection: AgentBuiltinToolSelection
 }

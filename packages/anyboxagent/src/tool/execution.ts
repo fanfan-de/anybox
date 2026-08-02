@@ -217,21 +217,28 @@ export async function createToolExecution(input: {
       const normalizedOutput = Tool.normalizeToolOutput(
         await runtime.execute(args, runtimeContext(toolCallID)),
       )
-      const output = input.item.source
+      const source = input.item.source
+      const output = source && (source.kind === "mcp" || source.kind === "native-module")
         ? {
             ...normalizedOutput,
             metadata: {
               ...normalizedOutput.metadata,
               toolSource: {
-                kind: input.item.source.kind,
-                id: input.item.source.id,
-                name: input.item.source.name,
-                description: input.item.source.description,
+                kind: source.kind,
+                id: source.id,
+                moduleID: source.moduleID,
+                name: source.name,
+                description: source.description,
+                provider: source.provider,
               },
             },
           }
         : normalizedOutput
 
+      // The session processor attaches universal module provenance to stored
+      // runtime events. Direct-output injection remains limited to the two
+      // legacy source kinds so newly sourced built-ins keep their established
+      // metadata/data contracts.
       return persistOutputIfLarge(output, toolCallID)
     },
     toModelOutput: async (output) => {

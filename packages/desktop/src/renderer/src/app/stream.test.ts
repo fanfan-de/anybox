@@ -3031,7 +3031,13 @@ describe("stream trace reducer", () => {
               toolSource: {
                 kind: "native-module",
                 id: "planner.core",
+                moduleID: "planner.core",
                 name: "Planner",
+                provider: {
+                  kind: "native",
+                  id: "anybox",
+                  name: "Anybox",
+                },
               },
             },
           },
@@ -3042,8 +3048,53 @@ describe("stream trace reducer", () => {
     expect(message.items.find((item) => item.kind === "tool")?.toolSource).toEqual({
       kind: "native-module",
       id: "planner.core",
+      moduleID: "planner.core",
       name: "Planner",
       description: undefined,
+      provider: {
+        kind: "native",
+        id: "anybox",
+        name: "Anybox",
+      },
+    })
+  })
+
+  it("preserves builtin module provenance on tool trace items", () => {
+    let message = buildStreamingAssistantThreadMessage("Builtin provenance")
+    message = applyAgentStreamEventToThreadMessage(message, {
+      event: "done",
+      data: {
+        parts: [{
+          id: "tool-read-file",
+          type: "tool",
+          tool: "read_file",
+          state: {
+            status: "completed",
+            output: "ok",
+            metadata: {
+              toolSource: {
+                kind: "builtin-module",
+                id: "workspace.files",
+                moduleID: "workspace.files",
+                name: "Workspace Files",
+                provider: {
+                  kind: "builtin",
+                  id: "anybox",
+                },
+              },
+            },
+          },
+        }],
+      },
+    })
+
+    expect(message.items.find((item) => item.kind === "tool")?.toolSource).toMatchObject({
+      kind: "builtin-module",
+      moduleID: "workspace.files",
+      provider: {
+        kind: "builtin",
+        id: "anybox",
+      },
     })
   })
 

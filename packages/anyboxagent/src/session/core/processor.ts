@@ -913,8 +913,10 @@ export function create(input: {
             metadata.toolSource = {
                 kind: source.kind,
                 id: source.id,
+                moduleID: source.moduleID,
                 name: source.name,
                 description: source.description,
+                provider: source.provider,
             }
         }
         return Object.keys(metadata).length > 0 ? metadata : undefined

@@ -22,6 +22,7 @@ import * as PromptUrlInstall from "#session/support/prompt-url-install.ts"
 import * as SkillGitInstall from "#skill/git-install.ts"
 import * as Skill from "#skill/skill.ts"
 import * as SkillManager from "#skill/manage.ts"
+import * as ToolModule from "#tool/module.ts"
 import * as ToolRegistry from "#tool/registry.ts"
 import * as Log from "#util/log.ts"
 
@@ -1513,11 +1514,31 @@ export async function listBuiltinTools() {
     ToolRegistry.builtinTools(),
     Config.getToolSelection(Config.GLOBAL_CONFIG_ID),
   ])
+  const catalog = ToolModule.catalogRegisteredTools({ tools: items })
+  const builtinModules = catalog.entries
+    .filter((entry) => entry.descriptor.provider.kind === "builtin" && entry.tools.length > 0)
+  const moduleIDByToolID = new Map(
+    builtinModules.flatMap((entry) =>
+      entry.tools.map((item) => [item.id, entry.descriptor.id] as const),
+    ),
+  )
 
   return {
+    modules: builtinModules.map(({ descriptor, tools }) => ({
+      id: descriptor.id,
+      title: descriptor.title,
+      description: descriptor.description,
+      provider: descriptor.provider,
+      activation: descriptor.activation,
+      toolIDs: tools.map((item) => item.id),
+    })),
     items: await Promise.all(
       items.map(async (item) => {
         const runtime = await item.init()
+        const moduleID = moduleIDByToolID.get(item.id)
+        if (!moduleID) {
+          throw new Error(`Built-in tool '${item.id}' is missing Tool Module ownership.`)
+        }
         const explicitStates = [item.id, ...(item.aliases ?? [])]
           .map((name) => selection.tools[name])
           .filter((value): value is boolean => typeof value === "boolean")
@@ -1529,6 +1550,7 @@ export async function listBuiltinTools() {
           inputSchema: toToolInputSchema(runtime.parameters),
           aliases: item.aliases ?? [],
           capabilities: item.capabilities ?? {},
+          moduleID,
           enabled: !explicitStates.includes(false),
         }
       }),

@@ -7,6 +7,7 @@ import { cinemaWorkflowTranslations } from "../cinema-workflow-translations"
 import { branchViewTranslations } from "../branch-view-translations"
 import { threadErrorTranslations } from "../thread-error-translations"
 import { plannerTranslations } from "../planner-translations"
+import { toolModuleTranslations } from "../tool-module-translations"
 
 export const jaJP = {
   "app.loading": "読み込み中",
@@ -1435,5 +1436,6 @@ export const jaJP = {
   ...cinemaWorkflowTranslations.enUS,
   ...branchViewTranslations.enUS,
   ...plannerTranslations.enUS,
+  ...toolModuleTranslations.enUS,
   ...threadErrorTranslations["ja-JP"],
 } as const satisfies Record<TranslationKey, string>

@@ -93,7 +93,7 @@ export function builtinShellToolsForPlatform(platform: NodeJS.Platform): Tool.To
   return []
 }
 
-export async function builtinTools(): Promise<Tool.ToolInfo[]> {
+async function rawBuiltinTools(): Promise<Tool.ToolInfo[]> {
   let isRemoteWorkspace = false
   try {
     isRemoteWorkspace = isSshWorkspaceUri(Instance.directory)
@@ -155,17 +155,46 @@ export async function builtinTools(): Promise<Tool.ToolInfo[]> {
   ]
 }
 
-export async function tools(): Promise<Tool.ToolInfo[]> {
+export async function builtinTools(): Promise<Tool.ToolInfo[]> {
+  return (await rawBuiltinTools()).map((item) =>
+    ToolModule.attachRegisteredToolSource(item, "builtin")
+  )
+}
+
+export interface ToolInventory {
+  builtin: Tool.ToolInfo[]
+  mcp: Tool.ToolInfo[]
+  custom: Tool.ToolInfo[]
+  all: Tool.ToolInfo[]
+}
+
+export async function inventory(): Promise<ToolInventory> {
   const custom = await state().then((x) => x.custom)
   const mcpTools = await Mcp.tools()
-  const result = [
-    ...(await builtinTools()),
-    ...mcpTools,
-    ...custom,
+  const builtin = await builtinTools()
+  const mcp = mcpTools.map((item) =>
+    ToolModule.attachRegisteredToolSource(item, "mcp")
+  )
+  const sourcedCustom = custom.map((item) =>
+    ToolModule.attachRegisteredToolSource(item, "custom")
+  )
+  const all = [
+    ...builtin,
+    ...mcp,
+    ...sourcedCustom,
   ]
 
-  assertUniqueToolNames(result)
-  return result
+  assertUniqueToolNames(all)
+  return {
+    builtin,
+    mcp,
+    custom: sourcedCustom,
+    all,
+  }
+}
+
+export async function tools(): Promise<Tool.ToolInfo[]> {
+  return (await inventory()).all
 }
 
 export async function get(id: string): Promise<Tool.ToolInfo | undefined> {

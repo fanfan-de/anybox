@@ -9,7 +9,13 @@ import type {
   PermissionToolKind,
   ToolPermissionMode,
 } from "../../../shared/permission"
-import type { ReasoningEffort as SharedReasoningEffort } from "@anybox/shared"
+import type {
+  ReasoningEffort as SharedReasoningEffort,
+  ToolModuleActivationMode,
+  ToolModuleActivationScope,
+  ToolModuleDiscoveryMode,
+  ToolModuleProviderKind,
+} from "@anybox/shared"
 import type {
   CinemaProviderAuthState as SharedCinemaProviderAuthState,
   CinemaProviderWorkflowCatalog as SharedCinemaProviderWorkflowCatalog,
@@ -1133,10 +1139,16 @@ export interface AssistantTraceItem {
   title?: string
   toolName?: string
   toolSource?: {
-    kind: "mcp" | "native-module"
+    kind: "mcp" | "native-module" | "builtin-module" | "custom-module" | "plugin-module"
     id: string
+    moduleID?: string
     name: string
     description?: string
+    provider?: {
+      kind: "builtin" | "native" | "mcp" | "plugin" | "custom"
+      id: string
+      name?: string
+    }
   }
   text?: string
   detail?: string
@@ -1579,6 +1591,23 @@ export interface BuiltinToolCapabilities {
   needsShell?: boolean
 }
 
+export interface BuiltinToolModuleSummary {
+  id: string
+  title: string
+  description: string
+  provider: {
+    kind: ToolModuleProviderKind
+    id: string
+    name?: string
+  }
+  activation: {
+    mode: ToolModuleActivationMode
+    scope: ToolModuleActivationScope
+    discovery: ToolModuleDiscoveryMode
+  }
+  toolIDs: string[]
+}
+
 export interface BuiltinToolSummary {
   id: string
   title: string
@@ -1586,6 +1615,7 @@ export interface BuiltinToolSummary {
   inputSchema?: unknown
   aliases: string[]
   capabilities: BuiltinToolCapabilities
+  moduleID: string
   enabled: boolean
 }
 
@@ -1594,6 +1624,7 @@ export interface BuiltinToolSelection {
 }
 
 export interface BuiltinToolsPayload {
+  modules: BuiltinToolModuleSummary[]
   items: BuiltinToolSummary[]
   selection: BuiltinToolSelection
 }

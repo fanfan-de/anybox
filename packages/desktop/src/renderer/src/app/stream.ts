@@ -1422,10 +1422,31 @@ function buildTraceItemFromPart(
     const stateMetadata = readRecord(state?.metadata)
     const rawToolSource = readRecord(stateMetadata?.toolSource)
     const rawToolSourceKind = readString(rawToolSource?.kind)
-    const toolSourceKind: "mcp" | "native-module" | undefined =
-      rawToolSourceKind === "mcp" || rawToolSourceKind === "native-module"
+    const toolSourceKind: "mcp" | "native-module" | "builtin-module" | "custom-module" | "plugin-module" | undefined =
+      rawToolSourceKind === "mcp" ||
+      rawToolSourceKind === "native-module" ||
+      rawToolSourceKind === "builtin-module" ||
+      rawToolSourceKind === "custom-module" ||
+      rawToolSourceKind === "plugin-module"
         ? rawToolSourceKind
         : undefined
+    const rawToolProvider = readRecord(rawToolSource?.provider)
+    const rawToolProviderKind = readString(rawToolProvider?.kind)
+    const toolProviderKind: "builtin" | "native" | "mcp" | "plugin" | "custom" | undefined =
+      rawToolProviderKind === "builtin" ||
+      rawToolProviderKind === "native" ||
+      rawToolProviderKind === "mcp" ||
+      rawToolProviderKind === "plugin" ||
+      rawToolProviderKind === "custom"
+        ? rawToolProviderKind
+        : undefined
+    const toolProvider = toolProviderKind && readString(rawToolProvider?.id)
+      ? {
+          kind: toolProviderKind,
+          id: readString(rawToolProvider?.id),
+          name: readString(rawToolProvider?.name) || undefined,
+        }
+      : undefined
     const toolSource = (
       toolSourceKind
       && readString(rawToolSource?.id)
@@ -1434,8 +1455,10 @@ function buildTraceItemFromPart(
       ? {
           kind: toolSourceKind,
           id: readString(rawToolSource?.id),
+          moduleID: readString(rawToolSource?.moduleID) || undefined,
           name: readString(rawToolSource?.name),
           description: readString(rawToolSource?.description) || undefined,
+          provider: toolProvider,
         }
       : undefined
     const rawStatus = readString(state?.status)

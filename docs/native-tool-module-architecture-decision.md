@@ -2,7 +2,7 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 状态 | Accepted；运行时与 `planner.core` 首个模块均已实现 |
+| 状态 | Accepted；运行时与 `planner.core` 首个模块均已实现，通用化由 [Tool Module V2 ADR](./tool-module-v2-architecture-decision.md) 接续 |
 | 决策日期 | 2026-08-01 |
 | 适用范围 | Anybox Agent 工具注册、会话请求、Composer 模块标签 |
 | 产品依据 | [Anybox 计划模块产品需求（PRD）](./planner-product-requirements.md) |

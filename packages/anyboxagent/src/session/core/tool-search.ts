@@ -22,7 +22,7 @@ export interface ToolModuleSearchDefinition {
   title: string
   description: string
   keywords: string[]
-  source: Extract<Tool.ToolSource, { kind: "native-module" }>
+  source: Tool.ToolSource
 }
 
 export type ToolSearchCandidate = ToolSearchDefinition | ToolModuleSearchDefinition

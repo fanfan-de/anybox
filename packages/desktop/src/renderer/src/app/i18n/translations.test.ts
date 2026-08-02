@@ -107,6 +107,19 @@ describe("i18n translations", () => {
     expect(t("en-US", "updates.action.downloadInBackground")).toBe("Download in background")
   })
 
+  it("exposes localized Tool Module catalog and availability copy", () => {
+    expect(t("zh-CN", "tools.modules.catalog.workspace.execution.title")).toBe("工作区执行")
+    expect(t("zh-CN", "tools.modules.catalog.runtime.bootstrap.description")).toBe(
+      "发现可选能力，并与用户进行交互。",
+    )
+    expect(t("zh-CN", "tools.modules.tool.tool_search.title")).toBe("工具搜索")
+    expect(t("zh-TW", "tools.modules.catalog.workspace.files.title")).toBe("工作區檔案")
+    expect(t("en-US", "tools.modules.catalog.agent.delegation.title")).toBe("Agent Delegation")
+    expect(t("zh-CN", "tools.modules.availabilityCopy", { enabled: 2, total: 5 })).toBe(
+      "已启用 2/5 个工具。这里只修改工具可用性，不会改变模块激活策略。",
+    )
+  })
+
   it("exposes localized terminal empty-state controls", () => {
     expect(t("zh-CN", "terminal.emptyState")).toBe("当前没有打开的终端会话。")
     expect(t("zh-TW", "terminal.create")).toBe("建立終端機")

@@ -7,6 +7,11 @@ import {
   getSupportedReasoningEfforts,
   normalizeReasoningEffort,
   SessionEventSchema,
+  ToolModuleActivationModeSchema,
+  ToolModuleActivationScopeSchema,
+  ToolModuleDiscoveryModeSchema,
+  ToolModuleIDSchema,
+  ToolModuleProviderKindSchema,
 } from "./index"
 
 describe("shared contracts", () => {
@@ -62,6 +67,24 @@ describe("shared contracts", () => {
     ).toBe(false)
     expect(AgentRouteSchemas.sessions.streamMessage.body.safeParse({ attachments: [{ path: "/tmp/a.png" }] }).success).toBe(true)
     expect(AgentRouteSchemas.sessions.streamMessage.body.safeParse({}).success).toBe(false)
+  })
+
+  it("validates universal tool module contracts", () => {
+    expect(ToolModuleIDSchema.parse("workspace.files")).toBe("workspace.files")
+    expect(ToolModuleIDSchema.parse("mcp.google-calendar_work")).toBe("mcp.google-calendar_work")
+    expect(ToolModuleIDSchema.safeParse("Planner Core").success).toBe(false)
+    expect(ToolModuleIDSchema.safeParse("planner/core").success).toBe(false)
+
+    expect(ToolModuleProviderKindSchema.options).toEqual([
+      "builtin",
+      "native",
+      "mcp",
+      "plugin",
+      "custom",
+    ])
+    expect(ToolModuleActivationModeSchema.parse("search-or-explicit")).toBe("search-or-explicit")
+    expect(ToolModuleActivationScopeSchema.parse("turn")).toBe("turn")
+    expect(ToolModuleDiscoveryModeSchema.parse("module")).toBe("module")
   })
 
   it("validates desktop openPath and session event contracts", () => {

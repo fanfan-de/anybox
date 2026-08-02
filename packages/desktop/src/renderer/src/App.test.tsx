@@ -1296,6 +1296,7 @@ describe("App", () => {
         selection: {},
       }),
       getBuiltinTools: vi.fn().mockResolvedValue({
+        modules: [],
         items: [],
         selection: { tools: {} },
       }),
@@ -9844,6 +9845,40 @@ describe("App", () => {
 
   it("opens built-in tools from the activity rail and loads tool availability", async () => {
     window.desktop!.getBuiltinTools = vi.fn().mockResolvedValue({
+      modules: [
+        {
+          id: "workspace.execution",
+          title: "Workspace Execution",
+          description: "Run commands inside the current workspace boundary.",
+          provider: {
+            kind: "builtin",
+            id: "anybox",
+            name: "Anybox",
+          },
+          activation: {
+            mode: "always",
+            scope: "global",
+            discovery: "none",
+          },
+          toolIDs: ["git_bash_command"],
+        },
+        {
+          id: "workspace.files",
+          title: "Workspace Files",
+          description: "Read and update files inside the current workspace boundary.",
+          provider: {
+            kind: "builtin",
+            id: "anybox",
+            name: "Anybox",
+          },
+          activation: {
+            mode: "always",
+            scope: "global",
+            discovery: "none",
+          },
+          toolIDs: ["read_file"],
+        },
+      ],
       items: [
         {
           id: "git_bash_command",
@@ -9857,6 +9892,7 @@ describe("App", () => {
             concurrency: "exclusive",
             needsShell: true,
           },
+          moduleID: "workspace.execution",
         },
         {
           id: "read_file",
@@ -9869,6 +9905,7 @@ describe("App", () => {
             destructive: false,
             concurrency: "safe",
           },
+          moduleID: "workspace.files",
         },
       ],
       selection: {
@@ -9889,11 +9926,11 @@ describe("App", () => {
     expect(screen.queryByText("Pick a project first")).not.toBeInTheDocument()
     expect(await screen.findByText("Global tool availability")).toBeInTheDocument()
     expect(screen.getByText("1 of 2 built-in tools enabled.")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Shell tools, 1 of 1 enabled" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Workspace Execution module, 1 of 1 tools enabled" })).toBeInTheDocument()
     expect(screen.getByText("Git Bash")).toBeInTheDocument()
     expect(screen.queryByText("Read File")).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole("button", { name: "File Tools, 0 of 1 enabled" }))
+    fireEvent.click(screen.getByRole("button", { name: "Workspace Files module, 0 of 1 tools enabled" }))
     expect(screen.getByText("Read File")).toBeInTheDocument()
 
     await waitFor(() => {

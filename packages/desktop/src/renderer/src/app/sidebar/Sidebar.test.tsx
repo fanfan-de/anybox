@@ -102,9 +102,10 @@ function renderSidebar(overrides: Partial<ComponentProps<typeof Sidebar>> = {}) 
     sessionCanvasUnreadBySession: {},
     showSidebarToggleButton: false,
     builtinToolsSidebarProps: {
-      activeToolKind: null,
+      activeModuleID: null,
+      builtinToolModules: [],
       builtinTools: [],
-      onActiveToolKindChange: vi.fn(),
+      onActiveModuleChange: vi.fn(),
     },
     visibleCanvasSessionIDs: [],
     conversationWorkspaceID: null,
