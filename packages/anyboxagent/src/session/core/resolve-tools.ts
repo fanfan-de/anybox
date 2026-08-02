@@ -432,7 +432,7 @@ export async function resolveToolPlan(input: ResolveToolsInput): Promise<Resolve
     registryTools[TOOL_SEARCH_MODEL_NAME] = createSearchTool(searchDefinitions)
     entries.push({
       item: toolSearchCatalogItem,
-      moduleID: toolSearchCatalogItem.source?.moduleID ?? "runtime.bootstrap",
+      moduleID: toolSearchCatalogItem.source?.moduleID ?? ToolModule.PROGRESSIVE_DISCLOSURE_TOOL_MODULE_ID,
       modelName: TOOL_SEARCH_MODEL_NAME,
       exposure: "direct",
       discovered: false,

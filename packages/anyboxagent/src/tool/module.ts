@@ -122,82 +122,79 @@ export const state = Instance.state(async () => ({
   custom: [] as NativeToolModuleDescriptor[],
 }))
 
+export const PROGRESSIVE_DISCLOSURE_TOOL_MODULE_ID = "runtime.progressive-disclosure"
+
 const BUILTIN_MODULE_METADATA = {
-  "runtime.bootstrap": {
-    title: "Runtime Bootstrap",
-    description: "Discover optional capabilities and interact with the user.",
-    keywords: ["runtime", "tool search", "approval", "question"],
+  "workspace.shell": {
+    title: "Shell",
+    description: "Run shell commands and interact with persistent or managed terminal sessions.",
+    keywords: ["shell", "terminal", "command", "process", "background"],
   },
   "workflow.tasks": {
-    title: "Task Workflow",
+    title: "Tasks",
     description: "Track execution plans and task progress inside an Agent run.",
     keywords: ["task", "plan", "progress", "workflow"],
   },
-  "workspace.files": {
-    title: "Workspace Files",
-    description: "Read, list, search, and inspect workspace files and images.",
-    keywords: ["file", "directory", "search", "image", "workspace"],
+  "workspace.file-io": {
+    title: "File Read and Write",
+    description: "Read, create, edit, patch, and inspect workspace files.",
+    keywords: ["file", "read", "write", "edit", "patch", "image", "workspace"],
   },
-  "workspace.edit": {
-    title: "Workspace Editing",
-    description: "Apply structured edits and patches to workspace files.",
-    keywords: ["edit", "patch", "replace", "write"],
+  "workspace.file-search": {
+    title: "File Search",
+    description: "List directories and search workspace paths or file contents.",
+    keywords: ["file", "directory", "search", "glob", "grep", "workspace"],
   },
-  "workspace.execution": {
-    title: "Workspace Execution",
-    description: "Run commands, terminals, and background processes in the workspace.",
-    keywords: ["terminal", "shell", "command", "exec", "background"],
+  "runtime.programmatic-orchestration": {
+    title: "Programmatic Orchestration",
+    description: "Compose supported tool calls with isolated JavaScript or safe parallel execution.",
+    keywords: ["orchestration", "javascript", "exec", "parallel", "compose"],
   },
-  "workspace.code": {
-    title: "Code Intelligence",
-    description: "Inspect definitions, references, symbols, and language-server information.",
-    keywords: ["code", "lsp", "definition", "reference", "symbol"],
+  "agent.multiagent": {
+    title: "Multi-agent",
+    description: "Spawn, inspect, wait for, and cancel delegated child Agent sessions.",
+    keywords: ["agent", "subagent", "multiagent", "delegate", "wait"],
   },
-  "workspace.recovery": {
-    title: "Workspace Recovery",
-    description: "Inspect and restore workspace rollback checkpoints.",
-    keywords: ["rollback", "checkpoint", "restore", "recovery"],
+  [PROGRESSIVE_DISCLOSURE_TOOL_MODULE_ID]: {
+    title: "Progressive Disclosure",
+    description: "Discover optional tools, Skills, MCP resources, and bundled workspace runtimes only when needed.",
+    keywords: ["progressive disclosure", "tool search", "skill", "mcp", "resource", "runtime", "dependency"],
   },
-  "agent.delegation": {
-    title: "Agent Delegation",
-    description: "Run parallel tools and coordinate delegated subagents.",
-    keywords: ["agent", "subagent", "parallel", "delegate", "wait"],
+  "agent.metacognition": {
+    title: "Metacognition",
+    description: "Inspect and return to earlier checkpoints to support Agent reflection and self-correction.",
+    keywords: ["metacognition", "reflection", "self correction", "checkpoint", "rollback"],
   },
-  "runtime.skills": {
-    title: "Skills and Dependencies",
-    description: "Load Agent skills, skill resources, and bundled workspace dependencies.",
-    keywords: ["skill", "resource", "dependency", "workspace"],
+  "network.web": {
+    title: "Network",
+    description: "Fetch public web pages and network resources.",
+    keywords: ["network", "web", "fetch", "http", "url"],
   },
-  "mcp.resources": {
-    title: "MCP Resources",
-    description: "List and read resources exposed by configured MCP servers.",
-    keywords: ["mcp", "resource", "template"],
+  "media.visual-generation": {
+    title: "Visual Generation",
+    description: "Generate visual media with configured image models.",
+    keywords: ["visual", "image", "generate", "media", "model"],
   },
-  "media.image": {
-    title: "Image Media",
-    description: "Generate images through the configured image provider.",
-    keywords: ["image", "generate", "media"],
+  "workspace.lsp": {
+    title: "LSP Tools",
+    description: "Inspect definitions, references, hover details, and workspace symbols through language servers.",
+    keywords: ["code", "lsp", "definition", "reference", "hover", "symbol"],
   },
-  "web.fetch": {
-    title: "Web Fetch",
-    description: "Retrieve and inspect content from web URLs.",
-    keywords: ["web", "url", "fetch", "http"],
+  "interaction.human": {
+    title: "Human Interaction",
+    description: "Ask the user structured questions and wait for their response.",
+    keywords: ["human", "user", "interaction", "question", "clarification"],
   },
-  "runtime.core": {
-    title: "Runtime Core",
-    description: "Core Anybox tools that do not belong to another capability module.",
-    keywords: ["runtime", "core", "anybox"],
+  "runtime.other": {
+    title: "Other",
+    description: "Built-in tools that do not yet have a suitable capability module.",
+    keywords: ["other", "miscellaneous", "runtime", "uncategorized"],
   },
 } as const
 
 type BuiltinModuleID = keyof typeof BUILTIN_MODULE_METADATA
 
-const BOOTSTRAP_TOOL_IDS = new Set(["ask_user_question", "tool_search"])
-const TASK_TOOL_IDS = new Set(["task_create", "task_get", "task_list", "task_update"])
-const FILE_TOOL_IDS = new Set(["read_file", "list_directory", "glob", "grep", "view_image"])
-const EDIT_TOOL_IDS = new Set(["replace_text", "apply_patch"])
-const EXECUTION_TOOL_IDS = new Set([
-  "exec",
+const SHELL_TOOL_IDS = new Set([
   "terminal_run_command",
   "terminal_read",
   "terminal_write_input",
@@ -209,32 +206,48 @@ const EXECUTION_TOOL_IDS = new Set([
   "ssh_shell_command",
   "write_stdin",
 ])
-const CODE_TOOL_IDS = new Set(["lsp_definition", "lsp_references", "lsp_hover", "lsp_workspace_symbols"])
-const RECOVERY_TOOL_IDS = new Set(["list_rollback_checkpoints", "rollback_to_checkpoint"])
-const DELEGATION_TOOL_IDS = new Set([
+const TASK_TOOL_IDS = new Set(["task_create", "task_get", "task_list", "task_update"])
+const FILE_IO_TOOL_IDS = new Set(["read_file", "replace_text", "apply_patch", "view_image"])
+const FILE_SEARCH_TOOL_IDS = new Set(["list_directory", "glob", "grep"])
+const PROGRAMMATIC_ORCHESTRATION_TOOL_IDS = new Set([
+  "exec",
   "multi_tool_use_parallel",
+])
+const MULTIAGENT_TOOL_IDS = new Set([
   "spawn_subagent",
   "cancel_subagent",
   "read_subagent",
   "wait_subagent",
 ])
-const SKILL_TOOL_IDS = new Set(["load_skill", "read_skill_resource", "load_workspace_dependencies"])
-const MCP_RESOURCE_TOOL_IDS = new Set(["list_mcp_resources", "list_mcp_resource_templates", "read_mcp_resource"])
+const PROGRESSIVE_DISCLOSURE_TOOL_IDS = new Set([
+  "tool_search",
+  "load_skill",
+  "read_skill_resource",
+  "list_mcp_resources",
+  "list_mcp_resource_templates",
+  "read_mcp_resource",
+  "load_workspace_dependencies",
+])
+const METACOGNITION_TOOL_IDS = new Set(["list_rollback_checkpoints", "rollback_to_checkpoint"])
+const NETWORK_TOOL_IDS = new Set(["web_fetch"])
+const VISUAL_GENERATION_TOOL_IDS = new Set(["generate_image"])
+const LSP_TOOL_IDS = new Set(["lsp_definition", "lsp_references", "lsp_hover", "lsp_workspace_symbols"])
+const HUMAN_INTERACTION_TOOL_IDS = new Set(["ask_user_question"])
 
 function builtinModuleID(toolID: string): BuiltinModuleID {
-  if (BOOTSTRAP_TOOL_IDS.has(toolID)) return "runtime.bootstrap"
+  if (SHELL_TOOL_IDS.has(toolID)) return "workspace.shell"
   if (TASK_TOOL_IDS.has(toolID)) return "workflow.tasks"
-  if (FILE_TOOL_IDS.has(toolID)) return "workspace.files"
-  if (EDIT_TOOL_IDS.has(toolID)) return "workspace.edit"
-  if (EXECUTION_TOOL_IDS.has(toolID)) return "workspace.execution"
-  if (CODE_TOOL_IDS.has(toolID)) return "workspace.code"
-  if (RECOVERY_TOOL_IDS.has(toolID)) return "workspace.recovery"
-  if (DELEGATION_TOOL_IDS.has(toolID)) return "agent.delegation"
-  if (SKILL_TOOL_IDS.has(toolID)) return "runtime.skills"
-  if (MCP_RESOURCE_TOOL_IDS.has(toolID)) return "mcp.resources"
-  if (toolID === "generate_image") return "media.image"
-  if (toolID === "web_fetch") return "web.fetch"
-  return "runtime.core"
+  if (FILE_IO_TOOL_IDS.has(toolID)) return "workspace.file-io"
+  if (FILE_SEARCH_TOOL_IDS.has(toolID)) return "workspace.file-search"
+  if (PROGRAMMATIC_ORCHESTRATION_TOOL_IDS.has(toolID)) return "runtime.programmatic-orchestration"
+  if (MULTIAGENT_TOOL_IDS.has(toolID)) return "agent.multiagent"
+  if (PROGRESSIVE_DISCLOSURE_TOOL_IDS.has(toolID)) return PROGRESSIVE_DISCLOSURE_TOOL_MODULE_ID
+  if (METACOGNITION_TOOL_IDS.has(toolID)) return "agent.metacognition"
+  if (NETWORK_TOOL_IDS.has(toolID)) return "network.web"
+  if (VISUAL_GENERATION_TOOL_IDS.has(toolID)) return "media.visual-generation"
+  if (LSP_TOOL_IDS.has(toolID)) return "workspace.lsp"
+  if (HUMAN_INTERACTION_TOOL_IDS.has(toolID)) return "interaction.human"
+  return "runtime.other"
 }
 
 function safeModuleSegment(value: string) {

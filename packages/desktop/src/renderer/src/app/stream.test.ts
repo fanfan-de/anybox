@@ -3074,9 +3074,9 @@ describe("stream trace reducer", () => {
             metadata: {
               toolSource: {
                 kind: "builtin-module",
-                id: "workspace.files",
-                moduleID: "workspace.files",
-                name: "Workspace Files",
+                id: "workspace.file-io",
+                moduleID: "workspace.file-io",
+                name: "File Read and Write",
                 provider: {
                   kind: "builtin",
                   id: "anybox",
@@ -3090,7 +3090,7 @@ describe("stream trace reducer", () => {
 
     expect(message.items.find((item) => item.kind === "tool")?.toolSource).toMatchObject({
       kind: "builtin-module",
-      moduleID: "workspace.files",
+      moduleID: "workspace.file-io",
       provider: {
         kind: "builtin",
         id: "anybox",

@@ -715,7 +715,7 @@ test("permission defaults allow workflow, interaction, delegation, exec, and oth
         await expect(Permission.evaluate({
           ...baseInput,
           tool: {
-            id: "enter_plan_mode",
+            id: "workflow_probe",
             kind: "workflow",
             readOnly: false,
             destructive: false,

@@ -69,8 +69,8 @@ type ToolModuleDescriptor = {
 模块 ID 使用稳定、provider-safe 的小写标识，例如：
 
 ```text
-runtime.bootstrap
-workspace.files
+runtime.progressive-disclosure
+workspace.file-io
 planner.core
 mcp.gmail
 custom.project
@@ -130,19 +130,22 @@ Builtin 工具按稳定的能力边界分组：
 
 | Module ID | 能力示例 |
 | --- | --- |
-| `runtime.bootstrap` | `tool_search`、询问用户 |
-| `workflow.tasks` | Agent 任务创建、查询和进度更新 |
-| `workspace.files` | 读取、目录、glob、grep、图片查看 |
-| `workspace.edit` | 文本替换和 patch |
-| `workspace.execution` | terminal、shell、exec、后台进程 |
-| `workspace.code` | LSP 定义、引用、hover、符号 |
-| `workspace.recovery` | rollback checkpoint |
-| `agent.delegation` | 并行工具与 subagent 协作 |
-| `runtime.skills` | Skill 和 workspace dependency 加载 |
-| `mcp.resources` | MCP resource/template 访问 |
-| `media.image` | 图片生成 |
-| `web.fetch` | Web 内容读取 |
-| `runtime.core` | 尚未拆出的核心工具兜底组 |
+| `workspace.shell` | 各平台 shell、持久终端、后台 shell 会话交互 |
+| `workflow.tasks` | Agent 会话任务创建、查询和进度更新 |
+| `workspace.file-io` | 文件读取、文本替换、patch、图片查看 |
+| `workspace.file-search` | 目录枚举、glob、grep |
+| `runtime.programmatic-orchestration` | JavaScript 编排与安全并行工具调用 |
+| `agent.multiagent` | 子 Agent 创建、读取、等待和取消 |
+| `runtime.progressive-disclosure` | Tool Search、Skill 加载、MCP Resource 访问和内置工作区运行环境发现 |
+| `agent.metacognition` | 回滚检查点枚举与回滚，用于 Agent 反思和自我修正 |
+| `network.web` | 公开网页和网络资源获取 |
+| `media.visual-generation` | 使用图像模型生成视觉媒体 |
+| `workspace.lsp` | LSP 定义、引用、hover、工作区符号 |
+| `interaction.human` | 向用户提出结构化问题并等待回复 |
+| `runtime.other` | 暂时找不到合适分类的内建工具 |
+
+`planner.core` 继续作为按需加载的 Planner 原生模块。`runtime.other` 当前没有工具，仍作为新内建工具
+没有明确归属时的默认兜底模块，待边界稳定后再迁移。
 
 其他来源：
 

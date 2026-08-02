@@ -1055,8 +1055,8 @@ describe("server api", () => {
       expect(listBody.success).toBe(true)
       expect(listBody.data?.selection.tools).toEqual({})
       expect(listBody.data?.modules.length).toBeGreaterThan(1)
-      expect(listBody.data?.modules.find((module) => module.id === "workspace.execution")).toMatchObject({
-        title: "Workspace Execution",
+      expect(listBody.data?.modules.find((module) => module.id === "workspace.shell")).toMatchObject({
+        title: "Shell",
         provider: {
           kind: "builtin",
           id: "anybox",
@@ -1067,13 +1067,13 @@ describe("server api", () => {
           discovery: "none",
         },
       })
-      expect(listBody.data?.modules.find((module) => module.id === "workspace.execution")?.toolIDs).toContain(
+      expect(listBody.data?.modules.find((module) => module.id === "workspace.shell")?.toolIDs).toContain(
         "git_bash_command",
       )
       expect(listBody.data?.items.some((tool) => tool.id === "ask_user_question")).toBe(true)
       expect(listBody.data?.items.find((tool) => tool.id === "tool_search")).toMatchObject({
         title: "Tool Search",
-        moduleID: "runtime.bootstrap",
+        moduleID: "runtime.progressive-disclosure",
         enabled: true,
         inputSchema: {
           type: "object",
@@ -1097,7 +1097,7 @@ describe("server api", () => {
       })
       expect(listBody.data?.items.find((tool) => tool.id === "git_bash_command")).toMatchObject({
         enabled: true,
-        moduleID: "workspace.execution",
+        moduleID: "workspace.shell",
         inputSchema: {
           type: "object",
         },

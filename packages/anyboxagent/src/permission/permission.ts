@@ -172,14 +172,6 @@ const SENSITIVE_PATH_PATTERNS = [
   "node_modules/**",
 ]
 
-function normalizeToolName(toolID: string) {
-  return toolID.trim().toLowerCase().replaceAll("_", "").replaceAll("-", "")
-}
-
-function isExitPlanModeTool(toolID: string) {
-  return normalizeToolName(toolID) === "exitplanmode"
-}
-
 function asPosix(value: string) {
   return value.replaceAll("\\", "/")
 }
@@ -871,39 +863,6 @@ function extractRequestBody(request: Pick<Request, "prompt" | "resource" | "runt
     : undefined
 }
 
-function updatePlanWorkflowForPendingRequest(request: Request) {
-  if (!isExitPlanModeTool(request.tool)) return
-
-  const draftMarkdown = extractRequestBody(request)
-  Session.updateSessionWorkflow(request.sessionID, (workflow) => ({
-    mode: "planning",
-    plan: {
-      status: "pending-approval",
-      draftMarkdown: draftMarkdown ?? workflow.plan.draftMarkdown,
-      pendingRequestID: request.id,
-      approvedMarkdown: undefined,
-      updatedAt: Date.now(),
-    },
-  }))
-}
-
-function updatePlanWorkflowForDeniedRequest(request: Request) {
-  if (!isExitPlanModeTool(request.tool)) return
-
-  const draftMarkdown = extractRequestBody(request)
-  Session.updateSessionWorkflow(request.sessionID, (workflow) => ({
-    mode: "planning",
-    plan: {
-      status: "draft",
-      draftMarkdown: draftMarkdown ?? workflow.plan.draftMarkdown,
-      pendingRequestID: undefined,
-      approvedMarkdown: workflow.plan.approvedMarkdown,
-      approvedAt: workflow.plan.approvedAt,
-      updatedAt: Date.now(),
-    },
-  }))
-}
-
 async function findStoredRequestForToolCall(toolCallID: string | undefined) {
   if (!toolCallID) return undefined
 
@@ -1356,8 +1315,6 @@ export async function registerApprovalRequest(input: {
     reason: decision.reason,
   })
 
-  updatePlanWorkflowForPendingRequest(record)
-
   const handle = openPermissionTurn({
     sessionID: record.sessionID,
     sourceTurnID: record.turnID,
@@ -1734,10 +1691,6 @@ export async function resolveRequest(id: string, resolution: Schema.RequestResol
     return {
       request: next,
     }
-  }
-
-  if (!approved) {
-    updatePlanWorkflowForDeniedRequest(next)
   }
 
   const assistant = readAssistantMessage(next.messageID)

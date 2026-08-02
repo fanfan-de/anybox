@@ -9847,9 +9847,9 @@ describe("App", () => {
     window.desktop!.getBuiltinTools = vi.fn().mockResolvedValue({
       modules: [
         {
-          id: "workspace.execution",
-          title: "Workspace Execution",
-          description: "Run commands inside the current workspace boundary.",
+          id: "workspace.shell",
+          title: "Shell",
+          description: "Run shell commands inside the current workspace boundary.",
           provider: {
             kind: "builtin",
             id: "anybox",
@@ -9863,8 +9863,8 @@ describe("App", () => {
           toolIDs: ["git_bash_command"],
         },
         {
-          id: "workspace.files",
-          title: "Workspace Files",
+          id: "workspace.file-io",
+          title: "File Read and Write",
           description: "Read and update files inside the current workspace boundary.",
           provider: {
             kind: "builtin",
@@ -9892,7 +9892,7 @@ describe("App", () => {
             concurrency: "exclusive",
             needsShell: true,
           },
-          moduleID: "workspace.execution",
+          moduleID: "workspace.shell",
         },
         {
           id: "read_file",
@@ -9905,7 +9905,7 @@ describe("App", () => {
             destructive: false,
             concurrency: "safe",
           },
-          moduleID: "workspace.files",
+          moduleID: "workspace.file-io",
         },
       ],
       selection: {
@@ -9926,11 +9926,11 @@ describe("App", () => {
     expect(screen.queryByText("Pick a project first")).not.toBeInTheDocument()
     expect(await screen.findByText("Global tool availability")).toBeInTheDocument()
     expect(screen.getByText("1 of 2 built-in tools enabled.")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Workspace Execution module, 1 of 1 tools enabled" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Shell module, 1 of 1 tools enabled" })).toBeInTheDocument()
     expect(screen.getByText("Git Bash")).toBeInTheDocument()
     expect(screen.queryByText("Read File")).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole("button", { name: "Workspace Files module, 0 of 1 tools enabled" }))
+    fireEvent.click(screen.getByRole("button", { name: "File Read and Write module, 0 of 1 tools enabled" }))
     expect(screen.getByText("Read File")).toBeInTheDocument()
 
     await waitFor(() => {

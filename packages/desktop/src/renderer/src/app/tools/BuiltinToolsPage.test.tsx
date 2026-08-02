@@ -30,21 +30,21 @@ function createModule(
 
 const builtinToolModules: BuiltinToolModuleSummary[] = [
   createModule(
-    "workspace.execution",
-    "Workspace Execution",
-    "Run commands, terminals, and background processes in the workspace.",
+    "workspace.shell",
+    "Shell",
+    "Run shell commands and interact with persistent or managed terminal sessions.",
     ["git_bash_command"],
   ),
   createModule(
-    "workspace.files",
-    "Workspace Files",
-    "Read, list, search, and inspect workspace files and images.",
+    "workspace.file-io",
+    "File Read and Write",
+    "Read, create, edit, patch, and inspect workspace files.",
     ["read_file", "apply_patch"],
   ),
   createModule(
-    "runtime.bootstrap",
-    "Runtime Bootstrap",
-    "Discover optional capabilities and interact with the user.",
+    "runtime.progressive-disclosure",
+    "Progressive Disclosure",
+    "Discover optional tools, Skills, MCP resources, and bundled workspace runtimes only when needed.",
     ["tool_search"],
   ),
 ]
@@ -71,7 +71,7 @@ const builtinTools: BuiltinToolSummary[] = [
       concurrency: "exclusive",
       needsShell: true,
     },
-    moduleID: "workspace.execution",
+    moduleID: "workspace.shell",
     enabled: true,
   },
   {
@@ -85,7 +85,7 @@ const builtinTools: BuiltinToolSummary[] = [
       destructive: false,
       concurrency: "safe",
     },
-    moduleID: "workspace.files",
+    moduleID: "workspace.file-io",
     enabled: false,
   },
   {
@@ -99,7 +99,7 @@ const builtinTools: BuiltinToolSummary[] = [
       destructive: true,
       concurrency: "exclusive",
     },
-    moduleID: "workspace.files",
+    moduleID: "workspace.file-io",
     enabled: false,
   },
   {
@@ -121,7 +121,7 @@ const builtinTools: BuiltinToolSummary[] = [
       readOnly: true,
       destructive: false,
     },
-    moduleID: "runtime.bootstrap",
+    moduleID: "runtime.progressive-disclosure",
     enabled: true,
   },
 ]
@@ -192,13 +192,13 @@ describe("BuiltinToolsPage", () => {
     expect(moduleList.querySelector(".skill-tree-role-icon")).toBeNull()
 
     const executionModule = screen.getByRole("button", {
-      name: "Workspace Execution module, 1 of 1 tools enabled",
+      name: "Shell module, 1 of 1 tools enabled",
     })
     expect(executionModule).toHaveAttribute("aria-pressed", "true")
     expect(screen.getByRole("button", {
-      name: "Workspace Files module, 0 of 2 tools enabled",
+      name: "File Read and Write module, 0 of 2 tools enabled",
     })).toBeInTheDocument()
-    expect(screen.getByText("workspace.execution")).toBeInTheDocument()
+    expect(screen.getByText("workspace.shell")).toBeInTheDocument()
     expect(screen.getByText("Built-in · Anybox")).toBeInTheDocument()
     expect(screen.getByText("Always available")).toBeInTheDocument()
     expect(screen.getByText("Global scope")).toBeInTheDocument()
@@ -206,7 +206,7 @@ describe("BuiltinToolsPage", () => {
     expect(screen.getByText("Shell access")).toBeInTheDocument()
     expect(props.container.querySelector("[class*='settings-']")).toBeNull()
 
-    const moduleSwitch = screen.getByRole("switch", { name: "Change availability for Workspace Execution" })
+    const moduleSwitch = screen.getByRole("switch", { name: "Change availability for Shell" })
     expect(moduleSwitch).toHaveAttribute("aria-checked", "true")
 
     fireEvent.click(screen.getByRole("button", { name: "Show details for Git Bash" }))
@@ -214,9 +214,9 @@ describe("BuiltinToolsPage", () => {
     expect(props.container.querySelector(".tools-card-input-schema pre")?.textContent).toContain('"command"')
 
     fireEvent.click(screen.getByRole("button", {
-      name: "Workspace Files module, 0 of 2 tools enabled",
+      name: "File Read and Write module, 0 of 2 tools enabled",
     }))
-    expect(screen.getByText("workspace.files")).toBeInTheDocument()
+    expect(screen.getByText("workspace.file-io")).toBeInTheDocument()
     expect(screen.getByText("Apply Patch")).toBeInTheDocument()
     expect(screen.getByText("Read File")).toBeInTheDocument()
     expect(screen.queryByText("Git Bash")).not.toBeInTheDocument()
@@ -227,7 +227,7 @@ describe("BuiltinToolsPage", () => {
     expect(props.onBuiltinToolToggle).toHaveBeenCalledWith("apply_patch", true)
 
     fireEvent.click(screen.getByRole("button", {
-      name: "Runtime Bootstrap module, 1 of 1 tools enabled",
+      name: "Progressive Disclosure module, 1 of 1 tools enabled",
     }))
     fireEvent.click(screen.getByRole("button", { name: "Show details for Tool Search" }))
     expect(props.container.querySelector(".tools-card-input-schema pre")?.textContent).toContain('"query"')
@@ -242,9 +242,9 @@ describe("BuiltinToolsPage", () => {
     const props = renderBuiltinToolsPage()
 
     fireEvent.click(screen.getByRole("button", {
-      name: "Workspace Files module, 0 of 2 tools enabled",
+      name: "File Read and Write module, 0 of 2 tools enabled",
     }))
-    const moduleSwitch = screen.getByRole("switch", { name: "Change availability for Workspace Files" })
+    const moduleSwitch = screen.getByRole("switch", { name: "Change availability for File Read and Write" })
     expect(moduleSwitch).toHaveAttribute("aria-checked", "false")
     expect(screen.getByText("All module tools disabled")).toBeInTheDocument()
 
@@ -259,10 +259,10 @@ describe("BuiltinToolsPage", () => {
     const props = renderBuiltinToolsPage({ builtinTools: tools })
 
     fireEvent.click(screen.getByRole("button", {
-      name: "Workspace Files module, 1 of 2 tools enabled",
+      name: "File Read and Write module, 1 of 2 tools enabled",
     }))
     expect(screen.getByText("Some module tools available")).toBeInTheDocument()
-    const moduleSwitch = screen.getByRole("switch", { name: "Change availability for Workspace Files" })
+    const moduleSwitch = screen.getByRole("switch", { name: "Change availability for File Read and Write" })
     expect(moduleSwitch).toHaveAttribute("aria-checked", "false")
 
     fireEvent.click(moduleSwitch)
@@ -271,12 +271,12 @@ describe("BuiltinToolsPage", () => {
 
   it("follows Module Catalog order instead of inferring groups from tool kind", () => {
     const modules = [
-      createModule("workspace.code", "Code Intelligence", "Code navigation.", ["code_probe"]),
-      createModule("workspace.execution", "Workspace Execution", "Command execution.", ["execution_probe"]),
+      createModule("workspace.lsp", "LSP Tools", "Code navigation.", ["code_probe"]),
+      createModule("workspace.shell", "Shell", "Command execution.", ["execution_probe"]),
     ]
     const tools = [
-      createTool("execution_probe", "Execution Probe", "search", "workspace.execution"),
-      createTool("code_probe", "Code Probe", "exec", "workspace.code"),
+      createTool("execution_probe", "Execution Probe", "search", "workspace.shell"),
+      createTool("code_probe", "Code Probe", "exec", "workspace.lsp"),
     ]
 
     renderBuiltinToolsPage({
@@ -286,7 +286,7 @@ describe("BuiltinToolsPage", () => {
 
     const moduleList = screen.getByRole("list", { name: "Tool Modules" })
     const labels = Array.from(moduleList.querySelectorAll(".skill-tree-label")).map((element) => element.textContent)
-    expect(labels).toEqual(["Code Intelligence", "Workspace Execution"])
+    expect(labels).toEqual(["LSP Tools", "Shell"])
     expect(screen.getByText("Code Probe")).toBeInTheDocument()
     expect(screen.queryByText("Execution Probe")).not.toBeInTheDocument()
   })
@@ -294,7 +294,7 @@ describe("BuiltinToolsPage", () => {
   it("disables Module and tool switches while changes are being saved", () => {
     renderBuiltinToolsPage({ isSavingBuiltinTools: true })
 
-    expect(screen.getByRole("switch", { name: "Change availability for Workspace Execution" })).toBeDisabled()
+    expect(screen.getByRole("switch", { name: "Change availability for Shell" })).toBeDisabled()
     expect(screen.getByRole("switch", { name: "Git Bash" })).toBeDisabled()
   })
 
@@ -341,17 +341,17 @@ describe("BuiltinToolsPage", () => {
     expect(screen.getByLabelText("工具顶部菜单")).toBeInTheDocument()
     expect(screen.getByRole("list", { name: "工具模块" })).toBeInTheDocument()
     expect(screen.getByRole("button", {
-      name: "工作区执行 模块，已启用 1/1 个工具",
+      name: "Shell 模块，已启用 1/1 个工具",
     })).toBeInTheDocument()
-    expect(screen.getByRole("heading", { name: "工作区执行" })).toBeInTheDocument()
-    expect(screen.getByText("在工作区中运行命令、终端和后台进程。")).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Shell" })).toBeInTheDocument()
+    expect(screen.getByText("运行 Shell 命令，并与持久或托管终端会话交互。")).toBeInTheDocument()
     expect(screen.getByText("内置 · Anybox")).toBeInTheDocument()
     expect(screen.getByText("始终可用")).toBeInTheDocument()
     expect(screen.getByText("全局作用域")).toBeInTheDocument()
     expect(screen.getByText("全局工具可用性")).toBeInTheDocument()
     expect(screen.getByText("模块内工具全部可用")).toBeInTheDocument()
     expect(screen.getByRole("switch", {
-      name: "切换 工作区执行 模块内工具的可用性",
+      name: "切换 Shell 模块内工具的可用性",
     })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole("button", { name: "显示 Git Bash 的详情" }))
@@ -360,9 +360,9 @@ describe("BuiltinToolsPage", () => {
     expect(screen.getByText("输入 Schema")).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole("button", {
-      name: "运行时引导 模块，已启用 1/1 个工具",
+      name: "渐进披露 模块，已启用 1/1 个工具",
     }))
-    expect(screen.getByRole("heading", { name: "运行时引导" })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "渐进披露" })).toBeInTheDocument()
     expect(screen.getByText("工具搜索")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "保存更改" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "恢复默认" })).toBeInTheDocument()

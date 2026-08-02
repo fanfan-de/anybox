@@ -108,13 +108,16 @@ describe("i18n translations", () => {
   })
 
   it("exposes localized Tool Module catalog and availability copy", () => {
-    expect(t("zh-CN", "tools.modules.catalog.workspace.execution.title")).toBe("工作区执行")
-    expect(t("zh-CN", "tools.modules.catalog.runtime.bootstrap.description")).toBe(
-      "发现可选能力，并与用户进行交互。",
+    expect(t("zh-CN", "tools.modules.catalog.workspace.shell.title")).toBe("Shell")
+    expect(t("zh-CN", "tools.modules.catalog.runtime.progressive-disclosure.description")).toBe(
+      "仅在需要时发现可选工具、Skills、MCP 资源及内置工作区运行环境。",
     )
+    expect(t("zh-CN", "tools.modules.catalog.agent.metacognition.title")).toBe("元认知工具")
+    expect(t("zh-CN", "tools.modules.catalog.network.web.title")).toBe("网络")
+    expect(t("zh-CN", "tools.modules.catalog.media.visual-generation.title")).toBe("视觉生成")
     expect(t("zh-CN", "tools.modules.tool.tool_search.title")).toBe("工具搜索")
-    expect(t("zh-TW", "tools.modules.catalog.workspace.files.title")).toBe("工作區檔案")
-    expect(t("en-US", "tools.modules.catalog.agent.delegation.title")).toBe("Agent Delegation")
+    expect(t("zh-TW", "tools.modules.catalog.workspace.file-io.title")).toBe("檔案讀寫")
+    expect(t("en-US", "tools.modules.catalog.agent.multiagent.title")).toBe("Multi-agent")
     expect(t("zh-CN", "tools.modules.availabilityCopy", { enabled: 2, total: 5 })).toBe(
       "已启用 2/5 个工具。这里只修改工具可用性，不会改变模块激活策略。",
     )

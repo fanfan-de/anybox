@@ -33,10 +33,10 @@ describe("universal tool module catalog", () => {
   it("builds the registered built-in catalog without project context", async () => {
     const tools = await ToolRegistry.builtinTools()
     const catalog = ToolModule.catalogRegisteredTools({ tools })
-    const execution = catalog.entries.find((entry) => entry.descriptor.id === "workspace.execution")
+    const shell = catalog.entries.find((entry) => entry.descriptor.id === "workspace.shell")
 
     expect(catalog.failures).toEqual([])
-    expect(execution).toMatchObject({
+    expect(shell).toMatchObject({
       active: true,
       exposure: "direct",
       descriptor: {
@@ -69,20 +69,87 @@ describe("universal tool module catalog", () => {
           expect(ToolModuleIDSchema.safeParse(item.source?.moduleID).success).toBe(true)
         }
 
-        expect(tools.find((item) => item.id === "tool_search")?.source?.moduleID).toBe("runtime.bootstrap")
-        expect(tools.find((item) => item.id === "read_file")?.source?.moduleID).toBe("workspace.files")
-        expect(tools.find((item) => item.id === "apply_patch")?.source?.moduleID).toBe("workspace.edit")
-        expect(tools.find((item) => item.id === "exec")?.source?.moduleID).toBe("workspace.execution")
+        expect(tools.find((item) => item.id === "tool_search")?.source?.moduleID).toBe(
+          "runtime.progressive-disclosure",
+        )
+        expect(tools.find((item) => item.id === "load_workspace_dependencies")?.source?.moduleID).toBe(
+          "runtime.progressive-disclosure",
+        )
+        expect(tools.find((item) => item.id === "ask_user_question")?.source?.moduleID).toBe("interaction.human")
+        expect(tools.find((item) => item.id === "read_file")?.source?.moduleID).toBe("workspace.file-io")
+        expect(tools.find((item) => item.id === "apply_patch")?.source?.moduleID).toBe("workspace.file-io")
+        expect(tools.find((item) => item.id === "glob")?.source?.moduleID).toBe("workspace.file-search")
+        expect(tools.find((item) => item.id === "exec")?.source?.moduleID).toBe(
+          "runtime.programmatic-orchestration",
+        )
+        expect(tools.find((item) => item.id === "multi_tool_use_parallel")?.source?.moduleID).toBe(
+          "runtime.programmatic-orchestration",
+        )
+        expect(tools.find((item) => item.id === "spawn_subagent")?.source?.moduleID).toBe("agent.multiagent")
+        expect(tools.find((item) => item.id === "lsp_definition")?.source?.moduleID).toBe("workspace.lsp")
+        expect(tools.find((item) => item.id === "list_rollback_checkpoints")?.source?.moduleID).toBe(
+          "agent.metacognition",
+        )
+        expect(tools.find((item) => item.id === "rollback_to_checkpoint")?.source?.moduleID).toBe(
+          "agent.metacognition",
+        )
+        expect(tools.find((item) => item.id === "web_fetch")?.source?.moduleID).toBe("network.web")
+        expect(tools.find((item) => item.id === "generate_image")?.source?.moduleID).toBe(
+          "media.visual-generation",
+        )
 
         const catalog = await ToolModule.catalog({ tools })
         const builtinEntries = catalog.entries.filter((entry) => entry.descriptor.provider.kind === "builtin")
+        const toolIDsFor = (moduleID: string) =>
+          builtinEntries.find((entry) => entry.descriptor.id === moduleID)?.tools.map((item) => item.id) ?? []
+
+        expect(toolIDsFor("workflow.tasks")).toEqual([
+          "task_create",
+          "task_get",
+          "task_list",
+          "task_update",
+        ])
+        expect(toolIDsFor("workspace.file-io")).toEqual([
+          "read_file",
+          "replace_text",
+          "apply_patch",
+          "view_image",
+        ])
+        expect(toolIDsFor("workspace.file-search")).toEqual(["glob", "grep", "list_directory"])
+        expect(toolIDsFor("runtime.programmatic-orchestration")).toEqual([
+          "multi_tool_use_parallel",
+          "exec",
+        ])
+        expect(toolIDsFor("agent.multiagent")).toEqual([
+          "read_subagent",
+          "wait_subagent",
+          "spawn_subagent",
+          "cancel_subagent",
+        ])
+        expect(toolIDsFor("runtime.progressive-disclosure")).toEqual([
+          "load_skill",
+          "read_skill_resource",
+          "list_mcp_resources",
+          "list_mcp_resource_templates",
+          "read_mcp_resource",
+          "load_workspace_dependencies",
+          "tool_search",
+        ])
+        expect(toolIDsFor("interaction.human")).toEqual(["ask_user_question"])
+        expect(toolIDsFor("agent.metacognition")).toEqual([
+          "list_rollback_checkpoints",
+          "rollback_to_checkpoint",
+        ])
+        expect(toolIDsFor("network.web")).toEqual(["web_fetch"])
+        expect(toolIDsFor("media.visual-generation")).toEqual(["generate_image"])
+        expect(toolIDsFor("runtime.other")).toEqual([])
         expect(builtinEntries.length).toBeGreaterThan(1)
         expect(builtinEntries.every((entry) => entry.active && entry.exposure === "direct")).toBe(true)
       },
     })
   })
 
-  it("does not register removed background task tools or aliases", async () => {
+  it("does not register removed tools or aliases", async () => {
     const tools = await ToolRegistry.builtinTools()
     const exposedNames = tools.flatMap((tool) => [tool.id, ...(tool.aliases ?? [])])
     const removedNames = [
@@ -90,6 +157,12 @@ describe("universal tool module catalog", () => {
       "read-background-task",
       "stop_background_task",
       "stop-background-task",
+      "enter_plan_mode",
+      "enter-plan-mode",
+      "EnterPlanMode",
+      "exit_plan_mode",
+      "exit-plan-mode",
+      "ExitPlanMode",
     ]
 
     for (const name of removedNames) expect(exposedNames).not.toContain(name)
