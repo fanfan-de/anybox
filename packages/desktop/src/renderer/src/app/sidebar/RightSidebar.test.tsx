@@ -525,6 +525,8 @@ describe("RightSidebar", () => {
     })
 
     expect(screen.getByText("分支对话")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "分支对话" })).toBeDisabled()
+    expect(screen.queryByText(/完成一条助手回复后/)).not.toBeInTheDocument()
     expect(screen.getByText("文件")).toBeInTheDocument()
     expect(screen.getByText("浏览器")).toBeInTheDocument()
     expect(screen.queryByText("消息树")).not.toBeInTheDocument()

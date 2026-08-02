@@ -39,6 +39,7 @@ import * as Tool from "#tool/tool.ts"
 import * as ToolRegistry from "#tool/registry.ts"
 import { TOOL_SEARCH_ID, TOOL_SEARCH_MODEL_NAME } from "#tool/tool-search.ts"
 import { WebFetchTool } from "#tool/web-fetch.ts"
+import { WriteStdinTool } from "#tool/write-stdin.ts"
 import {
   LoadWorkspaceDependenciesTool,
   WORKSPACE_NODE_PACKAGES,
@@ -1237,6 +1238,7 @@ describe("tool contract", () => {
         }
         expect((normalizedModelOutput.value as any).status).toBe("background_started")
         expect(String((normalizedModelOutput.value as any).backgroundTaskId)).toStartWith("tsk_")
+        expect((normalizedModelOutput.value as any).session_id).toBe(backgroundTaskId)
         expect((normalizedModelOutput.value as any).runInBackground).toBe(true)
 
         let snapshot = Tool.normalizeToolOutput(await readRuntime.execute(
@@ -1276,6 +1278,340 @@ describe("tool contract", () => {
       },
     })
   }, 120000)
+
+  it("automatically yields a still-running shell command on every supported host shell", async () => {
+    await Instance.provide({
+      directory: process.cwd(),
+      async fn() {
+        const shellCase = process.platform === "darwin"
+          ? {
+              tool: MacOSShellCommandTool,
+              command: "printf hello && exec sleep 30",
+            }
+          : process.platform === "win32"
+            ? {
+                tool: PowerShellCommandTool,
+                command: "Write-Output hello; Start-Sleep -Seconds 30",
+              }
+            : null
+        if (!shellCase) return
+
+        const execRuntime = await shellCase.tool.init()
+        const readRuntime = await ReadBackgroundTaskTool.init()
+        const stopRuntime = await StopBackgroundTaskTool.init()
+        const ctx = {
+          sessionID: "session-shell-auto-yield",
+          messageID: "message-shell-auto-yield",
+        }
+
+        const started = Tool.normalizeToolOutput(await execRuntime.execute(
+          {
+            command: shellCase.command,
+            "yield-time_ms": 100,
+          },
+          ctx,
+        ))
+        const backgroundTaskId = String((started.metadata as any)?.backgroundTaskId)
+        const cursor = Number((started.metadata as any)?.backgroundTaskCursor ?? 0)
+
+        expect(started.text).toContain("continuing in background")
+        expect(started.metadata).toMatchObject({
+          runInBackground: true,
+          backgroundTaskId: expect.stringMatching(/^tsk_/),
+        })
+        expect(await execRuntime.toModelOutput!(started)).toMatchObject({
+          type: "json",
+          value: {
+            status: "background_started",
+            backgroundTaskId,
+            backgroundTaskCursor: cursor,
+            session_id: backgroundTaskId,
+            yieldTimeMs: 100,
+          },
+        })
+
+        let snapshot = Tool.normalizeToolOutput(await readRuntime.execute(
+          {
+            id: backgroundTaskId,
+            cursor,
+          },
+          ctx,
+        ))
+        const deadline = Date.now() + 5_000
+        while (
+          !String((started.metadata as any)?.stdout ?? "").includes("hello") &&
+          !String((snapshot.metadata as any)?.output ?? "").includes("hello") &&
+          Date.now() < deadline
+        ) {
+          await Bun.sleep(25)
+          snapshot = Tool.normalizeToolOutput(await readRuntime.execute(
+            {
+              id: backgroundTaskId,
+              cursor,
+            },
+            ctx,
+          ))
+        }
+
+        expect(
+          `${String((started.metadata as any)?.stdout ?? "")}\n${String((snapshot.metadata as any)?.output ?? "")}`,
+        ).toContain("hello")
+
+        const stopped = Tool.normalizeToolOutput(await stopRuntime.execute(
+          {
+            id: backgroundTaskId,
+          },
+          ctx,
+        ))
+        expect(stopped.metadata).toMatchObject({
+          id: backgroundTaskId,
+          status: "deleted",
+        })
+      },
+    })
+  }, 120000)
+
+  it("returns a short shell command directly when it exits before the yield deadline", async () => {
+    await Instance.provide({
+      directory: process.cwd(),
+      async fn() {
+        const shellCase = process.platform === "darwin"
+          ? {
+              tool: MacOSShellCommandTool,
+              command: "printf short-result",
+            }
+          : process.platform === "win32"
+            ? {
+                tool: PowerShellCommandTool,
+                command: "Write-Output short-result",
+              }
+            : null
+        if (!shellCase) return
+
+        const runtime = await shellCase.tool.init()
+        const result = Tool.normalizeToolOutput(await runtime.execute(
+          {
+            command: shellCase.command,
+            "yield-time_ms": 5_000,
+          },
+          {
+            sessionID: "session-shell-short-command",
+            messageID: "message-shell-short-command",
+          },
+        ))
+
+        expect(result.metadata).toMatchObject({
+          exitCode: 0,
+          runInBackground: false,
+          backgroundTaskId: null,
+          stdout: expect.stringContaining("short-result"),
+        })
+      },
+    })
+  }, 120000)
+
+  it("continues a yielded shell session through write_stdin without exposing a cursor", async () => {
+    await Instance.provide({
+      directory: process.cwd(),
+      async fn() {
+        const shellCase = process.platform === "darwin"
+          ? {
+              tool: MacOSShellCommandTool,
+              command: "printf initial; sleep 0.5; printf final",
+            }
+          : process.platform === "win32"
+            ? {
+                tool: PowerShellCommandTool,
+                command: "Write-Output initial; Start-Sleep -Milliseconds 500; Write-Output final",
+              }
+            : null
+        if (!shellCase) return
+
+        const execRuntime = await shellCase.tool.init()
+        const writeRuntime = await WriteStdinTool.init()
+        const ctx = {
+          sessionID: "session-write-stdin-poll",
+          messageID: "message-write-stdin-poll",
+        }
+        const started = Tool.normalizeToolOutput(await execRuntime.execute(
+          {
+            command: shellCase.command,
+            "yield-time_ms": 50,
+          },
+          ctx,
+        ))
+        const sessionID = String((started.metadata as any)?.sessionID)
+
+        expect(sessionID).toStartWith("tsk_")
+        expect(await execRuntime.toModelOutput!(started)).toMatchObject({
+          type: "json",
+          value: {
+            session_id: sessionID,
+            status: "background_started",
+          },
+        })
+
+        const completed = Tool.normalizeToolOutput(await writeRuntime.execute(
+          {
+            session_id: sessionID,
+            chars: "",
+            "yield-time_ms": 5_000,
+          },
+          ctx,
+        ))
+        expect(completed.metadata).toMatchObject({
+          id: sessionID,
+          sessionID: null,
+          status: "exited",
+          exitCode: 0,
+        })
+        expect(String((completed.metadata as any)?.output ?? "")).toContain("final")
+        const modelOutput = await writeRuntime.toModelOutput!(completed) as any
+        expect(modelOutput.type).toBe("json")
+        expect(modelOutput.value.status).toBe("exited")
+        expect(modelOutput.value.exit_code).toBe(0)
+        expect(modelOutput.value.output).toContain("final")
+        expect(modelOutput.value.session_id).toBeUndefined()
+      },
+    })
+  }, 120000)
+
+  it("interrupts a yielded shell session through write_stdin Ctrl-C", async () => {
+    await Instance.provide({
+      directory: process.cwd(),
+      async fn() {
+        const shellCase = process.platform === "darwin"
+          ? {
+              tool: MacOSShellCommandTool,
+              command: "exec sleep 30",
+            }
+          : process.platform === "win32"
+            ? {
+                tool: PowerShellCommandTool,
+                command: "Start-Sleep -Seconds 30",
+              }
+            : null
+        if (!shellCase) return
+
+        const execRuntime = await shellCase.tool.init()
+        const writeRuntime = await WriteStdinTool.init()
+        const stopRuntime = await StopBackgroundTaskTool.init()
+        const ctx = {
+          sessionID: "session-write-stdin-interrupt",
+          messageID: "message-write-stdin-interrupt",
+        }
+        const started = Tool.normalizeToolOutput(await execRuntime.execute(
+          {
+            command: shellCase.command,
+            "yield-time_ms": 50,
+          },
+          ctx,
+        ))
+        const sessionID = String((started.metadata as any)?.sessionID)
+        const interrupted = Tool.normalizeToolOutput(await writeRuntime.execute(
+          {
+            session_id: sessionID,
+            chars: "\x03",
+            "yield-time_ms": 2_000,
+          },
+          ctx,
+        ))
+
+        expect(interrupted.metadata).toMatchObject({
+          id: sessionID,
+          interrupted: true,
+        })
+        if ((interrupted.metadata as any)?.status === "running") {
+          await stopRuntime.execute({ id: sessionID }, ctx)
+        } else {
+          expect((interrupted.metadata as any)?.status).toBe("exited")
+        }
+      },
+    })
+  }, 120000)
+
+  it("writes ordinary stdin to a yielded shell session", async () => {
+    await Instance.provide({
+      directory: process.cwd(),
+      async fn() {
+        const shellCase = process.platform === "darwin"
+          ? {
+              tool: MacOSShellCommandTool,
+              command: "IFS= read -r value; printf 'got:%s' \"$value\"",
+            }
+          : process.platform === "win32"
+            ? {
+                tool: PowerShellCommandTool,
+                command: "$value = [Console]::In.ReadLine(); Write-Output \"got:$value\"",
+              }
+            : null
+        if (!shellCase) return
+
+        const execRuntime = await shellCase.tool.init()
+        const writeRuntime = await WriteStdinTool.init()
+        const ctx = {
+          sessionID: "session-write-stdin-input",
+          messageID: "message-write-stdin-input",
+        }
+        const started = Tool.normalizeToolOutput(await execRuntime.execute(
+          {
+            command: shellCase.command,
+            "yield-time_ms": 50,
+          },
+          ctx,
+        ))
+        const sessionID = String((started.metadata as any)?.sessionID)
+        const completed = Tool.normalizeToolOutput(await writeRuntime.execute(
+          {
+            session_id: sessionID,
+            chars: "yes\n",
+            "yield-time_ms": 2_000,
+          },
+          ctx,
+        ))
+
+        expect(completed.metadata).toMatchObject({
+          id: sessionID,
+          status: "exited",
+          exitCode: 0,
+          inputChars: 4,
+        })
+        expect(String((completed.metadata as any)?.output ?? "")).toContain("got:yes")
+      },
+    })
+  }, 120000)
+
+  it("exposes the Codex-style write_stdin contract with input-sensitive permissions", async () => {
+    const runtime = await WriteStdinTool.init()
+    const shape = (runtime.parameters as z.ZodObject<any>).shape
+    const ctx = {
+      sessionID: "session-write-stdin-contract",
+      messageID: "message-write-stdin-contract",
+    }
+
+    expect(Boolean(shape.session_id)).toBe(true)
+    expect(Boolean(shape.chars)).toBe(true)
+    expect(Boolean(shape["yield-time_ms"])).toBe(true)
+    expect(Boolean(shape.max_output_tokens)).toBe(true)
+    expect(WriteStdinTool.capabilities).toMatchObject({
+      kind: "exec",
+      readOnly: false,
+      destructive: true,
+      concurrency: "safe",
+    })
+    expect(await runtime.assessPermission!({ session_id: "tsk_test", chars: "" }, ctx)).toMatchObject({
+      action: "allow",
+      allowInPlanning: true,
+    })
+    expect(await runtime.assessPermission!({ session_id: "tsk_test", chars: "\x03" }, ctx)).toMatchObject({
+      action: "allow",
+      risk: "medium",
+    })
+    expect(await runtime.assessPermission!({ session_id: "tsk_test", chars: "yes\n" }, ctx)).toMatchObject({
+      action: "ask",
+      risk: "medium",
+    })
+  })
 
   it("classifies shell permission intent conservatively for each shell", async () => {
     const repositoryRoot = await mkdtemp(path.join(tmpdir(), "anybox-shell-permission-"))
@@ -1385,35 +1721,30 @@ describe("tool contract", () => {
         tool: GitBashCommandTool,
         id: "git_bash_command",
         title: "Git Bash",
-        background: true,
         distro: false,
       },
       {
         tool: MacOSShellCommandTool,
         id: "macos_shell_command",
         title: "macOS Shell",
-        background: true,
         distro: false,
       },
       {
         tool: PowerShellCommandTool,
         id: "powershell_command",
         title: "PowerShell",
-        background: false,
         distro: false,
       },
       {
         tool: CmdCommandTool,
         id: "cmd_command",
         title: "Command Prompt",
-        background: false,
         distro: false,
       },
       {
         tool: WslBashCommandTool,
         id: "wsl_bash_command",
         title: "WSL Bash",
-        background: false,
         distro: true,
       },
     ]
@@ -1433,8 +1764,9 @@ describe("tool contract", () => {
       expect(runtime.description).toBeString()
 
       const shape = (runtime.parameters as z.ZodObject<any>).shape
-      expect(Boolean(shape.runInBackground)).toBe(item.background)
-      expect(Boolean(shape.run_in_background)).toBe(item.background)
+      expect(Boolean(shape["yield-time_ms"])).toBe(true)
+      expect(Boolean(shape.runInBackground)).toBe(true)
+      expect(Boolean(shape.run_in_background)).toBe(true)
       expect(Boolean(shape.distro)).toBe(item.distro)
     }
   })

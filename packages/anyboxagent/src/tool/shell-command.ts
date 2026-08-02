@@ -1,17 +1,17 @@
 import path from "node:path"
-import { spawn } from "node:child_process"
 import { stat } from "node:fs/promises"
 import z from "zod"
 import * as Tool from "#tool/tool.ts"
 import { Flag } from "#flag/flag.ts"
 import { Instance } from "#project/instance.ts"
 import { withMacOSDefaultPath } from "#shell/environment.ts"
-import { getShellTaskRegistry } from "#shell/task-registry.ts"
-import { terminateProcessTree } from "#shell/terminate.ts"
+import { getShellTaskRegistry, type ShellTaskResult } from "#shell/task-registry.ts"
 import { resolveToolPath, toDisplayPath } from "#tool/shared.ts"
 import { which } from "#util/which.ts"
 
-const DEFAULT_TIMEOUT_MS = Flag.ANYBOX_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS ?? 60_000
+const DEFAULT_YIELD_TIME_MS = 10_000
+const MAX_YIELD_TIME_MS = 30_000
+const CONFIGURED_DEFAULT_TIMEOUT_MS = Flag.ANYBOX_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS
 const DEFAULT_MAX_OUTPUT_CHARS = Flag.ANYBOX_EXPERIMENTAL_BASH_MAX_OUTPUT_LENGTH ?? 12_000
 
 const DANGEROUS_COMMAND_PATTERNS = [
@@ -71,6 +71,7 @@ export type ShellCommandInput = {
   command: string
   workdir?: string
   timeoutMs?: number
+  "yield-time_ms"?: number
   maxOutputChars?: number
   allowUnsafe?: boolean
   description?: string
@@ -84,7 +85,8 @@ interface ShellCommandMetadata extends Record<string, unknown> {
   shell: string
   cwd: string
   displayCwd: string
-  timeoutMs: number
+  timeoutMs: number | null
+  yieldTimeMs?: number
   exitCode: number | null
   signal: NodeJS.Signals | null
   timedOut: boolean
@@ -95,6 +97,8 @@ interface ShellCommandMetadata extends Record<string, unknown> {
   stderr: string
   runInBackground?: boolean
   backgroundTaskId?: string | null
+  backgroundTaskCursor?: number | null
+  sessionID?: string | null
 }
 
 type WhichCommand = typeof which
@@ -121,7 +125,6 @@ type ShellToolConfig<Parameters extends z.ZodType> = {
   shellKind: ShellKind
   description: string
   parameters: Parameters
-  supportsBackground?: boolean
   resolveInvocation(parameters: z.infer<Parameters>, cwd: string): Promise<ShellInvocation>
 }
 
@@ -151,22 +154,18 @@ function getResolverParts(options?: ResolverOptions) {
 
 function shellCommandParameters(input: {
   commandDescription: string
-  supportsBackground?: boolean
   wslDistro?: boolean
 }) {
   const shape = {
     command: z.string().min(1).describe(input.commandDescription),
     workdir: z.string().optional().describe("Working directory. Defaults to the current project directory."),
-    timeoutMs: z.number().int().positive().max(10 * 60 * 1000).optional().describe("Timeout in milliseconds."),
+    timeoutMs: z.number().int().positive().max(10 * 60 * 1000).optional().describe("Optional hard runtime limit in milliseconds. A task that exceeds it is terminated."),
+    "yield-time_ms": z.number().int().nonnegative().max(MAX_YIELD_TIME_MS).optional().describe("How long to wait before returning a background task id for a still-running command. Defaults to 10000 ms; use 0 to return immediately."),
     maxOutputChars: z.number().int().positive().max(200_000).optional().describe("Maximum chars kept for stdout and stderr."),
     allowUnsafe: z.boolean().optional().describe("Allow known dangerous command patterns."),
     description: z.string().optional().describe("Short description for the command intent."),
-    ...(input.supportsBackground
-      ? {
-          runInBackground: z.boolean().optional().describe("Start the command as a background task instead of waiting for it."),
-          run_in_background: z.boolean().optional().describe("Alias for runInBackground."),
-        }
-      : {}),
+    runInBackground: z.boolean().optional().describe("Compatibility shortcut for yield-time_ms=0. True returns a managed background task immediately."),
+    run_in_background: z.boolean().optional().describe("Alias for runInBackground."),
     ...(input.wslDistro
       ? {
           distro: z.string().trim().min(1).optional().describe("Optional WSL distribution name. Defaults to the user's default WSL distribution."),
@@ -179,12 +178,10 @@ function shellCommandParameters(input: {
 
 const GitBashCommandParameters = shellCommandParameters({
   commandDescription: "Git Bash/MSYS Bash command to execute.",
-  supportsBackground: true,
 })
 
 const MacOSShellCommandParameters = shellCommandParameters({
   commandDescription: "macOS zsh/POSIX shell command to execute.",
-  supportsBackground: true,
 })
 
 const PowerShellCommandParameters = shellCommandParameters({
@@ -202,6 +199,11 @@ const WslBashCommandParameters = shellCommandParameters({
 
 function shouldRunInBackground(parameters: ShellCommandInput) {
   return parameters.runInBackground ?? parameters.run_in_background ?? false
+}
+
+function resolveYieldTimeMs(parameters: ShellCommandInput) {
+  if (shouldRunInBackground(parameters)) return 0
+  return parameters["yield-time_ms"] ?? DEFAULT_YIELD_TIME_MS
 }
 
 function shellInput<Parameters extends z.ZodType>(parameters: z.infer<Parameters>): ShellCommandInput {
@@ -739,127 +741,131 @@ function createShellCommandTool<Parameters extends z.ZodType>(
           }
 
           const command = input.command.trim()
-          const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS
+          const timeoutMs = input.timeoutMs ?? CONFIGURED_DEFAULT_TIMEOUT_MS
+          const yieldTimeMs = resolveYieldTimeMs(input)
           const maxOutputChars = input.maxOutputChars ?? DEFAULT_MAX_OUTPUT_CHARS
-          const runInBackground = Boolean(config.supportsBackground && shouldRunInBackground(input))
           const displayCwd = toDisplayPath(cwd)
           const invocation = await config.resolveInvocation(parameters, cwd)
+          const title = input.description?.trim() || `${config.id}: ${command}`
+          const registry = getShellTaskRegistry()
+          const task = registry.start({
+            ownerSessionID: ctx.sessionID,
+            title: input.description?.trim(),
+            command,
+            cwd,
+            shell: invocation.shell,
+            executable: invocation.executable,
+            args: invocation.args,
+            env: invocation.env,
+            maxOutputChars,
+            timeoutMs,
+          })
 
-          if (runInBackground) {
-            const task = getShellTaskRegistry().start({
-              title: input.description?.trim(),
-              command,
-              cwd,
-              shell: invocation.executable,
-              env: invocation.env,
-            })
+          const formatCompleted = (result: ShellTaskResult, aborted: boolean) => {
+            const suffix: string[] = []
+            if (result.timedOut) suffix.push("timed out")
+            if (aborted) suffix.push("aborted")
+
+            const notes: string[] = []
+            if (result.stdoutTruncated || result.stderrTruncated) {
+              notes.push("Output was truncated. Increase maxOutputChars to inspect more.")
+            }
+
+            const normalizedStdout = result.stdout.trimEnd()
+            const normalizedStderr = result.stderr.trimEnd()
 
             return {
-              title: input.description?.trim() || `${config.id}: ${command}`,
+              title,
               text: [
                 `Command: ${command}`,
                 `Workdir: ${displayCwd}`,
                 `Shell: ${invocation.shell}`,
-                `Background Task ID: ${task.id}`,
-                "Status: started in background",
+                `Exit: ${result.exitCode ?? "unknown"}${suffix.length ? ` (${suffix.join(", ")})` : ""}`,
+                notes.length ? `Note: ${notes.join(" ")}` : undefined,
                 "",
-                "Use read_background_task to inspect output and stop_background_task to terminate it.",
-              ].join("\n"),
+                "STDOUT:",
+                normalizedStdout || "(no stdout)",
+                "",
+                "STDERR:",
+                normalizedStderr || "(no stderr)",
+              ].filter(Boolean).join("\n"),
               metadata: {
                 command,
                 shell: invocation.shell,
                 cwd,
                 displayCwd,
-                timeoutMs,
-                exitCode: null,
-                signal: null,
-                timedOut: false,
-                aborted: false,
-                stdoutTruncated: false,
-                stderrTruncated: false,
-                stdout: "",
-                stderr: "",
-                runInBackground: true,
-                backgroundTaskId: task.id,
+                timeoutMs: timeoutMs ?? null,
+                yieldTimeMs,
+                exitCode: result.exitCode,
+                signal: result.signal,
+                timedOut: result.timedOut,
+                aborted,
+                stdoutTruncated: result.stdoutTruncated,
+                stderrTruncated: result.stderrTruncated,
+                stdout: normalizedStdout,
+                stderr: normalizedStderr,
+                runInBackground: false,
+                backgroundTaskId: null,
+                backgroundTaskCursor: null,
               },
             }
           }
 
-          const proc = spawn(invocation.executable, invocation.args, {
-            cwd,
-            ...(invocation.env ? { env: invocation.env } : {}),
-            windowsHide: true,
-          })
-
-          let stdout = ""
-          let stderr = ""
-          let stdoutTruncated = false
-          let stderrTruncated = false
-          let timedOut = false
           let aborted = false
-
-          proc.stdout?.on("data", (chunk: Buffer) => {
-            if (stdout.length >= maxOutputChars) {
-              stdoutTruncated = true
-              return
-            }
-
-            const piece = chunk.toString()
-            const remain = maxOutputChars - stdout.length
-            if (piece.length <= remain) {
-              stdout += piece
-              return
-            }
-
-            stdout += piece.slice(0, remain)
-            stdoutTruncated = true
-          })
-
-          proc.stderr?.on("data", (chunk: Buffer) => {
-            if (stderr.length >= maxOutputChars) {
-              stderrTruncated = true
-              return
-            }
-
-            const piece = chunk.toString()
-            const remain = maxOutputChars - stderr.length
-            if (piece.length <= remain) {
-              stderr += piece
-              return
-            }
-
-            stderr += piece.slice(0, remain)
-            stderrTruncated = true
-          })
-
-          const timer = setTimeout(() => {
-            timedOut = true
-            terminateProcessTree(proc)
-          }, timeoutMs)
-
-          const onAbort = () => {
+          let snapshot: ShellTaskResult | null
+          if (!ctx.abort || yieldTimeMs <= 0) {
+            snapshot = await registry.wait(task.id, yieldTimeMs, ctx.sessionID)
+          } else if (ctx.abort.aborted) {
             aborted = true
-            terminateProcessTree(proc)
+            await registry.stop(task.id, ctx.sessionID)
+            snapshot = registry.result(task.id, ctx.sessionID)
+          } else {
+            let onAbort: (() => void) | null = null
+            const outcome = await Promise.race([
+              registry.wait(task.id, yieldTimeMs, ctx.sessionID).then((result) => ({
+                type: "task" as const,
+                result,
+              })),
+              new Promise<{ type: "abort" }>((resolve) => {
+                onAbort = () => resolve({ type: "abort" })
+                ctx.abort?.addEventListener("abort", onAbort, { once: true })
+              }),
+            ])
+            if (onAbort) ctx.abort.removeEventListener("abort", onAbort)
+
+            if (outcome.type === "abort") {
+              aborted = true
+              await registry.stop(task.id, ctx.sessionID)
+              snapshot = registry.result(task.id, ctx.sessionID)
+            } else {
+              snapshot = outcome.result
+            }
           }
-          ctx.abort?.addEventListener("abort", onAbort, { once: true })
 
-          const exit = await waitForProcessExit(proc).finally(() => {
-            clearTimeout(timer)
-            ctx.abort?.removeEventListener("abort", onAbort)
-          })
+          if (!snapshot) {
+            throw new Error(`Shell task '${task.id}' disappeared before producing a result.`)
+          }
 
-          const suffix: string[] = []
-          if (timedOut) suffix.push("timed out")
-          if (aborted) suffix.push("aborted")
+          if (aborted || snapshot.timedOut) {
+            if (snapshot.status === "running") {
+              await registry.stop(task.id, ctx.sessionID)
+            }
+            return formatCompleted(registry.take(task.id, ctx.sessionID) ?? snapshot, aborted)
+          }
 
-          const title = input.description?.trim() || `${config.id}: ${command}`
+          if (snapshot.status !== "running") {
+            return formatCompleted(registry.take(task.id, ctx.sessionID) ?? snapshot, false)
+          }
+
+          registry.acknowledge(task.id, snapshot.cursor, ctx.sessionID)
+
+          const explicitBackground = shouldRunInBackground(input)
+          const normalizedStdout = snapshot.stdout.trimEnd()
+          const normalizedStderr = snapshot.stderr.trimEnd()
           const notes: string[] = []
-          if (stdoutTruncated || stderrTruncated) {
-            notes.push("Output was truncated. Increase maxOutputChars to inspect more.")
+          if (snapshot.stdoutTruncated || snapshot.stderrTruncated) {
+            notes.push("Initial output was truncated. Later write_stdin calls return only newer output.")
           }
-
-          const normalizedStdout = stdout.trimEnd()
-          const normalizedStderr = stderr.trimEnd()
 
           return {
             title,
@@ -867,31 +873,40 @@ function createShellCommandTool<Parameters extends z.ZodType>(
               `Command: ${command}`,
               `Workdir: ${displayCwd}`,
               `Shell: ${invocation.shell}`,
-              `Exit: ${exit.code ?? "unknown"}${suffix.length ? ` (${suffix.join(", ")})` : ""}`,
+              `Session ID: ${task.id}`,
+              explicitBackground
+                ? "Status: started in background"
+                : `Status: still running after ${yieldTimeMs} ms; continuing in background`,
+              timeoutMs !== undefined ? `Hard timeout: ${timeoutMs} ms` : undefined,
               notes.length ? `Note: ${notes.join(" ")}` : undefined,
               "",
-              "STDOUT:",
+              "STDOUT SO FAR:",
               normalizedStdout || "(no stdout)",
               "",
-              "STDERR:",
+              "STDERR SO FAR:",
               normalizedStderr || "(no stderr)",
+              "",
+              `Use write_stdin with session_id=${task.id} and empty chars to read new output, or chars=\\u0003 to interrupt it.`,
             ].filter(Boolean).join("\n"),
             metadata: {
               command,
               shell: invocation.shell,
               cwd,
               displayCwd,
-              timeoutMs,
-              exitCode: exit.code,
-              signal: exit.signal,
-              timedOut,
-              aborted,
-              stdoutTruncated,
-              stderrTruncated,
+              timeoutMs: timeoutMs ?? null,
+              yieldTimeMs,
+              exitCode: null,
+              signal: null,
+              timedOut: false,
+              aborted: false,
+              stdoutTruncated: snapshot.stdoutTruncated,
+              stderrTruncated: snapshot.stderrTruncated,
               stdout: normalizedStdout,
               stderr: normalizedStderr,
-              runInBackground: false,
-              backgroundTaskId: null,
+              runInBackground: true,
+              backgroundTaskId: task.id,
+              backgroundTaskCursor: snapshot.cursor,
+              sessionID: task.id,
             },
           }
         },
@@ -926,6 +941,13 @@ function createShellCommandTool<Parameters extends z.ZodType>(
                         ? "ok"
                         : "failed",
               backgroundTaskId: metadata.backgroundTaskId,
+              ...(metadata.sessionID ? { session_id: metadata.sessionID } : {}),
+              ...(typeof metadata.backgroundTaskCursor === "number"
+                ? { backgroundTaskCursor: metadata.backgroundTaskCursor }
+                : {}),
+              ...(typeof metadata.yieldTimeMs === "number"
+                ? { yieldTimeMs: metadata.yieldTimeMs }
+                : {}),
               runInBackground: metadata.runInBackground,
               stdoutTruncated: metadata.stdoutTruncated,
               stderrTruncated: metadata.stderrTruncated,
@@ -955,7 +977,6 @@ export const GitBashCommandTool = createShellCommandTool({
   shellKind: "bash",
   description: "Run a Git Bash/MSYS Bash command inside the current project boundary. Use Bash syntax, but do not assume a full Linux environment.",
   parameters: GitBashCommandParameters,
-  supportsBackground: true,
   async resolveInvocation(parameters) {
     const executable = await resolveGitBashExecutable()
     const command = shellInput(parameters).command.trim()
@@ -973,7 +994,6 @@ export const MacOSShellCommandTool = createShellCommandTool({
   shellKind: "posix",
   description: "Run a macOS shell command inside the current project boundary. Use zsh/POSIX syntax.",
   parameters: MacOSShellCommandParameters,
-  supportsBackground: true,
   async resolveInvocation(parameters) {
     const executable = await resolveMacOSShellExecutable()
     const command = shellInput(parameters).command.trim()

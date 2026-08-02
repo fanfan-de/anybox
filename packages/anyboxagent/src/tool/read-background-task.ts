@@ -23,6 +23,7 @@ interface ReadBackgroundTaskMetadata extends Record<string, unknown> {
   status: string
   exitCode: number | null
   signal: NodeJS.Signals | null
+  timedOut: boolean
   cursor: number
   startCursor: number
   mode: "delta" | "reset"
@@ -49,10 +50,10 @@ export const ReadBackgroundTaskTool = Tool.define(
   async (): Promise<Tool.ToolRuntime<typeof ReadBackgroundTaskParameters, ReadBackgroundTaskMetadata>> => {
     return {
       title: "Background Task",
-      description: "Read the status and buffered output of a background shell task.",
+      description: "Deprecated compatibility tool for reading a background shell task. Prefer write_stdin with empty chars.",
       parameters: ReadBackgroundTaskParameters,
-      execute: async (parameters) => {
-        const result = getShellTaskRegistry().read(parameters.id, parameters.cursor)
+      execute: async (parameters, ctx) => {
+        const result = getShellTaskRegistry().read(parameters.id, parameters.cursor, ctx.sessionID)
         if (!result) {
           throw new Error(`Background task '${parameters.id}' was not found.`)
         }
@@ -71,6 +72,7 @@ export const ReadBackgroundTaskTool = Tool.define(
             `Shell: ${result.task.shell}`,
             `Status: ${result.task.status}`,
             `Exit: ${result.task.exitCode ?? "running"}`,
+            `Timed Out: ${result.task.timedOut ? "yes" : "no"}`,
             `Output Mode: ${result.replay.mode}`,
             `Cursor: ${result.replay.cursor}`,
             `Start Cursor: ${result.replay.startCursor}`,
@@ -89,6 +91,7 @@ export const ReadBackgroundTaskTool = Tool.define(
             status: result.task.status,
             exitCode: result.task.exitCode,
             signal: result.task.signal,
+            timedOut: result.task.timedOut,
             cursor: result.replay.cursor,
             startCursor: result.replay.startCursor,
             mode: result.replay.mode,
@@ -117,6 +120,7 @@ export const ReadBackgroundTaskTool = Tool.define(
             status: metadata.status,
             exitCode: metadata.exitCode,
             signal: metadata.signal,
+            timedOut: metadata.timedOut,
             cursor: metadata.cursor,
             startCursor: metadata.startCursor,
             mode: metadata.mode,

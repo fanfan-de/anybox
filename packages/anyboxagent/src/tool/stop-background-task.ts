@@ -18,6 +18,7 @@ interface StopBackgroundTaskMetadata extends Record<string, unknown> {
   status: string
   exitCode: number | null
   signal: NodeJS.Signals | null
+  timedOut: boolean
   cursor: number
 }
 
@@ -26,10 +27,10 @@ export const StopBackgroundTaskTool = Tool.define(
   async (): Promise<Tool.ToolRuntime<typeof StopBackgroundTaskParameters, StopBackgroundTaskMetadata>> => {
     return {
       title: "Stop Background Task",
-      description: "Terminate a background shell task.",
+      description: "Deprecated compatibility tool for terminating a background shell task. Prefer write_stdin with chars=\\u0003.",
       parameters: StopBackgroundTaskParameters,
-      execute: async (parameters) => {
-        const task = await getShellTaskRegistry().stop(parameters.id)
+      execute: async (parameters, ctx) => {
+        const task = await getShellTaskRegistry().stop(parameters.id, ctx.sessionID)
         if (!task) {
           throw new Error(`Background task '${parameters.id}' was not found.`)
         }
@@ -46,6 +47,7 @@ export const StopBackgroundTaskTool = Tool.define(
             `Shell: ${task.shell}`,
             `Status: ${task.status}`,
             `Exit: ${task.exitCode ?? "unknown"}`,
+            `Timed Out: ${task.timedOut ? "yes" : "no"}`,
           ].join("\n"),
           metadata: {
             id: task.id,
@@ -57,6 +59,7 @@ export const StopBackgroundTaskTool = Tool.define(
             status: task.status,
             exitCode: task.exitCode,
             signal: task.signal,
+            timedOut: task.timedOut,
             cursor: task.cursor,
           },
         }
@@ -81,6 +84,7 @@ export const StopBackgroundTaskTool = Tool.define(
             status: metadata.status,
             exitCode: metadata.exitCode,
             signal: metadata.signal,
+            timedOut: metadata.timedOut,
             cursor: metadata.cursor,
           },
         }

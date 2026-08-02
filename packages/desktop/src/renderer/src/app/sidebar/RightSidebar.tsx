@@ -388,11 +388,6 @@ export function RightSidebar({
               </button>
             ))}
           </div>
-          {branchAnchorOptions.length === 0 ? (
-            <p className="right-sidebar-launcher-hint">
-              {t("branchChat.launcherUnavailable")}
-            </p>
-          ) : null}
         </div>
       </div>
     )

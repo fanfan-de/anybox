@@ -62,15 +62,6 @@
   color: var(--semantic-branch-chat-accent);
 }
 
-.right-sidebar-launcher-hint {
-  margin: 0;
-  padding: 9px 10px;
-  border: 1px dashed var(--semantic-branch-chat-border);
-  color: var(--semantic-branch-chat-text-muted);
-  font-size: 11px;
-  line-height: 1.45;
-}
-
 .branch-chat-panel {
   min-width: 0;
   min-height: 0;

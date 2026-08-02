@@ -20,6 +20,7 @@ import { LspDefinitionTool, LspHoverTool, LspReferencesTool, LspWorkspaceSymbols
 import { LoadSkillTool } from "#tool/load-skill.ts"
 import { ListMcpResourceTemplatesTool, ListMcpResourcesTool, ReadMcpResourceTool } from "#tool/mcp-resources.ts"
 import { ParallelTool } from "#tool/parallel-tool.ts"
+import { WriteStdinTool } from "#tool/write-stdin.ts"
 import { ReadBackgroundTaskTool } from "#tool/read-background-task.ts"
 import { ReadFileTool } from "#tool/read-file.ts"
 import { ReadSubagentTool } from "#tool/read-subagent.ts"
@@ -108,6 +109,7 @@ async function rawBuiltinTools(): Promise<Tool.ToolInfo[]> {
     TaskListTool,
     TaskUpdateTool,
     ReadFileTool,
+    WriteStdinTool,
     ReadBackgroundTaskTool,
     ReadSubagentTool,
     WaitSubagentTool,

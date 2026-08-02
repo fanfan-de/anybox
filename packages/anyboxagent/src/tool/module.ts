@@ -207,6 +207,7 @@ const EXECUTION_TOOL_IDS = new Set([
   "cmd_command",
   "wsl_bash_command",
   "ssh_shell_command",
+  "write_stdin",
   "read_background_task",
   "stop_background_task",
 ])
