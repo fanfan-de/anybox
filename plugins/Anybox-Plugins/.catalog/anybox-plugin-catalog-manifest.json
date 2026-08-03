@@ -1,0 +1,435 @@
+{
+  "schemaVersion": 3,
+  "catalogID": "anybox-plugins",
+  "repositoryRef": "master",
+  "catalogPath": "plugins/Anybox-Plugins/.catalog",
+  "sourceCommit": "afdbff4b40717eeb2ae2f05d254d718c253ed5c5",
+  "pluginCount": 60,
+  "registry": {
+    "name": "anybox-plugin-registry.json",
+    "sha256": "a8e2902a77a30ff302546f825af0a4de893a1374b5285ff5c4e935039757b672",
+    "size": 392302
+  },
+  "assets": [
+    {
+      "pluginID": "anybox-plugin-development",
+      "pluginVersion": "0.1.0",
+      "name": "anybox-plugin-anybox-plugin-development-0.1.0.zip",
+      "sha256": "64beaacf3c2a1f5186c2f672cd25467e18ad443ab71659ac9a6ffe06a0d58f05",
+      "size": 15787
+    },
+    {
+      "pluginID": "atlassian-rovo",
+      "pluginVersion": "1.0.2",
+      "name": "anybox-plugin-atlassian-rovo-1.0.2.zip",
+      "sha256": "1f10268fac6de4ab91e430a13dde3fbb4dce2360519d947e0e9d11beba6f5033",
+      "size": 88858
+    },
+    {
+      "pluginID": "box",
+      "pluginVersion": "0.0.3",
+      "name": "anybox-plugin-box-0.0.3.zip",
+      "sha256": "a977be7d1ddf4517f3dfb982f2b38641ec3a7142609bcd355532a0adc3c91206",
+      "size": 44328
+    },
+    {
+      "pluginID": "build-ios-apps",
+      "pluginVersion": "0.1.2",
+      "name": "anybox-plugin-build-ios-apps-0.1.2.zip",
+      "sha256": "630535da96381b3147edf2f0a6169b3bd9f0fea8a9376241ad8b5e25fea9e68b",
+      "size": 119387
+    },
+    {
+      "pluginID": "build-macos-apps",
+      "pluginVersion": "0.1.4",
+      "name": "anybox-plugin-build-macos-apps-0.1.4.zip",
+      "sha256": "a7a9cc11fec2a29099c60353f1f73ea26b853313460f9dd74f1b92ea867e7981",
+      "size": 54008
+    },
+    {
+      "pluginID": "build-web-apps",
+      "pluginVersion": "0.1.2",
+      "name": "anybox-plugin-build-web-apps-0.1.2.zip",
+      "sha256": "296b1bed21e7172a69602fb7c6a825113c3825f88a5b2edb7a14389d6dd3f111",
+      "size": 198393
+    },
+    {
+      "pluginID": "canva",
+      "pluginVersion": "1.0.2",
+      "name": "anybox-plugin-canva-1.0.2.zip",
+      "sha256": "7e0d09af5fd84c7e4821af0f887d5c0fb4ad31752b72dddffddcc20b8f009be9",
+      "size": 1100844
+    },
+    {
+      "pluginID": "chrome",
+      "pluginVersion": "0.15.1",
+      "name": "anybox-plugin-chrome-0.15.1.zip",
+      "sha256": "c10ea6345854bf5e0881d5eb75165ccc3333d4fc16ae5fa0bd1ac79f7e6bdb27",
+      "size": 863047
+    },
+    {
+      "pluginID": "cinema",
+      "pluginVersion": "0.2.0",
+      "name": "anybox-plugin-cinema-0.2.0.zip",
+      "sha256": "0396896fb46dfb8387cb7549c487e7292c531670ac99f66521d821788adffd28",
+      "size": 15258
+    },
+    {
+      "pluginID": "circleci",
+      "pluginVersion": "1.0.0",
+      "name": "anybox-plugin-circleci-1.0.0.zip",
+      "sha256": "eb407b34ed3fdbd51c12e282acadc1fc78b5ddabcbaf589d19248f96226c49a2",
+      "size": 29581
+    },
+    {
+      "pluginID": "cloudflare",
+      "pluginVersion": "0.1.2",
+      "name": "anybox-plugin-cloudflare-0.1.2.zip",
+      "sha256": "9782800b791ea0fd0272d665306e7d70047968fb2abf7ed2e2dfd8d9fe4a9450",
+      "size": 730956
+    },
+    {
+      "pluginID": "coderabbit",
+      "pluginVersion": "1.1.1",
+      "name": "anybox-plugin-coderabbit-1.1.1.zip",
+      "sha256": "e557e559026c6fd050ea14aa419fec0886aa83bc98c015c857ca1ef0fecffa90",
+      "size": 8712
+    },
+    {
+      "pluginID": "computer-use-windows",
+      "pluginVersion": "0.3.5",
+      "name": "anybox-plugin-computer-use-windows-0.3.5.zip",
+      "sha256": "e806b3e49fc1b8a8f7a3df196eaa0cdc54a7569d55db8bcf27b34292bc047828",
+      "size": 51345195
+    },
+    {
+      "pluginID": "context7",
+      "pluginVersion": "1.0.0",
+      "name": "anybox-plugin-context7-1.0.0.zip",
+      "sha256": "90336d1914a1eb9099ebe9f6be19afbc18f280f77d8b33b4ad8a7e8d3a8be34c",
+      "size": 896
+    },
+    {
+      "pluginID": "documents",
+      "pluginVersion": "0.1.0",
+      "name": "anybox-plugin-documents-0.1.0.zip",
+      "sha256": "419aabbba1b41bffb10695133839ae4b62c1370a2af3e440545c4ef4d7f4a7ca",
+      "size": 405644
+    },
+    {
+      "pluginID": "expo",
+      "pluginVersion": "1.3.0",
+      "name": "anybox-plugin-expo-1.3.0.zip",
+      "sha256": "25819bfb5e694c883fbfa18cf10265866bcb8f49dd6345ab838a0a43e4747f98",
+      "size": 176538
+    },
+    {
+      "pluginID": "feishu",
+      "pluginVersion": "0.1.0",
+      "name": "anybox-plugin-feishu-0.1.0.zip",
+      "sha256": "97a94f4e9ffb97fd8bb15bd0f5d6bf2bdff1a46d8b480b6fa7a6cd5d1283fee9",
+      "size": 7593
+    },
+    {
+      "pluginID": "feishu-cli",
+      "pluginVersion": "0.1.0",
+      "name": "anybox-plugin-feishu-cli-0.1.0.zip",
+      "sha256": "cf38ee420c853e62445ce196fd4d834f9f39629d84f65c2735bb0b71e6b6004d",
+      "size": 1104612
+    },
+    {
+      "pluginID": "filesystem",
+      "pluginVersion": "1.0.0",
+      "name": "anybox-plugin-filesystem-1.0.0.zip",
+      "sha256": "143ad646dc3e51473db263b5cdfa8cdfe5d50fa448304f61b6f7b895355d92d8",
+      "size": 1065
+    },
+    {
+      "pluginID": "game-studio",
+      "pluginVersion": "0.1.2",
+      "name": "anybox-plugin-game-studio-0.1.2.zip",
+      "sha256": "d535ac5f492acda67b28ea53e7bdd5707555ae83c247d7977a35e226ef3dfd1c",
+      "size": 63108
+    },
+    {
+      "pluginID": "github",
+      "pluginVersion": "1.0.0",
+      "name": "anybox-plugin-github-1.0.0.zip",
+      "sha256": "77f610093b2511f797edefe0d7fe4fe651fb6431327d965b0daa0e09b019f95c",
+      "size": 71047
+    },
+    {
+      "pluginID": "gmail",
+      "pluginVersion": "0.1.3",
+      "name": "anybox-plugin-gmail-0.1.3.zip",
+      "sha256": "4b6afaf41e01ac4c0efe0fca23eb23dadb6a1b61bc13c124791845ce9aa30b53",
+      "size": 151895
+    },
+    {
+      "pluginID": "godot-cli",
+      "pluginVersion": "0.6.0",
+      "name": "anybox-plugin-godot-cli-0.6.0.zip",
+      "sha256": "ec0a6611180f8f26ecc2930ce57ccfb4bd80ea858d8bc7eda09f7ee5452039ca",
+      "size": 831608
+    },
+    {
+      "pluginID": "google-calendar",
+      "pluginVersion": "1.2.3",
+      "name": "anybox-plugin-google-calendar-1.2.3.zip",
+      "sha256": "305514bdbf941100755eea72aecd7d01094e0e5b82d31603d46720760c33e5d1",
+      "size": 493368
+    },
+    {
+      "pluginID": "google-drive",
+      "pluginVersion": "0.1.7",
+      "name": "anybox-plugin-google-drive-0.1.7.zip",
+      "sha256": "943f9f1819b94076b3fdbd957e9ace4723ef6382fd1d2878902e357118c76ad5",
+      "size": 502359
+    },
+    {
+      "pluginID": "heygen",
+      "pluginVersion": "1.3.2",
+      "name": "anybox-plugin-heygen-1.3.2.zip",
+      "sha256": "697ee94cd534fda7f59f28825b9cfd9c12ab9ef059f1933e546994b74eff39a4",
+      "size": 263708
+    },
+    {
+      "pluginID": "hubspot",
+      "pluginVersion": "2.0.3",
+      "name": "anybox-plugin-hubspot-2.0.3.zip",
+      "sha256": "c17c98441eeefd2005af0006bef870c3d0811114d7ab07dd8199989889e3e359",
+      "size": 34864
+    },
+    {
+      "pluginID": "hugging-face",
+      "pluginVersion": "1.0.3",
+      "name": "anybox-plugin-hugging-face-1.0.3.zip",
+      "sha256": "bfc054938d5f70440477f1324536f721d01cf9ea6a05d80e1263f96b5ba13009",
+      "size": 311901
+    },
+    {
+      "pluginID": "hyperframes",
+      "pluginVersion": "0.6.118",
+      "name": "anybox-plugin-hyperframes-0.6.118.zip",
+      "sha256": "a8f300b86e5851d9e2299833a28e323a3097377bf716ca5d52a231a3b1d4555a",
+      "size": 49011909
+    },
+    {
+      "pluginID": "kling",
+      "pluginVersion": "0.1.0",
+      "name": "anybox-plugin-kling-0.1.0.zip",
+      "sha256": "2d9282dc42880d6cc719b242bf20478421c8bc52519cbcaf430433d3bde17712",
+      "size": 7834
+    },
+    {
+      "pluginID": "latex",
+      "pluginVersion": "0.2.0",
+      "name": "anybox-plugin-latex-0.2.0.zip",
+      "sha256": "26835393712378a5e1a3abf677c3336444cfed5556cae29fbd65ad871476f094",
+      "size": 19997989
+    },
+    {
+      "pluginID": "linear",
+      "pluginVersion": "0.0.2",
+      "name": "anybox-plugin-linear-0.0.2.zip",
+      "sha256": "13c21cb300dd92dded7660a2e571a3497601247db2464a8e5af2409176fe1ca9",
+      "size": 306634
+    },
+    {
+      "pluginID": "neon-postgres",
+      "pluginVersion": "1.0.3",
+      "name": "anybox-plugin-neon-postgres-1.0.3.zip",
+      "sha256": "43100119cc504bc01d464a3c4f60fbb9e66f58b5613e41bdfa20c17806189273",
+      "size": 22221
+    },
+    {
+      "pluginID": "netlify",
+      "pluginVersion": "1.1.2",
+      "name": "anybox-plugin-netlify-1.1.2.zip",
+      "sha256": "c153b5c123a6bbc2d61d4d580f92722d4e99a984b50e1a6ae244aaf12ca78e7b",
+      "size": 150563
+    },
+    {
+      "pluginID": "notion",
+      "pluginVersion": "0.1.3",
+      "name": "anybox-plugin-notion-0.1.3.zip",
+      "sha256": "b56c2c31655a65add3bafb47044a637d505f7fab4f4d70775629449a504e5ac6",
+      "size": 232147
+    },
+    {
+      "pluginID": "obsidian-cli",
+      "pluginVersion": "0.1.0",
+      "name": "anybox-plugin-obsidian-cli-0.1.0.zip",
+      "sha256": "15bcdd74c54a3d82af0f3844698415706255d4763ae547003d1f93cd3f234be1",
+      "size": 154589
+    },
+    {
+      "pluginID": "outlook-calendar",
+      "pluginVersion": "0.1.3",
+      "name": "anybox-plugin-outlook-calendar-0.1.3.zip",
+      "sha256": "ed930d0ee76cc6aec95b80d5c338cec8efc50345ce55edb89af0dbacfcb2edf0",
+      "size": 51135
+    },
+    {
+      "pluginID": "outlook-email",
+      "pluginVersion": "0.1.3",
+      "name": "anybox-plugin-outlook-email-0.1.3.zip",
+      "sha256": "3c97b633d2fed50ae8eb42d63385088fce7428d0aced2b7065f69fbdb0f08ddb",
+      "size": 41786
+    },
+    {
+      "pluginID": "playwright",
+      "pluginVersion": "1.0.0",
+      "name": "anybox-plugin-playwright-1.0.0.zip",
+      "sha256": "2d6f930ab24623ac7225a4bc6ec42867f20b98b6f15a2b1b341ac46296b94031",
+      "size": 1594
+    },
+    {
+      "pluginID": "playwright-cli",
+      "pluginVersion": "0.1.0",
+      "name": "anybox-plugin-playwright-cli-0.1.0.zip",
+      "sha256": "4ab63a2f8a52f9c67411777cec020719f508bef3a1ffd528ec8ee17746609670",
+      "size": 3760
+    },
+    {
+      "pluginID": "plugin-eval",
+      "pluginVersion": "0.1.2",
+      "name": "anybox-plugin-plugin-eval-0.1.2.zip",
+      "sha256": "1f3260762cd5413102ecdd4446667b0e97686b320c34c9a3c9f878400a1d14f4",
+      "size": 83921
+    },
+    {
+      "pluginID": "postgres",
+      "pluginVersion": "1.0.0",
+      "name": "anybox-plugin-postgres-1.0.0.zip",
+      "sha256": "3d0577552e35d1b5f3e4dd4a460fda44a1ce058f3b39a1f6cbe5b8c444d3ccb5",
+      "size": 1102
+    },
+    {
+      "pluginID": "presentations",
+      "pluginVersion": "0.1.1",
+      "name": "anybox-plugin-presentations-0.1.1.zip",
+      "sha256": "cf6c0faadf0cd848acf29d8a15ba976ea108f12a2d554fb28f934eddfbd3deed",
+      "size": 38080
+    },
+    {
+      "pluginID": "remotion",
+      "pluginVersion": "1.0.0",
+      "name": "anybox-plugin-remotion-1.0.0.zip",
+      "sha256": "fb8bc3d51fcf1cd76bfeb0869329593279cca53bf76ebb9cf93e818672350f18",
+      "size": 124179
+    },
+    {
+      "pluginID": "render",
+      "pluginVersion": "0.1.0",
+      "name": "anybox-plugin-render-0.1.0.zip",
+      "sha256": "06c0b8cbb61901b194365d010d4416a80a7d19eba26e34aad57c1529e21ba2d1",
+      "size": 213990
+    },
+    {
+      "pluginID": "sentry",
+      "pluginVersion": "0.1.2",
+      "name": "anybox-plugin-sentry-0.1.2.zip",
+      "sha256": "6df20c17a442747ad0215021dade2ce015e5f4623484c4a6e4c4d4263d86549d",
+      "size": 15034
+    },
+    {
+      "pluginID": "sharepoint",
+      "pluginVersion": "0.1.3",
+      "name": "anybox-plugin-sharepoint-0.1.3.zip",
+      "sha256": "31e6ca9337a7d281b794e06619b6386ea8bf5a626f0eaa54f21645541f472bd1",
+      "size": 45657
+    },
+    {
+      "pluginID": "slack",
+      "pluginVersion": "0.1.2",
+      "name": "anybox-plugin-slack-0.1.2.zip",
+      "sha256": "8e07d8bc3e84cb42ddc499eaed044f477c95531d53167ede8e1522f9a3cd9134",
+      "size": 85926
+    },
+    {
+      "pluginID": "smtp-email",
+      "pluginVersion": "0.1.0",
+      "name": "anybox-plugin-smtp-email-0.1.0.zip",
+      "sha256": "a5ef3fa31fc3bb5a3c49db4618b203ccebf7a88940e3f66a27d28fd729bfb51b",
+      "size": 10137
+    },
+    {
+      "pluginID": "spreadsheets",
+      "pluginVersion": "0.1.0",
+      "name": "anybox-plugin-spreadsheets-0.1.0.zip",
+      "sha256": "404638688b8a1bda2a6a338e7283b2243bf062d829381ed51516b0e2bcb71e63",
+      "size": 284134
+    },
+    {
+      "pluginID": "stripe",
+      "pluginVersion": "1.0.2",
+      "name": "anybox-plugin-stripe-1.0.2.zip",
+      "sha256": "eaba6688a33d9f7d53b53e892e779848783e34f42fc0c085edfdda187c08c68c",
+      "size": 22746
+    },
+    {
+      "pluginID": "supabase",
+      "pluginVersion": "0.1.4",
+      "name": "anybox-plugin-supabase-0.1.4.zip",
+      "sha256": "a4238cddc1f2510c5f3d44aaf9ff65bf1b87b4dcbbf81467ed8ac54dc0a60350",
+      "size": 44381
+    },
+    {
+      "pluginID": "superpowers",
+      "pluginVersion": "6.0.3",
+      "name": "anybox-plugin-superpowers-6.0.3.zip",
+      "sha256": "5af4f8d4707e7e5daf10d9db178fac04dfb595fb4b2071ca276e4722a98e5a56",
+      "size": 228150
+    },
+    {
+      "pluginID": "teams",
+      "pluginVersion": "0.1.3",
+      "name": "anybox-plugin-teams-0.1.3.zip",
+      "sha256": "1af872dfa5b33ffb12d1b1552fed5733c983aa3e5e9aa816dcaedf4025c3391f",
+      "size": 36638
+    },
+    {
+      "pluginID": "temporal",
+      "pluginVersion": "0.2.2",
+      "name": "anybox-plugin-temporal-0.2.2.zip",
+      "sha256": "0bcd5dd1466c4f4089e5c162f794358ff21925bbbdef94c7fd135a8cad4b054d",
+      "size": 239769
+    },
+    {
+      "pluginID": "test-android-apps",
+      "pluginVersion": "0.1.2",
+      "name": "anybox-plugin-test-android-apps-0.1.2.zip",
+      "sha256": "5214edd8e7341f7de079369e80c75c5503407aa07b544ff17b1907d5fb595f7a",
+      "size": 99968
+    },
+    {
+      "pluginID": "test-plugin",
+      "pluginVersion": "1.0.0",
+      "name": "anybox-plugin-test-plugin-1.0.0.zip",
+      "sha256": "6e0d4d90354eea2ec15a8fc0f5e3a61e6ebde82ce782c9be994909ba2fcde7c7",
+      "size": 1388
+    },
+    {
+      "pluginID": "twilio-developer-kit",
+      "pluginVersion": "0.2.0",
+      "name": "anybox-plugin-twilio-developer-kit-0.2.0.zip",
+      "sha256": "47060a2173097996fe838cc28ecf62fe5a0109c5bcec0c412001c7b248cdbe2b",
+      "size": 1091983
+    },
+    {
+      "pluginID": "vercel",
+      "pluginVersion": "0.44.0",
+      "name": "anybox-plugin-vercel-0.44.0.zip",
+      "sha256": "5c2c31a8bf2de69b125ac61b75d200f14ce8470a9b8de377b4723097fbadfc19",
+      "size": 573422
+    },
+    {
+      "pluginID": "zotero",
+      "pluginVersion": "0.1.2",
+      "name": "anybox-plugin-zotero-0.1.2.zip",
+      "sha256": "febc7bc4d1b05867709240f185a85064c889544a27590f411f3ec34ac72a23a5",
+      "size": 31940
+    }
+  ]
+}
