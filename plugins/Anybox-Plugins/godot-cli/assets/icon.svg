@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Godot CLI">
+  <rect width="128" height="128" rx="28" fill="#478CBF"/>
+  <path d="M31 36h66a13 13 0 0 1 13 13v40a13 13 0 0 1-13 13H31a13 13 0 0 1-13-13V49a13 13 0 0 1 13-13Z" fill="#182433" opacity=".96"/>
+  <path d="m34 58 13 11-13 11" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M59 81h31" fill="none" stroke="#8EE6FF" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="96" cy="52" r="5" fill="#70D6A8"/>
+</svg>

@@ -31,11 +31,11 @@ const registry = JSON.parse(readFileSync(registryFile, "utf8")) as {
 }
 const registryPlugin = registry.plugins?.find((plugin) => plugin.id === pluginID)
 if (
-  registry.pluginCount !== 59
-  || registry.plugins?.length !== 59
+  registry.pluginCount !== 60
+  || registry.plugins?.length !== 60
   || !registryPlugin
 ) {
-  throw new Error(`Release registry must contain 59 plugins including '${pluginID}'.`)
+  throw new Error(`Release registry must contain 60 plugins including '${pluginID}'.`)
 }
 
 const dataRoot = await mkdtemp(join(tmpdir(), "anybox-plugin-release-smoke-"))
@@ -85,7 +85,7 @@ try {
   if (
     !catalogResponse.ok
     || !catalogBody.success
-    || catalogBody.data?.length !== 59
+    || catalogBody.data?.length !== 60
     || !catalogBody.data.some((plugin) => plugin.id === pluginID)
   ) {
     throw new Error(`Release catalog smoke failed: ${JSON.stringify(catalogBody)}`)
@@ -125,7 +125,7 @@ try {
   }
 
   console.log(
-    `[plugin-release] installed ${pluginID}@${registryPlugin.version} from one immutable Release ZIP; catalog=59; api.github.com=0`,
+    `[plugin-release] installed ${pluginID}@${registryPlugin.version} from one immutable Release ZIP; catalog=60; api.github.com=0`,
   )
 } finally {
   globalThis.fetch = originalFetch

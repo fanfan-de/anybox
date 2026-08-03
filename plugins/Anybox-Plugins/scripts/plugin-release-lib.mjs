@@ -17,7 +17,7 @@ import { deflateRawSync } from "node:zlib"
 export const PLUGIN_RELEASE_REGISTRY_FILENAME = "anybox-plugin-registry-v2.json"
 export const PLUGIN_RELEASE_MANIFEST_FILENAME = "anybox-plugin-release-manifest.json"
 export const MAX_PLUGIN_PACKAGE_BYTES = 100 * 1024 * 1024
-export const CURRENT_PLUGIN_COUNT = 59
+export const CURRENT_PLUGIN_COUNT = 60
 
 const PLUGIN_MANIFEST_PATH = ".anybox-plugin/plugin.json"
 const RELEASE_OWNER = "fanfan-de"

@@ -173,12 +173,12 @@ try {
   const ids = catalog.data.map((plugin) => plugin.id)
   const uniqueIDs = new Set(ids)
   if (
-    ids.length !== 59
-    || uniqueIDs.size !== 59
+    ids.length !== 60
+    || uniqueIDs.size !== 60
     || !["chrome", "computer-use-windows", "cinema"].every((id) => uniqueIDs.has(id))
   ) {
     throw new Error(
-      `Remote Release catalog must contain exactly 59 plugins, got ${ids.length}: ${ids.join(", ")}`,
+      `Remote Release catalog must contain exactly 60 plugins, got ${ids.length}: ${ids.join(", ")}`,
     )
   }
   if (registryRequestCount !== 1) {
@@ -191,14 +191,14 @@ try {
   if (
     cache.protocol !== "release-registry-v2"
     || cache.registryURL !== registryURL
-    || cache.registry?.pluginCount !== 59
+    || cache.registry?.pluginCount !== 60
   ) {
     throw new Error(`The validated remote registry was not cached atomically: ${JSON.stringify(cache)}`)
   }
 
   await close(registryServer)
   const offlineCatalog = await request(port, "/api/plugins/catalog?freshness=fresh")
-  if (!offlineCatalog.success || offlineCatalog.data?.length !== 59) {
+  if (!offlineCatalog.success || offlineCatalog.data?.length !== 60) {
     throw new Error(`Validated registry cache was unavailable offline: ${JSON.stringify(offlineCatalog)}`)
   }
 

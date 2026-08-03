@@ -1,0 +1,60 @@
+{
+  "name": "godot-cli",
+  "version": "0.6.0",
+  "description": "Use a local, authenticated CLI to inspect and safely control an open Godot 4.6 editor.",
+  "author": {
+    "name": "Anybox"
+  },
+  "license": "MIT",
+  "keywords": [
+    "godot",
+    "godot-4.6",
+    "cli",
+    "editor",
+    "game-development",
+    "local-only"
+  ],
+  "skills": "skills",
+  "interface": {
+    "displayName": {
+      "en-US": "Godot CLI",
+      "zh-CN": "Godot CLI"
+    },
+    "shortDescription": {
+      "en-US": "Safely operate an open Godot 4.6 editor through a local CLI.",
+      "zh-CN": "通过本地 CLI 安全操作已打开的 Godot 4.6 编辑器。"
+    },
+    "longDescription": {
+      "en-US": "A skill-only, Windows x86_64 plugin that bundles the Godot CLI editor addon and Rust executable. It uses authenticated loopback communication, defaults to read-only operations, and requires explicit approval for every editor write. It does not add MCP, HTTP services, or another runtime.",
+      "zh-CN": "仅包含 Skill 的 Windows x86_64 插件，随包提供 Godot CLI 编辑器插件与 Rust 可执行文件。它使用经过认证的环回通信，默认只读，每次编辑器写入都必须明确确认；不引入 MCP、HTTP 服务或额外运行时。"
+    },
+    "developerName": "Anybox",
+    "category": "Code",
+    "capabilities": [
+      "Godot 4.6",
+      "CLI",
+      "Editor Automation",
+      "Local Only"
+    ],
+    "defaultPrompt": [
+      "把 Godot CLI 安装到当前 Godot 项目",
+      "检查已打开的 Godot 场景",
+      "使用 Godot CLI 安全修改当前场景"
+    ],
+    "logo": "./assets/icon.svg",
+    "iconUrl": "./assets/icon.svg",
+    "brandColor": "#478CBF"
+  },
+  "skillPreviews": [
+    {
+      "name": "godot-cli",
+      "description": "通过 godot-cli 检查并安全控制已打开的 Godot 4.6 编辑器。",
+      "directory": "godot-cli"
+    },
+    {
+      "name": "godot-cli-setup",
+      "description": "将插件自带的 Godot CLI 编辑器插件和 Windows CLI 安装、升级、验证或卸载到指定 Godot 项目。",
+      "directory": "godot-cli-setup"
+    }
+  ]
+}

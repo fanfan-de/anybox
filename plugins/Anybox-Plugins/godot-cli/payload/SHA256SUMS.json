@@ -1,0 +1,427 @@
+{
+  "schemaVersion": 1,
+  "pluginID": "godot-cli",
+  "version": "0.6.0",
+  "files": [
+    {
+      "source": "addons/godot_cli/core/bridge_constants.gd",
+      "target": "addons/godot_cli/core/bridge_constants.gd",
+      "sha256": "cddbec7736cfb682127c7dd13aae989789c6c0012c4b64e9e778d2eff6e3e9a2",
+      "size": 3048
+    },
+    {
+      "source": "addons/godot_cli/core/bridge_constants.gd.uid",
+      "target": "addons/godot_cli/core/bridge_constants.gd.uid",
+      "sha256": "9948f751f02597f73a132657a464392b1c1269e524e88c01863c9c12890bdb1d",
+      "size": 20
+    },
+    {
+      "source": "addons/godot_cli/core/rpc_dispatcher.gd",
+      "target": "addons/godot_cli/core/rpc_dispatcher.gd",
+      "sha256": "2203e54e19e502b45656779e1e1da585ca940cd3058b780ca14c0d6712ca0a47",
+      "size": 9864
+    },
+    {
+      "source": "addons/godot_cli/core/rpc_dispatcher.gd.uid",
+      "target": "addons/godot_cli/core/rpc_dispatcher.gd.uid",
+      "sha256": "399884ae8c05e20907c8ff013ab94e155fb0e86b7c249d28beb5dd307141bf18",
+      "size": 20
+    },
+    {
+      "source": "addons/godot_cli/core/schema_validator.gd",
+      "target": "addons/godot_cli/core/schema_validator.gd",
+      "sha256": "01dc634e0021558cd2b74772aeab0fdbefe0d59a29a42c14605c4b6b81e237f5",
+      "size": 6861
+    },
+    {
+      "source": "addons/godot_cli/core/schema_validator.gd.uid",
+      "target": "addons/godot_cli/core/schema_validator.gd.uid",
+      "sha256": "9c141e98b09a9091313b58b4c2237c714503424bc6e363a21fda18d0f9724a7a",
+      "size": 20
+    },
+    {
+      "source": "addons/godot_cli/core/tool_definition.gd",
+      "target": "addons/godot_cli/core/tool_definition.gd",
+      "sha256": "27255c335bc5306d7f58543fc58c36703ffdc337ee49f35fa0635344698b796f",
+      "size": 840
+    },
+    {
+      "source": "addons/godot_cli/core/tool_definition.gd.uid",
+      "target": "addons/godot_cli/core/tool_definition.gd.uid",
+      "sha256": "c97808d6e7223d9885d9c6da8f5725c38020a6b8294dcad2744a08d179a05409",
+      "size": 20
+    },
+    {
+      "source": "addons/godot_cli/core/tool_executor.gd",
+      "target": "addons/godot_cli/core/tool_executor.gd",
+      "sha256": "a12f3305f3b586ab88db10c7a47d7e28e97efedbb3ab140ad626c173a75de2f5",
+      "size": 2334
+    },
+    {
+      "source": "addons/godot_cli/core/tool_executor.gd.uid",
+      "target": "addons/godot_cli/core/tool_executor.gd.uid",
+      "sha256": "c53e095343164004d54a89bc25acfe3453224e63c986b272f9759727e0c2c0e8",
+      "size": 19
+    },
+    {
+      "source": "addons/godot_cli/core/tool_registry.gd",
+      "target": "addons/godot_cli/core/tool_registry.gd",
+      "sha256": "46fb88f54ef9b9b8f1a70bbc3a8edab116d5075b483fe4bc5ff22165222bf89e",
+      "size": 2663
+    },
+    {
+      "source": "addons/godot_cli/core/tool_registry.gd.uid",
+      "target": "addons/godot_cli/core/tool_registry.gd.uid",
+      "sha256": "9c03b9082bc93392188303b3daa9845d93016dee0e6aecb710436215a0173204",
+      "size": 20
+    },
+    {
+      "source": "addons/godot_cli/debug/bridge_debug_state.gd",
+      "target": "addons/godot_cli/debug/bridge_debug_state.gd",
+      "sha256": "9a34e993a62ae59d84ae83795848bb005d288de4b4cbb97dc39e97deb75e8153",
+      "size": 9544
+    },
+    {
+      "source": "addons/godot_cli/debug/bridge_debug_state.gd.uid",
+      "target": "addons/godot_cli/debug/bridge_debug_state.gd.uid",
+      "sha256": "9d09b30ea939b92a6cb26494a20326d88193091edd2b4612adcf338a3ca6985e",
+      "size": 21
+    },
+    {
+      "source": "addons/godot_cli/debug/bridge_debugger_plugin.gd",
+      "target": "addons/godot_cli/debug/bridge_debugger_plugin.gd",
+      "sha256": "19c54b6e651f2f709cb35420978d9b1b1b2b8259424dc7ad247d4a59d3d7c431",
+      "size": 5638
+    },
+    {
+      "source": "addons/godot_cli/debug/bridge_debugger_plugin.gd.uid",
+      "target": "addons/godot_cli/debug/bridge_debugger_plugin.gd.uid",
+      "sha256": "459723897ec7bc36937c7a4ee86f6b59fdef3a674ee0f7c253be047820409441",
+      "size": 20
+    },
+    {
+      "source": "addons/godot_cli/observability/tool_usage_tracker.gd",
+      "target": "addons/godot_cli/observability/tool_usage_tracker.gd",
+      "sha256": "f98f934dc21bbc86b193c50699ce89ff8aa254f0cf9a12498c6fbffcb13aad57",
+      "size": 13726
+    },
+    {
+      "source": "addons/godot_cli/observability/tool_usage_tracker.gd.uid",
+      "target": "addons/godot_cli/observability/tool_usage_tracker.gd.uid",
+      "sha256": "7b42fe824af9a7481c1ccc10df163206375cc3a9f16fdb91e78342117fcfe24d",
+      "size": 19
+    },
+    {
+      "source": "addons/godot_cli/plugin.cfg",
+      "target": "addons/godot_cli/plugin.cfg",
+      "sha256": "8839a2e5fc8ae37dadf8fe06755433cb0e35ac5eb8e0f370fcd81a0d39ee5422",
+      "size": 198
+    },
+    {
+      "source": "addons/godot_cli/plugin.gd",
+      "target": "addons/godot_cli/plugin.gd",
+      "sha256": "6398311773b3e0ffbd951692b2c4fa4ec25b453e616a3f432237be6866b23aff",
+      "size": 4140
+    },
+    {
+      "source": "addons/godot_cli/plugin.gd.uid",
+      "target": "addons/godot_cli/plugin.gd.uid",
+      "sha256": "35bab98c793355dc476dcb55ce95247d30b30b184ed4149f1495ed4ffefa7f95",
+      "size": 20
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_class_tools.gd",
+      "target": "addons/godot_cli/tools/bridge_class_tools.gd",
+      "sha256": "c56f548ffb66ffb9e7683c6fe522b535051f1d1a4998ab49a3ca42f86772c452",
+      "size": 20173
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_class_tools.gd.uid",
+      "target": "addons/godot_cli/tools/bridge_class_tools.gd.uid",
+      "sha256": "6fa31e43e665c766e54048bdc53123c520245cc40c7787f03efc08ef1a650d63",
+      "size": 20
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_editor_tools.gd",
+      "target": "addons/godot_cli/tools/bridge_editor_tools.gd",
+      "sha256": "49f9a73b2077da5ecd0e16a3237617238f8d45a830e461cfec17fd25d09c84b9",
+      "size": 1627
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_editor_tools.gd.uid",
+      "target": "addons/godot_cli/tools/bridge_editor_tools.gd.uid",
+      "sha256": "d67ec60a6891e7517675dbfe40a0304db01bd7c9c7e9e4de43c21c64c69aa3d8",
+      "size": 20
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_node_name_guard.gd",
+      "target": "addons/godot_cli/tools/bridge_node_name_guard.gd",
+      "sha256": "453f2d2389a2e2ff585a9bed1b3518bb208f5f8ee8ef0da60f21c7dea59edbaf",
+      "size": 306
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_node_name_guard.gd.uid",
+      "target": "addons/godot_cli/tools/bridge_node_name_guard.gd.uid",
+      "sha256": "e097925d7bb5f06c1866dbc2f0d681baafb9b9656437c405eff0006736317fa2",
+      "size": 20
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_node_tools.gd",
+      "target": "addons/godot_cli/tools/bridge_node_tools.gd",
+      "sha256": "3362695620af488919295f747636397903af4d01a56abb3fbc45b399d4fdbc37",
+      "size": 105249
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_node_tools.gd.uid",
+      "target": "addons/godot_cli/tools/bridge_node_tools.gd.uid",
+      "sha256": "4810479a44625f24b2cc3baa783e19af3159caf2db758cff3e42c8bb9634c14a",
+      "size": 20
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_project_tools.gd",
+      "target": "addons/godot_cli/tools/bridge_project_tools.gd",
+      "sha256": "e9676e5ed9ed0ab19b943b60195b367794705ff094e0d5eb41a914faf649035f",
+      "size": 1701
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_project_tools.gd.uid",
+      "target": "addons/godot_cli/tools/bridge_project_tools.gd.uid",
+      "sha256": "3d191a2b9b08b9c43b1002f1b15eabf6c223cda7a4a9ec8e33a76ee03874e037",
+      "size": 19
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_resource_tools.gd",
+      "target": "addons/godot_cli/tools/bridge_resource_tools.gd",
+      "sha256": "307b9bfd90cad96434e0e71f5806fcf4fb1e55e179c278db9cae830553ad1efe",
+      "size": 43331
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_resource_tools.gd.uid",
+      "target": "addons/godot_cli/tools/bridge_resource_tools.gd.uid",
+      "sha256": "5fe7265c023c8a6e378f649ea501b8b6ba665ddb160ade45ff76481e8aec75cc",
+      "size": 21
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_resource_type_guard.gd",
+      "target": "addons/godot_cli/tools/bridge_resource_type_guard.gd",
+      "sha256": "d1b05942141d0b7b3ff7e8c3b716a5fcff3f7b8d84e74d210b4c0c6b6339216e",
+      "size": 2458
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_resource_type_guard.gd.uid",
+      "target": "addons/godot_cli/tools/bridge_resource_type_guard.gd.uid",
+      "sha256": "6e6932343aafd67cf2f578fdd8cb0eae05395ba1afa423860f4e63032786a600",
+      "size": 21
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_run_tools.gd",
+      "target": "addons/godot_cli/tools/bridge_run_tools.gd",
+      "sha256": "61218f7e5dcb8b29ccafd2411786040240ce907e12e6cc6c229f360d59519968",
+      "size": 14630
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_run_tools.gd.uid",
+      "target": "addons/godot_cli/tools/bridge_run_tools.gd.uid",
+      "sha256": "3d4f50075561fcc02aa5751d507ee8158bdf8f8ba7928ca39d16e002821aa2ed",
+      "size": 20
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_runtime_node_type_guard.gd",
+      "target": "addons/godot_cli/tools/bridge_runtime_node_type_guard.gd",
+      "sha256": "eef613e7654fc77fe41a60951a04176b07b9e153cd38a2eb229bd2e8778d655f",
+      "size": 873
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_runtime_node_type_guard.gd.uid",
+      "target": "addons/godot_cli/tools/bridge_runtime_node_type_guard.gd.uid",
+      "sha256": "0838f47c28b9711c48ad7900b01873a16333a83d5e5a69d228b6e13be7af7c90",
+      "size": 21
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_scene_tools.gd",
+      "target": "addons/godot_cli/tools/bridge_scene_tools.gd",
+      "sha256": "9c572fc41ab31351ddd1311a49ac8637ef383d708c20ade6bc84ba191d23dac4",
+      "size": 22997
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_scene_tools.gd.uid",
+      "target": "addons/godot_cli/tools/bridge_scene_tools.gd.uid",
+      "sha256": "4c5420cd17cbaeda7b723fb2eb43d74f4f2cd4b7c472040f84a82f3517557970",
+      "size": 19
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_signal_tools.gd",
+      "target": "addons/godot_cli/tools/bridge_signal_tools.gd",
+      "sha256": "c966ffc938c2cd82cc51f27731baa277da49222cc321c6cc361f293c1ddcda03",
+      "size": 33111
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_signal_tools.gd.uid",
+      "target": "addons/godot_cli/tools/bridge_signal_tools.gd.uid",
+      "sha256": "8a56c3ec41890ce06d24dfe253a3f03d627d8f7bd894330ae501dfbe3daf093b",
+      "size": 20
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_tool_context.gd",
+      "target": "addons/godot_cli/tools/bridge_tool_context.gd",
+      "sha256": "4450d078c91c2df9b146d3e9ce4b341a4ae2fd463e85505a90f9d1b5fd2a60b5",
+      "size": 6546
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_tool_context.gd.uid",
+      "target": "addons/godot_cli/tools/bridge_tool_context.gd.uid",
+      "sha256": "6db1603d324e1a84ac14ca79391f1da0a948feeb3526bb7acc2696f3b45d62c5",
+      "size": 20
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_tool_module.gd",
+      "target": "addons/godot_cli/tools/bridge_tool_module.gd",
+      "sha256": "a5e7c25e3e631e1c3508a6229506965547a0585fd3831850a5cc7eb437d87ec3",
+      "size": 1111
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_tool_module.gd.uid",
+      "target": "addons/godot_cli/tools/bridge_tool_module.gd.uid",
+      "sha256": "d6100d42a623dc97770d7c27b37f9effd331fe72e5e99da1657ab678a1e162cf",
+      "size": 20
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_tool_results.gd",
+      "target": "addons/godot_cli/tools/bridge_tool_results.gd",
+      "sha256": "ee97b87e6124c544d76bc0e1799c951c4a00ef347bc151bf464380dcbdb43d99",
+      "size": 357
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_tool_results.gd.uid",
+      "target": "addons/godot_cli/tools/bridge_tool_results.gd.uid",
+      "sha256": "54a17329109b9c1353bbb1ef30614cd7916eb126fb944f826c42125d6fed9c55",
+      "size": 20
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_tools.gd",
+      "target": "addons/godot_cli/tools/bridge_tools.gd",
+      "sha256": "1df96b2107d57d12a2b09c5f9ff60fb06d5bf43c7164b5d0dece2cf668d224cb",
+      "size": 1210
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_tools.gd.uid",
+      "target": "addons/godot_cli/tools/bridge_tools.gd.uid",
+      "sha256": "99f42e36ffb5ede0e70dc16c32c7efea5472e9d9b4bcd7f704128d41e0df35bf",
+      "size": 19
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_variant_codec.gd",
+      "target": "addons/godot_cli/tools/bridge_variant_codec.gd",
+      "sha256": "8964a8eac034582c2e0d17744dd9f121e5b245b80cfbdf25e5772a476ed1f886",
+      "size": 7928
+    },
+    {
+      "source": "addons/godot_cli/tools/bridge_variant_codec.gd.uid",
+      "target": "addons/godot_cli/tools/bridge_variant_codec.gd.uid",
+      "sha256": "1218a9e7e9a62274ab0205d9ba286deecf63cd6113d0eb2bcb1d95011de00739",
+      "size": 20
+    },
+    {
+      "source": "addons/godot_cli/tools/node_path_guard.gd",
+      "target": "addons/godot_cli/tools/node_path_guard.gd",
+      "sha256": "fcb9ce20a7a5eebfa47e7feda51756160cde04255934a42ea4463f46c12e51c0",
+      "size": 1396
+    },
+    {
+      "source": "addons/godot_cli/tools/node_path_guard.gd.uid",
+      "target": "addons/godot_cli/tools/node_path_guard.gd.uid",
+      "sha256": "010aac76a1f00b378872290cd91780493455e2cd8d2d12bd7ed4bd098b85f529",
+      "size": 20
+    },
+    {
+      "source": "addons/godot_cli/tools/scene_path_guard.gd",
+      "target": "addons/godot_cli/tools/scene_path_guard.gd",
+      "sha256": "f949b6c63734dc30ff010ef38d012211efac984223f34cbd16b4197bce85886b",
+      "size": 3275
+    },
+    {
+      "source": "addons/godot_cli/tools/scene_path_guard.gd.uid",
+      "target": "addons/godot_cli/tools/scene_path_guard.gd.uid",
+      "sha256": "6758d83f2b60ef39e7a35a5fb2fef8a893176165d24b222c93cc96f97aef9ae8",
+      "size": 19
+    },
+    {
+      "source": "addons/godot_cli/transport/client_connection.gd",
+      "target": "addons/godot_cli/transport/client_connection.gd",
+      "sha256": "1c1bd11671bb6242f08107662ab7313fdf2ef85e43b39f708bedcbdcdfadb620",
+      "size": 4386
+    },
+    {
+      "source": "addons/godot_cli/transport/client_connection.gd.uid",
+      "target": "addons/godot_cli/transport/client_connection.gd.uid",
+      "sha256": "67c73e84e0b883b33fcfd11b486465f06314c1c6842b58d64c372e6a679cff6d",
+      "size": 20
+    },
+    {
+      "source": "addons/godot_cli/transport/frame_codec.gd",
+      "target": "addons/godot_cli/transport/frame_codec.gd",
+      "sha256": "762198c2ac2382f5c75972dcf277f932ddfc1d62d338a25be7ad5efaf0b3ef59",
+      "size": 2726
+    },
+    {
+      "source": "addons/godot_cli/transport/frame_codec.gd.uid",
+      "target": "addons/godot_cli/transport/frame_codec.gd.uid",
+      "sha256": "edfdf5b3abde13cfe346fe3e3e87cd57aa0e1a4109c6586747e0c1a4ecfed664",
+      "size": 20
+    },
+    {
+      "source": "addons/godot_cli/transport/session_store.gd",
+      "target": "addons/godot_cli/transport/session_store.gd",
+      "sha256": "56aa419f0e0203d737d90fee15a61a04312dfcd5e7e519d15ffa1d7d2c339aed",
+      "size": 3323
+    },
+    {
+      "source": "addons/godot_cli/transport/session_store.gd.uid",
+      "target": "addons/godot_cli/transport/session_store.gd.uid",
+      "sha256": "f247fe6c96809814a607321c72225764d2fd18b4abb33f2c0023162a8602e3dd",
+      "size": 19
+    },
+    {
+      "source": "addons/godot_cli/transport/tcp_bridge_server.gd",
+      "target": "addons/godot_cli/transport/tcp_bridge_server.gd",
+      "sha256": "29e968f28370b05baf490b9d2b7f3b0aca987425f7ce2b144910e49db8b1c747",
+      "size": 7365
+    },
+    {
+      "source": "addons/godot_cli/transport/tcp_bridge_server.gd.uid",
+      "target": "addons/godot_cli/transport/tcp_bridge_server.gd.uid",
+      "sha256": "578a17e78ead32a963699b6b7ed18a70b93d4ef9339c81ca950dc8015c40f1e0",
+      "size": 20
+    },
+    {
+      "source": "addons/godot_cli/ui/status_panel.gd",
+      "target": "addons/godot_cli/ui/status_panel.gd",
+      "sha256": "69b4b0c26aec3825f249a924dbe7c86cedff994d926d7c726d3cefe4d6cdf024",
+      "size": 3758
+    },
+    {
+      "source": "addons/godot_cli/ui/status_panel.gd.uid",
+      "target": "addons/godot_cli/ui/status_panel.gd.uid",
+      "sha256": "4683cbc19484466f3cb41e5e353d9aa49608932557fdc8b644e87377d2eef518",
+      "size": 20
+    },
+    {
+      "source": "addons/godot_cli/ui/tool_usage_panel.gd",
+      "target": "addons/godot_cli/ui/tool_usage_panel.gd",
+      "sha256": "5bb6e85e5137e89ff6ad0b4366fe9596b6ec1473e0293c68b085628d87cdb5d9",
+      "size": 12177
+    },
+    {
+      "source": "addons/godot_cli/ui/tool_usage_panel.gd.uid",
+      "target": "addons/godot_cli/ui/tool_usage_panel.gd.uid",
+      "sha256": "db8fcdca7b6f2069613273331a5cafad1ecb8b213482ff96e6900993a67d555d",
+      "size": 19
+    },
+    {
+      "source": "windows-x86_64/godot-cli.exe",
+      "target": ".godot-cli/bin/godot-cli.exe",
+      "sha256": "91817b23ad50ba959e372412a8cb854efa432bfc9f2ff083933c08a1c7b99739",
+      "size": 1846784
+    }
+  ]
+}

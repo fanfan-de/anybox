@@ -1,0 +1,4 @@
+interface:
+  display_name: "Godot CLI"
+  short_description: "Control an open Godot editor through the local CLI"
+  default_prompt: "Use $godot-cli to inspect this Godot project and make only explicitly confirmed editor changes."
