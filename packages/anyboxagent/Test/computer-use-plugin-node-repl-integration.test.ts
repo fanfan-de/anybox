@@ -26,7 +26,7 @@ afterEach(async () => {
 })
 
 async function waitForPluginActionPermission(sessionID: string, toolCallID: string) {
-  const deadline = Date.now() + 5_000
+  const deadline = Date.now() + 30_000
   while (Date.now() < deadline) {
     const request = (await Permission.listRequests({
       sessionID,

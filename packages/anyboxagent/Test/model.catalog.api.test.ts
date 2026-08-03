@@ -307,7 +307,10 @@ test("normalizes generation form specs from provider manifest inputs", () => {
 
   expect(formSpec).toMatchObject({
     providerID: "klingai-cn",
-    modelID: "klingai-cn/kling-image-3.0-omni",
+    target: {
+      kind: "model",
+      modelID: "klingai-cn/kling-image-3.0-omni",
+    },
     mode: "omni-image",
     output: "image",
   })

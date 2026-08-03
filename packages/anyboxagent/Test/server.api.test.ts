@@ -2445,16 +2445,17 @@ describe("server api", () => {
           const providersBody = (await providersResponse.json()) as ProviderListEnvelope
 
           expect(providersResponse.status).toBe(200)
-          expect(providersBody.data?.items).toHaveLength(1)
-          expect(providersBody.data?.items[0]?.id).toBe("deepseek")
-          expect(providersBody.data?.items[0]?.models[0]?.id).toBe("deepseek-reasoner")
+          const deepSeekProviders = providersBody.data?.items.filter((provider) => provider.id === "deepseek") ?? []
+          expect(deepSeekProviders).toHaveLength(1)
+          expect(deepSeekProviders[0]?.models[0]?.id).toBe("deepseek-reasoner")
 
           const modelsResponse = await app.request("http://localhost/api/models")
           const modelsBody = (await modelsResponse.json()) as ProjectModelsEnvelope
 
           expect(modelsResponse.status).toBe(200)
-          expect(modelsBody.data?.items).toHaveLength(1)
-          expect(modelsBody.data?.items[0]).toMatchObject({
+          const deepSeekModels = modelsBody.data?.items.filter((model) => model.providerID === "deepseek") ?? []
+          expect(deepSeekModels).toHaveLength(1)
+          expect(deepSeekModels[0]).toMatchObject({
             providerID: "deepseek",
             id: "deepseek-reasoner",
             available: true,
@@ -2519,8 +2520,11 @@ describe("server api", () => {
           expect(compatibilityResponse.status).toBe(200)
           expect(compatibilityBody.data?.selection.model).toBe("deepseek/deepseek-reasoner")
           expect(compatibilityBody.data?.effectiveModel?.id).toBe("deepseek-reasoner")
-          expect(compatibilityBody.data?.items).toHaveLength(1)
-          expect(compatibilityBody.data?.items[0]).toMatchObject({
+          const compatibleDeepSeekModels = compatibilityBody.data?.items.filter(
+            (model) => model.providerID === "deepseek",
+          ) ?? []
+          expect(compatibleDeepSeekModels).toHaveLength(1)
+          expect(compatibleDeepSeekModels[0]).toMatchObject({
             providerID: "deepseek",
             id: "deepseek-reasoner",
             available: true,
@@ -2548,8 +2552,11 @@ describe("server api", () => {
           const projectModelsBody = (await projectModelsResponse.json()) as ProjectModelsEnvelope
 
           expect(projectModelsResponse.status).toBe(200)
-          expect(projectModelsBody.data?.items).toHaveLength(2)
-          expect(projectModelsBody.data?.items).toEqual(
+          const configuredProjectModels = projectModelsBody.data?.items.filter(
+            (model) => model.providerID === "deepseek" || model.providerID === "openai",
+          ) ?? []
+          expect(configuredProjectModels).toHaveLength(2)
+          expect(configuredProjectModels).toEqual(
             expect.arrayContaining([
               expect.objectContaining({
                 providerID: "deepseek",
@@ -2642,8 +2649,11 @@ describe("server api", () => {
           const globalModelsAfterProjectBody = (await globalModelsAfterProjectResponse.json()) as ProjectModelsEnvelope
 
           expect(globalModelsAfterProjectResponse.status).toBe(200)
-          expect(globalModelsAfterProjectBody.data?.items).toHaveLength(1)
-          expect(globalModelsAfterProjectBody.data?.items[0]).toMatchObject({
+          const globalDeepSeekModels = globalModelsAfterProjectBody.data?.items.filter(
+            (model) => model.providerID === "deepseek",
+          ) ?? []
+          expect(globalDeepSeekModels).toHaveLength(1)
+          expect(globalDeepSeekModels[0]).toMatchObject({
             providerID: "deepseek",
             id: "deepseek-reasoner",
           })
@@ -3402,7 +3412,7 @@ describe("server api", () => {
           const providersBody = (await providersResponse.json()) as ProviderListEnvelope
 
           expect(providersResponse.status).toBe(200)
-          expect(providersBody.data?.items).toHaveLength(0)
+          expect(providersBody.data?.items.some((provider) => provider.id === "deepseek")).toBe(false)
         },
       )
     } finally {

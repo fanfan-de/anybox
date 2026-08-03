@@ -148,16 +148,20 @@ describe("prompt loop unresolved tool guard", () => {
         expect(result.info.finishReason).toBe("stop")
         expect(streamCalls).toBe(1)
 
-        const assistants: Array<{ info: { id: string; role: string }; parts: any[] }> = []
+        const activeAssistants: Array<{ info: { id: string; role: string }; parts: any[] }> = []
         for await (const item of Message.stream(session.id)) {
           if (item.info.role !== "assistant") continue
-          assistants.push(item)
+          activeAssistants.push(item)
         }
 
-        expect(assistants.map((item) => item.info.id)).toHaveLength(2)
-        expect(assistants.at(-1)?.info.id).toBe(result.info.id)
+        expect(activeAssistants.map((item) => item.info.id)).toEqual([result.info.id])
 
-        const recoveredAssistant = assistants.find((item) => item.info.id === assistant.id)
+        const allAssistants = Message.listAllWithParts(session.id).filter(
+          (item) => item.info.role === "assistant",
+        )
+        expect(allAssistants).toHaveLength(2)
+
+        const recoveredAssistant = allAssistants.find((item) => item.info.id === assistant.id)
         const recoveredTool = recoveredAssistant?.parts.find(
           (part) => part.type === "tool" && part.callID === "call-stuck",
         )

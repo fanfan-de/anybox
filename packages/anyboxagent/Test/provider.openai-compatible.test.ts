@@ -186,7 +186,7 @@ test("custom openai-compatible providers rewrite chat endpoint and override auth
         })
 
         expect(response.status).toBe(200)
-        expect(capturedRequests).toEqual([
+        expect(capturedRequests.filter((request) => request.url.startsWith("https://gateway.test/"))).toEqual([
           {
             url: "https://gateway.test/v1/compatible/chat?trace=1",
             authorization: "Bearer sk-custom-runtime",

@@ -200,18 +200,20 @@ describe("declarative plugin platform artifacts", () => {
       transport: "unix-domain-socket",
       protocolVersion: 1,
     })
-    expect(runtimeConfig.bootstrapPath).toMatch(
+    expect(runtimeConfig.bootstrapPath.replaceAll("\\", "/")).toMatch(
       /^\/tmp\/anybox-browser-[a-f0-9]{16}\/com\.anybox\.browser\.bootstrap\.json$/,
     )
-    expect(runtimeConfig.runtimeEndpoint).toMatch(
+    expect(runtimeConfig.runtimeEndpoint.replaceAll("\\", "/")).toMatch(
       /^\/tmp\/anybox-browser-[a-f0-9]{16}\/runtime-v1-[a-f0-9]{16}\.sock$/,
     )
-    expect(runtimeConfig.nativeHostEndpoint).toMatch(
+    expect(runtimeConfig.nativeHostEndpoint.replaceAll("\\", "/")).toMatch(
       /^\/tmp\/anybox-browser-[a-f0-9]{16}\/native-host-v1-[a-f0-9]{16}\.sock$/,
     )
     expect(Buffer.byteLength(runtimeConfig.runtimeEndpoint)).toBeLessThanOrEqual(103)
     expect(Buffer.byteLength(runtimeConfig.nativeHostEndpoint)).toBeLessThanOrEqual(103)
-    expect((await stat(first!.executablePath)).mode & 0o777).toBe(0o755)
+    if (process.platform !== "win32") {
+      expect((await stat(first!.executablePath)).mode & 0o777).toBe(0o755)
+    }
 
     const [second] = await installPlatformArtifacts({
       ...installInput,
@@ -219,7 +221,9 @@ describe("declarative plugin platform artifacts", () => {
     })
     expect(second!.ownershipID).toBe(first!.ownershipID)
     expect(second!.executablePath).toBe(first!.executablePath)
-    expect((await stat(second!.executablePath)).mode & 0o777).toBe(0o755)
+    if (process.platform !== "win32") {
+      expect((await stat(second!.executablePath)).mode & 0o777).toBe(0o755)
+    }
 
     await expect(removePlatformArtifacts({
       pluginID: "chrome",

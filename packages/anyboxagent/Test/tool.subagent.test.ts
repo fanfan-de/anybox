@@ -44,6 +44,22 @@ mock.module("#provider/provider.ts", () => ({
       },
     },
   }),
+  getProviderSourceModel: async () => ({
+    id: "test-model",
+    providerID: "test-provider",
+    capabilities: {
+      reasoning: false,
+      attachment: false,
+      toolcall: true,
+      input: {
+        text: true,
+        audio: false,
+        image: false,
+        video: false,
+        pdf: false,
+      },
+    },
+  }),
   getLanguage: async (model: Record<string, unknown>) => model,
 }))
 
