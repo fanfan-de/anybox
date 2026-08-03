@@ -31,13 +31,13 @@ plugins/Anybox-Plugins/                                仓库内插件包集合
 
 ## 2. 插件包布局
 
-仓库内插件源码推荐采用 Codex-like 展开目录，manifest 入口为：
+仓库内插件源码采用展开目录，规范 manifest 入口为：
 
 ```text
 <plugin-id>/.anybox-plugin/plugin.json
 ```
 
-版本化入口：
+只有同一来源需要并存多个版本时才使用版本目录：
 
 ```text
 <plugin-id>/<version>/.anybox-plugin/plugin.json
@@ -59,16 +59,16 @@ plugins/Anybox-Plugins/                                仓库内插件包集合
     server.js
   docs/
   assets/
-  <plugin-id>-<version>.zip # 可选：远程 registry 安装包
 ```
 
 注意：
 
-- `plugin.json` 必须放在插件包根目录下的 `.anybox-plugin/plugin.json`；根目录 `plugin.json` 不再作为 manifest 入口。
+- 新插件使用 `.anybox-plugin/plugin.json`；根目录 `plugin.json` 和 `.codex-plugin/plugin.json` 仅作为兼容输入。
 - `skills`、`connectors`、`scripts` 等放在插件包根目录下。
-- 当前实现从 `plugin.json` 读取 connector 声明，尚未扫描独立的 `connectors/<id>/connector.json`。
+- `connectors`、`mcpServers` 和 `hooks` 可以内联，也可以指向插件包内的相对 JSON 文件；当前不会独立扫描 `connectors/<id>/connector.json`。
 - 插件 ID 来自 manifest `name` 的 trim + lowercase 结果，目录名、manifest `name` 和 registry ID 应保持一致。
 - 一个插件源里如果直接包没有 `.anybox-plugin/plugin.json`、但存在多个版本目录，catalog 会按 manifest `version` 选最高版本。
+- 版本化 ZIP 只保存在仓库级 `.catalog/packages/`，不放进展开式插件源码目录。
 
 ## 3. Manifest Schema
 
@@ -115,29 +115,33 @@ plugins/Anybox-Plugins/                                仓库内插件包集合
 
 ### 4.1 包扫描来源
 
-`packageSearchRoots()` 按顺序扫描：
+`packageSearchRoots()` 始终包含：
 
-1. Agent 内置插件包：`packages/anyboxagent/plugins/builtin/<plugin-id>/<version>`。
-2. 仓库插件包：`plugins/Anybox-Plugins/<plugin-id>`，也兼容 `<plugin-id>/<version>`。
-3. 本地开发插件仓库：`ANYBOX_PLUGIN_LOCAL_DIR`，未设置时为 Agent data 下的 `plugins/local`。
-4. 受管理安装目录：`ANYBOX_PLUGIN_INSTALL_DIR`，未设置时为 Agent data 下的 `plugins/installed`。
+1. 本地开发插件仓库：`ANYBOX_PLUGIN_LOCAL_DIR`，未设置时为 Agent data 下的 `plugins/local`。
+2. 受管理安装目录：`ANYBOX_PLUGIN_INSTALL_DIR`，未设置时为 Agent data 下的 `plugins/installed`。
 
-前面的来源会先进入合并表，后面的同 ID 来源会覆盖前面的同 ID 来源。本地开发目录和仓库目录只作为候选来源；安装时会复制到受管理安装目录。
+只有显式设置 `ANYBOX_PLUGIN_INCLUDE_SOURCE_PACKAGES=1` 时，才额外扫描 Agent 源码中的 `packages/anyboxagent/plugins/builtin` 和仓库源码中的 `plugins/Anybox-Plugins`。桌面开发版与正式版默认都将该变量设为 `0`，从而保持生产一致性。
+
+前面的来源会先进入合并表，后面的同 ID 来源会覆盖前面的同 ID 来源。本地开发目录和显式启用的源码目录只作为候选来源；安装时会复制到受管理安装目录。
 
 ### 4.2 Registry 来源
 
 除本地包外，还支持 registry：
 
 - 本地 registry 文件：仓库内 `plugins/registry/plugin-registry.json` 及 `ANYBOX_PLUGIN_REGISTRY_FILES` 指定的文件。
-- 远程 registry index：`ANYBOX_PLUGIN_REGISTRY_INDEX_URL`，默认指向 GitHub 上的 Anybox plugin index。
-- 远程 index 返回直接 HTTPS manifest URL 列表，每个条目必须指向 `<plugin-id>/.anybox-plugin/plugin.json`。目录 URL、`plugin.meta.json` 和根目录 `plugin.json` 不再作为 registry 入口。
-- 远程 metadata 可缓存到 `ANYBOX_PLUGIN_REGISTRY_CACHE_DIR`。
+- 远程 Registry：`ANYBOX_PLUGIN_REGISTRY_INDEX_URL`。桌面开发版、正式版和未覆盖配置的独立 Agent 默认都读取 `https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/.catalog/anybox-plugin-registry.json`。
+- 默认文件是 schema v3 Catalog Registry，直接嵌入完整目录条目和版本化 ZIP 元数据；兼容的 manifest URL 列表与旧 v2 Release Registry 仍可作为显式输入。
+- `plugins/Anybox-Plugins/index.json` 只是本地 Catalog 的源码清单输入，不是默认运行时目录。
+- 成功的远程目录按 URL 和协议版本整体缓存；`ANYBOX_PLUGIN_REGISTRY_CACHE_DIR` 可以覆盖缓存目录。
 
-Registry item 可以只有展示 metadata，也可以携带 zip 包下载信息。zip 是远程安装发布产物；仓库源码仍应以展开目录提交，便于审查和本地开发：
+正式 schema v3 条目必须携带 ZIP URL、SHA-256 和精确字节数。仓库源码仍以展开目录提交，版本化 ZIP 由本地命令写入 `.catalog/packages/`：
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 3,
+  "catalogID": "anybox-plugins",
+  "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "pluginCount": 1,
   "plugins": [
     {
       "id": "remote-lab",
@@ -146,7 +150,7 @@ Registry item 可以只有展示 metadata，也可以携带 zip 包下载信息�
       "description": "Remote fixture plugin.",
       "package": {
         "type": "zip",
-        "url": "https://cdn.example.test/remote-lab.zip",
+        "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/.catalog/packages/anybox-plugin-remote-lab-1.2.3.zip",
         "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "size": 12345
       }
@@ -163,7 +167,7 @@ Registry item 可以只有展示 metadata，也可以携带 zip 包下载信息�
 - 从 `mcpServers`、`mcpRequirements`、`connectors`、`connectorRequirements`、`skills` 汇总权限、工具预览、配置字段和风险等级。
 - 若本地包存在，会读取 `skills/<skill>/SKILL.md` 的 frontmatter 生成 skill preview。
 - 风险等级取各能力最高风险；`critical` 插件会出现在 catalog 中，但安装会被拒绝。
-- `installable` 由本地包存在或 registry zip 下载信息完整决定。
+- `installable` 由本地包存在或 Registry package 下载信息完整决定。
 
 ## 5. 安装、更新和卸载
 
@@ -173,8 +177,8 @@ Registry item 可以只有展示 metadata，也可以携带 zip 包下载信息�
 
 1. `ensurePluginPackageAvailable(pluginID)` 确保插件包可用：
    - 已在受管理安装目录：直接使用。
-   - 来自内置/仓库/本地开发目录：复制到受管理安装目录。
-   - 来自 registry：下载 zip、校验并解压到受管理安装目录。
+   - 来自本地开发目录或显式启用的仓库源码目录：复制到受管理安装目录。
+   - 来自 Registry：按目录中的固定 URL 下载 ZIP、校验并解压到受管理安装目录。
 2. `assertPackagePlugin(pluginID)` 从本地包读取并规范化 catalog item。
 3. 生成 `InstalledPlugin` 记录：
    - `pluginID`
@@ -200,9 +204,9 @@ Registry zip 安装会做以下校验：
 - URL 不允许携带用户名或密码。
 - 下载大小不能超过上限，且可校验声明的 `size`。
 - SHA-256 必须匹配 registry metadata。
-- 解压后不允许 symlink。
-- 解压后的路径必须留在 staging 目录内，防止路径穿越。
+- 拒绝空包、重复路径、symlink、路径穿越和超限解压内容。
 - zip 内必须有且仅有一个 manifest 匹配 registry 中声明的插件 ID 和版本。
+- 先在临时目录完成复制和校验，再原子切换安装目录；失败时保留原有可用版本。
 
 ### 5.3 更新
 
@@ -573,7 +577,7 @@ Skill 文件浏览通过 `listInstalledPluginSkillEntries` 和 `readInstalledPlu
 `calendar` 插件是普通 `mcpServers` 模式的代表：
 
 ```text
-plugins/Anybox-Plugins/calendar/0.1.0/
+plugins/Anybox-Plugins/calendar/
   .anybox-plugin/plugin.json
   scripts/server.js
 ```
@@ -617,6 +621,7 @@ packages/anyboxagent/Test/calendar-plugin.test.ts
 - catalog 读取和风险过滤。
 - 本地插件源安装后不删除源包。
 - 远程 registry metadata 加载和缓存回退。
+- schema v3 Catalog Registry 的整体验证、稳定 URL 和 ZIP 大小/SHA-256 校验。
 - registry-only metadata 的不可安装状态。
 - 普通 MCP 插件安装、禁用、诊断、卸载。
 - critical 风险插件安装拒绝。
@@ -646,19 +651,40 @@ packages/anyboxagent/Test/calendar-plugin.test.ts
 
 ## 17. 调试建议
 
-列出 catalog：
+使用独立本地插件来源列出 catalog：
 
 ```powershell
 cd C:\Projects\Anybox\packages\anyboxagent
+$env:ANYBOX_PLUGIN_LOCAL_DIR = "C:\path\to\plugin-source-root"
 $env:ANYBOX_PLUGIN_REGISTRY_INDEX_URL = "off"
 bun -e "import * as Plugin from './src/plugin/plugin.ts'; console.log(JSON.stringify(await Plugin.listCatalog(), null, 2))"
 ```
 
+直接调试 Anybox 仓库中的源码插件时，显式设置：
+
+```powershell
+$env:ANYBOX_PLUGIN_INCLUDE_SOURCE_PACKAGES = "1"
+```
+
+生产一致性验证必须保持该变量为 `0`，让开发版和正式版都读取稳定的远程 Registry。
+
 运行插件系统测试：
 
 ```powershell
-cd C:\Projects\Anybox\packages\anyboxagent
+cd C:\Projects\Anybox
+pnpm plugins:index:check
+pnpm plugins:catalog:test
+
+cd packages\anyboxagent
 bun test Test/plugin.test.ts
+```
+
+准备和复验正式仓库目录：
+
+```powershell
+cd C:\Projects\Anybox
+pnpm plugins:catalog:prepare
+pnpm plugins:catalog:verify
 ```
 
 检查某个插件安装后生成的 MCP server：
@@ -671,7 +697,7 @@ bun -e "import * as Config from './src/config/config.ts'; console.log(await Conf
 常见排查顺序：
 
 1. `plugin.json` 是否是合法 JSON，且顶层字段被 schema 支持。
-2. 插件目录是否位于扫描根目录下，且采用 `<plugin-id>/.anybox-plugin/plugin.json`，或版本化的 `<plugin-id>/<version>/.anybox-plugin/plugin.json`。
+2. 新插件是否采用 `<plugin-id>/.anybox-plugin/plugin.json`；兼容输入或版本目录是否确有必要。
 3. catalog 是否能看到插件，`installable` 是否为 `true`。
 4. required `configFields` 是否已提供或有 defaultValue。
 5. 安装记录里 `mcpServerIDs`、`connectorIDs`、`skillIDs` 是否符合预期。
@@ -680,3 +706,4 @@ bun -e "import * as Config from './src/config/config.ts'; console.log(await Conf
 8. 对 plugin-owned connector，credential store 中是否已有 API key 或 OAuth session。
 9. 对 stdio runtime，命令、工作目录、参数路径是否能在本机启动。
 10. 运行诊断接口确认 MCP server 是否能返回 `tools/list`。
+11. 正式目录是否通过 `plugins:catalog:verify`，且 `.catalog` 已作为普通 Git 文件提交。

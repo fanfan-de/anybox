@@ -151,9 +151,10 @@ pnpm site:build
 |   |-- site/                Public website and docs
 |   |-- mobile-app/          Companion mobile app
 |   `-- chrome-plugin/       Complete Chrome integration source project
-|-- plugins/                 Bundled and local plugin packages
+|-- plugins/                 Curated plugin sources and locally generated catalog
 |   `-- Anybox-Plugins/
-|       `-- chrome/          Generated Chrome plugin directory downloaded by Anybox
+|       |-- <plugin-id>/     Expanded plugin source packages
+|       `-- .catalog/        Versioned Registry, manifest, and ZIP packages
 |-- scripts/                 Repository maintenance scripts
 |-- package.json             Workspace entrypoint scripts
 `-- pnpm-workspace.yaml      Workspace package configuration
@@ -163,8 +164,8 @@ pnpm site:build
 
 - [Desktop package notes](./packages/desktop/README.md)
 - [Third-party plugin development](./docs/anybox-third-party-plugin-development.md)
+- [Plugin module implementation](./docs/plugin-module-implementation.md)
 - [Connector development guide](./docs/connector-development-guide.md)
-- [Plugin module v1](./docs/plugin-module-v1.md)
 - [Local connector design](./docs/plugin-local-connectors-design.md)
 - [Automation feature design](./docs/automation-feature-design.md)
 - [Planner module design](./docs/planner-module-design.md)

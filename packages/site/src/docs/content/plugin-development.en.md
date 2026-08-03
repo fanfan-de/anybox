@@ -4,16 +4,16 @@ An Anybox plugin is an installable capability package. It can contain only a Ski
 
 This guide starts with the smallest useful plugin you can install, then shows how to add tools and connected services.
 
-> This page follows the current Anybox runtime. New plugins should place `plugin.json` at the package root. `.anybox-plugin/plugin.json` and `.codex-plugin/plugin.json` remain supported compatibility entry points. Do not use the old `.fanfande-plugin/plugin.json`, `plugin.meta.json`, or committed zip artifacts in an expanded plugin directory.
+> This page follows the current Anybox runtime. New plugins use `.anybox-plugin/plugin.json`; root `plugin.json` and `.codex-plugin/plugin.json` are compatibility inputs only. Do not use the old `.fanfande-plugin/plugin.json` or `plugin.meta.json`, and do not place generated ZIP files in an expanded plugin source directory.
 
 ## Choose the Capability First
 
 | Capability | Use it for | Location |
 | --- | --- | --- |
 | Skill | Agent workflows, domain knowledge, and operating rules | `skills/<skill-name>/SKILL.md` |
-| MCP server | Local or remote tools that perform actions | `mcpServers` in `plugin.json` |
-| Connector | A plugin-specific API key or OAuth connection | `connectors` in `plugin.json` |
-| Connector requirement | Reuse a platform connection such as Gmail or GitHub | `connectorRequirements` in `plugin.json` |
+| MCP server | Local or remote tools that perform actions | `mcpServers` in the manifest |
+| Connector | A plugin-specific API key or OAuth connection | `connectors` in the manifest |
+| Connector requirement | Reuse a platform connection such as Gmail or GitHub | `connectorRequirements` in the manifest |
 
 If you only need to teach the agent a repeatable workflow, start with a Skill. Add an MCP server or connector only when the plugin must execute code or exchange external data.
 
@@ -26,7 +26,8 @@ The following `hello-anybox` plugin contains one Skill. It requires no build too
 ```text
 anybox-plugins/
   hello-anybox/
-    plugin.json
+    .anybox-plugin/
+      plugin.json
     skills/
       hello/
         SKILL.md
@@ -36,7 +37,7 @@ anybox-plugins/
 
 ### 2. Write plugin.json
 
-Create `hello-anybox/plugin.json`:
+Create `hello-anybox/.anybox-plugin/plugin.json`:
 
 ```json
 {
@@ -112,7 +113,7 @@ plugin:hello-anybox:hello
 Push `anybox-plugins` to a public GitHub repository, then copy the Raw URL that points directly to the manifest:
 
 ```text
-https://raw.githubusercontent.com/<account>/<repo>/<branch>/hello-anybox/plugin.json
+https://raw.githubusercontent.com/<account>/<repo>/<branch>/hello-anybox/.anybox-plugin/plugin.json
 ```
 
 Open the Plugins page in Anybox:
@@ -160,7 +161,8 @@ Add an MCP server when the agent must execute code:
 
 ```text
 hello-anybox/
-  plugin.json
+  .anybox-plugin/
+    plugin.json
   scripts/
     server.js
   skills/
@@ -268,7 +270,9 @@ Use `connectorRequirements` instead when a plugin only needs an existing Anybox 
 
 ## Local Development and Validation
 
-When running Anybox from source, point the runtime at a local plugin source:
+Development and packaged desktop builds behave the same by default: both read the stable remote `.catalog/anybox-plugin-registry.json` and do not automatically scan plugin source packages in the Anybox repository.
+
+When developing an independent plugin repository, point the runtime at a separate local plugin source:
 
 ```powershell
 $env:ANYBOX_PLUGIN_LOCAL_DIR = "C:\path\to\anybox-plugins"
@@ -284,6 +288,14 @@ export ANYBOX_PLUGIN_REGISTRY_INDEX_URL="off"
 
 `ANYBOX_PLUGIN_LOCAL_DIR` must point to the parent containing one or more plugin folders. Do not use your source repository as `ANYBOX_PLUGIN_INSTALL_DIR`: that is a managed installation root, and uninstalling a plugin may delete its managed copy.
 
+To debug the Anybox repository's own `plugins/Anybox-Plugins` source packages directly, opt in explicitly:
+
+```powershell
+$env:ANYBOX_PLUGIN_INCLUDE_SOURCE_PACKAGES = "1"
+```
+
+Keep this variable at `0` when verifying production-equivalent behavior.
+
 If you have cloned the Anybox source, inspect the catalog from the Agent package:
 
 ```powershell
@@ -295,7 +307,7 @@ In addition to inspecting catalog output, complete one real install, connection,
 
 ## Distribute the Plugin
 
-The simplest distribution method is a public GitHub repository and a Raw URL that points directly to `plugin.json`.
+The simplest third-party distribution method is a public GitHub repository and an HTTPS Raw URL that points directly to `.anybox-plugin/plugin.json`. The runtime also accepts supported GitHub `blob`, `tree`, and raw package paths as compatibility inputs.
 
 For a manifest hosted outside GitHub, add real zip download metadata:
 
@@ -312,13 +324,14 @@ For a manifest hosted outside GitHub, add real zip download metadata:
 
 The zip must use HTTPS and match the declared SHA-256. It cannot contain symbolic links or paths that escape the extraction directory, and it must contain exactly one manifest matching the plugin ID and version.
 
-To propose the plugin for the built-in Anybox catalog, open a pull request to the Anybox repository:
+To propose a plugin for the official Anybox catalog, submit both its source and the locally prepared catalog files:
 
-1. Add the expanded source under `plugins/Anybox-Plugins/<plugin-id>/`.
-2. Add a direct HTTPS `plugin.json` URL to `plugins/Anybox-Plugins/index.json`.
-3. Do not commit `plugin.meta.json` or a generated zip artifact.
+1. Add the expanded source under `plugins/Anybox-Plugins/<plugin-id>/` and increase the plugin's own `version`.
+2. Run `pnpm plugins:index` and `pnpm plugins:index:check`, then commit the plugin source and `index.json` first.
+3. Run `pnpm plugins:catalog:prepare` and `pnpm plugins:catalog:verify`.
+4. Commit the generated `.catalog/anybox-plugin-registry.json`, catalog manifest, and versioned ZIP files under `.catalog/packages/`, then use a normal `git push`.
 
-Directory URLs are not supported. Every registry entry must point directly to `plugin.json`.
+`index.json` is a local catalog build input, not the runtime catalog fetched by clients. Desktop clients read the stable `.catalog/anybox-plugin-registry.json` and download a selected ZIP only during installation. The entire publication flow runs locally and does not depend on GitHub Actions, GitHub Releases, or the GitHub API, nor is it tied to a desktop version.
 
 ## Security and Release Checklist
 
@@ -336,7 +349,7 @@ Before publishing, confirm that:
 
 | Symptom | Check |
 | --- | --- |
-| URL import fails | The URL must use HTTPS and point directly to `plugin.json`, not a GitHub page or directory |
+| URL import fails | The URL must use HTTPS; prefer `.anybox-plugin/plugin.json`, or use a supported GitHub `blob`, `tree`, or raw package path |
 | The plugin appears but cannot be installed | A manifest hosted outside GitHub normally needs valid `package` download metadata |
 | A local plugin is missing from the catalog | Check the source root, manifest entry point, required fields, unknown top-level fields, and JSON syntax |
 | A Skill is not discovered | It must be a direct child of a declared Skill root and contain `SKILL.md` |

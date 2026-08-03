@@ -1,5 +1,8 @@
 # Anybox 插件模块与本地 Connector 设计
 
+> [!NOTE]
+> 本文保留 Connector 的架构取舍与阶段记录，不作为插件包格式或发布流程的唯一规范。当前插件格式见[完整插件开发指南](../plugins/Anybox-Plugins/anybox-plugin-development/docs/anybox-third-party-plugin-development.md)，运行机制见[插件模块实现机制](./plugin-module-implementation.md)。
+
 ## 结论
 
 插件模块可以借鉴 Codex 的包结构、manifest、catalog、安装态、MCP/Skill 绑定和项目级选择机制，但 connector 不建议照搬 Codex。
@@ -83,27 +86,25 @@ flowchart LR
 
 ## 插件包结构
 
-继续使用当前版本化包结构：
+源码插件默认使用不带版本目录的展开结构：
 
 ```text
-<install-root>/
+<plugin-source-root>/
   <plugin-id>/
-    <version>/
-      .anybox-plugin/
-        plugin.json
-      assets/
-      docs/
-      scripts/
-      skills/
-        <skill-name>/
-          SKILL.md
-      connectors/
-        <connector-id>/
-          connector.json
-          server.js
+    .anybox-plugin/
+      plugin.json
+    assets/
+    docs/
+    scripts/
+    skills/
+      <skill-name>/
+        SKILL.md
+    connectors/
+      <connector-id>/
+        server.js
 ```
 
-`connectors/` 是可选目录。当前实现从 `plugin.json` 的 `connectors` 数组读取声明；需要携带本地运行时代码时可以把代码放在 `connectors/<id>/`。独立的 `connectors/<id>/connector.json` 扫描属于后续阶段。
+只有同一来源必须并存多个版本时，才使用 `<plugin-id>/<version>/.anybox-plugin/plugin.json`。`connectors/` 是可选目录。当前实现从 manifest 的 `connectors` 数组或其包内相对 JSON 文件读取声明；需要携带本地运行时代码时可以把代码放在 `connectors/<id>/`。独立扫描 `connectors/<id>/connector.json` 仍属于后续阶段。
 
 ## Manifest 设计
 
@@ -306,7 +307,7 @@ agent connector API
 
 ### 安装
 
-1. Catalog 扫描本地 package roots 和 registry metadata。
+1. Catalog 默认读取稳定的远程 schema v3 Registry；显式开发模式也可以扫描本地 package roots。
 2. 插件包复制到受控安装目录。
 3. Manifest 归一化。
 4. 写入安装态。
@@ -485,7 +486,8 @@ plugin.<pluginID>.app.<appID>
 
 - `packages/anyboxagent/src/plugin/plugin.ts`
 - `packages/anyboxagent/Test/plugin.test.ts`
-- `docs/plugin-module-v1.md`
+- `docs/plugin-module-implementation.md`
+- `plugins/Anybox-Plugins/anybox-plugin-development/docs/anybox-third-party-plugin-development.md`
 
 已完成内容：
 

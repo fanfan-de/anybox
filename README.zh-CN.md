@@ -151,9 +151,10 @@ pnpm site:build
 |   |-- site/                官网和文档站点
 |   |-- mobile-app/          配套移动端应用
 |   `-- chrome-plugin/       完整 Chrome 集成源码工程
-|-- plugins/                 内置和本地插件包
+|-- plugins/                 精选插件源码与本地生成的插件目录
 |   `-- Anybox-Plugins/
-|       `-- chrome/          Anybox 整目录下载的 Chrome 最终插件
+|       |-- <plugin-id>/     展开式插件源码包
+|       `-- .catalog/        版本化 Registry、Manifest 与 ZIP 包
 |-- scripts/                 仓库维护脚本
 |-- package.json             workspace 入口脚本
 `-- pnpm-workspace.yaml      workspace 包配置
@@ -163,8 +164,8 @@ pnpm site:build
 
 - [桌面端包说明](./packages/desktop/README.md)
 - [第三方插件开发](./docs/anybox-third-party-plugin-development.md)
+- [插件模块实现机制](./docs/plugin-module-implementation.md)
 - [连接器开发指南](./docs/connector-development-guide.md)
-- [Plugin module v1](./docs/plugin-module-v1.md)
 - [本地连接器设计](./docs/plugin-local-connectors-design.md)
 - [自动化功能设计](./docs/automation-feature-design.md)
 - [Planner 模块设计](./docs/planner-module-design.md)

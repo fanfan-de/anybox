@@ -4,16 +4,16 @@ Anybox 插件是一个可安装的能力包。它可以只包含一组指导 Age
 
 本页先带你制作一个能安装、能使用的最小插件，再介绍如何逐步增加工具和连接能力。
 
-> 本页以当前 Anybox 运行时为准。新插件推荐把 `plugin.json` 放在插件根目录；`.anybox-plugin/plugin.json` 与 `.codex-plugin/plugin.json` 仍作为兼容入口。不要使用旧的 `.fanfande-plugin/plugin.json`、`plugin.meta.json`，也不要把 zip 文件提交到展开式插件目录。
+> 本页以当前 Anybox 运行时为准。新插件使用 `.anybox-plugin/plugin.json`；根目录 `plugin.json` 与 `.codex-plugin/plugin.json` 仅作为兼容输入。不要使用旧的 `.fanfande-plugin/plugin.json` 或 `plugin.meta.json`，也不要把生成的 ZIP 放进展开式插件源码目录。
 
 ## 先选择插件能力
 
 | 能力 | 适合什么场景 | 放在哪里 |
 | --- | --- | --- |
 | Skill | 给 Agent 提供工作流程、领域知识和使用规则 | `skills/<skill-name>/SKILL.md` |
-| MCP server | 提供可以实际执行的本地或远程工具 | `plugin.json` 的 `mcpServers` |
-| Connector | 管理插件专属的 API key 或 OAuth 连接 | `plugin.json` 的 `connectors` |
-| Connector requirement | 复用 Anybox 已有的 Gmail、GitHub 等平台连接 | `plugin.json` 的 `connectorRequirements` |
+| MCP server | 提供可以实际执行的本地或远程工具 | Manifest 的 `mcpServers` |
+| Connector | 管理插件专属的 API key 或 OAuth 连接 | Manifest 的 `connectors` |
+| Connector requirement | 复用 Anybox 已有的 Gmail、GitHub 等平台连接 | Manifest 的 `connectorRequirements` |
 
 如果只是想教 Agent 按固定流程工作，从 Skill 开始即可。只有需要读写外部数据或执行程序时，才需要 MCP server 或 Connector。
 
@@ -26,7 +26,8 @@ Anybox 插件是一个可安装的能力包。它可以只包含一组指导 Age
 ```text
 anybox-plugins/
   hello-anybox/
-    plugin.json
+    .anybox-plugin/
+      plugin.json
     skills/
       hello/
         SKILL.md
@@ -36,7 +37,7 @@ anybox-plugins/
 
 ### 2. 编写 plugin.json
 
-在 `hello-anybox/plugin.json` 写入：
+在 `hello-anybox/.anybox-plugin/plugin.json` 写入：
 
 ```json
 {
@@ -112,7 +113,7 @@ plugin:hello-anybox:hello
 把 `anybox-plugins` 提交到一个公开 GitHub 仓库，然后复制直接指向 manifest 的 Raw URL：
 
 ```text
-https://raw.githubusercontent.com/<account>/<repo>/<branch>/hello-anybox/plugin.json
+https://raw.githubusercontent.com/<account>/<repo>/<branch>/hello-anybox/.anybox-plugin/plugin.json
 ```
 
 在 Anybox 中打开「插件」页面：
@@ -160,7 +161,8 @@ https://raw.githubusercontent.com/<account>/<repo>/<branch>/hello-anybox/plugin.
 
 ```text
 hello-anybox/
-  plugin.json
+  .anybox-plugin/
+    plugin.json
   scripts/
     server.js
   skills/
@@ -268,7 +270,9 @@ plugin.hello-anybox.hello
 
 ## 本地开发与验证
 
-从源码运行 Anybox 时，可以让运行时直接扫描本地插件来源：
+桌面开发版与正式版默认行为一致：都从稳定的远程 `.catalog/anybox-plugin-registry.json` 读取插件目录，不自动扫描 Anybox 仓库中的插件源码。
+
+开发独立插件仓库时，可以让运行时扫描单独的本地插件来源：
 
 ```powershell
 $env:ANYBOX_PLUGIN_LOCAL_DIR = "C:\path\to\anybox-plugins"
@@ -284,6 +288,14 @@ export ANYBOX_PLUGIN_REGISTRY_INDEX_URL="off"
 
 `ANYBOX_PLUGIN_LOCAL_DIR` 应指向包含一个或多个插件目录的父目录。开发时不要把源码仓库设为 `ANYBOX_PLUGIN_INSTALL_DIR`：后者是受管理的安装目录，卸载插件时可能删除其中的副本。
 
+如果需要直接调试 Anybox 仓库自身的 `plugins/Anybox-Plugins` 源码，显式设置：
+
+```powershell
+$env:ANYBOX_PLUGIN_INCLUDE_SOURCE_PACKAGES = "1"
+```
+
+验证开发版与正式版行为一致时，应保持该变量为 `0`。
+
 如果已经克隆 Anybox 源码，可以在 Agent 包中检查 catalog：
 
 ```powershell
@@ -295,7 +307,7 @@ bun -e "import * as Plugin from './src/plugin/plugin.ts'; console.log(JSON.strin
 
 ## 发布给其他用户
 
-最简单的分发方式是公开 GitHub 仓库和一个直接指向 `plugin.json` 的 Raw URL。
+第三方插件最简单的分发方式是公开 GitHub 仓库，并提供直接指向 `.anybox-plugin/plugin.json` 的 HTTPS Raw URL。运行时也可以兼容识别受支持的 GitHub `blob`、`tree` 和 raw 插件包路径。
 
 如果 manifest 不托管在 GitHub，可为远程 manifest 增加真实的 zip 下载信息：
 
@@ -312,13 +324,14 @@ bun -e "import * as Plugin from './src/plugin/plugin.ts'; console.log(JSON.strin
 
 zip 必须使用 HTTPS，SHA-256 必须与文件一致；归档中不能包含符号链接或逃出解压目录的路径，并且只能有一个 ID 和版本匹配的 manifest。
 
-如果希望插件进入 Anybox 内置目录，可以向 Anybox 仓库提交 Pull Request：
+如果希望插件进入 Anybox 官方目录，应把源码和正式目录文件一起提交到 Anybox 仓库：
 
-1. 在 `plugins/Anybox-Plugins/<plugin-id>/` 提交展开后的插件源文件。
-2. 在 `plugins/Anybox-Plugins/index.json` 中加入直接指向该 `plugin.json` 的 HTTPS URL。
-3. 不要提交 `plugin.meta.json` 或构建出的 zip 文件。
+1. 把展开式源码放入 `plugins/Anybox-Plugins/<plugin-id>/`，并更新插件自身 `version`。
+2. 运行 `pnpm plugins:index` 和 `pnpm plugins:index:check`，然后先提交插件源码与 `index.json`。
+3. 运行 `pnpm plugins:catalog:prepare` 和 `pnpm plugins:catalog:verify`。
+4. 提交生成的 `.catalog/anybox-plugin-registry.json`、Catalog Manifest 和 `.catalog/packages/` 中的版本化 ZIP，再执行普通 `git push`。
 
-目录 URL 不受支持；registry 中的每一项都必须直接指向 `plugin.json`。
+`index.json` 是本地 Catalog 的构建输入，不是客户端默认拉取的运行时目录。桌面客户端读取稳定的 `.catalog/anybox-plugin-registry.json`，安装时才按需下载对应 ZIP。整个发布过程在本地完成，不依赖 GitHub Actions、GitHub Release 或 GitHub API，也不与桌面版本绑定。
 
 ## 安全与发布检查
 
@@ -336,7 +349,7 @@ zip 必须使用 HTTPS，SHA-256 必须与文件一致；归档中不能包含�
 
 | 现象 | 检查 |
 | --- | --- |
-| 导入 URL 失败 | URL 必须是 HTTPS，并直接指向 `plugin.json`，不能指向 GitHub 网页或目录 |
+| 导入 URL 失败 | URL 必须是 HTTPS；优先直接指向 `.anybox-plugin/plugin.json`，或使用运行时能够识别的 GitHub `blob`、`tree`、raw 包路径 |
 | 插件出现但不能安装 | 非 GitHub 托管的 manifest 通常还需要有效的 `package` 下载信息 |
 | 本地插件没有出现在 catalog | 检查来源根目录、manifest 入口、必填字段、未知顶层字段和 JSON 语法 |
 | Skill 没有被发现 | Skill 必须位于声明根目录的直接子目录中，并包含 `SKILL.md` |
