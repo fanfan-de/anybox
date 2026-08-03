@@ -1870,7 +1870,7 @@ describe("plugin marketplace API", () => {
       },
     ])
     const releaseAlphaURL =
-      "https://github.com/fanfan-de/anybox/releases/download/anybox-plugin-catalog/anybox-plugin-release-alpha-1.0.0.zip"
+      "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/.catalog/packages/anybox-plugin-release-alpha-1.0.0.zip"
     const registry = {
       schemaVersion: 3,
       catalogID: "anybox-plugins",
@@ -1901,7 +1901,7 @@ describe("plugin marketplace API", () => {
           skills: [],
           package: {
             type: "zip",
-            url: "https://github.com/fanfan-de/anybox/releases/download/anybox-plugin-catalog/anybox-plugin-release-beta-2.0.0.zip",
+            url: "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/.catalog/packages/anybox-plugin-release-beta-2.0.0.zip",
             sha256: "d".repeat(64),
             size: 456,
           },
@@ -1968,7 +1968,7 @@ describe("plugin marketplace API", () => {
     expect(zipFetchCount).toBe(1)
   })
 
-  test("rejects catalog registry packages outside the dedicated plugin release", async () => {
+  test("rejects catalog registry packages outside the repository catalog path", async () => {
     await useTempDatabase()
     const app = createServerApp()
     const registryURL = "https://registry.example.test/anybox-plugin-registry.json"
@@ -1999,7 +1999,7 @@ describe("plugin marketplace API", () => {
           },
         },
       ],
-    }), { status: 200 })) as typeof fetch
+    }), { status: 200 })) as unknown as typeof fetch
 
     const response = await app.request("/api/plugins/catalog?freshness=fresh")
     const body = (await response.json()) as PluginCatalogEnvelope

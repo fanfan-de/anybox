@@ -32,17 +32,17 @@
 .cache, .git, .turbo, .vite-temp, node_modules
 ```
 
-## 默认 GitHub 目录与 Release 资产
+## 默认仓库目录与普通 Git 文件
 
 桌面开发版与正式版启动 Agent 时，默认传入同一个、不含桌面版本号的 GitHub Registry URL：
 
 ```text
-https://github.com/fanfan-de/anybox/releases/download/anybox-plugin-catalog/anybox-plugin-registry.json
+https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/.catalog/anybox-plugin-registry.json
 ```
 
-这是专用 GitHub Release 标签 `anybox-plugin-catalog` 下的稳定资产，不参与桌面版本选择，也不跟随 GitHub 的 `latest` 桌面 Release。打开插件页时，Agent 读取 schema v3 Registry；每个目录条目都包含插件自身版本、ZIP URL、SHA-256 和精确字节数。任一条目无效都会返回 `PLUGIN_REGISTRY_UNAVAILABLE`，不会静默过滤成部分目录。成功目录会按稳定 URL 和协议版本整体缓存；首次启动且 GitHub 不可达时没有目录可展示，至少成功拉取过一次后才可离线使用已验证缓存。
+这是 `master` 分支中的普通 Git 文件，不是 GitHub Release 资产。GitHub 只承担 Git 远程仓库和 raw 文件读取，不参与构建、校验或发布编排。打开插件页时，Agent 读取 schema v3 Registry；每个目录条目都包含插件自身版本、仓库 ZIP URL、SHA-256 和精确字节数。任一条目无效都会返回 `PLUGIN_REGISTRY_UNAVAILABLE`，不会静默过滤成部分目录。成功目录会按稳定 URL 和协议版本整体缓存；首次启动且远程仓库不可达时没有目录可展示，至少成功拉取过一次后才可离线使用已验证缓存。
 
-`plugins/Anybox-Plugins/index.json` 是仓库源码清单索引，也是 Release Registry 的构建输入；它不是开发版或正式版的默认运行时目录。它由以下命令生成和校验：
+`plugins/Anybox-Plugins/index.json` 是仓库源码清单索引，也是 Catalog Registry 的构建输入；它不是开发版或正式版的默认运行时目录。它由以下命令生成和校验：
 
 ```powershell
 pnpm plugins:index
@@ -62,14 +62,14 @@ pnpm plugins:index:check
 - 让 URL 以 `/.anybox-plugin/plugin.json` 结尾。
 - 把展开式插件包保存在 `plugins/Anybox-Plugins/<plugin-id>/`。
 - 不要添加 `plugin.meta.json`。
-- 不要提交生成的 ZIP 文件。
-- 源 manifest 不添加顶层 `package` 字段；Release 打包器会把不可变的 ZIP 元数据写入生成目录。
+- 不要在各插件源码目录中提交生成的 ZIP；只有本地目录命令管理的 `.catalog/packages/` 是版本化 ZIP 存储区。
+- 源 manifest 不添加顶层 `package` 字段；本地 Catalog 打包器会把 ZIP 元数据写入生成的 Registry。
 
 即使解析器接受更广泛的 GitHub URL 形式，也必须遵循这套仓库规范。
 
 ## 远程 URL 兼容行为
 
-远程默认目录、显式 Registry 和手动导入 URL 必须使用 HTTPS。索引条目不允许包含查询参数或 fragment。桌面开发版、正式版和未配置的独立 Agent 都默认使用 `releases/download/anybox-plugin-catalog/anybox-plugin-registry.json`。开发或测试可以通过 `ANYBOX_PLUGIN_REGISTRY_INDEX_URL` 显式覆盖为其他索引、schema v3 Catalog Registry 或兼容的旧 v2 Release Registry，也可以设为 `off`。缓存按 URL 和协议版本隔离。
+远程默认目录、显式 Registry 和手动导入 URL 必须使用 HTTPS。索引条目不允许包含查询参数或 fragment。桌面开发版、正式版和未配置的独立 Agent 都默认使用仓库 `.catalog/anybox-plugin-registry.json` 的 raw URL。开发或测试可以通过 `ANYBOX_PLUGIN_REGISTRY_INDEX_URL` 显式覆盖为其他索引、schema v3 Catalog Registry 或兼容的旧 v2 Release Registry，也可以设为 `off`。缓存按 URL 和协议版本隔离。
 
 运行时接受：
 
@@ -100,7 +100,7 @@ pnpm plugins:index:check
 }
 ```
 
-正式目录中的 ZIP 元数据必须提供固定 GitHub Release HTTPS URL、匹配的 SHA-256 和精确字节数。手动导入的旧兼容元数据仍可省略 `size`。
+schema v3 正式目录中的 ZIP 元数据必须提供固定仓库 `.catalog/packages/` raw HTTPS URL、匹配的 SHA-256 和精确字节数。兼容的旧 v2 Release Registry 仍使用其 Release URL；手动导入的旧兼容元数据可以省略 `size`。
 
 ### 手动 GitHub Tree
 
@@ -117,7 +117,7 @@ pnpm plugins:index:check
 
 ### 手动导入时推导 GitHub Tree
 
-如果手动导入的 manifest 托管在可识别的 GitHub 仓库中，而且没有显式 `package`，运行时会根据 manifest 所在的插件包根目录推导 `github-tree` 下载信息。这只是开发兼容能力；正式 v2 目录禁止 `github-tree`。
+如果手动导入的 manifest 托管在可识别的 GitHub 仓库中，而且没有显式 `package`，运行时会根据 manifest 所在的插件包根目录推导 `github-tree` 下载信息。这只是开发兼容能力；正式 schema v3 目录禁止 `github-tree`。
 
 如果非 GitHub 远程 manifest 没有可用 `package`，也没有匹配的本地展开式插件包，它只能用于目录展示，不能安装。
 
@@ -198,30 +198,29 @@ bun -e "import * as Plugin from './src/plugin/plugin.ts'; console.log(JSON.strin
 ```powershell
 Set-Location C:\Projects\Anybox
 pnpm plugins:index:check
-pnpm plugins:release:test
+pnpm plugins:catalog:test
 
 Set-Location C:\Projects\Anybox\packages\anyboxagent
 bun test Test/plugin.test.ts
 ```
 
-构建正式插件资产：
+在本地准备正式插件目录：
 
 ```powershell
-node plugins/Anybox-Plugins/scripts/build-plugin-release.mjs `
-  --commit <40-char-sha> `
-  --out <output-directory>
+pnpm plugins:catalog:prepare
+pnpm plugins:catalog:verify
 ```
 
-当前目录构建输出必须恰好包含 60 个 `anybox-plugin-<id>-<version>.zip`、`anybox-plugin-registry.json` 和 `anybox-plugin-release-manifest.json`。这些生成物不提交到 Git，也不塞进桌面安装器或桌面 Release。独立工作流 `.github/workflows/plugin-catalog-release.yml` 把它们发布到专用 `anybox-plugin-catalog` Release：同名 ZIP 已存在时必须逐字节一致，否则发布失败并要求插件升版；所有 ZIP 就绪后才覆盖 manifest，并把稳定 Registry 资产留到最后更新。客户端在更新间隙仍可回退到此前验证过的缓存。
+命令从已提交的插件源码和当前 Git HEAD 生成恰好 60 个 `anybox-plugin-<id>-<version>.zip`，写入 `plugins/Anybox-Plugins/.catalog/packages/`，同时更新 `anybox-plugin-registry.json` 与 `anybox-plugin-catalog-manifest.json`。同名 ZIP 已存在时必须逐字节一致，否则命令失败并要求插件升版；旧版本 ZIP 不自动删除。命令不会调用 GitHub API、Actions、Release，也不会自动执行 `git add`、commit 或 push。
 
-独立插件目录发布完成后，工作流会从真实稳定目录安装一个代表性 ZIP：
+`plugins:catalog:prepare` 会用同目录中的文件安装一个代表性 ZIP；也可以单独复验：
 
 ```powershell
 bun run packages/anyboxagent/scripts/smoke-plugin-release-install.ts `
   <anybox-plugin-registry.json> context7
 ```
 
-该 smoke 必须读取完整 60 项目录、只下载一次 ZIP，并拒绝访问 `api.github.com`。插件目录发布与桌面候选版、RC 和公开桌面 Release 相互独立。
+该 smoke 必须读取完整 60 项目录、只加载一次本地 ZIP，并拒绝访问 `api.github.com`。确认无误后，将 `.catalog/` 作为普通 Git 变更提交并执行普通 `git push`；插件目录发布与桌面候选版、RC 和公开桌面 Release 相互独立。
 
 如果只修改插件包，优先执行有针对性的目录加载和安装验证。当插件包覆盖了新修改的解析器路径，或风险足以证明有必要时，再运行完整回归测试文件。
 
@@ -251,6 +250,6 @@ packages/anyboxagent/Test/plugin.test.ts
 6. 添加必填的 `credential` 和 `runtime`。
 7. 用受支持的 manifest 字段替换 `plugin.meta.json`。
 8. 把相对于仓库根目录的路径假设改成相对于插件包根目录的路径。
-9. 默认远端目录使用独立 schema v3 Registry 和 write-once ZIP；手动 GitHub manifest URL 仍可推导 `github-tree`，旧 v2 Release Registry 继续作为兼容输入。
+9. 默认远端目录使用仓库内独立 schema v3 Registry 和 write-once ZIP，完全由本地命令生成；手动 GitHub manifest URL 仍可推导 `github-tree`，旧 v2 Release Registry 继续作为兼容输入。
 10. 验证目录、安装、生成 ID、密钥处理和卸载清理。
 11. 确认没有消费者后再删除旧兼容文件。

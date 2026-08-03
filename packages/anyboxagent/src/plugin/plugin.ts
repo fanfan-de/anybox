@@ -56,9 +56,10 @@ const PLUGIN_PACKAGE_DOWNLOAD_TIMEOUT_MS_ENV = "ANYBOX_PLUGIN_PACKAGE_DOWNLOAD_T
 const PLUGIN_IMPORTED_REGISTRY_FILE_ENV = "ANYBOX_PLUGIN_IMPORTED_REGISTRY_FILE"
 const PLUGIN_SOURCE_PACKAGES_ENV = "ANYBOX_PLUGIN_INCLUDE_SOURCE_PACKAGES"
 const PLUGIN_CATALOG_ID = "anybox-plugins"
-const PLUGIN_CATALOG_RELEASE_TAG = "anybox-plugin-catalog"
+const PLUGIN_CATALOG_RAW_BASE_URL =
+  "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/.catalog"
 const DEFAULT_PLUGIN_REGISTRY_URL =
-  `https://github.com/fanfan-de/anybox/releases/download/${PLUGIN_CATALOG_RELEASE_TAG}/anybox-plugin-registry.json`
+  `${PLUGIN_CATALOG_RAW_BASE_URL}/anybox-plugin-registry.json`
 const LOCAL_PLUGIN_COPY_IGNORED_DIRECTORIES = new Set([
   ".cache",
   ".git",
@@ -808,11 +809,11 @@ const PluginCatalogRegistryV3 = z
       seenIDs.add(pluginID)
 
       const assetName = `anybox-plugin-${pluginID}-${plugin.version}.zip`
-      const expectedURL = `https://github.com/fanfan-de/anybox/releases/download/${PLUGIN_CATALOG_RELEASE_TAG}/${assetName}`
+      const expectedURL = `${PLUGIN_CATALOG_RAW_BASE_URL}/packages/${assetName}`
       if (plugin.package.url !== expectedURL) {
         ctx.addIssue({
           code: "custom",
-          message: "Plugin package URL must point to the dedicated plugin catalog Release asset.",
+          message: "Plugin package URL must point to the repository-backed plugin catalog package.",
           path: ["plugins", index, "package", "url"],
         })
       }

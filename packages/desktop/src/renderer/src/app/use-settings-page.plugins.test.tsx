@@ -265,7 +265,7 @@ describe("useSettingsPage plugin state", () => {
     expect(result.current.installedPlugins).toEqual([installed])
     expect(result.current.activePluginID).toBe("filesystem")
     expect(result.current.pluginsError).toBe(
-      "The plugin catalog could not be loaded from GitHub, or this Release is missing it. Check GitHub access, then retry.",
+      "The latest plugin catalog could not be loaded from GitHub. Check GitHub access, then retry.",
     )
     expect(getPluginCatalog).toHaveBeenCalledTimes(2)
     expect(getPluginCatalog).toHaveBeenNthCalledWith(1, { freshness: "fresh" })
@@ -288,7 +288,7 @@ describe("useSettingsPage plugin state", () => {
 
     await waitFor(() => {
       expect(result.current.pluginsError).toBe(
-        "The plugin catalog could not be loaded from GitHub, or this Release is missing it. Check GitHub access, then retry.",
+        "The latest plugin catalog could not be loaded from GitHub. Check GitHub access, then retry.",
       )
     })
     expect(result.current.installedPlugins).toEqual([installed])

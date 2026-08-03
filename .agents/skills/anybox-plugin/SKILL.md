@@ -52,7 +52,7 @@ description: 构建、说明、迁移、评审或验证 Anybox 插件包及其 .
 - 规范 Connector 条目必须同时包含 `credential` 和 `runtime`；`configFields` 只能作为额外配置。
 - 优先使用 `connectors`，不要为新插件使用旧的 `apps` 字段。
 - 把 `commands` 和 `agents` 视为保留兼容字段，不要声称当前运行时会执行它们。
-- 桌面开发版与正式版默认共享独立的 `releases/download/anybox-plugin-catalog/anybox-plugin-registry.json`，且默认不扫描本地仓库源码包；只有显式设置 `ANYBOX_PLUGIN_INCLUDE_SOURCE_PACKAGES=1` 才进入源码插件开发模式。插件目录不跟随桌面版本或 `latest` Release，目录中的插件包仍使用带插件版本、摘要和字节数的 write-once ZIP。
+- 桌面开发版与正式版默认共享仓库内稳定的 `.catalog/anybox-plugin-registry.json`，且默认不扫描本地仓库源码包；只有显式设置 `ANYBOX_PLUGIN_INCLUDE_SOURCE_PACKAGES=1` 才进入源码插件开发模式。插件目录不跟随桌面版本，所有 Registry 和版本化 ZIP 都在本地生成、验证后作为普通 Git 文件提交；不得依赖 GitHub Actions、Release 或 API。
 - 除非确实希望阻止安装，否则不要把风险标记为 `critical`。
 - 迁移或验证期间保留用户文件和工作区中的无关改动。
 

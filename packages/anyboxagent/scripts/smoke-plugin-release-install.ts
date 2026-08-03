@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs"
-import { mkdtemp, rm } from "node:fs/promises"
+import { mkdir, mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { join, resolve } from "node:path"
+import { basename, dirname, join, resolve } from "node:path"
 
 interface ApiEnvelope<T> {
   success: boolean
@@ -15,6 +15,10 @@ interface ApiEnvelope<T> {
 interface RegistryPlugin {
   id: string
   version: string
+  package: {
+    type: "zip"
+    url: string
+  }
 }
 
 const registryFile = process.argv[2] ? resolve(process.argv[2]) : ""
@@ -35,10 +39,16 @@ if (
   || registry.plugins?.length !== 60
   || !registryPlugin
 ) {
-  throw new Error(`Release registry must contain 60 plugins including '${pluginID}'.`)
+  throw new Error(`Plugin catalog must contain 60 plugins including '${pluginID}'.`)
 }
+const localPackageRoot = join(dirname(registryFile), "packages")
+const useLocalPackages = existsSync(localPackageRoot)
 
-const dataRoot = await mkdtemp(join(tmpdir(), "anybox-plugin-release-smoke-"))
+const configuredDataRoot = process.env.ANYBOX_PLUGIN_SMOKE_DATA_DIR?.trim()
+const dataRoot = configuredDataRoot
+  ? resolve(configuredDataRoot)
+  : await mkdtemp(join(tmpdir(), "anybox-plugin-release-smoke-"))
+if (configuredDataRoot) await mkdir(dataRoot, { recursive: true })
 const databaseFile = join(dataRoot, "agent.db")
 const installRoot = join(dataRoot, "installed-plugins")
 const originalFetch = globalThis.fetch
@@ -50,7 +60,24 @@ globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) =>
     : input instanceof URL ? input.toString() : input.url
   requestedURLs.push(url)
   if (new URL(url).hostname.toLowerCase() === "api.github.com") {
-    throw new Error(`Release installation must not call api.github.com: ${url}`)
+    throw new Error(`Plugin installation must not call api.github.com: ${url}`)
+  }
+  if (useLocalPackages) {
+    if (url !== registryPlugin.package.url) {
+      throw new Error(`Local plugin catalog smoke attempted an unexpected network request: ${url}`)
+    }
+    const packagePath = join(localPackageRoot, basename(new URL(url).pathname))
+    if (!existsSync(packagePath)) {
+      throw new Error(`Local plugin catalog package does not exist: ${packagePath}`)
+    }
+    const bytes = readFileSync(packagePath)
+    return new Response(bytes, {
+      status: 200,
+      headers: {
+        "content-length": String(bytes.byteLength),
+        "content-type": "application/zip",
+      },
+    })
   }
   return originalFetch(input, init)
 }) as typeof fetch
@@ -88,7 +115,7 @@ try {
     || catalogBody.data?.length !== 60
     || !catalogBody.data.some((plugin) => plugin.id === pluginID)
   ) {
-    throw new Error(`Release catalog smoke failed: ${JSON.stringify(catalogBody)}`)
+    throw new Error(`Plugin catalog smoke failed: ${JSON.stringify(catalogBody)}`)
   }
 
   const installResponse = await app.request(
@@ -103,7 +130,7 @@ try {
   )
   const installBody = await installResponse.json() as ApiEnvelope<{ pluginID?: string }>
   if (!installResponse.ok || !installBody.success || installBody.data?.pluginID !== pluginID) {
-    throw new Error(`Release install smoke failed: ${JSON.stringify(installBody)}`)
+    throw new Error(`Plugin catalog install smoke failed: ${JSON.stringify(installBody)}`)
   }
 
   const installedManifest = join(
@@ -114,21 +141,27 @@ try {
     "plugin.json",
   )
   if (!existsSync(installedManifest)) {
-    throw new Error(`Release install did not create the expected manifest: ${installedManifest}`)
+    throw new Error(`Plugin catalog install did not create the expected manifest: ${installedManifest}`)
   }
   if (
     requestedURLs.length !== 1
-    || !requestedURLs[0]?.includes("/releases/download/")
+    || !requestedURLs[0]?.includes("/plugins/Anybox-Plugins/.catalog/packages/")
     || !requestedURLs[0]?.endsWith(".zip")
   ) {
-    throw new Error(`Release install made unexpected network requests: ${requestedURLs.join(", ")}`)
+    throw new Error(`Plugin catalog install made unexpected network requests: ${requestedURLs.join(", ")}`)
   }
 
   console.log(
-    `[plugin-release] installed ${pluginID}@${registryPlugin.version} from one immutable Release ZIP; catalog=60; api.github.com=0`,
+    `[plugin-catalog] installed ${pluginID}@${registryPlugin.version} from one ${useLocalPackages ? "local" : "repository"} ZIP; catalog=60; api.github.com=0`,
   )
 } finally {
   globalThis.fetch = originalFetch
   closeDatabase?.()
-  await rm(dataRoot, { recursive: true, force: true })
+  if (!configuredDataRoot) {
+    await rm(dataRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }).catch((error) => {
+      console.warn(
+        `[plugin-catalog] temporary smoke directory will be recoverable after process exit: ${dataRoot} (${error instanceof Error ? error.message : String(error)})`,
+      )
+    })
+  }
 }

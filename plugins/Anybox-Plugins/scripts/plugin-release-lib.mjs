@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process"
 import { createHash } from "node:crypto"
 import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs"
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises"
+import { copyFile, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import {
   basename,
@@ -15,9 +15,13 @@ import {
 import { deflateRawSync } from "node:zlib"
 
 export const PLUGIN_CATALOG_ID = "anybox-plugins"
-export const PLUGIN_CATALOG_RELEASE_TAG = "anybox-plugin-catalog"
-export const PLUGIN_RELEASE_REGISTRY_FILENAME = "anybox-plugin-registry.json"
-export const PLUGIN_RELEASE_MANIFEST_FILENAME = "anybox-plugin-release-manifest.json"
+export const PLUGIN_CATALOG_REPOSITORY_REF = "master"
+export const PLUGIN_CATALOG_REPOSITORY_PATH = "plugins/Anybox-Plugins/.catalog"
+export const PLUGIN_CATALOG_PACKAGES_DIRECTORY = "packages"
+export const PLUGIN_CATALOG_REGISTRY_FILENAME = "anybox-plugin-registry.json"
+export const PLUGIN_CATALOG_MANIFEST_FILENAME = "anybox-plugin-catalog-manifest.json"
+export const PLUGIN_CATALOG_RAW_BASE_URL =
+  `https://raw.githubusercontent.com/fanfan-de/anybox/${PLUGIN_CATALOG_REPOSITORY_REF}/${PLUGIN_CATALOG_REPOSITORY_PATH}`
 export const MAX_PLUGIN_PACKAGE_BYTES = 100 * 1024 * 1024
 export const CURRENT_PLUGIN_COUNT = 60
 
@@ -112,6 +116,7 @@ function assertCleanPluginSources(repoRoot) {
       "--untracked-files=all",
       "--",
       "plugins/Anybox-Plugins",
+      ":(exclude)plugins/Anybox-Plugins/.catalog",
     ],
     { encoding: "utf8" },
   ).trim()
@@ -467,8 +472,8 @@ function releaseAssetName(pluginID, pluginVersion) {
   return `anybox-plugin-${pluginID}-${pluginVersion}.zip`
 }
 
-function releaseAssetURL(releaseTag, assetName) {
-  return `https://github.com/${RELEASE_OWNER}/${RELEASE_REPOSITORY}/releases/download/${encodeURIComponent(releaseTag)}/${encodeURIComponent(assetName)}`
+function catalogPackageURL(assetName) {
+  return `${PLUGIN_CATALOG_RAW_BASE_URL}/${PLUGIN_CATALOG_PACKAGES_DIRECTORY}/${encodeURIComponent(assetName)}`
 }
 
 function validateReleaseRegistryShape(registry, expectedPluginCount) {
@@ -484,8 +489,8 @@ function validateReleaseRegistryShape(registry, expectedPluginCount) {
     invariant(plugin.package?.type === "zip", `Plugin '${plugin.id}' must use a ZIP release package.`)
     const assetName = releaseAssetName(plugin.id, plugin.version)
     invariant(
-      plugin.package.url === releaseAssetURL(PLUGIN_CATALOG_RELEASE_TAG, assetName),
-      `Plugin '${plugin.id}' has an invalid Release URL.`,
+      plugin.package.url === catalogPackageURL(assetName),
+      `Plugin '${plugin.id}' has an invalid repository catalog URL.`,
     )
     invariant(/^[a-f0-9]{64}$/.test(plugin.package.sha256), `Plugin '${plugin.id}' has an invalid package checksum.`)
     invariant(
@@ -505,24 +510,26 @@ export async function verifyPluginRelease({
   outputDirectory,
   sourceCommit,
   expectedPluginCount = CURRENT_PLUGIN_COUNT,
+  allowHistoricalPackages = false,
 }) {
   const resolvedOutput = resolve(outputDirectory)
-  const releaseManifestPath = join(resolvedOutput, PLUGIN_RELEASE_MANIFEST_FILENAME)
-  const registryPath = join(resolvedOutput, PLUGIN_RELEASE_REGISTRY_FILENAME)
-  const releaseManifest = readJSON(releaseManifestPath, "Plugin release manifest")
+  const releaseManifestPath = join(resolvedOutput, PLUGIN_CATALOG_MANIFEST_FILENAME)
+  const registryPath = join(resolvedOutput, PLUGIN_CATALOG_REGISTRY_FILENAME)
+  const releaseManifest = readJSON(releaseManifestPath, "Plugin catalog manifest")
   const registryBytes = await readFile(registryPath)
   const registry = JSON.parse(registryBytes.toString("utf8"))
   const expectedCommit = sourceCommit.toLowerCase()
 
-  invariant(releaseManifest.schemaVersion === 2, "Plugin release manifest schemaVersion must be 2.")
-  invariant(releaseManifest.catalogID === PLUGIN_CATALOG_ID, "Plugin release manifest catalog ID is invalid.")
-  invariant(releaseManifest.releaseTag === PLUGIN_CATALOG_RELEASE_TAG, "Plugin release manifest tag does not match the catalog channel.")
-  invariant(releaseManifest.sourceCommit === expectedCommit, "Plugin release manifest source commit does not match.")
-  invariant(releaseManifest.pluginCount === expectedPluginCount, "Plugin release manifest count does not match.")
-  invariant(Array.isArray(releaseManifest.assets) && releaseManifest.assets.length === expectedPluginCount, "Plugin release asset list is incomplete.")
-  invariant(releaseManifest.registry?.name === PLUGIN_RELEASE_REGISTRY_FILENAME, "Plugin release registry filename is invalid.")
-  invariant(releaseManifest.registry.size === registryBytes.length, "Plugin release registry size does not match.")
-  invariant(releaseManifest.registry.sha256 === sha256(registryBytes), "Plugin release registry checksum does not match.")
+  invariant(releaseManifest.schemaVersion === 3, "Plugin catalog manifest schemaVersion must be 3.")
+  invariant(releaseManifest.catalogID === PLUGIN_CATALOG_ID, "Plugin catalog manifest catalog ID is invalid.")
+  invariant(releaseManifest.repositoryRef === PLUGIN_CATALOG_REPOSITORY_REF, "Plugin catalog repository ref is invalid.")
+  invariant(releaseManifest.catalogPath === PLUGIN_CATALOG_REPOSITORY_PATH, "Plugin catalog repository path is invalid.")
+  invariant(releaseManifest.sourceCommit === expectedCommit, "Plugin catalog manifest source commit does not match.")
+  invariant(releaseManifest.pluginCount === expectedPluginCount, "Plugin catalog manifest count does not match.")
+  invariant(Array.isArray(releaseManifest.assets) && releaseManifest.assets.length === expectedPluginCount, "Plugin catalog asset list is incomplete.")
+  invariant(releaseManifest.registry?.name === PLUGIN_CATALOG_REGISTRY_FILENAME, "Plugin catalog registry filename is invalid.")
+  invariant(releaseManifest.registry.size === registryBytes.length, "Plugin catalog registry size does not match.")
+  invariant(releaseManifest.registry.sha256 === sha256(registryBytes), "Plugin catalog registry checksum does not match.")
 
   invariant(registry.catalogID === PLUGIN_CATALOG_ID, "Plugin release registry catalog ID is invalid.")
   invariant(registry.sourceCommit === expectedCommit, "Plugin release registry source commit does not match.")
@@ -545,7 +552,7 @@ export async function verifyPluginRelease({
     invariant(asset.sha256 === plugin.package.sha256, `Plugin '${asset.pluginID}' asset checksum differs from the registry.`)
     invariant(asset.size === plugin.package.size, `Plugin '${asset.pluginID}' asset size differs from the registry.`)
 
-    const assetPath = join(resolvedOutput, asset.name)
+    const assetPath = join(resolvedOutput, PLUGIN_CATALOG_PACKAGES_DIRECTORY, asset.name)
     const stat = lstatSync(assetPath)
     invariant(stat.isFile() && !stat.isSymbolicLink(), `Plugin release asset is not a regular file: ${asset.name}`)
     invariant(stat.size === asset.size, `Plugin release asset size mismatch: ${asset.name}`)
@@ -553,18 +560,136 @@ export async function verifyPluginRelease({
   }
 
   const expectedFiles = new Set([
-    PLUGIN_RELEASE_MANIFEST_FILENAME,
-    PLUGIN_RELEASE_REGISTRY_FILENAME,
-    ...seenAssetNames,
+    PLUGIN_CATALOG_MANIFEST_FILENAME,
+    PLUGIN_CATALOG_REGISTRY_FILENAME,
+    PLUGIN_CATALOG_PACKAGES_DIRECTORY,
   ])
   const actualFiles = readdirSync(resolvedOutput, { withFileTypes: true })
   invariant(
-    actualFiles.every((entry) => entry.isFile() && expectedFiles.has(entry.name))
+    actualFiles.every((entry) => expectedFiles.has(entry.name))
     && actualFiles.length === expectedFiles.size,
-    "Plugin release directory contains missing or unexpected files.",
+    "Plugin catalog directory contains missing or unexpected files.",
+  )
+  const topLevelByName = new Map(actualFiles.map((entry) => [entry.name, entry]))
+  invariant(topLevelByName.get(PLUGIN_CATALOG_MANIFEST_FILENAME)?.isFile(), "Plugin catalog manifest must be a regular file.")
+  invariant(topLevelByName.get(PLUGIN_CATALOG_REGISTRY_FILENAME)?.isFile(), "Plugin catalog registry must be a regular file.")
+  invariant(topLevelByName.get(PLUGIN_CATALOG_PACKAGES_DIRECTORY)?.isDirectory(), "Plugin catalog packages entry must be a directory.")
+  const packageFiles = readdirSync(join(resolvedOutput, PLUGIN_CATALOG_PACKAGES_DIRECTORY), { withFileTypes: true })
+  invariant(
+    packageFiles.every((entry) => entry.isFile() && /^anybox-plugin-[a-z0-9._-]+-[a-z0-9._-]+\.zip$/i.test(entry.name))
+    && packageFiles.every((entry) => allowHistoricalPackages || seenAssetNames.has(entry.name))
+    && packageFiles.length >= seenAssetNames.size
+    && (allowHistoricalPackages || packageFiles.length === seenAssetNames.size),
+    "Plugin catalog package directory contains missing or unexpected files.",
   )
 
   return { registry, releaseManifest }
+}
+
+function assertCatalogTargetLayout(catalogDirectory) {
+  if (!existsSync(catalogDirectory)) return
+  const allowedTopLevel = new Set([
+    PLUGIN_CATALOG_MANIFEST_FILENAME,
+    PLUGIN_CATALOG_REGISTRY_FILENAME,
+    PLUGIN_CATALOG_PACKAGES_DIRECTORY,
+  ])
+  const entries = readdirSync(catalogDirectory, { withFileTypes: true })
+  invariant(entries.every((entry) => allowedTopLevel.has(entry.name)), "Plugin catalog target contains unexpected files.")
+  for (const entry of entries) {
+    if (entry.name === PLUGIN_CATALOG_PACKAGES_DIRECTORY) {
+      invariant(entry.isDirectory(), "Plugin catalog packages entry must be a directory.")
+      const packageEntries = readdirSync(join(catalogDirectory, entry.name), { withFileTypes: true })
+      invariant(
+        packageEntries.every((item) => item.isFile() && /^anybox-plugin-[a-z0-9._-]+-[a-z0-9._-]+\.zip$/i.test(item.name)),
+        "Plugin catalog target contains an invalid package file.",
+      )
+    } else {
+      invariant(entry.isFile(), `Plugin catalog target '${entry.name}' must be a regular file.`)
+    }
+  }
+}
+
+export async function preparePluginCatalogRepository({
+  repoRoot,
+  pluginsRoot = join(repoRoot, "plugins", "Anybox-Plugins"),
+  catalogDirectory = join(repoRoot, PLUGIN_CATALOG_REPOSITORY_PATH),
+  sourceCommit,
+  expectedPluginCount = CURRENT_PLUGIN_COUNT,
+  allowDirty = false,
+  maxPluginPackageBytes = MAX_PLUGIN_PACKAGE_BYTES,
+}) {
+  const resolvedRepoRoot = resolve(repoRoot)
+  const resolvedCatalog = resolve(catalogDirectory)
+  invariant(isPathInside(resolvedRepoRoot, resolvedCatalog), "Plugin catalog target must stay inside the repository.")
+  invariant(
+    normalizeRepositoryPath(relative(resolvedRepoRoot, resolvedCatalog)) === PLUGIN_CATALOG_REPOSITORY_PATH,
+    `Plugin catalog target must be ${PLUGIN_CATALOG_REPOSITORY_PATH}.`,
+  )
+  assertCatalogTargetLayout(resolvedCatalog)
+
+  const temporaryRoot = await mkdtemp(join(tmpdir(), "anybox-plugin-catalog-"))
+  const buildDirectory = join(temporaryRoot, "catalog")
+  try {
+    const build = await buildPluginRelease({
+      repoRoot: resolvedRepoRoot,
+      pluginsRoot,
+      outputDirectory: buildDirectory,
+      sourceCommit,
+      expectedPluginCount,
+      allowDirty,
+      maxPluginPackageBytes,
+    })
+    await verifyPluginRelease({
+      outputDirectory: buildDirectory,
+      sourceCommit,
+      expectedPluginCount,
+    })
+
+    const sourcePackages = join(buildDirectory, PLUGIN_CATALOG_PACKAGES_DIRECTORY)
+    const targetPackages = join(resolvedCatalog, PLUGIN_CATALOG_PACKAGES_DIRECTORY)
+    const newAssets = []
+    const reusedAssets = []
+    for (const asset of build.releaseManifest.assets) {
+      const sourcePath = join(sourcePackages, asset.name)
+      const targetPath = join(targetPackages, asset.name)
+      if (!existsSync(targetPath)) {
+        newAssets.push({ ...asset, sourcePath, targetPath })
+        continue
+      }
+      const targetBytes = await readFile(targetPath)
+      invariant(
+        targetBytes.length === asset.size && sha256(targetBytes) === asset.sha256,
+        `Plugin package '${asset.name}' already exists with different bytes; bump the plugin version before publishing.`,
+      )
+      reusedAssets.push(asset)
+    }
+
+    await mkdir(targetPackages, { recursive: true })
+    for (const asset of newAssets) await copyFile(asset.sourcePath, asset.targetPath)
+    await copyFile(
+      join(buildDirectory, PLUGIN_CATALOG_REGISTRY_FILENAME),
+      join(resolvedCatalog, PLUGIN_CATALOG_REGISTRY_FILENAME),
+    )
+    await copyFile(
+      join(buildDirectory, PLUGIN_CATALOG_MANIFEST_FILENAME),
+      join(resolvedCatalog, PLUGIN_CATALOG_MANIFEST_FILENAME),
+    )
+
+    await verifyPluginRelease({
+      outputDirectory: resolvedCatalog,
+      sourceCommit,
+      expectedPluginCount,
+      allowHistoricalPackages: true,
+    })
+    return {
+      ...build,
+      outputDirectory: resolvedCatalog,
+      newAssets: newAssets.map(({ sourcePath: _sourcePath, targetPath: _targetPath, ...asset }) => asset),
+      reusedAssets,
+    }
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true })
+  }
 }
 
 export async function buildPluginRelease({
@@ -585,7 +710,6 @@ export async function buildPluginRelease({
   if (!allowDirty) assertCleanPluginSources(resolvedRepoRoot)
 
   const sourceCommitLower = sourceCommit.toLowerCase()
-  const releaseTag = PLUGIN_CATALOG_RELEASE_TAG
   const packages = discoverPluginPackages(resolvedPluginsRoot, expectedPluginCount)
   const pluginIDs = packages.map((plugin) => plugin.id)
   assertIndexMatchesInventory(resolvedPluginsRoot, pluginIDs)
@@ -593,6 +717,7 @@ export async function buildPluginRelease({
   const stagingDirectory = `${resolvedOutput}.staging-${process.pid}`
   await rm(stagingDirectory, { recursive: true, force: true })
   await mkdir(stagingDirectory, { recursive: true })
+  await mkdir(join(stagingDirectory, PLUGIN_CATALOG_PACKAGES_DIRECTORY), { recursive: true })
 
   try {
     const registryPlugins = []
@@ -619,13 +744,13 @@ export async function buildPluginRelease({
         sha256: sha256(zipBytes),
         size: zipBytes.length,
       }
-      await writeFile(join(stagingDirectory, assetName), zipBytes)
+      await writeFile(join(stagingDirectory, PLUGIN_CATALOG_PACKAGES_DIRECTORY, assetName), zipBytes)
       assets.push(asset)
       registryPlugins.push({
         ...registryManifest,
         package: {
           type: "zip",
-          url: releaseAssetURL(releaseTag, assetName),
+          url: catalogPackageURL(assetName),
           sha256: asset.sha256,
           size: asset.size,
         },
@@ -641,23 +766,24 @@ export async function buildPluginRelease({
     }
     validateReleaseRegistryShape(registry, expectedPluginCount)
     const registryBytes = Buffer.from(`${JSON.stringify(registry, null, 2)}\n`)
-    await writeFile(join(stagingDirectory, PLUGIN_RELEASE_REGISTRY_FILENAME), registryBytes)
+    await writeFile(join(stagingDirectory, PLUGIN_CATALOG_REGISTRY_FILENAME), registryBytes)
 
     const releaseManifest = {
-      schemaVersion: 2,
+      schemaVersion: 3,
       catalogID: PLUGIN_CATALOG_ID,
-      releaseTag,
+      repositoryRef: PLUGIN_CATALOG_REPOSITORY_REF,
+      catalogPath: PLUGIN_CATALOG_REPOSITORY_PATH,
       sourceCommit: sourceCommitLower,
       pluginCount: assets.length,
       registry: {
-        name: PLUGIN_RELEASE_REGISTRY_FILENAME,
+        name: PLUGIN_CATALOG_REGISTRY_FILENAME,
         sha256: sha256(registryBytes),
         size: registryBytes.length,
       },
       assets,
     }
     await writeFile(
-      join(stagingDirectory, PLUGIN_RELEASE_MANIFEST_FILENAME),
+      join(stagingDirectory, PLUGIN_CATALOG_MANIFEST_FILENAME),
       `${JSON.stringify(releaseManifest, null, 2)}\n`,
     )
 

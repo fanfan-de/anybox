@@ -21,7 +21,7 @@ description: 创建、审查或验证 Anybox 第三方插件包。Use when the u
 4. 在插件根目录添加运行文件，例如 `skills/`、`connectors/`、`scripts/`、`docs/` 和 `assets/`。
 5. 使用 `Plugin.listCatalog()` 验证 catalog 能发现插件。
 6. 更新内置仓库时运行 `pnpm plugins:index`，不要手改或把它当成正式生产目录。
-7. 如果修改了插件系统或分发代码，运行 `pnpm plugins:release:test` 和 `bun test Test/plugin.test.ts`。
+7. 如果修改了插件系统或分发代码，运行 `pnpm plugins:catalog:test` 和 `bun test Test/plugin.test.ts`。
 
 ## 插件包结构
 
@@ -46,7 +46,7 @@ description: 创建、审查或验证 Anybox 第三方插件包。Use when the u
 - `<install-root>` 是包含一个或多个插件包目录的父目录；开发新插件时优先把它作为 `ANYBOX_PLUGIN_LOCAL_DIR`。
 - 当前运行时用 `ANYBOX_PLUGIN_LOCAL_DIR` 发现固定本地插件仓库，未设置时默认是 Agent data 目录下的 `plugins/local`。这个目录逻辑上等价于 GitHub 插件仓库，只提供可安装候选项，不受卸载流程删除。
 - `ANYBOX_PLUGIN_INSTALL_DIR` 是受管理安装根目录，用于网络下载或从本地仓库安装时复制出来的插件包。这里的插件逻辑上属于已安装插件，运行时使用这里的副本，卸载时可能删除对应插件包。
-- 新包和正式 Release 只使用 `.anybox-plugin/plugin.json`；根目录 `plugin.json` 与 `.codex-plugin/plugin.json` 仅作为手动导入兼容入口。
+- 新包和正式目录资产只使用 `.anybox-plugin/plugin.json`；根目录 `plugin.json` 与 `.codex-plugin/plugin.json` 仅作为手动导入兼容入口。
 - `skills`、`connectors`、`scripts`、`docs` 和 `assets` 应放在插件根目录。
 - 插件 ID 使用稳定的小写名称。目录名和 manifest `name` 尽量保持一致。
 - 如果确实需要多个版本并存，也可以使用 `<plugin-id>/<version>/.anybox-plugin/plugin.json`，运行时会选择最高版本。
@@ -74,8 +74,8 @@ description: 创建、审查或验证 Anybox 第三方插件包。Use when the u
 - `connectors`
 - `apps`，仅用于旧兼容
 - `commands`、`agents`，当前是保留字段
-- `skillPreviews` 可用于仓库 manifest 的市场预览；源 manifest 不提交 `package`，正式 ZIP 元数据由 Release 打包器生成。
-- 内置仓库的 `index.json` 是源码清单索引，但默认安装目录使用独立的 `releases/download/anybox-plugin-catalog/anybox-plugin-registry.json`。桌面开发版与正式版默认不扫描本地仓库源码包；只有显式设置 `ANYBOX_PLUGIN_INCLUDE_SOURCE_PACKAGES=1` 才启用源码包。插件目录不跟随桌面版本或 `latest` Release，目录中的插件包仍只允许带插件版本、摘要和字节数的 write-once ZIP。
+- `skillPreviews` 可用于仓库 manifest 的市场预览；源 manifest 不提交 `package`，正式 ZIP 元数据由本地 Catalog 打包器生成。
+- 内置仓库的 `index.json` 是源码清单索引，但默认安装目录使用仓库 `.catalog/anybox-plugin-registry.json` 的稳定 raw URL。桌面开发版与正式版默认不扫描本地仓库源码包；只有显式设置 `ANYBOX_PLUGIN_INCLUDE_SOURCE_PACKAGES=1` 才启用源码包。目录不跟随桌面版本；Registry 和 write-once ZIP 全部在本地生成、验证，再作为普通 Git 文件提交和推送，不依赖 GitHub Actions、Release 或 API。
 
 未知顶层字段会被拒绝。
 
@@ -209,11 +209,13 @@ bun -e "import * as Plugin from './src/plugin/plugin.ts'; console.log(JSON.strin
 ```powershell
 cd C:\Projects\anybox
 pnpm plugins:index:check
-pnpm plugins:release:test
+pnpm plugins:catalog:test
 
 cd C:\Projects\anybox\packages\anyboxagent
 bun test Test/plugin.test.ts
 ```
+
+准备正式仓库目录时，先提交插件源码，再在仓库根目录运行 `pnpm plugins:catalog:prepare` 和 `pnpm plugins:catalog:verify`。随后只需把 `.catalog/` 作为普通 Git 变更提交并推送；不要调用 GitHub Actions、Release 或 API。
 
 ## 常见失败
 

@@ -164,7 +164,7 @@ describe("managed agent workspace dependencies", () => {
         expect(String(env[managedAgentInternals.env.protectedProcessNames])).toContain("anybox.exe")
         expect(env[managedAgentInternals.env.pluginSourcePackages]).toBe("0")
         expect(env[managedAgentInternals.env.pluginRegistryURL]).toBe(
-          "https://github.com/fanfan-de/anybox/releases/download/anybox-plugin-catalog/anybox-plugin-registry.json",
+          "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/.catalog/anybox-plugin-registry.json",
         )
         expect(env.ANYBOX_CONNECTOR_BUILD_CONFIG).toBe(connectorBuildConfigPath)
         expect(env.ANYBOX_SERVER_PORT).toBe("4567")
@@ -220,7 +220,7 @@ describe("managed agent workspace dependencies", () => {
         expect(env[managedAgentInternals.env.workspaceDependenciesVersion]).toBeUndefined()
         expect(env[managedAgentInternals.env.pluginSourcePackages]).toBe("0")
         expect(env[managedAgentInternals.env.pluginRegistryURL]).toBe(
-          "https://github.com/fanfan-de/anybox/releases/download/anybox-plugin-catalog/anybox-plugin-registry.json",
+          "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/.catalog/anybox-plugin-registry.json",
         )
       },
     )

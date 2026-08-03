@@ -13,6 +13,6 @@ process.stdout.write(`${JSON.stringify({
   catalogID: registry.schemaVersion === 3 ? registry.catalogID : undefined,
   desktopVersion: registry.schemaVersion === 2 ? registry.desktopVersion : undefined,
   pluginCount: registry.pluginCount,
-  releaseTag: registry.schemaVersion === 2 ? registry.releaseTag : "anybox-plugin-catalog",
+  releaseTag: registry.schemaVersion === 2 ? registry.releaseTag : undefined,
   sourceCommit: registry.sourceCommit,
 })}\n`)

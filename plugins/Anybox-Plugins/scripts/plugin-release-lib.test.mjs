@@ -8,9 +8,13 @@ import test from "node:test"
 import {
   buildPluginRelease,
   PLUGIN_CATALOG_ID,
-  PLUGIN_CATALOG_RELEASE_TAG,
-  PLUGIN_RELEASE_MANIFEST_FILENAME,
-  PLUGIN_RELEASE_REGISTRY_FILENAME,
+  PLUGIN_CATALOG_MANIFEST_FILENAME,
+  PLUGIN_CATALOG_PACKAGES_DIRECTORY,
+  PLUGIN_CATALOG_RAW_BASE_URL,
+  PLUGIN_CATALOG_REGISTRY_FILENAME,
+  PLUGIN_CATALOG_REPOSITORY_PATH,
+  PLUGIN_CATALOG_REPOSITORY_REF,
+  preparePluginCatalogRepository,
   verifyPluginRelease,
 } from "./plugin-release-lib.mjs"
 
@@ -68,15 +72,18 @@ async function createFixtureRepository(pluginIDs = ["alpha", "beta"]) {
 }
 
 async function listReleaseBytes(directory, manifest) {
-  const names = [
-    PLUGIN_RELEASE_MANIFEST_FILENAME,
-    PLUGIN_RELEASE_REGISTRY_FILENAME,
-    ...manifest.assets.map((asset) => asset.name),
-  ].sort()
-  return new Map(await Promise.all(names.map(async (name) => [name, await readFile(join(directory, name))])))
+  const files = [
+    [PLUGIN_CATALOG_MANIFEST_FILENAME, join(directory, PLUGIN_CATALOG_MANIFEST_FILENAME)],
+    [PLUGIN_CATALOG_REGISTRY_FILENAME, join(directory, PLUGIN_CATALOG_REGISTRY_FILENAME)],
+    ...manifest.assets.map((asset) => [
+      asset.name,
+      join(directory, PLUGIN_CATALOG_PACKAGES_DIRECTORY, asset.name),
+    ]),
+  ].sort(([left], [right]) => left.localeCompare(right))
+  return new Map(await Promise.all(files.map(async ([name, filePath]) => [name, await readFile(filePath)])))
 }
 
-test("builds byte-identical ZIPs, registry metadata, and release manifests", async () => {
+test("builds byte-identical ZIPs, registry metadata, and repository catalog manifests", async () => {
   const fixture = await createFixtureRepository()
   try {
     const firstDirectory = join(fixture.root, "release-one")
@@ -102,15 +109,16 @@ test("builds byte-identical ZIPs, registry metadata, and release manifests", asy
     assert.equal(first.registry.pluginCount, 2)
     assert.equal(first.registry.schemaVersion, 3)
     assert.equal(first.registry.catalogID, PLUGIN_CATALOG_ID)
-    assert.equal(first.releaseManifest.schemaVersion, 2)
+    assert.equal(first.releaseManifest.schemaVersion, 3)
     assert.equal(first.releaseManifest.catalogID, PLUGIN_CATALOG_ID)
-    assert.equal(first.releaseManifest.releaseTag, PLUGIN_CATALOG_RELEASE_TAG)
+    assert.equal(first.releaseManifest.repositoryRef, PLUGIN_CATALOG_REPOSITORY_REF)
+    assert.equal(first.releaseManifest.catalogPath, PLUGIN_CATALOG_REPOSITORY_PATH)
     assert.equal("desktopVersion" in first.registry, false)
     assert.equal("desktopVersion" in first.releaseManifest, false)
     assert.deepEqual(first.registry.plugins.map((plugin) => plugin.id), ["alpha", "beta"])
     assert.ok(first.registry.plugins.every((plugin) => plugin.package.type === "zip"))
     assert.ok(first.registry.plugins.every((plugin) =>
-      plugin.package.url.startsWith(`https://github.com/fanfan-de/anybox/releases/download/${PLUGIN_CATALOG_RELEASE_TAG}/`)))
+      plugin.package.url.startsWith(`${PLUGIN_CATALOG_RAW_BASE_URL}/${PLUGIN_CATALOG_PACKAGES_DIRECTORY}/`)))
     assert.doesNotMatch(JSON.stringify(first.registry), /github-tree/)
   } finally {
     await rm(fixture.root, { recursive: true, force: true })
@@ -152,8 +160,8 @@ test("rejects invalid manifests, duplicate IDs/manifests, sensitive files, unsaf
         expectedPluginCount: 2,
       })
 
-      const registryPath = join(outputDirectory, PLUGIN_RELEASE_REGISTRY_FILENAME)
-      const releaseManifestPath = join(outputDirectory, PLUGIN_RELEASE_MANIFEST_FILENAME)
+      const registryPath = join(outputDirectory, PLUGIN_CATALOG_REGISTRY_FILENAME)
+      const releaseManifestPath = join(outputDirectory, PLUGIN_CATALOG_MANIFEST_FILENAME)
       const registry = JSON.parse(await readFile(registryPath, "utf8"))
       registry.plugins[1].id = registry.plugins[0].id
       registry.plugins[1].name = registry.plugins[0].name
@@ -290,4 +298,40 @@ test("rejects invalid manifests, duplicate IDs/manifests, sensitive files, unsaf
       await rm(fixture.root, { recursive: true, force: true })
     }
   })
+})
+
+test("prepares the repository catalog locally and refuses to overwrite a versioned package", async () => {
+  const fixture = await createFixtureRepository()
+  try {
+    const catalogDirectory = join(fixture.root, PLUGIN_CATALOG_REPOSITORY_PATH)
+    const input = {
+      repoRoot: fixture.root,
+      pluginsRoot: fixture.pluginsRoot,
+      catalogDirectory,
+      sourceCommit: fixture.sourceCommit,
+      expectedPluginCount: 2,
+    }
+    const first = await preparePluginCatalogRepository(input)
+    assert.equal(first.newAssets.length, 2)
+    assert.equal(first.reusedAssets.length, 0)
+    await verifyPluginRelease({
+      outputDirectory: catalogDirectory,
+      sourceCommit: fixture.sourceCommit,
+      expectedPluginCount: 2,
+      allowHistoricalPackages: true,
+    })
+
+    const second = await preparePluginCatalogRepository(input)
+    assert.equal(second.newAssets.length, 0)
+    assert.equal(second.reusedAssets.length, 2)
+
+    const assetName = second.releaseManifest.assets[0].name
+    await writeFile(join(catalogDirectory, PLUGIN_CATALOG_PACKAGES_DIRECTORY, assetName), "tampered\n")
+    await assert.rejects(
+      preparePluginCatalogRepository(input),
+      /already exists with different bytes; bump the plugin version/,
+    )
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true })
+  }
 })

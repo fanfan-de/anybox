@@ -30,7 +30,7 @@ const MANAGED_AGENT_PROTECTED_PROCESS_NAMES_ENV = "ANYBOX_PROTECTED_PROCESS_NAME
 const MANAGED_AGENT_PLUGIN_SOURCE_PACKAGES_ENV = "ANYBOX_PLUGIN_INCLUDE_SOURCE_PACKAGES"
 const MANAGED_AGENT_PLUGIN_REGISTRY_URL_ENV = "ANYBOX_PLUGIN_REGISTRY_INDEX_URL"
 const DEFAULT_MANAGED_AGENT_PLUGIN_REGISTRY_URL =
-  "https://github.com/fanfan-de/anybox/releases/download/anybox-plugin-catalog/anybox-plugin-registry.json"
+  "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/.catalog/anybox-plugin-registry.json"
 const MANAGED_AGENT_PLUGIN_INSTALL_DIR_ENV_KEYS = [
   "ANYBOX_PLUGIN_INSTALL_DIR",
 ]

@@ -63,7 +63,7 @@ my-anybox-plugins/
 
 ### Manifest
 
-`plugin.json` 是插件清单。它是严格 JSON，未知顶层字段会被拒绝。仓库 manifest 可以包含 `skillPreviews`，但不应提交 `package`；Anybox 的 Release 打包器会在生成的正式目录中写入不可变下载元数据。
+`plugin.json` 是插件清单。它是严格 JSON，未知顶层字段会被拒绝。仓库 manifest 可以包含 `skillPreviews`，但不应提交 `package`；Anybox 的本地 Catalog 打包器会在生成的正式目录中写入不可变下载元数据。
 
 最小清单：
 
@@ -778,11 +778,11 @@ anybox-plugin-examples/
 $env:ANYBOX_PLUGIN_LOCAL_DIR = "C:\Projects\anybox-plugin-examples"
 ```
 
-Anybox 开发版与正式版默认行为一致，都不自动扫描本地仓库源码插件。打开插件页时，它们从独立的 `https://github.com/fanfan-de/anybox/releases/download/anybox-plugin-catalog/anybox-plugin-registry.json` 拉取同一份 GitHub 目录。该目录不跟随 Anybox 桌面版本，也不会被新的桌面 `latest` Release 覆盖。目录中的每个插件包仍带插件自身版本、SHA-256 摘要和精确字节数；发布工作流禁止用不同内容覆盖已有的同名 ZIP。首次启动离线时无法获得目录；至少成功拉取过一次后，才可使用按 URL 和协议隔离的已验证缓存。
+Anybox 开发版与正式版默认行为一致，都不自动扫描本地仓库源码插件。打开插件页时，它们从 `https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/.catalog/anybox-plugin-registry.json` 拉取同一份仓库目录。该目录不跟随 Anybox 桌面版本。目录中的每个插件包带插件自身版本、SHA-256 摘要和精确字节数；本地准备命令禁止用不同内容覆盖已有的同名 ZIP。首次启动离线时无法获得目录；至少成功拉取过一次后，才可使用按 URL 和协议隔离的已验证缓存。
 
-仓库里的 `index.json` 是自动生成的默认目录。运行 `pnpm plugins:index` 更新，运行 `pnpm plugins:index:check` 校验。它使用规范 HTTPS manifest URL；根 `plugin.json`、`.codex-plugin/plugin.json` 和其他 GitHub Tree 形式仍只是兼容输入。
+仓库里的 `index.json` 是自动生成的源码清单索引，不是开发版或正式版的默认运行时目录。运行 `pnpm plugins:index` 更新，运行 `pnpm plugins:index:check` 校验。它使用规范 HTTPS manifest URL；根 `plugin.json`、`.codex-plugin/plugin.json` 和其他 GitHub Tree 形式仍只是兼容输入。
 
-ZIP、正式目录和 Release manifest 都是候选构建产物，不提交到 Git，也不会整包内置进桌面安装器。第三方仓库可以继续通过 `ANYBOX_PLUGIN_LOCAL_DIR` 本地开发，或使用手动 URL 导入；开发 Anybox 仓库自身插件时必须显式设置 `ANYBOX_PLUGIN_INCLUDE_SOURCE_PACKAGES=1`。GitHub 目录安装会固定一次 Commit 后下载一次仓库归档，不再逐文件调用 Contents API。
+展开式插件源码不会整包内置进桌面安装器。Anybox 仓库自身的发布顺序是：先提交插件源码，再运行 `pnpm plugins:catalog:prepare` 和 `pnpm plugins:catalog:verify`，最后把生成的 `.catalog/` 作为普通 Git 变更提交并推送。整个过程不依赖 GitHub Actions、Release 或 API。第三方仓库可以继续通过 `ANYBOX_PLUGIN_LOCAL_DIR` 本地开发，或使用手动 URL 导入；开发 Anybox 仓库自身插件时必须显式设置 `ANYBOX_PLUGIN_INCLUDE_SOURCE_PACKAGES=1`。
 
 ## 常见问题
 
@@ -802,7 +802,7 @@ ZIP、正式目录和 Release manifest 都是候选构建产物，不提交到 G
 
 ### 商店目录不完整或安装失败
 
-- `PLUGIN_REGISTRY_UNAVAILABLE`：无法从 GitHub 拉取目录、Release 缺少目录资产，或整份目录校验失败；检查 GitHub 网络后重试。
+- `PLUGIN_REGISTRY_UNAVAILABLE`：无法从远程仓库拉取目录、`.catalog` 文件尚未推送，或整份目录校验失败；检查仓库文件与网络后重试。
 - `PLUGIN_PACKAGE_UNAVAILABLE`：目录条目无法推导或下载可用的 GitHub 插件包。
 - `PLUGIN_PACKAGE_DOWNLOAD_FAILED`：GitHub 不可达或下载超时。
 - `PLUGIN_PACKAGE_INVALID`：大小、SHA-256、ZIP 路径或清单 ID/版本校验失败。

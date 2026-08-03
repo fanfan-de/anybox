@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url"
 import {
   buildPluginRelease,
   CURRENT_PLUGIN_COUNT,
-  PLUGIN_RELEASE_REGISTRY_FILENAME,
+  PLUGIN_CATALOG_REGISTRY_FILENAME,
 } from "./plugin-release-lib.mjs"
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url))
@@ -84,9 +84,9 @@ const result = await buildPluginRelease({
   expectedPluginCount,
   allowDirty: args.allowDirty === true,
 })
-const registryPath = join(result.outputDirectory, PLUGIN_RELEASE_REGISTRY_FILENAME)
+const registryPath = join(result.outputDirectory, PLUGIN_CATALOG_REGISTRY_FILENAME)
 validateWithRuntime(registryPath)
 const registry = JSON.parse(readFileSync(registryPath, "utf8"))
 console.log(
-  `[plugin-release] built ${registry.pluginCount} deterministic plugin packages for ${result.releaseManifest.releaseTag} in ${result.outputDirectory}`,
+  `[plugin-catalog] built ${registry.pluginCount} deterministic plugin packages for repository ref ${result.releaseManifest.repositoryRef} in ${result.outputDirectory}`,
 )

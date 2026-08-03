@@ -53,7 +53,7 @@ async function listen(server) {
   })
   const address = server.address()
   if (!address || typeof address === "string") {
-    throw new Error("Unable to start the local plugin Release registry simulator.")
+    throw new Error("Unable to start the local plugin catalog registry simulator.")
   }
   return address.port
 }
@@ -179,7 +179,7 @@ try {
     || !["chrome", "computer-use-windows", "cinema"].every((id) => uniqueIDs.has(id))
   ) {
     throw new Error(
-      `Remote Release catalog must contain exactly 60 plugins, got ${ids.length}: ${ids.join(", ")}`,
+      `Remote repository catalog must contain exactly 60 plugins, got ${ids.length}: ${ids.join(", ")}`,
     )
   }
   if (registryRequestCount !== 1) {
