@@ -76,7 +76,6 @@ interface GlobalSkillsPageProps {
   onCreateGlobalSkillDraftCancel: () => void
   onCreateGlobalSkillDraftChange: (value: string) => void
   onCreateGlobalSkillDraftStart: (kind?: CreateGlobalSkillDraftKind, parentDirectory?: string | null) => void
-  onDelete: () => void | Promise<void>
   onDeleteGlobalSkill: (directoryPath?: string) => void | Promise<void>
   onGitInstallDialogClose: () => void
   onGitInstallDialogOpen: () => void
@@ -1581,7 +1580,6 @@ export function GlobalSkillsPage({
   onCreateGlobalSkillDraftCancel,
   onCreateGlobalSkillDraftChange,
   onCreateGlobalSkillDraftStart,
-  onDelete,
   onDeleteGlobalSkill,
   onGitInstallDialogClose,
   onGitInstallDialogOpen,
@@ -1674,7 +1672,6 @@ export function GlobalSkillsPage({
 
           <div className="settings-service-detail-panel global-skills-detail-panel">
             <GlobalSkillsCanvas
-              deletingGlobalSkillDirectory={deletingGlobalSkillDirectory}
               globalSkillsRoot={globalSkillsRoot}
               isDirty={isDirty}
               isLoadingFile={isLoadingFile}
@@ -1686,7 +1683,6 @@ export function GlobalSkillsPage({
               selectedSkillDirectoryName={selectedSkillDirectoryName}
               selectedSkillFiles={selectedSkillDirectory?.children ?? []}
               onChange={onChange}
-              onDelete={onDelete}
               onFileSelect={onGlobalSkillFileSelect}
               onSave={onSave}
             />

@@ -108,8 +108,6 @@ function openActivityRailConfigurationView(label: string | RegExp) {
 }
 
 async function openLocalSkillEditor() {
-  const detailTabs = await screen.findByRole("tablist", { name: "Skill detail sections" })
-  fireEvent.click(within(detailTabs).getByRole("tab", { name: "Files" }))
   const viewMode = await screen.findByRole("group", { name: "Skill file view mode" })
   fireEvent.click(within(viewMode).getByRole("button", { name: "Edit" }))
   return screen.findByRole("textbox", { name: "Local skill editor" })
@@ -3715,11 +3713,9 @@ describe("App", () => {
 
     openActivityRailConfigurationView("Open skills")
 
-    expect(await screen.findByRole("button", { name: "Delete" })).toHaveClass("secondary-button", "is-danger")
-    const detailTabs = screen.getByRole("tablist", { name: "Skill detail sections" })
-    fireEvent.click(within(detailTabs).getByRole("tab", { name: "Files" }))
-
-    expect(screen.getByRole("heading", { name: "Preview Heading" })).toBeInTheDocument()
+    expect(await screen.findByRole("heading", { name: "Preview Heading" })).toBeInTheDocument()
+    expect(screen.queryByRole("tablist", { name: "Skill detail sections" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument()
     expect(screen.getByText("First task")).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole("button", { name: "Edit" }))
@@ -3750,7 +3746,7 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Save" })).not.toBeDisabled()
   })
 
-  it("renders global skill frontmatter as structured preview metadata", async () => {
+  it("uses local SKILL frontmatter in the compact header without repeating a metadata panel", async () => {
     const root = "C:\\Users\\19128\\.anybox\\skills"
     const directoryPath = `${root}\\agent-browser`
     const filePath = `${directoryPath}\\SKILL.md`
@@ -3796,15 +3792,10 @@ describe("App", () => {
     const agentBrowserRow = await screen.findByRole("button", { name: "agent-browser" })
     expect(agentBrowserRow).toHaveClass("is-selected")
     expect(document.querySelectorAll(".skill-library-result-row.is-selected")).toHaveLength(1)
-    fireEvent.click(screen.getByRole("tab", { name: "Files" }))
-    expect(screen.getByRole("button", { name: "SKILL.md" })).toBeInTheDocument()
-
-    const metadata = screen.getByRole("region", { name: "Skill metadata" })
-    expect(within(metadata).getByText("Skill Metadata")).toBeInTheDocument()
-    expect(within(metadata).getByText("Browser automation CLI for AI agents.")).toBeInTheDocument()
-    expect(within(metadata).getByText("Hidden")).toBeInTheDocument()
-    expect(within(metadata).getByText("Bash(agent-browser:*)")).toBeInTheDocument()
-    expect(within(metadata).getByText("Bash(npx agent-browser:*)")).toBeInTheDocument()
+    expect(await screen.findByRole("treeitem", { name: "SKILL.md" })).toBeInTheDocument()
+    await screen.findByText("Browser automation CLI for AI agents.")
+    expect(screen.queryByRole("region", { name: "Skill metadata" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("tab", { name: "Files" })).not.toBeInTheDocument()
     expect(screen.getByRole("heading", { name: "agent-browser", level: 1 })).toBeInTheDocument()
     expect(screen.queryByText(/name: agent-browser/)).not.toBeInTheDocument()
     expect(screen.queryByText(/allowed-tools:/)).not.toBeInTheDocument()
@@ -9383,6 +9374,9 @@ describe("App", () => {
     }
 
     expect(document.querySelector("#app-sidebar")).toBeInTheDocument()
+    const resourcesAppShell = document.querySelector(".app-shell")
+    expect(resourcesAppShell?.getAttribute("style")).toContain("--sidebar-display-width: var(--resource-library-width)")
+    expect(screen.queryByTestId("sidebar-resizer")).not.toBeInTheDocument()
     expect(screen.queryByRole("complementary", { name: "Inspector sidebar" })).not.toBeInTheDocument()
     const promptTree = await screen.findByRole("list", { name: "Prompt presets" })
     const bundledPromptFolder = within(promptTree).getByRole("button", { name: "Bundled prompt folder" })
@@ -15209,6 +15203,7 @@ describe("App", () => {
   })
 
   it("lets the Skills workspace structural regions inherit the shell surface", () => {
+    expect(styles).toMatch(/\.app-shell\s*\{[^}]*--resource-library-width:\s*340px;/s)
     expect(styles).toMatch(
       /\.skills-workspace-page\s*\{[^}]*--skills-workspace-shell-surface:\s*var\(--surface-shell\);[^}]*background:\s*var\(--skills-workspace-shell-surface\);/s,
     )
@@ -15216,7 +15211,7 @@ describe("App", () => {
       /\.skills-workspace-toolbar\s*\{[^}]*background:\s*var\(--skills-workspace-shell-surface\);/s,
     )
     expect(styles).toMatch(
-      /\.skills-workspace-content\s*\{[^}]*background:\s*var\(--skills-workspace-shell-surface\);/s,
+      /\.skills-workspace-content\s*\{[^}]*grid-template-columns:\s*var\(--resource-library-width,\s*340px\)\s+minmax\(0,\s*1fr\);[^}]*background:\s*var\(--skills-workspace-shell-surface\);/s,
     )
     expect(styles).toMatch(
       /\.skills-workspace-list-panel,\s*\.skills-workspace-detail-panel\s*\{[^}]*background:\s*var\(--skills-workspace-shell-surface\);/s,

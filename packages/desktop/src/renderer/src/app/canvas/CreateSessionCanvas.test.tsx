@@ -179,32 +179,37 @@ describe("CreateSessionCanvas", () => {
 })
 
 describe("GlobalSkillsCanvas", () => {
-  it("shows local skill details first and keeps internal files in the Files tab", () => {
+  it("shows local skill details with a persistent right-side file navigator", () => {
     window.localStorage.setItem("desktop.locale", "en-US")
     const onFileSelect = vi.fn()
-
-    render(
+    const skillPath = "C:/Anybox/skills/Design/brand-guidelines/SKILL.md"
+    const licensePath = "C:/Anybox/skills/Design/brand-guidelines/LICENSE.txt"
+    const skillContent = '---\nname: brand-guidelines\ndescription: Keep the product voice consistent.\n---\n\n# Brand guide'
+    const renderCanvas = (
+      selectedFilePath = skillPath,
+      selectedFileContent = skillContent,
+      isLoadingFile = false,
+    ) => (
       <I18nProvider>
         <GlobalSkillsCanvas
-          deletingGlobalSkillDirectory={null}
           globalSkillsRoot="C:/Anybox/skills"
           isDirty={false}
-          isLoadingFile={false}
+          isLoadingFile={isLoadingFile}
           isSavingFile={false}
-          selectedFileContent={'---\nname: brand-guidelines\ndescription: Keep the product voice consistent.\n---\n\n# Brand guide'}
-          selectedFilePath="C:/Anybox/skills/Design/brand-guidelines/SKILL.md"
+          selectedFileContent={selectedFileContent}
+          selectedFilePath={selectedFilePath}
           selectedFileReadOnly={false}
           selectedSkillDirectoryPath="C:/Anybox/skills/Design/brand-guidelines"
           selectedSkillDirectoryName="brand-guidelines"
           selectedSkillFiles={[
             {
               name: "SKILL.md",
-              path: "C:/Anybox/skills/Design/brand-guidelines/SKILL.md",
+              path: skillPath,
               kind: "file",
             },
             {
               name: "LICENSE.txt",
-              path: "C:/Anybox/skills/Design/brand-guidelines/LICENSE.txt",
+              path: licensePath,
               kind: "file",
             },
             {
@@ -219,24 +224,58 @@ describe("GlobalSkillsCanvas", () => {
             },
           ]}
           onChange={vi.fn()}
-          onDelete={vi.fn()}
           onFileSelect={onFileSelect}
           onSave={vi.fn()}
         />
-      </I18nProvider>,
+      </I18nProvider>
     )
+
+    const { rerender } = render(renderCanvas())
 
     expect(screen.getByRole("heading", { name: "brand-guidelines", level: 2 })).toBeInTheDocument()
     expect(screen.getByText("Keep the product voice consistent.")).toBeInTheDocument()
-    expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute("aria-selected", "true")
-    expect(screen.queryByRole("button", { name: "LICENSE.txt" })).not.toBeInTheDocument()
+    expect(document.querySelector(".skill-library-local-detail .skill-library-product-icon")).toBeNull()
+    expect(screen.queryByRole("tablist")).not.toBeInTheDocument()
+    expect(document.querySelector(".skill-library-overview-grid")).not.toBeInTheDocument()
+    expect(screen.queryByText("Skill content")).not.toBeInTheDocument()
+    expect(screen.getByRole("region", { name: "SKILL.md" })).toBeInTheDocument()
+    const fileSidebar = screen.getByRole("complementary", { name: "Skill files" })
+    const threeColumnDetail = document.querySelector(".skill-library-downloaded-detail")
+    expect(threeColumnDetail?.firstElementChild).toHaveClass("skill-library-detail-center")
+    expect(threeColumnDetail?.lastElementChild).toBe(fileSidebar)
+    expect(screen.getByRole("tree", { name: "Skill files" })).toBeInTheDocument()
+    expect(screen.getByRole("treeitem", { name: "SKILL.md" })).toHaveAttribute("aria-selected", "true")
+    const referencesFolder = screen.getByRole("treeitem", { name: "references" })
+    expect(referencesFolder).toHaveAttribute("aria-expanded", "false")
+    expect(screen.queryByRole("treeitem", { name: "voice.md" })).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole("tab", { name: "Files" }))
+    act(() => referencesFolder.focus())
+    fireEvent.keyDown(referencesFolder, { key: "ArrowRight" })
+    expect(referencesFolder).toHaveAttribute("aria-expanded", "true")
+    const voiceFile = screen.getByRole("treeitem", { name: "voice.md" })
+    expect(voiceFile).toHaveAttribute("aria-level", "2")
+    fireEvent.keyDown(referencesFolder, { key: "ArrowRight" })
+    expect(voiceFile).toHaveFocus()
+    fireEvent.keyDown(voiceFile, { key: "Enter" })
+    expect(onFileSelect).toHaveBeenCalledWith("C:/Anybox/skills/Design/brand-guidelines/references/voice.md")
 
-    expect(screen.getByRole("button", { name: "SKILL.md" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "LICENSE.txt" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "references/voice.md" })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole("button", { name: "LICENSE.txt" }))
-    expect(onFileSelect).toHaveBeenCalledWith("C:/Anybox/skills/Design/brand-guidelines/LICENSE.txt")
+    const fileTree = screen.getByRole("tree", { name: "Skill files" })
+    const renderedSkillHeading = screen.getByRole("heading", { name: "Brand guide" })
+    rerender(renderCanvas(skillPath, skillContent, true))
+
+    expect(screen.getByRole("tree", { name: "Skill files" })).toBe(fileTree)
+    expect(screen.getByRole("treeitem", { name: "references" })).toHaveAttribute("aria-expanded", "true")
+    expect(screen.getByRole("treeitem", { name: "voice.md" })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Brand guide" })).toBe(renderedSkillHeading)
+    expect(document.querySelector(".global-skills-editor-shell")).toHaveAttribute("aria-busy", "true")
+
+    const licenseFile = screen.getByRole("treeitem", { name: "LICENSE.txt" })
+
+    fireEvent.click(licenseFile)
+
+    expect(onFileSelect).toHaveBeenCalledWith(licensePath)
+    rerender(renderCanvas(licensePath, "License terms"))
+    expect(screen.getByRole("region", { name: "LICENSE.txt" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled()
   })
 })

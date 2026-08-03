@@ -17,6 +17,7 @@ import {
   DownloadIcon,
   FileTextIcon,
   ForkIcon,
+  FolderIcon,
   KeyIcon,
   OpenExternalIcon,
   ResetIcon,
@@ -28,10 +29,12 @@ import {
 } from "../icons"
 import { useI18n } from "../i18n/I18nProvider"
 import { joinClassNames, writeTextToClipboard } from "../shared-ui"
+import { SkillFileList, SkillFileLoadingOverlay, SkillFilesSidebar } from "./SkillFileNavigation"
 import { SkillDocumentPreview } from "./SkillDocumentPreview"
 
 export type SkillCatalogDetailTab = "readme" | "files" | "security" | "versions"
-export type DownloadedSkillDetailTab = "overview" | "security" | "files" | "versions"
+export type DownloadedSkillDetailTab = "overview" | "security" | "versions"
+type DownloadedSkillDetailView = DownloadedSkillDetailTab | "file"
 
 function formatCount(value: number | undefined) {
   if (value === undefined) return null
@@ -364,6 +367,24 @@ function LocalScanPanel({ report }: { report: RegistryLocalScanReport | null }) 
   )
 }
 
+function SkillFileContent({
+  content,
+  renderMarkdown = false,
+}: {
+  content: string | null
+  renderMarkdown?: boolean
+}) {
+  const { t } = useI18n()
+
+  return content && renderMarkdown ? (
+    <div className="skill-library-file-content skill-library-file-markdown">
+      <SkillDocumentPreview content={content} />
+    </div>
+  ) : (
+    <pre className="skill-library-file-content" data-i18n-skip>{content ?? t("skillLibrary.files.select")}</pre>
+  )
+}
+
 function FilesPanel({
   files,
   selectedPath,
@@ -384,30 +405,16 @@ function FilesPanel({
 
   return (
     <div className="skill-library-files-layout">
-      <div className="skill-library-file-list" role="listbox" aria-label={t("skillLibrary.files.aria")}>
-        {files.map((file) => (
-          <button
-            key={file.path}
-            className={joinClassNames("skill-library-file-row", selectedPath === file.path ? "is-selected" : null)}
-            type="button"
-            role="option"
-            aria-selected={selectedPath === file.path}
-            title={file.path}
-            onClick={() => onSelect(file.path)}
-          >
-            <FileTextIcon />
-            <span>{file.path}</span>
-            {file.size !== undefined ? <small>{file.size} B</small> : null}
-          </button>
-        ))}
-      </div>
-      {content && renderMarkdown ? (
-        <div className="skill-library-file-content skill-library-file-markdown">
-          <SkillDocumentPreview content={content} />
-        </div>
-      ) : (
-        <pre className="skill-library-file-content" data-i18n-skip>{content ?? t("skillLibrary.files.select")}</pre>
-      )}
+      <SkillFileList
+        items={files.map((file) => ({
+          label: file.path,
+          path: file.path,
+          sizeLabel: file.size !== undefined ? `${file.size} B` : undefined,
+        }))}
+        selectedPath={selectedPath}
+        onSelect={onSelect}
+      />
+      <SkillFileContent content={content} renderMarkdown={renderMarkdown} />
     </div>
   )
 }
@@ -796,12 +803,24 @@ export function DownloadedSkillDetail({
 }) {
   const { t } = useI18n()
   const selectedVersion = skill?.versions.find((version) => version.version === skill.activeVersion)
-  const [activeTab, setActiveTab] = useState<DownloadedSkillDetailTab>("overview")
+  const [activeView, setActiveView] = useState<DownloadedSkillDetailView>("overview")
+  const [isFileSidebarOpen, setIsFileSidebarOpen] = useState(false)
   const tabsID = useId()
+  const filesSidebarID = `${tabsID}-files-sidebar`
   const tabRefs = useRef<Partial<Record<DownloadedSkillDetailTab, HTMLButtonElement | null>>>({})
+  const fileItems = useMemo(() => files.map((file) => ({
+    label: file.path,
+    path: file.path,
+    sizeLabel: file.size !== undefined ? `${file.size} B` : undefined,
+  })), [files])
+  const selectedFileLabel = files.find((file) => file.path === selectedFilePath)?.path
+    ?? selectedFilePath
+    ?? t("skillLibrary.local.skillFileName")
+  const currentFileLabelID = `${tabsID}-current-file`
 
   useEffect(() => {
-    setActiveTab("overview")
+    setActiveView("overview")
+    setIsFileSidebarOpen(false)
   }, [skill?.id])
 
   if (!skill) return <div className="skill-library-downloaded-empty">{emptyMessage ?? t("skillLibrary.downloadedEmpty")}</div>
@@ -821,7 +840,6 @@ export function DownloadedSkillDetail({
   const tabs: Array<{ id: DownloadedSkillDetailTab; label: string }> = [
     { id: "overview", label: t("skillLibrary.detail.overview") },
     { id: "security", label: t("skillLibrary.detail.security") },
-    { id: "files", label: t("skillLibrary.detail.files") },
     { id: "versions", label: t("skillLibrary.detail.versions") },
   ]
   const handleTabKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>, tab: DownloadedSkillDetailTab) => {
@@ -834,16 +852,25 @@ export function DownloadedSkillDetail({
     if (nextIndex === null) return
     event.preventDefault()
     const next = tabs[nextIndex]!.id
-    setActiveTab(next)
+    setActiveView(next)
     tabRefs.current[next]?.focus()
   }
   const copyHash = (value: string) => {
     void writeTextToClipboard(value).catch(() => undefined)
   }
+  const handleFileSelect = (path: string) => {
+    setActiveView("file")
+    if (path === selectedFilePath && fileContent !== null) return
+    onFileSelect(path)
+  }
 
   return (
-    <article className="skill-library-detail-panel skill-library-downloaded-detail">
-      <div className="skill-library-downloaded-chrome">
+    <article className={joinClassNames(
+      "skill-library-detail-panel skill-library-downloaded-detail",
+      isFileSidebarOpen ? "is-files-sidebar-open" : null,
+    )}>
+      <div className="skill-library-detail-center">
+        <div className="skill-library-downloaded-chrome">
         <header className="skill-library-detail-header">
           <div className="skill-library-downloaded-identity">
             <SkillProductIcon iconUrl={skill.iconUrl} name={skill.displayName} decorative />
@@ -895,6 +922,17 @@ export function DownloadedSkillDetail({
                 <ForkIcon />
               </button>
             ) : null}
+            <button
+              className={joinClassNames("icon-button", "skill-library-files-sidebar-toggle", isFileSidebarOpen ? "is-active" : null)}
+              type="button"
+              aria-controls={filesSidebarID}
+              aria-expanded={isFileSidebarOpen}
+              aria-label={t("skillLibrary.files.aria")}
+              title={t("skillLibrary.detail.files")}
+              onClick={() => setIsFileSidebarOpen((current) => !current)}
+            >
+              <FolderIcon />
+            </button>
           </div>
         </header>
         {statusMessage ? <p className="skill-library-download-status" role="status">{statusMessage}</p> : null}
@@ -905,21 +943,26 @@ export function DownloadedSkillDetail({
               ref={(node) => { tabRefs.current[tab.id] = node }}
               id={`${tabsID}-tab-${tab.id}`}
               aria-controls={`${tabsID}-panel`}
-              className={joinClassNames("skill-library-detail-tab", activeTab === tab.id ? "is-active" : null)}
+              className={joinClassNames("skill-library-detail-tab", activeView === tab.id ? "is-active" : null)}
               type="button"
               role="tab"
-              aria-selected={activeTab === tab.id}
-              tabIndex={activeTab === tab.id ? 0 : -1}
-              onClick={() => setActiveTab(tab.id)}
+              aria-selected={activeView === tab.id}
+              tabIndex={(activeView === "file" ? tab.id === "overview" : activeView === tab.id) ? 0 : -1}
+              onClick={() => setActiveView(tab.id)}
               onKeyDown={(event) => handleTabKeyDown(event, tab.id)}
             >
               {tab.label}
             </button>
           ))}
         </nav>
-      </div>
-      <div id={`${tabsID}-panel`} className="skill-library-detail-content skill-library-downloaded-tabpanel" role="tabpanel" aria-labelledby={`${tabsID}-tab-${activeTab}`}>
-        {activeTab === "overview" ? (
+        </div>
+        <div
+          id={`${tabsID}-panel`}
+          className={joinClassNames("skill-library-detail-content skill-library-downloaded-tabpanel", activeView === "file" ? "is-file-view" : null)}
+          role={activeView === "file" ? "region" : "tabpanel"}
+          aria-labelledby={activeView === "file" ? currentFileLabelID : `${tabsID}-tab-${activeView}`}
+        >
+        {activeView === "overview" ? (
           <div className="skill-library-downloaded-overview">
             {!skill.enabled ? (
               <div className="skill-library-overview-state has-warning">
@@ -956,7 +999,7 @@ export function DownloadedSkillDetail({
             ) : null}
           </div>
         ) : null}
-        {activeTab === "security" ? (
+        {activeView === "security" ? (
           <div className="skill-library-downloaded-security-view">
             <section>
               <h3>{t("skillLibrary.security.upstream")}</h3>
@@ -980,12 +1023,21 @@ export function DownloadedSkillDetail({
             </section>
           </div>
         ) : null}
-        {activeTab === "files" ? (
-          isLoadingFile
-            ? <div className="skill-library-detail-empty">{t("app.loadingData")}</div>
-            : <FilesPanel files={files} selectedPath={selectedFilePath} content={fileContent} renderMarkdown={Boolean(selectedFilePath?.toLowerCase().endsWith(".md"))} onSelect={onFileSelect} />
+        {activeView === "file" ? (
+          <div className="skill-library-downloaded-file-view">
+            <div className="skill-library-current-file-toolbar">
+              <div id={currentFileLabelID} className="skill-library-current-file" title={selectedFileLabel}>
+                <FileTextIcon aria-hidden="true" />
+                <span>{selectedFileLabel}</span>
+              </div>
+            </div>
+            <div className="skill-library-file-content-stage" aria-busy={isLoadingFile}>
+              <SkillFileContent content={fileContent} renderMarkdown={Boolean(selectedFilePath?.toLowerCase().endsWith(".md"))} />
+              <SkillFileLoadingOverlay isLoading={isLoadingFile} />
+            </div>
+          </div>
         ) : null}
-        {activeTab === "versions" ? (
+        {activeView === "versions" ? (
           <div className="skill-library-downloaded-versions-view">
             <h3>{t("skillLibrary.installedVersions")}</h3>
             <div className="skill-library-installed-version-list">
@@ -1007,7 +1059,15 @@ export function DownloadedSkillDetail({
             </div>
           </div>
         ) : null}
+        </div>
       </div>
+      <SkillFilesSidebar
+        id={filesSidebarID}
+        isLoading={isLoadingFile}
+        items={fileItems}
+        selectedPath={activeView === "file" ? selectedFilePath : null}
+        onSelect={handleFileSelect}
+      />
     </article>
   )
 }

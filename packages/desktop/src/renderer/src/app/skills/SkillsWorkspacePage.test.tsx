@@ -328,6 +328,8 @@ describe("SkillsWorkspacePage", () => {
     expect(skillRow).not.toHaveAttribute("aria-expanded")
     expect(skillRow).toHaveClass("is-navigation")
     expect(skillRow.querySelector(".skill-library-product-icon")).toBeNull()
+    expect(document.querySelector(".skills-workspace-page > .skills-workspace-toolbar")).toBeNull()
+    expect(document.querySelector(".skills-workspace-list-panel > .skills-workspace-toolbar")).not.toBeNull()
     expect(document.querySelector(".skills-workspace-list-panel > .skills-workspace-filter-bar")).not.toBeNull()
     expect(screen.queryByRole("button", { name: "Design" })).not.toBeInTheDocument()
     expect(screen.queryByText("LICENSE.txt")).not.toBeInTheDocument()
@@ -503,6 +505,21 @@ describe("SkillsWorkspacePage", () => {
   })
 
   it("downloads into the managed list and reads the offline SKILL.md", async () => {
+    let resolveNotes: ((value: RegistryFileContent) => void) | undefined
+    desktop.readDownloadedRegistrySkillFile.mockImplementation(({ path }) => {
+      if (path === "notes.txt") {
+        return new Promise((resolve) => { resolveNotes = resolve })
+      }
+      return Promise.resolve({
+        provider: "clawhub",
+        remoteId: "demo/reader",
+        version: "1.0.0",
+        path: "SKILL.md",
+        name: "SKILL.md",
+        content: "# Offline Reader",
+        encoding: "utf8" as const,
+      })
+    })
     render(<I18nProvider><Harness><div>Local editor</div></Harness></I18nProvider>)
     openThirdPartyMarketplace()
 
@@ -518,20 +535,44 @@ describe("SkillsWorkspacePage", () => {
     const overviewTab = await screen.findByRole("tab", { name: "Overview" })
     expect(overviewTab).toHaveAttribute("aria-selected", "true")
     expect(await screen.findByText("SHA-256")).toBeInTheDocument()
+    expect(screen.getByRole("complementary", { name: "Skill files" })).toBeInTheDocument()
+    const skillFile = await screen.findByRole("treeitem", { name: "SKILL.md" })
+    expect(skillFile).toHaveAttribute("aria-selected", "false")
+    expect(screen.queryByRole("tab", { name: "Files" })).not.toBeInTheDocument()
     expect(screen.getByText(/quarantined/i)).toBeInTheDocument()
     expect(screen.queryByRole("heading", { name: "Offline Reader" })).not.toBeInTheDocument()
 
     fireEvent.keyDown(overviewTab, { key: "ArrowRight" })
     expect(screen.getByRole("tab", { name: "Security" })).toHaveAttribute("aria-selected", "true")
-    fireEvent.click(screen.getByRole("tab", { name: "Files" }))
-    expect(await screen.findByRole("heading", { name: "Offline Reader" })).toBeInTheDocument()
+    fireEvent.click(skillFile)
+    const loadedHeading = await screen.findByRole("heading", { name: "Offline Reader" })
+    expect(screen.getByRole("treeitem", { name: "SKILL.md" })).toHaveAttribute("aria-selected", "true")
 
-    fireEvent.click(screen.getByRole("option", { name: "notes.txt" }))
+    const downloadedFileTree = screen.getByRole("tree", { name: "Skill files" })
+    fireEvent.click(screen.getByRole("treeitem", { name: "notes.txt" }))
+
+    expect(screen.getByRole("tree", { name: "Skill files" })).toBe(downloadedFileTree)
+    expect(screen.getByRole("treeitem", { name: "SKILL.md" })).toBeInTheDocument()
+    expect(loadedHeading).toBeInTheDocument()
+    expect(document.querySelector(".skill-library-file-content-stage")).toHaveAttribute("aria-busy", "true")
     await waitFor(() => expect(desktop.readDownloadedRegistrySkillFile).toHaveBeenCalledWith({
       id: downloaded.id,
       path: "notes.txt",
       version: "1.0.0",
     }))
+    await act(async () => {
+      resolveNotes?.({
+        provider: "clawhub",
+        remoteId: "demo/reader",
+        version: "1.0.0",
+        path: "notes.txt",
+        name: "notes.txt",
+        content: "Offline notes",
+        encoding: "utf8",
+      })
+    })
+    expect(await screen.findByText("Offline notes")).toBeInTheDocument()
+    expect(screen.getByRole("treeitem", { name: "notes.txt" })).toHaveAttribute("aria-selected", "true")
   })
 
   it("ignores a stale file response after another downloaded skill is selected", async () => {
@@ -560,12 +601,12 @@ describe("SkillsWorkspacePage", () => {
     })
     render(<I18nProvider><Harness><div>Local editor</div></Harness></I18nProvider>)
     fireEvent.click(screen.getByRole("tab", { name: "Downloaded" }))
-    fireEvent.click(await screen.findByRole("tab", { name: "Files" }))
+    fireEvent.click(await screen.findByRole("treeitem", { name: "SKILL.md" }))
 
     expect(await screen.findByRole("heading", { name: "Initial Skill" })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole("option", { name: "notes.txt" }))
+    fireEvent.click(screen.getByRole("treeitem", { name: "notes.txt" }))
     fireEvent.click(screen.getByRole("button", { name: /Writer Skill/ }))
-    fireEvent.click(await screen.findByRole("tab", { name: "Files" }))
+    fireEvent.click(await screen.findByRole("treeitem", { name: "SKILL.md" }))
     expect(await screen.findByRole("heading", { name: "Writer Content" })).toBeInTheDocument()
 
     await act(async () => {

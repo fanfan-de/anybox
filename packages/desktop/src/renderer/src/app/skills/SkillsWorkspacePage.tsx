@@ -260,12 +260,13 @@ export function SkillsWorkspacePage({
   async function handleDownloadedFileSelect(path: string) {
     if (!selectedDownloadedID) return
     const requestRevision = ++downloadedFileRevisionRef.current
-    setSelectedDownloadedFilePath(path)
-    setDownloadedFileContent(null)
     setIsLoadingDownloadedFile(true)
     const file = await catalog.readDownloadedFile(selectedDownloadedID, path, selectedDownloadedVersion)
     if (downloadedFileRevisionRef.current !== requestRevision) return
-    setDownloadedFileContent(file?.content ?? null)
+    if (file) {
+      setSelectedDownloadedFilePath(file.path)
+      setDownloadedFileContent(file.content)
+    }
     setIsLoadingDownloadedFile(false)
   }
 
@@ -405,72 +406,6 @@ export function SkillsWorkspacePage({
 
   return (
     <section className={joinClassNames("skills-workspace-page", `is-${mode}`)} aria-label={t("skillLibrary.pageAria")}>
-      <header className="skills-workspace-toolbar">
-        <label className="skills-workspace-search-field">
-          <SearchIcon aria-hidden="true" />
-          <input
-            type="search"
-            aria-label={t("skillLibrary.searchAria")}
-            placeholder={t("skillLibrary.searchPlaceholder")}
-            value={searchTerm}
-            onChange={(event) => setSearchTerm(event.target.value)}
-          />
-          {searchTerm ? (
-            <button
-              type="button"
-              aria-label={t("skillLibrary.searchClearAria")}
-              onClick={() => setSearchTerm("")}
-            >
-              <CloseIcon />
-            </button>
-          ) : null}
-        </label>
-        <div className="skills-workspace-add-menu-shell" ref={addSkillMenuRef}>
-          <button
-            ref={addSkillTriggerRef}
-            className={joinClassNames("primary-button", "skills-workspace-marketplace-button", isAddSkillMenuOpen ? "is-open" : null)}
-            type="button"
-            aria-haspopup="menu"
-            aria-expanded={isAddSkillMenuOpen}
-            aria-label={t("skillLibrary.add.open")}
-            title={t("skillLibrary.add.open")}
-            onClick={() => setIsAddSkillMenuOpen((current) => !current)}
-          >
-            <span>{t("skillLibrary.add.open")}</span>
-            <ChevronDownIcon />
-          </button>
-          {isAddSkillMenuOpen ? (
-            <div className="global-skills-install-menu skills-workspace-add-menu" role="menu" aria-label={t("skillLibrary.add.menuAria")}>
-              <button className="global-skills-install-menu-item" role="menuitem" type="button" onClick={handleMarketplaceOpen}>
-                {t("skillLibrary.marketplace.open")}
-              </button>
-              {localNavigatorProps ? (
-                <>
-                  <button
-                    className="global-skills-install-menu-item"
-                    role="menuitem"
-                    type="button"
-                    disabled={isLocalAddActionDisabled}
-                    onClick={handleInstallFromUrl}
-                  >
-                    {t("skillLibrary.add.fromUrl")}
-                  </button>
-                  <button
-                    className="global-skills-install-menu-item"
-                    role="menuitem"
-                    type="button"
-                    disabled={isLocalAddActionDisabled}
-                    onClick={handleInstallFromLocalFile}
-                  >
-                    {t("skillLibrary.add.fromLocalFile")}
-                  </button>
-                </>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-      </header>
-
       <div
         id={`${tabsID}-panel`}
         className="skills-workspace-content"
@@ -478,6 +413,71 @@ export function SkillsWorkspacePage({
         aria-labelledby={`${tabsID}-tab-${mode}`}
       >
         <aside className="skills-workspace-list-panel">
+          <header className="skills-workspace-toolbar">
+            <label className="skills-workspace-search-field">
+              <SearchIcon aria-hidden="true" />
+              <input
+                type="search"
+                aria-label={t("skillLibrary.searchAria")}
+                placeholder={t("skillLibrary.searchPlaceholder")}
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+              />
+              {searchTerm ? (
+                <button
+                  type="button"
+                  aria-label={t("skillLibrary.searchClearAria")}
+                  onClick={() => setSearchTerm("")}
+                >
+                  <CloseIcon />
+                </button>
+              ) : null}
+            </label>
+            <div className="skills-workspace-add-menu-shell" ref={addSkillMenuRef}>
+              <button
+                ref={addSkillTriggerRef}
+                className={joinClassNames("primary-button", "skills-workspace-marketplace-button", isAddSkillMenuOpen ? "is-open" : null)}
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={isAddSkillMenuOpen}
+                aria-label={t("skillLibrary.add.open")}
+                title={t("skillLibrary.add.open")}
+                onClick={() => setIsAddSkillMenuOpen((current) => !current)}
+              >
+                <span>{t("skillLibrary.add.open")}</span>
+                <ChevronDownIcon />
+              </button>
+              {isAddSkillMenuOpen ? (
+                <div className="global-skills-install-menu skills-workspace-add-menu" role="menu" aria-label={t("skillLibrary.add.menuAria")}>
+                  <button className="global-skills-install-menu-item" role="menuitem" type="button" onClick={handleMarketplaceOpen}>
+                    {t("skillLibrary.marketplace.open")}
+                  </button>
+                  {localNavigatorProps ? (
+                    <>
+                      <button
+                        className="global-skills-install-menu-item"
+                        role="menuitem"
+                        type="button"
+                        disabled={isLocalAddActionDisabled}
+                        onClick={handleInstallFromUrl}
+                      >
+                        {t("skillLibrary.add.fromUrl")}
+                      </button>
+                      <button
+                        className="global-skills-install-menu-item"
+                        role="menuitem"
+                        type="button"
+                        disabled={isLocalAddActionDisabled}
+                        onClick={handleInstallFromLocalFile}
+                      >
+                        {t("skillLibrary.add.fromLocalFile")}
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </header>
           <div className="skills-workspace-filter-bar">
             <nav className="skills-workspace-tabs" role="tablist" aria-label={t("skillLibrary.modeAria")}>
               {modes.map((item) => (

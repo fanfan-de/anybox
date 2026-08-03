@@ -161,6 +161,7 @@
   --sidebar-toggle-icon-size: 27.5px;
   --section-toolbar-pill-height: 30px;
   --section-toolbar-baseline: var(--section-toolbar-height);
+  --resource-library-width: 340px;
   --sidebar-display-width: var(--sidebar-width);
   --sidebar-resizer-width: 10px;
   --sidebar-width: 236px;

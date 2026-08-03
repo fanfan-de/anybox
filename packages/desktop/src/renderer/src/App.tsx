@@ -2532,6 +2532,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
   const isMobileView = leftSidebarView === "mobile"
   const isBuiltinToolsView = leftSidebarView === "tools"
   const isShellSidebarManagedView = isResourcesView || isBuiltinToolsView
+  const isPromptResourcesView = isResourcesView && promptSkillMode === "prompts"
   const isRegistrySkillLibraryView = isResourcesView && promptSkillMode === "skills"
   const isFullSurfaceView = isConnectionsView || isMobileView || isAutomationsView || isCalendarView || isRegistrySkillLibraryView
   useEffect(() => {
@@ -2605,6 +2606,12 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
   const effectiveAppShellStyle = isShellSidebarManagedView
     ? {
         ...appShellStyle,
+        ...(isPromptResourcesView
+          ? {
+              "--sidebar-display-width": isSidebarCollapsed ? "0px" : "var(--resource-library-width)",
+              "--sidebar-resizer-width": "0px",
+            }
+          : {}),
         "--right-sidebar-display-width": "0px",
         "--right-sidebar-resizer-width": "0px",
       }
@@ -2724,15 +2731,17 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               onToggleSidebar={handleSidebarToggle}
             />
 
-            <SidebarResizer
-              isSidebarResizing={isSidebarResizing}
-              maxWidth={sidebarWidthBounds.max}
-              minWidth={sidebarWidthBounds.min}
-              side="left"
-              sidebarWidth={sidebarWidth}
-              onKeyDown={handleSidebarResizerKeyDown}
-              onPointerDown={handleSidebarResizerPointerDown}
-            />
+            {isPromptResourcesView ? null : (
+              <SidebarResizer
+                isSidebarResizing={isSidebarResizing}
+                maxWidth={sidebarWidthBounds.max}
+                minWidth={sidebarWidthBounds.min}
+                side="left"
+                sidebarWidth={sidebarWidth}
+                onKeyDown={handleSidebarResizerKeyDown}
+                onPointerDown={handleSidebarResizerPointerDown}
+              />
+            )}
           </>
         ) : null}
 
@@ -2894,7 +2903,6 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                     onCreateGlobalSkillDraftCancel={handleCreateGlobalSkillDraftCancel}
                     onCreateGlobalSkillDraftChange={handleCreateGlobalSkillDraftChange}
                     onCreateGlobalSkillDraftStart={handleCreateGlobalSkillDraftStart}
-                    onDelete={handleDeleteGlobalSkill}
                     onDeleteGlobalSkill={handleDeleteGlobalSkill}
                     onGitInstallDialogClose={handleGitInstallDialogClose}
                     onGitInstallDialogOpen={handleGitInstallDialogOpen}
