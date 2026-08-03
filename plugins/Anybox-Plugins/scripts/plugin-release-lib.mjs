@@ -14,7 +14,9 @@ import {
 } from "node:path"
 import { deflateRawSync } from "node:zlib"
 
-export const PLUGIN_RELEASE_REGISTRY_FILENAME = "anybox-plugin-registry-v2.json"
+export const PLUGIN_CATALOG_ID = "anybox-plugins"
+export const PLUGIN_CATALOG_RELEASE_TAG = "anybox-plugin-catalog"
+export const PLUGIN_RELEASE_REGISTRY_FILENAME = "anybox-plugin-registry.json"
 export const PLUGIN_RELEASE_MANIFEST_FILENAME = "anybox-plugin-release-manifest.json"
 export const MAX_PLUGIN_PACKAGE_BYTES = 100 * 1024 * 1024
 export const CURRENT_PLUGIN_COUNT = 60
@@ -22,7 +24,6 @@ export const CURRENT_PLUGIN_COUNT = 60
 const PLUGIN_MANIFEST_PATH = ".anybox-plugin/plugin.json"
 const RELEASE_OWNER = "fanfan-de"
 const RELEASE_REPOSITORY = "anybox"
-const SEMVER_PATTERN = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/
 const COMMIT_PATTERN = /^[a-f0-9]{40}$/i
 const SAFE_SEGMENT_PATTERN = /^[a-z0-9][a-z0-9._-]*$/i
 const DISPLAY_ASSET_EXTENSIONS = new Set([
@@ -111,7 +112,6 @@ function assertCleanPluginSources(repoRoot) {
       "--untracked-files=all",
       "--",
       "plugins/Anybox-Plugins",
-      "packages/desktop/package.json",
     ],
     { encoding: "utf8" },
   ).trim()
@@ -472,7 +472,8 @@ function releaseAssetURL(releaseTag, assetName) {
 }
 
 function validateReleaseRegistryShape(registry, expectedPluginCount) {
-  invariant(registry.schemaVersion === 2, "Plugin release registry schemaVersion must be 2.")
+  invariant(registry.schemaVersion === 3, "Plugin catalog registry schemaVersion must be 3.")
+  invariant(registry.catalogID === PLUGIN_CATALOG_ID, "Plugin catalog registry ID is invalid.")
   invariant(registry.pluginCount === expectedPluginCount, "Plugin release registry count does not match the release inventory.")
   invariant(Array.isArray(registry.plugins) && registry.plugins.length === expectedPluginCount, "Plugin release registry is incomplete.")
   const ids = new Set()
@@ -483,7 +484,7 @@ function validateReleaseRegistryShape(registry, expectedPluginCount) {
     invariant(plugin.package?.type === "zip", `Plugin '${plugin.id}' must use a ZIP release package.`)
     const assetName = releaseAssetName(plugin.id, plugin.version)
     invariant(
-      plugin.package.url === releaseAssetURL(registry.releaseTag, assetName),
+      plugin.package.url === releaseAssetURL(PLUGIN_CATALOG_RELEASE_TAG, assetName),
       `Plugin '${plugin.id}' has an invalid Release URL.`,
     )
     invariant(/^[a-f0-9]{64}$/.test(plugin.package.sha256), `Plugin '${plugin.id}' has an invalid package checksum.`)
@@ -502,7 +503,6 @@ async function fileDigest(filePath) {
 
 export async function verifyPluginRelease({
   outputDirectory,
-  desktopVersion,
   sourceCommit,
   expectedPluginCount = CURRENT_PLUGIN_COUNT,
 }) {
@@ -514,9 +514,9 @@ export async function verifyPluginRelease({
   const registry = JSON.parse(registryBytes.toString("utf8"))
   const expectedCommit = sourceCommit.toLowerCase()
 
-  invariant(releaseManifest.schemaVersion === 1, "Plugin release manifest schemaVersion must be 1.")
-  invariant(releaseManifest.desktopVersion === desktopVersion, "Plugin release manifest desktop version does not match.")
-  invariant(releaseManifest.releaseTag === `v${desktopVersion}`, "Plugin release manifest tag does not match.")
+  invariant(releaseManifest.schemaVersion === 2, "Plugin release manifest schemaVersion must be 2.")
+  invariant(releaseManifest.catalogID === PLUGIN_CATALOG_ID, "Plugin release manifest catalog ID is invalid.")
+  invariant(releaseManifest.releaseTag === PLUGIN_CATALOG_RELEASE_TAG, "Plugin release manifest tag does not match the catalog channel.")
   invariant(releaseManifest.sourceCommit === expectedCommit, "Plugin release manifest source commit does not match.")
   invariant(releaseManifest.pluginCount === expectedPluginCount, "Plugin release manifest count does not match.")
   invariant(Array.isArray(releaseManifest.assets) && releaseManifest.assets.length === expectedPluginCount, "Plugin release asset list is incomplete.")
@@ -524,8 +524,7 @@ export async function verifyPluginRelease({
   invariant(releaseManifest.registry.size === registryBytes.length, "Plugin release registry size does not match.")
   invariant(releaseManifest.registry.sha256 === sha256(registryBytes), "Plugin release registry checksum does not match.")
 
-  invariant(registry.desktopVersion === desktopVersion, "Plugin release registry desktop version does not match.")
-  invariant(registry.releaseTag === `v${desktopVersion}`, "Plugin release registry tag does not match.")
+  invariant(registry.catalogID === PLUGIN_CATALOG_ID, "Plugin release registry catalog ID is invalid.")
   invariant(registry.sourceCommit === expectedCommit, "Plugin release registry source commit does not match.")
   validateReleaseRegistryShape(registry, expectedPluginCount)
 
@@ -572,7 +571,6 @@ export async function buildPluginRelease({
   repoRoot,
   pluginsRoot = join(repoRoot, "plugins", "Anybox-Plugins"),
   outputDirectory,
-  desktopVersion,
   sourceCommit,
   expectedPluginCount = CURRENT_PLUGIN_COUNT,
   allowDirty = false,
@@ -581,14 +579,13 @@ export async function buildPluginRelease({
   const resolvedRepoRoot = resolve(repoRoot)
   const resolvedPluginsRoot = resolve(pluginsRoot)
   const resolvedOutput = assertSafeOutputDirectory(resolvedRepoRoot, resolvedPluginsRoot, outputDirectory)
-  invariant(SEMVER_PATTERN.test(desktopVersion), `Desktop version '${desktopVersion}' is not valid semantic version text.`)
   invariant(COMMIT_PATTERN.test(sourceCommit), "Plugin release source commit must be a 40-character Git SHA.")
   invariant(Number.isSafeInteger(expectedPluginCount) && expectedPluginCount > 0, "Expected plugin count must be positive.")
   invariant(Number.isSafeInteger(maxPluginPackageBytes) && maxPluginPackageBytes > 0, "Plugin package byte limit must be positive.")
   if (!allowDirty) assertCleanPluginSources(resolvedRepoRoot)
 
   const sourceCommitLower = sourceCommit.toLowerCase()
-  const releaseTag = `v${desktopVersion}`
+  const releaseTag = PLUGIN_CATALOG_RELEASE_TAG
   const packages = discoverPluginPackages(resolvedPluginsRoot, expectedPluginCount)
   const pluginIDs = packages.map((plugin) => plugin.id)
   assertIndexMatchesInventory(resolvedPluginsRoot, pluginIDs)
@@ -636,9 +633,8 @@ export async function buildPluginRelease({
     }
 
     const registry = {
-      schemaVersion: 2,
-      desktopVersion,
-      releaseTag,
+      schemaVersion: 3,
+      catalogID: PLUGIN_CATALOG_ID,
       sourceCommit: sourceCommitLower,
       pluginCount: registryPlugins.length,
       plugins: registryPlugins,
@@ -648,8 +644,8 @@ export async function buildPluginRelease({
     await writeFile(join(stagingDirectory, PLUGIN_RELEASE_REGISTRY_FILENAME), registryBytes)
 
     const releaseManifest = {
-      schemaVersion: 1,
-      desktopVersion,
+      schemaVersion: 2,
+      catalogID: PLUGIN_CATALOG_ID,
       releaseTag,
       sourceCommit: sourceCommitLower,
       pluginCount: assets.length,

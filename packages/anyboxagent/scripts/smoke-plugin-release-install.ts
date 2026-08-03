@@ -21,7 +21,7 @@ const registryFile = process.argv[2] ? resolve(process.argv[2]) : ""
 const pluginID = process.argv[3]?.trim() || "context7"
 if (!registryFile || !existsSync(registryFile)) {
   throw new Error(
-    "Usage: bun run scripts/smoke-plugin-release-install.ts <anybox-plugin-registry-v2.json> [plugin-id]",
+    "Usage: bun run scripts/smoke-plugin-release-install.ts <anybox-plugin-registry.json> [plugin-id]",
   )
 }
 

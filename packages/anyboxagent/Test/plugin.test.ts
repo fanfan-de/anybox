@@ -342,6 +342,7 @@ let previousPluginRegistryIndexURL: string | undefined
 let previousPluginRegistryCacheDir: string | undefined
 let previousPluginImportedRegistryFile: string | undefined
 let previousPluginPackageDownloadTimeoutMS: string | undefined
+let previousPluginSourcePackages: string | undefined
 let previousConnectorRegistryFiles: string | undefined
 let previousConnectorBuildConfig: string | undefined
 let previousGmailOAuthClientID: string | undefined
@@ -375,6 +376,7 @@ async function useTempDatabase() {
   previousPluginRegistryCacheDir = process.env.ANYBOX_PLUGIN_REGISTRY_CACHE_DIR
   previousPluginImportedRegistryFile = process.env.ANYBOX_PLUGIN_IMPORTED_REGISTRY_FILE
   previousPluginPackageDownloadTimeoutMS = process.env.ANYBOX_PLUGIN_PACKAGE_DOWNLOAD_TIMEOUT_MS
+  previousPluginSourcePackages = process.env.ANYBOX_PLUGIN_INCLUDE_SOURCE_PACKAGES
   previousConnectorRegistryFiles = process.env.ANYBOX_CONNECTOR_REGISTRY_FILES
   previousConnectorBuildConfig = process.env.ANYBOX_CONNECTOR_BUILD_CONFIG
   previousGmailOAuthClientID = process.env.ANYBOX_GMAIL_OAUTH_CLIENT_ID
@@ -390,6 +392,7 @@ async function useTempDatabase() {
   process.env.ANYBOX_PLUGIN_IMPORTED_REGISTRY_FILE = join(activeRoot, "imported-plugin-registry.json")
   process.env.ANYBOX_PLUGIN_PACKAGE_DOWNLOAD_TIMEOUT_MS = "100"
   process.env.ANYBOX_TEST_HOME = activeRoot
+  delete process.env.ANYBOX_PLUGIN_INCLUDE_SOURCE_PACKAGES
   delete process.env.ANYBOX_PLUGIN_REGISTRY_FILES
   delete process.env.ANYBOX_CONNECTOR_REGISTRY_FILES
   delete process.env.ANYBOX_CONNECTOR_BUILD_CONFIG
@@ -1345,6 +1348,11 @@ afterEach(async () => {
   } else {
     process.env.ANYBOX_PLUGIN_PACKAGE_DOWNLOAD_TIMEOUT_MS = previousPluginPackageDownloadTimeoutMS
   }
+  if (previousPluginSourcePackages === undefined) {
+    delete process.env.ANYBOX_PLUGIN_INCLUDE_SOURCE_PACKAGES
+  } else {
+    process.env.ANYBOX_PLUGIN_INCLUDE_SOURCE_PACKAGES = previousPluginSourcePackages
+  }
   if (previousConnectorRegistryFiles === undefined) {
     delete process.env.ANYBOX_CONNECTOR_REGISTRY_FILES
   } else {
@@ -1407,6 +1415,22 @@ afterEach(async () => {
 })
 
 describe("plugin marketplace API", () => {
+  test("only scans repository source packages after an explicit opt-in", async () => {
+    await useTempDatabase()
+    const app = createServerApp()
+
+    const defaultResponse = await app.request("/api/plugins/catalog")
+    const defaultBody = (await defaultResponse.json()) as PluginCatalogEnvelope
+    expect(defaultResponse.status).toBe(200)
+    expect(defaultBody.data?.some((plugin) => plugin.id === "godot-cli")).toBe(false)
+
+    process.env.ANYBOX_PLUGIN_INCLUDE_SOURCE_PACKAGES = "1"
+    const optedInResponse = await app.request("/api/plugins/catalog")
+    const optedInBody = (await optedInResponse.json()) as PluginCatalogEnvelope
+    expect(optedInResponse.status).toBe(200)
+    expect(optedInBody.data?.some((plugin) => plugin.id === "godot-cli")).toBe(true)
+  })
+
   test("returns installed plugin package catalog entries without critical risk entries", async () => {
     await useTempDatabase()
     await writeManifestPluginPackage()
@@ -1822,10 +1846,10 @@ describe("plugin marketplace API", () => {
     expect(cachedBody.data?.some((plugin) => plugin.id === "atomic-valid")).toBe(false)
   })
 
-  test("loads a remote Release registry in one request and caches the validated whole document", async () => {
+  test("loads the independent plugin catalog registry in one request and caches the validated whole document", async () => {
     await useTempDatabase()
     const app = createServerApp()
-    const registryURL = "https://registry.example.test/anybox-plugin-registry-v2.json"
+    const registryURL = "https://registry.example.test/anybox-plugin-registry.json"
     process.env.ANYBOX_PLUGIN_REGISTRY_INDEX_URL = registryURL
     const releaseAlphaManifest = {
       name: "release-alpha",
@@ -1846,11 +1870,10 @@ describe("plugin marketplace API", () => {
       },
     ])
     const releaseAlphaURL =
-      "https://github.com/fanfan-de/anybox/releases/download/v1.2.3/anybox-plugin-release-alpha-1.0.0.zip"
+      "https://github.com/fanfan-de/anybox/releases/download/anybox-plugin-catalog/anybox-plugin-release-alpha-1.0.0.zip"
     const registry = {
-      schemaVersion: 2,
-      desktopVersion: "1.2.3",
-      releaseTag: "v1.2.3",
+      schemaVersion: 3,
+      catalogID: "anybox-plugins",
       sourceCommit: "b".repeat(40),
       pluginCount: 2,
       plugins: [
@@ -1878,7 +1901,7 @@ describe("plugin marketplace API", () => {
           skills: [],
           package: {
             type: "zip",
-            url: "https://github.com/fanfan-de/anybox/releases/download/v1.2.3/anybox-plugin-release-beta-2.0.0.zip",
+            url: "https://github.com/fanfan-de/anybox/releases/download/anybox-plugin-catalog/anybox-plugin-release-beta-2.0.0.zip",
             sha256: "d".repeat(64),
             size: 456,
           },
@@ -1926,7 +1949,7 @@ describe("plugin marketplace API", () => {
     )
     expect(cache).toMatchObject({
       schemaVersion: 2,
-      protocol: "release-registry-v2",
+      protocol: "catalog-registry-v3",
       registryURL,
       registry: {
         pluginCount: 2,
@@ -1943,6 +1966,45 @@ describe("plugin marketplace API", () => {
     expect(installResponse.status).toBe(200)
     expect(registryFetchCount).toBe(1)
     expect(zipFetchCount).toBe(1)
+  })
+
+  test("rejects catalog registry packages outside the dedicated plugin release", async () => {
+    await useTempDatabase()
+    const app = createServerApp()
+    const registryURL = "https://registry.example.test/anybox-plugin-registry.json"
+    process.env.ANYBOX_PLUGIN_REGISTRY_INDEX_URL = registryURL
+    globalThis.fetch = (async () => new Response(JSON.stringify({
+      schemaVersion: 3,
+      catalogID: "anybox-plugins",
+      sourceCommit: "b".repeat(40),
+      pluginCount: 1,
+      plugins: [
+        {
+          id: "wrong-channel",
+          name: "wrong-channel",
+          version: "1.0.0",
+          description: "Package URL points back to a desktop release.",
+          interface: {
+            displayName: "Wrong Channel",
+            shortDescription: "Invalid catalog package channel.",
+            category: "Docs",
+          },
+          mcpServers: [],
+          skills: [],
+          package: {
+            type: "zip",
+            url: "https://github.com/fanfan-de/anybox/releases/download/v1.2.3/anybox-plugin-wrong-channel-1.0.0.zip",
+            sha256: "d".repeat(64),
+            size: 456,
+          },
+        },
+      ],
+    }), { status: 200 })) as typeof fetch
+
+    const response = await app.request("/api/plugins/catalog?freshness=fresh")
+    const body = (await response.json()) as PluginCatalogEnvelope
+    expect(response.status).toBe(502)
+    expect(body.error?.code).toBe("PLUGIN_REGISTRY_UNAVAILABLE")
   })
 
   test("rejects a whole remote Release registry when one entry is invalid", async () => {
@@ -4091,6 +4153,7 @@ describe("plugin marketplace API", () => {
 
   test("migrates a legacy Chrome package to the Anybox-owned Node REPL runtime", async () => {
     await useTempDatabase()
+    process.env.ANYBOX_PLUGIN_INCLUDE_SOURCE_PACKAGES = "1"
     const legacyPackageRoot = await writeLegacyChromePluginPackage()
     const installedAt = Date.now()
     Plugin.listInstalled()
@@ -4801,6 +4864,7 @@ describe("plugin marketplace API", () => {
 
   test("loads built-in Gmail plugin and starts the Anybox-managed Gmail connector OAuth flow", async () => {
     await useTempDatabase()
+    process.env.ANYBOX_PLUGIN_INCLUDE_SOURCE_PACKAGES = "1"
     const googleClientID = "1234567890-gmailtest.apps.googleusercontent.com"
     process.env.ANYBOX_GMAIL_OAUTH_CLIENT_ID = googleClientID
     const app = createServerApp()

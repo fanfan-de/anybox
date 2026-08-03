@@ -9,9 +9,10 @@ const runtimeDir = path.resolve(
   process.env.ANYBOX_AGENT_RUNTIME_OUTPUT_DIR?.trim()
   ?? path.join(import.meta.dirname, "..", "build", "agent-runtime"),
 )
-const releaseDir = path.resolve(
-  process.env.ANYBOX_PLUGIN_RELEASE_DIR?.trim()
-  ?? path.join(import.meta.dirname, "..", "build", "plugin-release"),
+const catalogDir = path.resolve(
+  process.env.ANYBOX_PLUGIN_CATALOG_DIR?.trim()
+  ?? process.env.ANYBOX_PLUGIN_RELEASE_DIR?.trim()
+  ?? path.join(import.meta.dirname, "..", "..", "..", "build", "plugin-catalog"),
 )
 const bunName = process.platform === "win32" ? "bun.exe" : "bun"
 const dataDir = await mkdtemp(path.join(tmpdir(), "anybox-plugin-runtime-catalog-"))
@@ -65,13 +66,13 @@ async function close(server) {
 }
 
 const registryText = await readFile(
-  path.join(releaseDir, "anybox-plugin-registry-v2.json"),
+  path.join(catalogDir, "anybox-plugin-registry.json"),
   "utf8",
 )
 const registry = JSON.parse(registryText)
 let registryRequestCount = 0
 const registryServer = createHTTPServer((incoming, outgoing) => {
-  if (incoming.method === "GET" && incoming.url === "/anybox-plugin-registry-v2.json") {
+  if (incoming.method === "GET" && incoming.url === "/anybox-plugin-registry.json") {
     registryRequestCount += 1
     outgoing.writeHead(200, {
       "content-type": "application/json",
@@ -84,7 +85,7 @@ const registryServer = createHTTPServer((incoming, outgoing) => {
   outgoing.end("not found")
 })
 const registryPort = await listen(registryServer)
-const registryURL = `http://127.0.0.1:${registryPort}/anybox-plugin-registry-v2.json`
+const registryURL = `http://127.0.0.1:${registryPort}/anybox-plugin-registry.json`
 
 await mkdir(cacheDir, { recursive: true })
 await writeFile(
@@ -189,7 +190,7 @@ try {
     await readFile(path.join(cacheDir, "plugin-registry-cache-v2.json"), "utf8"),
   )
   if (
-    cache.protocol !== "release-registry-v2"
+    cache.protocol !== "catalog-registry-v3"
     || cache.registryURL !== registryURL
     || cache.registry?.pluginCount !== 60
   ) {

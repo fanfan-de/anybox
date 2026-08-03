@@ -752,10 +752,10 @@
       <section>
         <h2>7. 构建与打包</h2>
         <p>
-          Desktop 构建脚本 <code>packages/desktop/scripts/prepare-agent-runtime.mjs</code> 打包 agent server、Bun、node-pty 和 workspace dependencies；不会复制插件目录、目录 JSON 或 ZIP。桌面启动 Agent 时会传入当前桌面版本对应的 GitHub Release 目录 URL。
+          Desktop 构建脚本 <code>packages/desktop/scripts/prepare-agent-runtime.mjs</code> 打包 agent server、Bun、node-pty 和 workspace dependencies；不会复制插件目录、目录 JSON 或 ZIP。开发版与正式版启动 Agent 时默认都传入 GitHub <code>releases/download/anybox-plugin-catalog/anybox-plugin-registry.json</code> 的独立稳定目录 URL，并关闭本地仓库源码插件扫描。桌面构建与桌面 Release 不再生成或发布插件目录资产。
         </p>
         <p>
-          校验脚本 <code>packages/desktop/scripts/verify-agent-runtime.mjs</code> 拒绝目录快照、<code>plugins/builtin</code>、展开插件目录或 ZIP 资产进入 runtime。独立的 Release 校验负责确认远程目录完整且恰有 60 个 ZIP 条目。
+          校验脚本 <code>packages/desktop/scripts/verify-agent-runtime.mjs</code> 拒绝目录快照、<code>plugins/builtin</code>、展开插件目录或 ZIP 资产进入 runtime。独立的插件目录工作流负责确认远程目录完整且恰有 60 个 ZIP 条目。
         </p>
       </section>
 
@@ -775,7 +775,7 @@
         <h2>9. 从插件到会话可用能力的完整链路</h2>
         <ol>
           <li>插件作者在 <code>.anybox-plugin/plugin.json</code> 声明元信息、MCP server、skills 或 apps。</li>
-          <li>agent catalog API 先从同版本 GitHub Release 拉取一次目录，得到插件总数、清单和下载信息；用户安装时再下载所选 ZIP 到本机 <code>plugins/installed</code> 目录。</li>
+          <li>agent catalog API 从独立 GitHub 地址读取 v3 Registry；用户安装时校验插件版本、SHA-256 和字节数，再把 write-once ZIP 解压到本机 <code>plugins/installed</code> 目录。</li>
           <li>agent 扫描已下载插件 manifest，归一化为 <code>PluginCatalogItem</code>。</li>
           <li>desktop 插件页展示 catalog，用户选择安装。</li>
           <li>agent 安装插件，写入 <code>installed_plugins</code>，并生成全局 MCP server 配置。</li>

@@ -7,6 +7,8 @@ import { join } from "node:path"
 import test from "node:test"
 import {
   buildPluginRelease,
+  PLUGIN_CATALOG_ID,
+  PLUGIN_CATALOG_RELEASE_TAG,
   PLUGIN_RELEASE_MANIFEST_FILENAME,
   PLUGIN_RELEASE_REGISTRY_FILENAME,
   verifyPluginRelease,
@@ -82,7 +84,6 @@ test("builds byte-identical ZIPs, registry metadata, and release manifests", asy
     const input = {
       repoRoot: fixture.root,
       pluginsRoot: fixture.pluginsRoot,
-      desktopVersion: "1.2.3",
       sourceCommit: fixture.sourceCommit,
       expectedPluginCount: 2,
     }
@@ -99,8 +100,17 @@ test("builds byte-identical ZIPs, registry metadata, and release manifests", asy
     }
 
     assert.equal(first.registry.pluginCount, 2)
+    assert.equal(first.registry.schemaVersion, 3)
+    assert.equal(first.registry.catalogID, PLUGIN_CATALOG_ID)
+    assert.equal(first.releaseManifest.schemaVersion, 2)
+    assert.equal(first.releaseManifest.catalogID, PLUGIN_CATALOG_ID)
+    assert.equal(first.releaseManifest.releaseTag, PLUGIN_CATALOG_RELEASE_TAG)
+    assert.equal("desktopVersion" in first.registry, false)
+    assert.equal("desktopVersion" in first.releaseManifest, false)
     assert.deepEqual(first.registry.plugins.map((plugin) => plugin.id), ["alpha", "beta"])
     assert.ok(first.registry.plugins.every((plugin) => plugin.package.type === "zip"))
+    assert.ok(first.registry.plugins.every((plugin) =>
+      plugin.package.url.startsWith(`https://github.com/fanfan-de/anybox/releases/download/${PLUGIN_CATALOG_RELEASE_TAG}/`)))
     assert.doesNotMatch(JSON.stringify(first.registry), /github-tree/)
   } finally {
     await rm(fixture.root, { recursive: true, force: true })
@@ -119,7 +129,6 @@ test("rejects invalid manifests, duplicate IDs/manifests, sensitive files, unsaf
           repoRoot: fixture.root,
           pluginsRoot: fixture.pluginsRoot,
           outputDirectory: join(fixture.root, "release"),
-          desktopVersion: "1.2.3",
           sourceCommit: fixture.sourceCommit,
           expectedPluginCount: 1,
           allowDirty: true,
@@ -139,7 +148,6 @@ test("rejects invalid manifests, duplicate IDs/manifests, sensitive files, unsaf
         repoRoot: fixture.root,
         pluginsRoot: fixture.pluginsRoot,
         outputDirectory,
-        desktopVersion: "1.2.3",
         sourceCommit: fixture.sourceCommit,
         expectedPluginCount: 2,
       })
@@ -160,7 +168,6 @@ test("rejects invalid manifests, duplicate IDs/manifests, sensitive files, unsaf
       await assert.rejects(
         verifyPluginRelease({
           outputDirectory,
-          desktopVersion: "1.2.3",
           sourceCommit: fixture.sourceCommit,
           expectedPluginCount: 2,
         }),
@@ -181,7 +188,6 @@ test("rejects invalid manifests, duplicate IDs/manifests, sensitive files, unsaf
           repoRoot: fixture.root,
           pluginsRoot: fixture.pluginsRoot,
           outputDirectory: join(fixture.root, "release"),
-          desktopVersion: "1.2.3",
           sourceCommit: fixture.sourceCommit,
           expectedPluginCount: 1,
           allowDirty: true,
@@ -203,7 +209,6 @@ test("rejects invalid manifests, duplicate IDs/manifests, sensitive files, unsaf
           repoRoot: fixture.root,
           pluginsRoot: fixture.pluginsRoot,
           outputDirectory: join(fixture.root, "release"),
-          desktopVersion: "1.2.3",
           sourceCommit: fixture.sourceCommit,
           expectedPluginCount: 1,
           allowDirty: true,
@@ -228,7 +233,6 @@ test("rejects invalid manifests, duplicate IDs/manifests, sensitive files, unsaf
           repoRoot: fixture.root,
           pluginsRoot: fixture.pluginsRoot,
           outputDirectory: join(fixture.root, "release"),
-          desktopVersion: "1.2.3",
           sourceCommit: fixture.sourceCommit,
           expectedPluginCount: 1,
           allowDirty: true,
@@ -257,7 +261,6 @@ test("rejects invalid manifests, duplicate IDs/manifests, sensitive files, unsaf
           repoRoot: fixture.root,
           pluginsRoot: fixture.pluginsRoot,
           outputDirectory: join(fixture.root, "release"),
-          desktopVersion: "1.2.3",
           sourceCommit: fixture.sourceCommit,
           expectedPluginCount: 1,
           allowDirty: true,
@@ -277,7 +280,6 @@ test("rejects invalid manifests, duplicate IDs/manifests, sensitive files, unsaf
           repoRoot: fixture.root,
           pluginsRoot: fixture.pluginsRoot,
           outputDirectory: join(fixture.root, "release"),
-          desktopVersion: "1.2.3",
           sourceCommit: fixture.sourceCommit,
           expectedPluginCount: 1,
           maxPluginPackageBytes: 10,

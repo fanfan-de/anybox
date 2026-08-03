@@ -55,8 +55,10 @@ const PLUGIN_REGISTRY_ALLOW_INSECURE_HTTP_ENV = "ANYBOX_PLUGIN_REGISTRY_ALLOW_IN
 const PLUGIN_PACKAGE_DOWNLOAD_TIMEOUT_MS_ENV = "ANYBOX_PLUGIN_PACKAGE_DOWNLOAD_TIMEOUT_MS"
 const PLUGIN_IMPORTED_REGISTRY_FILE_ENV = "ANYBOX_PLUGIN_IMPORTED_REGISTRY_FILE"
 const PLUGIN_SOURCE_PACKAGES_ENV = "ANYBOX_PLUGIN_INCLUDE_SOURCE_PACKAGES"
+const PLUGIN_CATALOG_ID = "anybox-plugins"
+const PLUGIN_CATALOG_RELEASE_TAG = "anybox-plugin-catalog"
 const DEFAULT_PLUGIN_REGISTRY_URL =
-  "https://github.com/fanfan-de/anybox/releases/latest/download/anybox-plugin-registry-v2.json"
+  `https://github.com/fanfan-de/anybox/releases/download/${PLUGIN_CATALOG_RELEASE_TAG}/anybox-plugin-registry.json`
 const LOCAL_PLUGIN_COPY_IGNORED_DIRECTORIES = new Set([
   ".cache",
   ".git",
@@ -711,7 +713,7 @@ const PluginReleaseRegistryItem = PluginRegistryItem.extend({
   package: PluginReleaseZipPackageDownload,
 }).strict()
 
-const PluginReleaseRegistry = z
+const PluginReleaseRegistryV2 = z
   .object({
     schemaVersion: z.literal(2),
     desktopVersion: z.string().regex(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/),
@@ -768,6 +770,60 @@ const PluginReleaseRegistry = z
     })
   })
 
+const PluginCatalogRegistryV3 = z
+  .object({
+    schemaVersion: z.literal(3),
+    catalogID: z.literal(PLUGIN_CATALOG_ID),
+    sourceCommit: z.string().regex(GITHUB_COMMIT_SHA_PATTERN),
+    pluginCount: z.number().int().positive().max(MAX_REMOTE_PLUGIN_META_COUNT),
+    plugins: z.array(PluginReleaseRegistryItem).min(1).max(MAX_REMOTE_PLUGIN_META_COUNT),
+  })
+  .strict()
+  .superRefine((registry, ctx) => {
+    if (registry.pluginCount !== registry.plugins.length) {
+      ctx.addIssue({
+        code: "custom",
+        message: "pluginCount must match the number of plugins.",
+        path: ["pluginCount"],
+      })
+    }
+
+    const seenIDs = new Set<string>()
+    registry.plugins.forEach((plugin, index) => {
+      const pluginID = normalizeManifestID(plugin.name)
+      if (plugin.id !== pluginID) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Plugin id must match the normalized manifest name.",
+          path: ["plugins", index, "id"],
+        })
+      }
+      if (seenIDs.has(pluginID)) {
+        ctx.addIssue({
+          code: "custom",
+          message: `Duplicate plugin id '${pluginID}'.`,
+          path: ["plugins", index, "id"],
+        })
+      }
+      seenIDs.add(pluginID)
+
+      const assetName = `anybox-plugin-${pluginID}-${plugin.version}.zip`
+      const expectedURL = `https://github.com/fanfan-de/anybox/releases/download/${PLUGIN_CATALOG_RELEASE_TAG}/${assetName}`
+      if (plugin.package.url !== expectedURL) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Plugin package URL must point to the dedicated plugin catalog Release asset.",
+          path: ["plugins", index, "package", "url"],
+        })
+      }
+    })
+  })
+
+const PluginReleaseRegistry = z.union([
+  PluginReleaseRegistryV2,
+  PluginCatalogRegistryV3,
+])
+
 export type PluginReleaseRegistry = z.infer<typeof PluginReleaseRegistry>
 
 export function parsePluginReleaseRegistry(input: unknown) {
@@ -779,7 +835,16 @@ const RemotePluginReleaseRegistryCache = z
     schemaVersion: z.literal(2),
     protocol: z.literal("release-registry-v2"),
     registryURL: z.string().url(),
-    registry: PluginReleaseRegistry,
+    registry: PluginReleaseRegistryV2,
+  })
+  .strict()
+
+const RemotePluginCatalogRegistryCache = z
+  .object({
+    schemaVersion: z.literal(2),
+    protocol: z.literal("catalog-registry-v3"),
+    registryURL: z.string().url(),
+    registry: PluginCatalogRegistryV3,
   })
   .strict()
 
@@ -794,6 +859,7 @@ const RemotePluginManifestIndexCache = z
 
 const RemotePluginRegistryCache = z.discriminatedUnion("protocol", [
   RemotePluginReleaseRegistryCache,
+  RemotePluginCatalogRegistryCache,
   RemotePluginManifestIndexCache,
 ])
 
@@ -996,6 +1062,7 @@ function pluginRegistryIndexURL() {
 function expectedRemoteRegistryProtocol(registryURL: string) {
   try {
     const pathname = new URL(registryURL).pathname.toLowerCase()
+    if (pathname.endsWith("/anybox-plugin-registry.json")) return "catalog-registry-v3" as const
     if (pathname.endsWith("/anybox-plugin-registry-v2.json")) return "release-registry-v2" as const
     if (pathname.endsWith("/index.json")) return "manifest-index-v1" as const
   } catch {
@@ -1721,8 +1788,7 @@ function localPluginPackagesRoot() {
 
 function includeSourcePluginPackages() {
   const configured = getProcessEnvValue(PLUGIN_SOURCE_PACKAGES_ENV)?.trim()
-  if (configured) return /^(1|true|yes|on)$/i.test(configured)
-  return getProcessEnvValue("NODE_ENV") !== "production"
+  return Boolean(configured && /^(1|true|yes|on)$/i.test(configured))
 }
 
 function packageSearchRoots() {
@@ -1806,7 +1872,7 @@ function parsePluginRegistryDocument(input: unknown) {
     typeof input === "object"
     && input !== null
     && "schemaVersion" in input
-    && input.schemaVersion === 2
+    && (input.schemaVersion === 2 || input.schemaVersion === 3)
   ) {
     return parsePluginReleaseRegistry(input)
   }
@@ -2036,9 +2102,9 @@ function listCachedRemoteRegistryManifestSources(indexURL: string | undefined) {
     if (cache.registryURL !== indexURL) return []
     const expectedProtocol = expectedRemoteRegistryProtocol(indexURL)
     if (expectedProtocol && cache.protocol !== expectedProtocol) return []
-    const plugins = cache.protocol === "release-registry-v2"
-      ? cache.registry.plugins
-      : cache.plugins
+    const plugins = cache.protocol === "manifest-index-v1"
+      ? cache.plugins
+      : cache.registry.plugins
     return plugins.map((item) => registryItemToManifestSource(item))
   } catch {
     return []
@@ -2048,7 +2114,7 @@ function listCachedRemoteRegistryManifestSources(indexURL: string | undefined) {
 async function writeRemoteReleaseRegistryCache(registryURL: string, registry: PluginReleaseRegistry) {
   const cache = RemotePluginRegistryCache.parse({
     schemaVersion: 2,
-    protocol: "release-registry-v2",
+    protocol: registry.schemaVersion === 3 ? "catalog-registry-v3" : "release-registry-v2",
     registryURL,
     registry,
   })
@@ -2087,7 +2153,7 @@ async function fetchRemoteRegistryManifestSources(registryURL: string) {
     "Plugin registry",
   )
 
-  if (isJsonRecord(document) && document.schemaVersion === 2) {
+  if (isJsonRecord(document) && (document.schemaVersion === 2 || document.schemaVersion === 3)) {
     const registry = parsePluginReleaseRegistry(document)
     await writeRemoteReleaseRegistryCache(registryURL, registry)
     return registry.plugins.map((item) => registryItemToManifestSource(item))
@@ -2097,6 +2163,12 @@ async function fetchRemoteRegistryManifestSources(registryURL: string) {
     throw new PluginError(
       "PLUGIN_REGISTRY_UNAVAILABLE",
       "Plugin Release registry URL did not return a schemaVersion 2 registry.",
+    )
+  }
+  if (expectedProtocol === "catalog-registry-v3") {
+    throw new PluginError(
+      "PLUGIN_REGISTRY_UNAVAILABLE",
+      "Plugin catalog registry URL did not return a schemaVersion 3 registry.",
     )
   }
   const baseURLs = parseRegistryIndex(document)

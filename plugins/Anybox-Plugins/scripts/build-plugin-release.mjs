@@ -67,11 +67,10 @@ function validateWithRuntime(registryPath) {
 }
 
 const args = parseArguments(process.argv.slice(2))
-const desktopVersion = args["desktop-version"]?.trim()
 const sourceCommit = args.commit?.trim()
 const outputDirectory = args.out?.trim()
-if (!desktopVersion || !sourceCommit || !outputDirectory) {
-  fail("Usage: node build-plugin-release.mjs --desktop-version <semver> --commit <40-char-sha> --out <directory> [--allow-dirty]")
+if (!sourceCommit || !outputDirectory) {
+  fail("Usage: node build-plugin-release.mjs --commit <40-char-sha> --out <directory> [--allow-dirty]")
 }
 
 const expectedPluginCount = args["expected-count"]
@@ -81,7 +80,6 @@ const expectedPluginCount = args["expected-count"]
 const result = await buildPluginRelease({
   repoRoot,
   outputDirectory,
-  desktopVersion,
   sourceCommit,
   expectedPluginCount,
   allowDirty: args.allowDirty === true,
@@ -90,5 +88,5 @@ const registryPath = join(result.outputDirectory, PLUGIN_RELEASE_REGISTRY_FILENA
 validateWithRuntime(registryPath)
 const registry = JSON.parse(readFileSync(registryPath, "utf8"))
 console.log(
-  `[plugin-release] built ${registry.pluginCount} deterministic plugin packages for ${registry.releaseTag} in ${result.outputDirectory}`,
+  `[plugin-release] built ${registry.pluginCount} deterministic plugin packages for ${result.releaseManifest.releaseTag} in ${result.outputDirectory}`,
 )

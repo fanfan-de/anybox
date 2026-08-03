@@ -778,11 +778,11 @@ anybox-plugin-examples/
 $env:ANYBOX_PLUGIN_LOCAL_DIR = "C:\Projects\anybox-plugin-examples"
 ```
 
-Anybox 正式桌面版不读取可变的 `master/index.json`。打开插件页时，它先从当前 `v<desktopVersion>` GitHub Release 拉取一次 `anybox-plugin-registry-v2.json`，从中得到插件总数、完整清单以及每个插件的 ZIP URL、SHA-256 和精确大小；用户安装时再按该条目下载一次 ZIP。首次启动离线时无法获得目录；至少成功拉取过一次后，才可使用按 URL 和协议隔离的已验证缓存。
+Anybox 开发版与正式版默认行为一致，都不自动扫描本地仓库源码插件。打开插件页时，它们从独立的 `https://github.com/fanfan-de/anybox/releases/download/anybox-plugin-catalog/anybox-plugin-registry.json` 拉取同一份 GitHub 目录。该目录不跟随 Anybox 桌面版本，也不会被新的桌面 `latest` Release 覆盖。目录中的每个插件包仍带插件自身版本、SHA-256 摘要和精确字节数；发布工作流禁止用不同内容覆盖已有的同名 ZIP。首次启动离线时无法获得目录；至少成功拉取过一次后，才可使用按 URL 和协议隔离的已验证缓存。
 
-仓库里的 `index.json` 只是自动生成的开发清单。运行 `pnpm plugins:index` 更新，运行 `pnpm plugins:index:check` 校验。它仍使用规范 HTTPS manifest URL，方便开发和手动导入；根 `plugin.json`、`.codex-plugin/plugin.json` 和 GitHub Tree 都只是兼容输入。
+仓库里的 `index.json` 是自动生成的默认目录。运行 `pnpm plugins:index` 更新，运行 `pnpm plugins:index:check` 校验。它使用规范 HTTPS manifest URL；根 `plugin.json`、`.codex-plugin/plugin.json` 和其他 GitHub Tree 形式仍只是兼容输入。
 
-ZIP、正式目录和 Release manifest 都是候选构建产物，不提交到 Git，也不会整包内置进桌面安装器。第三方仓库可以继续通过 `ANYBOX_PLUGIN_LOCAL_DIR` 本地开发，或使用手动 URL 导入；GitHub 目录安装会固定一次 Commit 后下载一次仓库归档，不再逐文件调用 Contents API。
+ZIP、正式目录和 Release manifest 都是候选构建产物，不提交到 Git，也不会整包内置进桌面安装器。第三方仓库可以继续通过 `ANYBOX_PLUGIN_LOCAL_DIR` 本地开发，或使用手动 URL 导入；开发 Anybox 仓库自身插件时必须显式设置 `ANYBOX_PLUGIN_INCLUDE_SOURCE_PACKAGES=1`。GitHub 目录安装会固定一次 Commit 后下载一次仓库归档，不再逐文件调用 Contents API。
 
 ## 常见问题
 
@@ -803,7 +803,7 @@ ZIP、正式目录和 Release manifest 都是候选构建产物，不提交到 G
 ### 商店目录不完整或安装失败
 
 - `PLUGIN_REGISTRY_UNAVAILABLE`：无法从 GitHub 拉取目录、Release 缺少目录资产，或整份目录校验失败；检查 GitHub 网络后重试。
-- `PLUGIN_PACKAGE_UNAVAILABLE`：对应桌面 Release 缺少插件资产。
+- `PLUGIN_PACKAGE_UNAVAILABLE`：目录条目无法推导或下载可用的 GitHub 插件包。
 - `PLUGIN_PACKAGE_DOWNLOAD_FAILED`：GitHub 不可达或下载超时。
 - `PLUGIN_PACKAGE_INVALID`：大小、SHA-256、ZIP 路径或清单 ID/版本校验失败。
 - `PLUGIN_PLATFORM_ARTIFACT_FAILED`：插件已下载，但当前平台的原生组件安装失败。

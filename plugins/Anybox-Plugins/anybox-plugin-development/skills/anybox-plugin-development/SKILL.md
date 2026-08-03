@@ -75,7 +75,7 @@ description: 创建、审查或验证 Anybox 第三方插件包。Use when the u
 - `apps`，仅用于旧兼容
 - `commands`、`agents`，当前是保留字段
 - `skillPreviews` 可用于仓库 manifest 的市场预览；源 manifest 不提交 `package`，正式 ZIP 元数据由 Release 打包器生成。
-- 内置仓库的 `index.json` 是自动生成的开发清单，不是桌面生产目录。正式桌面从同版本 GitHub Release 动态拉取 v2 目录，且只允许该 Release 的 ZIP。
+- 内置仓库的 `index.json` 是源码清单索引，但默认安装目录使用独立的 `releases/download/anybox-plugin-catalog/anybox-plugin-registry.json`。桌面开发版与正式版默认不扫描本地仓库源码包；只有显式设置 `ANYBOX_PLUGIN_INCLUDE_SOURCE_PACKAGES=1` 才启用源码包。插件目录不跟随桌面版本或 `latest` Release，目录中的插件包仍只允许带插件版本、摘要和字节数的 write-once ZIP。
 
 未知顶层字段会被拒绝。
 
