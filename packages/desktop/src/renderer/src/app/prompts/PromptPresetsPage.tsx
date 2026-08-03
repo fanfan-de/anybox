@@ -1,9 +1,8 @@
 import { type ChangeEvent, type FormEvent, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import {
-  ChevronDownIcon,
   CloseIcon,
   DeleteIcon,
-  DownloadIcon,
   FileTextIcon,
   FolderIcon,
   FolderOpenIcon,
@@ -97,7 +96,6 @@ interface PromptPresetsPageProps {
   promptDraftContent: string
   promptDraftLabel: string
   promptLoadError: string | null
-  promptRoot: string
   promptPresets: PromptPresetSummary[]
   promptPresetSelection: PromptPresetSelection | null
   promptUrlInstallMessage: PromptEditorMessage | null
@@ -118,11 +116,10 @@ interface PromptPresetsPageProps {
   onPromptPresetSelect: (presetID: string) => boolean | Promise<boolean>
   onPromptPresetSelectionChange: (field: keyof PromptPresetSelection, value: string) => boolean | Promise<boolean>
   onPromptUrlInstallDialogClose: () => void
-  onPromptUrlInstallDialogOpen: () => void
   onPromptUrlInstallPromptToggle: (promptID: string) => void
   onPromptUrlInstallSourceChange: (value: string) => void
   onPreviewPromptUrlInstall: () => boolean | Promise<boolean>
-  onOpenPromptFolder: () => boolean | Promise<boolean>
+  onOpenPromptFile: (filePath: string) => boolean | Promise<boolean>
   onResetPromptPreset: () => boolean | Promise<boolean>
   onSavePromptPreset: () => boolean | Promise<boolean>
   onTranslatePromptPreset: (input: {
@@ -134,17 +131,13 @@ interface PromptPresetsPageProps {
 export interface PromptPresetsSidebarViewProps {
   deletingPromptPresetID: string | null
   isCreatingPromptPreset: boolean
-  isInstallingPromptUrlPrompts: boolean
-  isPreviewingPromptUrlInstall: boolean
   isPromptDirty: boolean
-  promptRoot: string
   promptPresets: PromptPresetSummary[]
   selectedPromptPreset: PromptPresetDocument | null
   onCreatePromptPreset: (options?: PromptPresetCreateOptions) => boolean | Promise<boolean>
   onDeletePromptPreset: (presetID?: string) => boolean | Promise<boolean>
-  onOpenPromptFolder: () => boolean | Promise<boolean>
+  onOpenPromptFile: (filePath: string) => boolean | Promise<boolean>
   onPromptPresetSelect: (presetID: string) => boolean | Promise<boolean>
-  onPromptUrlInstallDialogOpen: () => void
 }
 
 function getPromptPresetDisplayLabel(
@@ -226,6 +219,160 @@ function doesPromptPresetMatchSearch(
     preset.root ?? "",
     getPromptPresetSourceLabel(preset.source, t),
   ].some((value) => value.toLowerCase().includes(normalizedSearchTerm))
+}
+
+type PromptPresetContextMenuState = {
+  displayLabel: string
+  preset: PromptPresetSummary
+  trigger: HTMLButtonElement
+  x: number
+  y: number
+} | null
+
+function clampPromptPresetContextMenuPosition(x: number, y: number, width: number, height: number) {
+  const margin = 8
+  if (typeof window === "undefined") return { x, y }
+
+  return {
+    x: Math.max(margin, Math.min(x, window.innerWidth - width - margin)),
+    y: Math.max(margin, Math.min(y, window.innerHeight - height - margin)),
+  }
+}
+
+interface PromptPresetContextMenuProps {
+  deletingPromptPresetID: string | null
+  menu: PromptPresetContextMenuState
+  onClose: (restoreFocus?: boolean) => void
+  onDelete: (presetID: string) => boolean | Promise<boolean>
+  onOpen: (filePath: string) => boolean | Promise<boolean>
+  t: PromptTranslate
+}
+
+function PromptPresetContextMenu({
+  deletingPromptPresetID,
+  menu,
+  onClose,
+  onDelete,
+  onOpen,
+  t,
+}: PromptPresetContextMenuProps) {
+  const menuRef = useRef<HTMLDivElement | null>(null)
+  const [position, setPosition] = useState({ x: 0, y: 0 })
+
+  useLayoutEffect(() => {
+    if (!menu || !menuRef.current) return
+    const bounds = menuRef.current.getBoundingClientRect()
+    setPosition(clampPromptPresetContextMenuPosition(menu.x, menu.y, bounds.width, bounds.height))
+  }, [menu])
+
+  useEffect(() => {
+    if (!menu) return
+
+    menuRef.current?.querySelector<HTMLButtonElement>(".ui-context-menu__item:not(:disabled)")?.focus()
+
+    function handlePointerDown(event: globalThis.PointerEvent) {
+      if (menuRef.current?.contains(event.target as Node | null)) return
+      onClose()
+    }
+
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key !== "Escape") return
+      event.preventDefault()
+      onClose(true)
+    }
+
+    function handleViewportChange() {
+      onClose()
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown)
+    document.addEventListener("keydown", handleKeyDown)
+    window.addEventListener("resize", handleViewportChange)
+    window.addEventListener("scroll", handleViewportChange, true)
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown)
+      document.removeEventListener("keydown", handleKeyDown)
+      window.removeEventListener("resize", handleViewportChange)
+      window.removeEventListener("scroll", handleViewportChange, true)
+    }
+  }, [menu, onClose])
+
+  if (!menu) return null
+
+  const filePath = menu.preset.filePath?.trim() ?? ""
+  const isDeleting = deletingPromptPresetID === menu.preset.id
+
+  return createPortal(
+    <div
+      ref={menuRef}
+      className="ui-context-menu prompt-preset-context-menu"
+      role="menu"
+      aria-label={menu.displayLabel}
+      style={{ left: position.x, top: position.y }}
+      onContextMenu={(event) => event.preventDefault()}
+      onKeyDown={(event) => {
+        if (event.key === "Tab") {
+          event.preventDefault()
+          onClose(true)
+          return
+        }
+
+        if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return
+        const items = Array.from(
+          menuRef.current?.querySelectorAll<HTMLButtonElement>(".ui-context-menu__item:not(:disabled)") ?? [],
+        )
+        if (items.length === 0) return
+
+        event.preventDefault()
+        const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement)
+        const nextIndex = event.key === "Home"
+          ? 0
+          : event.key === "End"
+            ? items.length - 1
+            : event.key === "ArrowDown"
+              ? (currentIndex + 1 + items.length) % items.length
+              : (currentIndex - 1 + items.length) % items.length
+        items[nextIndex]?.focus()
+      }}
+    >
+      <button
+        className="ui-context-menu__item"
+        role="menuitem"
+        type="button"
+        disabled={!filePath}
+        onClick={(event) => {
+          event.stopPropagation()
+          onClose()
+          if (filePath) void onOpen(filePath)
+        }}
+      >
+        <span className="ui-context-menu__icon" aria-hidden="true"><FolderOpenIcon /></span>
+        <span className="ui-context-menu__label">{t("prompts.openFolder")}</span>
+      </button>
+      {menu.preset.source === "custom" ? (
+        <>
+          <div className="ui-context-menu__divider" role="separator" />
+          <button
+            className="ui-context-menu__item"
+            role="menuitem"
+            type="button"
+            data-variant="danger"
+            disabled={deletingPromptPresetID !== null}
+            onClick={(event) => {
+              event.stopPropagation()
+              onClose()
+              void onDelete(menu.preset.id)
+            }}
+          >
+            <span className="ui-context-menu__icon" aria-hidden="true"><DeleteIcon /></span>
+            <span className="ui-context-menu__label">{isDeleting ? t("prompts.deleting") : t("app.delete")}</span>
+          </button>
+        </>
+      ) : null}
+    </div>,
+    document.body,
+  )
 }
 
 interface PromptUrlInstallDialogProps {
@@ -481,22 +628,17 @@ function PromptTranslateDialog({
 export function PromptPresetsSidebarView({
   deletingPromptPresetID,
   isCreatingPromptPreset,
-  isInstallingPromptUrlPrompts,
-  isPreviewingPromptUrlInstall,
   isPromptDirty,
-  promptRoot,
   promptPresets,
   selectedPromptPreset,
   onCreatePromptPreset,
   onDeletePromptPreset,
-  onOpenPromptFolder,
+  onOpenPromptFile,
   onPromptPresetSelect,
-  onPromptUrlInstallDialogOpen,
 }: PromptPresetsSidebarViewProps) {
   const { t } = useI18n()
   const [promptSearchTerm, setPromptSearchTerm] = useState("")
-  const [isInstallMenuOpen, setIsInstallMenuOpen] = useState(false)
-  const installMenuRef = useRef<HTMLDivElement | null>(null)
+  const [promptPresetContextMenu, setPromptPresetContextMenu] = useState<PromptPresetContextMenuState>(null)
   const [expandedPromptPresetFolders, setExpandedPromptPresetFolders] = useState<PromptPresetFolderID[]>([
     "bundled",
     "custom",
@@ -535,28 +677,22 @@ export function PromptPresetsSidebarView({
     normalizedPromptSearchTerm ? folder.presets.length > 0 : true,
   )
   const isPromptSearchActive = normalizedPromptSearchTerm.length > 0
-  const isInstallButtonDisabled = isCreatingPromptPreset || isPreviewingPromptUrlInstall || isInstallingPromptUrlPrompts
 
-  useEffect(() => {
-    if (!isInstallMenuOpen) return
+  function closePromptPresetContextMenu(restoreFocus = false) {
+    const trigger = promptPresetContextMenu?.trigger
+    setPromptPresetContextMenu(null)
+    if (restoreFocus) trigger?.focus()
+  }
 
-    function handlePointerDown(event: globalThis.PointerEvent) {
-      if (installMenuRef.current?.contains(event.target as Node | null)) return
-      setIsInstallMenuOpen(false)
-    }
-
-    function handleKeyDown(event: globalThis.KeyboardEvent) {
-      if (event.key !== "Escape") return
-      setIsInstallMenuOpen(false)
-    }
-
-    window.addEventListener("pointerdown", handlePointerDown)
-    window.addEventListener("keydown", handleKeyDown)
-    return () => {
-      window.removeEventListener("pointerdown", handlePointerDown)
-      window.removeEventListener("keydown", handleKeyDown)
-    }
-  }, [isInstallMenuOpen])
+  function openPromptPresetContextMenu(
+    preset: PromptPresetSummary,
+    displayLabel: string,
+    trigger: HTMLButtonElement,
+    x: number,
+    y: number,
+  ) {
+    setPromptPresetContextMenu({ displayLabel, preset, trigger, x, y })
+  }
 
   function handlePromptPresetSelection(presetID: string) {
     if (presetID === selectedPromptPreset?.id) return
@@ -583,16 +719,6 @@ export function PromptPresetsSidebarView({
     void onCreatePromptPreset()
   }
 
-  function handleInstallMenuToggle() {
-    if (isInstallButtonDisabled) return
-    setIsInstallMenuOpen((current) => !current)
-  }
-
-  function handleInstallFromUrl() {
-    setIsInstallMenuOpen(false)
-    onPromptUrlInstallDialogOpen()
-  }
-
   function handlePromptFolderToggle(folderID: PromptPresetFolderID) {
     if (isPromptSearchActive) return
     setExpandedPromptPresetFolders((current) =>
@@ -604,80 +730,28 @@ export function PromptPresetsSidebarView({
 
   return (
     <section className="sidebar-view sidebar-view-prompts" aria-label={t("prompts.sidebarAria")}>
-      <div className="settings-prompt-section-bar prompt-presets-navigator-bar global-skills-section-bar">
-        <div className="prompt-presets-navigator-actions global-skills-section-actions">
+      <div className="skills-tree-search-row prompt-presets-search-row" aria-label={t("prompts.searchAria")} role="search">
+        <SearchIcon />
+        <input
+          aria-label={t("prompts.searchInputAria")}
+          placeholder={t("prompts.searchPlaceholder")}
+          type="search"
+          value={promptSearchTerm}
+          onChange={(event) => setPromptSearchTerm(event.target.value)}
+        />
+        {promptSearchTerm.trim() ? (
           <button
-            className="secondary-button global-skills-open-folder-button prompt-presets-open-button"
+            aria-label={t("prompts.clearSearchAria")}
+            title={t("prompts.clearSearchTitle")}
             type="button"
-            aria-label={t("prompts.openFolderAria")}
-            title={promptRoot || t("prompts.folderTitle")}
-            disabled={!promptRoot.trim()}
-            onClick={() => void onOpenPromptFolder()}
+            onClick={() => setPromptSearchTerm("")}
           >
-            <FolderIcon />
-            <span>{t("prompts.openFolder")}</span>
+            <CloseIcon />
           </button>
-          <div className="global-skills-install-menu-shell" ref={installMenuRef}>
-            <button
-              className={
-                isInstallMenuOpen
-                  ? "secondary-button global-skills-install-button prompt-presets-install-button is-open"
-                  : "secondary-button global-skills-install-button prompt-presets-install-button"
-              }
-              aria-expanded={isInstallMenuOpen}
-              aria-haspopup="menu"
-              aria-label={t("prompts.install.menuAria")}
-              disabled={isInstallButtonDisabled}
-              title={t("prompts.install.menuAria")}
-              type="button"
-              onClick={handleInstallMenuToggle}
-            >
-              <DownloadIcon />
-              <span>{isInstallingPromptUrlPrompts ? t("prompts.install.installing") : t("prompts.install.button")}</span>
-              <ChevronDownIcon />
-            </button>
-            {isInstallMenuOpen ? (
-              <div
-                className="global-skills-install-menu prompt-presets-install-menu"
-                role="menu"
-                aria-label={t("prompts.install.optionsAria")}
-              >
-                <button
-                  className="global-skills-install-menu-item"
-                  role="menuitem"
-                  type="button"
-                  onClick={handleInstallFromUrl}
-                >
-                  {t("prompts.install.fromUrl")}
-                </button>
-              </div>
-            ) : null}
-          </div>
-        </div>
+        ) : null}
       </div>
 
       <div className="skills-tree-root prompt-presets-tree" role="list" aria-label={t("prompts.listAria")}>
-        <div className="skills-tree-search-row" aria-label={t("prompts.searchAria")} role="search">
-          <SearchIcon />
-          <input
-            aria-label={t("prompts.searchInputAria")}
-            placeholder={t("prompts.searchPlaceholder")}
-            type="search"
-            value={promptSearchTerm}
-            onChange={(event) => setPromptSearchTerm(event.target.value)}
-          />
-          {promptSearchTerm.trim() ? (
-            <button
-              aria-label={t("prompts.clearSearchAria")}
-              title={t("prompts.clearSearchTitle")}
-              type="button"
-              onClick={() => setPromptSearchTerm("")}
-            >
-              <CloseIcon />
-            </button>
-          ) : null}
-        </div>
-
         {visiblePromptPresetFolders.length > 0 ? (
           visiblePromptPresetFolders.map((folder) => {
             const isExpanded = isPromptSearchActive || expandedPromptPresetFolders.includes(folder.id)
@@ -710,7 +784,16 @@ export function PromptPresetsSidebarView({
 
                         return (
                           <div key={preset.id} className="skill-tree-item skill-tree-item-file prompt-tree-file">
-                            <div className="skill-tree-row-shell">
+                            <div
+                              className="skill-tree-row-shell"
+                              onContextMenu={(event) => {
+                                event.preventDefault()
+                                event.stopPropagation()
+                                const trigger = event.currentTarget.querySelector<HTMLButtonElement>(".skill-tree-row")
+                                if (!trigger) return
+                                openPromptPresetContextMenu(preset, displayLabel, trigger, event.clientX, event.clientY)
+                              }}
+                            >
                               <button
                                 className={isActive ? "skill-tree-row is-active" : "skill-tree-row"}
                                 aria-label={displayLabel}
@@ -718,6 +801,18 @@ export function PromptPresetsSidebarView({
                                 title={getPromptPresetPathLabel(preset, t)}
                                 type="button"
                                 onClick={() => handlePromptPresetSelection(preset.id)}
+                                onKeyDown={(event) => {
+                                  if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return
+                                  event.preventDefault()
+                                  const bounds = event.currentTarget.getBoundingClientRect()
+                                  openPromptPresetContextMenu(
+                                    preset,
+                                    displayLabel,
+                                    event.currentTarget,
+                                    bounds.left + 12,
+                                    bounds.top + 12,
+                                  )
+                                }}
                               >
                                 <span className="skill-tree-label">{displayLabel}</span>
                               </button>
@@ -771,6 +866,14 @@ export function PromptPresetsSidebarView({
           </button>
         </div>
       </div>
+      <PromptPresetContextMenu
+        deletingPromptPresetID={deletingPromptPresetID}
+        menu={promptPresetContextMenu}
+        t={t}
+        onClose={closePromptPresetContextMenu}
+        onDelete={onDeletePromptPreset}
+        onOpen={onOpenPromptFile}
+      />
     </section>
   )
 }
@@ -790,7 +893,6 @@ export function PromptPresetsPage({
   promptDraftContent,
   promptDraftLabel,
   promptLoadError,
-  promptRoot,
   promptPresets,
   promptPresetSelection,
   promptUrlInstallMessage,
@@ -811,11 +913,10 @@ export function PromptPresetsPage({
   onPromptPresetSelect,
   onPromptPresetSelectionChange,
   onPromptUrlInstallDialogClose,
-  onPromptUrlInstallDialogOpen,
   onPromptUrlInstallPromptToggle,
   onPromptUrlInstallSourceChange,
   onPreviewPromptUrlInstall,
-  onOpenPromptFolder,
+  onOpenPromptFile,
   onResetPromptPreset,
   onSavePromptPreset,
   onTranslatePromptPreset,
@@ -1045,17 +1146,13 @@ export function PromptPresetsPage({
                   <PromptPresetsSidebarView
                     deletingPromptPresetID={deletingPromptPresetID}
                     isCreatingPromptPreset={isCreatingPromptPreset}
-                    isInstallingPromptUrlPrompts={isInstallingPromptUrlPrompts}
-                    isPreviewingPromptUrlInstall={isPreviewingPromptUrlInstall}
                     isPromptDirty={isPromptDirty}
-                    promptRoot={promptRoot}
                     promptPresets={promptPresets}
                     selectedPromptPreset={selectedPromptPreset}
                     onCreatePromptPreset={onCreatePromptPreset}
                     onDeletePromptPreset={onDeletePromptPreset}
-                    onOpenPromptFolder={onOpenPromptFolder}
+                    onOpenPromptFile={onOpenPromptFile}
                     onPromptPresetSelect={onPromptPresetSelect}
-                    onPromptUrlInstallDialogOpen={onPromptUrlInstallDialogOpen}
                   />
                 </div>
               ) : null}

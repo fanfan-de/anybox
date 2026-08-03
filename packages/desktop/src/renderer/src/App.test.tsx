@@ -556,6 +556,7 @@ type PromptPresetFixture = {
   hasOverride: boolean
   editable: boolean
   sourcePath?: string
+  filePath?: string
 }
 
 const PROMPT_PRESET_FIXTURES: PromptPresetFixture[] = [
@@ -9243,7 +9244,9 @@ describe("App", () => {
     let promptPresetSelection = { ...PROMPT_PRESET_SELECTION_FIXTURE }
     let promptPresetDocuments = [
       createPromptPresetDocument("system-default"),
-      createPromptPresetDocument("plan-mode"),
+      createPromptPresetDocument("plan-mode", {
+        filePath: "C:\\Users\\demo\\.anybox\\prompts\\bundled\\plan-mode.md",
+      }),
       createPromptPresetDocument("git-commit-message"),
       createPromptPresetDocument("cinema-text-generation"),
       createPromptPresetDocument("provider-gpt"),
@@ -9402,12 +9405,26 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Git commit message prompt" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Cinema text generation prompt" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "GPT Provider Prompt" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Open prompts folder" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Install prompt" })).not.toBeInTheDocument()
     expect(getPromptPresetCombobox("System prompt preset")).toHaveTextContent("System prompt")
     expect(getPromptPresetCombobox("Plan mode prompt preset")).toHaveTextContent("Plan mode prompt")
     expect(getPromptPresetCombobox("Git commit message prompt preset")).toHaveTextContent("Git commit message prompt")
     expect(screen.queryByRole("button", { name: /Confirm .* prompt preset/ })).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole("button", { name: "Plan mode prompt" }))
+    const planModePromptRow = screen.getByRole("button", { name: "Plan mode prompt" })
+    fireEvent.contextMenu(planModePromptRow, { clientX: 48, clientY: 64 })
+    const planModePromptMenu = screen.getByRole("menu", { name: "Plan mode prompt" })
+    expect(within(planModePromptMenu).getAllByRole("menuitem")[0]).toHaveTextContent("Open local file")
+    fireEvent.click(within(planModePromptMenu).getByRole("menuitem", { name: "Open local file" }))
+
+    await waitFor(() => {
+      expect(window.desktop!.openPath).toHaveBeenCalledWith({
+        targetPath: "C:\\Users\\demo\\.anybox\\prompts\\bundled\\plan-mode.md",
+      })
+    })
+
+    fireEvent.click(planModePromptRow)
 
     await waitFor(() => {
       expect(window.desktop!.readPromptPreset).toHaveBeenCalledWith({
@@ -9494,39 +9511,6 @@ describe("App", () => {
     })
 
     expect(await screen.findByText("Prompt preset deleted.")).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole("button", { name: "Install prompt" }))
-    fireEvent.click(screen.getByRole("menuitem", { name: "From URL" }))
-
-    const promptUrlInstallDialog = await screen.findByRole("dialog", { name: "Install prompts from URL" })
-    fireEvent.change(within(promptUrlInstallDialog).getByRole("textbox", { name: "Prompt resource URL" }), {
-      target: {
-        value: "https://github.com/acme/prompts/tree/main/prompts",
-      },
-    })
-    fireEvent.click(within(promptUrlInstallDialog).getByRole("button", { name: "Preview" }))
-
-    await waitFor(() => {
-      expect(window.desktop!.previewPromptUrlInstall).toHaveBeenCalledWith({
-        source: "https://github.com/acme/prompts/tree/main/prompts",
-      })
-    })
-    expect(within(promptUrlInstallDialog).getByText("Remote System Prompt")).toBeInTheDocument()
-
-    fireEvent.click(within(promptUrlInstallDialog).getByRole("button", { name: "Install (1)" }))
-
-    await waitFor(() => {
-      expect(window.desktop!.installPromptsFromUrl).toHaveBeenCalledWith({
-        previewID: "prompt-preview-1",
-        promptIDs: ["remote-system-prompt"],
-      })
-    })
-
-    expect(await screen.findByText("Installed 1 prompt.")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Remote System Prompt" })).toBeInTheDocument()
-    expect(screen.getByRole("textbox", { name: "Remote System Prompt content" })).toHaveValue(
-      "remote installed prompt",
-    )
 
     await choosePromptPreset("System prompt preset", "GPT Provider Prompt")
     fireEvent.click(screen.getByRole("button", { name: "GPT Provider Prompt" }))
@@ -15256,6 +15240,27 @@ describe("App", () => {
 
   it("keeps the global skills search row pinned to the top of the tree", () => {
     expect(styles).toMatch(/\.skills-tree-search-row\s*\{[^}]*position:\s*sticky;[^}]*top:\s*0;/s)
+  })
+
+  it("keeps the prompt search row outside the independently scrolling prompt tree", () => {
+    expect(styles).toMatch(
+      /\.prompt-presets-search-row\s*\{[^}]*position:\s*relative;[^}]*top:\s*auto;[^}]*flex:\s*0 0 auto;/s,
+    )
+    expect(styles).toMatch(
+      /\.prompt-presets-tree\s*\{[^}]*height:\s*auto;[^}]*flex:\s*1 1 auto;/s,
+    )
+  })
+
+  it("reveals prompt delete actions only while their row is hovered or focused", () => {
+    expect(styles).toMatch(
+      /\.skill-tree-row-shell \.row-action\s*\{[^}]*opacity:\s*0;[^}]*pointer-events:\s*none;/s,
+    )
+    expect(styles).toMatch(
+      /\.skill-tree-row-shell:hover \.row-action,\s*\.skill-tree-row-shell:focus-within \.row-action\s*\{[^}]*opacity:\s*1;[^}]*pointer-events:\s*auto;/s,
+    )
+    expect(styles).not.toMatch(
+      /\.prompt-tree-file \.prompt-tree-delete-button\s*\{[^}]*opacity:\s*1;/s,
+    )
   })
 
   it("scopes provider scrolling to the column layout", () => {

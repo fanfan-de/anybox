@@ -1612,7 +1612,6 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     promptDraftLabel,
     promptDraftContent,
     promptLoadError,
-    promptRoot,
     promptPresets,
     promptPresetSelection,
     promptUrlInstallMessage,
@@ -1627,8 +1626,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     createPromptPreset,
     deletePromptPreset,
     closePromptUrlInstallDialog,
-    openPromptFolder,
-    openPromptUrlInstallDialog,
+    openPromptFile,
     previewPromptUrlInstall,
     refreshProviderCatalog,
     refreshCinemaVideoProviderCatalog,
@@ -2676,17 +2674,13 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               promptPresetsSidebarProps={{
                 deletingPromptPresetID,
                 isCreatingPromptPreset,
-                isInstallingPromptUrlPrompts,
-                isPreviewingPromptUrlInstall,
                 isPromptDirty,
-                promptRoot,
                 promptPresets,
                 selectedPromptPreset,
                 onCreatePromptPreset: createPromptPreset,
                 onDeletePromptPreset: deletePromptPreset,
-                onOpenPromptFolder: openPromptFolder,
+                onOpenPromptFile: openPromptFile,
                 onPromptPresetSelect: selectPromptPreset,
-                onPromptUrlInstallDialogOpen: openPromptUrlInstallDialog,
               }}
               showSettingsButton={!isActivityRailVisible}
               showSidebarToggleButton={!isActivityRailVisible}
@@ -2774,7 +2768,6 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                     promptDraftContent={promptDraftContent}
                     promptDraftLabel={promptDraftLabel}
                     promptLoadError={promptLoadError}
-                    promptRoot={promptRoot}
                     promptPresets={promptPresets}
                     promptPresetSelection={promptPresetSelection}
                     promptUrlInstallMessage={promptUrlInstallMessage}
@@ -2788,7 +2781,6 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                     onDeletePromptPreset={deletePromptPreset}
                     onInstallPromptsFromUrl={installPromptsFromUrl}
                     onPromptUrlInstallDialogClose={closePromptUrlInstallDialog}
-                    onPromptUrlInstallDialogOpen={openPromptUrlInstallDialog}
                     onPromptUrlInstallPromptToggle={togglePromptUrlInstallPrompt}
                     onPromptUrlInstallSourceChange={setPromptUrlInstallSourceValue}
                     onPromptDraftChange={setPromptDraftValue}
@@ -2796,7 +2788,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                     onPromptPresetSelect={selectPromptPreset}
                     onPromptPresetSelectionChange={setPromptPresetSelectionValue}
                     onPreviewPromptUrlInstall={previewPromptUrlInstall}
-                    onOpenPromptFolder={openPromptFolder}
+                    onOpenPromptFile={openPromptFile}
                     onResetPromptPreset={resetPromptPreset}
                     onSavePromptPreset={savePromptPreset}
                     onTranslatePromptPreset={translatePromptPreset}

@@ -2346,12 +2346,11 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     }
   }
 
-  async function openPromptFolder() {
+  async function openPromptFile(filePath: string) {
+    const targetPath = filePath.trim()
     const openPath = window.desktop?.openPath
-    if (!promptRoot.trim()) return false
 
-
-    if (!openPath) {
+    if (!targetPath || !openPath) {
       showMessage({
         tone: "error",
         text: t("prompts.message.openFolderUnavailable"),
@@ -2360,9 +2359,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     }
 
     try {
-      await openPath({
-        targetPath: promptRoot,
-      })
+      await openPath({ targetPath })
       return true
     } catch (error) {
       showMessage({
@@ -4261,7 +4258,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     createPromptPreset,
     deletePromptPreset,
     closePromptUrlInstallDialog,
-    openPromptFolder,
+    openPromptFile,
     openPromptUrlInstallDialog,
     previewPromptUrlInstall,
     refreshProviderCatalog,

@@ -326,7 +326,9 @@ describe("SkillsWorkspacePage", () => {
 
     const skillRow = screen.getByRole("button", { name: "brand-guidelines" })
     expect(skillRow).not.toHaveAttribute("aria-expanded")
-    expect(skillRow.querySelector(".skill-default-logo-mark")).not.toBeNull()
+    expect(skillRow).toHaveClass("is-navigation")
+    expect(skillRow.querySelector(".skill-library-product-icon")).toBeNull()
+    expect(document.querySelector(".skills-workspace-list-panel > .skills-workspace-filter-bar")).not.toBeNull()
     expect(screen.queryByRole("button", { name: "Design" })).not.toBeInTheDocument()
     expect(screen.queryByText("LICENSE.txt")).not.toBeInTheDocument()
 
@@ -412,7 +414,7 @@ describe("SkillsWorkspacePage", () => {
     expect(within(row).getByRole("img", { name: "Reader Skill icon" }).tagName).toBe("SPAN")
   })
 
-  it("uses only local data images for downloaded product icons", async () => {
+  it("keeps downloaded navigation logo-free while retaining detail identity", async () => {
     const remoteIcon = "https://cdn.skillhub.cn/icons/reader.png"
     const localIcon = "data:image/png;base64,iVBORw0KGgo="
     desktop.listDownloadedRegistrySkills.mockResolvedValueOnce([
@@ -430,12 +432,18 @@ describe("SkillsWorkspacePage", () => {
     render(<I18nProvider><Harness><div>Local editor</div></Harness></I18nProvider>)
     fireEvent.click(screen.getByRole("tab", { name: "Downloaded" }))
 
-    const remoteFallback = await screen.findByRole("img", { name: "Reader Skill icon" })
-    expect(remoteFallback.tagName).toBe("SPAN")
-    expect(document.querySelector(`img[src="${remoteIcon}"]`)).toBeNull()
-    const localImage = screen.getByRole("img", { name: "Local Icon Skill icon" })
-    expect(localImage.tagName).toBe("IMG")
-    expect(localImage).toHaveAttribute("src", localIcon)
+    const readerRow = await screen.findByRole("button", { name: /Reader Skill/ })
+    const localIconRow = screen.getByRole("button", { name: /Local Icon Skill/ })
+    expect(readerRow).toHaveClass("is-navigation")
+    expect(readerRow.querySelector(".skill-library-product-icon")).toBeNull()
+    expect(localIconRow.querySelector(".skill-library-product-icon")).toBeNull()
+
+    fireEvent.click(localIconRow)
+    const detailImage = document.querySelector<HTMLImageElement>(
+      ".skill-library-downloaded-identity .skill-library-product-icon img",
+    )
+    expect(detailImage).not.toBeNull()
+    expect(detailImage).toHaveAttribute("src", localIcon)
   })
 
   it("filters downloaded skills in place without replacing the workspace", async () => {

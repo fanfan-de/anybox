@@ -21,13 +21,11 @@ import {
   MoreIcon,
   PlusIcon,
   SearchIcon,
-  SkillDefaultLogo,
 } from "../icons"
 import { useI18n } from "../i18n/I18nProvider"
 import { joinClassNames, ShellTopMenu } from "../shared-ui"
 import type { GlobalSkillTreeNode, SkillGitInstallPreview } from "../types"
 import type { GlobalSkillFolderOption } from "../use-global-skills"
-import { SkillProductIcon } from "./SkillCatalogViews"
 
 export type CreateGlobalSkillDraftKind = "skill" | "folder"
 export type SkillLibrarySourceFilter = "all" | "local" | "downloaded"
@@ -565,7 +563,7 @@ function GlobalSkillListRow({
         </form>
       ) : (
         <button
-          className={joinClassNames("skill-library-result-row", "is-local", isSelected ? "is-selected" : null)}
+          className={joinClassNames("skill-library-result-row", "is-navigation", "is-local", isSelected ? "is-selected" : null)}
           type="button"
           aria-label={node.name}
           aria-pressed={isSelected}
@@ -573,9 +571,6 @@ function GlobalSkillListRow({
           title={node.path}
           onClick={handleSelect}
         >
-          <span className="skill-library-product-icon is-local is-skill-default" aria-hidden="true">
-            <SkillDefaultLogo />
-          </span>
           <span className="skill-library-result-main">
             <span className="skill-library-result-title-line">
               <span className="skill-library-result-name">{node.name}</span>
@@ -584,13 +579,11 @@ function GlobalSkillListRow({
                 aria-hidden="true"
               />
             </span>
-            <span className="skill-library-result-summary">
-              {groupLabel || "Local skill"}
-            </span>
-            <span className="skill-library-result-meta">
-              <span>Local</span>
-              <span>{node.readOnly ? "Read-only" : "Editable"}</span>
-            </span>
+            {groupLabel || node.readOnly ? (
+              <span className="skill-library-result-summary">
+                {groupLabel || t("skillLibrary.local.readOnly")}
+              </span>
+            ) : null}
           </span>
         </button>
       )}
@@ -1219,6 +1212,7 @@ export function GlobalSkillsNavigator({
                 key={skill.id}
                 className={joinClassNames(
                   "skill-library-result-row",
+                  "is-navigation",
                   "is-downloaded",
                   selectedSkillSource === "downloaded" && selectedDownloadedSkillID === skill.id ? "is-selected" : null,
                 )}
@@ -1226,14 +1220,12 @@ export function GlobalSkillsNavigator({
                 aria-pressed={selectedSkillSource === "downloaded" && selectedDownloadedSkillID === skill.id}
                 onClick={() => onDownloadedSkillSelect?.(skill.id)}
               >
-                <SkillProductIcon iconUrl={skill.iconUrl} name={skill.displayName} />
                 <span className="skill-library-result-main">
                   <span className="skill-library-result-title-line">
                     <span className="skill-library-result-name">{skill.displayName}</span>
                     <span className={joinClassNames("skills-workspace-status-dot", skill.enabled ? "is-enabled" : "is-disabled")} aria-label={skill.enabled ? "Enabled" : "Disabled"} />
                   </span>
-                  <span className="skill-library-result-summary">{skill.slug}</span>
-                  <span className="skill-library-result-meta"><span>{skill.provider}</span><span>{skill.activeVersion}</span></span>
+                  <span className="skill-library-result-summary">{skill.description || skill.slug}</span>
                 </span>
               </button>
             ))}

@@ -9,7 +9,6 @@ import { ChevronDownIcon, CloseIcon, SearchIcon } from "../icons"
 import { joinClassNames } from "../shared-ui"
 import {
   DownloadedSkillDetail,
-  SkillProductIcon,
   SkillMarketplaceView,
   type SkillCatalogDetailTab,
 } from "./SkillCatalogViews"
@@ -426,41 +425,6 @@ export function SkillsWorkspacePage({
             </button>
           ) : null}
         </label>
-        <div className="skills-workspace-filter-bar">
-          <nav className="skills-workspace-tabs" role="tablist" aria-label={t("skillLibrary.modeAria")}>
-            {modes.map((item) => (
-              <button
-                key={item.id}
-                ref={(node) => { modeTabRefs.current[item.id] = node }}
-                id={`${tabsID}-tab-${item.id}`}
-                className={joinClassNames("skills-workspace-tab", mode === item.id ? "is-active" : null)}
-                type="button"
-                role="tab"
-                aria-label={item.label}
-                aria-selected={mode === item.id}
-                aria-controls={`${tabsID}-panel`}
-                tabIndex={mode === item.id ? 0 : -1}
-                onClick={() => onModeChange(item.id)}
-                onKeyDown={(event) => handleModeTabKeyDown(event, item.id)}
-              >
-                {item.label}
-                {item.id === "downloaded" && catalog.downloadedSkills.length > 0 ? (
-                  <span className="skills-workspace-tab-count">{catalog.downloadedSkills.length}</span>
-                ) : null}
-              </button>
-            ))}
-          </nav>
-          <select
-            className="skills-workspace-status-filter"
-            aria-label={t("skillLibrary.statusFilterAria")}
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value as SkillLibraryStatusFilter)}
-          >
-            <option value="all">{t("skillLibrary.provider.all")}</option>
-            <option value="enabled">{t("app.enabled")}</option>
-            <option value="disabled">{t("app.disabled")}</option>
-          </select>
-        </div>
         <div className="skills-workspace-add-menu-shell" ref={addSkillMenuRef}>
           <button
             ref={addSkillTriggerRef}
@@ -514,6 +478,41 @@ export function SkillsWorkspacePage({
         aria-labelledby={`${tabsID}-tab-${mode}`}
       >
         <aside className="skills-workspace-list-panel">
+          <div className="skills-workspace-filter-bar">
+            <nav className="skills-workspace-tabs" role="tablist" aria-label={t("skillLibrary.modeAria")}>
+              {modes.map((item) => (
+                <button
+                  key={item.id}
+                  ref={(node) => { modeTabRefs.current[item.id] = node }}
+                  id={`${tabsID}-tab-${item.id}`}
+                  className={joinClassNames("skills-workspace-tab", mode === item.id ? "is-active" : null)}
+                  type="button"
+                  role="tab"
+                  aria-label={item.label}
+                  aria-selected={mode === item.id}
+                  aria-controls={`${tabsID}-panel`}
+                  tabIndex={mode === item.id ? 0 : -1}
+                  onClick={() => onModeChange(item.id)}
+                  onKeyDown={(event) => handleModeTabKeyDown(event, item.id)}
+                >
+                  {item.label}
+                  {item.id === "downloaded" && catalog.downloadedSkills.length > 0 ? (
+                    <span className="skills-workspace-tab-count">{catalog.downloadedSkills.length}</span>
+                  ) : null}
+                </button>
+              ))}
+            </nav>
+            <select
+              className="skills-workspace-status-filter"
+              aria-label={t("skillLibrary.statusFilterAria")}
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value as SkillLibraryStatusFilter)}
+            >
+              <option value="all">{t("skillLibrary.provider.all")}</option>
+              <option value="enabled">{t("app.enabled")}</option>
+              <option value="disabled">{t("app.disabled")}</option>
+            </select>
+          </div>
           {localNavigatorProps ? (
             <GlobalSkillsNavigator
               {...localNavigatorProps}
@@ -533,14 +532,13 @@ export function SkillsWorkspacePage({
               {visibleDownloadedSkills.map((skill) => (
                   <button
                     key={skill.id}
-                    className={joinClassNames("skill-library-result-row", "is-downloaded", selectedSkillSource === "downloaded" && selectedDownloadedID === skill.id ? "is-selected" : null)}
+                    className={joinClassNames("skill-library-result-row", "is-navigation", "is-downloaded", selectedSkillSource === "downloaded" && selectedDownloadedID === skill.id ? "is-selected" : null)}
                     type="button"
                     onClick={() => handleDownloadedSkillSelect(skill.id)}
                   >
-                    <SkillProductIcon iconUrl={skill.iconUrl} name={skill.displayName} />
                     <span className="skill-library-result-main">
                       <span className="skill-library-result-name">{skill.displayName}</span>
-                      <span className="skill-library-result-summary">{skill.slug}</span>
+                      <span className="skill-library-result-summary">{skill.description || skill.slug}</span>
                     </span>
                   </button>
                 ))}

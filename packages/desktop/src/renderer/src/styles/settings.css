@@ -1953,7 +1953,8 @@ body.is-dragging-settings-page {
 
 .settings-prompt-library-panel {
   grid-area: library;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  align-content: stretch;
 }
 
 .settings-prompt-detail-panel {
@@ -3589,21 +3590,6 @@ body.is-dragging-settings-page {
   gap: 8px;
 }
 
-.prompt-presets-navigator-bar {
-  align-items: center;
-}
-
-.prompt-presets-navigator-actions {
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.prompt-presets-open-button,
-.prompt-presets-install-button,
 .prompt-presets-new-button {
   min-width: 0;
   display: inline-flex;
@@ -3611,23 +3597,20 @@ body.is-dragging-settings-page {
   gap: 6px;
 }
 
-.prompt-presets-open-button {
-  max-width: 160px;
-}
-
-.prompt-presets-open-button span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.prompt-presets-open-button svg,
-.prompt-presets-install-button svg,
 .prompt-presets-new-button svg {
   width: 14px;
   height: 14px;
   stroke-width: 2;
+}
+
+.prompt-preset-context-menu {
+  width: max-content;
+  min-width: 0;
+  max-width: min(240px, calc(100vw - 16px));
+}
+
+.prompt-preset-context-menu .ui-context-menu__item {
+  max-width: calc(100vw - 28px);
 }
 
 .prompt-presets-tree-body {
@@ -3635,8 +3618,16 @@ body.is-dragging-settings-page {
   overflow: hidden;
 }
 
+.prompt-presets-search-row {
+  position: relative;
+  top: auto;
+  z-index: auto;
+  flex: 0 0 auto;
+}
+
 .prompt-presets-tree {
-  height: 100%;
+  height: auto;
+  flex: 1 1 auto;
 }
 
 .prompt-tree-folder .skill-tree-row {
@@ -3677,11 +3668,6 @@ body.is-dragging-settings-page {
   padding: 0 6px;
   font-size: 10px;
   letter-spacing: 0.04em;
-}
-
-.prompt-tree-file .prompt-tree-delete-button {
-  opacity: 1;
-  pointer-events: auto;
 }
 
 .prompt-tree-empty {
@@ -14174,21 +14160,21 @@ body.is-dragging-settings-page {
   grid-column: 3;
 }
 
+.global-skills-page.is-embedded .settings-page-main.is-services.global-skills-page-main {
+  padding: 0;
+}
+
 .settings-page-main.is-services .settings-services-layout.global-skills-page-layout.is-sidebar-hosted,
 .settings-page-main.is-services .settings-services-layout.mcp-servers-page-layout.is-sidebar-hosted {
   grid-template-columns: minmax(0, 1fr);
 }
 
 .settings-page-main.is-services .settings-services-layout.global-skills-page-layout.is-sidebar-hosted {
-  grid-template-columns:
-    minmax(0, 1fr)
-    minmax(0, var(--settings-document-width))
-    minmax(0, 1fr)
-    var(--settings-document-side-panel-width);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .settings-page-main.is-services .settings-services-layout.global-skills-page-layout.is-sidebar-hosted > .global-skills-detail-panel {
-  grid-column: 2;
+  grid-column: 1;
 }
 
 .settings-page-main.is-services .settings-service-list-panel,
@@ -15015,20 +15001,6 @@ body.is-dragging-settings-page {
 
   .settings-page-main.is-services .settings-service-list-panel {
     max-height: 320px;
-  }
-}
-
-@media (min-width: 901px) and (max-width: 1280px) {
-  .settings-page-main.is-services .settings-services-layout.global-skills-page-layout.is-sidebar-hosted {
-    grid-template-columns:
-      minmax(0, 1fr)
-      minmax(0, var(--settings-document-width))
-      minmax(0, 1fr)
-      var(--settings-document-side-panel-width);
-  }
-
-  .settings-page-main.is-services .settings-services-layout.global-skills-page-layout.is-sidebar-hosted > .global-skills-detail-panel {
-    grid-column: 2;
   }
 }
 

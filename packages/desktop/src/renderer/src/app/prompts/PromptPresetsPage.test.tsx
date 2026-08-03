@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react"
+import { fireEvent, render, screen, within } from "@testing-library/react"
 import type { ComponentProps } from "react"
 import { describe, expect, it, vi } from "vitest"
 import { PromptPresetsPage } from "./PromptPresetsPage"
@@ -43,7 +43,6 @@ function createProps(overrides: Partial<PromptPresetsPageProps> = {}): PromptPre
     promptDraftContent: selectedPromptPreset.content,
     promptDraftLabel: selectedPromptPreset.label,
     promptLoadError: null,
-    promptRoot: "C:/Users/19128/.anybox/prompts",
     promptPresets: [selectedPromptPreset],
     promptPresetSelection: {
       systemPromptPresetID: selectedPromptPreset.id,
@@ -61,14 +60,13 @@ function createProps(overrides: Partial<PromptPresetsPageProps> = {}): PromptPre
     onCreatePromptPreset: vi.fn(() => true),
     onDeletePromptPreset: vi.fn(() => true),
     onInstallPromptsFromUrl: vi.fn(() => true),
-    onOpenPromptFolder: vi.fn(() => true),
+    onOpenPromptFile: vi.fn(() => true),
     onPreviewPromptUrlInstall: vi.fn(() => true),
     onPromptDraftChange: vi.fn(),
     onPromptDraftLabelChange: vi.fn(),
     onPromptPresetSelect: vi.fn(() => true),
     onPromptPresetSelectionChange: vi.fn(() => true),
     onPromptUrlInstallDialogClose: vi.fn(),
-    onPromptUrlInstallDialogOpen: vi.fn(),
     onPromptUrlInstallPromptToggle: vi.fn(),
     onPromptUrlInstallSourceChange: vi.fn(),
     onResetPromptPreset: vi.fn(() => true),
@@ -85,6 +83,67 @@ describe("PromptPresetsPage", () => {
     const promptRow = screen.getByRole("button", { name: LONG_PROMPT_LABEL })
 
     expect(promptRow.querySelector("svg")).toBeNull()
+  })
+
+  it("removes the navigator toolbar actions and exposes row actions in a context menu", () => {
+    const onDeletePromptPreset = vi.fn(() => true)
+    const onOpenPromptFile = vi.fn(() => true)
+    render(<PromptPresetsPage {...createProps({
+      hideNavigator: false,
+      onDeletePromptPreset,
+      onOpenPromptFile,
+    })} />)
+
+    expect(screen.queryByRole("button", { name: "Open prompts folder" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Install prompt" })).not.toBeInTheDocument()
+    const promptSearch = screen.getByRole("search", { name: "Prompt presets search" })
+    const promptList = screen.getByRole("list", { name: "Prompt presets" })
+    expect(promptList).not.toContainElement(promptSearch)
+    expect(promptSearch.nextElementSibling).toBe(promptList)
+
+    const promptRow = screen.getByRole("button", { name: LONG_PROMPT_LABEL })
+    fireEvent.contextMenu(promptRow, { clientX: 48, clientY: 64 })
+
+    const menu = screen.getByRole("menu", { name: LONG_PROMPT_LABEL })
+    const menuItems = within(menu).getAllByRole("menuitem")
+    expect(menuItems[0]).toHaveTextContent("Open local file")
+    expect(menuItems[1]).toHaveTextContent("Delete")
+    expect(menuItems[1]).toHaveAttribute("data-variant", "danger")
+
+    fireEvent.click(menuItems[0])
+    expect(onOpenPromptFile).toHaveBeenCalledWith("C:/Users/19128/.anybox/prompts/custom/long-title.md")
+    expect(screen.queryByRole("menu", { name: LONG_PROMPT_LABEL })).not.toBeInTheDocument()
+
+    fireEvent.contextMenu(promptRow, { clientX: 48, clientY: 64 })
+    fireEvent.click(within(screen.getByRole("menu", { name: LONG_PROMPT_LABEL })).getByRole("menuitem", { name: "Delete" }))
+    expect(onDeletePromptPreset).toHaveBeenCalledWith("custom-long-title")
+  })
+
+  it("opens a bundled prompt context menu from the keyboard and restores row focus with Escape", () => {
+    const bundledPrompt = createPromptPreset({
+      id: "system-default",
+      label: "System prompt",
+      source: "bundled",
+      editable: false,
+    })
+    render(<PromptPresetsPage {...createProps({
+      hideNavigator: false,
+      promptDraftContent: bundledPrompt.content,
+      promptDraftLabel: bundledPrompt.label,
+      promptPresets: [bundledPrompt],
+      selectedPromptPreset: bundledPrompt,
+    })} />)
+
+    const promptRow = screen.getByRole("button", { name: "System prompt" })
+    fireEvent.keyDown(promptRow, { key: "F10", shiftKey: true })
+
+    const menu = screen.getByRole("menu", { name: "System prompt" })
+    expect(within(menu).getAllByRole("menuitem")).toHaveLength(1)
+    expect(within(menu).queryByRole("menuitem", { name: "Delete" })).not.toBeInTheDocument()
+
+    fireEvent.keyDown(document, { key: "Escape" })
+    expect(screen.queryByRole("menu", { name: "System prompt" })).not.toBeInTheDocument()
+    expect(promptRow).toHaveFocus()
   })
 
   it("omits status badges from prompt navigator rows", () => {
