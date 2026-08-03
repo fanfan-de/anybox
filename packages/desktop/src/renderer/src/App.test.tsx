@@ -265,7 +265,10 @@ function sortPanesWithCreateSessionLast(panes: HTMLElement[]) {
 }
 
 function getPaneCanvasTitle(pane: HTMLElement) {
-  return pane.querySelector(".session-canvas-top-menu .label")?.textContent?.trim() ?? ""
+  return pane.closest(".dv-groupview")
+    ?.querySelector(".dv-tab.dv-active-tab .dockview-workbench-tab-title")
+    ?.textContent
+    ?.trim() ?? ""
 }
 
 async function getWorkbenchPanes(count: number) {
@@ -8546,7 +8549,8 @@ describe("App", () => {
       })
     })
     expect(await screen.findByRole("button", { name: "Backend chat" })).toBeInTheDocument()
-    expect(within(screen.getByLabelText("Session canvas top menu")).getByText("Backend chat")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Switch to session Backend chat" })).toHaveAttribute("aria-pressed", "true")
+    expect(within(screen.getByLabelText("Session canvas top menu")).queryByText("Backend chat")).not.toBeInTheDocument()
   })
 
   it("creates a session only for the currently selected folder", async () => {
@@ -14662,9 +14666,7 @@ describe("App", () => {
     expect(styles).toMatch(
       /\.session-canvas-top-menu-copy\s*\{[^}]*min-width:\s*0;[^}]*overflow:\s*hidden;/s,
     )
-    expect(styles).toMatch(
-      /\.session-canvas-top-menu-copy\s+\.label\s*\{[^}]*overflow:\s*hidden;[^}]*text-overflow:\s*ellipsis;[^}]*white-space:\s*nowrap;[^}]*font-size:\s*12px;[^}]*font-weight:\s*600;[^}]*line-height:\s*1\.2;[^}]*text-transform:\s*none;[^}]*color:\s*var\(--text-primary\);/s,
-    )
+    expect(styles).not.toMatch(/\.session-canvas-top-menu-copy\s+\.label\s*\{/s)
     expect(styles).toMatch(
       /\.session-canvas-top-menu\s+\.canvas-top-menu-button\s*\{[^}]*min-height:\s*var\(--section-toolbar-pill-height\);[^}]*border-radius:\s*8px;[^}]*font-size:\s*12px;[^}]*line-height:\s*1\.2;/s,
     )
