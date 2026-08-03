@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react"
+import { fireEvent, render, screen, within } from "@testing-library/react"
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -246,12 +246,24 @@ describe("BuiltinToolsPage", () => {
     )
   })
 
+  it("keeps availability controls in one compact row and wraps them on narrow screens", () => {
+    expect(toolsStyles).toMatch(
+      /\.builtin-tools-page \.tools-availability-toolbar\s*\{[^}]*min-height:\s*52px;[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto;[^}]*align-items:\s*center;/s,
+    )
+    expect(toolsStyles).toMatch(
+      /@media \(max-width: 900px\)\s*\{[\s\S]*?\.builtin-tools-page \.tools-availability-toolbar\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);[^}]*align-items:\s*stretch;/s,
+    )
+  })
+
   it("renders server-defined Tool Modules and keeps per-tool controls", () => {
     const props = renderBuiltinToolsPage()
 
     expect(screen.getByLabelText("Tools top menu")).toBeInTheDocument()
-    expect(screen.getByText("Global tool availability")).toBeInTheDocument()
-    expect(screen.getByText("2 of 4 built-in tools enabled.")).toBeInTheDocument()
+    const availabilityToolbar = screen.getByRole("group", { name: "Availability" })
+    expect(availabilityToolbar).toHaveClass("tools-availability-toolbar")
+    expect(within(availabilityToolbar).getByText("Global 2/4")).toBeInTheDocument()
+    expect(within(availabilityToolbar).getByText("This module 1/1")).toBeInTheDocument()
+    expect(within(availabilityToolbar).getByText("Enable all")).toBeInTheDocument()
 
     expect(screen.getByRole("heading", { name: "Always-on Tool Modules" })).toBeInTheDocument()
     expect(screen.getByRole("heading", { name: "On-demand Tool Modules" })).toBeInTheDocument()
@@ -269,7 +281,7 @@ describe("BuiltinToolsPage", () => {
     })).toBeInTheDocument()
     expect(screen.getByText("workspace.shell")).toBeInTheDocument()
     expect(screen.getByText("Built-in · Anybox")).toBeInTheDocument()
-    expect(screen.getByText("Always available")).toBeInTheDocument()
+    expect(screen.getByText("Activation: Always available")).toBeInTheDocument()
     expect(screen.getByText("Global scope")).toBeInTheDocument()
     expect(screen.getByText("Git Bash")).toBeInTheDocument()
     expect(screen.getByText("Shell access")).toBeInTheDocument()
@@ -303,7 +315,7 @@ describe("BuiltinToolsPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }))
     expect(props.onSaveBuiltinTools).toHaveBeenCalled()
-    fireEvent.click(screen.getByRole("button", { name: "Reset to default" }))
+    fireEvent.click(screen.getByRole("button", { name: "Reset all tools" }))
     expect(props.onResetBuiltinTools).toHaveBeenCalled()
   })
 
@@ -315,7 +327,7 @@ describe("BuiltinToolsPage", () => {
     }))
     const moduleSwitch = screen.getByRole("switch", { name: "Change availability for File Read and Write" })
     expect(moduleSwitch).toHaveAttribute("aria-checked", "false")
-    expect(screen.getByText("All module tools disabled")).toBeInTheDocument()
+    expect(screen.getByText("This module 0/2")).toBeInTheDocument()
 
     fireEvent.click(moduleSwitch)
     expect(props.onBuiltinToolModuleToggle).toHaveBeenCalledWith(["read_file", "apply_patch"], true)
@@ -330,7 +342,7 @@ describe("BuiltinToolsPage", () => {
     fireEvent.click(screen.getByRole("button", {
       name: "File Read and Write module, 1 of 2 tools enabled",
     }))
-    expect(screen.getByText("Some module tools available")).toBeInTheDocument()
+    expect(screen.getByText("This module 1/2")).toBeInTheDocument()
     const moduleSwitch = screen.getByRole("switch", { name: "Change availability for File Read and Write" })
     expect(moduleSwitch).toHaveAttribute("aria-checked", "false")
 
@@ -377,16 +389,22 @@ describe("BuiltinToolsPage", () => {
 
     expect(screen.getByText("planner.core")).toBeInTheDocument()
     expect(screen.getByText("Native · Anybox")).toBeInTheDocument()
-    expect(screen.getAllByText("On demand")).toHaveLength(2)
+    expect(screen.getByText("Activation: On demand")).toBeInTheDocument()
+    expect(screen.getByText("On demand")).toBeInTheDocument()
     expect(screen.getByText("Current-turn scope")).toBeInTheDocument()
-    expect(screen.getByText("On-demand tool catalog")).toBeInTheDocument()
-    expect(screen.getByText("This module contains 2 tools.")).toBeInTheDocument()
-    expect(screen.getByText("Loaded for the current turn only")).toBeInTheDocument()
+    const onDemandToolbar = screen.getByRole("note", { name: "On-demand tool catalog" })
+    expect(within(onDemandToolbar).getByText("On-demand tool catalog")).toBeInTheDocument()
+    expect(within(onDemandToolbar).getByText("2 tools")).toBeInTheDocument()
+    expect(within(onDemandToolbar).getByText(
+      "Browsing does not load tools; use Tool Search, @计划, /计划, /planner, or Planner delegation.",
+    )).toBeInTheDocument()
+    expect(props.container.querySelector(".tools-detail-header")).not.toBeInTheDocument()
+    expect(props.container.querySelector(".tools-on-demand-notice")).not.toBeInTheDocument()
     expect(screen.getByText("List Planner Todos")).toBeInTheDocument()
     expect(screen.getByText("Create Planner Todo")).toBeInTheDocument()
-    expect(screen.queryByText("Global tool availability")).not.toBeInTheDocument()
+    expect(screen.queryByRole("group", { name: "Availability" })).not.toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Save changes" })).not.toBeInTheDocument()
-    expect(screen.queryByRole("button", { name: "Reset to default" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Reset all tools" })).not.toBeInTheDocument()
     expect(screen.queryByRole("switch")).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole("button", { name: "Show details for List Planner Todos" }))
@@ -463,10 +481,12 @@ describe("BuiltinToolsPage", () => {
     expect(screen.getByRole("heading", { name: "Shell" })).toBeInTheDocument()
     expect(screen.getByText("运行 Shell 命令，并与持久或托管终端会话交互。")).toBeInTheDocument()
     expect(screen.getByText("内置 · Anybox")).toBeInTheDocument()
-    expect(screen.getByText("始终可用")).toBeInTheDocument()
+    expect(screen.getByText("激活策略：始终可用")).toBeInTheDocument()
     expect(screen.getByText("全局作用域")).toBeInTheDocument()
-    expect(screen.getByText("全局工具可用性")).toBeInTheDocument()
-    expect(screen.getByText("模块内工具全部可用")).toBeInTheDocument()
+    const availabilityToolbar = screen.getByRole("group", { name: "可用性" })
+    expect(within(availabilityToolbar).getByText("全局 2/4")).toBeInTheDocument()
+    expect(within(availabilityToolbar).getByText("本模块 1/1")).toBeInTheDocument()
+    expect(within(availabilityToolbar).getByText("全部启用")).toBeInTheDocument()
     expect(screen.getByRole("switch", {
       name: "切换 Shell 模块内工具的可用性",
     })).toBeInTheDocument()
@@ -482,14 +502,19 @@ describe("BuiltinToolsPage", () => {
     expect(screen.getByRole("heading", { name: "渐进披露" })).toBeInTheDocument()
     expect(screen.getByText("工具搜索")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "保存更改" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "恢复默认" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "重置全部工具" })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole("button", {
       name: "Planner 模块，共 2 个工具，按需加载",
     }))
-    expect(screen.getByText("按需工具目录")).toBeInTheDocument()
+    const onDemandToolbar = screen.getByRole("note", { name: "按需工具目录" })
+    expect(within(onDemandToolbar).getByText("按需工具目录")).toBeInTheDocument()
+    expect(within(onDemandToolbar).getByText("2 个工具")).toBeInTheDocument()
+    expect(within(onDemandToolbar).getByText(
+      "浏览不会加载工具；可通过工具搜索、@计划、/计划、/planner 或 Planner 委派使用。",
+    )).toBeInTheDocument()
     expect(screen.getByText("列出 Planner 待办")).toBeInTheDocument()
-    expect(screen.getByText("仅为当前轮次加载")).toBeInTheDocument()
+    expect(screen.queryByText("仅为当前轮次加载")).not.toBeInTheDocument()
     expect(screen.queryByRole("switch")).not.toBeInTheDocument()
   })
 })

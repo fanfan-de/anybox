@@ -121,7 +121,10 @@ describe("i18n translations", () => {
     expect(t("zh-TW", "tools.modules.tool.planner_create_todo.description")).toBe(
       "建立一個 Anybox Planner 待辦，並可選擇安排執行時間。",
     )
-    expect(t("zh-CN", "tools.modules.onDemand.noticeTitle")).toBe("仅为当前轮次加载")
+    expect(t("zh-CN", "tools.modules.onDemand.contentsSummary", { total: 12 })).toBe("12 个工具")
+    expect(t("zh-CN", "tools.modules.onDemand.noticeCopy")).toBe(
+      "浏览不会加载工具；可通过工具搜索、@计划、/计划、/planner 或 Planner 委派使用。",
+    )
     expect(t("zh-CN", "tools.modules.tool.tool_search.title")).toBe("工具搜索")
     expect(t("zh-TW", "tools.modules.catalog.workspace.file-io.title")).toBe("檔案讀寫")
     expect(t("en-US", "tools.modules.catalog.agent.multiagent.title")).toBe("Multi-agent")

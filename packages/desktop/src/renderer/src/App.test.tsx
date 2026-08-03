@@ -9956,8 +9956,9 @@ describe("App", () => {
     expect(screen.queryByRole("complementary", { name: "Inspector sidebar" })).not.toBeInTheDocument()
     expect(screen.queryByRole("dialog", { name: "Settings" })).not.toBeInTheDocument()
     expect(screen.queryByText("Pick a project first")).not.toBeInTheDocument()
-    expect(await screen.findByText("Global tool availability")).toBeInTheDocument()
-    expect(screen.getByText("1 of 2 built-in tools enabled.")).toBeInTheDocument()
+    const availabilityToolbar = await screen.findByRole("group", { name: "Availability" })
+    expect(within(availabilityToolbar).getByText("Global 1/2")).toBeInTheDocument()
+    expect(within(availabilityToolbar).getByText("This module 1/1")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Shell module, 1 of 1 tools enabled" })).toBeInTheDocument()
     expect(screen.getByText("Git Bash")).toBeInTheDocument()
     expect(screen.queryByText("Read File")).not.toBeInTheDocument()
@@ -9968,7 +9969,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Planner module, 1 tools, on demand" }))
     expect(screen.getByText("List Planner Todos")).toBeInTheDocument()
     expect(screen.getByText("Current-turn scope")).toBeInTheDocument()
-    expect(screen.queryByText("Global tool availability")).not.toBeInTheDocument()
+    expect(screen.queryByRole("group", { name: "Availability" })).not.toBeInTheDocument()
     expect(screen.queryByRole("switch")).not.toBeInTheDocument()
 
     await waitFor(() => {
@@ -15309,7 +15310,9 @@ describe("App", () => {
     expect(styles).toMatch(/\.builtin-tools-page\s*\{[^}]*--tools-obs-bg:\s*var\(--surface-shell\);/s)
     expect(styles).not.toMatch(/:root\[data-theme="dark"\]\s+\.builtin-tools-page\s*\{[^}]*--tools-obs-bg:/s)
     expect(styles).toMatch(/\.builtin-tools-page\s+\.tools-panel\s*\{[^}]*padding:\s*0;[^}]*border:\s*0;[^}]*border-radius:\s*0;[^}]*background:\s*transparent;/s)
-    expect(styles).toMatch(/\.builtin-tools-page\s+\.tools-detail-header\s*\{[^}]*padding-top:\s*18px;[^}]*border-top:\s*1px solid var\(--tools-obs-border\);[^}]*border-bottom:\s*1px solid var\(--tools-obs-border\);/s)
+    expect(styles).toMatch(/\.builtin-tools-page\s+\.tools-on-demand-toolbar\s*\{[^}]*min-height:\s*52px;[^}]*border-top:\s*1px solid var\(--tools-obs-border\);[^}]*border-bottom:\s*1px solid var\(--tools-obs-border\);[^}]*grid-template-columns:\s*auto minmax\(0,\s*1fr\);/s)
+    expect(styles).toMatch(/@media\s*\(max-width:\s*900px\)\s*\{[\s\S]*?\.builtin-tools-page\s+\.tools-on-demand-toolbar\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\);/s)
+    expect(styles).not.toContain(".tools-on-demand-notice")
     expect(styles).toMatch(/@media\s*\(max-width:\s*900px\)\s*\{[\s\S]*?\.builtin-tools-page\s+\.tools-panel\s*\{[^}]*padding:\s*0;/s)
   })
 
