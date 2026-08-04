@@ -5,6 +5,8 @@ import { prepareAndroidReleaseAssets } from "./lib/android-release.mjs"
 import {
   assertVersionCodeAdvances,
   buildGitHubReleaseCreateArgs,
+  isMissingPublishedReleasePair,
+  selectLatestPublishedMobileRelease,
   selectPhysicalDeviceSerial,
 } from "./lib/release-guards.mjs"
 import {
@@ -233,7 +235,10 @@ async function requireIncreasingPublishedVersionCode(mobile, certificatePem) {
         signal: controller.signal,
       }),
     ])
-    if (manifestResponse.status === 404 && signatureResponse.status === 404) return
+    // Tencent COS returns 403 for an absent public object when the bucket does not
+    // grant anonymous listing. GitHub remains the monotonic source for this first
+    // self-hosted release, and uploaded objects are verified publicly before use.
+    if (isMissingPublishedReleasePair(manifestResponse.status, signatureResponse.status)) return
     if (!manifestResponse.ok || !signatureResponse.ok) {
       throw new Error(
         `Published Android release preflight failed: manifest HTTP ${manifestResponse.status}, ` +
@@ -254,6 +259,57 @@ async function requireIncreasingPublishedVersionCode(mobile, certificatePem) {
   }
 }
 
+async function requireIncreasingGitHubVersionCode(mobile) {
+  const listed = commandResult("gh", [
+    "release",
+    "list",
+    "--repo",
+    mobile.githubRepository,
+    "--limit",
+    "100",
+    "--json",
+    "tagName,isDraft,isPrerelease,publishedAt",
+  ])
+  if (listed.status !== 0) {
+    if (listed.stdout) process.stdout.write(listed.stdout)
+    if (listed.stderr) process.stderr.write(listed.stderr)
+    throw new Error("Unable to inspect existing GitHub mobile releases.")
+  }
+  let releases
+  try {
+    releases = JSON.parse(listed.stdout)
+  } catch {
+    throw new Error("GitHub mobile release listing returned invalid JSON.")
+  }
+  const previousRelease = selectLatestPublishedMobileRelease(releases, mobile.githubTagPrefix)
+  if (!previousRelease) return
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(mobile.githubRepository)) {
+    throw new Error("Mobile GitHub repository is invalid.")
+  }
+  const manifestAssetName = mobile.appJson.extra.anyboxMobileGitHubManifestAssetName
+  const manifestUrl =
+    `https://github.com/${mobile.githubRepository}/releases/download/` +
+    `${encodeURIComponent(previousRelease.tagName)}/${encodeURIComponent(manifestAssetName)}`
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 20_000)
+  try {
+    const response = await fetch(manifestUrl, {
+      cache: "no-store",
+      redirect: "follow",
+      signal: controller.signal,
+    })
+    if (!response.ok) {
+      throw new Error(
+        `Previous GitHub mobile release manifest returned HTTP ${response.status}: ${previousRelease.tagName}`,
+      )
+    }
+    const previous = JSON.parse(await response.text())
+    assertVersionCodeAdvances(mobile.versionCode, previous.versionCode)
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 async function fetchRequiredText(url, label) {
   const response = await fetch(url, { cache: "no-store" })
   if (!response.ok) throw new Error(`${label} returned HTTP ${response.status}.`)
@@ -268,11 +324,12 @@ async function main() {
   assertScopedReleaseTreeClean()
   const mobile = readMobileConfig()
   const signing = requireOtaSigningMaterial()
-  await requireIncreasingPublishedVersionCode(mobile, signing.certificatePem)
-  const nativeFingerprint = await assertNativeFingerprint(mobile.runtimeVersion)
   const sourceCommit = readGit(["rev-parse", "HEAD"]).toLowerCase()
   const tag = `${mobile.githubTagPrefix}${mobile.version}`
   requireTagAbsent(tag, mobile.githubRepository)
+  await requireIncreasingGitHubVersionCode(mobile)
+  await requireIncreasingPublishedVersionCode(mobile, signing.certificatePem)
+  const nativeFingerprint = await assertNativeFingerprint(mobile.runtimeVersion)
 
   run(corepack, ["pnpm", "--filter", "anybox-mobile-app", "typecheck"], {
     cwd: repoRoot,

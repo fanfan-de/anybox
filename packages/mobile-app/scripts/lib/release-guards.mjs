@@ -33,6 +33,24 @@ export function assertVersionCodeAdvances(currentVersionCode, previousVersionCod
   }
 }
 
+export function isMissingPublishedReleasePair(manifestStatus, signatureStatus) {
+  if (manifestStatus !== signatureStatus) return false
+  return manifestStatus === 404 || manifestStatus === 403
+}
+
+export function selectLatestPublishedMobileRelease(releases, tagPrefix) {
+  return [...releases]
+    .filter(
+      (release) =>
+        release?.isDraft === false &&
+        release?.isPrerelease === false &&
+        typeof release?.tagName === "string" &&
+        release.tagName.startsWith(tagPrefix) &&
+        Number.isFinite(Date.parse(release.publishedAt)),
+    )
+    .sort((left, right) => Date.parse(right.publishedAt) - Date.parse(left.publishedAt))[0]
+}
+
 export function assertReleaseCertificateFingerprint(
   apkCertificateFingerprint,
   keystoreCertificateFingerprint,
