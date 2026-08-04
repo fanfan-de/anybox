@@ -2720,7 +2720,10 @@ interface SettingsPageProps {
     field: "apiKey" | "baseURL" | "userID",
     value: string,
   ) => void
-  onCustomProviderDraftChange: (field: keyof CustomProviderDraftState, value: string) => void
+  onCustomProviderDraftChange: <K extends keyof CustomProviderDraftState>(
+    field: K,
+    value: CustomProviderDraftState[K],
+  ) => void
   onCustomProviderDraftReset: (draft?: CustomProviderDraftState) => void
   onRefreshProviderCatalog: () => boolean | Promise<boolean>
   onRefreshCinemaVideoProviderCatalog: () => boolean | Promise<boolean>
@@ -3665,11 +3668,17 @@ export function SettingsPage({
     }
 
     function getCustomProviderEditDraft(provider: ProviderCatalogItem): CustomProviderDraftState {
+      const defaultModel = provider.customDefaultModel ?? modelGroups[provider.id]?.[0]?.id ?? ""
+      const model = modelGroups[provider.id]?.find((item) => item.id === defaultModel)
+
       return {
         apiBaseURL: provider.baseURL ?? "",
         apiKey: "",
-        defaultModel: provider.customDefaultModel ?? modelGroups[provider.id]?.[0]?.id ?? "",
+        defaultModel,
         chatEndpoint: provider.customChatEndpoint ?? "/chat/completions",
+        supportsImageInput: Boolean(model?.capabilities.input.image),
+        supportsPdfInput: Boolean(model?.capabilities.attachment && model.capabilities.input.pdf),
+        supportsReasoning: Boolean(model?.capabilities.reasoning),
       }
     }
 
@@ -6262,6 +6271,99 @@ export function SettingsPage({
                           onChange={(event) => onCustomProviderDraftChange("chatEndpoint", event.target.value)}
                         />
                       </label>
+
+                      <div
+                        className="custom-provider-capabilities"
+                        role="group"
+                        aria-labelledby="custom-provider-capabilities-label"
+                      >
+                        <span className="settings-field-label" id="custom-provider-capabilities-label">
+                          Model capabilities
+                        </span>
+
+                        <div className="custom-provider-capability-list">
+                          <button
+                            className={
+                              customProviderDraft.supportsImageInput
+                                ? "custom-provider-capability-switch is-active"
+                                : "custom-provider-capability-switch"
+                            }
+                            type="button"
+                            role="switch"
+                            aria-checked={customProviderDraft.supportsImageInput}
+                            aria-label="Custom provider image input"
+                            disabled={customProviderBusy}
+                            onClick={() =>
+                              onCustomProviderDraftChange(
+                                "supportsImageInput",
+                                !customProviderDraft.supportsImageInput,
+                              )
+                            }
+                          >
+                            <span className="custom-provider-capability-copy">
+                              <strong>Image input</strong>
+                              <small>Allow images in chat messages.</small>
+                            </span>
+                            <span className="settings-toggle-control" aria-hidden="true">
+                              <span className="settings-toggle-thumb" />
+                            </span>
+                          </button>
+
+                          <button
+                            className={
+                              customProviderDraft.supportsPdfInput
+                                ? "custom-provider-capability-switch is-active"
+                                : "custom-provider-capability-switch"
+                            }
+                            type="button"
+                            role="switch"
+                            aria-checked={customProviderDraft.supportsPdfInput}
+                            aria-label="Custom provider PDF input"
+                            disabled={customProviderBusy}
+                            onClick={() =>
+                              onCustomProviderDraftChange(
+                                "supportsPdfInput",
+                                !customProviderDraft.supportsPdfInput,
+                              )
+                            }
+                          >
+                            <span className="custom-provider-capability-copy">
+                              <strong>PDF input</strong>
+                              <small>Allow PDF files in chat messages.</small>
+                            </span>
+                            <span className="settings-toggle-control" aria-hidden="true">
+                              <span className="settings-toggle-thumb" />
+                            </span>
+                          </button>
+
+                          <button
+                            className={
+                              customProviderDraft.supportsReasoning
+                                ? "custom-provider-capability-switch is-active"
+                                : "custom-provider-capability-switch"
+                            }
+                            type="button"
+                            role="switch"
+                            aria-checked={customProviderDraft.supportsReasoning}
+                            aria-label="Custom provider reasoning"
+                            disabled={customProviderBusy}
+                            onClick={() =>
+                              onCustomProviderDraftChange(
+                                "supportsReasoning",
+                                !customProviderDraft.supportsReasoning,
+                              )
+                            }
+                          >
+                            <span className="custom-provider-capability-copy">
+                              <strong>Reasoning</strong>
+                              <small>Mark this model as supporting reasoning.</small>
+                            </span>
+                            <span className="settings-toggle-control" aria-hidden="true">
+                              <span className="settings-toggle-thumb" />
+                            </span>
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
                     <div className="settings-actions-row">

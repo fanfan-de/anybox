@@ -125,6 +125,9 @@ const CustomProviderBodyBase = z.object({
   authHeader: z.string().optional(),
   defaultModel: z.string().min(1),
   chatEndpoint: z.string().min(1),
+  supportsImageInput: z.boolean().optional().default(false),
+  supportsPdfInput: z.boolean().optional().default(false),
+  supportsReasoning: z.boolean().optional().default(false),
 })
 const hasCustomProviderCredentialInput = (value: { providerID?: string; apiKey?: string; authHeader?: string }) =>
   Boolean(value.providerID?.trim() || value.apiKey?.trim() || value.authHeader?.trim())
@@ -574,6 +577,9 @@ function normalizeCustomProviderInput(input: z.infer<typeof UpsertCustomProvider
     apiBaseURL,
     chatEndpoint,
     defaultModel,
+    supportsImageInput: input.supportsImageInput,
+    supportsPdfInput: input.supportsPdfInput,
+    supportsReasoning: input.supportsReasoning,
     ...authHeader,
   }
 }
@@ -589,6 +595,10 @@ type NormalizedCustomProviderInput = ReturnType<typeof normalizeCustomProviderIn
 
 function buildCustomProviderConfig(input: NormalizedCustomProviderInput): Config.Provider {
   const host = new URL(input.apiBaseURL).host
+  const inputModalities: Array<"text" | "image" | "pdf"> = ["text"]
+  if (input.supportsImageInput) inputModalities.push("image")
+  if (input.supportsPdfInput) inputModalities.push("pdf")
+
   return {
     id: input.providerID,
     name: `Custom · ${host}`,
@@ -610,12 +620,12 @@ function buildCustomProviderConfig(input: NormalizedCustomProviderInput): Config
           api: input.apiBaseURL,
           npm: CUSTOM_PROVIDER_SDK_PACKAGE,
         },
-        reasoning: false,
+        reasoning: input.supportsReasoning,
         temperature: true,
         tool_call: true,
-        attachment: false,
+        attachment: input.supportsPdfInput,
         modalities: {
-          input: ["text"],
+          input: inputModalities,
           output: ["text"],
         },
         options: {},

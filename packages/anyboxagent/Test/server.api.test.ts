@@ -2770,6 +2770,16 @@ describe("server api", () => {
                 id: "deepseek-chat",
                 name: "deepseek-chat",
                 available: true,
+                capabilities: expect.objectContaining({
+                  reasoning: false,
+                  attachment: false,
+                  toolcall: true,
+                  input: expect.objectContaining({
+                    text: true,
+                    image: false,
+                    pdf: false,
+                  }),
+                }),
               }),
             ]),
           )
@@ -2834,6 +2844,9 @@ describe("server api", () => {
               apiKey: "",
               defaultModel: "deepseek-chat-edited",
               chatEndpoint: "/compatible/chat",
+              supportsImageInput: true,
+              supportsPdfInput: true,
+              supportsReasoning: true,
             }),
           })
           const editBody = (await editResponse.json()) as ProviderUpdateEnvelope
@@ -2851,6 +2864,29 @@ describe("server api", () => {
                 id: providerID,
                 customChatEndpoint: "/compatible/chat",
                 customDefaultModel: "deepseek-chat-edited",
+              }),
+            ]),
+          )
+
+          const editedModelsResponse = await app.request("http://localhost/api/models")
+          const editedModelsBody = (await editedModelsResponse.json()) as ProjectModelsEnvelope
+
+          expect(editedModelsResponse.status).toBe(200)
+          expect(editedModelsBody.data?.items).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({
+                providerID,
+                id: "deepseek-chat-edited",
+                capabilities: expect.objectContaining({
+                  reasoning: true,
+                  attachment: true,
+                  toolcall: true,
+                  input: expect.objectContaining({
+                    text: true,
+                    image: true,
+                    pdf: true,
+                  }),
+                }),
               }),
             ]),
           )

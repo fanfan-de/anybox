@@ -1823,6 +1823,9 @@ export interface CustomProviderDraftState {
   apiKey: string
   defaultModel: string
   chatEndpoint: string
+  supportsImageInput: boolean
+  supportsPdfInput: boolean
+  supportsReasoning: boolean
 }
 
 export interface SkillInfo {

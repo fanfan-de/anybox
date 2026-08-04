@@ -627,6 +627,9 @@ try {
       apiKey: string
       defaultModel: string
       chatEndpoint: string
+      supportsImageInput: boolean
+      supportsPdfInput: boolean
+      supportsReasoning: boolean
     }) =>
       invokeDesktop("desktop:upsert-custom-provider", input) as Promise<{
         provider: {
@@ -644,6 +647,9 @@ try {
       apiKey: string
       defaultModel: string
       chatEndpoint: string
+      supportsImageInput: boolean
+      supportsPdfInput: boolean
+      supportsReasoning: boolean
     }) =>
       invokeDesktop("desktop:test-custom-provider-connection", input) as Promise<AgentProviderConnectionTestResult>,
     getGlobalModels: () =>

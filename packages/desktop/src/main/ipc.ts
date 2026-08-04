@@ -5589,6 +5589,9 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
         apiKey: string
         defaultModel: string
         chatEndpoint: string
+        supportsImageInput: boolean
+        supportsPdfInput: boolean
+        supportsReasoning: boolean
       },
     ) => {
       const result = await requestAgentJSON<{
@@ -5611,6 +5614,9 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
           apiKey: input.apiKey,
           defaultModel: input.defaultModel,
           chatEndpoint: input.chatEndpoint,
+          supportsImageInput: input.supportsImageInput,
+          supportsPdfInput: input.supportsPdfInput,
+          supportsReasoning: input.supportsReasoning,
         }),
       })
       return result.data
@@ -5627,6 +5633,9 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
         apiKey: string
         defaultModel: string
         chatEndpoint: string
+        supportsImageInput: boolean
+        supportsPdfInput: boolean
+        supportsReasoning: boolean
       },
     ) => {
       const result = await requestAgentJSON<AgentProviderConnectionTestResult>("/api/providers/custom/test", {
@@ -5640,6 +5649,9 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
           apiKey: input.apiKey,
           defaultModel: input.defaultModel,
           chatEndpoint: input.chatEndpoint,
+          supportsImageInput: input.supportsImageInput,
+          supportsPdfInput: input.supportsPdfInput,
+          supportsReasoning: input.supportsReasoning,
         }),
       })
       return result.data

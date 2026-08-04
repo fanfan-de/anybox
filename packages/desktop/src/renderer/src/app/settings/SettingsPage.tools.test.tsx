@@ -168,6 +168,9 @@ function createSettingsPageProps(
       apiKey: "",
       defaultModel: "",
       chatEndpoint: "/chat/completions",
+      supportsImageInput: false,
+      supportsPdfInput: false,
+      supportsReasoning: false,
     },
     onActivityRailVisibilityChange: vi.fn(),
     onAgentDebugTraceChange: vi.fn(),
@@ -369,7 +372,9 @@ function createModel(
   name: string,
   input?: {
     family?: string
+    imageInput?: boolean
     imageOutput?: boolean
+    pdfInput?: boolean
     reasoning?: boolean
   },
 ): ComponentProps<typeof SettingsPage>["models"][number] {
@@ -383,14 +388,14 @@ function createModel(
     capabilities: {
       temperature: true,
       reasoning: input?.reasoning ?? false,
-      attachment: false,
+      attachment: input?.pdfInput ?? false,
       toolcall: true,
       input: {
         text: true,
         audio: false,
-        image: false,
+        image: input?.imageInput ?? false,
         video: false,
-        pdf: false,
+        pdf: input?.pdfInput ?? false,
       },
       output: {
         text: true,
@@ -1241,7 +1246,7 @@ describe("SettingsPage built-in tools", () => {
     expect(image).toHaveAttribute("hidden")
   })
 
-  it("opens the custom provider dialog and edits its four fields", () => {
+  it("opens the custom provider dialog and edits its fields and model capabilities", () => {
     const onCustomProviderDraftChange = vi.fn()
 
     render(
@@ -1264,6 +1269,14 @@ describe("SettingsPage built-in tools", () => {
     expect(screen.getByLabelText("Custom provider API key")).toHaveAttribute("placeholder", "Enter API key")
     expect(defaultModelInput).toHaveAttribute("placeholder", "model-name")
 
+    const imageInputSwitch = screen.getByRole("switch", { name: "Custom provider image input" })
+    const pdfInputSwitch = screen.getByRole("switch", { name: "Custom provider PDF input" })
+    const reasoningSwitch = screen.getByRole("switch", { name: "Custom provider reasoning" })
+
+    expect(imageInputSwitch).toHaveAttribute("aria-checked", "false")
+    expect(pdfInputSwitch).toHaveAttribute("aria-checked", "false")
+    expect(reasoningSwitch).toHaveAttribute("aria-checked", "false")
+
     fireEvent.change(apiBaseURLInput, {
       target: { value: "https://api.example.com/v1" },
     })
@@ -1276,11 +1289,17 @@ describe("SettingsPage built-in tools", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Custom provider chat endpoint" }), {
       target: { value: "/compatible/chat" },
     })
+    fireEvent.click(imageInputSwitch)
+    fireEvent.click(pdfInputSwitch)
+    fireEvent.click(reasoningSwitch)
 
     expect(onCustomProviderDraftChange).toHaveBeenCalledWith("apiBaseURL", "https://api.example.com/v1")
     expect(onCustomProviderDraftChange).toHaveBeenCalledWith("apiKey", "sk-test")
     expect(onCustomProviderDraftChange).toHaveBeenCalledWith("defaultModel", "custom-chat-model")
     expect(onCustomProviderDraftChange).toHaveBeenCalledWith("chatEndpoint", "/compatible/chat")
+    expect(onCustomProviderDraftChange).toHaveBeenCalledWith("supportsImageInput", true)
+    expect(onCustomProviderDraftChange).toHaveBeenCalledWith("supportsPdfInput", true)
+    expect(onCustomProviderDraftChange).toHaveBeenCalledWith("supportsReasoning", true)
   })
 
   it("tests and saves a complete custom provider draft", async () => {
@@ -1295,6 +1314,9 @@ describe("SettingsPage built-in tools", () => {
             apiKey: "sk-test",
             defaultModel: "custom-chat-model",
             chatEndpoint: "/chat/completions",
+            supportsImageInput: true,
+            supportsPdfInput: true,
+            supportsReasoning: true,
           },
           onSaveCustomProvider,
           onTestCustomProviderConnection,
@@ -1333,7 +1355,13 @@ describe("SettingsPage built-in tools", () => {
       <SettingsPage
         {...createSettingsPageProps({
           catalog: [customProvider, catalogProvider],
-          models: [createModel("custom-example", "deepseek-v4-flash", "deepseek-v4-flash")],
+          models: [
+            createModel("custom-example", "deepseek-v4-flash", "deepseek-v4-flash", {
+              imageInput: true,
+              pdfInput: true,
+              reasoning: true,
+            }),
+          ],
           onDeleteProvider,
           onCustomProviderDraftReset,
         })}
@@ -1357,6 +1385,9 @@ describe("SettingsPage built-in tools", () => {
       apiKey: "",
       defaultModel: "deepseek-v4-flash",
       chatEndpoint: "/chat/completions",
+      supportsImageInput: true,
+      supportsPdfInput: true,
+      supportsReasoning: true,
     })
     expect(screen.getByRole("dialog", { name: "Edit Custom Provider" })).toBeInTheDocument()
   })

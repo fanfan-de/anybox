@@ -4284,6 +4284,97 @@ body.is-dragging-settings-page {
   gap: 14px;
 }
 
+.custom-provider-capabilities,
+.custom-provider-capability-copy {
+  min-width: 0;
+  display: grid;
+}
+
+.custom-provider-capabilities {
+  gap: 8px;
+}
+
+.custom-provider-capability-list {
+  overflow: hidden;
+  border: 1px solid var(--seg-border);
+  border-radius: var(--seg-radius-xs);
+}
+
+.custom-provider-capability-switch {
+  appearance: none;
+  width: 100%;
+  min-height: 58px;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--seg-border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--seg-text-1);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 160ms ease;
+}
+
+.custom-provider-capability-switch:last-child {
+  border-bottom: 0;
+}
+
+.custom-provider-capability-switch:not(:disabled):hover,
+.custom-provider-capability-switch:focus-visible {
+  background: var(--semantic-switch-row-surface-focus);
+}
+
+.custom-provider-capability-switch:focus-visible {
+  outline: none;
+}
+
+.custom-provider-capability-switch:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
+.custom-provider-capability-copy {
+  gap: 3px;
+}
+
+.custom-provider-capability-copy strong {
+  color: var(--seg-text-1);
+  font-size: 13px;
+  font-weight: 680;
+}
+
+.custom-provider-capability-copy small {
+  color: var(--seg-text-2);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.custom-provider-capability-switch:focus-visible .settings-toggle-control {
+  border-color: var(--semantic-switch-track-border-focus);
+}
+
+.custom-provider-capability-switch.is-active .settings-toggle-control {
+  border-color: var(--semantic-switch-track-border-active);
+  background: var(--semantic-switch-track-surface-active);
+}
+
+.custom-provider-capability-switch.is-active .settings-toggle-thumb {
+  transform: translateX(20px);
+}
+
+.custom-provider-capability-switch:disabled .settings-toggle-control {
+  border-color: var(--semantic-switch-track-border-disabled);
+  background: var(--semantic-switch-track-surface-disabled);
+}
+
+.custom-provider-capability-switch:disabled .settings-toggle-thumb {
+  background: var(--semantic-switch-thumb-surface-disabled);
+}
+
 .model-catalog-view {
   display: grid;
   gap: 12px;

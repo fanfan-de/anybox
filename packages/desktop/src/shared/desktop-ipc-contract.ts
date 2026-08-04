@@ -1172,6 +1172,9 @@ export interface DesktopCustomProviderInput {
   apiKey: string
   defaultModel: string
   chatEndpoint: string
+  supportsImageInput: boolean
+  supportsPdfInput: boolean
+  supportsReasoning: boolean
 }
 
 export type DesktopProviderAuthPrompt = "login" | "select_account"

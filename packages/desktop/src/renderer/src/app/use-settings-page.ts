@@ -97,6 +97,9 @@ const defaultCustomProviderDraft: CustomProviderDraftState = {
   apiKey: "",
   defaultModel: "",
   chatEndpoint: "/chat/completions",
+  supportsImageInput: false,
+  supportsPdfInput: false,
+  supportsReasoning: false,
 }
 
 function normalizeSelection(selection?: {
@@ -1966,7 +1969,10 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     })
   }
 
-  function setCustomProviderDraftValue(field: keyof CustomProviderDraftState, value: string) {
+  function setCustomProviderDraftValue<K extends keyof CustomProviderDraftState>(
+    field: K,
+    value: CustomProviderDraftState[K],
+  ) {
     setCustomProviderDraft((current) => ({
       ...current,
       [field]: value,
@@ -2802,6 +2808,9 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
         apiKey: customProviderDraft.apiKey.trim(),
         defaultModel: customProviderDraft.defaultModel.trim(),
         chatEndpoint: customProviderDraft.chatEndpoint.trim(),
+        supportsImageInput: customProviderDraft.supportsImageInput,
+        supportsPdfInput: customProviderDraft.supportsPdfInput,
+        supportsReasoning: customProviderDraft.supportsReasoning,
       })
       resetCustomProviderDraft()
       await loadSettingsData({ silent: true })
@@ -3157,6 +3166,9 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
         apiKey: customProviderDraft.apiKey.trim(),
         defaultModel: customProviderDraft.defaultModel.trim(),
         chatEndpoint: customProviderDraft.chatEndpoint.trim(),
+        supportsImageInput: customProviderDraft.supportsImageInput,
+        supportsPdfInput: customProviderDraft.supportsPdfInput,
+        supportsReasoning: customProviderDraft.supportsReasoning,
       })
       showMessage({
         tone: result.ok ? "success" : "error",
