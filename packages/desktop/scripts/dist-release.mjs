@@ -9,7 +9,7 @@ const normalizeLinuxUpdateMetadataScript = path.join(scriptDir, "normalize-linux
 const builderArgs = process.argv.slice(2)
 
 if (builderArgs.some((argument) => argument === "--publish" || argument.startsWith("--publish="))) {
-  throw new Error("The dist command always uses --publish never; use the reviewed publish workflow for uploads")
+  throw new Error("The dist command always uses --publish never; upload the reviewed artifacts with the local release procedure")
 }
 
 function run(command, args) {
