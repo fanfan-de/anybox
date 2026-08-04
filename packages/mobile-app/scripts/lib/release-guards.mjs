@@ -38,6 +38,10 @@ export function isMissingPublishedReleasePair(manifestStatus, signatureStatus) {
   return manifestStatus === 404 || manifestStatus === 403
 }
 
+export function shouldRetryPublishedReleasePairWithoutQuery(manifestStatus, signatureStatus) {
+  return manifestStatus === 400 && signatureStatus === 400
+}
+
 export function selectLatestPublishedMobileRelease(releases, tagPrefix) {
   return [...releases]
     .filter(

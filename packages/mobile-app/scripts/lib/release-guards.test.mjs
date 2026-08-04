@@ -7,6 +7,7 @@ import {
   isMissingPublishedReleasePair,
   selectLatestPublishedMobileRelease,
   selectPhysicalDeviceSerial,
+  shouldRetryPublishedReleasePairWithoutQuery,
 } from "./release-guards.mjs"
 
 test("requires one explicitly selected physical-device candidate", () => {
@@ -33,6 +34,12 @@ test("recognizes the first COS-backed release when both public pointers are abse
   assert.equal(isMissingPublishedReleasePair(403, 403), true)
   assert.equal(isMissingPublishedReleasePair(403, 404), false)
   assert.equal(isMissingPublishedReleasePair(500, 500), false)
+})
+
+test("retries the bare COS pointers when absent cache-busted objects return HTTP 400", () => {
+  assert.equal(shouldRetryPublishedReleasePairWithoutQuery(400, 400), true)
+  assert.equal(shouldRetryPublishedReleasePairWithoutQuery(400, 403), false)
+  assert.equal(shouldRetryPublishedReleasePairWithoutQuery(500, 500), false)
 })
 
 test("selects only the latest published stable mobile release", () => {

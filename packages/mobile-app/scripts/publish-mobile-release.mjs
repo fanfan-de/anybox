@@ -8,6 +8,7 @@ import {
   isMissingPublishedReleasePair,
   selectLatestPublishedMobileRelease,
   selectPhysicalDeviceSerial,
+  shouldRetryPublishedReleasePairWithoutQuery,
 } from "./lib/release-guards.mjs"
 import {
   assertNativeFingerprint,
@@ -225,19 +226,35 @@ async function requireIncreasingPublishedVersionCode(mobile, certificatePem) {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 12_000)
   try {
-    const [manifestResponse, signatureResponse] = await Promise.all([
-      fetch(`${manifestUrl}?preflight=${Date.now()}`, {
-        cache: "no-store",
-        signal: controller.signal,
-      }),
-      fetch(`${signatureUrl}?preflight=${Date.now()}`, {
-        cache: "no-store",
-        signal: controller.signal,
-      }),
-    ])
-    // Tencent COS returns 403 for an absent public object when the bucket does not
-    // grant anonymous listing. GitHub remains the monotonic source for this first
-    // self-hosted release, and uploaded objects are verified publicly before use.
+    const fetchPair = (cacheBusted) => {
+      const suffix = cacheBusted ? `?preflight=${Date.now()}` : ""
+      return Promise.all([
+        fetch(`${manifestUrl}${suffix}`, {
+          cache: "no-store",
+          headers: cacheBusted ? undefined : { "cache-control": "no-cache", pragma: "no-cache" },
+          signal: controller.signal,
+        }),
+        fetch(`${signatureUrl}${suffix}`, {
+          cache: "no-store",
+          headers: cacheBusted ? undefined : { "cache-control": "no-cache", pragma: "no-cache" },
+          signal: controller.signal,
+        }),
+      ])
+    }
+    let [manifestResponse, signatureResponse] = await fetchPair(true)
+    if (
+      shouldRetryPublishedReleasePairWithoutQuery(
+        manifestResponse.status,
+        signatureResponse.status,
+      )
+    ) {
+      const retryResponses = await fetchPair(false)
+      manifestResponse = retryResponses[0]
+      signatureResponse = retryResponses[1]
+    }
+    // Tencent COS can return 400 for a query on an absent object and 403 for the
+    // bare object when the bucket does not grant anonymous listing. GitHub remains
+    // the monotonic source for this first release, and uploads are verified publicly.
     if (isMissingPublishedReleasePair(manifestResponse.status, signatureResponse.status)) return
     if (!manifestResponse.ok || !signatureResponse.ok) {
       throw new Error(
