@@ -119,14 +119,10 @@ export function SkillProductIcon({
 }) {
   const { t } = useI18n()
   const source = resolveProductIconSource(iconUrl, allowRemote)
-  const [hasImageError, setHasImageError] = useState(false)
+  const [failedImageSource, setFailedImageSource] = useState<string | null>(null)
   const accessibleName = t("skillLibrary.productIconAlt", { name })
 
-  useEffect(() => {
-    setHasImageError(false)
-  }, [source])
-
-  if (source && !hasImageError) {
+  if (source && failedImageSource !== source) {
     return (
       <span className="skill-library-product-icon" aria-hidden={decorative || undefined}>
         <img
@@ -135,7 +131,7 @@ export function SkillProductIcon({
           loading="lazy"
           decoding="async"
           referrerPolicy="no-referrer"
-          onError={() => setHasImageError(true)}
+          onError={() => setFailedImageSource(source)}
         />
       </span>
     )
