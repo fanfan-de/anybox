@@ -1,6 +1,6 @@
 {
   "name": "remotion",
-  "version": "1.0.0",
+  "version": "1.0.6",
   "description": "Remotion video creation skills — best practices, animations, audio, captions, 3D, and more for building programmatic videos with React.",
   "author": {
     "name": "Remotion",
@@ -27,8 +27,8 @@
       "zh-CN": "Remotion"
     },
     "shortDescription": {
-      "en-US": "Create motion graphics from prompts",
-      "zh-CN": "根据提示创建动态图形"
+      "en-US": "Make videos agentically",
+      "zh-CN": "通过智能代理制作视频"
     },
     "longDescription": {
       "en-US": "Build videos programmatically with Remotion and React. Covers animations, timing, audio, captions, 3D, transitions, charts, text effects, and more.",
@@ -41,24 +41,73 @@
       "Write"
     ],
     "websiteURL": "https://remotion.dev",
-    "privacyPolicyURL": "https://remotion.pro/privacy",
-    "termsOfServiceURL": "https://remotion.pro/terms",
+    "privacyPolicyURL": "https://www.remotion.dev/docs/license/privacy",
+    "termsOfServiceURL": "https://www.remotion.dev/docs/license/terms",
     "defaultPrompt": [
       "Create an animated chart with 5 bars",
       "Make an animated call-to-action subscribe button for our YouTube channel",
       "Use Remotion to add captions and audio to a video composition."
     ],
-    "screenshots": [],
     "brandColor": "#0B84F3",
-    "composerIcon": "./assets/icon.png",
+    "composerIcon": "./assets/composer-icon.svg",
     "logo": "./assets/logo.png"
   },
   "skills": "./skills/",
   "skillPreviews": [
     {
       "name": "remotion-best-practices",
-      "description": "Best practices for Remotion - Video creation in React",
-      "directory": "remotion"
+      "description": "Router for all Remotion skills",
+      "directory": "remotion-best-practices"
+    },
+    {
+      "name": "remotion-captions",
+      "description": "Transcribing, displaying and animating captions",
+      "directory": "remotion-captions"
+    },
+    {
+      "name": "remotion-create",
+      "description": "Create a new Remotion video",
+      "directory": "remotion-create"
+    },
+    {
+      "name": "remotion-docs",
+      "description": "Search Remotion documentation",
+      "directory": "remotion-docs"
+    },
+    {
+      "name": "remotion-interactivity",
+      "description": "Structure Remotion markup for interactivity",
+      "directory": "remotion-interactivity"
+    },
+    {
+      "name": "remotion-maps",
+      "description": "Remotion Map animation knowledge",
+      "directory": "remotion-maps"
+    },
+    {
+      "name": "remotion-markup",
+      "description": "Content, animation and effects best practices",
+      "directory": "remotion-markup"
+    },
+    {
+      "name": "remotion-multimedia",
+      "description": "Interacting with Mediabunny",
+      "directory": "remotion-multimedia"
+    },
+    {
+      "name": "remotion-render",
+      "description": "Export a Remotion video",
+      "directory": "remotion-render"
+    },
+    {
+      "name": "remotion-saas",
+      "description": "Build an app with Remotion",
+      "directory": "remotion-saas"
+    },
+    {
+      "name": "remotion-upgrade",
+      "description": "Upgrade Remotion, and related packages",
+      "directory": "remotion-upgrade"
     }
   ]
 }
