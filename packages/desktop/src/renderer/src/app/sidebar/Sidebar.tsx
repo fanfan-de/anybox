@@ -1435,9 +1435,6 @@ function FolderWorkspaceView({
           const leadingIcon = showStateIcon ? (isExpanded ? "expanded" : "collapsed") : "folder"
           const linkedWorktreeRoot = getLinkedWorktreeRoot(workspace)
           const workspaceLabel = isConversationWorkspace ? "\u5bf9\u8bdd" : workspace.name
-          const workspaceMeta = isConversationWorkspace
-            ? workspace.directory
-            : workspace.project.repositoryRoot ?? workspace.project.worktree
           const createSessionLabel = `Create session for ${workspaceLabel}`
           const createSessionTitle = isMissingWorkspace
             ? `${workspaceLabel} has been deleted and cannot create new sessions.`
@@ -1519,12 +1516,9 @@ function FolderWorkspaceView({
                         <ForkIcon />
                       </span>
                     ) : null}
-                    <span className="project-row-meta" title={workspaceMeta}>
-                      <span className="project-row-meta-label">{workspaceMeta}</span>
-                      {isMissingWorkspace ? (
-                        <span className="project-row-status is-missing">{"\u5df2\u5220\u9664"}</span>
-                      ) : null}
-                    </span>
+                    {isMissingWorkspace ? (
+                      <span className="project-row-status is-missing">{"\u5df2\u5220\u9664"}</span>
+                    ) : null}
                   </span>
                 </button>
                 <div className="project-row-actions" aria-label={`${workspaceLabel} actions`}>

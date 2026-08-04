@@ -1620,7 +1620,7 @@ describe("App", () => {
     expect(screen.getByRole("menuitem", { name: "\u79FB\u9664" })).toBeInTheDocument()
     fireEvent.keyDown(document, { key: "Escape" })
     expect(screen.getByRole("button", { name: "Create session for app" })).toBeInTheDocument()
-    expect(screen.getAllByText("C:\\Projects\\Project 2").length).toBeGreaterThan(0)
+    expect(screen.getByRole("button", { name: "app" })).not.toHaveTextContent("C:\\Projects\\Project 2")
     expect(screen.getByRole("button", { name: "Chat 1" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Switch to session Chat 1" })).toBeInTheDocument()
     const addSessionTabButton = screen.getByRole("button", { name: "Add session tab" })
@@ -4762,7 +4762,7 @@ describe("App", () => {
 
     render(<App />)
 
-    expect(await screen.findByText("C:\\Projects\\Atlas")).toBeInTheDocument()
+    expect(await screen.findByRole("button", { name: "client" })).not.toHaveTextContent("C:\\Projects\\Atlas")
 
     await waitFor(() => {
       expect(window.desktop!.gitGetCapabilities).toHaveBeenCalledWith({
@@ -5786,8 +5786,7 @@ describe("App", () => {
 
     expect(screen.queryByRole("button", { name: "app" })).not.toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Chat 1" })).not.toBeInTheDocument()
-    expect(await screen.findByRole("button", { name: "client" })).toBeInTheDocument()
-    expect(screen.getAllByText("C:\\Projects\\Atlas").length).toBeGreaterThan(0)
+    expect(await screen.findByRole("button", { name: "client" })).not.toHaveTextContent("C:\\Projects\\Atlas")
     expect(screen.getByRole("button", { name: "Atlas review" })).toBeInTheDocument()
     await waitFor(() => {
       expect(screen.queryByRole("button", { name: "app" })).not.toBeInTheDocument()
@@ -5850,8 +5849,9 @@ describe("App", () => {
 
     render(<App />)
 
-    expect(await screen.findByText("已删除")).toBeInTheDocument()
-    expect(screen.getAllByText("C:\\Projects\\Ghost").length).toBeGreaterThan(0)
+    const missingWorkspaceRow = await screen.findByRole("button", { name: "ghost-client" })
+    expect(missingWorkspaceRow).toHaveTextContent("已删除")
+    expect(missingWorkspaceRow).not.toHaveTextContent("C:\\Projects\\Ghost")
     expect(screen.getByRole("button", { name: "Create session for ghost-client" })).toBeDisabled()
     await waitFor(() => {
       expect(window.desktop!.updateWorkspaceWatchDirectories).toHaveBeenCalledWith({
@@ -7906,8 +7906,7 @@ describe("App", () => {
         directory: "C:\\Projects\\Orion\\client",
       })
     })
-    expect(await screen.findByRole("button", { name: "client" })).toBeInTheDocument()
-    expect(screen.getAllByText("C:\\Projects\\Orion").length).toBeGreaterThan(0)
+    expect(await screen.findByRole("button", { name: "client" })).not.toHaveTextContent("C:\\Projects\\Orion")
   })
 
   it("reuses the existing create session tab when opening a folder without sessions", async () => {
@@ -13155,7 +13154,7 @@ describe("App", () => {
     })
   })
 
-  it("refreshes the sidebar workspace metadata after a streamed session updates git metadata", async () => {
+  it("refreshes the sidebar workspace without exposing updated git paths", async () => {
     let sessionStreamListener: DesktopAgentSessionEventListener | undefined
 
     window.desktop!.getAgentHealth = vi.fn().mockResolvedValue({
@@ -13247,7 +13246,7 @@ describe("App", () => {
       })
     })
 
-    expect(await screen.findByText("C:\\Projects\\Atlas")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "client" })).not.toHaveTextContent("C:\\Projects\\Atlas")
   })
 
   it("keeps consecutive streamed replies isolated to their own assistant cards", async () => {

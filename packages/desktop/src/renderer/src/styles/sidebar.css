@@ -438,8 +438,8 @@ body.is-resizing-sidebar .sidebar-resizer::before {
 
 .project-row-label {
   min-width: 0;
-  max-width: 55%;
-  flex: 0 0 auto;
+  max-width: 100%;
+  flex: 0 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

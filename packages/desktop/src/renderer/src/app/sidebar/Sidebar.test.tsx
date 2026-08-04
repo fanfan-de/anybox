@@ -390,13 +390,13 @@ describe("Sidebar", () => {
     expect(onSessionSelect).not.toHaveBeenCalled()
   })
 
-  it("shows the project root path inline with the folder name", () => {
+  it("shows the folder name without the project root path", () => {
     renderSidebar()
 
     const workspaceRow = screen.getByRole("button", { name: "Workspace" })
     expect(workspaceRow.querySelector(".project-row-label")).toHaveTextContent("Workspace")
-    expect(workspaceRow.querySelector(".project-row-meta")).toHaveAttribute("title", "C:/work/workspace-1")
-    expect(workspaceRow.querySelector(".project-row-meta-label")).toHaveTextContent("C:/work/workspace-1")
+    expect(workspaceRow).not.toHaveTextContent("C:/work/workspace-1")
+    expect(workspaceRow.querySelector(".project-row-meta")).not.toBeInTheDocument()
   })
 
   it("adds a project folder from the workspace background context menu", () => {
