@@ -1,0 +1,218 @@
+{
+  "name": "keynote",
+  "version": "0.1.0",
+  "description": "Create, edit, inspect, and export Apple Keynote presentations through a bundled MCP server and presentation design skill.",
+  "author": {
+    "name": "Anybox",
+    "url": "https://github.com/fanfan-de/anybox"
+  },
+  "homepage": "https://github.com/fanfan-de/anybox/tree/master/plugins/Anybox-Plugins/keynote",
+  "repository": "https://github.com/fanfan-de/anybox",
+  "license": "MIT",
+  "keywords": [
+    "keynote",
+    "presentation",
+    "slides",
+    "applescript",
+    "macos",
+    "mcp"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "Keynote Studio",
+      "zh-CN": "Keynote 工作室"
+    },
+    "shortDescription": {
+      "en-US": "Create and edit Keynote decks with AI.",
+      "zh-CN": "让 AI 创建、编辑并导出 Keynote 演示文稿。"
+    },
+    "longDescription": {
+      "en-US": "Control Apple Keynote on macOS through AppleScript. Create presentations, manage slides and content, inspect layouts, add build animations, capture slide previews, and export PDF files. Includes a presentation design skill with tested layout and typography guidance.",
+      "zh-CN": "通过 AppleScript 在 macOS 上控制 Apple Keynote：创建演示文稿、管理幻灯片与内容、检查布局、添加构建动画、生成幻灯片预览并导出 PDF。插件同时内置经过实践验证的排版与演示设计 Skill。"
+    },
+    "developerName": "Anybox · based on ByAxe/keynote-mcp",
+    "category": "Design",
+    "capabilities": [
+      "Create",
+      "Edit",
+      "Inspect",
+      "Export",
+      "Automation"
+    ],
+    "websiteURL": "https://github.com/ByAxe/keynote-mcp",
+    "defaultPrompt": [
+      "为我创建一份结构清晰、视觉精致的 Keynote 演示文稿",
+      "检查当前 Keynote 的版式并修复文字裁切和重叠",
+      "把当前 Keynote 导出为 PDF"
+    ],
+    "logo": "./assets/keynote.svg",
+    "iconUrl": "./assets/keynote.svg",
+    "screenshots": [],
+    "brandColor": "#6C5CE7"
+  },
+  "mcpServers": [
+    {
+      "id": "control",
+      "name": "Keynote Control",
+      "description": "Control Apple Keynote through the bundled keynote-mcp runtime.",
+      "risk": "high",
+      "permissions": [
+        "macOS only; requires Apple Keynote to be installed",
+        "Starts a local Python MCP process through uv and may download Python plus locked dependencies on first launch",
+        "Controls Keynote through Apple Events and AppleScript",
+        "Can create, edit, delete, save, close, screenshot, and export presentations at user-selected paths",
+        "Build animation tools use System Events UI scripting and require Accessibility permission",
+        "Optional Unsplash tools send search requests and download images when an API key is configured"
+      ],
+      "tools": [
+        {
+          "name": "create_presentation",
+          "title": "Create Presentation",
+          "description": "Create a new Keynote presentation.",
+          "readOnly": false
+        },
+        {
+          "name": "get_available_themes",
+          "title": "List Themes",
+          "description": "Read the Keynote themes available on this Mac.",
+          "readOnly": true
+        },
+        {
+          "name": "get_slide_content",
+          "title": "Inspect Slide",
+          "description": "Read the elements and geometry on a slide.",
+          "readOnly": true
+        },
+        {
+          "name": "add_slide",
+          "title": "Add Slide",
+          "description": "Add a slide to the active presentation.",
+          "readOnly": false
+        },
+        {
+          "name": "add_text_box",
+          "title": "Add Text",
+          "description": "Add positioned and styled text to a slide.",
+          "readOnly": false
+        },
+        {
+          "name": "add_image",
+          "title": "Add Image",
+          "description": "Add a local image to a slide.",
+          "readOnly": false
+        },
+        {
+          "name": "add_builds_to_slide",
+          "title": "Add Animations",
+          "description": "Add build-in animations through Keynote UI scripting.",
+          "readOnly": false
+        },
+        {
+          "name": "delete_slide",
+          "title": "Delete Slide",
+          "description": "Delete a slide from the active presentation.",
+          "readOnly": false,
+          "destructive": true
+        },
+        {
+          "name": "clear_slide",
+          "title": "Clear Slide",
+          "description": "Remove user-created content from a slide.",
+          "readOnly": false,
+          "destructive": true
+        },
+        {
+          "name": "screenshot_slide",
+          "title": "Capture Slide",
+          "description": "Write a slide preview image to a selected path.",
+          "readOnly": false
+        },
+        {
+          "name": "export_pdf",
+          "title": "Export PDF",
+          "description": "Export the active presentation as a PDF file.",
+          "readOnly": false
+        },
+        {
+          "name": "search_unsplash_images",
+          "title": "Search Unsplash",
+          "description": "Search Unsplash when the optional API key is configured.",
+          "readOnly": true
+        }
+      ],
+      "configFields": [
+        {
+          "key": "UNSPLASH_KEY",
+          "label": "Unsplash access key",
+          "type": "password",
+          "required": false,
+          "secret": true,
+          "placeholder": "Optional",
+          "description": "Enables Unsplash image search and download tools. Leave empty to keep those tools unavailable."
+        },
+        {
+          "key": "KEYNOTE_UV_PATH",
+          "label": "uv executable path",
+          "type": "path",
+          "required": false,
+          "placeholder": "/opt/homebrew/bin/uv",
+          "description": "Optional absolute path to uv. Leave empty to search PATH and common macOS install locations."
+        }
+      ],
+      "runtime": {
+        "transport": "stdio",
+        "command": "/bin/sh",
+        "args": [
+          "${PLUGIN_ROOT}/scripts/launch-keynote-mcp.sh"
+        ],
+        "cwd": "${PLUGIN_ROOT}",
+        "env": {
+          "UNSPLASH_KEY": "${UNSPLASH_KEY}",
+          "KEYNOTE_UV_PATH": "${KEYNOTE_UV_PATH}"
+        },
+        "timeoutMs": 120000,
+        "toolPolicies": {
+          "list_presentations": {
+            "policy": "auto"
+          },
+          "get_presentation_info": {
+            "policy": "auto"
+          },
+          "get_available_themes": {
+            "policy": "auto"
+          },
+          "get_presentation_resolution": {
+            "policy": "auto"
+          },
+          "get_slide_size": {
+            "policy": "auto"
+          },
+          "get_slide_count": {
+            "policy": "auto"
+          },
+          "get_slide_info": {
+            "policy": "auto"
+          },
+          "get_available_layouts": {
+            "policy": "auto"
+          },
+          "get_slide_content": {
+            "policy": "auto"
+          },
+          "get_speaker_notes": {
+            "policy": "auto"
+          }
+        }
+      },
+      "installReview": [
+        "This initial version runs only on macOS and exits with an actionable error on other platforms.",
+        "Install uv before first use. The launcher searches PATH, ~/.local/bin, /opt/homebrew/bin, and /usr/local/bin.",
+        "The first launch can download Python 3.12 and dependencies described by the bundled uv.lock file.",
+        "macOS will ask whether the Python runtime may automate Keynote. Build animations additionally require Accessibility access.",
+        "Only inspection tools are auto-allowed; all presentation mutations, filesystem writes, UI scripting, and network tools require approval by default.",
+        "The optional Unsplash access key is stored by Anybox and injected only into the MCP process."
+      ]
+    }
+  ],
+  "skills": "skills"
+}

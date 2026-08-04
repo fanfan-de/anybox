@@ -2767,7 +2767,7 @@ describe("plugin marketplace API", () => {
     expect(existsSync(join(pluginInstallRoot(), "tree-lab", "0.3.0", "README.md"))).toBe(true)
   })
 
-  test("installs registry zip packages that use Windows path separators", async () => {
+  test("installs registry zip packages with Windows separators and deep asset paths", async () => {
     await useTempDatabase()
     const app = createServerApp()
     process.env.ANYBOX_PLUGIN_REGISTRY_INDEX_URL = "https://registry.example.test/index.json"
@@ -2794,6 +2794,10 @@ describe("plugin marketplace API", () => {
           "Use when testing remote plugin installation.",
           "",
         ].join("\n"),
+      },
+      {
+        name: "remote-lab-1.2.3\\skills\\review\\references\\templates\\held-text-strobe-burst\\assets\\texture-mask-text\\masks\\painted-plaster-017.png",
+        data: Buffer.from(tinyPngBase64, "base64"),
       },
     ])
     const remotePluginMeta = {
@@ -2854,6 +2858,20 @@ describe("plugin marketplace API", () => {
     expect(installBody.data?.skillIDs).toEqual(["plugin:remote-lab:review"])
     expect(existsSync(join(pluginInstallRoot(), "remote-lab", "1.2.3", ".anybox-plugin", "plugin.json"))).toBe(true)
     expect(existsSync(join(pluginInstallRoot(), "remote-lab", "1.2.3", "skills", "review", "SKILL.md"))).toBe(true)
+    expect(existsSync(join(
+      pluginInstallRoot(),
+      "remote-lab",
+      "1.2.3",
+      "skills",
+      "review",
+      "references",
+      "templates",
+      "held-text-strobe-burst",
+      "assets",
+      "texture-mask-text",
+      "masks",
+      "painted-plaster-017.png",
+    ))).toBe(true)
   })
 
   test("rejects registry zip packages with unsafe Windows-style paths", async () => {

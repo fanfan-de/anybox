@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto"
 import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs"
-import { cp, mkdir, rename, rm, rmdir, writeFile } from "node:fs/promises"
+import { cp, mkdir, mkdtemp, rename, rm, rmdir, writeFile } from "node:fs/promises"
 import { delimiter, dirname, extname, isAbsolute, join, relative, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { inflateRawSync } from "node:zlib"
@@ -3652,9 +3652,10 @@ async function replaceManagedPluginPackage(
   allowNestedManifests = false,
 ) {
   const parentRoot = dirname(finalRoot)
-  const finalName = finalRoot.slice(parentRoot.length + 1)
-  const stagingRoot = join(parentRoot, `.${finalName}.install-${randomUUID()}`)
-  const backupRoot = join(parentRoot, `.${finalName}.backup-${randomUUID()}`)
+  const operationID = randomUUID().replaceAll("-", "").slice(0, 16)
+  // These directories inherit every path inside the package, so their names must stay compact on Windows.
+  const stagingRoot = join(parentRoot, `.i-${operationID}`)
+  const backupRoot = join(parentRoot, `.b-${operationID}`)
   let movedExisting = false
   let promoted = false
 
@@ -3731,6 +3732,13 @@ function githubArchiveURL(locator: GitHubPackageLocator, ref: string) {
   return `https://codeload.github.com/${encodeURIComponent(locator.owner)}/${encodeURIComponent(locator.repo)}/zip/${encodeURIComponent(ref)}`
 }
 
+async function createPluginInstallTempRoot() {
+  const parentRoot = join(Global.Path.cache, "plugin-installs")
+  await mkdir(parentRoot, { recursive: true })
+  // Keep the transient segment short so deeply nested plugin assets remain below Windows MAX_PATH.
+  return mkdtemp(join(parentRoot, "p-"))
+}
+
 async function downloadGitHubTreePluginPackage(registrySource: PluginManifestSource, download: Extract<PluginPackageDownload, { type: "github-tree" }>) {
   const pluginID = normalizePluginID(registrySource.manifest.name)
   const locator = parseGitHubPackageURL(download.url)
@@ -3740,7 +3748,7 @@ async function downloadGitHubTreePluginPackage(registrySource: PluginManifestSou
 
   const safeID = assertPluginPathSegment(pluginID)
   const safeVersion = assertPluginPathSegment(registrySource.manifest.version)
-  const tempRoot = join(Global.Path.cache, "plugin-installs", `${safeID}-${safeVersion}-${randomUUID()}`)
+  const tempRoot = await createPluginInstallTempRoot()
   const zipPath = join(tempRoot, "repository.zip")
   const stagingRoot = join(tempRoot, "repository")
   const finalRoot = join(installedPluginPackagesRoot(), safeID, safeVersion)
@@ -3802,7 +3810,7 @@ async function downloadZipPluginPackage(registrySource: PluginManifestSource, do
 
   const safeID = assertPluginPathSegment(pluginID)
   const safeVersion = assertPluginPathSegment(registrySource.manifest.version)
-  const tempRoot = join(Global.Path.cache, "plugin-installs", `${safeID}-${safeVersion}-${randomUUID()}`)
+  const tempRoot = await createPluginInstallTempRoot()
   const zipPath = join(tempRoot, "package.zip")
   const stagingRoot = join(tempRoot, "extract")
   const finalRoot = join(installedPluginPackagesRoot(), safeID, safeVersion)

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title description">
+  <title id="title">Keynote Studio</title>
+  <desc id="description">A presentation screen with a rising chart on a purple background.</desc>
+  <defs>
+    <linearGradient id="background" x1="18" y1="12" x2="112" y2="118" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8B7CFF"/>
+      <stop offset="1" stop-color="#5543C8"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="38" y1="35" x2="91" y2="83" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity="0.98"/>
+      <stop offset="1" stop-color="#EEEAFE" stop-opacity="0.94"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="29" fill="url(#background)"/>
+  <path d="M28 31.5C28 27.9 30.9 25 34.5 25h59c3.6 0 6.5 2.9 6.5 6.5v54c0 3.6-2.9 6.5-6.5 6.5h-59A6.5 6.5 0 0 1 28 85.5v-54Z" fill="#2B236B" fill-opacity="0.36"/>
+  <rect x="33" y="30" width="62" height="55" rx="5" fill="url(#screen)"/>
+  <path d="M43 70 54.5 57.5 64 64l17-20" fill="none" stroke="#6C5CE7" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="81" cy="44" r="5" fill="#FF8E72"/>
+  <path d="M64 85v14m-17 4h34" fill="none" stroke="#FFF" stroke-width="7" stroke-linecap="round"/>
+</svg>
