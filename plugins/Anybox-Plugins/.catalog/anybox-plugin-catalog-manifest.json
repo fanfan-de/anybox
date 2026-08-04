@@ -3,12 +3,12 @@
   "catalogID": "anybox-plugins",
   "repositoryRef": "master",
   "catalogPath": "plugins/Anybox-Plugins/.catalog",
-  "sourceCommit": "afdbff4b40717eeb2ae2f05d254d718c253ed5c5",
-  "pluginCount": 60,
+  "sourceCommit": "407c7bfd8d5893f9bc4524b0a90978709c82f879",
+  "pluginCount": 61,
   "registry": {
     "name": "anybox-plugin-registry.json",
-    "sha256": "a8e2902a77a30ff302546f825af0a4de893a1374b5285ff5c4e935039757b672",
-    "size": 392302
+    "sha256": "4e0ba87ab68942056a16af102ba8c7f65e40b5773d93f9af9dea2d498320c8ff",
+    "size": 400056
   },
   "assets": [
     {
@@ -209,10 +209,17 @@
     },
     {
       "pluginID": "hyperframes",
-      "pluginVersion": "0.6.118",
-      "name": "anybox-plugin-hyperframes-0.6.118.zip",
-      "sha256": "a8f300b86e5851d9e2299833a28e323a3097377bf716ca5d52a231a3b1d4555a",
-      "size": 49011909
+      "pluginVersion": "0.7.90",
+      "name": "anybox-plugin-hyperframes-0.7.90.zip",
+      "sha256": "aec9930800a9f6f7b8d434eb42d2f199c5c204694bc3ab52c8dd2be910580839",
+      "size": 11728341
+    },
+    {
+      "pluginID": "keynote",
+      "pluginVersion": "0.1.0",
+      "name": "anybox-plugin-keynote-0.1.0.zip",
+      "sha256": "7908e23a41afe0951f77a3a565365d57240a12e242bb7fae6bedeca0100a45f3",
+      "size": 177916
     },
     {
       "pluginID": "kling",
