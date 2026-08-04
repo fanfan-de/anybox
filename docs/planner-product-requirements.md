@@ -5,7 +5,7 @@
 | 状态 | 已接受，作为实施基线 |
 | 版本 | 1.0 |
 | 决策日期 | 2026-08-01 |
-| 实施进度 | 阶段 0–5 已完成；计划工作台、当前轮工具加载、Agent 单次委托与显式 Automation 联动均已落地 |
+| 实施进度 | 阶段 0–5 已完成；计划工作台、当前轮工具加载、Agent 单次委托与显式 Automation 联动均已落地；旧 Calendar MCP 插件已于 2026-08-04 退役 |
 | 产品名称 | 计划（Planner） |
 | 关联架构决策 | [原生 Tool Module 渐进式披露 ADR](./native-tool-module-architecture-decision.md) |
 | 关联子系统 | [Automation 功能设计](./automation-feature-design.md) |
@@ -35,7 +35,7 @@ Anybox 的“计划”不是一套以日历为中心的事件管理器，而是�
 2. 同时支持“还没决定什么时候做”和“已安排到具体时间”的工作。
 3. 让 Agent 能读取任务上下文、生成计划、寻找空闲时间，并在授权后执行工作。
 4. 通过渐进式披露加载计划工具，避免计划工具常驻所有对话的模型上下文。
-5. 保留标准 MCP 兼容面，同时让 Anybox 内部能力使用原生工具直接访问同一领域服务。
+5. 让 Anybox 内部能力使用原生工具直接访问同一领域服务，不再维护重复的 Calendar MCP 回环插件。
 6. 与 Automation 建立清晰边界：计划管理“做什么与何时做”，Automation 管理“何时自动运行 Agent”。
 
 ## 3. 非目标
@@ -277,7 +277,7 @@ MVP 原生工具包使用 `planner_*` 命名，避免与 Agent 内部用于会�
 - `planner_run_todo`
 - `planner_link_automation`
 
-工具只调用 Planner 领域服务；桌面 UI、原生工具和 Calendar MCP 适配器不得各自实现一套业务规则。
+工具只调用 Planner 领域服务；桌面 UI、HTTP API 和原生工具不得各自实现一套业务规则。
 
 ## 9. 权限与用户控制
 
@@ -299,7 +299,7 @@ MVP 原生工具包使用 `planner_*` 命名，避免与 Agent 内部用于会�
 5. 原生 `planner.core` 工具包及两条本轮激活路径。
 6. Agent 查任务、创建任务、更新任务、完成任务、排期和查找空闲时间。
 7. PlanProposal 的接受与拒绝基础流程。
-8. Calendar 标准 MCP 继续可用，但转发到同一 Planner 领域服务。
+8. Calendar HTTP API 作为桌面排程视图的内部兼容面继续可用，并转发到同一 Planner 领域服务。
 9. 工具调用的权限、审计、错误反馈和回归测试。
 
 ### 10.2 后置能力
@@ -334,7 +334,7 @@ MVP 原生工具包使用 `planner_*` 命名，避免与 Agent 内部用于会�
 
 ### 11.3 工程验收
 
-- UI、HTTP API、原生工具和 Calendar MCP 适配器共享同一 Planner service。
+- UI、HTTP API 和原生工具共享同一 Planner service。
 - 原有 Calendar Todo 数据有确定性迁移或兼容读取路径，不双写两套主表。
 - 工具权限、只读会话模式、恢复当前轮发现状态和不可用模块都有自动化测试。
 - 窄窗口、长标题、键盘焦点、独立滚动和主题切换通过桌面端 UI 检查。
@@ -364,11 +364,11 @@ MVP 原生工具包使用 `planner_*` 命名，避免与 Agent 内部用于会�
 - 从现有 Calendar Todo 能力抽取或迁移 Planner service。
 - 建立 Todo、Schedule、PlanProposal 和 AgentTaskRun 边界。
 - 实现查询、写入、事务、迁移与审计。
-- 让 Calendar API/MCP 适配器转发到 Planner service。
+- 让 Calendar HTTP API 转发到 Planner service。
 
-交付判定：UI/API/MCP/原生工具对同一任务读写一致。
+交付判定：UI、HTTP API 和原生工具对同一任务读写一致。
 
-实施状态（2026-08-01）：已完成。`planner_tasks` 原表原位迁移；Planner API、Calendar API、Calendar MCP 与原生工具共享 Planner service；Proposal 接受使用单事务和版本冲突保护；Todo、Proposal 与 AgentTaskRun 均写入审计记录。
+实施状态（2026-08-04 更新）：已完成。`planner_tasks` 原表原位迁移；Planner API、Calendar HTTP API 与原生工具共享 Planner service；Proposal 接受使用单事务和版本冲突保护；Todo、Proposal 与 AgentTaskRun 均写入审计记录。原用于回环访问这些 API 的 Calendar MCP 插件已在原生工具覆盖稳定后删除。
 
 ### 阶段 3：计划工作台 MVP
 
@@ -406,7 +406,7 @@ MVP 原生工具包使用 `planner_*` 命名，避免与 Agent 内部用于会�
 
 - Agent 端 TypeScript 类型检查通过。
 - 桌面端语义令牌检查与 TypeScript 类型检查通过。
-- Planner、Calendar MCP/API 兼容层、工具搜索、当前轮加载与权限选择跨层测试通过。
+- Planner、Calendar HTTP API、工具搜索、当前轮加载与权限选择跨层测试通过。
 - Planner 工作台、Composer 标签、消息工具来源、客户端 API 与翻译测试通过。
 - 桌面端生产构建通过；深色主题、高 DPI、紧凑窗口以及 Agent/Automation 二次确认界面已完成实机检查。
 

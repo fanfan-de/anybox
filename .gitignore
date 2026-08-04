@@ -57,6 +57,7 @@ artifacts/
 packages/**/Test/.tmp/
 packages/mobile-app/.expo/
 packages/**/package-lock.json
+packages/anyboxagent/bun.lock
 packages/**/exports/
 packages/**/design-exports/
 packages/**/pencil-exports/

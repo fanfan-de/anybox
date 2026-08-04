@@ -117,7 +117,7 @@ const CATEGORY_LABEL_KEYS: Record<PluginCategory | "All", TranslationKey> = {
   Design: "plugins.category.design",
 }
 
-const FEATURED_PLUGIN_LIMIT = 3
+const ANYBOX_PLUGIN_PUBLISHER = "anybox"
 
 function runtimeTitle(runtime: PluginRuntimeTemplate) {
   if (runtime.transport === "stdio") {
@@ -467,6 +467,10 @@ function pluginSearchText(plugin: PluginCatalogItem, locale: AppLocale) {
     plugin.connectorRequirements.map((requirement) => requirement.connector).join(" "),
     plugin.apps.map((app) => app.name).join(" "),
   ].join(" ")
+}
+
+function isAnyboxPlugin(plugin: PluginCatalogItem) {
+  return plugin.publisher.trim().toLowerCase() === ANYBOX_PLUGIN_PUBLISHER
 }
 
 function pluginDetailDescription(plugin: PluginCatalogItem, locale: AppLocale, t: Translate) {
@@ -1217,11 +1221,10 @@ export function PluginsPage({
   const hasDirectoryFilters =
     effectiveSearchQuery.trim().length > 0 ||
     categoryFilter !== "All"
-  const featuredPlugins = useMemo(() => {
-    const installedMatches = filteredPlugins.filter((plugin) => installedByPluginID.has(plugin.id))
-    const priorityPlugins = installedMatches.length > 0 ? installedMatches : filteredPlugins
-    return priorityPlugins.slice(0, FEATURED_PLUGIN_LIMIT)
-  }, [filteredPlugins, installedByPluginID])
+  const featuredPlugins = useMemo(
+    () => filteredPlugins.filter(isAnyboxPlugin),
+    [filteredPlugins],
+  )
   const shouldShowFeatured = !hasDirectoryFilters && featuredPlugins.length > 0
   const featuredPluginIDs = useMemo(() => new Set(featuredPlugins.map((plugin) => plugin.id)), [featuredPlugins])
   const directorySections = useMemo(() => {

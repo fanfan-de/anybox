@@ -1,7 +1,11 @@
-import { isDeepStrictEqual } from "node:util"
 import os from "node:os"
 import { isAbsolute, resolve as resolvePath } from "node:path"
 import type { JSONValue } from "@ai-sdk/provider"
+import {
+  fromJsonSchema,
+  isSpecType,
+  type JsonSchemaType,
+} from "@modelcontextprotocol/client"
 import z from "zod"
 import * as Config from "#config/config.ts"
 import {
@@ -24,8 +28,6 @@ import {
 } from "#mcp/client.ts"
 
 const log = Log.create({ service: "mcp.manager" })
-
-type JsonSchemaObject = Record<string, unknown>
 
 type ManagedServer = {
   client?: McpClientLike
@@ -94,8 +96,6 @@ export interface McpReadResourceResult {
   meta?: McpResourceReadResult["_meta"]
 }
 
-type LiteralValue = string | number | bigint | boolean | null | undefined
-
 const MCP_STRUCTURED_CONTENT_KEY = "mcpStructuredContent"
 const MCP_IS_ERROR_KEY = "mcpIsError"
 const MCP_SERVER_ID_KEY = "serverID"
@@ -114,108 +114,54 @@ function canonicalToolID(serverID: string, toolName: string) {
   return `mcp__${normalizeIdentifier(serverID)}__${normalizeIdentifier(toolName)}`
 }
 
-function isLiteralValue(value: unknown): value is LiteralValue {
-  return value === null || ["string", "number", "bigint", "boolean", "undefined"].includes(typeof value)
-}
-
-function literalUnion(values: unknown[]) {
-  if (values.length === 0) return z.never()
-  if (values.every(isLiteralValue)) {
-    const literals = values.map((value) => z.literal(value))
-    if (literals.length === 1) return literals[0]!
-    return z.union([literals[0]!, literals[1]!, ...literals.slice(2)] as [
-      z.ZodLiteral<LiteralValue>,
-      z.ZodLiteral<LiteralValue>,
-      ...z.ZodLiteral<LiteralValue>[],
-    ])
-  }
-
-  return z.custom((input) => values.some((value) => isDeepStrictEqual(value, input)))
-}
-
-function schemaUnion(options: z.ZodTypeAny[]) {
-  if (options.length === 0) return z.any()
-  if (options.length === 1) return options[0]!
-  return z.union([options[0]!, options[1]!, ...options.slice(2)] as [
-    z.ZodTypeAny,
-    z.ZodTypeAny,
-    ...z.ZodTypeAny[],
-  ])
-}
-
 function jsonSchemaToZod(schema: unknown): z.ZodTypeAny {
-  if (!schema || typeof schema !== "object") {
+  if (!isRecord(schema)) {
     return z.any()
   }
 
-  const record = schema as JsonSchemaObject
-  if (Array.isArray(record.enum)) {
-    return literalUnion(record.enum as unknown[])
+  try {
+    const standardSchema = fromJsonSchema(schema as JsonSchemaType)
+    const result = z.unknown().superRefine((value, context) => {
+      let validation: ReturnType<typeof standardSchema["~standard"]["validate"]>
+      try {
+        validation = standardSchema["~standard"].validate(value)
+      } catch (error) {
+        context.addIssue({
+          code: "custom",
+          message: error instanceof Error
+            ? `Invalid MCP tool input schema: ${error.message}`
+            : "Invalid MCP tool input schema.",
+        })
+        return
+      }
+      if (validation instanceof Promise) {
+        context.addIssue({
+          code: "custom",
+          message: "Asynchronous MCP JSON Schema validation is not supported.",
+        })
+        return
+      }
+
+      if (validation.issues?.length) {
+        context.addIssue({
+          code: "custom",
+          message: validation.issues.map((issue) => issue.message).join("; "),
+        })
+      }
+    })
+
+    return typeof schema.description === "string" && schema.description.trim()
+      ? result.describe(schema.description.trim())
+      : result
+  } catch (error) {
+    log.warn("failed to compile mcp tool input schema", {
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return z.unknown().refine(
+      () => false,
+      "MCP tool input schema could not be compiled.",
+    )
   }
-
-  if ("const" in record) {
-    return literalUnion([record.const])
-  }
-
-  if (Array.isArray(record.anyOf) && record.anyOf.length > 0) {
-    return schemaUnion(record.anyOf.map((item) => jsonSchemaToZod(item)))
-  }
-
-  if (Array.isArray(record.oneOf) && record.oneOf.length > 0) {
-    return schemaUnion(record.oneOf.map((item) => jsonSchemaToZod(item)))
-  }
-
-  const typeField = Array.isArray(record.type) ? record.type : typeof record.type === "string" ? [record.type] : []
-  const allowsNull = typeField.includes("null")
-  const primaryType = typeField.find((value) => value !== "null")
-
-  let result: z.ZodTypeAny
-  switch (primaryType) {
-    case "string":
-      result = z.string()
-      break
-    case "number":
-      result = z.number()
-      break
-    case "integer":
-      result = z.number().int()
-      break
-    case "boolean":
-      result = z.boolean()
-      break
-    case "array": {
-      const itemSchema = jsonSchemaToZod(record.items)
-      result = z.array(itemSchema)
-      break
-    }
-    case "object":
-    default: {
-      const properties = record.properties && typeof record.properties === "object" ? (record.properties as Record<string, unknown>) : {}
-      const required = new Set(Array.isArray(record.required) ? (record.required as string[]) : [])
-      const shape = Object.fromEntries(
-        Object.entries(properties).map(([key, value]) => {
-          const child = jsonSchemaToZod(value)
-          return [key, required.has(key) ? child : child.optional()]
-        }),
-      )
-      const additionalProperties = record.additionalProperties
-      result =
-        additionalProperties === false
-          ? z.object(shape)
-          : z.object(shape).catchall(additionalProperties ? jsonSchemaToZod(additionalProperties) : z.any())
-      break
-    }
-  }
-
-  if (typeof record.description === "string" && record.description.trim()) {
-    result = result.describe(record.description.trim())
-  }
-
-  if (allowsNull) {
-    result = result.nullable()
-  }
-
-  return result
 }
 
 function toolCapabilities(tool: McpToolDefinition): Tool.ToolCapabilities {
@@ -577,13 +523,15 @@ export class McpManager {
               ctx,
             )
             const summary = summarizeToolCallResult(result)
+            const hasStructuredContent = result.structuredContent !== undefined
+              && isSpecType.JSONValue(result.structuredContent)
             const metadata: Record<string, unknown> = {
               [MCP_SERVER_ID_KEY]: server.id,
               [MCP_TOOL_NAME_KEY]: definition.name,
               [MCP_IS_ERROR_KEY]: summary.isError,
             }
 
-            if (isRecord(result.structuredContent)) {
+            if (hasStructuredContent) {
               metadata[MCP_STRUCTURED_CONTENT_KEY] = result.structuredContent
             }
 
@@ -591,7 +539,7 @@ export class McpManager {
               title: displayName,
               text: summary.text,
               metadata,
-              data: isRecord(result.structuredContent)
+              data: hasStructuredContent
                 ? {
                     structuredContent: result.structuredContent,
                     isError: summary.isError,
@@ -603,14 +551,17 @@ export class McpManager {
           toModelOutput: (output) => {
             const metadata = isRecord(output.metadata) ? output.metadata : undefined
             const data = isRecord(output.data) ? output.data : undefined
-            const structuredContent = isRecord(metadata?.[MCP_STRUCTURED_CONTENT_KEY])
-              ? (metadata[MCP_STRUCTURED_CONTENT_KEY] as Record<string, unknown>)
-              : isRecord(data?.structuredContent)
-                ? (data.structuredContent as Record<string, unknown>)
+            const metadataValue = metadata?.[MCP_STRUCTURED_CONTENT_KEY]
+            const dataValue = data?.structuredContent
+            const structuredContent = isSpecType.JSONValue(metadataValue)
+              ? metadataValue
+              : isSpecType.JSONValue(dataValue)
+                ? dataValue
                 : undefined
+            const hasStructuredContent = structuredContent !== undefined
             const isError = Boolean(metadata?.[MCP_IS_ERROR_KEY] ?? data?.isError)
 
-            if (structuredContent) {
+            if (hasStructuredContent) {
               if (isError) {
                 return {
                   type: "error-json" as const,
@@ -701,18 +652,40 @@ export class McpManager {
   }
 
   private async serverTools(handle: ManagedServer): Promise<McpToolDefinition[]> {
-    handle.toolsPromise ??= this.clientFor(handle).then((client) => client.listTools())
-    return await handle.toolsPromise
+    const promise = handle.toolsPromise ?? this.clientFor(handle).then((client) => client.listTools())
+    handle.toolsPromise = promise
+    try {
+      return await promise
+    } finally {
+      if (handle.toolsPromise === promise) {
+        handle.toolsPromise = undefined
+      }
+    }
   }
 
   private async serverResources(handle: ManagedServer): Promise<McpResourceDefinition[]> {
-    handle.resourcesPromise ??= this.clientFor(handle).then((client) => client.listResources())
-    return await handle.resourcesPromise
+    const promise = handle.resourcesPromise ?? this.clientFor(handle).then((client) => client.listResources())
+    handle.resourcesPromise = promise
+    try {
+      return await promise
+    } finally {
+      if (handle.resourcesPromise === promise) {
+        handle.resourcesPromise = undefined
+      }
+    }
   }
 
   private async serverResourceTemplates(handle: ManagedServer): Promise<McpResourceTemplateDefinition[]> {
-    handle.resourceTemplatesPromise ??= this.clientFor(handle).then((client) => client.listResourceTemplates())
-    return await handle.resourceTemplatesPromise
+    const promise = handle.resourceTemplatesPromise
+      ?? this.clientFor(handle).then((client) => client.listResourceTemplates())
+    handle.resourceTemplatesPromise = promise
+    try {
+      return await promise
+    } finally {
+      if (handle.resourceTemplatesPromise === promise) {
+        handle.resourceTemplatesPromise = undefined
+      }
+    }
   }
 
   private async clientFor(handle: ManagedServer): Promise<McpClientLike> {

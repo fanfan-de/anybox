@@ -76,15 +76,15 @@ plugins/Anybox-Plugins/                                仓库内插件包集合
 
 ```json
 {
-  "name": "calendar",
-  "version": "0.1.0",
-  "description": "Create, inspect, update, schedule, and clean up Anybox Calendar todos and events through a local MCP server.",
+  "name": "filesystem",
+  "version": "1.0.0",
+  "description": "Expose a specific local directory to an MCP filesystem server.",
   "interface": {
-    "displayName": "Calendar",
-    "shortDescription": "Manage Anybox Calendar items.",
-    "developerName": "Anybox",
-    "category": "Automation",
-    "capabilities": ["calendar", "todos", "events"]
+    "displayName": "Filesystem",
+    "shortDescription": "Expose a local directory to MCP.",
+    "developerName": "Model Context Protocol",
+    "category": "Code",
+    "capabilities": ["Read", "Write"]
   },
   "mcpServers": [],
   "mcpRequirements": [],
@@ -262,23 +262,29 @@ Registry zip 安装会做以下校验：
 {
   "mcpServers": [
     {
-      "id": "calendar",
-      "name": "Calendar",
-      "risk": "medium",
-      "permissions": ["Reads Calendar items from the local Anybox Agent API."],
+      "name": "Filesystem",
+      "risk": "high",
+      "permissions": ["Read and potential write access inside the configured root path."],
       "tools": [
         {
-          "name": "calendar_list_items",
-          "description": "List projected Anybox Calendar items.",
+          "name": "read_file",
+          "description": "Read a file below the configured root.",
           "readOnly": true,
           "destructive": false
         }
       ],
+      "configFields": [
+        {
+          "key": "ROOT_PATH",
+          "label": "Root path",
+          "type": "path",
+          "required": true
+        }
+      ],
       "runtime": {
         "transport": "stdio",
-        "command": "node",
-        "args": ["${PLUGIN_ROOT}/scripts/server.js"],
-        "cwd": "${PLUGIN_ROOT}",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-filesystem", "${ROOT_PATH}"],
         "timeoutMs": 30000
       }
     }
@@ -289,7 +295,7 @@ Registry zip 安装会做以下校验：
 安装时会转换成全局 MCP server 配置：
 
 ```text
-plugin.calendar.calendar
+plugin.filesystem
 ```
 
 `runtime.transport` 支持：
@@ -478,7 +484,7 @@ Skill 浏览器遵循以下边界：
 安装插件只是写入全局安装记录和全局 MCP server 配置。项目级启用另走项目配置：
 
 ```text
-selected_plugins = ["calendar", "chrome"]
+selected_plugins = ["filesystem", "chrome"]
 ```
 
 相关 API：
@@ -510,7 +516,7 @@ PUT /api/projects/:id/plugins/selection
 最终工具注册阶段，MCP manager 会连接这些 server 并把工具暴露成模型工具 ID：
 
 ```text
-mcp__plugin_calendar_calendar__calendar_create_todo
+mcp__plugin_filesystem__read_file
 ```
 
 工具 ID 由 server ID 和 MCP tool name 规范化组合，避免与内置工具或其他 MCP server 工具冲突。
@@ -572,40 +578,25 @@ Skill 文件浏览通过 `listInstalledPluginSkillEntries` 和 `readInstalledPlu
 - 返回工具数量、工具名、工具 annotation、风险提示、推荐 policy 和当前配置 policy。
 - 诊断结果缓存到安装记录的 `lastDiagnostic` 或 `lastConnectorDiagnostics`。
 
-## 14. Calendar 插件示例
+## 14. Filesystem 插件示例
 
-`calendar` 插件是普通 `mcpServers` 模式的代表：
+`filesystem` 插件是普通 `mcpServers` 模式的代表：
 
 ```text
-plugins/Anybox-Plugins/calendar/
+plugins/Anybox-Plugins/filesystem/
   .anybox-plugin/plugin.json
-  scripts/server.js
 ```
 
 manifest 声明：
 
-- 插件 ID：`calendar`
-- MCP server ID：`calendar`
-- 生成全局 server ID：`plugin.calendar.calendar`
+- 插件 ID：`filesystem`
+- 未声明具名 server ID，因此生成全局 server ID：`plugin.filesystem`
 - runtime：`stdio`
-- command：`node`
-- args：`${PLUGIN_ROOT}/scripts/server.js`
-- env：`ANYBOX_CALENDAR_AGENT_BASE_URL=http://127.0.0.1:4096`
+- command：`npx`
+- args：`-y @modelcontextprotocol/server-filesystem ${ROOT_PATH}`
+- 安装配置：必填目录字段 `ROOT_PATH`
 
-`server.js` 实现一个 JSON-RPC over stdio MCP server：
-
-- `initialize` 返回 server info。
-- `tools/list` 返回 Calendar 工具列表。
-- `tools/call` 根据工具名转发到本地 Agent Calendar API。
-
-例如：
-
-- `calendar_create_todo` -> `POST /api/calendar/todos`
-- `calendar_create_event` -> `POST /api/calendar/events`
-- `calendar_list_items` -> `GET /api/calendar/items`
-- `calendar_schedule_todo` -> `PATCH /api/calendar/todos/:id/schedule`
-
-这个插件不直接写 SQLite。数据模型和持久化在 `packages/anyboxagent/src/calendar/calendar.ts`，HTTP API 在 `packages/anyboxagent/src/server/routes/calendar.ts`。
+插件本身不携带 `server.js`；MCP manager 按 manifest 启动上游 Filesystem MCP server，并通过 `tools/list` 获取真实工具定义。插件页中的 `read_file`、`write_file` 和 `list_directory` 只用于安装前能力与风险预览。
 
 ## 15. 测试覆盖
 
@@ -613,7 +604,6 @@ manifest 声明：
 
 ```text
 packages/anyboxagent/Test/plugin.test.ts
-packages/anyboxagent/Test/calendar-plugin.test.ts
 ```
 
 覆盖范围包括：
@@ -691,7 +681,7 @@ pnpm plugins:catalog:verify
 
 ```powershell
 cd C:\Projects\Anybox\packages\anyboxagent
-bun -e "import * as Config from './src/config/config.ts'; console.log(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, 'plugin.calendar.calendar'))"
+bun -e "import * as Config from './src/config/config.ts'; console.log(await Config.getMcpServer(Config.GLOBAL_CONFIG_ID, 'plugin.filesystem'))"
 ```
 
 常见排查顺序：

@@ -2,12 +2,13 @@ import { describe, expect, test } from "bun:test"
 import "./sqlite.cleanup.ts"
 import { $ } from "bun"
 import { once } from "node:events"
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises"
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import { createServer } from "node:http"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js"
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/client"
+import { toNodeHandler } from "@modelcontextprotocol/node"
+import { createMcpHandler, fromJsonSchema, McpServer } from "@modelcontextprotocol/server"
 import z from "zod"
 import * as Config from "#config/config.ts"
 import { McpClient } from "#mcp/client.ts"
@@ -30,14 +31,20 @@ async function createGitRepo(root: string, seed: string) {
   await $`git commit -m init`.cwd(root).quiet()
 }
 
-async function writeMockMcpServer(root: string) {
+async function writeLegacyMockMcpServer(root: string) {
   const script = join(root, "mock-mcp-server.js")
   await writeFile(
     script,
     [
       "const readline = require('node:readline')",
+      "const { appendFileSync } = require('node:fs')",
       "const rl = readline.createInterface({ input: process.stdin })",
       "function send(payload) { process.stdout.write(JSON.stringify(payload) + '\\n') }",
+      "function trace(method) {",
+      "  if (process.env.ANYBOX_MCP_TEST_TRACE) {",
+      "    appendFileSync(process.env.ANYBOX_MCP_TEST_TRACE, `${method}\\n`)",
+      "  }",
+      "}",
       "const tools = [{",
       "  name: 'echo',",
       "  title: 'Echo',",
@@ -78,6 +85,7 @@ async function writeMockMcpServer(root: string) {
       "rl.on('line', (line) => {",
       "  if (!line.trim()) return",
       "  const message = JSON.parse(line)",
+      "  trace(String(message.method || 'response'))",
       "  if (message.method === 'initialize') {",
       "    send({",
       "      jsonrpc: '2.0',",
@@ -162,37 +170,46 @@ async function writeMockMcpServer(root: string) {
 }
 
 async function startMockHttpMcpServer() {
-  const seenHeaders: Array<Record<string, string | string[] | undefined>> = []
-  const server = createServer(async (req, res) => {
-    if (req.method !== "POST" || req.url !== "/mcp") {
-      res.writeHead(405).end()
-      return
-    }
+  const seenRequests: Array<{
+    authorization?: string
+    mcpMethod?: string
+    mcpName?: string
+    protocolVersion?: string
+    sessionID?: string
+    xApiKey?: string
+  }> = []
+  const seenEras: Array<"legacy" | "modern"> = []
 
-    const chunks: Buffer[] = []
-    for await (const chunk of req) {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
-    }
-    const bodyText = Buffer.concat(chunks).toString("utf8")
-    const body = bodyText ? JSON.parse(bodyText) : undefined
+  const handler = createMcpHandler(({ era }) => {
+    seenEras.push(era)
 
-    seenHeaders.push({
-      authorization: req.headers.authorization,
-      "x-api-key": req.headers["x-api-key"],
-    })
-
-    const mcp = new McpServer({
-      name: "mock-http",
-      version: "1.0.0",
-    })
+    const mcp = new McpServer(
+      {
+        name: "mock-http",
+        version: "1.0.0",
+      },
+      {
+        cacheHints: {
+          "tools/list": {
+            ttlMs: 60_000,
+            cacheScope: "private",
+          },
+        },
+        capabilities: {
+          tools: {
+            listChanged: false,
+          },
+        },
+      },
+    )
     mcp.registerTool(
       "echo",
       {
         title: "Echo",
         description: "Echo back the provided value",
-        inputSchema: {
+        inputSchema: z.object({
           value: z.string(),
-        },
+        }),
         annotations: {
           readOnlyHint: true,
         },
@@ -208,9 +225,9 @@ async function startMockHttpMcpServer() {
       {
         title: "Write",
         description: "Pretend to mutate data",
-        inputSchema: {
+        inputSchema: z.object({
           value: z.string(),
-        },
+        }),
       },
       async ({ value }) => ({
         content: [{ type: "text", text: `write:${value}` }],
@@ -218,19 +235,101 @@ async function startMockHttpMcpServer() {
         isError: false,
       }),
     )
+    mcp.registerTool(
+      "array_result",
+      {
+        title: "Array Result",
+        description: "Return a top-level JSON array",
+        inputSchema: z.object({}),
+        outputSchema: z.array(z.string()),
+        annotations: {
+          readOnlyHint: true,
+        },
+      },
+      async () => ({
+        content: [{ type: "text", text: '["alpha","beta"]' }],
+        structuredContent: ["alpha", "beta"],
+        isError: false,
+      }),
+    )
+    mcp.registerTool(
+      "boolean_result",
+      {
+        title: "Boolean Result",
+        description: "Return a top-level JSON scalar",
+        inputSchema: z.object({}),
+        outputSchema: z.boolean(),
+        annotations: {
+          readOnlyHint: true,
+        },
+      },
+      async () => ({
+        content: [{ type: "text", text: "false" }],
+        structuredContent: false,
+        isError: false,
+      }),
+    )
+    mcp.registerTool(
+      "reference_echo",
+      {
+        title: "Reference Echo",
+        description: "Exercise a nested JSON Schema reference",
+        inputSchema: fromJsonSchema<{ value: string }>({
+          $schema: "https://json-schema.org/draft/2020-12/schema",
+          type: "object",
+          $defs: {
+            stringValue: {
+              type: "string",
+            },
+          },
+          properties: {
+            value: {
+              $ref: "#/$defs/stringValue",
+            },
+          },
+          required: ["value"],
+          additionalProperties: false,
+        }),
+        annotations: {
+          readOnlyHint: true,
+        },
+      },
+      async ({ value }) => ({
+        content: [{ type: "text", text: `reference:${value}` }],
+        structuredContent: { echoed: value },
+        isError: false,
+      }),
+    )
 
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: undefined,
+    return mcp
+  }, {
+    legacy: "reject",
+  })
+  const nodeHandler = toNodeHandler(handler)
+
+  const server = createServer(async (req, res) => {
+    if (req.method !== "POST" || req.url !== "/mcp") {
+      res.writeHead(405).end()
+      return
+    }
+
+    seenRequests.push({
+      authorization: req.headers.authorization,
+      mcpMethod: req.headers["mcp-method"] as string | undefined,
+      mcpName: req.headers["mcp-name"] as string | undefined,
+      protocolVersion: req.headers["mcp-protocol-version"] as string | undefined,
+      sessionID: req.headers["mcp-session-id"] as string | undefined,
+      xApiKey: req.headers["x-api-key"] as string | undefined,
     })
 
     try {
-      await mcp.connect(transport)
-      await transport.handleRequest(req, res, body)
-    } finally {
-      res.on("close", () => {
-        void transport.close()
-        void mcp.close()
-      })
+      await nodeHandler(req, res)
+    } catch (error) {
+      if (!res.headersSent) {
+        res.writeHead(500).end()
+        return
+      }
+      res.destroy(error instanceof Error ? error : undefined)
     }
   })
 
@@ -243,8 +342,10 @@ async function startMockHttpMcpServer() {
 
   return {
     url: `http://127.0.0.1:${address.port}/mcp`,
-    seenHeaders,
+    seenEras,
+    seenRequests,
     async close() {
+      await handler.close()
       await new Promise<void>((resolve, reject) => {
         server.close((error) => {
           if (error) {
@@ -263,7 +364,8 @@ describe("mcp integration", () => {
     const root = await mkdtemp(join(tmpdir(), "anybox-mcp-client-"))
 
     try {
-      const script = await writeMockMcpServer(root)
+      const script = await writeLegacyMockMcpServer(root)
+      const tracePath = join(root, "protocol-trace.log")
       const client = new McpClient({
         cwd: root,
         worktree: root,
@@ -274,12 +376,17 @@ describe("mcp integration", () => {
           transport: "stdio",
           command: process.execPath,
           args: [script],
+          env: {
+            ANYBOX_MCP_TEST_TRACE: tracePath,
+          },
           enabled: true,
         },
       })
 
       try {
         const tools = await client.listTools()
+        expect(client.getProtocolEra()).toBe("legacy")
+        expect(await client.listTools()).toEqual(tools)
         expect(tools).toHaveLength(1)
         expect(tools[0]).toMatchObject({
           name: "echo",
@@ -298,8 +405,170 @@ describe("mcp integration", () => {
         await client.dispose()
         await new Promise((resolve) => setTimeout(resolve, 50))
       }
+
+      const tracedMethods = (await readFile(tracePath, "utf8"))
+        .split(/\r?\n/u)
+        .filter(Boolean)
+      expect(tracedMethods).toContain("server/discover")
+      expect(tracedMethods).toContain("initialize")
+      expect(tracedMethods.filter((method) => method === "tools/list")).toHaveLength(1)
     } finally {
       await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("McpClient should not connect after disposal during transport creation", async () => {
+    let closeCount = 0
+    let releaseTransport!: (transport: { close(): Promise<void> }) => void
+    const transportPromise = new Promise<{ close(): Promise<void> }>((resolve) => {
+      releaseTransport = resolve
+    })
+    const client = new McpClient({
+      cwd: process.cwd(),
+      worktree: process.cwd(),
+      requestTimeoutMs: 1000,
+      server: {
+        id: "delayed",
+        name: "Delayed",
+        transport: "stdio",
+        command: process.execPath,
+        enabled: true,
+      },
+    })
+    const transportOwner = client as unknown as {
+      createTransport(): Promise<{ close(): Promise<void> }>
+    }
+    transportOwner.createTransport = () => transportPromise
+
+    const listPromise = client.listTools()
+    await client.dispose()
+    releaseTransport({
+      close: async () => {
+        closeCount += 1
+      },
+    })
+
+    await expect(listPromise).rejects.toThrow("is closed")
+    expect(closeCount).toBe(1)
+    expect(client.getProtocolEra()).toBeUndefined()
+  })
+
+  test("McpClient should bound an unresponsive HTTP session termination", async () => {
+    let abortObserved = false
+    const transport = new StreamableHTTPClientTransport(new URL("http://127.0.0.1/mcp"), {
+      sessionId: "stuck-session",
+      fetch: async (_url, init) => await new Promise<Response>((_resolve, reject) => {
+        const onAbort = () => {
+          abortObserved = true
+          reject(new Error("aborted"))
+        }
+        if (init?.signal?.aborted) {
+          onAbort()
+          return
+        }
+        init?.signal?.addEventListener("abort", onAbort, { once: true })
+      }),
+    })
+    await transport.start()
+    const client = new McpClient({
+      cwd: process.cwd(),
+      worktree: process.cwd(),
+      requestTimeoutMs: 1,
+      server: {
+        id: "stuck-http",
+        name: "Stuck HTTP",
+        transport: "remote",
+        serverUrl: "http://127.0.0.1/mcp",
+        enabled: true,
+      },
+    })
+    const transportOwner = client as unknown as {
+      transport?: StreamableHTTPClientTransport
+    }
+    transportOwner.transport = transport
+
+    const startedAt = Date.now()
+    await client.dispose()
+
+    expect(Date.now() - startedAt).toBeLessThan(1_500)
+    expect(abortObserved).toBe(true)
+  })
+
+  test("McpClient should refresh honored lists after a subscription restart", async () => {
+    const refreshCalls: string[] = []
+    let toolsChanged = 0
+    let resourcesChanged = 0
+    const neverClosed = new Promise<"remote">(() => undefined)
+    const sdkClient = {
+      close: async () => undefined,
+      listen: async () => ({
+        honoredFilter: {
+          toolsListChanged: true,
+          resourcesListChanged: true,
+        },
+        closed: neverClosed,
+        close: async () => undefined,
+      }),
+      listTools: async (_params: unknown, options: { cacheMode?: string }) => {
+        refreshCalls.push(`tools:${options.cacheMode}`)
+        return { tools: [] }
+      },
+      listResources: async (_params: unknown, options: { cacheMode?: string }) => {
+        refreshCalls.push(`resources:${options.cacheMode}`)
+        return { resources: [] }
+      },
+      listResourceTemplates: async (_params: unknown, options: { cacheMode?: string }) => {
+        refreshCalls.push(`templates:${options.cacheMode}`)
+        return { resourceTemplates: [] }
+      },
+    }
+    const client = new McpClient({
+      cwd: process.cwd(),
+      worktree: process.cwd(),
+      requestTimeoutMs: 1000,
+      onToolsChanged: () => {
+        toolsChanged += 1
+      },
+      onResourcesChanged: () => {
+        resourcesChanged += 1
+      },
+      server: {
+        id: "subscription-restart",
+        name: "Subscription Restart",
+        transport: "remote",
+        serverUrl: "http://127.0.0.1/mcp",
+        enabled: true,
+      },
+    })
+    const owner = client as unknown as {
+      client?: typeof sdkClient
+      scheduleSubscriptionRestart(
+        client: typeof sdkClient,
+        filter: { toolsListChanged?: boolean; resourcesListChanged?: boolean },
+        attempt: number,
+      ): void
+    }
+    owner.client = sdkClient
+
+    try {
+      owner.scheduleSubscriptionRestart(sdkClient, {
+        toolsListChanged: true,
+        resourcesListChanged: true,
+      }, 0)
+      const deadline = Date.now() + 2_000
+      while (refreshCalls.length < 3 && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      }
+
+      expect(refreshCalls.sort()).toEqual([
+        "resources:refresh",
+        "templates:refresh",
+        "tools:refresh",
+      ])
+      expect(toolsChanged).toBe(1)
+      expect(resourcesChanged).toBe(1)
+    } finally {
+      await client.dispose()
     }
   })
 
@@ -307,7 +576,7 @@ describe("mcp integration", () => {
     const root = await mkdtemp(join(tmpdir(), "anybox-mcp-client-resources-"))
 
     try {
-      const script = await writeMockMcpServer(root)
+      const script = await writeLegacyMockMcpServer(root)
       const client = new McpClient({
         cwd: root,
         worktree: root,
@@ -369,7 +638,7 @@ describe("mcp integration", () => {
     }
   })
 
-  test("McpClient should list and call remote HTTP tools", async () => {
+  test("McpClient should negotiate modern HTTP and preserve modern tool results", async () => {
     const remote = await startMockHttpMcpServer()
 
     try {
@@ -392,7 +661,33 @@ describe("mcp integration", () => {
 
       try {
         const tools = await client.listTools()
-        expect(tools.map((tool) => tool.name)).toEqual(["echo", "write"])
+        expect(client.getProtocolEra()).toBe("modern")
+        expect(tools.map((tool) => tool.name)).toEqual([
+          "echo",
+          "write",
+          "array_result",
+          "boolean_result",
+          "reference_echo",
+        ])
+        expect(tools.find((tool) => tool.name === "array_result")?.outputSchema).toMatchObject({
+          type: "array",
+          items: {
+            type: "string",
+          },
+        })
+        expect(tools.find((tool) => tool.name === "reference_echo")?.inputSchema).toMatchObject({
+          $defs: {
+            stringValue: {
+              type: "string",
+            },
+          },
+          properties: {
+            value: {
+              $ref: "#/$defs/stringValue",
+            },
+          },
+        })
+        expect(await client.listTools()).toEqual(tools)
 
         const result = await client.callTool("echo", { value: "hello" })
         expect(result).toMatchObject({
@@ -401,13 +696,58 @@ describe("mcp integration", () => {
           },
           isError: false,
         })
+
+        const arrayResult = await client.callTool("array_result", {})
+        expect(arrayResult.structuredContent).toEqual(["alpha", "beta"])
+        expect(arrayResult.content).toEqual([
+          {
+            type: "text",
+            text: '["alpha","beta"]',
+          },
+        ])
+
+        const booleanResult = await client.callTool("boolean_result", {})
+        expect(booleanResult.structuredContent).toBe(false)
+
+        const referenceResult = await client.callTool("reference_echo", {
+          value: "schema-value",
+        })
+        expect(referenceResult.structuredContent).toEqual({
+          echoed: "schema-value",
+        })
       } finally {
         await client.dispose()
       }
 
-      expect(remote.seenHeaders).not.toHaveLength(0)
-      expect(remote.seenHeaders[0]?.authorization).toBe("Bearer remote-token")
-      expect(remote.seenHeaders[0]?.["x-api-key"]).toBe("secret")
+      expect(remote.seenEras).not.toHaveLength(0)
+      expect(remote.seenEras.every((era) => era === "modern")).toBe(true)
+      expect(remote.seenRequests.map((request) => request.mcpMethod)).toContain("server/discover")
+      expect(remote.seenRequests.map((request) => request.mcpMethod)).toContain("tools/list")
+      expect(remote.seenRequests.filter((request) => request.mcpMethod === "tools/list")).toHaveLength(1)
+      expect(remote.seenRequests).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          mcpMethod: "tools/call",
+          mcpName: "echo",
+        }),
+        expect.objectContaining({
+          mcpMethod: "tools/call",
+          mcpName: "array_result",
+        }),
+        expect.objectContaining({
+          mcpMethod: "tools/call",
+          mcpName: "boolean_result",
+        }),
+        expect.objectContaining({
+          mcpMethod: "tools/call",
+          mcpName: "reference_echo",
+        }),
+      ]))
+      for (const request of remote.seenRequests) {
+        expect(request.protocolVersion).toBe("2026-07-28")
+        expect(request.sessionID).toBeUndefined()
+        expect(request.authorization).toBe("Bearer remote-token")
+        expect(request.xApiKey).toBe("secret")
+      }
     } finally {
       await remote.close()
     }
@@ -419,7 +759,7 @@ describe("mcp integration", () => {
 
     try {
       await createGitRepo(root, "mcp-manager")
-      const script = await writeMockMcpServer(root)
+      const script = await writeLegacyMockMcpServer(root)
       const { project } = await Project.fromDirectory(root)
       projectID = project.id
 
@@ -505,7 +845,7 @@ describe("mcp integration", () => {
 
     try {
       await createGitRepo(root, "mcp-manager-resources")
-      const script = await writeMockMcpServer(root)
+      const script = await writeLegacyMockMcpServer(root)
       const { project } = await Project.fromDirectory(root)
       projectID = project.id
 
@@ -585,7 +925,7 @@ describe("mcp integration", () => {
 
     try {
       await createGitRepo(root, "mcp-resource-tools")
-      const script = await writeMockMcpServer(root)
+      const script = await writeLegacyMockMcpServer(root)
       const { project } = await Project.fromDirectory(root)
       projectID = project.id
 
@@ -703,7 +1043,7 @@ describe("mcp integration", () => {
 
     try {
       await createGitRepo(root, "mcp-diagnose")
-      const script = await writeMockMcpServer(root)
+      const script = await writeLegacyMockMcpServer(root)
       const { project } = await Project.fromDirectory(root)
       projectID = project.id
 
@@ -758,7 +1098,7 @@ describe("mcp integration", () => {
     const root = await mkdtemp(join(tmpdir(), "anybox-mcp-global-diagnose-"))
 
     try {
-      const script = await writeMockMcpServer(root)
+      const script = await writeLegacyMockMcpServer(root)
       const diagnostic = await Mcp.diagnoseServer({
         id: "mock-global",
         name: "Mock Global",
@@ -790,7 +1130,7 @@ describe("mcp integration", () => {
     }
   })
 
-  test("Mcp manager should expose filtered remote HTTP tools through the registry shape", async () => {
+  test("Mcp manager should expose modern JSON results and referenced schemas", async () => {
     const root = await mkdtemp(join(tmpdir(), "anybox-mcp-remote-manager-"))
     const remote = await startMockHttpMcpServer()
     let projectID: string | undefined
@@ -826,9 +1166,49 @@ describe("mcp integration", () => {
         directory: root,
         fn: async () => {
           const tools = await Mcp.tools()
+          const arrayResult = tools.find((item) => item.id === "mcp__remote__array_result")
+          const booleanResult = tools.find((item) => item.id === "mcp__remote__boolean_result")
+          const referenceEcho = tools.find((item) => item.id === "mcp__remote__reference_echo")
 
           expect(tools.find((item) => item.id === "mcp__remote__echo")).toBeDefined()
           expect(tools.find((item) => item.id === "mcp__remote__write")).toBeUndefined()
+          expect(arrayResult).toBeDefined()
+          expect(booleanResult).toBeDefined()
+          expect(referenceEcho).toBeDefined()
+
+          const context = {
+            sessionID: "session_modern_mcp",
+            messageID: "message_modern_mcp",
+          }
+          const arrayRuntime = await arrayResult!.init()
+          const arrayOutput = Tool.normalizeToolOutput(await arrayRuntime.execute({}, context))
+          expect(arrayOutput.metadata).toMatchObject({
+            serverID: "remote",
+            toolName: "array_result",
+            mcpIsError: false,
+            mcpStructuredContent: ["alpha", "beta"],
+          })
+          expect(await arrayRuntime.toModelOutput?.(arrayOutput)).toEqual({
+            type: "json",
+            value: ["alpha", "beta"],
+          })
+
+          const booleanRuntime = await booleanResult!.init()
+          const booleanOutput = Tool.normalizeToolOutput(await booleanRuntime.execute({}, context))
+          expect(booleanOutput.metadata).toMatchObject({
+            serverID: "remote",
+            toolName: "boolean_result",
+            mcpIsError: false,
+            mcpStructuredContent: false,
+          })
+          expect(await booleanRuntime.toModelOutput?.(booleanOutput)).toEqual({
+            type: "json",
+            value: false,
+          })
+
+          const referenceRuntime = await referenceEcho!.init()
+          expect(referenceRuntime.parameters.safeParse({ value: "schema-value" }).success).toBe(true)
+          expect(referenceRuntime.parameters.safeParse({ value: 42 }).success).toBe(false)
         },
       })
     } finally {
@@ -848,7 +1228,7 @@ describe("mcp integration", () => {
 
     try {
       await createGitRepo(root, "mcp-stdio-policy")
-      const script = await writeMockMcpServer(root)
+      const script = await writeLegacyMockMcpServer(root)
       const { project } = await Project.fromDirectory(root)
       projectID = project.id
 

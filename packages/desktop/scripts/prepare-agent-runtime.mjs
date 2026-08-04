@@ -101,7 +101,9 @@ function resolveBunBinary() {
 async function copyNodePtyRuntime(runtimeNodeModulesDir) {
   const packageRoot = path.join(agentDir, "node_modules", "node-pty")
   if (!(await pathExists(packageRoot))) {
-    throw new Error("Missing packages/anyboxagent/node_modules/node-pty. Run `bun install` in anyboxagent first.")
+    throw new Error(
+      "Missing packages/anyboxagent/node_modules/node-pty. Run `pnpm install --filter anyboxagent` from the workspace root first.",
+    )
   }
 
   const targetRoot = path.join(runtimeNodeModulesDir, "node-pty")

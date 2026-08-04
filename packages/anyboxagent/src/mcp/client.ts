@@ -1,16 +1,20 @@
 import { type Stream } from "node:stream"
 import { pathToFileURL } from "node:url"
-import { Client } from "@modelcontextprotocol/sdk/client/index.js"
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
-import { ElicitRequestSchema, ListRootsRequestSchema } from "@modelcontextprotocol/sdk/types.js"
-import type {
-  ElicitRequest,
-  ElicitResult,
-  ReadResourceResult,
-  Resource,
-  ResourceTemplate,
-} from "@modelcontextprotocol/sdk/types.js"
+import {
+  Client,
+  StreamableHTTPClientTransport,
+  isSpecType,
+  type ElicitRequest,
+  type ElicitResult,
+  type JSONValue,
+  type McpSubscription,
+  type ProtocolEra,
+  type ReadResourceResult,
+  type Resource,
+  type ResourceTemplateType,
+  type SubscriptionFilter,
+} from "@modelcontextprotocol/client"
+import { StdioClientTransport } from "@modelcontextprotocol/client/stdio"
 import type { McpServerSummary } from "#config/config.ts"
 import type { ResolvedConnectorRuntime } from "#connector/connector.ts"
 import * as BuiltinMcp from "#mcp/builtin.ts"
@@ -21,6 +25,10 @@ import {
 import * as Log from "#util/log.ts"
 
 const log = Log.create({ service: "mcp.client" })
+const MCP_LEGACY_CACHE_TTL_MS = 30_000
+const MCP_SESSION_TERMINATION_TIMEOUT_MS = 2_000
+const MCP_SUBSCRIPTION_RETRY_MAX_MS = 30_000
+const MCP_SUBSCRIPTION_RETRY_MIN_MS = 1_000
 
 export interface McpToolDefinition {
   name: string
@@ -39,12 +47,12 @@ export interface McpToolDefinition {
 
 export interface McpToolCallResult {
   content: unknown[]
-  structuredContent?: Record<string, unknown>
+  structuredContent?: JSONValue
   isError?: boolean
 }
 
 export type McpResourceDefinition = Resource
-export type McpResourceTemplateDefinition = ResourceTemplate
+export type McpResourceTemplateDefinition = ResourceTemplateType
 export type McpResourceReadResult = ReadResourceResult
 
 export interface McpClientOptions {
@@ -67,6 +75,7 @@ export interface McpToolRequestContext {
 
 export interface McpClientLike {
   dispose(): Promise<void>
+  getProtocolEra(): ProtocolEra | undefined
   listTools(): Promise<McpToolDefinition[]>
   listResources(): Promise<McpResourceDefinition[]>
   listResourceTemplates(): Promise<McpResourceTemplateDefinition[]>
@@ -280,6 +289,24 @@ function buildRemoteHeaders(server: {
   return Object.keys(headers).length > 0 ? headers : undefined
 }
 
+async function settleWithin(promise: Promise<unknown>, timeoutMs: number) {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const settled = promise.then(
+    () => undefined,
+    () => undefined,
+  )
+  try {
+    await Promise.race([
+      settled,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
 function normalizeCallResult(result: unknown): McpToolCallResult {
   if (result && typeof result === "object" && Array.isArray((result as { content?: unknown[] }).content)) {
     return result as McpToolCallResult
@@ -291,13 +318,12 @@ function normalizeCallResult(result: unknown): McpToolCallResult {
       content: [
         {
           type: "text",
-          text: typeof toolResult === "string" ? toolResult : JSON.stringify(toolResult),
+          text: typeof toolResult === "string"
+            ? toolResult
+            : JSON.stringify(toolResult) ?? String(toolResult),
         },
       ],
-      structuredContent:
-        toolResult && typeof toolResult === "object" && !Array.isArray(toolResult)
-          ? (toolResult as Record<string, unknown>)
-          : undefined,
+      structuredContent: isSpecType.JSONValue(toolResult) ? toolResult : undefined,
       isError: false,
     }
   }
@@ -316,10 +342,11 @@ function normalizeCallResult(result: unknown): McpToolCallResult {
 export class McpClient {
   private client?: Client
   private closed = false
-  private initializePromise?: Promise<void>
+  private initializePromise?: Promise<Client>
   private readonly options: McpClientOptions
   private readonly stderrLines: string[] = []
   private stderrStream?: Stream | null
+  private subscriptionRetryTimer?: ReturnType<typeof setTimeout>
   private transport?: StdioClientTransport | StreamableHTTPClientTransport
 
   constructor(options: McpClientOptions) {
@@ -329,19 +356,26 @@ export class McpClient {
   async dispose() {
     if (this.closed) return
     this.closed = true
+    this.clearSubscriptionRetry()
 
-    const closeTasks: Promise<unknown>[] = []
-    if (this.transport instanceof StreamableHTTPClientTransport && this.transport.sessionId) {
-      closeTasks.push(this.transport.terminateSession().catch(() => undefined))
+    const client = this.client
+    const transport = this.transport
+    if (transport instanceof StreamableHTTPClientTransport && transport.sessionId) {
+      await settleWithin(
+        transport.terminateSession(),
+        Math.min(
+          Math.max(this.options.requestTimeoutMs, 250),
+          MCP_SESSION_TERMINATION_TIMEOUT_MS,
+        ),
+      )
     }
 
-    if (this.client) {
-      closeTasks.push(this.client.close().catch(() => undefined))
-    } else if (this.transport) {
-      closeTasks.push(this.transport.close().catch(() => undefined))
+    if (client) {
+      await client.close().catch(() => undefined)
+    } else if (transport) {
+      await transport.close().catch(() => undefined)
     }
 
-    await Promise.allSettled(closeTasks)
     this.stderrStream?.removeAllListeners()
     this.stderrStream = undefined
     this.transport = undefined
@@ -350,57 +384,37 @@ export class McpClient {
   }
 
   async listTools(): Promise<McpToolDefinition[]> {
-    await this.ensureInitialized()
-    const tools: McpToolDefinition[] = []
-    let cursor: string | undefined
-
-    do {
-      const result = await this.client!.listTools(cursor ? { cursor } : undefined, {
-        timeout: this.options.requestTimeoutMs,
-      })
-      tools.push(...(result.tools as McpToolDefinition[]))
-      cursor = result.nextCursor
-    } while (cursor)
-
-    return tools
+    const client = await this.ensureInitialized()
+    const result = await client.listTools(undefined, {
+      timeout: this.options.requestTimeoutMs,
+    })
+    return result.tools as McpToolDefinition[]
   }
 
   async listResources(): Promise<Resource[]> {
-    await this.ensureInitialized()
-    const resources: Resource[] = []
-    let cursor: string | undefined
-
-    do {
-      const result = await this.client!.listResources(cursor ? { cursor } : undefined, {
-        timeout: this.options.requestTimeoutMs,
-      })
-      resources.push(...result.resources)
-      cursor = result.nextCursor
-    } while (cursor)
-
-    return resources
+    const client = await this.ensureInitialized()
+    const result = await client.listResources(undefined, {
+      timeout: this.options.requestTimeoutMs,
+    })
+    return result.resources
   }
 
-  async listResourceTemplates(): Promise<ResourceTemplate[]> {
-    await this.ensureInitialized()
-    const resourceTemplates: ResourceTemplate[] = []
-    let cursor: string | undefined
+  async listResourceTemplates(): Promise<ResourceTemplateType[]> {
+    const client = await this.ensureInitialized()
+    const result = await client.listResourceTemplates(undefined, {
+      timeout: this.options.requestTimeoutMs,
+    })
+    return result.resourceTemplates
+  }
 
-    do {
-      const result = await this.client!.listResourceTemplates(cursor ? { cursor } : undefined, {
-        timeout: this.options.requestTimeoutMs,
-      })
-      resourceTemplates.push(...result.resourceTemplates)
-      cursor = result.nextCursor
-    } while (cursor)
-
-    return resourceTemplates
+  getProtocolEra(): ProtocolEra | undefined {
+    return this.client?.getProtocolEra()
   }
 
   async readResource(uri: string, abort?: AbortSignal): Promise<ReadResourceResult> {
-    await this.ensureInitialized()
+    const client = await this.ensureInitialized()
 
-    return await this.client!.readResource(
+    return await client.readResource(
       {
         uri,
       },
@@ -417,19 +431,18 @@ export class McpClient {
     abort?: AbortSignal,
     context?: McpToolRequestContext,
   ): Promise<McpToolCallResult> {
-    await this.ensureInitialized()
+    const client = await this.ensureInitialized()
     const requestContext = normalizedRequestContext(context)
     const requestMeta = isAnyboxNodeReplServer(this.options.server)
       ? requestContext
       : undefined
 
-    return normalizeCallResult(await this.client!.callTool(
+    return normalizeCallResult(await client.callTool(
       {
         name: toolName,
         arguments: args,
         ...(requestMeta ? { _meta: requestMeta } : {}),
       },
-      undefined,
       {
         signal: abort,
         timeout: isAnyboxNodeReplServer(this.options.server)
@@ -448,8 +461,8 @@ export class McpClient {
     detail?: Record<string, unknown>
   }) {
     if (!isAnyboxNodeReplServer(this.options.server)) return
-    await this.ensureInitialized()
-    await this.client!.notification({
+    const client = await this.ensureInitialized()
+    await client.notification({
       method: "notifications/anybox/lifecycle",
       params: input,
     } as never)
@@ -481,6 +494,7 @@ export class McpClient {
               listChanged: false,
             },
           },
+          defaultCacheTtlMs: MCP_LEGACY_CACHE_TTL_MS,
           listChanged: {
             resources: {
               onChanged: (error) => {
@@ -505,10 +519,13 @@ export class McpClient {
               },
             },
           },
+          versionNegotiation: {
+            mode: "auto",
+          },
         },
       )
 
-      client.setRequestHandler(ListRootsRequestSchema, async () => ({
+      client.setRequestHandler("roots/list", async () => ({
         roots: [this.options.cwd, this.options.worktree]
           .filter((value, index, all) => value && all.indexOf(value) === index)
           .map((value) => ({
@@ -518,25 +535,30 @@ export class McpClient {
       }))
       if (isAnyboxNodeReplServer(this.options.server)) {
         client.setRequestHandler(
-          ElicitRequestSchema,
+          "elicitation/create",
           this.options.onElicitation ?? handleAnyboxPermissionElicitation,
         )
       }
       const transport = await this.createTransport()
-      transport.onerror = (error) => {
+      if (this.closed) {
+        await transport.close().catch(() => undefined)
+        throw new Error(`MCP server '${this.options.server.id}' is closed.`)
+      }
+      client.onerror = (error) => {
         if (this.closed) return
-        log.warn("mcp transport error", {
+        log.warn("mcp client error", {
           serverID: this.options.server.id,
           error: error instanceof Error ? error.message : String(error),
           detail: this.stderrLines.at(-1),
         })
       }
-      transport.onclose = () => {
+      client.onclose = () => {
         if (this.closed) return
+        this.clearSubscriptionRetry()
         this.client = undefined
         this.transport = undefined
         this.initializePromise = undefined
-        log.warn("mcp transport closed", {
+        log.warn("mcp client closed", {
           serverID: this.options.server.id,
           detail: this.stderrLines.at(-1),
         })
@@ -547,6 +569,12 @@ export class McpClient {
       await client.connect(transport, {
         timeout: this.options.requestTimeoutMs,
       })
+      if (this.closed || this.client !== client) {
+        await client.close().catch(() => undefined)
+        throw new Error(`MCP server '${this.options.server.id}' is closed.`)
+      }
+      this.watchSubscription(client, client.autoOpenedSubscription)
+      return client
     })().catch(async (error) => {
       const detail = this.stderrHint()
       await this.disposeTransport()
@@ -568,8 +596,125 @@ export class McpClient {
   private async disposeTransport() {
     this.stderrStream?.removeAllListeners()
     this.stderrStream = undefined
-    if (!this.transport) return
-    await this.transport.close().catch(() => undefined)
+    if (this.client) {
+      await this.client.close().catch(() => undefined)
+      return
+    }
+    await this.transport?.close().catch(() => undefined)
+  }
+
+  private watchSubscription(client: Client, subscription: McpSubscription | undefined) {
+    if (!subscription) return
+    void subscription.closed.then((cause) => {
+      if (cause === "local" || this.closed || this.client !== client) return
+      log.warn("mcp list_changed subscription closed", {
+        serverID: this.options.server.id,
+        cause,
+      })
+      this.scheduleSubscriptionRestart(client, subscription.honoredFilter, 0)
+    })
+  }
+
+  private scheduleSubscriptionRestart(client: Client, filter: SubscriptionFilter, attempt: number) {
+    if (this.closed || this.client !== client) return
+    this.clearSubscriptionRetry()
+    const delay = Math.min(
+      MCP_SUBSCRIPTION_RETRY_MIN_MS * 2 ** attempt,
+      MCP_SUBSCRIPTION_RETRY_MAX_MS,
+    )
+    this.subscriptionRetryTimer = setTimeout(() => {
+      this.subscriptionRetryTimer = undefined
+      if (this.closed || this.client !== client) return
+      void client.listen(filter, {
+        timeout: this.options.requestTimeoutMs,
+      }).then((subscription) => {
+        if (this.closed || this.client !== client) {
+          void subscription.close().catch(() => undefined)
+          return
+        }
+        this.watchSubscription(client, subscription)
+        void this.refreshSubscriptionLists(client, subscription.honoredFilter).catch((error) => {
+          log.warn("failed to complete mcp subscription restart refresh", {
+            serverID: this.options.server.id,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        })
+      }, (error) => {
+        if (this.closed || this.client !== client) return
+        log.warn("failed to restart mcp list_changed subscription", {
+          serverID: this.options.server.id,
+          attempt: attempt + 1,
+          error: error instanceof Error ? error.message : String(error),
+        })
+        this.scheduleSubscriptionRestart(client, filter, attempt + 1)
+      })
+    }, delay)
+    this.subscriptionRetryTimer.unref?.()
+  }
+
+  private async refreshSubscriptionLists(client: Client, filter: SubscriptionFilter) {
+    const refreshes: Promise<void>[] = []
+
+    if (filter.toolsListChanged) {
+      refreshes.push(this.refreshSubscriptionList(
+        client,
+        "tools",
+        () => client.listTools(undefined, {
+          cacheMode: "refresh",
+          timeout: this.options.requestTimeoutMs,
+        }),
+        this.options.onToolsChanged,
+      ))
+    }
+
+    if (filter.resourcesListChanged) {
+      refreshes.push(this.refreshSubscriptionList(
+        client,
+        "resources and templates",
+        async () => {
+          const results = await Promise.allSettled([
+            client.listResources(undefined, {
+              cacheMode: "refresh",
+              timeout: this.options.requestTimeoutMs,
+            }),
+            client.listResourceTemplates(undefined, {
+              cacheMode: "refresh",
+              timeout: this.options.requestTimeoutMs,
+            }),
+          ])
+          const failure = results.find((result) => result.status === "rejected")
+          if (failure?.status === "rejected") throw failure.reason
+        },
+        this.options.onResourcesChanged,
+      ))
+    }
+
+    await Promise.all(refreshes)
+  }
+
+  private async refreshSubscriptionList(
+    client: Client,
+    label: string,
+    refresh: () => Promise<unknown>,
+    onChanged: (() => void) | undefined,
+  ) {
+    try {
+      await refresh()
+    } catch (error) {
+      log.warn(`failed to refresh mcp ${label} after subscription restart`, {
+        serverID: this.options.server.id,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+
+    if (this.closed || this.client !== client) return
+    onChanged?.()
+  }
+
+  private clearSubscriptionRetry() {
+    if (!this.subscriptionRetryTimer) return
+    clearTimeout(this.subscriptionRetryTimer)
+    this.subscriptionRetryTimer = undefined
   }
 
   private async createTransport() {
@@ -723,8 +868,11 @@ export function summarizeToolCallResult(result: McpToolCallResult) {
   }
 
   const text = textParts.filter(Boolean).join("\n\n").trim()
+  const fallback = result.structuredContent !== undefined
+    ? result.structuredContent
+    : result.content
   return {
-    text: text || JSON.stringify(result.structuredContent ?? result.content),
+    text: text || JSON.stringify(fallback),
     isError: result.isError ?? false,
   }
 }

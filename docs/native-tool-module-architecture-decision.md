@@ -2,7 +2,7 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 状态 | Accepted；运行时与 `planner.core` 首个模块均已实现，通用化由 [Tool Module V2 ADR](./tool-module-v2-architecture-decision.md) 接续 |
+| 状态 | Accepted；运行时与 `planner.core` 首个模块均已实现，通用化由 [Tool Module V2 ADR](./tool-module-v2-architecture-decision.md) 接续；Calendar MCP 插件兼容层已于 2026-08-04 退役 |
 | 决策日期 | 2026-08-01 |
 | 适用范围 | Anybox Agent 工具注册、会话请求、Composer 模块标签 |
 | 产品依据 | [Anybox 计划模块产品需求（PRD）](./planner-product-requirements.md) |
@@ -18,7 +18,7 @@ Anybox 新增“原生 Tool Module”机制，用于承载 Planner 等应用内�
 - 不引入主 LLM 调用前的意图解析器、分类模型或隐藏的语义路由器。
 - 在工具搜索不可用、被拒绝或失败时保持隐藏，不得回退为全量直接暴露。
 
-Calendar 标准 MCP 插件继续作为兼容适配层存在，但 Anybox 内部 Planner 工具直接调用 Planner 领域服务。
+Anybox 内部 Planner 工具直接调用 Planner 领域服务。旧 Calendar MCP 插件不再分发或安装；桌面排程视图仍可通过内部 HTTP API 访问同一领域服务。
 
 ## 2. 背景与现状
 
@@ -45,9 +45,9 @@ Calendar 标准 MCP 插件继续作为兼容适配层存在，但 Anybox 内部 
 
 因此，现有实现提供了“当前轮状态”和“下一次模型调用恢复发现结果”的骨架，但没有完整支持原生模块的严格按需注册。
 
-### 2.3 Calendar 插件边界
+### 2.3 已退役的 Calendar 插件边界
 
-当前 Calendar 插件是标准 stdio MCP server：
+早期 Calendar 插件使用标准 stdio MCP server：
 
 ```text
 LLM / MCP client
@@ -56,7 +56,7 @@ LLM / MCP client
   -> anyboxagent Calendar domain + SQLite
 ```
 
-它的 MCP 进程是协议适配器，领域逻辑和数据仍位于 Anybox runtime。这个结构适合向外部 MCP client 提供兼容能力，但 Anybox 内部再走 `stdio -> HTTP -> 自身` 会增加进程、序列化、诊断和故障面，不应成为原生 Planner 工具的主路径。
+它的 MCP 进程只是协议适配器，领域逻辑和数据始终位于 Anybox runtime。随着 Planner 收敛为 Todo-first 产品且原生工具完成覆盖，这条额外的 `stdio -> HTTP -> 自身` 链路已没有产品消费者，并于 2026-08-04 删除。Calendar HTTP API、事件数据和排程投影仍是桌面端内部能力，不属于已删除的插件包。
 
 ## 3. 架构原则
 
@@ -67,7 +67,7 @@ LLM / MCP client
 5. **搜索描述保持通用**：候选模块目录留在运行时索引，不展开到 prompt。
 6. **模块有边界**：一次搜索加载一个有限工具包，不借机注册所有 Anybox 原生能力。
 7. **权限不变**：加载工具不等于批准工具调用；每个工具仍走统一权限策略。
-8. **领域逻辑单一**：UI、HTTP、原生工具和 MCP adapter 共享同一 service。
+8. **领域逻辑单一**：UI、HTTP 和原生工具共享同一 service。
 
 ## 4. 决策
 
@@ -274,24 +274,22 @@ type ToolSource =
 
 任何一种失败都不得让全部原生模块变为 direct。现有 MCP 是否保留旧 fallback 可单独迁移，但该 fallback 绝不能应用到 `native-module` source。
 
-## 5. Planner 与 MCP 的最终边界
+## 5. Planner 的最终边界
 
 ```mermaid
 flowchart LR
     UI["计划 UI"] --> D["Planner Domain Service"]
     NT["原生 planner_* 工具"] --> D
     API["Anybox HTTP API"] --> D
-    MCP["Calendar 标准 MCP 适配器"] --> API
     D --> DB["SQLite / Planner Repository"]
 ```
 
 决策结果：
 
 - Anybox 内部 Agent 使用原生 `planner_*` 工具。
-- 外部 MCP client 或插件兼容场景继续使用 Calendar MCP。
-- Calendar MCP server 不直接写 SQLite，也不复制领域校验。
-- 现有 `/api/calendar` 可以在迁移期保留，但其实现应转发到 Planner service。
-- UI、原生工具和 MCP 对同一 Todo 使用同一 ID、权限语义和事务规则。
+- 不再提供 Calendar MCP 插件或外部 MCP 兼容面。
+- `/api/calendar` 作为桌面排程视图的内部兼容 API 保留，并转发到 Planner service。
+- UI、HTTP API 和原生工具对同一 Todo 使用同一 ID、权限语义和事务规则。
 
 ## 6. Composer 与产品交互契约
 
@@ -313,7 +311,7 @@ flowchart LR
 - Composer 标签显示“计划”，而不是内部 ID `planner.core`。
 - 发送后的用户消息保留紧凑的模块来源标签，便于审计和重试。
 - 工具活动区显示“已为本轮加载计划工具”，不宣称模块被永久启用。
-- 模块不可用时给出明确原因，不静默改用 Calendar MCP 或其他相似工具。
+- 模块不可用时给出明确原因，不静默改用其他插件或相似工具。
 
 ### 6.3 语法识别边界
 
@@ -393,9 +391,9 @@ packages/anyboxagent/src/planner/
 
 ### 9.4 Planner 集成测试
 
-- UI、原生工具和 Calendar MCP 读取同一 Todo。
+- UI、原生工具和 Calendar HTTP API 读取同一 Todo。
 - 原生工具排期后 Calendar 立即显示同一记录。
-- Calendar MCP 改期后原生工具返回相同时间和版本。
+- Calendar HTTP API 改期后原生工具返回相同时间和版本。
 - Proposal 接受前无正式数据变更，接受后事务提交。
 - 工具写操作遵循审批和审计策略。
 
@@ -408,8 +406,9 @@ packages/anyboxagent/src/planner/
 5. 实现 Composer `tool-module` 标签、`@计划` 与 `/计划`。
 6. 抽取 Planner domain service，建立现有 Calendar 数据兼容层。
 7. 实现并注册 `planner.core`，打通权限与审计。
-8. 将 Calendar MCP adapter 切换到同一 Planner service。
-9. 更新公开工具文档中关于 deferred fallback 和搜索描述的说明。
+8. 将桌面 Calendar API 切换到同一 Planner service。
+9. 原生工具覆盖稳定后，卸载并删除无消费者的 Calendar MCP 插件。
+10. 更新公开工具文档中关于 deferred fallback 和搜索描述的说明。
 
 每一步都应保持旧会话、现有 MCP 和未使用 Planner 的普通对话可运行；不得以一次性大迁移替换所有工具注册逻辑。
 
@@ -429,7 +428,7 @@ packages/anyboxagent/src/planner/
 
 ### 11.4 Anybox 内部继续通过 Calendar MCP 回环
 
-否决原因：Anybox 已经拥有领域 runtime，再经过 stdio 子进程和本地 HTTP 只增加故障面。MCP 应作为外部兼容协议，而不是内部领域调用总线。
+否决原因：Anybox 已经拥有领域 runtime，再经过 stdio 子进程和本地 HTTP 只增加故障面。当前产品也没有需要这层兼容协议的外部 MCP 消费者；未来若重新引入外部集成，应作为明确受支持的独立接口设计。
 
 ### 11.5 搜索失效时把全部模块直接暴露
 
@@ -442,7 +441,7 @@ packages/anyboxagent/src/planner/
 - 普通对话不会携带 Planner 工具 schema。
 - 用户既可以明确控制，也可以让主 LLM 按需发现能力。
 - 不增加前置语义路由器。
-- 原生能力减少 MCP 回环成本，同时保留标准 MCP 兼容性。
+- 原生能力移除了 Calendar MCP 回环进程及其安装、序列化和诊断成本。
 - 当前轮状态、权限和审计边界明确，可扩展到其他内部模块。
 
 ### 成本与风险

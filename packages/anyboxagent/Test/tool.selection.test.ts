@@ -62,9 +62,6 @@ describe("global built-in tool selection", () => {
         expect(toolNames).toContain("read_file")
         expect(toolNames).toContain("multi_tool_use_parallel")
         expect(toolNames).toContain("exec")
-        expect(toolNames).not.toContain("calendar_create_todo")
-        expect(toolNames).not.toContain("calendar_create_event")
-        expect(toolNames).not.toContain("calendar_list_items")
         expect(toolNames.some((name) => name.startsWith("planner_"))).toBe(false)
         for (const shellToolID of shellToolIDs) {
           expect(toolNames).toContain(shellToolID)

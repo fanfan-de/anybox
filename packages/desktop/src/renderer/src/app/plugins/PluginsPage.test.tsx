@@ -331,10 +331,18 @@ describe("PluginsPage", () => {
     })
   })
 
-  it("renders primary category navigation and featured plugin list", () => {
+  it("recommends every Anybox plugin and keeps other publishers in category sections", () => {
+    const partnerPlugin = createPlugin({
+      id: "partner",
+      name: "Partner",
+      description: "Connect a partner service.",
+      publisher: "Partner Inc.",
+    })
+
     render(
       <PluginsPage
         {...createProps({
+          installedPlugins: [createInstalledPlugin({ pluginID: "partner" })],
           pluginCatalog: [
             createPlugin(),
             createDocsPlugin(),
@@ -346,18 +354,36 @@ describe("PluginsPage", () => {
               configFields: [],
               mcpServers: [],
             }),
+            createPlugin({
+              id: "calendar",
+              name: "Calendar",
+              description: "Manage calendar items.",
+              category: "Automation",
+              configFields: [],
+              mcpServers: [],
+            }),
+            partnerPlugin,
           ],
         })}
       />,
     )
 
     const categoryNav = screen.getByRole("navigation", { name: "Plugin categories" })
-    const allCategoryButton = within(categoryNav).getByRole("button", { name: "All, 3 plugins" })
+    const allCategoryButton = within(categoryNav).getByRole("button", { name: "All, 5 plugins" })
     expect(allCategoryButton).toHaveAttribute("aria-pressed", "true")
     expect(allCategoryButton).toHaveTextContent(/^All$/)
     expect(screen.queryByRole("region", { name: "Plugin promotion" })).not.toBeInTheDocument()
     expect(screen.getByRole("region", { name: "Featured plugins" })).toBeInTheDocument()
-    expect(screen.getByRole("list", { name: "Featured" })).toBeInTheDocument()
+    const featuredList = screen.getByRole("list", { name: "Featured" })
+    expect(within(featuredList).getAllByRole("listitem")).toHaveLength(4)
+    expect(within(featuredList).getByRole("button", { name: "Filesystem not installed" })).toBeInTheDocument()
+    expect(within(featuredList).getByRole("button", { name: "Docs not installed" })).toBeInTheDocument()
+    expect(within(featuredList).getByRole("button", { name: "Designer not installed" })).toBeInTheDocument()
+    expect(within(featuredList).getByRole("button", { name: "Calendar not installed" })).toBeInTheDocument()
+    expect(within(featuredList).queryByRole("button", { name: "Partner installed enabled" })).not.toBeInTheDocument()
+    expect(within(screen.getByRole("list", { name: "Code" })).getByRole("button", {
+      name: "Partner installed enabled",
+    })).toBeInTheDocument()
 
     fireEvent.click(within(categoryNav).getByRole("button", { name: "Docs, 1 plugin" }))
 
@@ -365,11 +391,33 @@ describe("PluginsPage", () => {
     expect(screen.getByRole("button", { name: "Docs not installed" })).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Filesystem not installed" })).not.toBeInTheDocument()
 
-    fireEvent.click(within(categoryNav).getByRole("button", { name: "All, 3 plugins" }))
+    fireEvent.click(within(categoryNav).getByRole("button", { name: "All, 5 plugins" }))
 
-    expect(within(categoryNav).getByRole("button", { name: "All, 3 plugins" })).toHaveAttribute("aria-pressed", "true")
+    expect(within(categoryNav).getByRole("button", { name: "All, 5 plugins" })).toHaveAttribute("aria-pressed", "true")
     expect(screen.getByRole("button", { name: "Filesystem not installed" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Docs not installed" })).toBeInTheDocument()
+  })
+
+  it("does not recommend installed plugins from other publishers", () => {
+    const partnerPlugin = createPlugin({
+      id: "partner",
+      name: "Partner",
+      publisher: "Partner Inc.",
+    })
+
+    render(
+      <PluginsPage
+        {...createProps({
+          installedPlugins: [createInstalledPlugin({ pluginID: "partner" })],
+          pluginCatalog: [partnerPlugin],
+        })}
+      />,
+    )
+
+    expect(screen.queryByRole("region", { name: "Featured plugins" })).not.toBeInTheDocument()
+    expect(within(screen.getByRole("list", { name: "Code" })).getByRole("button", {
+      name: "Partner installed enabled",
+    })).toBeInTheDocument()
   })
 
   it("localizes marketplace category chips and card metadata in English", () => {

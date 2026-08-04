@@ -4,6 +4,14 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { dirname, join } from "node:path"
 import { McpClient } from "#mcp/client.ts"
 
+function structuredContentRecord(result: Awaited<ReturnType<McpClient["callTool"]>>) {
+  const content = result.structuredContent
+  if (!content || typeof content !== "object" || Array.isArray(content)) {
+    throw new Error("Expected object structured content from the Feishu MCP server.")
+  }
+  return content
+}
+
 const FEISHU_CONNECTOR_TOOLS = [
   "feishu_profile",
   "feishu_search_files",
@@ -246,7 +254,7 @@ describe("Feishu connector MCP server", () => {
         file_token: "https://example.feishu.cn/docx/doxcn123",
         file_type: "docx",
       })
-      expect(metadata.structuredContent?.metas).toEqual([
+      expect(structuredContentRecord(metadata).metas).toEqual([
         { doc_token: "doxcn123", doc_type: "docx", title: "Planning Doc" },
       ])
 
@@ -254,27 +262,27 @@ describe("Feishu connector MCP server", () => {
         document_id: "doxcn123",
         page_size: 10,
       })
-      expect(blocks.structuredContent?.blocks).toEqual([{ block_id: "blk1", block_type: 2 }])
+      expect(structuredContentRecord(blocks).blocks).toEqual([{ block_id: "blk1", block_type: 2 }])
 
       const spaces = await client.callTool("feishu_list_wiki_spaces", {})
-      expect(spaces.structuredContent?.spaces).toEqual([{ space_id: "spc1", name: "Team Wiki" }])
+      expect(structuredContentRecord(spaces).spaces).toEqual([{ space_id: "spc1", name: "Team Wiki" }])
 
       const node = await client.callTool("feishu_get_wiki_node", {
         node_token: "https://example.feishu.cn/wiki/wikcn1",
       })
-      expect(node.structuredContent?.node).toMatchObject({ node_token: "wikcn1", title: "Roadmap" })
+      expect(structuredContentRecord(node).node).toMatchObject({ node_token: "wikcn1", title: "Roadmap" })
 
       const nodes = await client.callTool("feishu_list_wiki_nodes", {
         space_id: "spc1",
         parent_node_token: "wikcn1",
       })
-      expect(nodes.structuredContent?.nodes).toEqual([{ node_token: "wikcn1", title: "Overview" }])
+      expect(structuredContentRecord(nodes).nodes).toEqual([{ node_token: "wikcn1", title: "Overview" }])
 
       const sheet = await client.callTool("feishu_read_sheet_values", {
         spreadsheet_token: "https://example.feishu.cn/sheets/shtcn123",
         range: "Sheet1!A1:B2",
       })
-      expect(sheet.structuredContent?.valueRange).toMatchObject({
+      expect(structuredContentRecord(sheet).valueRange).toMatchObject({
         range: "Sheet1!A1:B2",
         values: [["Name", "Status"], ["Launch", "Green"]],
       })
@@ -284,7 +292,7 @@ describe("Feishu connector MCP server", () => {
         table_id: "tbl123",
         page_size: 5,
       })
-      expect(records.structuredContent?.records).toEqual([{ record_id: "rec1", fields: { Name: "Launch" } }])
+      expect(structuredContentRecord(records).records).toEqual([{ record_id: "rec1", fields: { Name: "Launch" } }])
 
       expect(api.requests.every((request) => request.authorization === "Bearer test-access-token")).toBe(true)
       expect(api.requests.map((request) => request.pathname)).toEqual([

@@ -9,6 +9,14 @@ const temporaryRoots: string[] = []
 const originalNodeBinary = process.env.ANYBOX_NODE_BINARY
 const originalNodeRunAsNode = process.env.ANYBOX_NODE_RUN_AS_NODE
 
+function structuredResult(result: Awaited<ReturnType<McpClient["callTool"]>>) {
+  const content = result.structuredContent
+  if (!content || typeof content !== "object" || Array.isArray(content)) {
+    throw new Error("Expected object structured content from the Node REPL MCP server.")
+  }
+  return content.result
+}
+
 function nodeReplServer() {
   const definition = BuiltinMcp.getDefinition(BuiltinMcp.NODE_REPL_DEFINITION_ID)
   if (!definition) throw new Error("Expected the built-in Node REPL MCP definition.")
@@ -104,9 +112,9 @@ describe("built-in Node REPL MCP", () => {
         .toContain("explicit return")
 
       const bareExpression = await client.callTool("js", { code: "1 + 1" })
-      expect(bareExpression.structuredContent?.result).toBeNull()
+      expect(structuredResult(bareExpression)).toBeNull()
       const returnedExpression = await client.callTool("js", { code: "return 1 + 1" })
-      expect(returnedExpression.structuredContent?.result).toBe(2)
+      expect(structuredResult(returnedExpression)).toBe(2)
 
       await client.callTool("js", { code: "globalThis.counter = 40" })
       const result = await client.callTool("js", {
@@ -121,7 +129,7 @@ describe("built-in Node REPL MCP", () => {
           permissionType: typeof nodeRepl.requestPermission
         }`,
       })
-      expect(result.structuredContent?.result).toMatchObject({
+      expect(structuredResult(result)).toMatchObject({
         counter: 42,
         processType: "undefined",
         agentType: "undefined",
@@ -135,7 +143,7 @@ describe("built-in Node REPL MCP", () => {
       const reset = await client.callTool("js", {
         code: "return typeof globalThis.counter",
       })
-      expect(reset.structuredContent?.result).toBe("undefined")
+      expect(structuredResult(reset)).toBe("undefined")
     } finally {
       await client.dispose()
     }
@@ -151,7 +159,7 @@ describe("built-in Node REPL MCP", () => {
             privateKey: nodeProcess.env.ANYBOX_BROWSER_AUTH_PRIVATE_KEY
           }`,
       })
-      const environment = result.structuredContent?.result as {
+      const environment = structuredResult(result) as {
         publicKey?: unknown
         privateKey?: unknown
       }
@@ -186,7 +194,7 @@ describe("built-in Node REPL MCP", () => {
       )
 
       expect(result.isError).toBe(false)
-      expect(result.structuredContent?.result).toMatchObject({
+      expect(structuredResult(result)).toMatchObject({
         requestMeta: {
           sessionID: "session-node-repl",
           turnID: "turn-node-repl",
@@ -200,7 +208,7 @@ describe("built-in Node REPL MCP", () => {
       const nextCall = await client.callTool("js", {
         code: "return nodeRepl.requestMeta",
       })
-      expect(nextCall.structuredContent?.result).toBeNull()
+      expect(structuredResult(nextCall)).toBeNull()
     } finally {
       await client.dispose()
     }
@@ -251,7 +259,7 @@ describe("built-in Node REPL MCP", () => {
       )
 
       expect(result.isError).toBe(false)
-      expect(result.structuredContent?.result).toEqual({
+      expect(structuredResult(result)).toEqual({
         permission: {
           allowed: true,
           decision: "allow-session",
@@ -311,7 +319,7 @@ describe("built-in Node REPL MCP", () => {
         },
       )
       expect(result.isError).toBe(false)
-      expect(result.structuredContent?.result).toBe("allow-once")
+      expect(structuredResult(result)).toBe("allow-once")
     } finally {
       await client.dispose()
     }
