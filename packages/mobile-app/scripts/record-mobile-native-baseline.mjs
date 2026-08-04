@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import {
   computeAndroidNativeFingerprint,
+  fingerprintProfile,
   otaKeyId,
   packageRoot,
   readMobileConfig,
@@ -21,7 +22,7 @@ async function main() {
   const baseline = {
     schemaVersion: 1,
     platform: "android",
-    fingerprintProfile: "production-channel-normalized",
+    fingerprintProfile,
     runtimeVersion: mobile.runtimeVersion,
     version: mobile.version,
     versionCode: mobile.versionCode,

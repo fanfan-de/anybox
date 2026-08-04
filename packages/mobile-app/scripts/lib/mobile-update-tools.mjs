@@ -16,6 +16,9 @@ import {
   uploadFile,
   uploadObject,
 } from "../../../../scripts/lib/tencent-cos.mjs"
+import { createAndroidNativeFingerprint, fingerprintProfile } from "./native-fingerprint.mjs"
+
+export { fingerprintProfile }
 
 export const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..")
 export const repoRoot = path.resolve(packageRoot, "..", "..")
@@ -187,16 +190,12 @@ export function assertScopedReleaseTreeClean() {
 }
 
 export async function computeAndroidNativeFingerprint() {
-  const { createProjectHashAsync } = await import("@expo/fingerprint")
   const previousChannel = process.env.ANYBOX_MOBILE_UPDATE_CHANNEL
   const previousBuildProfile = process.env.ANYBOX_MOBILE_BUILD_PROFILE
   process.env.ANYBOX_MOBILE_UPDATE_CHANNEL = "production"
   process.env.ANYBOX_MOBILE_BUILD_PROFILE = "production"
   try {
-    return await createProjectHashAsync(packageRoot, {
-      platforms: ["android"],
-      silent: true,
-    })
+    return await createAndroidNativeFingerprint(packageRoot, repoRoot)
   } finally {
     if (previousChannel === undefined) delete process.env.ANYBOX_MOBILE_UPDATE_CHANNEL
     else process.env.ANYBOX_MOBILE_UPDATE_CHANNEL = previousChannel
@@ -214,7 +213,7 @@ export function readNativeBaseline(runtimeVersion) {
   if (
     baseline.schemaVersion !== 1 ||
     baseline.platform !== "android" ||
-    baseline.fingerprintProfile !== "production-channel-normalized" ||
+    baseline.fingerprintProfile !== fingerprintProfile ||
     baseline.runtimeVersion !== runtimeVersion ||
     typeof baseline.nativeFingerprint !== "string"
   ) {
