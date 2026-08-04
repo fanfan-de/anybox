@@ -21,6 +21,8 @@ interface RegistryPlugin {
   }
 }
 
+const EXPECTED_PLUGIN_COUNT = 61
+
 const registryFile = process.argv[2] ? resolve(process.argv[2]) : ""
 const pluginID = process.argv[3]?.trim() || "context7"
 if (!registryFile || !existsSync(registryFile)) {
@@ -35,11 +37,13 @@ const registry = JSON.parse(readFileSync(registryFile, "utf8")) as {
 }
 const registryPlugin = registry.plugins?.find((plugin) => plugin.id === pluginID)
 if (
-  registry.pluginCount !== 60
-  || registry.plugins?.length !== 60
+  registry.pluginCount !== EXPECTED_PLUGIN_COUNT
+  || registry.plugins?.length !== EXPECTED_PLUGIN_COUNT
   || !registryPlugin
 ) {
-  throw new Error(`Plugin catalog must contain 60 plugins including '${pluginID}'.`)
+  throw new Error(
+    `Plugin catalog must contain ${EXPECTED_PLUGIN_COUNT} plugins including '${pluginID}'.`,
+  )
 }
 const localPackageRoot = join(dirname(registryFile), "packages")
 const useLocalPackages = existsSync(localPackageRoot)
@@ -112,7 +116,7 @@ try {
   if (
     !catalogResponse.ok
     || !catalogBody.success
-    || catalogBody.data?.length !== 60
+    || catalogBody.data?.length !== EXPECTED_PLUGIN_COUNT
     || !catalogBody.data.some((plugin) => plugin.id === pluginID)
   ) {
     throw new Error(`Plugin catalog smoke failed: ${JSON.stringify(catalogBody)}`)
@@ -152,7 +156,7 @@ try {
   }
 
   console.log(
-    `[plugin-catalog] installed ${pluginID}@${registryPlugin.version} from one ${useLocalPackages ? "local" : "repository"} ZIP; catalog=60; api.github.com=0`,
+    `[plugin-catalog] installed ${pluginID}@${registryPlugin.version} from one ${useLocalPackages ? "local" : "repository"} ZIP; catalog=${EXPECTED_PLUGIN_COUNT}; api.github.com=0`,
   )
 } finally {
   globalThis.fetch = originalFetch

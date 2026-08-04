@@ -755,7 +755,7 @@
           Desktop 构建脚本 <code>packages/desktop/scripts/prepare-agent-runtime.mjs</code> 打包 agent server、Bun、node-pty 和 workspace dependencies；不会复制插件目录、目录 JSON 或 ZIP。开发版与正式版启动 Agent 时默认都传入仓库 <code>plugins/Anybox-Plugins/.catalog/anybox-plugin-registry.json</code> 的稳定 raw URL，并关闭本地仓库源码插件扫描。插件目录由本地命令生成和验证，再作为普通 Git 文件提交；桌面构建、GitHub Actions 与 GitHub Release 均不参与插件目录发布。
         </p>
         <p>
-          校验脚本 <code>packages/desktop/scripts/verify-agent-runtime.mjs</code> 拒绝目录快照、<code>plugins/builtin</code>、展开插件目录或 ZIP 资产进入 runtime。本地 <code>plugins:catalog:prepare</code> 与 <code>plugins:catalog:verify</code> 负责确认目录完整且恰有 60 个当前 ZIP 条目。
+          校验脚本 <code>packages/desktop/scripts/verify-agent-runtime.mjs</code> 拒绝目录快照、<code>plugins/builtin</code>、展开插件目录或 ZIP 资产进入 runtime。本地 <code>plugins:catalog:prepare</code> 与 <code>plugins:catalog:verify</code> 负责确认目录完整且恰有 61 个当前 ZIP 条目。
         </p>
       </section>
 

@@ -17,6 +17,7 @@ const catalogDir = path.resolve(
 const bunName = process.platform === "win32" ? "bun.exe" : "bun"
 const dataDir = await mkdtemp(path.join(tmpdir(), "anybox-plugin-runtime-catalog-"))
 const cacheDir = path.join(dataDir, "registry-cache")
+const EXPECTED_PLUGIN_COUNT = 61
 
 async function unusedLoopbackPort() {
   const server = createTCPServer()
@@ -174,12 +175,12 @@ try {
   const ids = catalog.data.map((plugin) => plugin.id)
   const uniqueIDs = new Set(ids)
   if (
-    ids.length !== 60
-    || uniqueIDs.size !== 60
+    ids.length !== EXPECTED_PLUGIN_COUNT
+    || uniqueIDs.size !== EXPECTED_PLUGIN_COUNT
     || !["chrome", "computer-use-windows", "cinema"].every((id) => uniqueIDs.has(id))
   ) {
     throw new Error(
-      `Remote repository catalog must contain exactly 60 plugins, got ${ids.length}: ${ids.join(", ")}`,
+      `Remote repository catalog must contain exactly ${EXPECTED_PLUGIN_COUNT} plugins, got ${ids.length}: ${ids.join(", ")}`,
     )
   }
   if (registryRequestCount !== 1) {
@@ -192,14 +193,14 @@ try {
   if (
     cache.protocol !== "catalog-registry-v3"
     || cache.registryURL !== registryURL
-    || cache.registry?.pluginCount !== 60
+    || cache.registry?.pluginCount !== EXPECTED_PLUGIN_COUNT
   ) {
     throw new Error(`The validated remote registry was not cached atomically: ${JSON.stringify(cache)}`)
   }
 
   await close(registryServer)
   const offlineCatalog = await request(port, "/api/plugins/catalog?freshness=fresh")
-  if (!offlineCatalog.success || offlineCatalog.data?.length !== 60) {
+  if (!offlineCatalog.success || offlineCatalog.data?.length !== EXPECTED_PLUGIN_COUNT) {
     throw new Error(`Validated registry cache was unavailable offline: ${JSON.stringify(offlineCatalog)}`)
   }
 
