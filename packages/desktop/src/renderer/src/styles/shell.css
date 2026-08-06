@@ -48,6 +48,24 @@
   initial-value: 10px;
 }
 
+@property --companion-region-width {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 480px;
+}
+
+@property --companion-region-display-width {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 480px;
+}
+
+@property --companion-region-resizer-width {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 10px;
+}
+
 
 
 .window-shell {
@@ -168,6 +186,9 @@
   --right-sidebar-display-width: var(--right-sidebar-width);
   --right-sidebar-resizer-width: 10px;
   --right-sidebar-width: 480px;
+  --companion-region-display-width: var(--right-sidebar-display-width);
+  --companion-region-resizer-width: var(--right-sidebar-resizer-width);
+  --companion-region-width: var(--right-sidebar-width);
   position: relative;
   z-index: 1;
   min-height: 0;
@@ -178,8 +199,8 @@
     var(--sidebar-display-width)
     var(--sidebar-resizer-width)
     minmax(0, 1fr)
-    var(--right-sidebar-resizer-width)
-    var(--right-sidebar-display-width);
+    var(--companion-region-resizer-width)
+    var(--companion-region-display-width);
   grid-template-rows: minmax(0, 1fr);
   gap: 0;
   border: 0;
@@ -187,6 +208,187 @@
   border-radius: 0;
   background: var(--surface-app);
   box-shadow: none;
+}
+
+.app-shell.is-swappable-shell > [data-shell-region="primary"] {
+  grid-column: 4;
+  grid-row: 1;
+  min-width: 0;
+}
+
+.app-shell.is-swappable-shell > [data-shell-region="companion"] {
+  grid-column: 6;
+  grid-row: 1;
+  min-width: 0;
+}
+
+.app-shell.is-swappable-shell > .is-shell-region-hidden {
+  display: none;
+}
+
+.shell-layout-switcher-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12px 16px;
+  background: transparent;
+  -webkit-app-region: no-drag;
+}
+
+.shell-layout-switcher {
+  width: min(320px, calc(100vw - 32px));
+  padding: 6px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--semantic-dropdown-menu-radius, var(--seg-radius-md));
+  background: var(--semantic-dropdown-menu-surface);
+  box-shadow: var(--shadow-popover, var(--shadow-md));
+  color: var(--semantic-dropdown-option-text);
+  animation: shell-layout-switcher-enter 140ms ease-out;
+}
+
+.shell-layout-switcher-header {
+  min-height: 30px;
+  padding: 4px 8px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--semantic-dropdown-option-meta-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.shell-layout-switcher-header kbd {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 400;
+}
+
+.shell-layout-switcher-options {
+  display: grid;
+  gap: 2px;
+}
+
+.shell-layout-switcher-option {
+  width: 100%;
+  min-height: 38px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: max(4px, calc(var(--semantic-dropdown-menu-radius, var(--seg-radius-md)) - 2px));
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 9px;
+  background: transparent;
+  color: var(--semantic-dropdown-option-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.shell-layout-switcher-option:hover,
+.shell-layout-switcher-option:focus-visible {
+  outline: none;
+  background: var(--semantic-dropdown-option-surface-hover);
+  color: var(--semantic-dropdown-option-text-hover);
+}
+
+.shell-layout-switcher-option.is-selected,
+.shell-layout-switcher-option[aria-checked="true"] {
+  background: var(--semantic-dropdown-option-surface-selected);
+  color: var(--semantic-dropdown-option-text-selected);
+}
+
+.shell-layout-switcher-option-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.shell-layout-switcher-option-status {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--semantic-dropdown-option-meta-text-selected);
+}
+
+.shell-layout-switcher-option-status svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
+.shell-layout-switcher-glyph {
+  width: 44px;
+  height: 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 12px;
+  gap: 3px;
+}
+
+.shell-layout-switcher-glyph-surface {
+  min-width: 0;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  opacity: 0.75;
+}
+
+.shell-layout-switcher-glyph.is-workbench-primary .is-workbench,
+.shell-layout-switcher-glyph.is-tools-primary .is-tools {
+  grid-column: 1;
+}
+
+.shell-layout-switcher-glyph.is-workbench-primary .is-tools,
+.shell-layout-switcher-glyph.is-tools-primary .is-workbench {
+  grid-column: 2;
+}
+
+.shell-layout-switcher-glyph .is-workbench {
+  background: linear-gradient(
+    to bottom,
+    transparent 0 5px,
+    currentColor 5px 6px,
+    transparent 6px
+  );
+}
+
+.shell-layout-switcher-glyph .is-tools {
+  background: linear-gradient(
+    to bottom,
+    currentColor 0 4px,
+    transparent 4px
+  );
+}
+
+@keyframes shell-layout-switcher-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell-layout-switcher {
+    animation: none;
+  }
 }
 
 .app-loading-screen,

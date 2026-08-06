@@ -51,13 +51,13 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
       items: [
         {
           content: overviewZh,
-          description: "理解 Anybox 的定位、工作方式、能力边界与推荐阅读路径。",
+          description: "了解 Anybox 的定位、核心能力、工作方式与安全边界。",
           slug: "overview",
           title: "产品概览",
         },
         {
           content: useCasesZh,
-          description: "从开发、研究办公和内容创作场景中选择合适的第一个任务。",
+          description: "选择适合开发、办公与内容创作的首个可验证任务。",
           slug: "use-cases",
           title: "使用场景",
         },
@@ -68,13 +68,13 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
       items: [
         {
           content: gettingStartedZh,
-          description: "安装桌面端、连接模型，并完成第一次可检查的项目会话。",
+          description: "安装桌面端、连接模型，并完成首次只读项目任务。",
           slug: "getting-started",
           title: "快速开始",
         },
         {
           content: projectsAndSessionsZh,
-          description: "理解项目、工作区和会话的关系，并建立清晰的任务组织方式。",
+          description: "厘清项目、工作区与会话，建立明确的任务边界。",
           slug: "projects-and-sessions",
           title: "项目、工作区与会话",
         },
@@ -85,13 +85,13 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
       items: [
         {
           content: permissionsZh,
-          description: "看懂风险等级、审批卡片和授权范围，保留必要的执行控制。",
+          description: "了解工具调用如何授权、拒绝，以及审批时应检查什么。",
           slug: "permissions",
           title: "权限与审批",
         },
         {
           content: coreConceptZh,
-          description: "理解上下文预算、自动压缩、手动压缩和长会话恢复机制。",
+          description: "了解长会话如何压缩上下文、保留近期消息并恢复任务。",
           slug: "core-concept",
           title: "长会话与上下文",
         },
@@ -102,19 +102,19 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
       items: [
         {
           content: providersZh,
-          description: "连接模型供应商，测试凭据，并为不同任务选择合适模型。",
+          description: "连接服务商、测试凭据，并按任务选择合适模型。",
           slug: "providers",
           title: "模型供应商",
         },
         {
           content: toolsZh,
-          description: "理解工具分类、全局可用性、权限、渐进式发现与 JavaScript 编排。",
+          description: "管理内置工具，理解权限、渐进发现与 JavaScript Exec。",
           slug: "tools",
           title: "工具系统",
         },
         {
           content: skillsZh,
-          description: "创建本地 Skill，安全启用受管来源，并管理更新、回滚与项目选择。",
+          description: "创建、启用和管理本地、插件与受管 Skills。",
           slug: "skills",
           title: "Skills",
         },
@@ -125,25 +125,25 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
       items: [
         {
           content: chromeZh,
-          description: "让 Agent 安全使用你现有的 Chrome 标签页、登录状态和可见网页界面。",
+          description: "让 Agent 使用现有 Chrome 标签页、登录状态与网页界面。",
           slug: "chrome",
           title: "Chrome 插件",
         },
         {
           content: computerUseWindowsZh,
-          description: "在 Windows 11 中观察并操作指定应用窗口，理解安全提示、审批边界和适用场景。",
+          description: "在 Windows 11 中安全观察并操作指定应用窗口。",
           slug: "computer-use-windows",
           title: "Windows 电脑控制",
         },
         {
           content: cinemaZh,
-          description: "初始化并管理本地 AI 影视项目，以文本、图片、视频和音频四类节点组织创作流程。",
+          description: "以四类节点初始化和管理本地 AI 影视项目。",
           slug: "cinema",
           title: "anybox for cinema",
         },
         {
           content: buildWebAppsZh,
-          description: "用设计、实现、浏览器测试和专项最佳实践构建高质量 Web 应用。",
+          description: "用专业工作流实现、测试并优化 Web 应用。",
           slug: "build-web-apps",
           title: "构建 Web 应用",
         },
@@ -154,7 +154,7 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
       items: [
         {
           content: pluginDevelopmentZh,
-          description: "从第一个 Skill 插件开始，加入 MCP、Connector，并发布给其他用户。",
+          description: "创建 Skill 插件，并按需加入 MCP、Connector 与发布配置。",
           slug: "plugin-development",
           title: "制作插件",
         },
@@ -165,13 +165,13 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
       items: [
         {
           content: troubleshootingZh,
-          description: "按项目、模型、工具、MCP、权限和长会话逐层定位常见问题。",
+          description: "按项目、模型、工具、权限和连接逐层定位问题。",
           slug: "troubleshooting",
           title: "排障",
         },
         {
           content: faqZh,
-          description: "平台、数据、模型、权限、移动端和反馈方式的常见问题。",
+          description: "快速了解平台、模型、数据、权限与故障处理。",
           slug: "faq",
           title: "FAQ",
         },
@@ -184,13 +184,13 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
       items: [
         {
           content: overviewEn,
-          description: "Understand what Anybox is, how it works, its boundaries, and where to begin.",
+          description: "Understand Anybox, its core workflow, capabilities, and safety boundaries.",
           slug: "overview",
           title: "Overview",
         },
         {
           content: useCasesEn,
-          description: "Choose a practical first task across development, research, operations, and creation.",
+          description: "Choose a verifiable first task for development, office work, or creation.",
           slug: "use-cases",
           title: "Use Cases",
         },
@@ -201,13 +201,13 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
       items: [
         {
           content: gettingStartedEn,
-          description: "Install the desktop app, connect a model, and complete an inspectable first session.",
+          description: "Install Anybox, connect a model, and complete a first read-only task.",
           slug: "getting-started",
           title: "Quick Start",
         },
         {
           content: projectsAndSessionsEn,
-          description: "Understand projects, workspaces, and sessions, then organize tasks clearly.",
+          description: "Use projects, workspaces, and sessions to keep task boundaries clear.",
           slug: "projects-and-sessions",
           title: "Projects, Workspaces & Sessions",
         },
@@ -218,13 +218,13 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
       items: [
         {
           content: permissionsEn,
-          description: "Read risk levels, approval cards, and authorization scope while retaining control.",
+          description: "Understand authorization, denial, and what to inspect before approval.",
           slug: "permissions",
           title: "Permissions & Approvals",
         },
         {
           content: coreConceptEn,
-          description: "Understand context budgets, automatic and manual compaction, and long-session recovery.",
+          description: "Learn how compaction preserves recent context and restores long sessions.",
           slug: "core-concept",
           title: "Long Sessions & Context",
         },
@@ -235,19 +235,19 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
       items: [
         {
           content: providersEn,
-          description: "Connect a provider, test credentials, and choose a suitable model for each task.",
+          description: "Connect providers, test credentials, and choose a model for each task.",
           slug: "providers",
           title: "Model Providers",
         },
         {
           content: toolsEn,
-          description: "Understand tool categories, global availability, permissions, discovery, and JavaScript orchestration.",
+          description: "Manage built-ins and understand permissions, discovery, and JavaScript Exec.",
           slug: "tools",
           title: "Tool System",
         },
         {
           content: skillsEn,
-          description: "Create local Skills and safely manage downloads, updates, rollbacks, and project selection.",
+          description: "Create, enable, and manage local, plugin, and downloaded Skills.",
           slug: "skills",
           title: "Skills",
         },
@@ -258,25 +258,25 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
       items: [
         {
           content: chromeEn,
-          description: "Let the agent safely use your existing Chrome tabs, signed-in state, and visible web UI.",
+          description: "Let the agent use existing Chrome tabs, signed-in state, and web UI.",
           slug: "chrome",
           title: "Chrome",
         },
         {
           content: computerUseWindowsEn,
-          description: "Observe and operate a selected Windows app window with clear safety and approval boundaries.",
+          description: "Safely observe and operate one selected Windows application window.",
           slug: "computer-use-windows",
           title: "Computer Use Windows",
         },
         {
           content: cinemaEn,
-          description: "Initialize and manage local AI film projects with Text, Image, Video, and Audio nodes.",
+          description: "Manage local AI film projects with four supported node types.",
           slug: "cinema",
           title: "anybox for cinema",
         },
         {
           content: buildWebAppsEn,
-          description: "Build high-quality web apps with design, implementation, browser QA, and focused best practices.",
+          description: "Implement, test, and optimize web apps with focused workflows.",
           slug: "build-web-apps",
           title: "Build Web Apps",
         },
@@ -287,7 +287,7 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
       items: [
         {
           content: pluginDevelopmentEn,
-          description: "Start with a Skill plugin, add MCP and connectors, then publish it for other users.",
+          description: "Create a Skill plugin, then add MCP, connectors, and release metadata.",
           slug: "plugin-development",
           title: "Build Plugins",
         },
@@ -298,13 +298,13 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
       items: [
         {
           content: troubleshootingEn,
-          description: "Diagnose project, provider, tool, MCP, permission, and long-session issues.",
+          description: "Diagnose project, model, tool, permission, and connection failures.",
           slug: "troubleshooting",
           title: "Troubleshooting",
         },
         {
           content: faqEn,
-          description: "Common questions about platforms, data, models, permissions, mobile, and support.",
+          description: "Quick answers about platforms, models, data, permissions, and failures.",
           slug: "faq",
           title: "FAQ",
         },

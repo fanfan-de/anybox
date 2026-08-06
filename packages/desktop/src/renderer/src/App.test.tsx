@@ -152,6 +152,7 @@ type DesktopAgentSessionEventListener = Parameters<DesktopAgentSession["onEvent"
 type DesktopAgentSessionEvent = Parameters<DesktopAgentSessionEventListener>[0]
 
 let agentSessionEventListeners: DesktopAgentSessionEventListener[] = []
+let shellLayoutSwitcherListener: ((event: { source: "application-menu" }) => void) | null = null
 
 
 function createRequestStreamEvent(input: {
@@ -784,6 +785,7 @@ describe("App", () => {
   beforeEach(() => {
     window.localStorage.clear()
     agentSessionEventListeners = []
+    shellLayoutSwitcherListener = null
     Object.defineProperty(window.navigator, "clipboard", {
       configurable: true,
       value: {
@@ -1508,6 +1510,12 @@ describe("App", () => {
       onMobileBridgeEvent: vi.fn(() => vi.fn()),
       onPtyEvent: vi.fn(() => vi.fn()),
       onWindowStateChange: vi.fn(() => vi.fn()),
+      onOpenShellLayoutSwitcher: vi.fn((listener) => {
+        shellLayoutSwitcherListener = listener
+        return vi.fn(() => {
+          if (shellLayoutSwitcherListener === listener) shellLayoutSwitcherListener = null
+        })
+      }),
     }
     const desktop = window.desktop!
     desktop.gitCommit = vi.fn().mockResolvedValue({
@@ -13247,6 +13255,36 @@ describe("App", () => {
     })
 
     expect(screen.getByRole("button", { name: "client" })).not.toHaveTextContent("C:\\Projects\\Atlas")
+  })
+
+  it("switches the mounted workbench and tools surfaces through the layout selector", async () => {
+    const { container } = render(<App />)
+    const appShell = container.querySelector<HTMLElement>(".app-shell")
+    const workbench = container.querySelector<HTMLElement>('[data-shell-surface="workbench"]')
+    const tools = container.querySelector<HTMLElement>('[data-shell-surface="tools"]')
+
+    expect(appShell).toHaveAttribute("data-shell-layout", "workbench-primary")
+    expect(workbench).toHaveAttribute("data-shell-region", "primary")
+    expect(tools).toHaveAttribute("data-shell-region", "companion")
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse right sidebar" }))
+    expect(tools).toHaveClass("is-shell-region-hidden")
+    expect(tools).toHaveAttribute("aria-hidden", "true")
+
+    act(() => {
+      shellLayoutSwitcherListener?.({ source: "application-menu" })
+    })
+    fireEvent.click(screen.getByRole("radio", { name: "Tools workbench centered" }))
+
+    expect(appShell).toHaveAttribute("data-shell-layout", "tools-primary")
+    expect(container.querySelector('[data-shell-surface="workbench"]')).toBe(workbench)
+    expect(container.querySelector('[data-shell-surface="tools"]')).toBe(tools)
+    expect(workbench).toHaveAttribute("data-shell-region", "companion")
+    expect(tools).toHaveAttribute("data-shell-region", "primary")
+    expect(workbench).not.toHaveClass("is-shell-region-hidden")
+    expect(tools).not.toHaveClass("is-shell-region-hidden")
+    expect(window.localStorage.getItem("desktop.shellLayoutMode.v1")).toBe("tools-primary")
+    expect(screen.queryByRole("dialog", { name: "Switch workspace layout" })).not.toBeInTheDocument()
   })
 
   it("keeps consecutive streamed replies isolated to their own assistant cards", async () => {

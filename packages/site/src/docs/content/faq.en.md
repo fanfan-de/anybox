@@ -2,92 +2,54 @@
 
 ## What is Anybox?
 
-Anybox is an open-source desktop AI agent workspace for local projects. It brings projects, persistent sessions, models, tools, terminals, permissions, Skills, MCP, and plugins into one workbench.
+Anybox is an open-source desktop AI agent workspace for software development and everyday work. It brings projects, sessions, models, tools, permissions, Skills, MCP, and plugins into one workbench.
 
-## Which platforms are supported?
+## Which platforms are supported, and where do I download it?
 
-The primary desktop targets are Windows x64, macOS Apple Silicon, and Linux x64, all in Early Access. Linux Releases usually provide an AppImage and some also include a Debian package; the assets attached to each GitHub Release are the source of truth.
-
-## Can I download Android or iOS now?
-
-The mobile clients are in development and early testing, with Android/iOS source and pairing features already in the repository. Check the latest GitHub Releases for public builds and supported system versions; development scripts are not proof of a production release.
-
-## Where should I download an installer?
-
-Choose a version and platform asset from the project's GitHub Releases page. Verify the operating system, CPU architecture, release notes, and available checksums first. Not every release necessarily contains every platform.
+The main desktop targets are Windows x64, macOS Apple Silicon, and Linux x64, currently in Early Access. Android and iOS remain in development and early testing. Use the actual assets in GitHub Releases as the source of truth for installers, system requirements, and platform status.
 
 ## Must I use a cloud model?
 
-Anybox can connect to multiple cloud providers or point a custom provider at a team gateway or compatible service running locally. It does not currently bundle a local inference engine, so a local endpoint must be installed and maintained separately.
+No. A custom provider can connect to a team gateway or compatible local endpoint. Anybox does not bundle a local inference engine, so you must install and maintain that service separately.
 
-## How do I configure a model?
+## How do I configure or switch models?
 
-Open **Settings → Providers**, sign in or enter an API key, and run **Test connection**. After it succeeds, use **Settings → Models** to choose the primary and optional small model. A session can override the global model.
-
-## Why is there no permanent list of every model?
-
-Provider and model catalogs refresh dynamically. Names, capabilities, context limits, status, and pricing metadata can change, so use the current in-app catalog, provider notices, and actual account access.
+Sign in or enter an API key under **Settings → Providers** and test the connection, then choose the primary and optional small model under **Settings → Models**. The control at the top of a session can override the global choice. Catalogs are dynamic; use current app and account access as truth.
 
 ## Will Anybox modify my project automatically?
 
-Default mode classifies tools, commands, paths, and risk before allowing, asking, or denying an action, so it does not prompt for every write. For unfamiliar work, begin with a read-only prompt or Planning mode and inspect the diff afterward.
+Default mode allows, asks, or denies based on the tool, parameters, path, and risk; it does not prompt for every write. For unfamiliar work, begin read-only or use Planning mode and inspect the diff afterward.
 
 ## Does Full Access remove every restriction?
 
-No. Full Access reduces routine prompts, but critical-risk actions, side effects outside the active project, and some operations on sensitive paths remain blocked. It is not a project-boundary bypass.
+No. Critical-risk actions, side effects outside the project, and some operations on sensitive paths remain blocked.
 
 ## How do projects, sessions, and tasks relate?
 
-A project maps to a directory, Git repository, or SSH workspace and can contain multiple sessions. Tasks are structured execution state inside a session, including owners, dependencies, current work, and blockers; they are not a separate project-management board.
-
-## Are SSH workspaces and Git worktrees supported?
-
-Yes. You can open remote folders over SSH, and Git projects can create isolated worktrees for parallel tasks. The available tools differ between remote and local workspaces.
+A project maps to a local directory, Git repository, or SSH workspace and can hold multiple sessions. A task is structured execution state inside a session, not a separate project-management board. Git projects can use worktrees to isolate parallel work.
 
 ## What is the difference between Skills, MCP, and plugins?
 
-A Skill provides instructions and resources. MCP connects callable tools and data resources. A plugin can package Skills, MCP, connectors, and interface metadata. Their actions still follow project selection and permission policy.
+A Skill provides instructions and resources. MCP provides callable tools and data. A plugin can package Skills, MCP, connectors, and display metadata. A managed Skill must also be enabled and selected for the project after download.
 
-## Why did a downloaded Skill not take effect?
+## How are credentials and data handled?
 
-Managed Skills are not loaded by the agent immediately after download. Enable **Allow agent to use** in Downloaded and check the current project's Skill selection. A plugin Skill also requires its plugin to be enabled and selected for the project.
+Manually saved provider credentials live in local agent-managed data; do not assume operating-system keychain storage or additional encryption. Models, MCP, connectors, marketplaces, and cloud relays may receive task-relevant data. Never place keys in projects, prompts, or Skills.
 
-## Where are credentials stored, and is an OS keychain used?
+## What is stored locally, and does Optimize Storage delete sessions?
 
-Provider credentials saved manually are kept in agent-managed application data on this computer, with file access restricted where supported. Do not assume OS-keychain storage or additional file encryption, and never place keys in a project, prompt, or Skill.
+Projects, sessions, messages, tasks, permission records, and most runtime state are stored in local agent data. Optimize Storage mainly removes expired traces and unreferenced tool artifacts and reclaims SQLite space; it is not intended to delete normal session history.
 
-## What data can leave my computer?
+## What if a model test fails or the agent is unreachable?
 
-Model calls send prompts, conversation context, and task-relevant file or tool content to the selected provider. MCP, connectors, Web Fetch, plugin or Skill marketplaces, catalog refreshes, and the mobile cloud relay can also contact external services.
-
-## What is stored locally?
-
-Projects, sessions, messages, tasks, archives, permission records, and most runtime state are stored in the local agent data directory. Use **Settings → Storage** to inspect database, trace, tool artifact, and path information.
-
-## Does Optimize Storage delete chat history?
-
-Storage maintenance primarily removes expired runtime traces, unreferenced tool artifacts, and reclaims SQLite space. It is not intended to delete normal messages or session history. Optimization can be unavailable while a session task is running.
-
-## What should I do when a model test fails?
-
-Check the API key or sign-in state, account credit, proxy and firewall, API base URL, model ID, regional limits, and rate limits. Refresh the provider catalog and make sure the session is not overriding the model with an older choice.
-
-## What should I do when the agent is unreachable?
-
-The default local agent is `http://127.0.0.1:4096`, with `/healthz` as its health endpoint. Check whether the managed agent is still starting, the port is occupied, a custom URL is wrong, or security software is blocking localhost.
+For model failures, check credentials, credit, network, API base URL, model ID, and limits. The default agent address is `http://127.0.0.1:4096`, with `/healthz` for health checks; also inspect port conflicts, custom URLs, and security software.
 
 ## Why was an action denied without an approval button?
 
-Common causes are a read-only session or agent policy, an unapproved plan, a path outside the active project, a sensitive file, or a critical-risk classification. Approval is for user-decidable actions and does not bypass operations prohibited by automatic safety policy.
+Common causes are read-only policy, an unapproved plan, a path outside the project, a sensitive file, or critical risk. Approval cannot bypass automatic safety policy.
 
-## How do I submit a diagnostic report?
+## How do I report an issue?
 
-Use the in-app `/report` flow to review the file count, size, destination, and redaction notice before actively confirming upload. Redaction is best effort, so do not include keys, tokens, or private data in the description or session.
+Use the in-app `/report` flow and review file count, size, destination, and the redaction notice before upload. Redaction is best effort, so never include keys, tokens, or private data in the report text.
 
-## What if documentation disagrees with the app?
-
-Prefer the installed version's interface, its matching GitHub Release, and the repository source. Anybox evolves quickly, and platform status, model catalogs, or mobile capabilities can move ahead of or behind website copy.
-
-## What should I read after my first session?
-
-Read **Model Providers** to confirm connectivity and data boundaries, then use **Skills** for project rules. Configure MCP and plugins only when a task genuinely needs external tools or services.
+If documentation and the app disagree, prefer the installed interface, its matching GitHub Release, and repository source.

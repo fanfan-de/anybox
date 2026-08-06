@@ -13,7 +13,8 @@ import {
 } from "../icons"
 import { useI18n } from "../i18n/I18nProvider"
 import { UnifiedPreviewPanel } from "../preview/UnifiedPreviewPanel"
-import { ShellTopMenu } from "../shared-ui"
+import { ShellTopMenu, SidebarToggleButton } from "../shared-ui"
+import type { ShellRegionRole } from "../shell-layout"
 import type { CodeHighlightTheme } from "../code-theme"
 import {
   listBranchAnchorOptions,
@@ -104,6 +105,11 @@ interface RightSidebarProps {
   onWorkspaceFileQueryChange: (value: string) => void
   onWorkspaceFileSelect: (path: string, options?: { linkedLineRange?: MarkdownLocalFileLinkTarget["lineRange"] }) => void
   renderTerminalTab: (input: RenderTerminalTabInput) => ReactNode
+  isCompanionCollapsed?: boolean
+  isRegionHidden?: boolean
+  onToggleCompanion?: () => void
+  regionRole?: ShellRegionRole
+  showCompanionToggle?: boolean
   windowControls?: ReactNode
 }
 
@@ -263,6 +269,11 @@ export function RightSidebar({
   onWorkspaceFileQueryChange,
   onWorkspaceFileSelect,
   renderTerminalTab,
+  isCompanionCollapsed = false,
+  isRegionHidden = false,
+  onToggleCompanion,
+  regionRole = "companion",
+  showCompanionToggle = false,
   windowControls,
 }: RightSidebarProps) {
   const { t } = useI18n()
@@ -497,8 +508,37 @@ export function RightSidebar({
     }
   }
 
+  const topMenuTrailing = showCompanionToggle || windowControls
+    ? (
+        <>
+          {showCompanionToggle && onToggleCompanion ? (
+            <SidebarToggleButton
+              isSidebarCollapsed={isCompanionCollapsed}
+              onToggleSidebar={onToggleCompanion}
+              side="right"
+              variant="top-menu"
+            />
+          ) : null}
+          {windowControls}
+        </>
+      )
+    : null
+
   return (
-    <aside id="app-sidebar-right" className="sidebar is-right" aria-label="Inspector sidebar">
+    <aside
+      id="app-sidebar-right"
+      className={[
+        "sidebar is-right",
+        isRegionHidden ? "is-shell-region-hidden" : "",
+      ].filter(Boolean).join(" ")}
+      aria-hidden={isRegionHidden || undefined}
+      aria-label={regionRole === "primary" ? t("shellLayout.toolsSurface") : t("rightSidebar.inspector")}
+      data-shell-region={regionRole}
+      data-shell-surface="tools"
+      inert={isRegionHidden || undefined}
+      role={regionRole === "primary" ? "region" : undefined}
+      tabIndex={regionRole === "primary" ? -1 : undefined}
+    >
       <ShellTopMenu
         as="header"
         ariaLabel="Right sidebar top menu"
@@ -549,7 +589,7 @@ export function RightSidebar({
           </>
         )}
         dragRegion
-        trailing={windowControls}
+        trailing={topMenuTrailing}
         trailingClassName="right-sidebar-top-menu-window-controls"
       />
 

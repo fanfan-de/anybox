@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react"
 import {
-  DEFAULT_RIGHT_SIDEBAR_WIDTH,
+  COMPANION_MIN_PRIMARY_RATIO,
+  DEFAULT_COMPANION_WIDTH,
   DEFAULT_SIDEBAR_WIDTH,
-  RIGHT_SIDEBAR_MIN_LEFT_EDGE_RATIO,
+  MIN_TOOL_COMPANION_WIDTH,
+  MIN_WORKBENCH_COMPANION_WIDTH,
   SIDEBAR_KEYBOARD_STEP,
   SIDEBAR_RESIZER_WIDTH,
 } from "./constants"
@@ -23,6 +25,12 @@ import {
   type RendererFrameTaskCancel,
 } from "./renderer-frame-coordinator"
 import { useDesktopRuntimeCapabilities } from "./runtime-capabilities"
+import {
+  DEFAULT_SHELL_LAYOUT_MODE,
+  SHELL_LAYOUT_MODE_STORAGE_KEY,
+  readShellLayoutMode,
+  type ShellLayoutMode,
+} from "./shell-layout"
 
 const ACTIVITY_RAIL_VISIBILITY_STORAGE_KEY = "desktop.activityRailVisible"
 const DEBUG_UI_REGIONS_STORAGE_KEY = "desktop.debugUiRegions"
@@ -94,6 +102,16 @@ function readAgentDebugTracePreference() {
   return readBooleanPreference(AGENT_DEBUG_TRACE_STORAGE_KEY, false)
 }
 
+function readStoredShellLayoutMode() {
+  if (typeof window === "undefined") return DEFAULT_SHELL_LAYOUT_MODE
+
+  try {
+    return readShellLayoutMode(window.localStorage)
+  } catch {
+    return DEFAULT_SHELL_LAYOUT_MODE
+  }
+}
+
 function mergeAssistantTraceVisibilityPreference(value: unknown): AssistantTraceVisibility {
   const merged = { ...DEFAULT_ASSISTANT_TRACE_VISIBILITY }
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -144,7 +162,8 @@ export function useDesktopShell() {
   const [isWindowMaximized, setIsWindowMaximized] = useState(false)
   const [windowControlsClearance, setWindowControlsClearance] = useState(WINDOW_CONTROLS_CLEARANCE_FALLBACK)
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH)
-  const [rightSidebarWidth, setRightSidebarWidth] = useState(DEFAULT_RIGHT_SIDEBAR_WIDTH)
+  const [rightSidebarWidth, setRightSidebarWidth] = useState(DEFAULT_COMPANION_WIDTH)
+  const [shellLayoutMode, setShellLayoutMode] = useState<ShellLayoutMode>(readStoredShellLayoutMode)
   const [isActivityRailVisible, setIsActivityRailVisible] = useState(readActivityRailVisibilityPreference)
   const appearanceState = useAppearanceState({
     appearanceAuthoringEnabled,
@@ -198,7 +217,7 @@ export function useDesktopShell() {
   const [agentDefaultDirectory, setAgentDefaultDirectory] = useState("")
   const [agentConnected, setAgentConnected] = useState(false)
   const lastExpandedSidebarWidthRef = useRef(DEFAULT_SIDEBAR_WIDTH)
-  const lastExpandedRightSidebarWidthRef = useRef(DEFAULT_RIGHT_SIDEBAR_WIDTH)
+  const lastExpandedRightSidebarWidthRef = useRef(DEFAULT_COMPANION_WIDTH)
   const activeSidebarResizerPointerRef = useRef<ActivePointerCapture | null>(null)
   const activeSidebarResizeRef = useRef<ActiveSidebarResize | null>(null)
   const activeSidebarResizeCleanupRef = useRef<(() => void) | null>(null)
@@ -223,12 +242,15 @@ export function useDesktopShell() {
     return resolveSidebarWidthBounds(containerWidth - fixedWidth)
   }
 
-  function resolveRightSidebarBounds(containerWidth?: number) {
-    if (!containerWidth || containerWidth <= 0) {
-      return resolveRightSidebarWidthBounds(containerWidth, RIGHT_SIDEBAR_MIN_LEFT_EDGE_RATIO)
-    }
+  function resolveRightSidebarBounds(
+    containerWidth?: number,
+    layoutMode: ShellLayoutMode = shellLayoutMode,
+  ) {
+    const minWidth = layoutMode === "tools-primary"
+      ? MIN_WORKBENCH_COMPANION_WIDTH
+      : MIN_TOOL_COMPANION_WIDTH
 
-    return resolveRightSidebarWidthBounds(containerWidth, RIGHT_SIDEBAR_MIN_LEFT_EDGE_RATIO)
+    return resolveRightSidebarWidthBounds(containerWidth, COMPANION_MIN_PRIMARY_RATIO, minWidth)
   }
 
   function releaseActiveSidebarResizerPointerCapture() {
@@ -271,6 +293,8 @@ export function useDesktopShell() {
     } else {
       resizeState.appShell.style.setProperty("--right-sidebar-display-width", widthValue)
       resizeState.appShell.style.setProperty("--right-sidebar-width", widthValue)
+      resizeState.appShell.style.setProperty("--companion-region-display-width", widthValue)
+      resizeState.appShell.style.setProperty("--companion-region-width", widthValue)
     }
     updateSidebarResizerAriaValue(width)
   }
@@ -489,6 +513,14 @@ export function useDesktopShell() {
   }, [assistantTraceVisibility, developmentFeaturesEnabled])
 
   useEffect(() => {
+    try {
+      window.localStorage.setItem(SHELL_LAYOUT_MODE_STORAGE_KEY, shellLayoutMode)
+    } catch {
+      return
+    }
+  }, [shellLayoutMode])
+
+  useEffect(() => {
     function syncSidebarWidthToViewport() {
       const rect = appShellRef.current?.getBoundingClientRect()
       if (!rect || rect.width <= 0) return
@@ -513,7 +545,7 @@ export function useDesktopShell() {
     return () => {
       window.removeEventListener("resize", syncSidebarWidthToViewport)
     }
-  }, [isActivityRailVisible, isRightSidebarCollapsed, isSidebarCollapsed, rightSidebarWidth, sidebarWidth])
+  }, [isActivityRailVisible, isRightSidebarCollapsed, isSidebarCollapsed, rightSidebarWidth, shellLayoutMode, sidebarWidth])
 
   useEffect(() => {
     return () => {
@@ -771,6 +803,19 @@ export function useDesktopShell() {
     setIsRightSidebarCollapsed(true)
   }
 
+  function handleShellLayoutModeChange(nextMode: ShellLayoutMode) {
+    if (nextMode === shellLayoutMode) return
+
+    activeSidebarResizeCleanupRef.current?.()
+    const rect = appShellRef.current?.getBoundingClientRect()
+    const bounds = resolveRightSidebarBounds(rect?.width, nextMode)
+    const nextWidth = clamp(rightSidebarWidth, bounds.min, bounds.max)
+    lastExpandedRightSidebarWidthRef.current = nextWidth
+    setRightSidebarWidth(nextWidth)
+    setIsRightSidebarCollapsed(false)
+    setShellLayoutMode(nextMode)
+  }
+
   function handleActivityRailVisibilityChange(nextVisible: boolean) {
     if (!nextVisible) {
       activeSidebarResizeCleanupRef.current?.()
@@ -836,6 +881,9 @@ export function useDesktopShell() {
     "--right-sidebar-display-width": isRightSidebarCollapsed ? "0px" : `${rightSidebarWidth}px`,
     "--right-sidebar-resizer-width": isRightSidebarCollapsed ? "0px" : `${SIDEBAR_RESIZER_WIDTH}px`,
     "--right-sidebar-width": `${rightSidebarWidth}px`,
+    "--companion-region-display-width": isRightSidebarCollapsed ? "0px" : `${rightSidebarWidth}px`,
+    "--companion-region-resizer-width": isRightSidebarCollapsed ? "0px" : `${SIDEBAR_RESIZER_WIDTH}px`,
+    "--companion-region-width": `${rightSidebarWidth}px`,
   } as CSSProperties
 
   const currentAppShellWidth = appShellRef.current?.getBoundingClientRect().width
@@ -894,6 +942,7 @@ export function useDesktopShell() {
     handleRightSidebarResizerKeyDown,
     handleRightSidebarResizerPointerDown,
     handleRightSidebarToggle,
+    handleShellLayoutModeChange,
     handleWindowAction,
     isActivityRailVisible,
     isAgentDebugTraceEnabled,
@@ -905,15 +954,23 @@ export function useDesktopShell() {
     isSidebarResizing,
     isRightSidebarCollapsed,
     isRightSidebarResizing,
+    isCompanionCollapsed: isRightSidebarCollapsed,
+    isCompanionResizing: isRightSidebarResizing,
     isWindowMaximized,
     platform,
     rightSidebarWidthBounds,
     rightSidebarWidth,
+    companionWidthBounds: rightSidebarWidthBounds,
+    companionWidth: rightSidebarWidth,
     resolvedCodeTheme,
     resolvedColorMode,
     runtimeCapabilitiesReady,
     sidebarWidthBounds,
     sidebarWidth,
+    shellLayoutMode,
     windowControlsRef,
+    handleCompanionResizerKeyDown: handleRightSidebarResizerKeyDown,
+    handleCompanionResizerPointerDown: handleRightSidebarResizerPointerDown,
+    handleCompanionToggle: handleRightSidebarToggle,
   }
 }

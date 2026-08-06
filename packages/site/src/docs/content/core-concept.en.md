@@ -1,104 +1,43 @@
 # Long Sessions & Context
 
-An Anybox agent session grows over time. To keep long sessions running, the agent can compact older turns into an internal summary before building the next model request. The summary is sent together with the most recent original messages.
+As a session grows, file content, tool output, and replies can exceed the model's context window. Anybox compacts older complete turns into an internal summary while keeping recent messages unchanged so the task can continue.
 
-The main implementation lives in `packages/anyboxagent/src/session/core/context-window.ts` and is connected to the run loop in `packages/anyboxagent/src/session/core/prompt.ts`.
+## Automatic and Manual Compaction
 
-## What Context Compaction Solves
+Automatic compaction is enabled by default and controlled by `config.compaction.auto`. Set `ANYBOX_DISABLE_AUTOCOMPACT` to disable it.
 
-A model request cannot carry unlimited history. File reads, terminal output, tool calls, patch summaries, and multi-turn responses all consume the context window. Compaction aims to:
-
-- Preserve goals, decisions, files, errors, tool results, and next steps required to continue the task.
-- Keep the most recent turns unchanged so the latest user intent has highest priority.
-- Replace older history with a durable summary that can be restored later.
-- Trim tool output and summary text if the compacted context is still too large.
-
-## Automatic Compaction
-
-Each agent loop reloads messages from the active branch and prepares the prompt context:
-
-```ts
-ContextWindow.preparePromptContext({
-  sessionID,
-  model,
-  system,
-  messages,
-  reasoningEffort,
-  tools,
-  recordCompactionMessage,
-})
-```
-
-Automatic compaction is enabled for sessions by default.
-
-It is also controlled by configuration:
-
-- Automatic compaction is enabled when `config.compaction.auto !== false`.
-- `ANYBOX_DISABLE_AUTOCOMPACT` disables automatic compaction.
-
-## Manual Compaction
-
-The desktop app also supports:
+When a session is idle, enter either command in the Composer:
 
 - `/compact`
 - `~compact`
 
-The Composer intercepts these commands before sending. They are available only in an existing session and are not stored as ordinary user messages. The renderer calls Electron IPC through `window.desktop.agentSession.compact`, which reaches:
+The command is not sent as a normal message. It returns `status: "noop"` when there is not enough history, and it cannot run while the session is active.
 
-```text
-POST /api/sessions/:id/compact
-```
+## Selection and Budget
 
-The backend reuses `ContextWindow.compactPromptContext` and records the resulting `compaction` part with `auto: false`. If there are not enough older turns, the endpoint returns `status: "noop"` and the Composer shows a lightweight status message.
+Anybox defines a turn as one user message plus the replies and tool results that follow it. Compaction follows these rules:
 
-Manual compaction follows the same safeguards:
+- Keep the latest `6` turns unchanged by default.
+- Continue after the newest `compactedToMessageID` instead of compacting the same history again.
+- Select at most about `12000` tokens per batch and no more than `40%` of the prompt budget.
+- Use default limits of `128000` context tokens and `8192` output tokens.
+- Begin at `72%` of the available prompt budget; treat `82%` as the hard threshold.
 
-- It cannot run while the session is active.
-- The six most recent turns remain uncompressed.
+Actual budgets adjust to the selected model's capabilities.
 
-## Context Budget
+## What the Summary Preserves
 
-Before compaction, Anybox calculates a prompt budget from model capabilities:
+The summary retains:
 
-- Default context limit: `128000` tokens.
-- Default output limit: `8192` tokens.
-- Reserved output space is clamped between `2048` and `16384` tokens.
-- Soft threshold: `72%` of the available prompt budget.
-- Hard threshold: `82%` of the available prompt budget.
+- Current goals, user requirements, and confirmed decisions.
+- Important files, repository state, tool results, and errors.
+- Completed work, unfinished items, and next steps.
 
-Compaction begins only after the estimated token count exceeds the soft threshold.
+It uses the current session model with tool calls disabled. If model-based compaction fails, Anybox falls back to a shortened transcript excerpt.
 
-## Choosing What to Compact
+## Persistence and Recovery
 
-Messages are grouped into turns. A turn contains one user message and the assistant messages and tool results that follow it, up to the next user message.
-
-Selection follows these rules:
-
-- Previously compacted history is not resent as original messages.
-- Selection continues after the latest `compactedToMessageID` boundary.
-- The six most recent turns remain intact by default.
-- One batch selects about `12000` tokens at most and never more than `40%` of the prompt budget.
-- If an early turn is very large, the oldest eligible turn is still selected.
-
-This makes the summary advance incrementally instead of summarizing the entire conversation on every request.
-
-## Generating the Summary
-
-The model receives existing compacted history together with the newly selected older turns. It is instructed to return only the content inside `<compacted_history>` and preserve:
-
-- Current goals and user requirements.
-- Important files, code details, and repository state.
-- Completed actions, tool results, and errors.
-- Confirmed decisions and their reasons.
-- Current progress and next steps.
-
-The current session model is used with `temperature: 0`. When tool definitions are present, they are passed with `toolChoice: "none"` so the model cannot call tools during compaction. A built-in `compaction` subagent also exists with an empty tool policy.
-
-If a compaction request containing tool definitions fails, Anybox retries without the tools. If model compaction fails entirely, it falls back to a shortened transcript excerpt.
-
-## Persistent Format
-
-The compacted result is written back to the session database as an internal user message:
+The result is stored as an internal user message:
 
 ```text
 role: user
@@ -106,46 +45,18 @@ agent: compaction
 internal: true
 ```
 
-It contains:
-
-- A synthetic `text` part with `metadata.kind: "compacted-history"`, wrapped in `<compacted_history>`.
-- A `compaction` part recording `auto`, `compactionID`, message boundaries, `summaryVersion`, and `createdAt`.
-
-The `compaction` part is an internal marker and is not sent to the model or rendered in the normal ThreadView. The `text` part supplies the actual compacted context.
-
-## Rebuilding the Prompt
-
-The next prompt starts with the newest compacted history and appends original turns after the compaction boundary:
+Its `text` part contains `<compacted_history>`. Its `compaction` part records `auto`, `compactionID`, message boundaries, version, and time. The next prompt is rebuilt in this order:
 
 ```text
 system prompts
-compacted history internal user message
-recent raw user / assistant / tool messages
+compacted history
+recent raw messages and tool results
 ```
 
-Recent original messages take precedence if they conflict with the summary. System prompts are rebuilt each turn and are not written into `<compacted_history>`.
+Recent raw messages win if they conflict with the summary. Compaction changes only the context sent to the model; it does not delete project files.
 
-## Oversized-Context Fallbacks
+## Fallbacks and Presentation
 
-If the rebuilt prompt still exceeds the hard threshold, Anybox progressively:
+If the rebuilt prompt still exceeds the hard threshold, the runtime progressively trims completed tool output, drops older active turns while retaining at least two, and then shortens the summary. ThreadView hides internal summaries; manual compaction reports status near the Composer.
 
-1. Trims completed tool output to about `1200` characters.
-2. Trims tool output further to about `320` characters.
-3. Drops older active turns while keeping at least two turns.
-4. Shortens compacted history in `85%` steps while preserving about `1500` characters at minimum.
-
-These changes affect only the context sent to the model and do not delete the original session records.
-
-## Desktop Presentation
-
-The desktop renderer recognizes internal compaction messages and hides their summary text from the normal thread:
-
-- `packages/desktop/src/renderer/src/app/stream.ts` detects `agent: "compaction"` or `type: "compaction"`.
-- ThreadView does not render the compacted summary or a compaction marker.
-- Results for `/compact` and `~compact` appear as lightweight status near the Composer.
-
-This keeps compaction details out of the previous assistant trace and avoids exposing the full internal summary in ordinary replies.
-
-## Test Coverage
-
-The main tests live in `packages/anyboxagent/Test/session.context-window.test.ts` and verify early-turn compaction, manual `auto: false` records, persistence boundaries, oversized tool-output trimming, model-message filtering, and archive restoration. Frontend restoration and display behavior are covered in `packages/desktop/src/renderer/src/app/stream.test.ts`.
+The main implementation is `packages/anyboxagent/src/session/core/context-window.ts`, called from the run loop in `prompt.ts`.

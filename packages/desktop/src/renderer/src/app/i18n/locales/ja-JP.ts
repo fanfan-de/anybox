@@ -8,6 +8,7 @@ import { branchViewTranslations } from "../branch-view-translations"
 import { threadErrorTranslations } from "../thread-error-translations"
 import { plannerTranslations } from "../planner-translations"
 import { toolModuleTranslations } from "../tool-module-translations"
+import { shellLayoutTranslations } from "../shell-layout-translations"
 
 export const jaJP = {
   "app.loading": "読み込み中",
@@ -1437,5 +1438,6 @@ export const jaJP = {
   ...branchViewTranslations.enUS,
   ...plannerTranslations.enUS,
   ...toolModuleTranslations.enUS,
+  ...shellLayoutTranslations["ja-JP"],
   ...threadErrorTranslations["ja-JP"],
 } as const satisfies Record<TranslationKey, string>

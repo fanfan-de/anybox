@@ -8,6 +8,7 @@ import { branchViewTranslations } from "../branch-view-translations"
 import { threadErrorTranslations } from "../thread-error-translations"
 import { plannerTranslations } from "../planner-translations"
 import { toolModuleTranslations } from "../tool-module-translations"
+import { shellLayoutTranslations } from "../shell-layout-translations"
 
 export const idID = {
   "app.loading": "Memuat",
@@ -1437,5 +1438,6 @@ export const idID = {
   ...branchViewTranslations.enUS,
   ...plannerTranslations.enUS,
   ...toolModuleTranslations.enUS,
+  ...shellLayoutTranslations["id-ID"],
   ...threadErrorTranslations["id-ID"],
 } as const satisfies Record<TranslationKey, string>

@@ -8,6 +8,7 @@ import { branchViewTranslations } from "../branch-view-translations"
 import { threadErrorTranslations } from "../thread-error-translations"
 import { plannerTranslations } from "../planner-translations"
 import { toolModuleTranslations } from "../tool-module-translations"
+import { shellLayoutTranslations } from "../shell-layout-translations"
 
 export const es419 = {
   "app.loading": "Cargando",
@@ -1437,5 +1438,6 @@ export const es419 = {
   ...branchViewTranslations.enUS,
   ...plannerTranslations.enUS,
   ...toolModuleTranslations.enUS,
+  ...shellLayoutTranslations["es-419"],
   ...threadErrorTranslations["es-419"],
 } as const satisfies Record<TranslationKey, string>

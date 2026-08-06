@@ -4,6 +4,7 @@ import type { MenuKey } from "./types"
 
 export interface ApplicationMenuOptions {
   onCheckForUpdates?: () => void
+  onOpenShellLayoutSwitcher?: () => void
 }
 
 export interface ApplicationMenus {
@@ -18,6 +19,7 @@ const menuLabels = {
     edit: "编辑",
     file: "文件",
     help: "帮助",
+    switchLayout: "切换工作区布局",
     view: "视图",
     window: "窗口",
   },
@@ -27,6 +29,7 @@ const menuLabels = {
     edit: "編輯",
     file: "檔案",
     help: "說明",
+    switchLayout: "切換工作區配置",
     view: "檢視",
     window: "視窗",
   },
@@ -36,6 +39,7 @@ const menuLabels = {
     edit: "Edit",
     file: "File",
     help: "Help",
+    switchLayout: "Switch Workspace Layout",
     view: "View",
     window: "Window",
   },
@@ -45,6 +49,7 @@ const menuLabels = {
     edit: "編集",
     file: "ファイル",
     help: "ヘルプ",
+    switchLayout: "ワークスペースのレイアウトを切り替え",
     view: "表示",
     window: "ウインドウ",
   },
@@ -54,6 +59,7 @@ const menuLabels = {
     edit: "편집",
     file: "파일",
     help: "도움말",
+    switchLayout: "작업 공간 레이아웃 전환",
     view: "보기",
     window: "창",
   },
@@ -63,6 +69,7 @@ const menuLabels = {
     edit: "Editar",
     file: "Arquivo",
     help: "Ajuda",
+    switchLayout: "Alternar layout do espaço de trabalho",
     view: "Exibir",
     window: "Janela",
   },
@@ -72,6 +79,7 @@ const menuLabels = {
     edit: "Editar",
     file: "Archivo",
     help: "Ayuda",
+    switchLayout: "Cambiar diseño del espacio de trabajo",
     view: "Ver",
     window: "Ventana",
   },
@@ -81,6 +89,7 @@ const menuLabels = {
     edit: "Bearbeiten",
     file: "Datei",
     help: "Hilfe",
+    switchLayout: "Arbeitsbereichslayout wechseln",
     view: "Ansicht",
     window: "Fenster",
   },
@@ -90,6 +99,7 @@ const menuLabels = {
     edit: "Édition",
     file: "Fichier",
     help: "Aide",
+    switchLayout: "Changer la disposition de l’espace de travail",
     view: "Affichage",
     window: "Fenêtre",
   },
@@ -99,6 +109,7 @@ const menuLabels = {
     edit: "Edit",
     file: "Berkas",
     help: "Bantuan",
+    switchLayout: "Ganti tata letak ruang kerja",
     view: "Tampilan",
     window: "Jendela",
   },
@@ -108,6 +119,7 @@ const menuLabels = {
     edit: "Modifica",
     file: "File",
     help: "Aiuto",
+    switchLayout: "Cambia layout dell’area di lavoro",
     view: "Vista",
     window: "Finestra",
   },
@@ -117,6 +129,7 @@ const menuLabels = {
     edit: "Edycja",
     file: "Plik",
     help: "Pomoc",
+    switchLayout: "Przełącz układ obszaru roboczego",
     view: "Widok",
     window: "Okno",
   },
@@ -126,6 +139,7 @@ const menuLabels = {
     edit: "Düzenle",
     file: "Dosya",
     help: "Yardım",
+    switchLayout: "Çalışma alanı düzenini değiştir",
     view: "Görünüm",
     window: "Pencere",
   },
@@ -135,6 +149,7 @@ const menuLabels = {
     edit: "Chỉnh sửa",
     file: "Tệp",
     help: "Trợ giúp",
+    switchLayout: "Chuyển bố cục không gian làm việc",
     view: "Xem",
     window: "Cửa sổ",
   },
@@ -165,6 +180,14 @@ export function createApplicationMenus(locale: AppLocale, options: ApplicationMe
     ...(isMac ? ([{ role: "pasteAndMatchStyle" }, { role: "delete" }, { role: "selectAll" }] as const) : []),
   ]
   const viewMenu: MenuItemConstructorOptions[] = [
+    {
+      label: labels.switchLayout,
+      accelerator: "CommandOrControl+Shift+L",
+      click: () => {
+        options.onOpenShellLayoutSwitcher?.()
+      },
+    },
+    { type: "separator" },
     { role: "reload" },
     { role: "forceReload" },
     { role: "toggleDevTools" },

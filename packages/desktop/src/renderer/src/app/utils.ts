@@ -38,10 +38,11 @@ export function resolveSidebarWidthBounds(containerWidth?: number) {
 export function resolveRightSidebarWidthBounds(
   containerWidth?: number,
   minLeftEdgeRatio = RIGHT_SIDEBAR_MIN_LEFT_EDGE_RATIO,
+  minWidth = MIN_RIGHT_SIDEBAR_WIDTH,
 ) {
   return resolveWidthBounds(
     containerWidth,
-    MIN_RIGHT_SIDEBAR_WIDTH,
+    minWidth,
     MAX_RIGHT_SIDEBAR_WIDTH,
     containerWidth && containerWidth > 0 ? Math.max(0, containerWidth * minLeftEdgeRatio) : 0,
   )

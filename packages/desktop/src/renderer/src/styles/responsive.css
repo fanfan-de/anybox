@@ -99,6 +99,57 @@
   .right-sidebar-top-menu-actions {
     justify-self: start;
   }
+
+  .app-shell.is-swappable-shell {
+    grid-template-columns:
+      var(--activity-rail-display-width)
+      var(--sidebar-display-width)
+      var(--sidebar-resizer-width)
+      minmax(0, 1fr)
+      var(--companion-region-resizer-width)
+      var(--companion-region-display-width);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .app-shell.is-swappable-shell > .activity-rail {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .app-shell.is-swappable-shell > .sidebar:not(.is-right) {
+    grid-column: 2;
+    grid-row: 1;
+    border-top: 0;
+  }
+
+  .app-shell.is-swappable-shell > .sidebar-resizer {
+    display: block;
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .app-shell.is-swappable-shell > .sidebar-resizer.is-right {
+    grid-column: 5;
+  }
+
+  .app-shell.is-swappable-shell > [data-shell-region="primary"] {
+    grid-column: 4;
+    grid-row: 1;
+  }
+
+  .app-shell.is-swappable-shell > [data-shell-region="companion"] {
+    grid-column: 6;
+    grid-row: 1;
+  }
+
+  .app-shell.is-swappable-shell > .sidebar.is-right {
+    border-top: 0;
+  }
+
+  .app-shell.is-swappable-shell .right-sidebar-top-menu {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
 }
 
 @media (max-width: 900px) {
@@ -163,6 +214,10 @@
 
   .sidebar.is-right {
     --right-sidebar-inline-padding: 12px;
+  }
+
+  .app-shell.is-swappable-shell > .canvas.is-workbench {
+    padding: 0;
   }
 
   .canvas {

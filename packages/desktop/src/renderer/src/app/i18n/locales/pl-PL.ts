@@ -8,6 +8,7 @@ import { branchViewTranslations } from "../branch-view-translations"
 import { threadErrorTranslations } from "../thread-error-translations"
 import { plannerTranslations } from "../planner-translations"
 import { toolModuleTranslations } from "../tool-module-translations"
+import { shellLayoutTranslations } from "../shell-layout-translations"
 
 export const plPL = {
   "app.loading": "Ładowanie",
@@ -1437,5 +1438,6 @@ export const plPL = {
   ...branchViewTranslations.enUS,
   ...plannerTranslations.enUS,
   ...toolModuleTranslations.enUS,
+  ...shellLayoutTranslations["pl-PL"],
   ...threadErrorTranslations["pl-PL"],
 } as const satisfies Record<TranslationKey, string>

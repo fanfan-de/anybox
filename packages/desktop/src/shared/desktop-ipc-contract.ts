@@ -171,6 +171,7 @@ export const DESKTOP_MOBILE_BRIDGE_EVENT_CHANNEL = "desktop:mobile-bridge-event"
 export const DESKTOP_WORKSPACE_FILE_CHANGE_EVENT_CHANNEL = "desktop:workspace-file-change"
 export const DESKTOP_PTY_EVENT_CHANNEL = "desktop:pty-event"
 export const DESKTOP_WINDOW_STATE_EVENT_CHANNEL = "desktop:window-state-changed"
+export const DESKTOP_OPEN_SHELL_LAYOUT_SWITCHER_EVENT_CHANNEL = "desktop:open-shell-layout-switcher"
 export const DESKTOP_WORKBENCH_STATE_EVENT_CHANNEL = "desktop:workbench-state-changed"
 export const DESKTOP_APP_UPDATE_STATE_EVENT_CHANNEL = "desktop:app-update-state-changed"
 export const DESKTOP_APPEARANCE_STATE_EVENT_CHANNEL = "desktop:appearance-state-changed"
@@ -2553,6 +2554,7 @@ export interface DesktopIpcEventPayloads {
   [DESKTOP_WORKSPACE_FILE_CHANGE_EVENT_CHANNEL]: WorkspaceFileChangeIPCEvent
   [DESKTOP_PTY_EVENT_CHANNEL]: PtyTransportIPCEvent
   [DESKTOP_WINDOW_STATE_EVENT_CHANNEL]: DesktopWindowState
+  [DESKTOP_OPEN_SHELL_LAYOUT_SWITCHER_EVENT_CHANNEL]: { source: "application-menu" }
   [DESKTOP_WORKBENCH_STATE_EVENT_CHANNEL]: WorkbenchStateEvent
   [DESKTOP_APPEARANCE_STATE_EVENT_CHANNEL]: AppearanceRuntimeState
   [DESKTOP_SEMANTIC_TOKEN_INSPECTOR_EVENT_CHANNEL]: SemanticTokenInspectorEvent
@@ -2909,6 +2911,9 @@ export interface DesktopApiMethods {
   onWorkspaceFileChange(listener: (event: DesktopIpcEventPayload<typeof DESKTOP_WORKSPACE_FILE_CHANGE_EVENT_CHANNEL>) => void): () => void
   onPtyEvent(listener: (event: DesktopIpcEventPayload<typeof DESKTOP_PTY_EVENT_CHANNEL>) => void): () => void
   onWindowStateChange(listener: (state: DesktopIpcEventPayload<typeof DESKTOP_WINDOW_STATE_EVENT_CHANNEL>) => void): () => void
+  onOpenShellLayoutSwitcher(
+    listener: (event: DesktopIpcEventPayload<typeof DESKTOP_OPEN_SHELL_LAYOUT_SWITCHER_EVENT_CHANNEL>) => void,
+  ): () => void
   onWorkbenchStateChange(listener: (event: DesktopIpcEventPayload<typeof DESKTOP_WORKBENCH_STATE_EVENT_CHANNEL>) => void): () => void
   onAppearanceStateChange(listener: (state: DesktopIpcEventPayload<typeof DESKTOP_APPEARANCE_STATE_EVENT_CHANNEL>) => void): () => void
 }

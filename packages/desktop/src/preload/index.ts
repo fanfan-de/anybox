@@ -107,6 +107,7 @@ import {
   DESKTOP_AUTOMATION_EVENT_CHANNEL,
   DESKTOP_ENVIRONMENT_EVENT_CHANNEL,
   DESKTOP_MOBILE_BRIDGE_EVENT_CHANNEL,
+  DESKTOP_OPEN_SHELL_LAYOUT_SWITCHER_EVENT_CHANNEL,
   DESKTOP_PTY_EVENT_CHANNEL,
   DESKTOP_SEMANTIC_TOKEN_INSPECTOR_EVENT_CHANNEL,
   DESKTOP_WORKBENCH_STATE_EVENT_CHANNEL,
@@ -1179,6 +1180,20 @@ try {
 
       return () => {
         ipcRenderer.removeListener(DESKTOP_WINDOW_STATE_EVENT_CHANNEL, wrappedListener)
+      }
+    },
+    onOpenShellLayoutSwitcher: (listener: (event: { source: "application-menu" }) => void) => {
+      const wrappedListener = (
+        _event: Electron.IpcRendererEvent,
+        layoutEvent: { source: "application-menu" },
+      ) => {
+        listener(layoutEvent)
+      }
+
+      ipcRenderer.on(DESKTOP_OPEN_SHELL_LAYOUT_SWITCHER_EVENT_CHANNEL, wrappedListener)
+
+      return () => {
+        ipcRenderer.removeListener(DESKTOP_OPEN_SHELL_LAYOUT_SWITCHER_EVENT_CHANNEL, wrappedListener)
       }
     },
     onWorkbenchStateChange: (listener: (event: WorkbenchStateEvent) => void) => {

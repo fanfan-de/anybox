@@ -2,6 +2,8 @@ import { type KeyboardEvent, type PointerEvent } from "react"
 import { type SidebarSide } from "../shared-ui"
 
 interface SidebarResizerProps {
+  ariaLabel?: string
+  controlsID?: string
   isSidebarResizing: boolean
   maxWidth: number
   minWidth: number
@@ -12,6 +14,8 @@ interface SidebarResizerProps {
 }
 
 export function SidebarResizer({
+  ariaLabel: ariaLabelOverride,
+  controlsID: controlsIDOverride,
   isSidebarResizing,
   maxWidth,
   minWidth,
@@ -23,8 +27,8 @@ export function SidebarResizer({
   const resizerClassName = side === "right"
     ? isSidebarResizing ? "sidebar-resizer is-right is-active" : "sidebar-resizer is-right"
     : isSidebarResizing ? "sidebar-resizer is-active" : "sidebar-resizer"
-  const ariaLabel = side === "right" ? "Resize right sidebar" : "Resize left sidebar"
-  const controlsID = side === "right" ? "app-sidebar-right" : "app-sidebar"
+  const ariaLabel = ariaLabelOverride ?? (side === "right" ? "Resize right sidebar" : "Resize left sidebar")
+  const controlsID = controlsIDOverride ?? (side === "right" ? "app-sidebar-right" : "app-sidebar")
   const testID = side === "right" ? "right-sidebar-resizer" : "sidebar-resizer"
 
   return (

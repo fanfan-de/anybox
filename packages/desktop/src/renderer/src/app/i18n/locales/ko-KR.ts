@@ -8,6 +8,7 @@ import { branchViewTranslations } from "../branch-view-translations"
 import { threadErrorTranslations } from "../thread-error-translations"
 import { plannerTranslations } from "../planner-translations"
 import { toolModuleTranslations } from "../tool-module-translations"
+import { shellLayoutTranslations } from "../shell-layout-translations"
 
 export const koKR = {
   "app.loading": "로딩 중",
@@ -1437,5 +1438,6 @@ export const koKR = {
   ...branchViewTranslations.enUS,
   ...plannerTranslations.enUS,
   ...toolModuleTranslations.enUS,
+  ...shellLayoutTranslations["ko-KR"],
   ...threadErrorTranslations["ko-KR"],
 } as const satisfies Record<TranslationKey, string>

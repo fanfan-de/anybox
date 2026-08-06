@@ -8,6 +8,7 @@ import { branchViewTranslations } from "../branch-view-translations"
 import { threadErrorTranslations } from "../thread-error-translations"
 import { plannerTranslations } from "../planner-translations"
 import { toolModuleTranslations } from "../tool-module-translations"
+import { shellLayoutTranslations } from "../shell-layout-translations"
 
 export const zhTW = {
   "app.loading": "載入中",
@@ -1437,5 +1438,6 @@ export const zhTW = {
   ...branchViewTranslations.zhTW,
   ...plannerTranslations.zhTW,
   ...toolModuleTranslations.zhTW,
+  ...shellLayoutTranslations["zh-TW"],
   ...threadErrorTranslations["zh-TW"],
 } as const satisfies Record<TranslationKey, string>

@@ -576,6 +576,7 @@ export interface WorkbenchShellProps {
   isResolvingPermissionRequest: boolean
   isSavingToolPermissionMode: boolean
   isRightSidebarCollapsed: boolean
+  showCompanionToggle?: boolean
   isSidebarCollapsed: boolean
   platform: string
   store: WorkspaceStoreApi
@@ -1497,13 +1498,15 @@ export function WorkbenchShell(props: WorkbenchShellProps) {
       <div className="dockview-workbench-header-actions dockview-workbench-header-trailing">
         {isLastPane ? (
           <>
-            <SidebarToggleButton
-              isSidebarCollapsed={props.isRightSidebarCollapsed}
-              onToggleSidebar={props.onToggleRightSidebar}
-              side="right"
-              variant="top-menu"
-            />
-            {props.isRightSidebarCollapsed ? props.windowControls : null}
+            {props.showCompanionToggle !== false ? (
+              <SidebarToggleButton
+                isSidebarCollapsed={props.isRightSidebarCollapsed}
+                onToggleSidebar={props.onToggleRightSidebar}
+                side="right"
+                variant="top-menu"
+              />
+            ) : null}
+            {props.showCompanionToggle === false || props.isRightSidebarCollapsed ? props.windowControls : null}
           </>
         ) : null}
       </div>

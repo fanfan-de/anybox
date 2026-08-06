@@ -5,6 +5,7 @@
 ## 当前状态
 
 - 自定义无边框标题栏，菜单和窗口控制由 Electron main 驱动。
+- 主工作区支持“对话工作台居中”和“工具工作台居中”两种顶层布局；通过 `Ctrl/Cmd+Shift+L` 打开布局选择器，选择会全局持久化。
 - 侧栏以“文件夹工作区”为主视角，从后端拉取项目和会话，再映射成文件夹分组。
 - 启动后会请求当前会话的历史消息，并在切换会话时重新回放历史。
 - 发送消息优先走 SSE 流式链路，把 reasoning、text、tool 等事件实时渲染到 thread。
@@ -74,6 +75,7 @@ bun test Test/server.api.test.ts
 3. 点击 `Open folder` 可以新增工作区，点击 `Create session` 可以在当前文件夹下新增会话。
 4. 删除会话后，侧栏和本地 conversation 状态都能同步更新。
 5. 发送消息时，在线模式优先显示流式 trace；离线模式仍能看到本地 fallback 回复。
+6. 使用 `Ctrl/Cmd+Shift+L` 切换两种工作区布局；Workbench 与 Cinema/浏览器等工具状态不应因换位而重置，重新启动后应恢复上次选择。
 
 ## 文档索引
 

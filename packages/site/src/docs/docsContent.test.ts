@@ -58,10 +58,10 @@ describe("docs content", () => {
     }
 
     expect(getDocsArticle("overview", "zh")?.content).toContain(
-      "第一句就是我的。",
+      "Anybox 是一款开源的 AI Agent 桌面工作台",
     )
     expect(getDocsArticle("overview", "en")?.content).toContain(
-      "The first sentence is mine.",
+      "Anybox is an open-source desktop AI agent workspace",
     )
   })
 

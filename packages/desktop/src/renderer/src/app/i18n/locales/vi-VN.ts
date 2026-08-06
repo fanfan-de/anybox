@@ -8,6 +8,7 @@ import { branchViewTranslations } from "../branch-view-translations"
 import { threadErrorTranslations } from "../thread-error-translations"
 import { plannerTranslations } from "../planner-translations"
 import { toolModuleTranslations } from "../tool-module-translations"
+import { shellLayoutTranslations } from "../shell-layout-translations"
 
 export const viVN = {
   "app.loading": "Đang tải",
@@ -1437,5 +1438,6 @@ export const viVN = {
   ...branchViewTranslations.enUS,
   ...plannerTranslations.enUS,
   ...toolModuleTranslations.enUS,
+  ...shellLayoutTranslations["vi-VN"],
   ...threadErrorTranslations["vi-VN"],
 } as const satisfies Record<TranslationKey, string>

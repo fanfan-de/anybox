@@ -19,6 +19,7 @@ import { branchViewTranslations } from "./branch-view-translations"
 import { threadErrorTranslations } from "./thread-error-translations"
 import { plannerTranslations } from "./planner-translations"
 import { toolModuleTranslations } from "./tool-module-translations"
+import { shellLayoutTranslations } from "./shell-layout-translations"
 
 export const zhCN = {
   "app.loading": "加载中",
@@ -1620,6 +1621,7 @@ export const zhCN = {
   ...branchViewTranslations.zhCN,
   ...plannerTranslations.zhCN,
   ...toolModuleTranslations.zhCN,
+  ...shellLayoutTranslations["zh-CN"],
 } as const
 
 export type TranslationKey = keyof typeof zhCN
@@ -3224,6 +3226,7 @@ export const enUS = {
   ...branchViewTranslations.enUS,
   ...plannerTranslations.enUS,
   ...toolModuleTranslations.enUS,
+  ...shellLayoutTranslations["en-US"],
 } as const satisfies Record<TranslationKey, string>
 
 const translations = {

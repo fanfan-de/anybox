@@ -24,6 +24,8 @@ import {
 } from "./window"
 import { WorkbenchWindowManager } from "./workbench-window-manager"
 import { resolveWindowsAppUserModelId } from "./windows-app-identity"
+import { DESKTOP_OPEN_SHELL_LAYOUT_SWITCHER_EVENT_CHANNEL } from "../shared/desktop-ipc-contract"
+import { sendWebContentsSafely } from "./safe-web-contents-send"
 
 const mainDir = path.dirname(fileURLToPath(import.meta.url))
 const PREVIEW_WEBVIEW_PARTITION = "persist:preview"
@@ -62,9 +64,21 @@ void app.whenReady().then(async () => {
     safeError("[desktop] failed to start mobile bridge", error)
   })
 
+  let mainWindow: BrowserWindow | null = null
   const menuOptions: ApplicationMenuOptions = {
     onCheckForUpdates: () => {
       void checkForAppUpdates({ manual: true })
+    },
+    onOpenShellLayoutSwitcher: () => {
+      const target = mainWindow
+      if (!target || target.isDestroyed()) return
+      if (!target.isVisible()) target.show()
+      target.focus()
+      sendWebContentsSafely(
+        target.webContents,
+        DESKTOP_OPEN_SHELL_LAYOUT_SWITCHER_EVENT_CHANNEL,
+        { source: "application-menu" },
+      )
     },
   }
   const localeSnapshot = await readLocaleConfigSnapshot().catch((error) => {
@@ -83,7 +97,6 @@ void app.whenReady().then(async () => {
     },
     createPopoutWindowOptions: () => resolvePopoutWindowOptions(mainDir),
   })
-  let mainWindow: BrowserWindow | null = null
   const createMainWindow = async () => {
     const win = await createWindow(mainDir, {
       closeToTray: {

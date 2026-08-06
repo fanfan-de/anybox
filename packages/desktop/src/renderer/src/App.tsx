@@ -41,6 +41,12 @@ import { SemanticTokenInspectorOverlay } from "./app/debug/SemanticTokenInspecto
 import type { BuiltinToolModuleID } from "./app/tools/BuiltinToolsPage"
 import { findSession, isGitWorkspaceProject, sameWorkspaceDirectory } from "./app/workspace"
 import { WorkbenchShell } from "./app/workbench/WorkbenchShell"
+import { ShellLayoutSwitcher } from "./app/shell-layout-switcher"
+import {
+  SHELL_LAYOUTS,
+  getShellRegionRole,
+  type ShellLayoutMode,
+} from "./app/shell-layout"
 import {
   createInitialDockviewLayout,
   getActivePanelForGroupFromState,
@@ -1089,6 +1095,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
   const [promptSkillMode, setPromptSkillMode] = useState<PromptSkillMode>("prompts")
   const [skillLibraryMode, setSkillLibraryMode] = useState<SkillLibraryMode>("all")
   const [isSkillMarketplaceOpen, setIsSkillMarketplaceOpen] = useState(false)
+  const [isShellLayoutSwitcherOpen, setIsShellLayoutSwitcherOpen] = useState(false)
   const [automationCreateProjectID, setAutomationCreateProjectID] = useState<string | null>(null)
   const autoPromptedDownloadingUpdateRef = useRef<string | null>(null)
   const autoPromptedDownloadedUpdateRef = useRef<string | null>(null)
@@ -1144,8 +1151,10 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     handleDebugUiRegionsChange,
     handleSemanticTokenInspectorChange,
     handleMobileConnectionAdvancedInfoChange,
-    handleRightSidebarResizerKeyDown,
-    handleRightSidebarResizerPointerDown,
+    handleCompanionResizerKeyDown,
+    handleCompanionResizerPointerDown,
+    handleCompanionToggle,
+    handleShellLayoutModeChange,
     handleRightSidebarToggle,
     handleSidebarResizerKeyDown,
     handleSidebarResizerPointerDown,
@@ -1162,20 +1171,32 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     isDebugUiRegionsEnabled,
     isSemanticTokenInspectorEnabled,
     isMobileConnectionAdvancedInfoEnabled,
+    isCompanionCollapsed,
+    isCompanionResizing,
     isRightSidebarCollapsed,
-    isRightSidebarResizing,
     isSidebarCollapsed,
     isSidebarResizing,
     isWindowMaximized,
     platform,
-    rightSidebarWidthBounds,
-    rightSidebarWidth,
+    companionWidthBounds,
+    companionWidth,
     resolvedCodeTheme,
     resolvedColorMode,
     sidebarWidthBounds,
     sidebarWidth,
+    shellLayoutMode,
     windowControlsRef,
   } = useDesktopShell()
+
+  const handleShellLayoutSwitcherClose = useCallback(() => {
+    setIsShellLayoutSwitcherOpen(false)
+  }, [])
+
+  useEffect(() => {
+    return window.desktop?.onOpenShellLayoutSwitcher?.(() => {
+      setIsShellLayoutSwitcherOpen((current) => !current)
+    })
+  }, [])
 
   useEffect(() => {
     let disposed = false
@@ -2535,6 +2556,33 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
   const isPromptResourcesView = isResourcesView && promptSkillMode === "prompts"
   const isRegistrySkillLibraryView = isResourcesView && promptSkillMode === "skills"
   const isFullSurfaceView = isConnectionsView || isMobileView || isAutomationsView || isCalendarView || isRegistrySkillLibraryView
+  const isSwappableShell = !isFullSurfaceView && !isShellSidebarManagedView
+  const workbenchRegionRole = getShellRegionRole(shellLayoutMode, "workbench")
+  const toolsRegionRole = getShellRegionRole(shellLayoutMode, "tools")
+  const isWorkbenchRegionHidden = isSwappableShell
+    && isCompanionCollapsed
+    && workbenchRegionRole === "companion"
+  const isToolsRegionHidden = isSwappableShell
+    && isCompanionCollapsed
+    && toolsRegionRole === "companion"
+  const workbenchOwnsWindowControls = isSwappableShell
+    && !isWorkbenchRegionHidden
+    && (workbenchRegionRole === "companion" || isCompanionCollapsed)
+  const toolsOwnsWindowControls = isSwappableShell
+    && !isToolsRegionHidden
+    && (toolsRegionRole === "companion" || isCompanionCollapsed)
+
+  const handleShellLayoutModeSelect = useCallback((nextMode: ShellLayoutMode) => {
+    const didChange = nextMode !== shellLayoutMode
+    handleShellLayoutModeChange(nextMode)
+    setIsShellLayoutSwitcherOpen(false)
+
+    if (!didChange) return
+    window.requestAnimationFrame(() => {
+      const primarySurface = SHELL_LAYOUTS[nextMode].primary
+      document.querySelector<HTMLElement>(`[data-shell-surface="${primarySurface}"]`)?.focus()
+    })
+  }, [handleShellLayoutModeChange, shellLayoutMode])
   useEffect(() => {
     if (isResourcesView && promptSkillMode === "skills") return
     setIsSkillMarketplaceOpen(false)
@@ -2600,6 +2648,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
   )
   const appShellClassName = [
     "app-shell",
+    isSwappableShell ? "is-swappable-shell" : "",
     isOpen ? "is-settings-open" : "",
     isSkillMarketplaceOpen ? "is-skill-marketplace-open" : "",
   ].filter(Boolean).join(" ")
@@ -2614,13 +2663,20 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
           : {}),
         "--right-sidebar-display-width": "0px",
         "--right-sidebar-resizer-width": "0px",
+        "--companion-region-display-width": "0px",
+        "--companion-region-resizer-width": "0px",
       }
     : appShellStyle
   return (
     <WorkspaceStoreProvider store={workspaceStore}>
       <ThreadLinkRoutingProvider openInAnybox={handleOpenThreadLinkInAnybox}>
         <div className={windowShellClassName}>
-        <main ref={appShellRef} className={appShellClassName} style={effectiveAppShellStyle}>
+        <main
+          ref={appShellRef}
+          className={appShellClassName}
+          data-shell-layout={isSwappableShell ? shellLayoutMode : undefined}
+          style={effectiveAppShellStyle}
+        >
         {isActivityRailVisible ? (
           <ActivityRail
             activeView={leftSidebarView}
@@ -2746,11 +2802,19 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
         ) : null}
 
         <section
-          className={
-            isFullSurfaceView
-              ? "canvas is-workbench is-full-surface"
-              : "canvas is-workbench"
-          }
+          id="app-workbench"
+          className={[
+            "canvas is-workbench",
+            isFullSurfaceView ? "is-full-surface" : "",
+            isWorkbenchRegionHidden ? "is-shell-region-hidden" : "",
+          ].filter(Boolean).join(" ")}
+          aria-hidden={isWorkbenchRegionHidden || undefined}
+          aria-label={isSwappableShell ? t("shellLayout.workbenchSurface") : undefined}
+          data-shell-region={isSwappableShell ? workbenchRegionRole : undefined}
+          data-shell-surface={isSwappableShell ? "workbench" : undefined}
+          inert={isWorkbenchRegionHidden || undefined}
+          role={isSwappableShell ? "region" : undefined}
+          tabIndex={isSwappableShell ? -1 : undefined}
         >
           {isResourcesView ? (
             <PromptSkillsPage
@@ -3117,11 +3181,12 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                 isActivityRailVisible={isActivityRailVisible}
                 isResolvingPermissionRequest={isResolvingPermissionRequest}
                 isSavingToolPermissionMode={isSavingToolPermissionMode}
-                isRightSidebarCollapsed={isRightSidebarCollapsed}
+                isRightSidebarCollapsed={isCompanionCollapsed}
+                showCompanionToggle={workbenchRegionRole === "primary"}
                 isSidebarCollapsed={isSidebarCollapsed}
                 platform={platform}
                 store={workspaceStore}
-                windowControls={isRightSidebarCollapsed ? workbenchWindowControls : null}
+                windowControls={workbenchOwnsWindowControls ? workbenchWindowControls : null}
                 readThreadScrollSnapshot={readThreadScrollSnapshot}
                 saveThreadScrollSnapshot={saveThreadScrollSnapshot}
                 threadNavigationRequestBySession={threadNavigationRequestBySession}
@@ -3168,7 +3233,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                 onSessionModelSelectionChange={handleSessionModelSelectionChange}
                 onSetDraft={setDraftForTab}
                 onToggleLeftSidebar={handleSidebarToggle}
-                onToggleRightSidebar={handleRightSidebarToggle}
+                onToggleRightSidebar={handleCompanionToggle}
                 onMessageDiffRestore={handleMessageDiffRestore}
                 onMessageDiffReview={handleMessageDiffReview}
                 onMessageDiffSummaryHydrate={handleMessageDiffSummaryHydrate}
@@ -3177,17 +3242,21 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
           )}
         </section>
 
-        {!isFullSurfaceView && !isShellSidebarManagedView && !isRightSidebarCollapsed ? (
+        {isSwappableShell ? (
           <>
-            <SidebarResizer
-              isSidebarResizing={isRightSidebarResizing}
-              maxWidth={rightSidebarWidthBounds.max}
-              minWidth={rightSidebarWidthBounds.min}
-              side="right"
-              sidebarWidth={rightSidebarWidth}
-              onKeyDown={handleRightSidebarResizerKeyDown}
-              onPointerDown={handleRightSidebarResizerPointerDown}
-            />
+            {!isCompanionCollapsed ? (
+              <SidebarResizer
+                ariaLabel={workbenchRegionRole === "companion" ? t("shellLayout.workbenchSurface") : undefined}
+                controlsID={workbenchRegionRole === "companion" ? "app-workbench" : undefined}
+                isSidebarResizing={isCompanionResizing}
+                maxWidth={companionWidthBounds.max}
+                minWidth={companionWidthBounds.min}
+                side="right"
+                sidebarWidth={companionWidth}
+                onKeyDown={handleCompanionResizerKeyDown}
+                onPointerDown={handleCompanionResizerPointerDown}
+              />
+            ) : null}
 
             <RightSidebar
               assistantTraceVisibility={assistantTraceVisibility}
@@ -3267,7 +3336,12 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                   storageKey={WORKBENCH_TERMINAL_STORAGE_KEY}
                 />
               )}
-              windowControls={windowControls}
+              isCompanionCollapsed={isCompanionCollapsed}
+              isRegionHidden={isToolsRegionHidden}
+              onToggleCompanion={handleCompanionToggle}
+              regionRole={toolsRegionRole}
+              showCompanionToggle={toolsRegionRole === "primary"}
+              windowControls={toolsOwnsWindowControls ? windowControls : null}
             />
           </>
         ) : null}
@@ -3424,6 +3498,12 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
             onInstall={() => void handleInstallAppUpdate()}
           />
         ) : null}
+        <ShellLayoutSwitcher
+          isOpen={isShellLayoutSwitcherOpen}
+          mode={shellLayoutMode}
+          onClose={handleShellLayoutSwitcherClose}
+          onModeChange={handleShellLayoutModeSelect}
+        />
         </main>
         {appearanceAuthoringEnabled ? (
           <SemanticTokenInspectorOverlay

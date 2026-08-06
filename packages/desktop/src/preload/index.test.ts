@@ -40,6 +40,26 @@ describe("desktop preload bridge", () => {
     expect(electronMock.invoke).toHaveBeenCalledWith("desktop:detect-local-preview-services")
   })
 
+  it("forwards the application-menu layout switcher event", () => {
+    const api = electronMock.exposedDesktopApi as Record<string, (...args: unknown[]) => unknown>
+    const listener = vi.fn()
+    const unsubscribe = api.onOpenShellLayoutSwitcher(listener) as () => void
+    const [, wrappedListener] = electronMock.on.mock.calls.at(-1) ?? []
+
+    expect(electronMock.on).toHaveBeenLastCalledWith(
+      "desktop:open-shell-layout-switcher",
+      expect.any(Function),
+    )
+    ;(wrappedListener as (...args: unknown[]) => void)({}, { source: "application-menu" })
+    expect(listener).toHaveBeenCalledWith({ source: "application-menu" })
+
+    unsubscribe()
+    expect(electronMock.removeListener).toHaveBeenCalledWith(
+      "desktop:open-shell-layout-switcher",
+      wrappedListener,
+    )
+  })
+
   it("exposes storage usage snapshots", async () => {
     const snapshot = {
       generatedAt: 1,
