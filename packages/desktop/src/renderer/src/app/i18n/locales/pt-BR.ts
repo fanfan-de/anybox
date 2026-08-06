@@ -64,6 +64,8 @@ export const ptBR = {
   "thread.execution.collapse": "Recolher processo",
   "thread.question.heading": "Precisa da sua entrada",
   "thread.question.region": "Pergunta do agente",
+  "thread.question.questionLabel": "Pergunta:",
+  "thread.question.answerLabel": "Resposta:",
   "thread.question.answered": "Respondido.",
   "thread.question.answeredWith": "Respondido: {answer}",
   "thread.question.noteMultipleFreeform": "Selecione uma ou mais opções ou adicione uma resposta personalizada.",

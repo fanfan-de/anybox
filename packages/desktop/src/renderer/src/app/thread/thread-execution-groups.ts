@@ -77,6 +77,7 @@ export interface AssistantExecutionSummaryRow {
 export type ExecutionProjectedThreadDisplayRow = ThreadDisplayRow
 
 export interface DeriveThreadExecutionGroupsInput {
+  answeredQuestionIDs?: ReadonlySet<string>
   eligibilityLocks?: ReadonlySet<string>
   messages: ThreadMessage[]
   rows: ThreadDisplayRow[]
@@ -214,10 +215,24 @@ function resolveFinalMessage(candidate: ExecutionGroupCandidate) {
   }
 }
 
-function isUnresolvedPromptRow(row: AtomicAssistantDisplayRow) {
+function isQuestionPromptAnswered(
+  prompt: NonNullable<AssistantTraceItem["questionPrompt"]>,
+  answeredQuestionIDs: ReadonlySet<string>,
+) {
+  const questionID = prompt.questionID?.trim()
+  return prompt.answered === true ||
+    Boolean(questionID && answeredQuestionIDs.has(questionID)) ||
+    Boolean(prompt.answerText?.trim()) ||
+    Boolean(prompt.freeformText?.trim()) ||
+    Boolean(prompt.selectedOptions?.some((value) => Boolean(value.trim())))
+}
+
+function isUnresolvedPromptRow(
+  row: AtomicAssistantDisplayRow,
+  answeredQuestionIDs: ReadonlySet<string>,
+) {
   if (row.kind === "assistant-question-row") {
-    const prompt = row.item.questionPrompt
-    if (prompt) return prompt.answered !== true
+    if (row.item.questionPrompt) return !isQuestionPromptAnswered(row.item.questionPrompt, answeredQuestionIDs)
     return row.item.status === "pending" || row.item.status === "waiting-approval"
   }
   if (row.kind === "assistant-approval-row") {
@@ -253,10 +268,13 @@ function isTerminalizedTraceOutcomeRow(
   )
 }
 
-function isAlwaysOutcomeRow(row: AtomicAssistantDisplayRow) {
+function isAlwaysOutcomeRow(
+  row: AtomicAssistantDisplayRow,
+  answeredQuestionIDs: ReadonlySet<string>,
+) {
   return row.kind === "assistant-actions" ||
     row.kind === "assistant-diff-card" ||
-    isUnresolvedPromptRow(row)
+    isUnresolvedPromptRow(row, answeredQuestionIDs)
 }
 
 function textPartsForTraceItem(item: AssistantTraceItem) {
@@ -739,6 +757,7 @@ function deriveGroup(
   rows: ThreadDisplayRow[],
   messageIndexByID: ReadonlyMap<string, number>,
   eligibilityLocks: ReadonlySet<string>,
+  answeredQuestionIDs: ReadonlySet<string>,
 ) {
   const assistantMessageIDSet = new Set(candidate.assistantMessages.map((message) => message.id))
   const assistantMessageOrdinalByID = new Map(candidate.assistantMessages.map((message, index) => [message.id, index] as const))
@@ -750,7 +769,7 @@ function deriveGroup(
   const finalMessageOrdinal = finalMessage ? assistantMessageOrdinalByID.get(finalMessage.id) : undefined
   const responseStartRawItemIndex = finalResolution.responseBlock?.startRawItemIndex
   const protectedRowIDs = new Set(
-    groupRows.filter(isAlwaysOutcomeRow).map((row) => row.rowID),
+    groupRows.filter((row) => isAlwaysOutcomeRow(row, answeredQuestionIDs)).map((row) => row.rowID),
   )
   const hasResolvedFinalResponse =
     !finalResolution.authoritativeMetadataPending && Boolean(finalResolution.responseBlock)
@@ -817,6 +836,7 @@ function deriveGroup(
 }
 
 export function deriveThreadExecutionGroups({
+  answeredQuestionIDs = new Set(),
   eligibilityLocks = new Set(),
   messages,
   rows,
@@ -830,7 +850,7 @@ export function deriveThreadExecutionGroups({
     messageIndexByID,
   )
   const groups = candidates.map((candidate) => {
-    const group = deriveGroup(candidate, rows, messageIndexByID, eligibilityLocks)
+    const group = deriveGroup(candidate, rows, messageIndexByID, eligibilityLocks, answeredQuestionIDs)
     if (group.thresholdReached && !group.hasInsertedUserBoundary) nextEligibilityLocks.add(group.groupID)
     const { thresholdReached: _thresholdReached, ...publicGroup } = group
     return publicGroup

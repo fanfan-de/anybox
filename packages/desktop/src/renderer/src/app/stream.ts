@@ -1503,7 +1503,7 @@ function buildTraceItemFromPart(
       : null
     const questionPrompt = readAskUserQuestionPrompt(state?.metadata)
 
-    if (questionPrompt && !questionPrompt.answered) {
+    if (questionPrompt) {
       return [createPartTraceItem({
         id: sourceID,
         sourceID,

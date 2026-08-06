@@ -64,6 +64,8 @@ export const viVN = {
   "thread.execution.collapse": "Thu gọn quá trình xử lý",
   "thread.question.heading": "Cần nhập liệu",
   "thread.question.region": "Câu hỏi từ Agent",
+  "thread.question.questionLabel": "Câu hỏi:",
+  "thread.question.answerLabel": "Câu trả lời:",
   "thread.question.answered": "Đã trả lời.",
   "thread.question.answeredWith": "Đã trả lời: {answer}",
   "thread.question.noteMultipleFreeform": "Chọn một hoặc nhiều tùy chọn, hoặc thêm câu trả lời tùy chỉnh.",

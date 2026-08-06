@@ -64,6 +64,8 @@ export const plPL = {
   "thread.execution.collapse": "Zwiń przebieg przetwarzania",
   "thread.question.heading": "Wymaga Twojego wkładu",
   "thread.question.region": "Pytanie agenta",
+  "thread.question.questionLabel": "Pytanie:",
+  "thread.question.answerLabel": "Odpowiedź:",
   "thread.question.answered": "Odpowiedziano.",
   "thread.question.answeredWith": "Odpowiedziano: {answer}",
   "thread.question.noteMultipleFreeform": "Wybierz jedną lub więcej opcji albo dodaj własną odpowiedź.",

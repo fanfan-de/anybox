@@ -1700,8 +1700,32 @@ describe("stream trace reducer", () => {
     expect(questionItems[0]?.questionPrompt?.questionID).toBe("que_target")
   })
 
-  it("renders answered ask-user-question tools as normal tool trace items", () => {
+  it("keeps answered ask-user-question tools as question prompts with answer metadata", () => {
     let message = buildStreamingAssistantThreadMessage("Answer a question")
+
+    message = applyAgentStreamEventToThreadMessage(message, {
+      event: "part",
+      data: {
+        part: {
+          id: "tool-question",
+          type: "tool",
+          tool: "AskUserQuestion",
+          state: {
+            status: "completed",
+            metadata: {
+              kind: "ask-user-question",
+              questionID: "que_target",
+              header: "Deploy target",
+              question: "Where should I deploy?",
+              options: [{ label: "Vercel", value: "vercel" }],
+              allowFreeform: true,
+              multiple: false,
+              required: true,
+            },
+          },
+        },
+      },
+    })
 
     message = applyAgentStreamEventToThreadMessage(message, {
       event: "part",
@@ -1731,14 +1755,22 @@ describe("stream trace reducer", () => {
       },
     })
 
-    expect(message.items.some((item) => item.kind === "question")).toBe(false)
-    const toolItems = message.items.filter((item) => item.kind === "tool")
-    expect(toolItems).toHaveLength(1)
-    expect(toolItems[0]).toMatchObject({
-      kind: "tool",
-      title: "AskUserQuestion",
-      text: "Question answered.",
+    const questionItems = message.items.filter((item) => item.kind === "question")
+    expect(questionItems).toHaveLength(1)
+    expect(questionItems[0]).toMatchObject({
+      id: "tool-question",
+      sourceID: "tool-question",
+      kind: "question",
+      questionPrompt: {
+        questionID: "que_target",
+        question: "Where should I deploy?",
+        answered: true,
+        answerText: "vercel",
+        selectedOptions: ["vercel"],
+      },
     })
+    const toolItems = message.items.filter((item) => item.kind === "tool")
+    expect(toolItems).toHaveLength(0)
   })
 
   it("preserves the full completed tool output for disclosure views", () => {

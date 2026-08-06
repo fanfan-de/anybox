@@ -64,6 +64,8 @@ export const es419 = {
   "thread.execution.collapse": "Contraer proceso",
   "thread.question.heading": "Necesita tu entrada",
   "thread.question.region": "Pregunta del agente",
+  "thread.question.questionLabel": "Pregunta:",
+  "thread.question.answerLabel": "Respuesta:",
   "thread.question.answered": "Respondido.",
   "thread.question.answeredWith": "Respondido: {answer}",
   "thread.question.noteMultipleFreeform": "Selecciona una o más opciones, o agrega una respuesta personalizada.",

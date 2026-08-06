@@ -4,6 +4,7 @@ const TARGET_MESSAGE_ID = "assistant-e2e"
 const SECOND_TARGET_MESSAGE_ID = "assistant-e2e-second"
 const TARGET_GROUP_ID = "turn:turn-e2e"
 const PENDING_GROUP_ID = "turn:pending:user-e2e"
+const QUESTION_GROUP_ID = "turn:turn-question-e2e"
 const REASONING_ITEM_ID = "process-reasoning"
 
 test("streaming reasoning updates immediately in a fixed one-line viewport", async ({ page }) => {
@@ -383,5 +384,89 @@ test("pending turn canonicalization never exposes duplicate processing summaries
 
   expect(observation.maxCount).toBeLessThanOrEqual(1)
   expect(observation.expandedObservationCount, observation.expandedGroupIDs.join(", ")).toBe(0)
+  expect(pageErrors).toEqual([])
+})
+
+test("answered question cards fold with processing while pending questions remain actionable", async ({ page }) => {
+  const pageErrors: string[] = []
+  page.on("pageerror", (error) => pageErrors.push(error.message))
+
+  await page.goto("/e2e/thread-execution-harness.html?questions=1")
+  const thread = page.locator(".thread-column.is-virtualized")
+  await thread.evaluate((column) => {
+    column.scrollTop = column.scrollHeight
+    column.dispatchEvent(new Event("scroll", { bubbles: true }))
+  })
+
+  const answeredCard = thread.locator(
+    '[data-assistant-item-id="answered-question-e2e"] .ask-user-question-card',
+  )
+  const questionSummary = thread.locator(
+    `.assistant-execution-summary-button[data-thread-execution-group-id="${QUESTION_GROUP_ID}"]`,
+  )
+  const pendingCard = thread.locator(
+    '[data-assistant-item-id="pending-question-e2e"] .ask-user-question-card',
+  )
+  await expect(questionSummary).toBeVisible()
+  await expect(questionSummary).toHaveAttribute("aria-expanded", "false")
+  await expect(answeredCard).toHaveCount(0)
+  await expect(pendingCard).toBeVisible()
+
+  await questionSummary.click()
+  await expect(questionSummary).toHaveAttribute("aria-expanded", "true")
+  await expect(answeredCard).toBeVisible()
+  await expect(answeredCard).toHaveAttribute("data-question-state", "answered")
+  await expect(answeredCard.locator(".ask-user-question-header")).toHaveCount(0)
+  const summaryLabels = answeredCard.locator(".ask-user-question-summary-label")
+  await expect(summaryLabels).toHaveCount(2)
+  await expect(summaryLabels.nth(0)).toHaveText("问题：")
+  await expect(summaryLabels.nth(1)).toHaveText("回答：")
+  const answerContent = answeredCard.locator(".ask-user-question-answer")
+  await expect(answerContent).toHaveCSS("border-top-width", "0px")
+  await expect(answerContent).toHaveCSS("padding-top", "0px")
+  await expect(answeredCard).toContainText(
+    "Which parts should be included in the release review before the deployment proceeds?",
+  )
+  await expect(answeredCard).toContainText("Implementation and regression coverage")
+  await expect(answeredCard).toContainText("legacy-review-value")
+  await expect(answeredCard).toContainText(
+    "Also verify long text wrapping in narrow panes and keyboard submission behavior.",
+  )
+  await expect(answeredCard).not.toContainText("Mobile release")
+  await expect(answeredCard.locator("button, input, [role=checkbox]")).toHaveCount(0)
+
+  await page.locator(".thread-e2e-harness").evaluate((element) => {
+    element.style.width = "360px"
+  })
+  await expect.poll(async () => answeredCard.evaluate((element) => element.clientWidth)).toBeLessThan(360)
+  const narrowMetrics = await answeredCard.evaluate((element) => ({
+    clientWidth: element.clientWidth,
+    scrollWidth: element.scrollWidth,
+  }))
+  expect(narrowMetrics.clientWidth).toBeLessThan(360)
+  expect(narrowMetrics.scrollWidth).toBeLessThanOrEqual(narrowMetrics.clientWidth + 1)
+
+  const lightBackground = await answeredCard.evaluate((element) => getComputedStyle(element).backgroundColor)
+  await page.emulateMedia({ colorScheme: "dark" })
+  await expect.poll(async () => answeredCard.evaluate((element) => (
+    getComputedStyle(element).backgroundColor
+  ))).not.toBe(lightBackground)
+
+  await thread.evaluate((column) => {
+    column.scrollTop = column.scrollHeight
+    column.dispatchEvent(new Event("scroll", { bubbles: true }))
+  })
+  const freeformInput = pendingCard.getByRole("textbox")
+  await freeformInput.fill("Enter submits and keeps this exact keyboard answer visible.")
+  await freeformInput.press("Enter")
+  await expect(pendingCard).toHaveAttribute("data-question-state", "answered")
+  await expect(pendingCard.locator(".ask-user-question-summary-label")).toHaveCount(2)
+  await expect(pendingCard).toContainText("Enter submits and keeps this exact keyboard answer visible.")
+  await expect(pendingCard.locator("button, input, [role=checkbox]")).toHaveCount(0)
+
+  await questionSummary.click()
+  await expect(questionSummary).toHaveAttribute("aria-expanded", "false")
+  await expect(answeredCard).toHaveCount(0)
+  await expect(pendingCard).toBeVisible()
   expect(pageErrors).toEqual([])
 })

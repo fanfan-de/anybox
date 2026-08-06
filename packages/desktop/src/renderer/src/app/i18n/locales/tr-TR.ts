@@ -64,6 +64,8 @@ export const trTR = {
   "thread.execution.collapse": "İşlem sürecini daralt",
   "thread.question.heading": "Girdinizi bekliyor",
   "thread.question.region": "Agent sorusu",
+  "thread.question.questionLabel": "Soru:",
+  "thread.question.answerLabel": "Yanıt:",
   "thread.question.answered": "Yanıtlandı.",
   "thread.question.answeredWith": "Yanıtlandı: {answer}",
   "thread.question.noteMultipleFreeform": "Bir veya daha fazla seçenek belirleyin veya özel bir yanıt ekleyin.",

@@ -2352,6 +2352,7 @@ interface TraceItemViewProps {
   onArtifactLinkOpen?: (target: MarkdownArtifactLinkTarget) => void
   onLocalFileLinkOpen?: (target: MarkdownLocalFileLinkTarget) => void
   onProposedPlanConfirm?: ProposedPlanConfirmHandler
+  questionAnswer?: UserThreadMessage["questionAnswer"]
   shouldCollapseAfterMessageCompletion?: boolean
   suppressReasoningMessageCompletionCollapse?: boolean
   traceVisibility: AssistantTraceVisibility
@@ -2377,6 +2378,7 @@ type TraceItemRendererProps = RequiredTraceItemRendererProps &
     | "onLocalFileLinkOpen"
     | "onOpenImagePreview"
     | "onProposedPlanConfirm"
+    | "questionAnswer"
     | "traceVisibility"
   > & {
     className: string
@@ -3807,6 +3809,10 @@ function CompactionTraceItemView(props: TraceItemRendererProps) {
   return <WorkflowLogTraceItemView {...props} />
 }
 
+function normalizeQuestionSelectedOptions(values: readonly string[] | undefined) {
+  return [...new Set((values ?? []).map((value) => value.trim()).filter(Boolean))]
+}
+
 function QuestionTraceItemView({
   className,
   debugEntries,
@@ -3815,6 +3821,7 @@ function QuestionTraceItemView({
   item,
   interactionRowID = item.id,
   onAskUserQuestionAnswer,
+  questionAnswer,
   ...props
 }: TraceItemRendererProps) {
   const { t } = useI18n()
@@ -3822,7 +3829,9 @@ function QuestionTraceItemView({
   const freeformAnswer = entry?.question.draft ?? ""
   const selectedQuestionOptions = entry?.question.selectedOptions ?? []
   const operationStatus = entry?.operation.status ?? "idle"
-  const isSubmittingQuestionAnswer = operationStatus === "submitting" || operationStatus === "submitted"
+  const isLocallySubmittingQuestionAnswer = operationStatus === "submitting"
+  const isLocallySubmittedQuestionAnswer = operationStatus === "submitted"
+  const isSubmittingQuestionAnswer = isLocallySubmittingQuestionAnswer || isLocallySubmittedQuestionAnswer
   const questionAnswerError = operationStatus === "failed" ? entry?.operation.error ?? null : null
   const prompt = item.questionPrompt
   const interactionRevision = useMemo(() => buildThreadInteractionRevision(
@@ -3864,18 +3873,18 @@ function QuestionTraceItemView({
   const questionID = prompt.questionID
   const canSubmitAnswer = Boolean(onAskUserQuestionAnswer && questionID)
   const isAnswerDisabled = isQuestionAnswered || isQuestionAnswerDisabled || isSubmittingQuestionAnswer || !questionID
+  const shouldShowAnswerSummary = isQuestionAnswered || isSubmittingQuestionAnswer
+  const isAnswerSummarySubmitting = isLocallySubmittingQuestionAnswer && !isQuestionAnswered
   const canUseOptionButtons = prompt.options.length > 0 && !prompt.multiple && canSubmitAnswer
   const canUseMultipleSelection = prompt.options.length > 0 && prompt.multiple && canSubmitAnswer
   const trimmedFreeformAnswer = freeformAnswer.trim()
   const hasSelectedOptions = selectedQuestionOptions.length > 0
   const canSubmitStructuredAnswer = canSubmitAnswer && !isAnswerDisabled && (hasSelectedOptions || Boolean(trimmedFreeformAnswer))
   const questionContext = prompt.header?.trim()
-  const note = isQuestionAnswered
-    ? prompt.answerText ? t("thread.question.answeredWith", { answer: prompt.answerText }) : t("thread.question.answered")
-    : canUseMultipleSelection && prompt.allowFreeform
+  const note = canUseMultipleSelection
+    ? prompt.allowFreeform
       ? t("thread.question.noteMultipleFreeform")
-      : canUseMultipleSelection
-        ? t("thread.question.noteMultiple")
+      : t("thread.question.noteMultiple")
     : prompt.multiple
       ? prompt.allowFreeform
         ? t("thread.question.noteComposerMultipleFreeform")
@@ -3885,6 +3894,47 @@ function QuestionTraceItemView({
           ? t("thread.question.noteFreeform")
           : t("thread.question.noteComposerOptional")
         : null
+
+  const answerSnapshot = prompt.answered
+    ? {
+        answerText: prompt.answerText?.trim() ?? "",
+        freeformText: prompt.freeformText?.trim() ?? "",
+        selectedOptions: normalizeQuestionSelectedOptions(prompt.selectedOptions),
+      }
+    : questionAnswer
+      ? {
+          answerText: "",
+          freeformText: questionAnswer.freeformText?.trim() ?? "",
+          selectedOptions: normalizeQuestionSelectedOptions(questionAnswer.selectedOptions),
+        }
+      : {
+          answerText: "",
+          freeformText: trimmedFreeformAnswer,
+          selectedOptions: normalizeQuestionSelectedOptions(selectedQuestionOptions),
+        }
+  const selectedAnswerOptions = answerSnapshot.selectedOptions.map((value) => {
+    const option = prompt.options.find((candidate) => candidate.value === value)
+    return {
+      description: option?.description,
+      label: option?.label || value,
+      value,
+    }
+  })
+  const hasStructuredAnswer = selectedAnswerOptions.length > 0 || Boolean(answerSnapshot.freeformText)
+  const legacyAnswerOption = !hasStructuredAnswer && answerSnapshot.answerText
+    ? prompt.options.find((option) => option.value === answerSnapshot.answerText)
+    : undefined
+  const displayedAnswerOptions = legacyAnswerOption
+    ? [{
+        description: legacyAnswerOption.description,
+        label: legacyAnswerOption.label,
+        value: legacyAnswerOption.value,
+      }]
+    : selectedAnswerOptions
+  const displayedFreeformAnswer = answerSnapshot.freeformText || (
+    displayedAnswerOptions.length === 0 ? answerSnapshot.answerText : ""
+  )
+  const hasDisplayedAnswer = displayedAnswerOptions.length > 0 || Boolean(displayedFreeformAnswer)
 
   function handleQuestionOptionToggle(optionValue: string) {
     if (operationStatus === "failed") {
@@ -3913,15 +3963,22 @@ function QuestionTraceItemView({
   }) {
     if (!onAskUserQuestionAnswer || isAnswerDisabled || !questionID) return
 
+    const normalizedSelectedOptions = normalizeQuestionSelectedOptions(input.selectedOptions)
+    const normalizedFreeformText = input.freeformText?.trim() ?? ""
+    const normalizedAnswerText = input.text.trim()
+    if (!normalizedAnswerText) return
+
+    store.getState().setQuestionSelectedOptions(scopeID, interactionRowID, normalizedSelectedOptions)
+    store.getState().setQuestionDraft(scopeID, interactionRowID, normalizedFreeformText)
     const operationToken = store.getState().beginOperation(scopeID, interactionRowID)
     if (!operationToken) return
 
     try {
       await onAskUserQuestionAnswer({
-        text: input.text,
+        text: normalizedAnswerText,
         questionID,
-        ...(input.selectedOptions && input.selectedOptions.length > 0 ? { selectedOptions: input.selectedOptions } : {}),
-        ...(input.freeformText ? { freeformText: input.freeformText } : {}),
+        ...(normalizedSelectedOptions.length > 0 ? { selectedOptions: normalizedSelectedOptions } : {}),
+        ...(normalizedFreeformText ? { freeformText: normalizedFreeformText } : {}),
       })
       store.getState().completeOperation(scopeID, interactionRowID, operationToken)
     } catch (error) {
@@ -3951,18 +4008,69 @@ function QuestionTraceItemView({
   }
 
   return (
-    <article className={`${className} ask-user-question-card`} data-kind={item.kind} role="region" aria-label={item.title || t("thread.question.region")}>
+    <article
+      aria-busy={isAnswerSummarySubmitting || undefined}
+      aria-label={item.title || t("thread.question.region")}
+      className={joinClassNames(
+        className,
+        "ask-user-question-card",
+        shouldShowAnswerSummary && "is-answered",
+        isAnswerSummarySubmitting && "is-submitting",
+      )}
+      data-kind={item.kind}
+      data-question-state={isAnswerSummarySubmitting ? "submitting" : shouldShowAnswerSummary ? "answered" : "pending"}
+      role="region"
+    >
       <div className="ask-user-question-body">
-        <div className="ask-user-question-header">
-          <span className="ask-user-question-icon" aria-hidden="true">
-            <InfoIcon />
-          </span>
-          <span className="ask-user-question-heading">{t("thread.question.heading")}</span>
-          {questionContext ? <span className="ask-user-question-context">{questionContext}</span> : null}
-        </div>
-        <ThreadRichText className="ask-user-question-text" text={prompt.question} />
+        {!shouldShowAnswerSummary ? (
+          <div className="ask-user-question-header">
+            <span className="ask-user-question-icon" aria-hidden="true">
+              <InfoIcon />
+            </span>
+            <span className="ask-user-question-heading">{t("thread.question.heading")}</span>
+            {questionContext ? <span className="ask-user-question-context">{questionContext}</span> : null}
+          </div>
+        ) : null}
+        {shouldShowAnswerSummary ? (
+          <div className="ask-user-question-summary">
+            <span className="ask-user-question-summary-label">{t("thread.question.questionLabel")}</span>
+            <ThreadRichText className="ask-user-question-text" text={prompt.question} />
 
-        {prompt.options.length > 0 ? (
+            {hasDisplayedAnswer ? (
+              <>
+                <span className="ask-user-question-summary-label">{t("thread.question.answerLabel")}</span>
+                <div
+                  aria-live={isAnswerSummarySubmitting ? "polite" : undefined}
+                  className="ask-user-question-answer"
+                >
+                  {displayedAnswerOptions.length > 0 ? (
+                    <ul className="ask-user-question-answer-list">
+                      {displayedAnswerOptions.map((answer, index) => (
+                        <li className="ask-user-question-answer-item" key={`${item.id}-answer-${answer.value}-${index}`}>
+                          <span className="ask-user-question-answer-value">{answer.label}</span>
+                          {answer.description ? (
+                            <ThreadRichText
+                              as="span"
+                              className="ask-user-question-answer-description"
+                              text={answer.description}
+                            />
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {displayedFreeformAnswer ? (
+                    <ThreadRichText className="ask-user-question-answer-freeform" text={displayedFreeformAnswer} />
+                  ) : null}
+                </div>
+              </>
+            ) : null}
+          </div>
+        ) : (
+          <ThreadRichText className="ask-user-question-text" text={prompt.question} />
+        )}
+
+        {!shouldShowAnswerSummary && prompt.options.length > 0 ? (
           <ol className="ask-user-question-options">
             {prompt.options.map((option, index) => (
               <li key={`${item.id}-${option.value}-${index}`} className="ask-user-question-option">
@@ -4005,7 +4113,7 @@ function QuestionTraceItemView({
           </ol>
         ) : null}
 
-        {canUseMultipleSelection || (prompt.allowFreeform && canSubmitAnswer) ? (
+        {!shouldShowAnswerSummary && (canUseMultipleSelection || (prompt.allowFreeform && canSubmitAnswer)) ? (
           <form className="ask-user-question-response-form" onSubmit={handleStructuredAnswerSubmit}>
             {prompt.allowFreeform ? (
               <label className={joinClassNames(
@@ -4030,7 +4138,7 @@ function QuestionTraceItemView({
                 disabled={!canSubmitStructuredAnswer}
                 type="submit"
               >
-                {isSubmittingQuestionAnswer ? t("thread.question.sending") : t("thread.question.submit")}
+                {t("thread.question.submit")}
               </button>
             </div>
           </form>
@@ -4039,7 +4147,7 @@ function QuestionTraceItemView({
         {questionAnswerError ? (
           <p className="ask-user-question-error" role="alert">{questionAnswerError}</p>
         ) : null}
-        {note ? <p className="ask-user-question-note">{note}</p> : null}
+        {!shouldShowAnswerSummary && note ? <p className="ask-user-question-note">{note}</p> : null}
       </div>
       <TraceItemDebugEntries debugEntries={debugEntries} itemID={item.id} />
     </article>
@@ -4767,6 +4875,7 @@ const TraceItemView = memo(function TraceItemView({
   onArtifactLinkOpen,
   onLocalFileLinkOpen,
   onProposedPlanConfirm,
+  questionAnswer,
   shouldCollapseAfterMessageCompletion = false,
   suppressReasoningMessageCompletionCollapse = false,
   traceVisibility,
@@ -4820,6 +4929,7 @@ const TraceItemView = memo(function TraceItemView({
         onLocalFileLinkOpen={onLocalFileLinkOpen}
         onOpenImagePreview={onOpenImagePreview}
         onProposedPlanConfirm={onProposedPlanConfirm}
+        questionAnswer={questionAnswer}
         shouldCollapseAfterMessageCompletion={shouldCollapseAfterMessageCompletion}
         suppressReasoningMessageCompletionCollapse={suppressReasoningMessageCompletionCollapse}
         traceVisibility={traceVisibility}
@@ -4837,6 +4947,7 @@ function renderTraceItemForRow({
   onLocalFileLinkOpen,
   onOpenImagePreview,
   onProposedPlanConfirm,
+  questionAnswer,
   row,
   traceItem,
   traceVisibility,
@@ -4856,6 +4967,7 @@ function renderTraceItemForRow({
       onLocalFileLinkOpen={onLocalFileLinkOpen}
       isLatestMessage={row.isLatestMessage}
       onProposedPlanConfirm={onProposedPlanConfirm}
+      questionAnswer={questionAnswer}
       shouldCollapseAfterMessageCompletion={row.shouldCollapseTraceItemAfterMessageCompletion}
       suppressReasoningMessageCompletionCollapse={row.suppressReasoningMessageCompletionCollapse}
       traceVisibility={traceVisibility}
@@ -5281,12 +5393,12 @@ function VisibleThreadView({
   const onProposedPlanConfirm = actionCapabilities.canConfirmProposedPlan ? actions.onProposedPlanConfirm : undefined
   const onPermissionRequestResponse = actions.onPermissionRequestResponse
   const {
-    answeredQuestionIDs,
     commitPendingAutoCollapse,
     displayMessages,
     displayRows,
     executionGroups,
     pendingAutoCollapseGroups,
+    questionAnswersByID,
   } = useThreadProjection({
     activeMessages,
     activeSession,
@@ -6215,9 +6327,9 @@ function VisibleThreadView({
     previousDisplayMessageIDsByScrollKeyRef.current[effectiveScrollStateKey] = new Set(displayMessageIDs)
   }, [displayMessageIDs, effectiveScrollStateKey])
 
-  function isTraceItemQuestionAnswered(item: AssistantTraceItem) {
+  function getTraceItemQuestionAnswer(item: AssistantTraceItem) {
     const questionID = item.questionPrompt?.questionID
-    return Boolean(item.questionPrompt?.answered || (questionID && answeredQuestionIDs.has(questionID)))
+    return questionID ? questionAnswersByID.get(questionID) : undefined
   }
 
   function renderDisplayRow(row: ThreadDisplayRow) {
@@ -6242,8 +6354,8 @@ function VisibleThreadView({
         copiedResponseMessageID={copiedResponseMessageID}
         copiedUserThreadMessageID={copiedUserThreadMessageID}
         displayMessages={displayMessages}
+        getTraceItemQuestionAnswer={getTraceItemQuestionAnswer}
         isResolvingPermissionRequest={isResolvingPermissionRequest}
-        isTraceItemQuestionAnswered={isTraceItemQuestionAnswered}
         onArtifactLinkOpen={onArtifactLinkOpen}
         onAskUserQuestionAnswer={onAskUserQuestionAnswer}
         onBranchSelect={onBranchSelect}

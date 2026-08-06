@@ -64,6 +64,8 @@ export const deDE = {
   "thread.execution.collapse": "Verarbeitungsverlauf einklappen",
   "thread.question.heading": "Benötigt Ihre Eingabe",
   "thread.question.region": "Agent-Frage",
+  "thread.question.questionLabel": "Frage:",
+  "thread.question.answerLabel": "Antwort:",
   "thread.question.answered": "Beantwortet.",
   "thread.question.answeredWith": "Beantwortet: {answer}",
   "thread.question.noteMultipleFreeform": "Wählen Sie eine oder mehrere Optionen oder geben Sie eine eigene Antwort ein.",

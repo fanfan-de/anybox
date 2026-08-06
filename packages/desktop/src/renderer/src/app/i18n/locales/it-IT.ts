@@ -64,6 +64,8 @@ export const itIT = {
   "thread.execution.collapse": "Comprimi elaborazione",
   "thread.question.heading": "Richiede input",
   "thread.question.region": "Domanda dell'agente",
+  "thread.question.questionLabel": "Domanda:",
+  "thread.question.answerLabel": "Risposta:",
   "thread.question.answered": "Risposto.",
   "thread.question.answeredWith": "Risposto: {answer}",
   "thread.question.noteMultipleFreeform": "Seleziona una o più opzioni o aggiungi una risposta personalizzata.",

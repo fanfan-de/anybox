@@ -64,6 +64,8 @@ export const idID = {
   "thread.execution.collapse": "Ciutkan proses",
   "thread.question.heading": "Butuh input Anda",
   "thread.question.region": "Pertanyaan agen",
+  "thread.question.questionLabel": "Pertanyaan:",
+  "thread.question.answerLabel": "Jawaban:",
   "thread.question.answered": "Terjawab.",
   "thread.question.answeredWith": "Terjawab: {answer}",
   "thread.question.noteMultipleFreeform": "Pilih satu atau lebih opsi, atau tambahkan jawaban kustom.",

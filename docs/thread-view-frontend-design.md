@@ -711,21 +711,25 @@ assistant response 后方可显示动作行：
 
 agent 提问通过 `question` trace item 渲染：
 
+- `ask-user-question` metadata 无论 pending 还是 answered 都投影为同一个 `question` row，并复用工具 `sourceID` 原位更新；不会在回答后退化成普通 tool trace。
+- 待回答和提交中的 `assistant-question-row` 是 protected execution outcome，始终位于可折叠的 process prefix 之外；canonical metadata、结构化答案或历史 `questionAnswer` 快照确认问题已回答后，该 row 在最终回复之前归入 process prefix，并随“已处理”折叠。主 Thread View 与 Branch Chat 共用这套投影和渲染规则。
 - 单选可以直接点 option button。
 - 多选用 checkbox，再提交。
 - freeform 使用输入框。
-- 已回答问题显示 answered note，避免重复提交。
-- draft、selected options 和 operation 状态存放在 thread interaction store；virtual row 卸载/重挂后仍可恢复。
-- 提交使用原子 operation token 防止重复；失败时保留草稿并显示错误，只有 canonical answered 状态到达后才清理本地交互状态。
+- 提交开始时立即切换为只读摘要；提交中与已回答状态只保留在 `data-question-state`、operation store 和必要的 `aria-busy` 中，不向用户显示“正在提交回答”或“已回答”状态文案。
+- 已回答卡片保留原问题，并以本地化的“问题：”“回答：”短前缀组成紧凑的两行只读摘要；不插入“你的回答”等所有权文案，也不创建嵌套 answer surface。选项按 `value` 映射到 `label` 和自身 description，未知值显示原值，旧历史缺少结构化答案时回退到 `answerText`。未选项、编号、checkbox、输入框、发送按钮和 helper note 均不渲染。
+- draft、selected options、规范化后的提交答案和 operation 状态存放在 thread interaction store；virtual row 卸载/重挂后仍可恢复。历史 user message 中的 `questionAnswer` 也会形成答案快照，供旧数据兼容。
+- 提交使用原子 operation token 防止重复；失败时恢复完整控件、保留草稿和选择并显示错误，允许重试。canonical answered metadata 到达后以服务端答案为准并清理本地交互状态。
 
-这类卡片在 response section 中使用轻量中性 surface，保留紧凑标题、问题正文和回答控件；只有权限审批类阻塞点使用 warning 语义色。具体规则：
+这类卡片在 response section 中使用轻量中性 surface；只有权限审批类阻塞点使用 warning 语义色。具体规则：
 
-- 顶部状态行使用固定文案“需要你回答 / Needs your input”，`questionPrompt.header` 只作为次级上下文显示。
+- 待回答态保留“需要你补充信息 / Needs your input”提示行，`questionPrompt.header` 只作为次级上下文显示；只读摘要隐藏整条提示行。
 - 问题正文使用正文强调级别，不使用 pane/page 标题级字号。
 - 单选项渲染为真实 button；默认态保持轻量，hover/focus 才增强底色、边框和文字。
 - 多选项使用 checkbox row，选中状态不能只依赖位置表达。
 - freeform 输入是补充回答区，不参与选项编号；当 options 与 freeform 同时存在时，输入框位于选项列表之后的独立 action row。
-- helper note 只说明回答方式或已回答状态，使用 muted token。
+- helper note 只在待回答状态说明回答方式，使用 muted token；只读摘要不显示 helper note。
+- 只读摘要中的问题和回答使用同一 card surface 与连续内容流，不额外增加回答标题、边框、底色或嵌套卡片。
 - submit 是当前 question card 的唯一 primary action，default/hover/focus/disabled/loading 必须消费按钮 semantic token。
 
 ### 图片预览

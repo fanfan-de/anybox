@@ -64,6 +64,8 @@ export const jaJP = {
   "thread.execution.collapse": "処理内容を折りたたむ",
   "thread.question.heading": "入力が必要です",
   "thread.question.region": "エージェントの質問",
+  "thread.question.questionLabel": "質問：",
+  "thread.question.answerLabel": "回答：",
   "thread.question.answered": "回答済み。",
   "thread.question.answeredWith": "回答: {answer}",
   "thread.question.noteMultipleFreeform": "1つ以上のオプションを選択するか、カスタム回答を追加してください。",

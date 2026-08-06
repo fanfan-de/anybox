@@ -64,6 +64,8 @@ export const zhTW = {
   "thread.execution.collapse": "收起處理過程",
   "thread.question.heading": "需要你補充資訊",
   "thread.question.region": "Agent 提問",
+  "thread.question.questionLabel": "問題：",
+  "thread.question.answerLabel": "回答：",
   "thread.question.answered": "已回答。",
   "thread.question.answeredWith": "已回答：{answer}",
   "thread.question.noteMultipleFreeform": "選擇一個或多個選項，或補充自訂回答。",

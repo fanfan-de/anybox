@@ -8,6 +8,7 @@ import type {
   SessionSummary,
   ThreadMessage,
   ThreadTurn,
+  UserThreadMessage,
 } from "../types"
 import {
   buildThreadDisplayContext,
@@ -44,13 +45,13 @@ interface ThreadProjectionInput {
 }
 
 interface ThreadProjection {
-  answeredQuestionIDs: Set<string>
   baseDisplayRows: ThreadDisplayRow[]
   commitPendingAutoCollapse: (groupIDs: readonly string[]) => void
   displayMessages: ThreadMessage[]
   displayRows: ThreadDisplayRow[]
   executionGroups: ThreadExecutionGroup[]
   pendingAutoCollapseGroups: ThreadExecutionGroup[]
+  questionAnswersByID: Map<string, NonNullable<UserThreadMessage["questionAnswer"]>>
   threadDisplayContext: ThreadDisplayContext
 }
 
@@ -154,18 +155,18 @@ function orderAdjacentAssistantMessagesForDisplay(messages: ThreadMessage[]) {
   return orderedMessages ?? messages
 }
 
-function collectAnsweredQuestionIDs(messages: ThreadMessage[]) {
-  const answeredQuestionIDs = new Set<string>()
+function collectQuestionAnswersByID(messages: ThreadMessage[]) {
+  const questionAnswersByID = new Map<string, NonNullable<UserThreadMessage["questionAnswer"]>>()
 
   for (const message of messages) {
     if (message.kind !== "user") continue
 
-    const questionID = message.questionAnswer?.questionID
-    if (!questionID) continue
-    answeredQuestionIDs.add(questionID)
+    const questionAnswer = message.questionAnswer
+    if (!questionAnswer?.questionID) continue
+    questionAnswersByID.set(questionAnswer.questionID, questionAnswer)
   }
 
-  return answeredQuestionIDs
+  return questionAnswersByID
 }
 
 function mergeThreadDisplayRowsCachesForDecoration(
@@ -340,7 +341,8 @@ export function useThreadProjection({
   const activeSessionID = activeSession?.id ?? null
   const pendingPermissionRequestID = pendingPermissionRequests[0]?.id ?? null
   const pendingPermissionRequestCount = pendingPermissionRequests.length
-  const answeredQuestionIDs = useMemo(() => collectAnsweredQuestionIDs(activeMessages), [activeMessages])
+  const questionAnswersByID = useMemo(() => collectQuestionAnswersByID(activeMessages), [activeMessages])
+  const answeredQuestionIDs = useMemo(() => new Set(questionAnswersByID.keys()), [questionAnswersByID])
   const displayMessages = useMemo(() => orderAdjacentAssistantMessagesForDisplay(activeMessages), [activeMessages])
   const hasCanonicalTurns = activeTurns !== undefined && activeTurns !== null
 
@@ -380,6 +382,7 @@ export function useThreadProjection({
   const executionGroupsResult = useMemo(() => {
     const eligibilityLocks = executionGroupEligibilityLocksRef.current.get(presentationScopeID) ?? new Set<string>()
     let result = deriveThreadExecutionGroups({
+      answeredQuestionIDs,
       eligibilityLocks,
       messages: displayMessages,
       rows: baseDisplayRows,
@@ -398,6 +401,7 @@ export function useThreadProjection({
     })
     if (didMigrateEligibilityLock) {
       result = deriveThreadExecutionGroups({
+        answeredQuestionIDs,
         eligibilityLocks: migratedEligibilityLocks,
         messages: displayMessages,
         rows: baseDisplayRows,
@@ -417,7 +421,7 @@ export function useThreadProjection({
     })
     executionGroupReferenceCacheRef.current.set(presentationScopeID, nextScopeCache)
     return { ...result, groupIDAliases, groups }
-  }, [activeTurns, baseDisplayRows, displayMessages, presentationScopeID])
+  }, [activeTurns, answeredQuestionIDs, baseDisplayRows, displayMessages, presentationScopeID])
   const executionGroups = executionGroupsResult.groups
   const executionGroupIDAliases = executionGroupsResult.groupIDAliases
   const canonicalFinalOwnerProjection = useMemo(
@@ -558,13 +562,13 @@ export function useThreadProjection({
   }, [activeSessionID, displayRowsResult.cache])
 
   return {
-    answeredQuestionIDs,
     baseDisplayRows: projectionBaseDisplayRows,
     commitPendingAutoCollapse,
     displayMessages,
     displayRows,
     executionGroups,
     pendingAutoCollapseGroups,
+    questionAnswersByID,
     threadDisplayContext: projectionThreadDisplayContext,
   }
 }

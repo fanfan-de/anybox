@@ -64,6 +64,8 @@ export const koKR = {
   "thread.execution.collapse": "처리 과정 접기",
   "thread.question.heading": "입력 필요",
   "thread.question.region": "Agent 질문",
+  "thread.question.questionLabel": "질문:",
+  "thread.question.answerLabel": "답변:",
   "thread.question.answered": "답변 완료.",
   "thread.question.answeredWith": "답변: {answer}",
   "thread.question.noteMultipleFreeform": "하나 이상의 옵션을 선택하거나 사용자 정의 답변을 추가하세요.",

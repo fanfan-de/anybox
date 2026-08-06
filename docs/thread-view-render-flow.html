@@ -710,7 +710,7 @@
             </article>
             <article class="card" data-tone="green">
               <h3>Turn execution disclosure</h3>
-              <p>Canonical <code>ThreadTurn</code> 先派生 <code>ThreadExecutionGroup</code>；同 backend execution 在任一帧最多一个 summary。投影只对有 backend/segment 强身份的重复 canonical wrappers 做保守归并，随后由 <code>ThreadPresentationStore</code> 决定是否从 <code>displayRows</code> 移除 process prefix。<code>completed</code> 且 final response 已解析时，response 前的失败 trace 仍属于 process prefix；非 <code>completed</code> 终态或 <code>completed</code> 无最终 response 时，最后一条失败/终态 trace 才作为 protected outcome 留在折叠区外。自动折叠使用 semantic scroll-anchor transaction，不使用 CSS 隐藏 row。</p>
+              <p>Canonical <code>ThreadTurn</code> 先派生 <code>ThreadExecutionGroup</code>；同 backend execution 在任一帧最多一个 summary。投影只对有 backend/segment 强身份的重复 canonical wrappers 做保守归并，随后由 <code>ThreadPresentationStore</code> 决定是否从 <code>displayRows</code> 移除 process prefix。待回答和提交中的 <code>assistant-question-row</code> 属于 protected outcome；canonical metadata、结构化答案或历史答案快照确认已回答后，该 row 在最终回复之前归入 process prefix。<code>completed</code> 且 final response 已解析时，response 前的失败 trace 仍属于 process prefix；非 <code>completed</code> 终态或 <code>completed</code> 无最终 response 时，最后一条失败/终态 trace 才作为 protected outcome 留在折叠区外。自动折叠使用 semantic scroll-anchor transaction，不使用 CSS 隐藏 row。</p>
             </article>
           </div>
         </section>
@@ -746,9 +746,14 @@
                   <td>Turn 级处理状态、时长和 process prefix 展开/收起按钮。</td>
                 </tr>
                 <tr>
-                  <td><code>assistant-response-row</code> / <code>assistant-question-row</code> / <code>assistant-file-change-row</code></td>
+                  <td><code>assistant-response-row</code> / <code>assistant-file-change-row</code></td>
                   <td><code>AssistantTraceSection</code> → <code>TraceItemView</code></td>
-                  <td>主回复、问题、文件变更摘要。</td>
+                  <td>主回复与文件变更摘要。</td>
+                </tr>
+                <tr>
+                  <td><code>assistant-question-row</code></td>
+                  <td><code>AssistantTraceSection</code> → <code>QuestionTraceItemView</code></td>
+                  <td>待回答时显示交互控件并作为 protected outcome 留在折叠区外；提交后隐藏状态行，以本地化的“问题：”“回答：”短前缀形成只读摘要。服务端或历史答案确认后，最终回复之前的已回答卡片归入 process prefix。</td>
                 </tr>
                 <tr>
                   <td><code>assistant-reasoning-row</code> / <code>assistant-tool-row</code> / <code>assistant-workflow-row</code> / <code>assistant-source-row</code> / <code>assistant-approval-row</code> / <code>assistant-debug-row</code></td>

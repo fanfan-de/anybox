@@ -64,6 +64,8 @@ export const frFR = {
   "thread.execution.collapse": "Réduire le processus",
   "thread.question.heading": "Nécessite votre saisie",
   "thread.question.region": "Question de l'agent",
+  "thread.question.questionLabel": "Question :",
+  "thread.question.answerLabel": "Réponse :",
   "thread.question.answered": "Répondu.",
   "thread.question.answeredWith": "Répondu : {answer}",
   "thread.question.noteMultipleFreeform": "Sélectionnez une ou plusieurs options, ou ajoutez une réponse personnalisée.",

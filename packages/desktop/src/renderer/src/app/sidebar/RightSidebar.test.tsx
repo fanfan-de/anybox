@@ -666,6 +666,138 @@ describe("RightSidebar", () => {
     }
   })
 
+  it("folds answered AskUserQuestion cards with processing in Branch Chat", async () => {
+    const previousDesktop = window.desktop
+    const tab = {
+      ...createBranchChatTab(),
+      headMessageID: "assistant-question",
+      phase: "committed" as const,
+    }
+    window.desktop = {
+      ...previousDesktop,
+      agentSession: {
+        loadHistory: vi.fn().mockResolvedValue([
+          {
+            info: {
+              id: "user-root",
+              sessionID: "session-1",
+              role: "user",
+              created: 1,
+              parentMessageID: null,
+            },
+            parts: [{ id: "part-user-root", type: "text", text: "Root prompt" }],
+          },
+          {
+            info: {
+              id: "assistant-anchor",
+              sessionID: "session-1",
+              role: "assistant",
+              created: 2,
+              completed: 2,
+              parentMessageID: "user-root",
+              finishReason: "stop",
+            },
+            parts: [{ id: "part-assistant-anchor", type: "text", text: "Shared answer" }],
+          },
+          {
+            info: {
+              id: "user-question",
+              sessionID: "session-1",
+              role: "user",
+              created: 3,
+              parentMessageID: "assistant-anchor",
+            },
+            parts: [{ id: "part-user-question", type: "text", text: "Choose a target" }],
+          },
+          {
+            info: {
+              id: "assistant-question",
+              sessionID: "session-1",
+              role: "assistant",
+              created: 4,
+              completed: 4,
+              parentMessageID: "user-question",
+              finishReason: "stop",
+            },
+            parts: [{
+              id: "tool-question",
+              type: "tool",
+              tool: "AskUserQuestion",
+              state: {
+                status: "completed",
+                metadata: {
+                  kind: "ask-user-question",
+                  questionID: "que_branch_target",
+                  header: "Branch target",
+                  question: "Where should this branch deploy?",
+                  options: [
+                    { label: "Vercel", value: "vercel", description: "Selected branch target" },
+                    { label: "Cloudflare", value: "cloudflare" },
+                  ],
+                  allowFreeform: false,
+                  multiple: false,
+                  required: true,
+                  answered: true,
+                  answerText: "vercel",
+                  selectedOptions: ["vercel"],
+                },
+              },
+            }],
+          },
+        ]),
+        sendTurn: vi.fn(),
+        resumeTurn: vi.fn(),
+        cancelTurn: vi.fn(),
+        interrupt: vi.fn(),
+        answerQuestion: vi.fn(),
+        subscribe: vi.fn(),
+        unsubscribe: vi.fn(),
+        loadPermissionRequests: vi.fn().mockResolvedValue([]),
+        respondPermissionRequest: vi.fn(),
+        onEvent: vi.fn(() => () => undefined),
+      },
+    } as typeof window.desktop
+
+    try {
+      renderRightSidebar({
+        messageTreeBySession: {
+          "session-1": createBranchChatTree(),
+        },
+        rightSidebar: {
+          activeTabID: tab.id,
+          tabs: [tab],
+        },
+      })
+
+      const branchChat = await screen.findByRole("region", { name: "Branch Chat" })
+      const processSummary = await waitFor(() => {
+        const element = branchChat.querySelector(".assistant-execution-summary-button") as HTMLButtonElement | null
+        expect(element).not.toBeNull()
+        return element!
+      })
+      expect(processSummary).toHaveAttribute("aria-expanded", "false")
+      expect(within(branchChat).queryByText("Where should this branch deploy?")).not.toBeInTheDocument()
+
+      fireEvent.click(processSummary)
+      expect(processSummary).toHaveAttribute("aria-expanded", "true")
+      const question = await within(branchChat).findByText("Where should this branch deploy?")
+      const card = question.closest(".ask-user-question-card") as HTMLElement
+      expect(card).toHaveAttribute("data-question-state", "answered")
+      expect(card.querySelector(".ask-user-question-header")).toBeNull()
+      expect(card.querySelectorAll(".ask-user-question-summary-label")).toHaveLength(2)
+      expect(within(card).getByText("Question:")).toBeInTheDocument()
+      expect(within(card).getByText("Answer:")).toBeInTheDocument()
+      expect(within(card).queryByText("Answered")).not.toBeInTheDocument()
+      expect(within(card).getByText("Vercel")).toBeInTheDocument()
+      expect(within(card).getByText("Selected branch target")).toBeInTheDocument()
+      expect(within(card).queryByText("Cloudflare")).not.toBeInTheDocument()
+      expect(within(card).queryByRole("button")).not.toBeInTheDocument()
+      expect(within(card).queryByRole("textbox")).not.toBeInTheDocument()
+    } finally {
+      window.desktop = previousDesktop
+    }
+  })
+
   it("supports keyboard selection, Escape, outside close, and focus return in Advanced options", async () => {
     const onUpdateTab = vi.fn()
     renderRightSidebar({

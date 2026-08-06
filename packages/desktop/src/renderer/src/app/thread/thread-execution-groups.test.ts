@@ -151,8 +151,10 @@ function derive(
   turns: ThreadTurn[] | null | undefined,
   rows = buildRows(messages),
   eligibilityLocks?: ReadonlySet<string>,
+  answeredQuestionIDs?: ReadonlySet<string>,
 ) {
   return deriveThreadExecutionGroups({
+    answeredQuestionIDs,
     eligibilityLocks,
     messages,
     rows,
@@ -867,6 +869,72 @@ describe("thread execution groups", () => {
 
     expect(group.outcomeRowIDs).toContain(rowIDForItem(rows, "question"))
     expect(group.prefixRowIDs).not.toContain(rowIDForItem(rows, "question"))
+  })
+
+  it("folds answered questions into the process prefix before the final response", () => {
+    const questionMessage = assistantMessage("assistant-1", [
+      reasoningItem("reasoning-1", "One"),
+      reasoningItem("reasoning-2", "Two"),
+      traceItem("answered-question", "question", {
+        questionPrompt: {
+          allowFreeform: false,
+          answerText: "yes",
+          answered: true,
+          multiple: false,
+          options: [{ label: "Yes", value: "yes" }],
+          question: "Continue?",
+          questionID: "que_continue",
+          required: true,
+          selectedOptions: ["yes"],
+        },
+        status: "completed",
+      }),
+    ], { segmentID: "question-segment" })
+    const finalMessage = assistantMessage("assistant-2", [
+      textItem("final-response", "Done."),
+    ], { segmentID: "final-segment" })
+    const messages = [questionMessage, finalMessage]
+    const rows = buildRows(messages)
+    const group = derive(messages, [threadTurn("turn-1", messages, {
+      finalSegmentID: finalMessage.segmentID,
+    })], rows).groups[0]!
+
+    expect(group.prefixRowIDs).toContain(rowIDForItem(rows, "answered-question"))
+    expect(group.outcomeRowIDs).not.toContain(rowIDForItem(rows, "answered-question"))
+    expect(group.autoCollapseReady).toBe(true)
+  })
+
+  it("folds questions resolved by a historical answer snapshot into the process prefix", () => {
+    const questionMessage = assistantMessage("assistant-1", [
+      reasoningItem("reasoning-1", "One"),
+      reasoningItem("reasoning-2", "Two"),
+      traceItem("history-question", "question", {
+        questionPrompt: {
+          allowFreeform: false,
+          multiple: false,
+          options: [{ label: "Yes", value: "yes" }],
+          question: "Continue?",
+          questionID: "que_history_continue",
+          required: true,
+        },
+        status: "completed",
+      }),
+    ], { segmentID: "question-segment" })
+    const finalMessage = assistantMessage("assistant-2", [
+      textItem("final-response", "Done."),
+    ], { segmentID: "final-segment" })
+    const messages = [questionMessage, finalMessage]
+    const rows = buildRows(messages)
+    const group = derive(
+      messages,
+      [threadTurn("turn-1", messages, { finalSegmentID: finalMessage.segmentID })],
+      rows,
+      undefined,
+      new Set(["que_history_continue"]),
+    ).groups[0]!
+
+    expect(group.prefixRowIDs).toContain(rowIDForItem(rows, "history-question"))
+    expect(group.outcomeRowIDs).not.toContain(rowIDForItem(rows, "history-question"))
   })
 
   it("keeps the last failed tool and pending approval outside an abnormal prefix", () => {

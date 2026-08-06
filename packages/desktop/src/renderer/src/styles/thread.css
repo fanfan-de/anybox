@@ -2734,6 +2734,67 @@ body.is-image-lightbox-open {
   overflow-wrap: anywhere;
 }
 
+.ask-user-question-summary {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: start;
+  gap: 4px 6px;
+  min-width: 0;
+}
+
+.ask-user-question-summary-label {
+  color: var(--seg-text-2);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.ask-user-question-answer {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ask-user-question-answer-list {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ask-user-question-answer-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ask-user-question-answer-value,
+.ask-user-question-answer-freeform {
+  min-width: 0;
+  margin: 0;
+  color: var(--seg-text-1);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.ask-user-question-answer-value {
+  font-weight: 600;
+}
+
+.ask-user-question-answer-description {
+  min-width: 0;
+  color: var(--seg-text-3);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .ask-user-question-option {
   display: grid;
   grid-template-columns: 22px minmax(0, 1fr);

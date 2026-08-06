@@ -77,6 +77,7 @@ export interface TraceRowItemRenderInput {
   onLocalFileLinkOpen?: (target: MarkdownLocalFileLinkTarget) => void
   onOpenImagePreview?: (payload: ImagePreviewPayload) => void
   onProposedPlanConfirm?: ProposedPlanConfirmHandler
+  questionAnswer?: UserThreadMessage["questionAnswer"]
   row: AssistantTraceRenderableRow
   traceItem: AssistantTraceRowItem
   traceVisibility: AssistantTraceVisibility
@@ -157,6 +158,7 @@ interface TraceRowViewSharedProps {
   onLocalFileLinkOpen?: (target: MarkdownLocalFileLinkTarget) => void
   onOpenImagePreview?: (payload: ImagePreviewPayload) => void
   onProposedPlanConfirm?: ProposedPlanConfirmHandler
+  questionAnswer?: UserThreadMessage["questionAnswer"]
   traceVisibility: AssistantTraceVisibility
 }
 
@@ -245,6 +247,7 @@ export interface ThreadRowRendererProps {
   copiedResponseMessageID: string | null
   copiedUserThreadMessageID: string | null
   displayMessages: ThreadMessage[]
+  getTraceItemQuestionAnswer: (item: AssistantTraceItem) => UserThreadMessage["questionAnswer"] | undefined
   isResolvingPermissionRequest: boolean
   onArtifactLinkOpen?: (target: MarkdownArtifactLinkTarget) => void
   onAskUserQuestionAnswer: QuestionAnswerHandler
@@ -266,7 +269,6 @@ export interface ThreadRowRendererProps {
   permissionRequestActionRequestID: string | null
   readThreadMessageMotion: (messageID: string, isLive?: boolean) => ThreadMessageMotion
   row: ThreadDisplayRow
-  isTraceItemQuestionAnswered: (item: AssistantTraceItem) => boolean
 }
 
 function areAssistantTraceVisibilityEqual(left: AssistantTraceVisibility, right: AssistantTraceVisibility) {
@@ -299,6 +301,7 @@ function areTraceRowSharedPropsEqual<TProps extends TraceRowViewSharedProps>(lef
     left.onLocalFileLinkOpen === right.onLocalFileLinkOpen &&
     left.onOpenImagePreview === right.onOpenImagePreview &&
     left.onProposedPlanConfirm === right.onProposedPlanConfirm &&
+    left.questionAnswer === right.questionAnswer &&
     areAssistantTraceVisibilityEqual(left.traceVisibility, right.traceVisibility)
   )
 }
@@ -488,6 +491,7 @@ const AssistantTraceSectionRowView = memo(function AssistantTraceSectionRowView(
   onLocalFileLinkOpen,
   onOpenImagePreview,
   onProposedPlanConfirm,
+  questionAnswer,
   row,
   traceVisibility,
 }: AssistantTraceSectionRowViewProps) {
@@ -517,6 +521,7 @@ const AssistantTraceSectionRowView = memo(function AssistantTraceSectionRowView(
               onLocalFileLinkOpen,
               onOpenImagePreview,
               onProposedPlanConfirm,
+              questionAnswer,
               row,
               traceItem,
               traceVisibility,
@@ -552,6 +557,7 @@ const AssistantTraceLiteRowView = memo(function AssistantTraceLiteRowView({
   pendingPermissionRequest,
   permissionRequestActionError,
   permissionRequestActionRequestID,
+  questionAnswer,
   row,
   traceVisibility,
 }: AssistantTraceLiteRowViewProps) {
@@ -605,6 +611,7 @@ const AssistantTraceLiteRowView = memo(function AssistantTraceLiteRowView({
           onLocalFileLinkOpen,
           onOpenImagePreview,
           onProposedPlanConfirm,
+          questionAnswer,
           row,
           traceItem,
           traceVisibility,
@@ -913,8 +920,8 @@ export function ThreadRowRenderer({
   copiedResponseMessageID,
   copiedUserThreadMessageID,
   displayMessages,
+  getTraceItemQuestionAnswer,
   isResolvingPermissionRequest,
-  isTraceItemQuestionAnswered,
   onArtifactLinkOpen,
   onAskUserQuestionAnswer,
   onBranchSelect,
@@ -982,12 +989,13 @@ export function ThreadRowRenderer({
       pendingPermissionRequests,
       row,
     })
+    const questionAnswer = getTraceItemQuestionAnswer(row.traceItem.item)
 
     return (
       <AssistantTraceLiteRowView
         activeSession={activeSession}
         components={components}
-        isQuestionAnswered={isTraceItemQuestionAnswered(row.traceItem.item)}
+        isQuestionAnswered={Boolean(row.traceItem.item.questionPrompt?.answered || questionAnswer)}
         isQuestionAnswerDisabled={isQuestionAnswerDisabled}
         isResolvingPermissionRequest={isResolvingPermissionRequest}
         motion={readThreadMessageMotion(row.motionKey, row.message.isStreaming)}
@@ -1001,6 +1009,7 @@ export function ThreadRowRenderer({
         pendingPermissionRequest={pendingPermissionRequest}
         permissionRequestActionError={permissionRequestActionError}
         permissionRequestActionRequestID={permissionRequestActionRequestID}
+        questionAnswer={questionAnswer}
         row={row}
         traceVisibility={assistantTraceVisibility}
       />
@@ -1008,10 +1017,16 @@ export function ThreadRowRenderer({
   }
 
   if (isAssistantTraceSectionRow(row)) {
+    const questionAnswer = row.kind === "assistant-file-change-row"
+      ? undefined
+      : getTraceItemQuestionAnswer(row.traceItem.item)
+
     return (
       <AssistantTraceSectionRowView
         components={components}
-        isQuestionAnswered={row.kind === "assistant-file-change-row" ? false : isTraceItemQuestionAnswered(row.traceItem.item)}
+        isQuestionAnswered={row.kind === "assistant-file-change-row"
+          ? false
+          : Boolean(row.traceItem.item.questionPrompt?.answered || questionAnswer)}
         isQuestionAnswerDisabled={isQuestionAnswerDisabled}
         motion={readThreadMessageMotion(row.motionKey, row.message.isStreaming)}
         onOpenImagePreview={onOpenImagePreview}
@@ -1020,6 +1035,7 @@ export function ThreadRowRenderer({
         onArtifactLinkOpen={onArtifactLinkOpen}
         onLocalFileLinkOpen={onLocalFileLinkOpen}
         onProposedPlanConfirm={onProposedPlanConfirm}
+        questionAnswer={questionAnswer}
         row={row}
         traceVisibility={assistantTraceVisibility}
       />

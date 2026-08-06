@@ -1282,8 +1282,11 @@ describe("ThreadView trace item renderers", () => {
 })
 
 describe("ThreadView question prompts", () => {
-  it("keeps option buttons clickable while the assistant message is waiting for an answer", () => {
-    const onAskUserQuestionAnswer = vi.fn().mockResolvedValue(undefined)
+  it("switches a quick option to a read-only submitting summary immediately", async () => {
+    let resolveAnswer: (() => void) | null = null
+    const onAskUserQuestionAnswer = vi.fn(() => new Promise<void>((resolve) => {
+      resolveAnswer = resolve
+    }))
     const questionItem: AssistantTraceItem = {
       id: "question-1",
       kind: "question",
@@ -1302,7 +1305,7 @@ describe("ThreadView question prompts", () => {
         required: true,
       },
     }
-    const { getByRole } = renderThread(
+    const { container, getByRole, props, rerender } = renderThread(
       [assistantTraceMessage("assistant-1", [questionItem], true)],
       { onAskUserQuestionAnswer },
     )
@@ -1317,6 +1320,197 @@ describe("ThreadView question prompts", () => {
       selectedOptions: ["vercel"],
       text: "vercel",
     })
+    const card = screen.getByText("Where should I deploy?").closest(".ask-user-question-card") as HTMLElement
+    expect(card).toHaveAttribute("data-question-state", "submitting")
+    expect(within(card).getByText("Vercel")).toBeInTheDocument()
+    expect(within(card).getByText("Recommended")).toBeInTheDocument()
+    expect(card.querySelector(".ask-user-question-header")).toBeNull()
+    expect(card.querySelectorAll(".ask-user-question-summary-label")).toHaveLength(2)
+    expect(within(card).getByText("Question:")).toBeInTheDocument()
+    expect(within(card).getByText("Answer:")).toBeInTheDocument()
+    expect(within(card).queryByText("Submitting answer")).not.toBeInTheDocument()
+    expect(within(card).queryByText("Your answer")).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Vercel" })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText("Custom answer")).not.toBeInTheDocument()
+
+    await act(async () => {
+      resolveAnswer?.()
+      await Promise.resolve()
+    })
+    await waitFor(() => expect(card).toHaveAttribute("data-question-state", "answered"))
+
+    const canonicalQuestionItem: AssistantTraceItem = {
+      ...questionItem,
+      isStreaming: false,
+      status: "completed",
+      questionPrompt: {
+        ...questionItem.questionPrompt!,
+        answered: true,
+        answerText: "vercel",
+        selectedOptions: ["vercel"],
+      },
+    }
+    rerender(
+      <ThreadView
+        {...props}
+        activeMessages={[assistantTraceMessage("assistant-1", [canonicalQuestionItem], false)]}
+      />,
+    )
+    expect(container.querySelectorAll(".ask-user-question-card")).toHaveLength(1)
+    const canonicalCard = container.querySelector(".ask-user-question-card") as HTMLElement
+    expect(canonicalCard).toHaveAttribute("data-question-state", "answered")
+    expect(within(canonicalCard).getByText("Vercel")).toBeInTheDocument()
+    expect(canonicalCard.querySelector(".ask-user-question-header")).toBeNull()
+    expect(canonicalCard.querySelectorAll(".ask-user-question-summary-label")).toHaveLength(2)
+    expect(within(canonicalCard).getByText("Question:")).toBeInTheDocument()
+    expect(within(canonicalCard).getByText("Answer:")).toBeInTheDocument()
+  })
+
+  it("renders a canonical single-select answer without unselected options or controls", () => {
+    const questionItem: AssistantTraceItem = {
+      id: "question-answered-single",
+      kind: "question",
+      timestamp: 1,
+      label: "Question",
+      status: "completed",
+      section: "response",
+      visibilityKey: "response",
+      questionPrompt: {
+        questionID: "que_answered_single",
+        header: "Deployment target",
+        question: "Where should I deploy?",
+        options: [
+          { label: "Vercel", value: "vercel", description: "Recommended for this project" },
+          { label: "Cloudflare", value: "cloudflare" },
+        ],
+        allowFreeform: true,
+        multiple: false,
+        required: true,
+        answered: true,
+        answerText: "vercel",
+        selectedOptions: ["vercel"],
+      },
+    }
+    renderThread([assistantTraceMessage("assistant-1", [questionItem], false)])
+
+    const card = screen.getByText("Where should I deploy?").closest(".ask-user-question-card") as HTMLElement
+    expect(card).toHaveAttribute("data-question-state", "answered")
+    expect(card.querySelector(".ask-user-question-header")).toBeNull()
+    expect(card.querySelectorAll(".ask-user-question-summary-label")).toHaveLength(2)
+    expect(within(card).getByText("Question:")).toBeInTheDocument()
+    expect(within(card).getByText("Answer:")).toBeInTheDocument()
+    expect(within(card).queryByText("Answered")).not.toBeInTheDocument()
+    expect(within(card).queryByText("Your answer")).not.toBeInTheDocument()
+    expect(within(card).getByText("Vercel")).toBeInTheDocument()
+    expect(within(card).getByText("Recommended for this project")).toBeInTheDocument()
+    expect(within(card).queryByText("Cloudflare")).not.toBeInTheDocument()
+    expect(within(card).queryByRole("button")).not.toBeInTheDocument()
+    expect(within(card).queryByRole("textbox")).not.toBeInTheDocument()
+    expect(within(card).queryByRole("checkbox")).not.toBeInTheDocument()
+  })
+
+  it("renders every selected value plus freeform text and falls back to unknown raw values", () => {
+    const questionItem: AssistantTraceItem = {
+      id: "question-answered-multiple",
+      kind: "question",
+      timestamp: 1,
+      label: "Question",
+      status: "completed",
+      section: "response",
+      visibilityKey: "response",
+      questionPrompt: {
+        questionID: "que_answered_multiple",
+        question: "Which work should I include?",
+        options: [
+          { label: "Documentation", value: "docs", description: "Update the guide" },
+          { label: "Tests", value: "tests" },
+        ],
+        allowFreeform: true,
+        multiple: true,
+        required: true,
+        answered: true,
+        answerText: "Also include release notes",
+        selectedOptions: ["docs", "unknown-value"],
+        freeformText: "Also include release notes",
+      },
+    }
+    renderThread([assistantTraceMessage("assistant-1", [questionItem], false)])
+
+    const card = screen.getByText("Which work should I include?").closest(".ask-user-question-card") as HTMLElement
+    expect(within(card).getByText("Documentation")).toBeInTheDocument()
+    expect(within(card).getByText("Update the guide")).toBeInTheDocument()
+    expect(within(card).getByText("unknown-value")).toBeInTheDocument()
+    expect(within(card).getByText("Also include release notes")).toBeInTheDocument()
+    expect(within(card).queryByText("Tests")).not.toBeInTheDocument()
+    expect(within(card).queryByText("1.")).not.toBeInTheDocument()
+    expect(within(card).queryByText("2.")).not.toBeInTheDocument()
+  })
+
+  it("falls back to legacy answerText when structured answer fields are unavailable", () => {
+    const questionItem: AssistantTraceItem = {
+      id: "question-answered-legacy",
+      kind: "question",
+      timestamp: 1,
+      label: "Question",
+      status: "completed",
+      section: "response",
+      visibilityKey: "response",
+      questionPrompt: {
+        questionID: "que_answered_legacy",
+        question: "What should I remember?",
+        options: [],
+        allowFreeform: true,
+        multiple: false,
+        required: true,
+        answered: true,
+        answerText: "Keep the legacy answer",
+      },
+    }
+    renderThread([assistantTraceMessage("assistant-1", [questionItem], false)])
+
+    expect(screen.getByText("What should I remember?")).toBeInTheDocument()
+    expect(screen.getByText("Keep the legacy answer")).toBeInTheDocument()
+    expect(screen.queryByLabelText("Custom answer")).not.toBeInTheDocument()
+  })
+
+  it("uses a historical user-message answer snapshot when prompt metadata is not canonical yet", () => {
+    const questionItem: AssistantTraceItem = {
+      id: "question-history-answer",
+      kind: "question",
+      timestamp: 1,
+      label: "Question",
+      status: "completed",
+      section: "response",
+      visibilityKey: "response",
+      questionPrompt: {
+        questionID: "que_history_answer",
+        question: "Choose the historical target",
+        options: [
+          { label: "Vercel", value: "vercel" },
+          { label: "Cloudflare", value: "cloudflare" },
+        ],
+        allowFreeform: false,
+        multiple: false,
+        required: true,
+      },
+    }
+    const answerMessage: UserThreadMessage = {
+      ...userMessage("user-answer", "vercel"),
+      questionAnswer: {
+        questionID: "que_history_answer",
+        selectedOptions: ["vercel"],
+      },
+    }
+    renderThread([
+      assistantTraceMessage("assistant-1", [questionItem], false),
+      answerMessage,
+    ])
+
+    const card = screen.getByText("Choose the historical target").closest(".ask-user-question-card") as HTMLElement
+    expect(card).toHaveAttribute("data-question-state", "answered")
+    expect(card.querySelector(".ask-user-question-header")).toBeNull()
+    expect(within(card).getByText("Vercel")).toBeInTheDocument()
+    expect(within(card).queryByText("Cloudflare")).not.toBeInTheDocument()
   })
 
   it("uses the full response width for freeform-only questions", () => {
@@ -1378,9 +1572,12 @@ describe("ThreadView question prompts", () => {
   })
 
   it("keeps a freeform draft after submission fails and allows an explicit retry", async () => {
+    let resolveRetry: (() => void) | null = null
     const onAskUserQuestionAnswer = vi.fn()
       .mockRejectedValueOnce(new Error("Answer failed"))
-      .mockResolvedValueOnce(undefined)
+      .mockImplementationOnce(() => new Promise<void>((resolve) => {
+        resolveRetry = resolve
+      }))
     const questionItem: AssistantTraceItem = {
       id: "question-retry",
       kind: "question",
@@ -1409,13 +1606,26 @@ describe("ThreadView question prompts", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send" }))
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Answer failed")
-    expect(input).toHaveValue("Keep this draft")
+    const restoredInput = screen.getByLabelText("Custom answer") as HTMLInputElement
+    expect(restoredInput).toHaveValue("Keep this draft")
     expect(screen.getByRole("button", { name: "Send" })).toBeEnabled()
 
     fireEvent.click(screen.getByRole("button", { name: "Send" }))
     await waitFor(() => expect(onAskUserQuestionAnswer).toHaveBeenCalledTimes(2))
-    expect(input).toHaveValue("Keep this draft")
-    expect(screen.getByRole("button", { name: "Sending..." })).toBeDisabled()
+    const summaryCard = screen.getByText("What should I keep?").closest(".ask-user-question-card") as HTMLElement
+    expect(summaryCard).toHaveAttribute("data-question-state", "submitting")
+    expect(within(summaryCard).getByText("Keep this draft")).toBeInTheDocument()
+    expect(summaryCard.querySelector(".ask-user-question-header")).toBeNull()
+    expect(summaryCard.querySelectorAll(".ask-user-question-summary-label")).toHaveLength(2)
+    expect(within(summaryCard).getByText("Question:")).toBeInTheDocument()
+    expect(within(summaryCard).getByText("Answer:")).toBeInTheDocument()
+    expect(screen.queryByLabelText("Custom answer")).not.toBeInTheDocument()
+
+    await act(async () => {
+      resolveRetry?.()
+      await Promise.resolve()
+    })
+    await waitFor(() => expect(summaryCard).toHaveAttribute("data-question-state", "answered"))
   })
 
   it("preserves a pending question through virtual unmount and prevents duplicate submission", async () => {
@@ -1470,16 +1680,22 @@ describe("ThreadView question prompts", () => {
     threadColumn.scrollTop = 0
     fireEvent.wheel(threadColumn, { deltaY: -120 })
     fireEvent.scroll(threadColumn)
-    const restoredInput = await screen.findByLabelText("Custom answer") as HTMLInputElement
-    expect(restoredInput).toHaveValue("Persistent answer")
-    expect(restoredInput).toBeDisabled()
-    expect(screen.getByRole("button", { name: "Sending..." })).toBeDisabled()
+    const restoredAnswer = await screen.findByText("Persistent answer")
+    const restoredCard = restoredAnswer.closest(".ask-user-question-card") as HTMLElement
+    expect(restoredCard).toHaveAttribute("data-question-state", "submitting")
+    expect(restoredCard.querySelector(".ask-user-question-header")).toBeNull()
+    expect(restoredCard.querySelectorAll(".ask-user-question-summary-label")).toHaveLength(2)
+    expect(within(restoredCard).getByText("Question:")).toBeInTheDocument()
+    expect(within(restoredCard).getByText("Answer:")).toBeInTheDocument()
+    expect(screen.queryByLabelText("Custom answer")).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Send" })).not.toBeInTheDocument()
     expect(onAskUserQuestionAnswer).toHaveBeenCalledTimes(1)
 
     await act(async () => {
       resolveAnswer?.()
       await Promise.resolve()
     })
+    await waitFor(() => expect(restoredCard).toHaveAttribute("data-question-state", "answered"))
     expect(container.querySelector('[data-thread-virtual-row-id]')).not.toBeNull()
   })
 })

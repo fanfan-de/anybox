@@ -21,9 +21,11 @@ import "./thread-execution-harness.css"
 const TARGET_TURN_ID = "turn-e2e"
 const TARGET_MESSAGE_ID = "assistant-e2e"
 const SECOND_TARGET_MESSAGE_ID = "assistant-e2e-second"
+const QUESTION_TURN_ID = "turn-question-e2e"
 const PENDING_TURN_ID = "pending:user-e2e"
 const INITIAL_REASONING_TEXT = "Inspecting the renderer before applying the final response."
 const SECOND_REASONING_LINE = "Checking the compact reasoning viewport on a second line."
+const SHOW_QUESTION_SCENARIO = new URLSearchParams(window.location.search).has("questions")
 const WRAPPED_REASONING_TAIL = [
   "This deliberately long live reasoning sentence verifies that the browser wraps text at the real pane width",
   "and advances the one-line viewport without increasing the outer reasoning row height.",
@@ -214,6 +216,103 @@ function trailingTurn(index: number) {
   return { messages: [user, assistant] satisfies ThreadMessage[], turn }
 }
 
+function questionTurn() {
+  const timestamp = 20_000
+  const user = userMessage("question-user-e2e", "Confirm the final release review scope", timestamp)
+  const assistant: AssistantThreadMessage = {
+    id: "assistant-question-e2e",
+    kind: "assistant",
+    backendTurnID: QUESTION_TURN_ID,
+    segmentID: "segment-question-e2e",
+    timestamp: timestamp + 1,
+    runtime: {
+      phase: "blocked",
+      startedAt: timestamp,
+      updatedAt: timestamp + 2,
+    },
+    state: "blocked",
+    items: [
+      {
+        id: "question-process-reasoning-1",
+        kind: "reasoning",
+        timestamp: timestamp + 1,
+        label: "Reasoning",
+        text: "Reviewing the first answered interaction before continuing.",
+        status: "completed",
+      },
+      {
+        id: "question-process-reasoning-2",
+        kind: "reasoning",
+        timestamp: timestamp + 1,
+        label: "Reasoning",
+        text: "Checking whether answered question cards join the processing disclosure.",
+        status: "completed",
+      },
+      {
+        id: "answered-question-e2e",
+        kind: "question",
+        timestamp: timestamp + 2,
+        label: "Question",
+        title: "Release scope",
+        status: "completed",
+        questionPrompt: {
+          questionID: "que_answered_e2e",
+          header: "Release scope",
+          question: "Which parts should be included in the release review before the deployment proceeds?",
+          options: [
+            {
+              label: "Implementation and regression coverage",
+              value: "implementation",
+              description: "Review the desktop UI behavior, automated tests, and relevant documentation.",
+            },
+            {
+              label: "Mobile release",
+              value: "mobile",
+              description: "Review the independently shipped mobile application.",
+            },
+          ],
+          allowFreeform: true,
+          multiple: true,
+          required: true,
+          answered: true,
+          answerText: "Also verify long text wrapping in narrow panes and keyboard submission behavior.",
+          selectedOptions: ["implementation", "legacy-review-value"],
+          freeformText: "Also verify long text wrapping in narrow panes and keyboard submission behavior.",
+        },
+      },
+      {
+        id: "pending-question-e2e",
+        kind: "question",
+        timestamp: timestamp + 3,
+        label: "Question",
+        title: "Keyboard check",
+        status: "pending",
+        questionPrompt: {
+          questionID: "que_pending_e2e",
+          header: "Keyboard check",
+          question: "What final keyboard behavior should be verified?",
+          options: [],
+          allowFreeform: true,
+          multiple: false,
+          required: true,
+        },
+      },
+    ],
+    isStreaming: false,
+  }
+  const turn: ThreadTurn = {
+    turnID: QUESTION_TURN_ID,
+    status: "blocked",
+    startedAt: timestamp,
+    updatedAt: timestamp + 3,
+    userMessageID: user.id,
+    lastMessageID: assistant.id,
+    finalSegmentID: assistant.segmentID,
+    messages: [user, assistant],
+  }
+  return { messages: [user, assistant] satisfies ThreadMessage[], turn }
+}
+
 function Harness() {
   const [canonicalized, setCanonicalized] = useState(false)
   const [completed, setCompleted] = useState(false)
@@ -233,6 +332,7 @@ function Harness() {
     [],
   )
   const tails = useMemo(() => Array.from({ length: 36 }, (_, index) => trailingTurn(index + 1)), [])
+  const questions = useMemo(() => questionTurn(), [])
   const targetAssistant = useMemo(
     () => targetAssistantMessage(completed, reasoningText),
     [completed, reasoningText],
@@ -253,8 +353,12 @@ function Harness() {
     }))
   }, [canonicalized, completed, secondTargetAssistant, targetAssistant, targetUser])
   const activeTurns = useMemo(
-    () => [...targetTurns, ...tails.map((tail) => tail.turn)],
-    [tails, targetTurns],
+    () => [
+      ...targetTurns,
+      ...tails.map((tail) => tail.turn),
+      ...(SHOW_QUESTION_SCENARIO ? [questions.turn] : []),
+    ],
+    [questions, tails, targetTurns],
   )
   const activeMessages = useMemo(() => deriveActiveMessages(activeTurns), [activeTurns])
   const targetAssistantCount = targetTurns.reduce(
