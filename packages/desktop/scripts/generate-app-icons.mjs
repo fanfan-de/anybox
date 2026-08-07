@@ -5,6 +5,7 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { spawnSync } from "node:child_process"
+import { requirePowerShell7Runtime } from "../../platform/src/powershell.ts"
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const projectDir = path.resolve(scriptDir, "..")
@@ -268,10 +269,12 @@ function generateWithLinuxTools(sourceSvg, trayTemplateSvg, outputDir, pngSize) 
   console.log(`[desktop][icons] generated Linux app and tray icons from ${sourceSvg}`)
 }
 
-function generateWithPowerShell(sourceSvg, outputDir, pngSize) {
-  const powerShell = process.platform === "win32" ? "powershell" : "pwsh"
-  run(powerShell, [
+async function generateWithPowerShell(sourceSvg, outputDir, pngSize) {
+  const powerShell = await requirePowerShell7Runtime()
+  run(powerShell.executable, [
+    "-NoLogo",
     "-NoProfile",
+    "-NonInteractive",
     "-ExecutionPolicy",
     "Bypass",
     "-File",
@@ -300,7 +303,7 @@ if (!existsSync(sourceSvg)) {
 }
 
 if (process.platform === "win32") {
-  generateWithPowerShell(sourceSvg, outputDir, pngSize)
+  await generateWithPowerShell(sourceSvg, outputDir, pngSize)
 } else if (process.platform === "darwin") {
   if (!existsSync(trayTemplateSvg)) {
     throw new Error(`[desktop][icons] tray template SVG not found: ${trayTemplateSvg}`)

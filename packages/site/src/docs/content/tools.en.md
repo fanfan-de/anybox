@@ -69,9 +69,11 @@ The Tasks module breaks down work inside the current Agent session. Planner stor
 | Write Terminal Input (`terminal_write_input`) | Send raw input to the persistent terminal. |
 | Write Stdin (`write_stdin`) | Poll, send input to, or interrupt an existing managed Shell session. |
 | Git Bash (`git_bash_command`) | Run a Git Bash/MSYS Bash command inside the project boundary. |
-| PowerShell (`powershell_command`) | Run a Windows PowerShell command inside the project boundary. |
+| PowerShell (`powershell_command`) | Run PowerShell 7 commands inside the project boundary. |
 | Command Prompt (`cmd_command`) | Run a Windows Command Prompt command inside the project boundary. |
 | WSL Bash (`wsl_bash_command`) | Run a WSL Linux Bash command inside the project boundary. |
+
+PowerShell 7 is an optional local dependency. Anybox does not bundle or install it, and Windows PowerShell 5.1 is not supported. If PowerShell 7 is missing, Anybox and other shells such as Command Prompt, Git Bash, and WSL continue to work.
 
 A local macOS workspace uses `macos_shell_command` for its platform Shell, while an SSH workspace uses `ssh_shell_command`. The Shell count can therefore vary by environment.
 

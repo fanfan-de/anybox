@@ -80,7 +80,7 @@
     "test:prompt": "bun test Test/prompt.e2e.test.ts",
     "test:server": "bun Test/run-server-tests.ts",
     "test:server-prompt-e2e": "bun test Test/server.prompt.e2e.test.ts",
-    "test:shell": "bun test Test/shell.task-registry.test.ts Test/pty.runtime.test.ts Test/server.pty.test.ts Test/terminal-output.test.ts && bun test Test/tool.contract.test.ts",
+    "test:shell": "bun test Test/shell.task-registry.test.ts Test/pty.runtime.test.ts Test/server.pty.test.ts Test/terminal-output.test.ts Test/environment.shell.test.ts && bun test Test/tool.contract.test.ts",
     "test:tool": "bun test Test/javascript-runtime.test.ts Test/tool.exec.test.ts Test/tool.selection.test.ts Test/tool.search.test.ts Test/tool.contract.test.ts Test/tool.processor.test.ts Test/tool.apply-patch.test.ts",
     "test:tool:e2e": "bun test Test/tool.real-llm.e2e.test.ts",
     "test:tool:all": "bun run test:tool && bun run test:tool:e2e"

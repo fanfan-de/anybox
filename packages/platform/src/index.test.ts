@@ -3,8 +3,11 @@ import { describe, expect, it } from "vitest"
 import {
   createPlatformAdapter,
   getBundledBunName,
+  getDefaultShell,
   getPythonExecutable,
   normalizeComparablePath,
+  POWERSHELL_7_INSTALL_MESSAGE,
+  type PowerShell7Detector,
 } from "./index"
 
 describe("platform adapter", () => {
@@ -30,5 +33,51 @@ describe("platform adapter", () => {
 
     await adapter.openPath("/tmp/project")
     expect(opened).toEqual(["/tmp/project"])
+  })
+
+  it("uses a validated PowerShell 7 runtime as the Windows default", async () => {
+    const detector: PowerShell7Detector = {
+      async detect() {
+        return {
+          available: true,
+          executable: "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+          version: "7.6.4",
+          edition: "Core",
+          major: 7,
+        }
+      },
+      async validate() {
+        throw new Error("validate should not be called")
+      },
+    }
+
+    await expect(getDefaultShell("win32", { PATH: "" }, detector)).resolves.toBe(
+      "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+    )
+  })
+
+  it("never falls back to powershell.exe when PowerShell 7 is unavailable", async () => {
+    const detector: PowerShell7Detector = {
+      async detect() {
+        return {
+          available: false,
+          message: POWERSHELL_7_INSTALL_MESSAGE,
+          detail: "missing",
+        }
+      },
+      async validate() {
+        throw new Error("validate should not be called")
+      },
+    }
+
+    await expect(getDefaultShell("win32", {
+      PATH: "C:\\Windows\\System32\\WindowsPowerShell\\v1.0",
+      ComSpec: "C:\\Windows\\System32\\cmd.exe",
+    }, detector)).resolves.toBe("C:\\Windows\\System32\\cmd.exe")
+
+    await expect(getDefaultShell("win32", {
+      PATH: "",
+      ComSpec: "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+    }, detector)).rejects.toThrow("Windows PowerShell 5.1 (powershell.exe) is not supported")
   })
 })

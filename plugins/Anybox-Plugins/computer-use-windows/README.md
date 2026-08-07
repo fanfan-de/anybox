@@ -5,7 +5,7 @@ discovers applications and windows, captures one selected window with Windows
 Graphics Capture, inspects a bounded UI Automation tree, and sends guarded
 mouse or keyboard input from a fresh one-action state.
 
-The current plugin version is `0.3.5`. The bundled native helper component is
+The current plugin version is `0.3.6`. The bundled native helper component is
 version `0.2.3`. The supported release target is Windows
 11 x64.
 
@@ -150,7 +150,7 @@ the Node REPL image channel and are not repeated in structured state results.
 From this directory:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass `
+pwsh.exe -NoProfile -ExecutionPolicy Bypass `
   -File scripts/package-helper.ps1 -Check
 
 $tests = (Get-ChildItem tests -Filter '*.test.mjs' -File).FullName
@@ -164,6 +164,8 @@ node scripts/smoke-uia.mjs
 node scripts/smoke-app-catalog.mjs
 node scripts/smoke-safety.mjs
 ```
+
+These PowerShell steps and the optional Authenticode runtime check require a locally installed PowerShell 7.x (Core). The plugin does not install or bundle PowerShell, and it never falls back to Windows PowerShell 5.1.
 
 See [Security and privacy](docs/security.md) and
 [Release procedure](docs/release.md) before distribution.

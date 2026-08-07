@@ -22,7 +22,7 @@ Signing after hash generation is invalid because Authenticode changes the EXE.
 ## Helper build and package
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass `
+pwsh.exe -NoProfile -ExecutionPolicy Bypass `
   -File scripts/package-helper.ps1
 ```
 
@@ -32,7 +32,7 @@ copy/hash step, or perform the same order in CI. Do not hand-edit the digest.
 Validate an already assembled plugin package:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass `
+pwsh.exe -NoProfile -ExecutionPolicy Bypass `
   -File scripts/package-helper.ps1 -Check
 
 $env:ANYBOX_COMPUTER_USE_REQUIRE_SIGNATURE = '1'

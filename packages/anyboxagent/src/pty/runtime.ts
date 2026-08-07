@@ -6,10 +6,19 @@ import { access, chmod, stat } from "node:fs/promises"
 import { createRequire } from "node:module"
 import { fileURLToPath } from "node:url"
 import type { IPty } from "node-pty"
+import {
+  createPowerShell7Detector,
+  isPowerShell7Executable,
+  isWindowsPowerShellExecutable,
+  powerShell7Detector,
+  POWERSHELL_7_UTF8_PREAMBLE,
+  WINDOWS_POWERSHELL_UNSUPPORTED_MESSAGE,
+  type PowerShell7Detector,
+} from "@anybox/platform"
 import { Flag } from "#flag/flag.ts"
 import { withMacOSDefaultPath } from "#shell/environment.ts"
 import { which } from "#util/which.ts"
-import { getProcessEnvValue } from "#env/compat.ts"
+import { getEnvValue, getProcessEnvValue } from "#env/compat.ts"
 
 type MaybePromise<T> = T | Promise<T>
 type NodePtyModule = typeof import("node-pty")
@@ -66,6 +75,11 @@ export interface PtyRuntimeAdapter {
   spawn(input: PtyRuntimeSpawnInput): MaybePromise<PtyRuntimeHandle>
 }
 
+export function buildPtyShellArgs(executable: string) {
+  if (!isPowerShell7Executable(executable)) return []
+  return ["-NoExit", "-Command", POWERSHELL_7_UTF8_PREAMBLE]
+}
+
 type NodePtyWorkerEvent =
   | {
       type: "ready"
@@ -89,7 +103,7 @@ async function isExistingFile(candidate: string) {
   return stat(candidate).then((entry) => entry.isFile()).catch(() => false)
 }
 
-async function resolveExistingCommand(candidate?: string | null) {
+async function resolveExistingCommand(candidate?: string | null, env: NodeJS.ProcessEnv = process.env) {
   const value = candidate?.trim()
   if (!value) return null
 
@@ -97,11 +111,11 @@ async function resolveExistingCommand(candidate?: string | null) {
     return (await isExistingFile(value)) ? value : null
   }
 
-  return which(value) ?? null
+  return which(value, env) ?? null
 }
 
-function isWindowsSystemBashShim(candidate: string) {
-  if (process.platform !== "win32") return false
+function isWindowsSystemBashShim(candidate: string, platform: NodeJS.Platform = process.platform) {
+  if (platform !== "win32") return false
   const normalized = path.resolve(candidate).replaceAll("/", "\\").toLowerCase()
   return normalized.endsWith("\\windows\\system32\\bash.exe")
 }
@@ -173,48 +187,98 @@ async function loadNodePtyModule() {
   return nodePtyModulePromise
 }
 
-export async function resolveDefaultPtyShell(input?: string) {
-  const requestedShell = input ?? getProcessEnvValue("ANYBOX_PTY_SHELL")
-  const explicit = await resolveExistingCommand(requestedShell)
-  if (explicit) return explicit
-  if (requestedShell?.trim()) {
+export interface ResolveDefaultPtyShellOptions {
+  platform?: NodeJS.Platform
+  env?: NodeJS.ProcessEnv
+  configuredGitBashPath?: string | null
+  powerShellDetector?: PowerShell7Detector
+}
+
+function unsupportedWindowsPowerShell(value?: string | null) {
+  if (value?.trim() && isWindowsPowerShellExecutable(value)) {
+    throw new PtyRuntimeError("PTY_CREATE_FAILED", WINDOWS_POWERSHELL_UNSUPPORTED_MESSAGE)
+  }
+}
+
+export async function resolveDefaultPtyShell(
+  input?: string,
+  options: ResolveDefaultPtyShellOptions = {},
+) {
+  const platform = options.platform ?? process.platform
+  const env = options.env ?? process.env
+  const detector = options.powerShellDetector
+    ?? (platform === process.platform && env === process.env
+      ? powerShell7Detector
+      : createPowerShell7Detector({ platform, env }))
+
+  const resolveRequestedShell = async (requestedShell: string) => {
+    unsupportedWindowsPowerShell(requestedShell)
+
+    if (isPowerShell7Executable(requestedShell)) {
+      const hasPath = requestedShell.includes("/") || requestedShell.includes("\\") || path.isAbsolute(requestedShell)
+      if (hasPath) {
+        const explicitPowerShell = await resolveExistingCommand(requestedShell, env)
+        if (!explicitPowerShell) {
+          throw new PtyRuntimeError("PTY_CREATE_FAILED", `Terminal shell not found: ${requestedShell.trim()}`)
+        }
+        const runtime = await detector.validate(explicitPowerShell)
+        if (!runtime.available) throw new PtyRuntimeError("PTY_CREATE_FAILED", runtime.message)
+        return runtime.executable
+      }
+
+      const runtime = await detector.detect()
+      if (!runtime.available) throw new PtyRuntimeError("PTY_CREATE_FAILED", runtime.message)
+      return runtime.executable
+    }
+
+    const explicit = await resolveExistingCommand(requestedShell, env)
+    if (explicit) return explicit
     throw new PtyRuntimeError("PTY_CREATE_FAILED", `Terminal shell not found: ${requestedShell.trim()}`)
   }
 
-  const fromShellEnv = await resolveExistingCommand(process.env.SHELL)
-  if (fromShellEnv && !isWindowsSystemBashShim(fromShellEnv)) return fromShellEnv
+  const requestedShell = input ?? getEnvValue(env, "ANYBOX_PTY_SHELL")
+  if (requestedShell?.trim()) return resolveRequestedShell(requestedShell.trim())
 
-  const fromConfiguredGitBash = await resolveExistingCommand(Flag.ANYBOX_GIT_BASH_PATH)
+  const shellEnv = env.SHELL
+  if (shellEnv?.trim()) {
+    unsupportedWindowsPowerShell(shellEnv)
+    if (isPowerShell7Executable(shellEnv)) return resolveRequestedShell(shellEnv.trim())
+  }
+  const fromShellEnv = await resolveExistingCommand(shellEnv, env)
+  if (fromShellEnv && !isWindowsSystemBashShim(fromShellEnv, platform)) return fromShellEnv
+
+  const configuredGitBashPath = options.configuredGitBashPath !== undefined
+    ? options.configuredGitBashPath
+    : Flag.ANYBOX_GIT_BASH_PATH
+  unsupportedWindowsPowerShell(configuredGitBashPath)
+  const fromConfiguredGitBash = await resolveExistingCommand(configuredGitBashPath, env)
   if (fromConfiguredGitBash) return fromConfiguredGitBash
 
-  if (process.platform === "win32") {
-    const bash = (await resolveExistingCommand("bash.exe")) ?? (await resolveExistingCommand("bash"))
-    if (bash && !isWindowsSystemBashShim(bash)) return bash
+  if (platform === "win32") {
+    const bash = (await resolveExistingCommand("bash.exe", env)) ?? (await resolveExistingCommand("bash", env))
+    if (bash && !isWindowsSystemBashShim(bash, platform)) return bash
 
-    const git = (await resolveExistingCommand("git.exe")) ?? (await resolveExistingCommand("git"))
+    const git = (await resolveExistingCommand("git.exe", env)) ?? (await resolveExistingCommand("git", env))
     if (git) {
       const gitBash = path.resolve(git, "..", "..", "bin", "bash.exe")
       if (await isExistingFile(gitBash)) return gitBash
     }
 
-    const pwsh = (await resolveExistingCommand("pwsh.exe")) ?? (await resolveExistingCommand("pwsh"))
-    if (pwsh) return pwsh
+    const powerShell = await detector.detect()
+    if (powerShell.available) return powerShell.executable
 
-    const powershell =
-      (await resolveExistingCommand("powershell.exe")) ?? (await resolveExistingCommand("powershell"))
-    if (powershell) return powershell
-
-    const comSpec = await resolveExistingCommand(process.env.ComSpec)
+    unsupportedWindowsPowerShell(env.ComSpec)
+    const comSpec = await resolveExistingCommand(env.ComSpec, env)
     if (comSpec) return comSpec
 
     return "cmd.exe"
   }
 
-  if (process.platform === "darwin") {
+  if (platform === "darwin") {
     return "/bin/zsh"
   }
 
-  return (await resolveExistingCommand("bash")) ?? "/bin/sh"
+  return (await resolveExistingCommand("bash", env)) ?? "/bin/sh"
 }
 
 const ALLOWED_ENV_KEYS = [

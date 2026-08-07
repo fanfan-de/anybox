@@ -69,9 +69,11 @@
 | 写入终端输入（`terminal_write_input`） | 向持久终端发送原始输入。 |
 | 写入标准输入（`write_stdin`） | 轮询、继续输入或中断现有的托管 Shell 会话。 |
 | Git Bash（`git_bash_command`） | 在项目边界内运行 Git Bash/MSYS Bash 命令。 |
-| PowerShell（`powershell_command`） | 在项目边界内运行 Windows PowerShell 命令。 |
+| PowerShell（`powershell_command`） | 在项目边界内运行 PowerShell 7 命令。 |
 | 命令提示符（`cmd_command`） | 在项目边界内运行 Windows Command Prompt 命令。 |
 | WSL Bash（`wsl_bash_command`） | 在项目边界内运行 WSL Linux Bash 命令。 |
+
+PowerShell 7 是可选的本机依赖。Anybox 不会捆绑或自动安装它，也不支持 Windows PowerShell 5.1。缺少 PowerShell 7 时，Anybox 以及命令提示符、Git Bash、WSL 等其他 Shell 仍可正常工作。
 
 在 macOS 本地工作区中，平台 Shell 会替换为 `macos_shell_command`；在 SSH 工作区中则使用 `ssh_shell_command`。因此不同环境中的 Shell 工具数可能不同。
 

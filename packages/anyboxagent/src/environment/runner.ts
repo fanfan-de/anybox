@@ -176,7 +176,7 @@ async function executeSetup(
         "Environment cwd changed after the run was queued.",
       )
     }
-    const invocation = resolveEnvironmentShellInvocation(script)
+    const invocation = await resolveEnvironmentShellInvocation(script)
     const running = Store.updateRun(run.id, {
       status: "running",
       startedAt: Date.now(),
@@ -196,7 +196,7 @@ async function executeSetup(
         stdin: "ignore",
         stdout: "pipe",
         stderr: "pipe",
-        // Bun currently drops PowerShell command arguments for detached Windows
+        // Bun currently drops PowerShell 7 command arguments for detached Windows
         // children. taskkill /T can still terminate the full tree without a
         // detached process group, while Unix needs one for negative-PID signals.
         detached: process.platform !== "win32",

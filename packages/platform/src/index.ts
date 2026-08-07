@@ -2,6 +2,15 @@ import { spawn } from "node:child_process"
 import fs from "node:fs"
 import path from "node:path"
 import { setTimeout as delay } from "node:timers/promises"
+import {
+  createPowerShell7Detector,
+  getPowerShell7Runtime,
+  isWindowsPowerShellExecutable,
+  WINDOWS_POWERSHELL_UNSUPPORTED_MESSAGE,
+  type PowerShell7Detector,
+} from "./powershell"
+
+export * from "./powershell"
 
 export type SupportedDesktopPlatform = "win32" | "darwin"
 
@@ -38,9 +47,13 @@ export function getPythonExecutable(root: string, platform: NodeJS.Platform = pr
   return path.join(root, "bin", "python")
 }
 
-function commandExists(command: string) {
-  const separator = process.platform === "win32" ? ";" : ":"
-  const pathValue = process.env.PATH ?? process.env.Path ?? ""
+function commandExists(
+  command: string,
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+) {
+  const separator = platform === "win32" ? ";" : ":"
+  const pathValue = env.PATH ?? env.Path ?? ""
   for (const directory of pathValue.split(separator)) {
     if (!directory) continue
     const candidate = path.join(directory, command)
@@ -49,21 +62,31 @@ function commandExists(command: string) {
   return undefined
 }
 
-export async function getDefaultShell(platform: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env) {
+export async function getDefaultShell(
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+  powerShellDetector?: PowerShell7Detector,
+) {
   if (platform !== "win32" && env.SHELL?.trim()) return env.SHELL.trim()
   if (platform === "darwin") return "/bin/zsh"
 
   if (platform === "win32") {
-    const bash = commandExists("bash.exe") ?? commandExists("bash")
+    const bash = commandExists("bash.exe", platform, env) ?? commandExists("bash", platform, env)
     if (bash) return bash
-    const pwsh = commandExists("pwsh.exe") ?? commandExists("pwsh")
-    if (pwsh) return pwsh
-    const powershell = commandExists("powershell.exe") ?? commandExists("powershell")
-    if (powershell) return powershell
-    return env.ComSpec?.trim() || "cmd.exe"
+    const powerShell = await (powerShellDetector
+      ? powerShellDetector.detect()
+      : platform === process.platform && env === process.env
+        ? getPowerShell7Runtime()
+        : createPowerShell7Detector({ platform, env }).detect())
+    if (powerShell.available) return powerShell.executable
+    const comSpec = env.ComSpec?.trim()
+    if (comSpec && isWindowsPowerShellExecutable(comSpec)) {
+      throw new Error(WINDOWS_POWERSHELL_UNSUPPORTED_MESSAGE)
+    }
+    return comSpec || "cmd.exe"
   }
 
-  return commandExists("bash") ?? "/bin/sh"
+  return commandExists("bash", platform, env) ?? "/bin/sh"
 }
 
 async function defaultOpenPath(targetPath: string, platform: NodeJS.Platform) {

@@ -5,7 +5,6 @@ export const DEFAULT_TERMINAL_SHELL_PROFILE_ID = "default"
 function windowsProfiles(): TerminalShellProfile[] {
   return [
     { id: DEFAULT_TERMINAL_SHELL_PROFILE_ID, label: "Default", shell: null },
-    { id: "powershell", label: "Windows PowerShell", shell: "powershell.exe" },
     { id: "pwsh", label: "PowerShell 7", shell: "pwsh.exe" },
     { id: "cmd", label: "Command Prompt", shell: "cmd.exe" },
     { id: "wsl", label: "WSL", shell: "wsl.exe" },
@@ -37,4 +36,3 @@ export function resolveShellFromProfile(
   const matched = profiles.find((profile) => profile.id === profileID)
   return matched?.shell ?? null
 }
-

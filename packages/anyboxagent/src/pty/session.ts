@@ -1,7 +1,7 @@
 import path from "node:path"
 import { PtyBuffer } from "#pty/buffer.ts"
 import { PtyEvents, publishPtyEvent } from "#pty/events.ts"
-import type { PtyRuntimeAdapter } from "#pty/runtime.ts"
+import { buildPtyShellArgs, type PtyRuntimeAdapter } from "#pty/runtime.ts"
 import type { PtyReplayPayload, PtySessionInfo } from "#pty/types.ts"
 
 export type PtySessionEvent =
@@ -81,7 +81,7 @@ export async function createManagedPtySession(options: CreateManagedPtySessionOp
   const listeners = new Set<(event: PtySessionEvent) => void>()
   const runtime = await options.runtime.spawn({
     executable: options.shell,
-    args: [],
+    args: buildPtyShellArgs(options.shell),
     cwd: options.cwd,
     rows: options.rows,
     cols: options.cols,

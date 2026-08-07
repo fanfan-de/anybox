@@ -54,7 +54,11 @@ describe("terminal storage", () => {
     expect(restored.scrollTopBySessionID).toEqual({
       "session-1": 4,
     })
-    expect(restored.preferredShellProfileID).toBe("powershell")
+    expect(restored.preferredShellProfileID).toBe("pwsh")
+    expect(JSON.parse(window.localStorage.getItem("desktop.terminal.workspace.v1") ?? "{}")).toMatchObject({
+      version: 2,
+      preferredShellProfileID: "pwsh",
+    })
   })
 
   it("falls back to the empty workspace shape for invalid payloads", () => {

@@ -13,6 +13,7 @@ const {
 } = require("./build-info")
 const { ComputerUseError, asComputerUseError, cuError } = require("./errors")
 const { FrameDecoder, encodeFrame } = require("./frame-codec")
+const { createPowerShell7Detector } = require("./powershell7")
 const { SerialQueue } = require("./serial-queue")
 
 const PIPE_CONNECT_TIMEOUT_MS = 5_000
@@ -23,13 +24,20 @@ class HelperClient {
     this.helperArgs = options.helperArgs ?? []
     this.cwd = options.cwd
     this.spawn = options.spawn ?? spawn
+    this.spawnSync = options.spawnSync ?? spawnSync
     this.connect = options.connect ?? net.connect
     this.pipePath = options.pipePath ?? ((name) => `\\\\.\\pipe\\${name}`)
     this.stderr = options.stderr ?? process.stderr
     this.platform = options.platform ?? process.platform
+    this.env = options.env ?? process.env
+    this.powerShell7Detector = options.powerShell7Detector ?? createPowerShell7Detector({
+      env: this.env,
+      platform: this.platform,
+      spawnSync: this.spawnSync,
+    })
     this.verifyIntegrity = options.verifyIntegrity !== false
     this.requireAuthenticode = options.requireAuthenticode
-      ?? process.env.ANYBOX_COMPUTER_USE_REQUIRE_SIGNATURE?.trim() === "1"
+      ?? this.env.ANYBOX_COMPUTER_USE_REQUIRE_SIGNATURE?.trim() === "1"
     this.onPhysicalEscape = options.onPhysicalEscape
     this.onOverlayUnavailable = options.onOverlayUnavailable
     this.defaultContext = options.defaultContext
@@ -216,31 +224,29 @@ class HelperClient {
       "  exit 2",
       "}",
     ].join("; ")
-    let observedStatus
-    for (const executable of ["pwsh.exe", "powershell.exe"]) {
-      const result = spawnSync(executable, [
-        "-NoLogo",
-        "-NoProfile",
-        "-NonInteractive",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-Command",
-        script,
-      ], {
-        encoding: "utf8",
-        env: {
-          ...process.env,
-          ANYBOX_CU_SIGNATURE_TARGET: this.helperPath,
-        },
-        maxBuffer: 64 * 1024,
-        windowsHide: true,
-      })
-      const status = result.stdout?.trim()
-      if (result.status === 0 && status) {
-        observedStatus = status
-        break
-      }
+    const powerShell = this.powerShell7Detector.detect()
+    if (!powerShell.available) {
+      throw cuError("CU_PROTOCOL_MISMATCH", powerShell.message)
     }
+
+    const result = this.spawnSync(powerShell.executable, [
+      "-NoLogo",
+      "-NoProfile",
+      "-NonInteractive",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-Command",
+      script,
+    ], {
+      encoding: "utf8",
+      env: {
+        ...this.env,
+        ANYBOX_CU_SIGNATURE_TARGET: this.helperPath,
+      },
+      maxBuffer: 64 * 1024,
+      windowsHide: true,
+    })
+    const observedStatus = result.status === 0 ? result.stdout?.trim() : undefined
     if (observedStatus !== "Valid") {
       throw cuError(
         "CU_PROTOCOL_MISMATCH",

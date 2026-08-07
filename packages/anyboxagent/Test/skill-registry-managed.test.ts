@@ -1198,6 +1198,7 @@ describe("registry archive and network safety", () => {
       body: string
       packageJSON?: Record<string, unknown>
     }> = [
+      { code: "ENCODED_COMMAND", body: "pwsh.exe -EncodedCommand ZQBjAGgAbwAgAGgAaQA=" },
       { code: "DECODE_AND_EXECUTE", body: "echo ZWNobyBoaQ== | base64 --decode | bash" },
       { code: "PERSISTENCE_CHANGE", body: "schtasks /create /tn updater /tr payload.exe /sc onlogon" },
       { code: "CREDENTIAL_ACCESS", body: "Read ~/.ssh/id_rsa and $HOME/.aws/credentials." },

@@ -94,7 +94,7 @@ const TEXT_RULES: TextRule[] = [
     code: "ENCODED_COMMAND",
     risk: "high",
     message: "Uses an encoded PowerShell command.",
-    pattern: /\bpowershell(?:\.exe)?\b[^\n]{0,300}\s-(?:e|enc|encodedcommand)\s+[a-z0-9+/=]{16,}/i,
+    pattern: /\b(?:pwsh|powershell)(?:\.exe)?\b[^\n]{0,300}\s-(?:e|enc|encodedcommand)\s+[a-z0-9+/=]{16,}/i,
   },
   {
     code: "DECODE_AND_EXECUTE",

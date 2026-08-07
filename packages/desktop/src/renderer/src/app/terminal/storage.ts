@@ -23,12 +23,30 @@ export function loadTerminalWorkspaceState(storageKey?: string): TerminalWorkspa
   if (typeof window === "undefined") return createEmptyTerminalWorkspaceState()
 
   try {
-    const raw = window.localStorage.getItem(resolveTerminalStorageKey(storageKey))
+    const resolvedStorageKey = resolveTerminalStorageKey(storageKey)
+    const raw = window.localStorage.getItem(resolvedStorageKey)
     if (!raw) return createEmptyTerminalWorkspaceState()
 
     const parsed = JSON.parse(raw) as TerminalStoragePayload
     if (parsed.version !== 2) {
       return createEmptyTerminalWorkspaceState()
+    }
+
+    const preferredShellProfileID = typeof parsed.preferredShellProfileID === "string"
+      ? parsed.preferredShellProfileID === "powershell"
+        ? "pwsh"
+        : parsed.preferredShellProfileID
+      : null
+
+    if (parsed.preferredShellProfileID === "powershell") {
+      try {
+        window.localStorage.setItem(resolvedStorageKey, JSON.stringify({
+          ...parsed,
+          preferredShellProfileID,
+        }))
+      } catch {
+        // The in-memory migration still applies when storage is unavailable.
+      }
     }
 
     return {
@@ -44,7 +62,7 @@ export function loadTerminalWorkspaceState(storageKey?: string): TerminalWorkspa
             )
           : {},
       panelHeight: Number.isFinite(parsed.panelHeight) ? Math.max(220, Math.min(parsed.panelHeight, 560)) : DEFAULT_PANEL_HEIGHT,
-      preferredShellProfileID: typeof parsed.preferredShellProfileID === "string" ? parsed.preferredShellProfileID : null,
+      preferredShellProfileID,
     }
   } catch {
     return createEmptyTerminalWorkspaceState()

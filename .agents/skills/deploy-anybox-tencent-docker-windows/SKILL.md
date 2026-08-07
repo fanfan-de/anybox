@@ -30,7 +30,7 @@ ssh anybox-server 'docker --version && docker compose version && docker ps'
 
 ## 打包并上传
 
-在本地 Windows PowerShell 中执行：
+在本机 PowerShell 7 中执行：
 
 ```powershell
 cd C:\Projects

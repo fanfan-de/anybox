@@ -5,6 +5,10 @@ import path from "node:path"
 import { spawnSync } from "node:child_process"
 import { Readable } from "node:stream"
 import { finished } from "node:stream/promises"
+import {
+  buildPowerShell7Args,
+  requirePowerShell7Runtime,
+} from "../../platform/src/powershell.ts"
 
 const DEFAULT_PLATFORM = "android-36"
 const DEFAULT_BUILD_TOOLS = "36.0.0"
@@ -161,18 +165,15 @@ async function downloadFile(url, destination) {
     await finished(Readable.fromWeb(response.body).pipe(createWriteStream(destination)))
     return
   } catch (error) {
-    console.log(`Node download failed, retrying with PowerShell: ${error instanceof Error ? error.message : String(error)}`)
+    console.log(`Node download failed, retrying with PowerShell 7: ${error instanceof Error ? error.message : String(error)}`)
   }
 
+  const powerShell = await requirePowerShell7Runtime()
   const result = run(
-    "powershell",
-    [
-      "-NoProfile",
-      "-ExecutionPolicy",
-      "Bypass",
-      "-Command",
+    powerShell.executable,
+    buildPowerShell7Args(
       `$ProgressPreference = 'SilentlyContinue'; Invoke-WebRequest -Uri ${psQuote(url)} -OutFile ${psQuote(destination)} -MaximumRedirection 10`,
-    ],
+    ),
     { stdio: "inherit" },
   )
   if (result.status !== 0) {
@@ -180,16 +181,13 @@ async function downloadFile(url, destination) {
   }
 }
 
-function expandArchive(zipPath, destination) {
+async function expandArchive(zipPath, destination) {
+  const powerShell = await requirePowerShell7Runtime()
   const result = run(
-    "powershell",
-    [
-      "-NoProfile",
-      "-ExecutionPolicy",
-      "Bypass",
-      "-Command",
+    powerShell.executable,
+    buildPowerShell7Args(
       `Expand-Archive -LiteralPath ${psQuote(zipPath)} -DestinationPath ${psQuote(destination)} -Force`,
-    ],
+    ),
     { stdio: "inherit" },
   )
   if (result.status !== 0) {
@@ -207,7 +205,7 @@ async function installPortableJdk() {
   await fs.rm(extractPath, { force: true, recursive: true })
   console.log("Downloading portable JDK 17...")
   await downloadFile(JDK_URL, downloadPath)
-  expandArchive(downloadPath, extractPath)
+  await expandArchive(downloadPath, extractPath)
 
   const entries = await fs.readdir(extractPath, { withFileTypes: true })
   const jdkEntry = entries.find((entry) => entry.isDirectory())
@@ -230,7 +228,7 @@ async function installPortableAndroidCli(sdkRoot) {
   await fs.rm(tempExtractPath, { force: true, recursive: true })
   console.log("Downloading Android command-line tools...")
   await downloadFile(ANDROID_CLI_URL, downloadPath)
-  expandArchive(downloadPath, tempExtractPath)
+  await expandArchive(downloadPath, tempExtractPath)
 
   const source = path.join(tempExtractPath, "cmdline-tools")
   if (!existsSync(source)) throw new Error("Android CLI archive did not contain cmdline-tools.")

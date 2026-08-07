@@ -4,6 +4,10 @@ import fs from "node:fs"
 import fsp from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import {
+  buildPowerShell7Args,
+  requirePowerShell7Runtime,
+} from "../../platform/src/powershell.ts"
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const desktopDir = path.resolve(scriptDir, "..")
@@ -162,14 +166,11 @@ async function downloadVerifiedFile(url, target, expectedSha256) {
   }
 }
 
-function expandArchive(zipPath, targetDir) {
-  run("powershell.exe", [
-    "-NoLogo",
-    "-NoProfile",
-    "-NonInteractive",
-    "-Command",
+async function expandArchive(zipPath, targetDir) {
+  const powerShell = await requirePowerShell7Runtime()
+  run(powerShell.executable, buildPowerShell7Args(
     `Expand-Archive -LiteralPath '${zipPath.replaceAll("'", "''")}' -DestinationPath '${targetDir.replaceAll("'", "''")}' -Force`,
-  ])
+  ))
 }
 
 function expandMacPackage(pkgPath, targetDir) {
@@ -258,7 +259,7 @@ async function preparePythonDependencies(input) {
   await fsp.rm(pythonDir, { recursive: true, force: true })
   await fsp.mkdir(pythonDir, { recursive: true })
   await downloadFile(pythonEmbeddedUrl, zipPath)
-  expandArchive(zipPath, pythonDir)
+  await expandArchive(zipPath, pythonDir)
   await fsp.mkdir(sitePackagesDir, { recursive: true })
   await updatePythonPathFile(pythonDir)
   await downloadFile(getPipUrl, getPipPath)

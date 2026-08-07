@@ -1,3 +1,4 @@
+import { preparePowerShell7Command } from "@anybox/platform"
 import * as EnvironmentDiscovery from "#environment/discovery.ts"
 import * as EnvironmentEvents from "#environment/events.ts"
 import * as EnvironmentRunner from "#environment/runner.ts"
@@ -28,7 +29,7 @@ function actionTerminalKey(input: {
 
 function actionCommand(script: string) {
   if (process.platform === "win32") {
-    return `${script.trimEnd()}\r\nexit $LASTEXITCODE\r\n`
+    return `${preparePowerShell7Command(script.trimEnd())}\r\nexit $LASTEXITCODE\r\n`
   }
   return `${script.trimEnd()}\nexit $?\n`
 }
@@ -107,7 +108,7 @@ export async function startAction(input: {
     environment.rootDirectory,
     action.cwd,
   )
-  const invocation = resolveEnvironmentShellInvocation(script)
+  const invocation = await resolveEnvironmentShellInvocation(script)
   const terminalKey = actionTerminalKey({
     bindingID: environment.bindingID,
     environmentKey: environment.key,

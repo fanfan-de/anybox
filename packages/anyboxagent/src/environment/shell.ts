@@ -1,3 +1,10 @@
+import {
+  buildPowerShell7Args,
+  powerShell7Detector,
+  requirePowerShell7Runtime,
+  type PowerShell7Detector,
+} from "@anybox/platform"
+
 export interface EnvironmentShellInvocation {
   executable: string
   args: string[]
@@ -11,18 +18,16 @@ function resolveExecutable(candidates: string[]) {
   return undefined
 }
 
-export function resolveEnvironmentShellInvocation(
+export async function resolveEnvironmentShellInvocation(
   script: string,
   platform = process.platform,
-): EnvironmentShellInvocation {
+  detector: PowerShell7Detector = powerShell7Detector,
+): Promise<EnvironmentShellInvocation> {
   if (platform === "win32") {
-    const executable = resolveExecutable(["pwsh.exe", "pwsh", "powershell.exe", "powershell"])
-    if (!executable) {
-      throw new Error("PowerShell is required to run environment scripts on Windows.")
-    }
+    const runtime = await requirePowerShell7Runtime(detector)
     return {
-      executable,
-      args: ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script],
+      executable: runtime.executable,
+      args: buildPowerShell7Args(script),
     }
   }
 

@@ -7,6 +7,11 @@ import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os"
 import path from "node:path"
 import z from "zod"
+import {
+  createPowerShell7Detector,
+  POWERSHELL_7_INSTALL_MESSAGE,
+  type PowerShell7Detector,
+} from "@anybox/platform"
 import * as Agent from "#agent/agent.ts"
 import * as Identifier from "#id/id.ts"
 import { Instance } from "#project/instance.ts"
@@ -25,6 +30,7 @@ import {
   WslBashCommandTool,
   assessShellPermission,
   buildPowerShellArgs,
+  createPowerShellCommandTool,
   resolveCmdExecutable,
   resolveGitBashExecutable,
   resolveMacOSShellExecutable,
@@ -1430,7 +1436,7 @@ describe("tool contract", () => {
           : process.platform === "win32"
             ? {
                 tool: PowerShellCommandTool,
-                command: "Write-Output short-result",
+                command: "Write-Output short-result; Write-Output \"中文输出正常\"",
               }
             : null
         if (!shellCase) return
@@ -1448,12 +1454,27 @@ describe("tool contract", () => {
           },
         ))
 
+        const stdout = String(result.metadata?.stdout)
         expect(result.metadata).toMatchObject({
           exitCode: 0,
           runInBackground: false,
           backgroundTaskId: null,
-          stdout: expect.stringContaining("short-result"),
         })
+        expect(stdout).toContain("short-result")
+        if (process.platform === "win32") {
+          const modelOutput = await runtime.toModelOutput!(result)
+          expect(String(result.metadata?.shell)).toMatch(/pwsh\.exe$/i)
+          expect(String(result.metadata?.shellVersion)).toMatch(/^7\./)
+          expect(result.metadata?.shellEdition).toBe("Core")
+          expect(stdout).toContain("中文输出正常")
+          expect(modelOutput).toMatchObject({
+            type: "json",
+            value: {
+              shellVersion: expect.stringMatching(/^7\./),
+              shellEdition: "Core",
+            },
+          })
+        }
       },
     })
   }, 120000)
@@ -1470,7 +1491,7 @@ describe("tool contract", () => {
           : process.platform === "win32"
             ? {
                 tool: PowerShellCommandTool,
-                command: "Write-Host \"$([char]27)[32mterminal-short$([char]27)[0m\"",
+                command: "Write-Host \"$([char]27)[32mterminal-short$([char]27)[0m\"; Write-Output \"终端中文正常\"",
               }
             : null
         if (!shellCase) return
@@ -1497,6 +1518,13 @@ describe("tool contract", () => {
         })
         expect(String((result.metadata as any)?.terminalOutput)).toContain("terminal-short")
         expect(String((result.metadata as any)?.terminalOutput)).not.toContain("\x1b[")
+        if (process.platform === "win32") {
+          expect(String((result.metadata as any)?.terminalOutput)).toContain("终端中文正常")
+          expect(result.metadata).toMatchObject({
+            shellEdition: "Core",
+          })
+          expect(String(result.metadata?.shellVersion)).toMatch(/^7\./)
+        }
         const modelOutput = await runtime.toModelOutput!(result)
         expect((modelOutput as any).type).toBe("json")
         expect((modelOutput as any).value.tty).toBe(true)
@@ -2008,6 +2036,110 @@ describe("tool contract", () => {
   it("keeps PowerShell non-interactive by default and removes the flag for tty sessions", () => {
     expect(buildPowerShellArgs("python", false)).toContain("-NonInteractive")
     expect(buildPowerShellArgs("python", true)).not.toContain("-NonInteractive")
+    expect(buildPowerShellArgs("Write-Output '你好'", false).at(-1)).toContain(
+      "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)",
+    )
+    expect(buildPowerShellArgs("Write-Output '你好'", false).at(-1)).toEndWith("Write-Output '你好'")
+  })
+
+  it("describes the exact cached PowerShell 7 runtime before the tool is called", async () => {
+    let probes = 0
+    const detector = createPowerShell7Detector({
+      platform: "win32",
+      env: { PATH: "C:\\Tools" },
+      whichCommand: () => "C:\\Tools\\pwsh.exe",
+      probe: async () => {
+        probes += 1
+        return {
+          stdout: JSON.stringify({ version: "7.6.4", edition: "Core" }),
+          stderr: "",
+        }
+      },
+    })
+    const tool = createPowerShellCommandTool(detector)
+
+    const firstRuntime = await tool.init()
+    const secondRuntime = await tool.init()
+
+    expect(firstRuntime.description).toContain("Run commands using PowerShell 7.6.4 (Core).")
+    expect(firstRuntime.description).toContain(
+      "This tool only uses PowerShell 7 and never Windows PowerShell 5.1.",
+    )
+    expect(secondRuntime.description).toBe(firstRuntime.description)
+    expect(probes).toBe(1)
+
+    await Instance.provide({
+      directory: process.cwd(),
+      async fn() {
+        await expect(firstRuntime.validate?.(
+          { command: "$PSVersionTable", tty: false },
+          { cwd: process.cwd() } as Tool.Context,
+        )).resolves.toBeUndefined()
+      },
+    })
+    expect(probes).toBe(1)
+
+    const modelOutput = await firstRuntime.toModelOutput?.({
+      text: "ok",
+      metadata: {
+        command: "$PSVersionTable",
+        shell: "C:\\Tools\\pwsh.exe",
+        shellVersion: "7.6.4",
+        shellEdition: "Core",
+        cwd: process.cwd(),
+        displayCwd: ".",
+        timeoutMs: null,
+        exitCode: 0,
+        signal: null,
+        tty: false,
+        timedOut: false,
+        aborted: false,
+        stdoutTruncated: false,
+        stderrTruncated: false,
+        stdout: "ok",
+        stderr: "",
+        terminalOutput: "",
+        terminalOutputTruncated: false,
+      },
+    })
+    expect(modelOutput).toMatchObject({
+      type: "json",
+      value: {
+        shell: "C:\\Tools\\pwsh.exe",
+        shellVersion: "7.6.4",
+        shellEdition: "Core",
+      },
+    })
+  })
+
+  it("keeps the PowerShell tool visible but unavailable without blocking other tools", async () => {
+    const detector: PowerShell7Detector = {
+      async detect() {
+        return {
+          available: false,
+          message: POWERSHELL_7_INSTALL_MESSAGE,
+          detail: "missing",
+        }
+      },
+      async validate() {
+        throw new Error("validate should not be called")
+      },
+    }
+    const runtime = await createPowerShellCommandTool(detector).init()
+
+    expect(runtime.description).toContain("PowerShell 7 is unavailable on this machine. Do not call this tool.")
+    await Instance.provide({
+      directory: process.cwd(),
+      async fn() {
+        await expect(runtime.validate?.(
+          { command: "Write-Output ok", tty: false },
+          { cwd: process.cwd() } as Tool.Context,
+        )).resolves.toBe(POWERSHELL_7_INSTALL_MESSAGE)
+      },
+    })
+    await expect(CmdCommandTool.init()).resolves.toMatchObject({
+      title: "Command Prompt",
+    })
   })
 
   it("selects one-time shell tools by host platform", () => {
@@ -2113,12 +2245,16 @@ describe("tool contract", () => {
     const powershell = await resolvePowerShellExecutable({
       platform: "win32",
       env: {
-        SystemRoot: "C:\\Windows",
+        ProgramFiles: "C:\\Program Files",
       },
       whichCommand: () => null,
-      isFile: async (filePath) => filePath === "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      isFile: async (filePath) => filePath === "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+      probe: async () => ({
+        stdout: JSON.stringify({ version: "7.6.4", edition: "Core" }),
+        stderr: "",
+      }),
     })
-    expect(powershell).toBe("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe")
+    expect(powershell).toBe("C:\\Program Files\\PowerShell\\7\\pwsh.exe")
 
     const cmd = await resolveCmdExecutable({
       platform: "win32",

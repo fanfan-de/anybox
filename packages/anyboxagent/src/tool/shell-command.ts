@@ -1,6 +1,14 @@
 import path from "node:path"
 import { stat } from "node:fs/promises"
 import z from "zod"
+import {
+  buildPowerShell7Args,
+  createPowerShell7Detector,
+  powerShell7Detector,
+  requirePowerShell7Runtime,
+  type PowerShell7DetectionOptions,
+  type PowerShell7Detector,
+} from "@anybox/platform"
 import * as Tool from "#tool/tool.ts"
 import { Flag } from "#flag/flag.ts"
 import { Instance } from "#project/instance.ts"
@@ -85,6 +93,8 @@ export type ShellCommandInput = {
 interface ShellCommandMetadata extends Record<string, unknown> {
   command: string
   shell: string
+  shellVersion?: string
+  shellEdition?: string
   cwd: string
   displayCwd: string
   timeoutMs: number | null
@@ -121,6 +131,8 @@ type ShellInvocation = {
   executable: string
   args: string[]
   shell: string
+  shellVersion?: string
+  shellEdition?: string
   env?: NodeJS.ProcessEnv
 }
 
@@ -129,6 +141,7 @@ type ShellToolConfig<Parameters extends z.ZodType> = {
   title: string
   shellKind: ShellKind
   description: string
+  resolveDescription?: () => Promise<string>
   parameters: Parameters
   resolveInvocation(parameters: z.infer<Parameters>, cwd: string): Promise<ShellInvocation>
 }
@@ -608,23 +621,13 @@ export async function resolveMacOSShellExecutable(options?: ResolverOptions) {
   )
 }
 
-export async function resolvePowerShellExecutable(options?: ResolverOptions) {
-  const { env, platform, whichCommand, isFile } = getResolverParts(options)
-  const fromPath = whichCommand("powershell.exe", env) ?? whichCommand("powershell", env)
-  if (fromPath) return fromPath
-
-  if (platform === "win32") {
-    const windowsPath = path.win32
-    const systemRoot = env.SystemRoot ?? (env.SystemDrive ? windowsPath.join(env.SystemDrive, "Windows") : "C:\\Windows")
-    const defaultPath = windowsPath.join(systemRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
-    if (await isFile(defaultPath)) return defaultPath
-  }
-
-  throw new Error("No PowerShell executable was found. Install Windows PowerShell or add powershell.exe to PATH.")
+export async function resolvePowerShellExecutable(options?: PowerShell7DetectionOptions) {
+  const detector = options ? createPowerShell7Detector(options) : powerShell7Detector
+  return (await requirePowerShell7Runtime(detector)).executable
 }
 
 export function buildPowerShellArgs(command: string, tty = false) {
-  return ["-NoLogo", "-NoProfile", ...(tty ? [] : ["-NonInteractive"]), "-Command", command]
+  return buildPowerShell7Args(command, tty)
 }
 
 export async function resolveCmdExecutable(options?: ResolverOptions) {
@@ -666,9 +669,12 @@ function createShellCommandTool<Parameters extends z.ZodType>(
   return Tool.define(
     config.id,
     async (): Promise<Tool.ToolRuntime<Parameters, ShellCommandMetadata>> => {
+      const description = config.resolveDescription
+        ? await config.resolveDescription()
+        : config.description
       return {
         title: config.title,
-        description: config.description,
+        description,
         parameters: config.parameters,
         formatValidationError: (error) => formatValidationError(config.id, error),
         validate: async (parameters, ctx) => {
@@ -815,6 +821,8 @@ function createShellCommandTool<Parameters extends z.ZodType>(
               metadata: {
                 command,
                 shell: invocation.shell,
+                shellVersion: invocation.shellVersion,
+                shellEdition: invocation.shellEdition,
                 cwd,
                 displayCwd,
                 timeoutMs: timeoutMs ?? null,
@@ -930,6 +938,8 @@ function createShellCommandTool<Parameters extends z.ZodType>(
             metadata: {
               command,
               shell: invocation.shell,
+              shellVersion: invocation.shellVersion,
+              shellEdition: invocation.shellEdition,
               cwd,
               displayCwd,
               timeoutMs: timeoutMs ?? null,
@@ -968,6 +978,8 @@ function createShellCommandTool<Parameters extends z.ZodType>(
               command: metadata.command,
               workdir: metadata.displayCwd,
               shell: metadata.shell,
+              ...(metadata.shellVersion ? { shellVersion: metadata.shellVersion } : {}),
+              ...(metadata.shellEdition ? { shellEdition: metadata.shellEdition } : {}),
               tty: metadata.tty,
               exitCode: metadata.exitCode,
               signal: metadata.signal,
@@ -1057,23 +1069,47 @@ export const MacOSShellCommandTool = createShellCommandTool({
   },
 })
 
-export const PowerShellCommandTool = createShellCommandTool({
-  id: "powershell_command",
-  title: "PowerShell",
-  shellKind: "powershell",
-  description: "Run a Windows PowerShell command inside the current project boundary. Use PowerShell cmdlet syntax, object pipelines, and $env:VAR environment variables.",
-  parameters: PowerShellCommandParameters,
-  async resolveInvocation(parameters) {
-    const executable = await resolvePowerShellExecutable()
-    const input = shellInput(parameters)
-    const command = input.command.trim()
-    return {
-      executable,
-      args: buildPowerShellArgs(command, input.tty ?? false),
-      shell: executable,
-    }
-  },
-})
+export function createPowerShellCommandTool(
+  detector: PowerShell7Detector = powerShell7Detector,
+) {
+  return createShellCommandTool({
+    id: "powershell_command",
+    title: "PowerShell",
+    shellKind: "powershell",
+    description: "Run PowerShell 7 commands inside the current project boundary.",
+    async resolveDescription() {
+      const runtime = await detector.detect()
+      if (!runtime.available) {
+        return [
+          "PowerShell 7 is unavailable on this machine. Do not call this tool.",
+          "Install it with: winget install --id Microsoft.PowerShell --source winget",
+          "Then restart Anybox. Windows PowerShell 5.1 is not supported.",
+        ].join("\n")
+      }
+
+      return [
+        `Run commands using PowerShell ${runtime.version} (${runtime.edition}).`,
+        "This tool only uses PowerShell 7 and never Windows PowerShell 5.1.",
+        "Commands run inside the current project boundary. Use PowerShell cmdlet syntax, object pipelines, and $env:VAR environment variables.",
+      ].join("\n")
+    },
+    parameters: PowerShellCommandParameters,
+    async resolveInvocation(parameters) {
+      const runtime = await requirePowerShell7Runtime(detector)
+      const input = shellInput(parameters)
+      const command = input.command.trim()
+      return {
+        executable: runtime.executable,
+        args: buildPowerShellArgs(command, input.tty ?? false),
+        shell: runtime.executable,
+        shellVersion: runtime.version,
+        shellEdition: runtime.edition,
+      }
+    },
+  })
+}
+
+export const PowerShellCommandTool = createPowerShellCommandTool()
 
 export const CmdCommandTool = createShellCommandTool({
   id: "cmd_command",

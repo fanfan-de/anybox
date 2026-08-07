@@ -132,3 +132,55 @@ test("helper client waits for end_turn before stopping the helper", async () => 
   })
   assert.equal(client.process, undefined)
 })
+
+test("helper Authenticode verification uses only the validated PowerShell 7 path", () => {
+  const calls = []
+  const client = createClient({
+    powerShell7Detector: {
+      detect() {
+        return {
+          available: true,
+          executable: "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+          version: "7.6.4",
+          edition: "Core",
+          major: 7,
+        }
+      },
+    },
+    spawnSync(executable, args) {
+      calls.push({ executable, args })
+      return { status: 0, stdout: "Valid", stderr: "" }
+    },
+  })
+
+  client.verifyHelperAuthenticode()
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].executable, "C:\\Program Files\\PowerShell\\7\\pwsh.exe")
+  assert.ok(!calls[0].executable.toLowerCase().endsWith("powershell.exe"))
+})
+
+test("helper Authenticode verification reports the PowerShell 7 install guidance", () => {
+  const client = createClient({
+    powerShell7Detector: {
+      detect() {
+        return {
+          available: false,
+          message: [
+            "PowerShell 7 is required but pwsh.exe was not found.",
+            "Install it with:",
+            "winget install --id Microsoft.PowerShell --source winget",
+            "Then restart Anybox.",
+            "Windows PowerShell 5.1 is not supported.",
+          ].join("\n"),
+          detail: "missing",
+        }
+      },
+    },
+  })
+
+  assert.throws(
+    () => client.verifyHelperAuthenticode(),
+    (error) => error.code === "CU_PROTOCOL_MISMATCH"
+      && error.message.includes("winget install --id Microsoft.PowerShell --source winget"),
+  )
+})

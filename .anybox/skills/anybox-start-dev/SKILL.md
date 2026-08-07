@@ -1,6 +1,6 @@
 ---
 name: anybox-start-dev
-description: Start the Anybox local development environment by launching the agent server and desktop client in separate PowerShell windows. Use when Codex needs to boot this repository for manual testing or local verification, or when the user asks to start the server or client, run `bun run dev:server` in `packages/anyboxagent`, or run `bun run dev` in `packages/desktop`.
+description: Start the Anybox local development environment by launching the agent server and desktop client in separate PowerShell 7 windows. Use when Codex needs to boot this repository for manual testing or local verification, or when the user asks to start the server or client, run `bun run dev:server` in `packages/anyboxagent`, or run `bun run dev` in `packages/desktop`.
 ---
 
 # Anybox Start Dev
@@ -10,7 +10,7 @@ Use the bundled script to start the two long-running development processes requi
 ## Workflow
 
 1. Run `scripts/start-dev.ps1`.
-2. Let the script open two new PowerShell windows.
+2. Let the script open two new PowerShell 7 windows.
 3. Keep both windows open for the rest of the verification or testing session.
 
 The script starts exactly these commands:
@@ -27,4 +27,4 @@ The script starts exactly these commands:
 
 ## Resource
 
-- `scripts/start-dev.ps1`: Open the server and client in separate PowerShell windows.
+- `scripts/start-dev.ps1`: Open the server and client in separate PowerShell 7 windows.
