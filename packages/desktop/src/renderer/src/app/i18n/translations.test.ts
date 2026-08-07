@@ -164,7 +164,7 @@ describe("i18n translations", () => {
     expect(t("en-US", "thread.error.message.insufficientBalance")).toBe(
       "Your balance is insufficient. Add funds and try again.",
     )
-    expect(getTranslationDictionary("zh-CN")["thread.permission.trace.requested"]).toBe("请求权限")
+    expect(getTranslationDictionary("zh-CN")["thread.permission.trace.requested"]).toBe("需要你的确认")
     expect(translateLiteral("zh-CN", "Run MCP tool resolve-library-id from Context7 Docs.")).toBe(
       "运行 Context7 Docs 的 MCP 工具 resolve-library-id。",
     )

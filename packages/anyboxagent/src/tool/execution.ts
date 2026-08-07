@@ -2,6 +2,7 @@ import * as Agent from "#agent/agent.ts"
 import * as Config from "#config/config.ts"
 import * as Identifier from "#id/id.ts"
 import * as Permission from "#permission/permission.ts"
+import { runWithFilesystemAuthorization } from "#permission/filesystem-authorization.ts"
 import { Instance } from "#project/instance.ts"
 import type * as Provider from "#provider/provider.ts"
 import * as Session from "#session/core/session.ts"
@@ -234,9 +235,11 @@ export async function createToolExecution(input: {
         throw new Error("Tool execution requires approval before it can continue.")
       }
 
-      const normalizedOutput = Tool.normalizeToolOutput(
-        await runtime.execute(args, runtimeContext(toolCallID)),
-      )
+      const execute = () => runtime.execute(args, runtimeContext(toolCallID))
+      const rawOutput = decision.filesystemAuthorization
+        ? await runWithFilesystemAuthorization(decision.filesystemAuthorization, execute)
+        : await execute()
+      const normalizedOutput = Tool.normalizeToolOutput(rawOutput)
       const source = input.item.source
       const output = source && (source.kind === "mcp" || source.kind === "native-module")
         ? {

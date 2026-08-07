@@ -1,13 +1,15 @@
 import { test, expect } from "bun:test"
 import "./sqlite.cleanup.ts"
 import { $ } from "bun"
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises"
+import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { Instance } from "#project/instance.ts"
 import * as Identifier from "#id/id.ts"
 import * as Config from "#config/config.ts"
 import * as Permission from "#permission/permission.ts"
+import { runWithFilesystemAuthorization } from "#permission/filesystem-authorization.ts"
+import { resolveToolPath } from "#tool/shared.ts"
 import {
   getBrowserAuthorizationEnvironment,
   signBrowserAuthorizationReceipt,
@@ -577,7 +579,7 @@ test("permission defaults auto-run safe reads and writes while honoring tool den
   }
 }, 120000)
 
-test("permission allows read-only tools to reference outside paths", async () => {
+test("permission asks for outside writes by default and allows them in full access mode", async () => {
   const repositoryRoot = await mkdtemp(path.join(tmpdir(), "anybox-permission-read-outside-"))
   const outsideRoot = await mkdtemp(path.join(tmpdir(), "anybox-permission-read-outside-target-"))
 
@@ -622,8 +624,101 @@ test("permission allows read-only tools to reference outside paths", async () =>
         })
 
         expect(readDecision.action).toBe("allow")
-        expect(writeDecision.action).toBe("deny")
+        expect(writeDecision.action).toBe("ask")
+        expect(writeDecision.risk).toBe("high")
+        expect(writeDecision.filesystemAuthorization).toEqual({
+          allowOutsideWorkspace: false,
+          paths: [outsideFile],
+        })
         expect(readDecision.derived.paths).toContain(outsideFile.replaceAll("\\", "/"))
+
+        await Config.setPermissionMode(Config.GLOBAL_CONFIG_ID, "full_access")
+        const fullAccessDecision = await Permission.evaluate({
+          ...base,
+          toolCallID: "toolcall_write_outside_full_access",
+          tool: {
+            id: "replace_text",
+            kind: "write",
+            readOnly: false,
+            destructive: false,
+            needsShell: false,
+          },
+        })
+
+        expect(fullAccessDecision.action).toBe("allow")
+        expect(fullAccessDecision.risk).toBe("high")
+        expect(fullAccessDecision.filesystemAuthorization).toEqual({
+          allowOutsideWorkspace: false,
+          paths: [outsideFile],
+        })
+        expect(resolveToolPath(outsideFile)).toBe(outsideFile)
+        expect(runWithFilesystemAuthorization(
+          fullAccessDecision.filesystemAuthorization!,
+          () => resolveToolPath(outsideFile),
+        )).toBe(outsideFile)
+        expect(() => runWithFilesystemAuthorization(
+          fullAccessDecision.filesystemAuthorization!,
+          () => resolveToolPath(path.join(outsideRoot, "not-approved.txt")),
+        )).toThrow("does not match the frozen filesystem authorization")
+        await Config.setPermissionMode(Config.GLOBAL_CONFIG_ID, "default")
+
+        const patchTarget = path.join(outsideRoot, "created-by-patch.txt")
+        const patchDecision = await Permission.evaluate({
+          ...base,
+          toolCallID: "toolcall_patch_outside",
+          input: {
+            patch: `*** Begin Patch\n*** Add File: ${patchTarget}\n+created\n*** End Patch`,
+          },
+          tool: {
+            id: "apply_patch",
+            kind: "write",
+            readOnly: false,
+            destructive: false,
+            needsShell: false,
+          },
+        })
+        expect(patchDecision.action).toBe("ask")
+        expect(patchDecision.filesystemAuthorization?.paths).toEqual([patchTarget])
+
+        const sensitiveDecision = await Permission.evaluate({
+          ...base,
+          toolCallID: "toolcall_sensitive_outside",
+          input: {
+            file_path: path.join(outsideRoot, ".env"),
+          },
+          tool: {
+            id: "replace_text",
+            kind: "write",
+            readOnly: false,
+            destructive: false,
+            needsShell: false,
+          },
+        })
+        expect(sensitiveDecision).toMatchObject({
+          action: "deny",
+          risk: "critical",
+        })
+
+        const linkedDirectory = path.join(repositoryRoot, "outside-link")
+        await symlink(outsideRoot, linkedDirectory, process.platform === "win32" ? "junction" : "dir")
+        const linkedWriteDecision = await Permission.evaluate({
+          ...base,
+          toolCallID: "toolcall_symlinked_write_outside",
+          input: {
+            file_path: path.join(linkedDirectory, "linked-output.txt"),
+          },
+          tool: {
+            id: "replace_text",
+            kind: "write",
+            readOnly: false,
+            destructive: false,
+            needsShell: false,
+          },
+        })
+        expect(linkedWriteDecision.action).toBe("ask")
+        expect(linkedWriteDecision.filesystemAuthorization?.paths).toEqual([
+          path.join(outsideRoot, "linked-output.txt"),
+        ])
       },
     })
   } finally {

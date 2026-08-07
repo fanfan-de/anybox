@@ -40,6 +40,7 @@ import {
 } from "#tool/shell-command.ts"
 import { GlobTool } from "#tool/glob.ts"
 import { GrepTool } from "#tool/grep.ts"
+import { ListDirectoryTool } from "#tool/list-directory.ts"
 import { ReadFileTool } from "#tool/read-file.ts"
 import { ReplaceTextTool } from "#tool/replace-text.ts"
 import { SshShellCommandTool } from "#tool/ssh-shell-command.ts"
@@ -4278,6 +4279,40 @@ describe("tool contract", () => {
     }
   }, 120000)
 
+  it("lists an explicit absolute directory outside the project", async () => {
+    const repositoryRoot = await mkdtemp(path.join(tmpdir(), "anybox-list-outside-project-"))
+    const outsideRoot = await mkdtemp(path.join(tmpdir(), "anybox-list-outside-source-"))
+
+    try {
+      await createGitRepo(repositoryRoot, "list-outside-project")
+      await writeFile(path.join(outsideRoot, "outside.txt"), "outside project\n")
+
+      await Instance.provide({
+        directory: repositoryRoot,
+        async fn() {
+          const runtime = await ListDirectoryTool.init()
+          const result = Tool.normalizeToolOutput(await runtime.execute(
+            {
+              path: outsideRoot,
+              recursive: true,
+              maxEntries: 50,
+              includeHidden: true,
+            },
+            {
+              sessionID: "session-list-outside",
+              messageID: "message-list-outside",
+            },
+          ))
+
+          expect(result.text).toContain("outside.txt")
+        },
+      })
+    } finally {
+      await rm(repositoryRoot, { recursive: true, force: true })
+      await rm(outsideRoot, { recursive: true, force: true })
+    }
+  }, 120000)
+
   it("rejects binary files for text reads", async () => {
     const repositoryRoot = await mkdtemp(path.join(tmpdir(), "anybox-read-binary-"))
 
@@ -4644,7 +4679,7 @@ describe("tool contract", () => {
     }
   })
 
-  it("rejects symlinked paths that resolve outside the project boundary", async () => {
+  it("allows read-only access through symlinks that resolve outside the project boundary", async () => {
     const repositoryRoot = await mkdtemp(path.join(tmpdir(), "anybox-read-symlink-"))
     const outsideRoot = await mkdtemp(path.join(tmpdir(), "anybox-read-symlink-target-"))
 
@@ -4664,17 +4699,16 @@ describe("tool contract", () => {
         async fn() {
           const runtime = await ReadFileTool.init()
 
-          await expect(
-            runtime.execute(
-              {
-                path: "linked/secret.txt",
-              },
-              {
-                sessionID: "session-read-symlink",
-                messageID: "message-read-symlink",
-              },
-            ),
-          ).rejects.toThrow("outside the active project boundary")
+          const result = Tool.normalizeToolOutput(await runtime.execute(
+            {
+              path: "linked/secret.txt",
+            },
+            {
+              sessionID: "session-read-symlink",
+              messageID: "message-read-symlink",
+            },
+          ))
+          expect(result.text).toContain("outside project")
         },
       })
     } finally {

@@ -133,6 +133,10 @@ export const RequestRuntime = z
     toolKind: ToolKind.optional(),
     input: z.record(z.string(), z.any()),
     resource: RequestResource.optional(),
+    filesystemAuthorization: z.object({
+      allowOutsideWorkspace: z.boolean(),
+      paths: z.array(z.string()),
+    }).optional(),
   })
   .meta({
     ref: "PermissionRequestRuntime",

@@ -1,4 +1,5 @@
 import * as path from "node:path"
+import { realpathSync } from "node:fs"
 import z from "zod"
 import * as Log from "#util/log.ts"
 import * as db from "#database/Sqlite.ts"
@@ -15,6 +16,7 @@ import * as Orchestrator from "#session/runtime/orchestrator.ts"
 import * as EventStore from "#session/runtime/event-store.ts"
 import * as Session from "#session/core/session.ts"
 import * as Schema from "#permission/schema.ts"
+import { runWithFilesystemAuthorization } from "#permission/filesystem-authorization.ts"
 
 const log = Log.create({ service: "permission" })
 let permissionTablesGeneration = -1
@@ -139,6 +141,10 @@ export type EvaluationResult = {
   action: Action
   reason: string
   risk: Risk
+  filesystemAuthorization?: {
+    allowOutsideWorkspace: boolean
+    paths: string[]
+  }
   derived: {
     paths: string[]
     command?: string
@@ -267,14 +273,19 @@ function isPermissionDisabled() {
 }
 
 function extractPatchPaths(patch: string) {
-  const matches = patch.matchAll(/^(?:---|\+\+\+)\s+(.*)$/gm)
   const result = new Set<string>()
 
-  for (const match of matches) {
-    const raw = match[1]?.trim()
-    if (!raw || raw === "/dev/null") continue
-    const normalized = raw.startsWith("a/") || raw.startsWith("b/") ? raw.slice(2) : raw
-    result.add(normalized)
+  for (const pattern of [
+    /^(?:---|\+\+\+)\s+(.*)$/gm,
+    /^\*\*\* (?:Add|Update|Delete) File:\s*(.*)$/gm,
+    /^\*\*\* Move to:\s*(.*)$/gm,
+  ]) {
+    for (const match of patch.matchAll(pattern)) {
+      const raw = match[1]?.trim()
+      if (!raw || raw === "/dev/null") continue
+      const normalized = raw.startsWith("a/") || raw.startsWith("b/") ? raw.slice(2) : raw
+      result.add(normalized)
+    }
   }
 
   return [...result]
@@ -285,13 +296,38 @@ function resolvePathCandidate(inputPath: string, cwd: string, worktree?: string)
     ? path.resolve(inputPath)
     : path.resolve(cwd, inputPath)
   const normalized = Filesystem.normalizePath(resolved)
+  const suffix: string[] = []
+  let current = normalized
+  let canonical = normalized
+  while (true) {
+    try {
+      const existing = Filesystem.normalizePath(realpathSync.native(current))
+      canonical = Filesystem.normalizePath(suffix.length > 0 ? path.join(existing, ...suffix) : existing)
+      break
+    } catch {
+      const parent = path.dirname(current)
+      if (parent === current) break
+      suffix.unshift(path.basename(current))
+      current = parent
+    }
+  }
 
   const root = worktree || cwd
   const relative = asPosix(path.relative(root, normalized))
-  const inside = Filesystem.contains(root, normalized) || Filesystem.contains(cwd, normalized)
+  const lexicalInside = Filesystem.contains(root, normalized) || Filesystem.contains(cwd, normalized)
+  const canonicalRoots = [root, cwd].map((candidate) => {
+    try {
+      return Filesystem.normalizePath(realpathSync.native(candidate))
+    } catch {
+      return Filesystem.normalizePath(candidate)
+    }
+  })
+  const canonicalInside = canonicalRoots.some((candidate) => Filesystem.contains(candidate, canonical))
+  const inside = lexicalInside && canonicalInside
 
   return {
     absolute: normalized,
+    canonical,
     relative: relative && relative !== "" && !relative.startsWith("..") ? relative : asPosix(inputPath),
     inside,
   }
@@ -344,7 +380,20 @@ function extractPaths(input: Record<string, unknown>, cwd: string, worktree?: st
 }
 
 function isSensitivePath(relativePath: string) {
-  return SENSITIVE_PATH_PATTERNS.some((pattern) => matchPattern(pattern, relativePath))
+  const normalized = asPosix(relativePath)
+  const basename = normalized.split("/").at(-1) ?? normalized
+  const lower = normalized.toLowerCase()
+  return SENSITIVE_PATH_PATTERNS.some((pattern) => (
+    matchPattern(pattern, normalized) || matchPattern(pattern, basename)
+  )) || [
+    "/.ssh/",
+    "/.gnupg/",
+    "/.aws/",
+    "/.kube/",
+    "/.config/gcloud/",
+  ].some((segment) => lower.includes(segment))
+    || /^[a-z]:\/(?:windows|program files|program files \(x86\))(?:\/|$)/i.test(lower)
+    || /^\/(?:etc|usr|bin|sbin|system|library)(?:\/|$)/i.test(lower)
 }
 
 const RISK_ORDER: Record<Risk, number> = {
@@ -838,6 +887,7 @@ function buildRuntimeSnapshot(input: {
   toolKind?: Schema.ToolKind
   rawInput: Record<string, unknown>
   derived: EvaluationResult["derived"]
+  filesystemAuthorization?: EvaluationResult["filesystemAuthorization"]
 }): Schema.RequestRuntime {
   return Schema.RequestRuntime.parse({
     tool: input.tool,
@@ -849,6 +899,7 @@ function buildRuntimeSnapshot(input: {
       workdir: input.derived.workdir,
       body: input.derived.body,
     },
+    filesystemAuthorization: input.filesystemAuthorization,
   })
 }
 
@@ -919,7 +970,8 @@ export async function evaluate(input: EvaluationInput): Promise<EvaluationResult
     body: body || undefined,
   }
   const workflow = Session.normalizeWorkflowState(session?.workflow)
-  const risk = maxRisk(deriveRisk(input, derived.paths), intent?.risk ?? "low")
+  const riskPaths = derivedPaths.resolved.flatMap((item) => [item.relative, item.canonical])
+  const risk = maxRisk(deriveRisk(input, riskPaths), intent?.risk ?? "low")
   const turn = input.turnID
     ? Session.DataBaseRead("turns", input.turnID) as Session.TurnInfo | null
     : null
@@ -952,18 +1004,77 @@ export async function evaluate(input: EvaluationInput): Promise<EvaluationResult
     return result
   }
 
+  const storedRequest = await findStoredRequestForToolCall(input.toolCallID)
+
   if (derivedPaths.hasOutsidePath && input.tool.readOnly !== true) {
+    if (storedRequest?.status === "denied") {
+      const result: EvaluationResult = {
+        action: "deny",
+        reason: storedRequest.resolutionReason?.trim() || "Tool execution was denied by the user.",
+        risk: storedRequest.risk,
+        derived,
+      }
+      await audit(input, result)
+      return result
+    }
+
+    if (intent?.action === "deny" || risk === "critical") {
+      const result: EvaluationResult = {
+        action: "deny",
+        reason: intent?.action === "deny"
+          ? intent.reason?.trim() || "The tool denied this operation."
+          : "Critical-risk tool calls are blocked by the automatic safe-run policy.",
+        risk,
+        derived,
+      }
+      await audit(input, result)
+      return result
+    }
+
+    if (storedRequest?.status === "approved") {
+      const frozenAuthorization = storedRequest.runtime?.filesystemAuthorization
+      if (!frozenAuthorization) {
+        const result: EvaluationResult = {
+          action: "deny",
+          reason: "Approved outside-workspace write is missing its frozen filesystem authorization.",
+          risk: "critical",
+          derived,
+        }
+        await audit(input, result)
+        return result
+      }
+      const result: EvaluationResult = {
+        action: "allow",
+        reason: "Tool execution was approved by the user.",
+        risk: storedRequest.risk,
+        filesystemAuthorization: {
+          allowOutsideWorkspace: false,
+          paths: frozenAuthorization.paths,
+        },
+        derived,
+      }
+      await audit(input, result)
+      return result
+    }
+
+    const permissionMode = await Config.getPermissionMode(Config.GLOBAL_CONFIG_ID)
+    const fullAccess = permissionMode.mode === "full_access"
     const result: EvaluationResult = {
-      action: "deny",
-      reason: "Tool input referenced a path outside the active project boundary for a tool with side effects.",
-      risk: "critical",
+      action: fullAccess ? "allow" : "ask",
+      reason: fullAccess
+        ? "Full access mode approved this write outside the active project boundary."
+        : "Tool requires approval to write outside the active project boundary.",
+      risk: "high",
+      filesystemAuthorization: {
+        allowOutsideWorkspace: false,
+        paths: derivedPaths.resolved.filter((item) => !item.inside).map((item) => item.canonical),
+      },
       derived,
     }
     await audit(input, result)
     return result
   }
 
-  const storedRequest = await findStoredRequestForToolCall(input.toolCallID)
   if (storedRequest?.status === "approved") {
     const result: EvaluationResult = {
       action: "allow",
@@ -1275,6 +1386,7 @@ export async function registerApprovalRequest(input: {
     toolKind: descriptor.kind,
     rawInput: input.toolPart.state.input,
     derived: decision.derived,
+    filesystemAuthorization: decision.filesystemAuthorization,
   })
 
   const record = Schema.Request.parse({
@@ -1498,16 +1610,23 @@ async function completeApprovedRequest(
       }
 
       try {
+        const executeApprovedTool = () => runtime.execute(request.input, {
+          sessionID: request.sessionID,
+          turnID: turn?.turnID ?? request.approvalID,
+          messageID: request.messageID,
+          cwd: session.directory,
+          worktree: Instance.worktree,
+          abort: new AbortController().signal,
+          toolCallID: request.toolCallID,
+        })
+        const rawOutput = request.runtime?.filesystemAuthorization
+          ? await runWithFilesystemAuthorization(
+              request.runtime.filesystemAuthorization,
+              executeApprovedTool,
+            )
+          : await executeApprovedTool()
         const output = Tool.normalizeToolOutput(
-          await runtime.execute(request.input, {
-            sessionID: request.sessionID,
-            turnID: turn?.turnID ?? request.approvalID,
-            messageID: request.messageID,
-            cwd: session.directory,
-            worktree: Instance.worktree,
-            abort: new AbortController().signal,
-            toolCallID: request.toolCallID,
-          }),
+          rawOutput,
         )
 
         const attachments = (output.attachments ?? [])

@@ -3,7 +3,6 @@ import { createReadStream, realpathSync } from "node:fs"
 import { mkdir, open, readFile, readdir, rename, rm, stat as localStat, writeFile } from "node:fs/promises"
 import {
   containsSshRemotePath,
-  containsWorkspaceLocation,
   createSshWorkspaceUri,
   isSshWorkspaceUri,
   joinSshRemotePath,
@@ -13,6 +12,7 @@ import {
 } from "@anybox/shared"
 import { Instance } from "#project/instance.ts"
 import * as Filesystem from "#util/filesystem.ts"
+import { currentFilesystemAuthorization } from "#permission/filesystem-authorization.ts"
 import * as Ssh from "#remote/ssh/index.ts"
 
 const FAST_TEXT_READ_BYTES = 1024 * 1024
@@ -220,12 +220,7 @@ export function resolveToolPath(inputPath: string): string {
       throw new Error(`Path is outside the active SSH profile: ${inputPath}`)
     }
 
-    const targetUri = createSshWorkspaceUri(root.profileID, target.remotePath)
-    if (!containsWorkspaceLocation(Instance.directory, targetUri) && !containsWorkspaceLocation(Instance.worktree, targetUri)) {
-      throw new Error(`Path is outside the active project boundary: ${inputPath}`)
-    }
-
-    return targetUri
+    return createSshWorkspaceUri(root.profileID, target.remotePath)
   }
 
   if (isUncPath(inputPath)) {
@@ -237,10 +232,6 @@ export function resolveToolPath(inputPath: string): string {
     : path.resolve(Instance.directory, inputPath)
   const normalized = Filesystem.normalizePath(resolved)
 
-  if (!Instance.containsPath(normalized)) {
-    throw new Error(`Path is outside the active project boundary: ${inputPath}`)
-  }
-
   const canonical = resolveDeepestExistingPath(normalized)
   const canonicalRoots = [
     resolveDeepestExistingPath(Instance.directory),
@@ -250,9 +241,19 @@ export function resolveToolPath(inputPath: string): string {
   const insideCanonicalBoundary = canonicalRoots.some((root) =>
     Filesystem.contains(root, canonical)
   )
+  const insideWorkspace = Instance.containsPath(normalized) && insideCanonicalBoundary
+  const authorization = currentFilesystemAuthorization()
 
-  if (!insideCanonicalBoundary) {
-    throw new Error(`Path resolves outside the active project boundary: ${inputPath}`)
+  if (authorization && !insideWorkspace) {
+    const authorizedOutsidePath = authorization.allowOutsideWorkspace
+      || authorization.paths.some((approvedPath) => {
+        const canonicalApproved = resolveDeepestExistingPath(Filesystem.normalizePath(path.resolve(approvedPath)))
+        return canonicalApproved === canonical
+      })
+
+    if (!authorizedOutsidePath) {
+      throw new Error(`Path does not match the frozen filesystem authorization: ${inputPath}`)
+    }
   }
 
   return normalized

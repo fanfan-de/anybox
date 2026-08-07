@@ -4996,18 +4996,22 @@ function PermissionRequestCard({
   const rationale = translatePermissionText(locale, request.prompt.rationale)
   const detailBody = request.prompt.details?.body?.trim()
   const permissionDecisions = getAllowedPermissionDecisions(request)
+  const requestedPaths = request.prompt.details?.paths?.filter((path) => path.trim()) ?? []
+  const primaryTarget = requestedPaths.length > 0
+    ? requestedPaths.join(", ")
+    : request.prompt.details?.workdir?.trim()
+  const primaryTargetLabel = requestedPaths.length > 0
+    ? t(permissionDetailLabelTranslationKeys.paths)
+    : t(permissionDetailLabelTranslationKeys.workdir)
   const detailLines = [
     rationale && rationale !== summary
       ? { key: "rationale", label: t(permissionDetailLabelTranslationKeys.rationale), value: rationale, isWide: true }
       : null,
-    request.prompt.details?.workdir
+    request.prompt.details?.workdir && request.prompt.details.workdir !== "."
       ? { key: "workdir", label: t(permissionDetailLabelTranslationKeys.workdir), value: request.prompt.details.workdir, isWide: false }
       : null,
     request.prompt.details?.command
       ? { key: "command", label: t(permissionDetailLabelTranslationKeys.command), value: request.prompt.details.command, isWide: true }
-      : null,
-    request.prompt.details?.paths && request.prompt.details.paths.length > 0
-      ? { key: "paths", label: t(permissionDetailLabelTranslationKeys.paths), value: request.prompt.details.paths.join(", "), isWide: true }
       : null,
   ].filter((item): item is { key: PermissionRequestDetailKey; label: string; value: string; isWide: boolean } => Boolean(item))
 
@@ -5024,7 +5028,6 @@ function PermissionRequestCard({
       <header className="permission-request-header">
         <div>
           <div className="permission-request-context">
-            <span className="permission-request-context-label">{t("thread.permission.trace.label")}</span>
             <span className="permission-request-context-title">{t("thread.permission.trace.requested")}</span>
           </div>
           <h3>{title}</h3>
@@ -5039,6 +5042,13 @@ function PermissionRequestCard({
           <span className={`permission-risk-chip is-${request.prompt.risk}`}>{formatPermissionRiskLabel(request.prompt.risk, t)}</span>
         </div>
       </header>
+
+      {primaryTarget ? (
+        <div className="permission-request-target">
+          <span className="permission-request-target-label">{primaryTargetLabel}</span>
+          <strong title={primaryTarget}>{primaryTarget}</strong>
+        </div>
+      ) : null}
 
       <div className="permission-request-controls">
         <div className="settings-inline-actions permission-request-actions">
@@ -5062,7 +5072,10 @@ function PermissionRequestCard({
 
       {request.prompt.detailsAvailable && (detailLines.length > 0 || detailBody) ? (
         <details className="permission-request-disclosure">
-          <summary>{t("thread.permission.details")}</summary>
+          <summary>
+            <ChevronRightIcon aria-hidden="true" />
+            <span>{t("thread.permission.details")}</span>
+          </summary>
           <div className="permission-request-grid permission-request-grid-compact">
             <div className="permission-request-meta">
               <span className="permission-request-meta-label">{t("thread.permission.requested")}</span>
@@ -5071,7 +5084,11 @@ function PermissionRequestCard({
             {detailLines.map((item) => (
               <div
                 key={item.key}
-                className={item.isWide ? "permission-request-meta permission-request-meta-wide" : "permission-request-meta"}
+                className={joinClassNames(
+                  "permission-request-meta",
+                  item.isWide && "permission-request-meta-wide",
+                  item.key === "command" && "is-command",
+                )}
               >
                 <span className="permission-request-meta-label">{item.label}</span>
                 <strong>{item.value}</strong>
@@ -5086,10 +5103,6 @@ function PermissionRequestCard({
           </div>
         </details>
       ) : null}
-
-      <div className="permission-request-footer">
-        <p className="permission-request-note">{t("thread.permission.note")}</p>
-      </div>
 
       {actionError ? <p className="permission-request-error">{actionError}</p> : null}
     </article>
