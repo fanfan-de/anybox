@@ -6,8 +6,9 @@ import { Instance } from "#project/instance.ts"
 import { getServerBaseURL } from "#server/base-url.ts"
 import * as Filesystem from "#util/filesystem.ts"
 
-const MAX_LOCAL_IMAGE_BYTES = 20 * 1024 * 1024
+export const MAX_IMAGE_BYTES = 20 * 1024 * 1024
 const SAFE_ASSET_ID_PATTERN = /^[A-Za-z0-9._-]+$/
+const MODEL_IMAGE_MIMES = new Set(["image/jpeg", "image/png", "image/webp"])
 
 const IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
   ".apng": "image/apng",
@@ -42,6 +43,8 @@ export interface ImageAssetMetadata {
   width?: number
   height?: number
   sizeBytes: number
+  /** Optional for assets written before SHA-256 metadata was introduced. */
+  sha256?: string
   sourceTool: "generate_image" | "view_image"
   prompt?: string
   originalPath?: string
@@ -94,6 +97,10 @@ function assetURL(sessionID: string, assetID: string) {
 
 export function isSupportedImageMime(mime: string) {
   return Boolean(IMAGE_EXTENSION_BY_MIME[mime.toLowerCase()])
+}
+
+export function isModelImageMime(mime: string) {
+  return MODEL_IMAGE_MIMES.has(mime.toLowerCase())
 }
 
 function sniffImageMime(bytes: Uint8Array, fallbackExtension?: string) {
@@ -228,8 +235,8 @@ export async function readLocalImage(inputPath: string) {
   if (!info.isFile()) {
     throw new Error(`Path is not a file: ${inputPath}`)
   }
-  if (info.size > MAX_LOCAL_IMAGE_BYTES) {
-    throw new Error(`Image is too large (${info.size} bytes). Maximum supported size is ${MAX_LOCAL_IMAGE_BYTES} bytes.`)
+  if (info.size > MAX_IMAGE_BYTES) {
+    throw new Error(`Image is too large (${info.size} bytes). Maximum supported size is ${MAX_IMAGE_BYTES} bytes.`)
   }
 
   const bytes = await readFile(resolved)
@@ -276,6 +283,7 @@ export async function saveImageAsset(input: SaveImageAssetInput): Promise<ImageA
     filename,
     ...dimensions,
     sizeBytes: input.bytes.byteLength,
+    sha256: createHash("sha256").update(input.bytes).digest("hex"),
     sourceTool: input.sourceTool,
     prompt: input.prompt,
     originalPath: input.originalPath,
@@ -297,9 +305,74 @@ export async function readImageAsset(sessionID: string, assetID: string) {
   assertWithin(dir, metadataPath)
 
   const metadata = JSON.parse(await readFile(metadataPath, "utf8")) as ImageAssetMetadata
+  if (metadata.sessionID !== sessionID || metadata.assetID !== assetID) {
+    throw new Error("Image asset metadata does not match the requested asset reference.")
+  }
   await stat(filepath)
   return {
     metadata,
     file: Bun.file(filepath),
+  }
+}
+
+export interface ImageAssetRef {
+  sessionID: string
+  assetID: string
+}
+
+/**
+ * Recovers the stable asset identity from an Anybox attachment URL. The host
+ * and port are intentionally ignored because persisted sessions can outlive a
+ * desktop server instance.
+ */
+export function parseImageAssetURL(value: string): ImageAssetRef | undefined {
+  let pathname: string
+  try {
+    pathname = new URL(value, "http://anybox.local").pathname
+  } catch {
+    return undefined
+  }
+
+  const match = /^\/api\/sessions\/([^/]+)\/assets\/([^/]+)\/?$/.exec(pathname)
+  if (!match) return undefined
+
+  try {
+    const sessionID = decodeURIComponent(match[1] ?? "")
+    const assetID = decodeURIComponent(match[2] ?? "")
+    if (!sessionID || !SAFE_ASSET_ID_PATTERN.test(assetID)) return undefined
+    return { sessionID, assetID }
+  } catch {
+    return undefined
+  }
+}
+
+/** Reads an image asset for one model request without persisting its bytes. */
+export async function readImageAssetBytes(ref: ImageAssetRef) {
+  const asset = await readImageAsset(ref.sessionID, ref.assetID)
+  const bytes = new Uint8Array(await asset.file.arrayBuffer())
+  if (bytes.byteLength > MAX_IMAGE_BYTES) {
+    throw new Error(
+      `Image is too large (${bytes.byteLength} bytes). Maximum supported size is ${MAX_IMAGE_BYTES} bytes.`,
+    )
+  }
+
+  const mime = asset.metadata.mime.toLowerCase()
+  if (!isModelImageMime(mime)) {
+    throw new Error(
+      `Image format ${asset.metadata.mime} cannot be sent to the model. Convert it to PNG, JPEG, or WebP first.`,
+    )
+  }
+
+  const sniffedMime = sniffImageMime(bytes, path.extname(asset.metadata.path).toLowerCase())
+  if (sniffedMime !== mime) {
+    throw new Error(
+      `Image bytes do not match the stored media type (${asset.metadata.mime}). Reopen the source image with view_image.`,
+    )
+  }
+
+  return {
+    metadata: asset.metadata,
+    bytes,
+    sha256: asset.metadata.sha256 ?? createHash("sha256").update(bytes).digest("hex"),
   }
 }

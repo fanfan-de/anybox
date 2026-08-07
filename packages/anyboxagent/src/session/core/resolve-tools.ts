@@ -4,6 +4,7 @@ import * as Agent from "#agent/agent.ts"
 import * as Config from "#config/config.ts"
 import { Flag } from "#flag/flag.ts"
 import { Instance } from "#project/instance.ts"
+import type * as Provider from "#provider/provider.ts"
 import type * as Message from "#session/core/message.ts"
 import {
   createToolSearchIndex,
@@ -55,6 +56,7 @@ export type ResolveToolsInput = {
   turnID?: string
   messageID: string
   abort: AbortSignal
+  model?: Provider.Model
   messages?: Message.WithParts[]
   turnUserMessageID?: string
   turnMcpServerIDs?: string[]
@@ -267,23 +269,29 @@ export async function resolveToolPlan(input: ResolveToolsInput): Promise<Resolve
     })
   }
 
-  const activeToolModuleIDs = moduleCatalog.entries
-    .filter((entry) => entry.active && entry.turnActivated)
-    .map((entry) => entry.descriptor.id)
-
   const registry = moduleCatalog.entries.flatMap((entry) => entry.tools)
   ToolRegistry.assertUniqueToolNames(registry)
 
   const readOnlyToolsOnly = readOnlyToolsOnlyForSession(input.agent, input.sessionID, input.turnID)
+  const accessFailureFor = (item: Tool.ToolInfo) => getToolAccessFailure({
+    item,
+    agent: input.agent,
+    model: input.model,
+    builtinToolIDs,
+    globalToolSelection,
+    readOnlyToolsOnly,
+  })
+  const activeToolModuleIDs = moduleCatalog.entries
+    .filter((entry) =>
+      entry.active &&
+      entry.turnActivated &&
+      entry.tools.some((item) => !accessFailureFor(item)),
+    )
+    .map((entry) => entry.descriptor.id)
+
   const toolSearchCatalogItem = builtinRegistry.find((item) => item.id === TOOL_SEARCH_ID)
   const toolSearchAccessFailure = toolSearchCatalogItem
-    ? getToolAccessFailure({
-        item: toolSearchCatalogItem,
-        agent: input.agent,
-        builtinToolIDs,
-        globalToolSelection,
-        readOnlyToolsOnly,
-      })
+    ? accessFailureFor(toolSearchCatalogItem)
     : `Built-in tool "${TOOL_SEARCH_ID}" is not registered.`
   const progressiveDisclosureEnabled =
     toolSearchFeatureEnabled &&
@@ -295,7 +303,11 @@ export async function resolveToolPlan(input: ResolveToolsInput): Promise<Resolve
     .filter((entry) =>
       !entry.active &&
       entry.descriptor.activation.discovery === "module" &&
-      !requestedOrDiscoveredToolModuleIDs.includes(entry.descriptor.id),
+      !requestedOrDiscoveredToolModuleIDs.includes(entry.descriptor.id) &&
+      // Lazily loaded native modules have no tool definitions until they are
+      // activated. Keep their descriptor searchable without forcing a load;
+      // model requirements are enforced as soon as their tools materialize.
+      (entry.tools.length === 0 || entry.tools.some((item) => !accessFailureFor(item))),
     )
     .map(({ descriptor }): ToolModuleSearchDefinition => ({
       kind: "module",
@@ -325,13 +337,7 @@ export async function resolveToolPlan(input: ResolveToolsInput): Promise<Resolve
       // executable model alias is bound to this Turn's deferred candidates below.
       if (item.id === TOOL_SEARCH_ID) continue
 
-      if (getToolAccessFailure({
-        item,
-        agent: input.agent,
-        builtinToolIDs,
-        globalToolSelection,
-        readOnlyToolsOnly,
-      })) {
+      if (accessFailureFor(item)) {
         continue
       }
 
@@ -376,6 +382,7 @@ export async function resolveToolPlan(input: ResolveToolsInput): Promise<Resolve
         execution = await createToolExecution({
           item,
           agent: input.agent,
+          model: input.model,
           sessionID: input.sessionID,
           turnID: input.turnID,
           messageID: input.messageID,

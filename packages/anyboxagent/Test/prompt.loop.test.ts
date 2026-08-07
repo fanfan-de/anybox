@@ -9,6 +9,7 @@ import { Instance } from "#project/instance.ts"
 import * as SessionDiff from "#session/diff/diff.ts"
 import * as LLM from "#session/core/llm.ts"
 import type * as MessageTypes from "#session/core/message.ts"
+import * as ImageAssets from "#session/support/image-assets.ts"
 import * as Provider from "#provider/provider.ts"
 
 const hasGit = spawnSync("git", ["--version"], { stdio: "ignore" }).status === 0
@@ -32,6 +33,21 @@ function createTestModel(): Provider.Model {
       },
       output: {
         ...Provider.testDeepSeekModel.capabilities.output,
+      },
+    },
+  }
+}
+
+function createVisionTestModel(): Provider.Model {
+  const model = createTestModel()
+  return {
+    ...model,
+    capabilities: {
+      ...model.capabilities,
+      attachment: true,
+      input: {
+        ...model.capabilities.input,
+        image: true,
       },
     },
   }
@@ -666,6 +682,183 @@ describe("prompt loop concurrency", () => {
     } finally {
       restoreLLM()
       restoreProvider()
+      await rm(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  itIfGit("injects view_image bytes into the second provider request", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "anybox-view-image-loop-"))
+    const imagePath = join(tempDir, "pixel.png")
+    await writeFile(
+      imagePath,
+      Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
+        "base64",
+      ),
+    )
+    let streamCalls = 0
+    let secondProviderMessages: any[] | undefined
+    let assetPath: string | undefined
+
+    const restoreProvider = Provider.setProviderFunctionOverridesForTesting({
+      getDefaultModelRef: async () => ({
+        providerID: "test-provider",
+        modelID: "test-model",
+      }),
+      getSelection: async () => ({}),
+      getModel: async () => createVisionTestModel(),
+      getLanguage: async (model) => model as never,
+    })
+
+    const restoreLLM = LLM.setRuntimeDependenciesForTesting({
+      getLanguage: async (model) => model as never,
+      streamText: ((input: any) => {
+        streamCalls += 1
+        const call = streamCalls
+        if (call === 2) secondProviderMessages = input.prompt
+
+        return {
+          fullStream: (async function* () {
+            yield { type: "start" }
+            if (call === 1) {
+              const toolCallId = "call-view-image-loop"
+              const viewImage = input.tools?.view_image
+              if (!viewImage?.execute) throw new Error("view_image was not exposed to the visual model")
+              const output = await viewImage.execute(
+                { path: imagePath },
+                {
+                  toolCallId,
+                  messages: input.prompt,
+                  abortSignal: input.abortSignal,
+                },
+              )
+              const ref = output.metadata?.modelImageRef as ImageAssets.ImageAssetRef
+              assetPath = (await ImageAssets.readImageAsset(ref.sessionID, ref.assetID)).metadata.path
+
+              yield {
+                type: "tool-call",
+                toolCallId,
+                toolName: "view_image",
+                input: { path: imagePath },
+                title: output.title,
+              }
+              yield {
+                type: "tool-result",
+                toolCallId,
+                toolName: "view_image",
+                input: { path: imagePath },
+                output,
+                title: output.title,
+                providerMetadata: {},
+              }
+              yield { type: "finish", finishReason: "tool-calls", totalUsage: {} }
+              await input.onFinish?.({
+                finishReason: "tool-calls",
+                text: "",
+                totalUsage: {},
+              })
+              return
+            }
+
+            yield { type: "text-start" }
+            yield { type: "text-delta", text: "I can see the image." }
+            yield { type: "text-end" }
+            yield { type: "finish", finishReason: "stop", totalUsage: {} }
+            await input.onFinish?.({
+              finishReason: "stop",
+              text: "I can see the image.",
+              totalUsage: {},
+            })
+          })(),
+        }
+      }) as never,
+    })
+
+    let unsubscribe = () => false
+    try {
+      const Session = await import("#session/core/session.ts")
+      const Prompt = await import("#session/core/prompt.ts")
+      const Message = await import("#session/core/message.ts")
+      const EventStore = await import("#session/runtime/event-store.ts")
+
+      await Instance.provide({
+        directory: tempDir,
+        async fn() {
+          const session = await Session.createSession({
+            directory: Instance.directory,
+            projectID: Instance.project.id,
+          })
+          const runtimeEvents: any[] = []
+          unsubscribe = EventStore.subscribe((event) => {
+            if (event.sessionID === session.id) runtimeEvents.push(event)
+          })
+
+          await Prompt.prompt({
+            sessionID: session.id,
+            model: {
+              providerID: "test-provider",
+              modelID: "test-model",
+            },
+            parts: [{
+              type: "text",
+              text: `Inspect ${imagePath}`,
+            }],
+          })
+
+          expect(streamCalls).toBe(2)
+          const toolMessage = secondProviderMessages?.find((message) => message.role === "tool")
+          if (!toolMessage) {
+            throw new Error("Second provider request had no tool message")
+          }
+          const toolResult = toolMessage?.content?.find((part: any) => part.toolName === "view_image")
+          expect(toolResult?.output?.type).toBe("content")
+          const image = toolResult?.output?.value?.find((part: any) => part.type === "file")
+          expect(image?.mediaType).toBe("image/png")
+          expect(image?.data?.data).toBeInstanceOf(Uint8Array)
+          expect([...image.data.data.slice(0, 8)]).toEqual([
+            0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+          ])
+
+          const startedCalls = runtimeEvents.filter((event) => event.type === "llm.call.started")
+          expect(startedCalls).toHaveLength(2)
+          expect(startedCalls[1]?.payload.toolResultImageParts).toBe(1)
+          expect(startedCalls[1]?.payload.images?.[0]).toMatchObject({
+            location: "tool-result",
+            mime: "image/png",
+            width: 1,
+            height: 1,
+            sourceTool: "view_image",
+          })
+
+          const assistants: MessageTypes.WithParts[] = []
+          for await (const item of Message.stream(session.id)) {
+            if (item.info.role === "assistant") assistants.push(item)
+          }
+          const firstTool = assistants[0]?.parts.find(
+            (part): part is MessageTypes.ToolPart => part.type === "tool" && part.tool === "view_image",
+          )
+          expect(firstTool?.state.status).toBe("completed")
+          if (!firstTool || firstTool.state.status !== "completed") {
+            throw new Error("Expected a completed view_image tool result")
+          }
+          expect(firstTool.state.attachments?.[0]).toMatchObject({
+            type: "image",
+            mime: "image/png",
+            width: 1,
+            height: 1,
+          })
+          expect(firstTool.state.attachments?.[0]?.url).toContain("/api/sessions/")
+          expect(JSON.stringify(firstTool.state)).not.toContain("iVBORw0KGgo")
+        },
+      })
+    } finally {
+      unsubscribe()
+      restoreLLM()
+      restoreProvider()
+      if (assetPath) {
+        await rm(assetPath, { force: true })
+        await rm(`${assetPath}.json`, { force: true })
+      }
       await rm(tempDir, { recursive: true, force: true })
     }
   })

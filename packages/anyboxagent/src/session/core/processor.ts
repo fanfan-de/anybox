@@ -18,6 +18,8 @@ import {
     isAnsweredAskUserQuestionMetadata,
 } from "#tool/ask-user-question.ts"
 import * as Tool from "#tool/tool.ts"
+import { createHash } from "node:crypto"
+import { readImageDimensions } from "#session/support/image-assets.ts"
 
 const log = Log.create({ service: "session.processor" })
 const ENABLE_STREAM_STDOUT_DEBUG = Flag.ANYBOX_DEBUG_STREAM_STDOUT
@@ -314,16 +316,92 @@ function buildStepTokens(usage: LanguageModelUsage | undefined) {
     }
 }
 
+function inlineImageBytes(value: unknown): Uint8Array | undefined {
+    if (value instanceof Uint8Array) return value
+    if (value instanceof ArrayBuffer) return new Uint8Array(value)
+    if (typeof value !== "string" || !value.startsWith("data:")) return undefined
+
+    const comma = value.indexOf(",")
+    if (comma < 0) return undefined
+    try {
+        const header = value.slice(0, comma).toLowerCase()
+        const body = value.slice(comma + 1)
+        return header.includes(";base64")
+            ? new Uint8Array(Buffer.from(body, "base64"))
+            : new TextEncoder().encode(decodeURIComponent(body))
+    } catch {
+        return undefined
+    }
+}
+
+function summarizeImageForTrace(input: {
+    location: "top-level" | "tool-result"
+    mime: string
+    data: unknown
+    sourceTool?: string
+}) {
+    const bytes = inlineImageBytes(input.data)
+    const dimensions = bytes ? readImageDimensions(bytes, input.mime) : {}
+    return {
+        location: input.location,
+        mime: input.mime,
+        ...(bytes ? {
+            bytes: bytes.byteLength,
+            sha256: createHash("sha256").update(bytes).digest("hex"),
+        } : {}),
+        ...dimensions,
+        ...(input.sourceTool ? { sourceTool: input.sourceTool } : {}),
+    }
+}
+
 function summarizeLlmCallInput(streamInput: LLM.StreamInput) {
     let hasAttachments = false
+    const images: Array<ReturnType<typeof summarizeImageForTrace>> = []
 
     for (const message of streamInput.messages) {
         if (!Array.isArray(message.content)) continue
-        if (message.content.some((part) => part.type === "image" || part.type === "file")) {
-            hasAttachments = true
-            break
+        for (const part of message.content) {
+            if (part.type === "image") {
+                hasAttachments = true
+                images.push(summarizeImageForTrace({
+                    location: "top-level",
+                    mime: part.mediaType ?? "image/unknown",
+                    data: part.image,
+                }))
+                continue
+            }
+
+            if (part.type === "file") {
+                hasAttachments = true
+                if (part.mediaType.toLowerCase().startsWith("image/")) {
+                    images.push(summarizeImageForTrace({
+                        location: "top-level",
+                        mime: part.mediaType,
+                        data: part.data,
+                    }))
+                }
+                continue
+            }
+
+            if (part.type !== "tool-result") continue
+            const output = part.output
+            if (!output || output.type !== "content") continue
+            for (const content of output.value) {
+                if (content.type !== "file" || !content.mediaType.toLowerCase().startsWith("image/")) continue
+                hasAttachments = true
+                images.push(summarizeImageForTrace({
+                    location: "tool-result",
+                    mime: content.mediaType,
+                    data: content.data.type === "data" ? content.data.data : undefined,
+                    sourceTool: part.toolName,
+                }))
+            }
         }
     }
+
+    const topLevelImageParts = images.filter((image) => image.location === "top-level").length
+    const toolResultImageParts = images.filter((image) => image.location === "tool-result").length
+    const totalImageBytes = images.reduce((total, image) => total + (image.bytes ?? 0), 0)
 
     const requestedToolCount = (
         streamInput.activeTools ??
@@ -341,6 +419,10 @@ function summarizeLlmCallInput(streamInput: LLM.StreamInput) {
         requestedToolCount,
         toolsDisabledReason,
         hasAttachments,
+        topLevelImageParts,
+        toolResultImageParts,
+        totalImageBytes,
+        images,
     }
 }
 
@@ -1424,6 +1506,10 @@ export function create(input: {
                         requestedToolCount: llmSummary.requestedToolCount,
                         toolsDisabledReason: llmSummary.toolsDisabledReason,
                         hasAttachments: llmSummary.hasAttachments,
+                        topLevelImageParts: llmSummary.topLevelImageParts,
+                        toolResultImageParts: llmSummary.toolResultImageParts,
+                        totalImageBytes: llmSummary.totalImageBytes,
+                        images: llmSummary.images,
                     })
 
                     const draft = createAssistantOutputDraft()
@@ -1988,6 +2074,10 @@ export function create(input: {
                                     requestedToolCount: llmSummary.requestedToolCount,
                                     toolsDisabledReason: llmSummary.toolsDisabledReason,
                                     hasAttachments: llmSummary.hasAttachments,
+                                    topLevelImageParts: llmSummary.topLevelImageParts,
+                                    toolResultImageParts: llmSummary.toolResultImageParts,
+                                    totalImageBytes: llmSummary.totalImageBytes,
+                                    images: llmSummary.images,
                                     finishReason: value.finishReason,
                                     usage: summarizeLlmUsage(value.totalUsage),
                                 })
@@ -2020,6 +2110,10 @@ export function create(input: {
                                     requestedToolCount: llmSummary.requestedToolCount,
                                     toolsDisabledReason: llmSummary.toolsDisabledReason,
                                     hasAttachments: llmSummary.hasAttachments,
+                                    topLevelImageParts: llmSummary.topLevelImageParts,
+                                    toolResultImageParts: llmSummary.toolResultImageParts,
+                                    totalImageBytes: llmSummary.totalImageBytes,
+                                    images: llmSummary.images,
                                     error: streamErrorMessage,
                                     retryable: false,
                                 })
@@ -2176,6 +2270,10 @@ export function create(input: {
                             requestedToolCount: llmSummary.requestedToolCount,
                             toolsDisabledReason: llmSummary.toolsDisabledReason,
                             hasAttachments: llmSummary.hasAttachments,
+                            topLevelImageParts: llmSummary.topLevelImageParts,
+                            toolResultImageParts: llmSummary.toolResultImageParts,
+                            totalImageBytes: llmSummary.totalImageBytes,
+                            images: llmSummary.images,
                             error: streamAbortReason,
                             retryable: false,
                         })
@@ -2238,6 +2336,10 @@ export function create(input: {
                             requestedToolCount: llmSummary.requestedToolCount,
                             toolsDisabledReason: llmSummary.toolsDisabledReason,
                             hasAttachments: llmSummary.hasAttachments,
+                            topLevelImageParts: llmSummary.topLevelImageParts,
+                            toolResultImageParts: llmSummary.toolResultImageParts,
+                            totalImageBytes: llmSummary.totalImageBytes,
+                            images: llmSummary.images,
                             error: errorMessage,
                             retryable: Boolean(e?.isRetryable === true),
                         })

@@ -208,6 +208,16 @@ const LlmUsagePayload = z.object({
   cacheWriteTokens: z.number().int().nonnegative().optional(),
 })
 
+const LlmImageSummary = z.object({
+  location: z.enum(["top-level", "tool-result"]),
+  mime: z.string(),
+  bytes: z.number().int().nonnegative().optional(),
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional(),
+  sha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  sourceTool: z.string().optional(),
+})
+
 const LlmCallStartedPayload = z.object({
   messageID: z.string(),
   providerID: z.string(),
@@ -219,6 +229,10 @@ const LlmCallStartedPayload = z.object({
   requestedToolCount: z.number().int().nonnegative().optional(),
   toolsDisabledReason: z.literal("model_does_not_support_toolcall").optional(),
   hasAttachments: z.boolean().optional(),
+  topLevelImageParts: z.number().int().nonnegative().optional(),
+  toolResultImageParts: z.number().int().nonnegative().optional(),
+  totalImageBytes: z.number().int().nonnegative().optional(),
+  images: LlmImageSummary.array().optional(),
 })
 
 const LlmCallCompletedPayload = LlmCallStartedPayload.extend({

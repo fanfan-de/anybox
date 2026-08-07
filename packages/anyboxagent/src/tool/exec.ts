@@ -454,6 +454,7 @@ export const ExecTool = Tool.define(
                 const accessFailure = getToolAccessFailure({
                   item,
                   agent,
+                  model: ctx.model ?? initctx?.model,
                   builtinToolIDs,
                   globalToolSelection,
                   readOnlyToolsOnly,
@@ -471,6 +472,7 @@ export const ExecTool = Tool.define(
                 const execution = await createToolExecution({
                   item,
                   agent,
+                  model: ctx.model ?? initctx?.model,
                   sessionID: ctx.sessionID,
                   turnID: ctx.turnID,
                   messageID: ctx.messageID,

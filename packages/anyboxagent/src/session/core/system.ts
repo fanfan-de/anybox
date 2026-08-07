@@ -43,16 +43,28 @@ function renderActiveTasks(session: Session.SessionInfo | null | undefined) {
 }
 
 export function tools(toolNames: string[]) {
-    if (!toolNames.includes("multi_tool_use_parallel")) return []
+    const prompts: string[] = []
 
-    return [
-        [
+    if (toolNames.includes("multi_tool_use_parallel")) {
+        prompts.push([
             "# Parallel tool use",
             "- When you need multiple independent read/search tool calls, prefer one `multi_tool_use_parallel` call.",
             "- Use `{ calls: [{ tool: \"read_file\", input: { file_path: \"...\" } }] }`.",
-            "- Do not use it for dependent steps, edits, shell commands, user questions, image generation, or subagent control.",
-        ].join("\n"),
-    ]
+            "- Do not use it for dependent steps, edits, shell commands, user questions, image viewing or generation, or subagent control.",
+        ].join("\n"))
+    }
+
+    if (toolNames.includes("view_image")) {
+        prompts.push([
+            "# Local image inspection",
+            "- Before making any visual claim about a local image or screenshot, call `view_image` directly with its path.",
+            "- A successful result loads the actual image into your visual context on the following model call.",
+            "- If no image content was received, do not claim that you saw or inspected the image; call `view_image` again or report the failure.",
+            "- Do not wrap `view_image` in `multi_tool_use_parallel`.",
+        ].join("\n"))
+    }
+
+    return prompts
 }
 
 export function provider(model: Provider.Model): string[] {
@@ -111,6 +123,9 @@ export async function environment(model: Provider.Model) {
             `  Platform: ${isRemoteSsh ? "remote linux/posix over SSH" : process.platform}`,
             isRemoteSsh ? `  Shell command tool: ssh_shell_command` : undefined,
             `  Today's date: ${new Date().toDateString()}`,
+            model.capabilities.input.image
+                ? undefined
+                : "  Image input: unavailable. Do not claim visual inspection; ask the user to select a multimodal model when visual analysis is required.",
             `</env>`,
             `<directories>`,
             //todo:缺少依赖，临时注释掉

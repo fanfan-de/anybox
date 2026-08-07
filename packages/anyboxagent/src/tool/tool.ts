@@ -2,6 +2,7 @@ import z from "zod"
 import type { JSONValue } from "@ai-sdk/provider"
 import type { ToolModuleProviderKind } from "@anybox/shared"
 import type * as Agent from "#agent/agent.ts"
+import type * as Provider from "#provider/provider.ts"
 
 type Metadata = Record<string, unknown>
 export type Awaitable<T> = T | Promise<T>
@@ -23,6 +24,29 @@ export interface ToolCapabilities {
   destructive?: boolean
   concurrency?: ToolConcurrency
   needsShell?: boolean
+}
+
+export type ToolModelInputModality = keyof Provider.Model["capabilities"]["input"]
+
+export interface ToolModelRequirements {
+  inputModalities?: ToolModelInputModality[]
+}
+
+export function getModelRequirementFailure(
+  item: Pick<ToolInfo, "id" | "modelRequirements">,
+  model?: Provider.Model,
+) {
+  if (!model) return undefined
+
+  const missing = (item.modelRequirements?.inputModalities ?? [])
+    .filter((modality) => model.capabilities.input[modality] !== true)
+  if (missing.length === 0) return undefined
+
+  const requirement = missing.join(", ")
+  const suggestion = missing.includes("image")
+    ? " Select a multimodal model with image input to use this tool."
+    : " Select a model that supports the required input modalities."
+  return `Tool "${item.id}" requires model input support for: ${requirement}.${suggestion}`
 }
 
 export interface ToolProviderSource {
@@ -73,6 +97,7 @@ export type ToolSource = ToolModuleSourceMetadata & (
 
 export interface InitContext {
   agent?: Agent.AgentInfo
+  model?: Provider.Model
 }
 
 export interface Context {
@@ -85,6 +110,7 @@ export interface Context {
   worktree?: string
   abort?: AbortSignal
   toolCallID?: string
+  model?: Provider.Model
 }
 
 export interface ToolAttachment<M extends Metadata = Metadata> {
@@ -135,6 +161,18 @@ export type ToolModelOutput =
   | string
   | { type: "text"; value: string }
   | { type: "json"; value: JSONValue }
+  | {
+      type: "content"
+      value: Array<
+        | { type: "text"; text: string }
+        | {
+            type: "file"
+            data: { type: "data"; data: Uint8Array }
+            mediaType: string
+            filename?: string
+          }
+      >
+    }
   | { type: "error-text"; value: string }
   | { type: "error-json"; value: JSONValue }
   | { type: "execution-denied"; reason?: string }
@@ -188,6 +226,7 @@ export interface ToolInfo<
   description?: string
   aliases?: string[]
   capabilities?: ToolCapabilities
+  modelRequirements?: ToolModelRequirements
   source?: ToolSource
   inputSchema?: Record<string, unknown>
   maxResultSizeChars?: number

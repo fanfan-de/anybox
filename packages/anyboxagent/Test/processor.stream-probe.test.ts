@@ -81,6 +81,108 @@ describe("processor fullStream consumption probe", () => {
     await Log.init({ print: true, file: false, level: "INFO" })
   })
 
+  it("summarizes top-level and tool-result images in llm.call.started without recording bytes", async () => {
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
+      "base64",
+    )
+    restoreLLM = LLM.setRuntimeDependenciesForTesting({
+      getLanguage: async (model) => model as never,
+      streamText: ((options: any) => ({
+        fullStream: (async function* () {
+          yield { type: "start" }
+          yield {
+            type: "finish",
+            finishReason: "stop",
+            totalUsage: { inputTokens: 1, outputTokens: 1 },
+          }
+          await options.onFinish?.({
+            finishReason: "stop",
+            text: "",
+            totalUsage: { inputTokens: 1, outputTokens: 1 },
+          })
+        })(),
+      })) as never,
+    })
+
+    const Processor = await import("#session/core/processor.ts")
+    const sessionID = `session-image-trace-${Date.now()}`
+    const recorded = createTurnRecorder(sessionID)
+    const assistant = {
+      id: `assistant-image-trace-${Date.now()}`,
+      sessionID,
+      role: "assistant",
+      created: Date.now(),
+      parentID: "user-image-trace",
+      modelID: "gpt-5.3-codex",
+      providerID: "openai",
+      agent: "plan",
+      path: { cwd: ".", root: "." },
+      cost: 0,
+      tokens: {
+        input: 0,
+        output: 0,
+        reasoning: 0,
+        cache: { read: 0, write: 0 },
+      },
+    } as any
+    const streamInput = createStreamInput()
+    streamInput.messages = [
+      {
+        role: "user",
+        content: [{ type: "image", image: new Uint8Array(png), mediaType: "image/png" }],
+      },
+      {
+        role: "tool",
+        content: [{
+          type: "tool-result",
+          toolCallId: "call-view-image",
+          toolName: "view_image",
+          output: {
+            type: "content",
+            value: [{
+              type: "file",
+              data: { type: "data", data: new Uint8Array(png) },
+              mediaType: "image/png",
+              filename: "pixel.png",
+            }],
+          },
+        }],
+      },
+    ] as any
+
+    const processor = Processor.create({ Assistant: assistant, turn: recorded.turn })
+    expect(await processor.process(streamInput)).toBe("continue")
+
+    const started = recorded.events.find((event) => event.type === "llm.call.started")
+    expect(started?.payload).toMatchObject({
+      topLevelImageParts: 1,
+      toolResultImageParts: 1,
+      totalImageBytes: png.byteLength * 2,
+      hasAttachments: true,
+      images: [
+        {
+          location: "top-level",
+          mime: "image/png",
+          bytes: png.byteLength,
+          width: 1,
+          height: 1,
+        },
+        {
+          location: "tool-result",
+          mime: "image/png",
+          bytes: png.byteLength,
+          width: 1,
+          height: 1,
+          sourceTool: "view_image",
+        },
+      ],
+    })
+    expect(started?.payload.images.every((image: any) => /^[a-f0-9]{64}$/.test(image.sha256))).toBe(true)
+    expect(JSON.stringify(started?.payload)).not.toContain("iVBORw0KGgo")
+    expect(JSON.stringify(started?.payload)).not.toContain("data:image")
+  })
+
   it("keeps fullStream chunk probe logs disabled by default", async () => {
     await Log.init({ print: true, file: false, level: "DEBUG" })
     delete process.env.ANYBOX_DEBUG_FULLSTREAM_PROBE

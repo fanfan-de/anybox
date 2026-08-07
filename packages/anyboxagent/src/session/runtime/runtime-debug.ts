@@ -54,6 +54,18 @@ export type RuntimeLlmCallSummary = {
   requestedToolCount?: number
   toolsDisabledReason?: "model_does_not_support_toolcall"
   hasAttachments?: boolean
+  topLevelImageParts?: number
+  toolResultImageParts?: number
+  totalImageBytes?: number
+  images?: Array<{
+    location: "top-level" | "tool-result"
+    mime: string
+    bytes?: number
+    width?: number
+    height?: number
+    sha256?: string
+    sourceTool?: string
+  }>
   finishReason?: string
   usage?: {
     inputTokens?: number
@@ -360,6 +372,10 @@ function summarizeRuntimeEvent(event: RuntimeEvent.RuntimeEvent): RuntimeEventSu
           requestedToolCount: event.payload.requestedToolCount,
           toolsDisabledReason: event.payload.toolsDisabledReason,
           hasAttachments: event.payload.hasAttachments,
+          topLevelImageParts: event.payload.topLevelImageParts,
+          toolResultImageParts: event.payload.toolResultImageParts,
+          totalImageBytes: event.payload.totalImageBytes,
+          images: event.payload.images,
         },
       }
     case "llm.call.completed":
@@ -382,6 +398,10 @@ function summarizeRuntimeEvent(event: RuntimeEvent.RuntimeEvent): RuntimeEventSu
           requestedToolCount: event.payload.requestedToolCount,
           toolsDisabledReason: event.payload.toolsDisabledReason,
           hasAttachments: event.payload.hasAttachments,
+          topLevelImageParts: event.payload.topLevelImageParts,
+          toolResultImageParts: event.payload.toolResultImageParts,
+          totalImageBytes: event.payload.totalImageBytes,
+          images: event.payload.images,
           finishReason: event.payload.finishReason,
           usage: summarizeUsage(event.payload.usage),
         },
@@ -405,6 +425,10 @@ function summarizeRuntimeEvent(event: RuntimeEvent.RuntimeEvent): RuntimeEventSu
           requestedToolCount: event.payload.requestedToolCount,
           toolsDisabledReason: event.payload.toolsDisabledReason,
           hasAttachments: event.payload.hasAttachments,
+          topLevelImageParts: event.payload.topLevelImageParts,
+          toolResultImageParts: event.payload.toolResultImageParts,
+          totalImageBytes: event.payload.totalImageBytes,
+          images: event.payload.images,
         },
       }
     case "message.recorded": {
@@ -910,6 +934,10 @@ function updateTurnFromEvent(turn: MutableTurnSummary, event: RuntimeEvent.Runti
         requestedToolCount: event.payload.requestedToolCount,
         toolsDisabledReason: event.payload.toolsDisabledReason,
         hasAttachments: event.payload.hasAttachments,
+        topLevelImageParts: event.payload.topLevelImageParts,
+        toolResultImageParts: event.payload.toolResultImageParts,
+        totalImageBytes: event.payload.totalImageBytes,
+        images: event.payload.images,
       })
       return
     case "llm.call.completed": {
@@ -939,6 +967,10 @@ function updateTurnFromEvent(turn: MutableTurnSummary, event: RuntimeEvent.Runti
         requestedToolCount: event.payload.requestedToolCount,
         toolsDisabledReason: event.payload.toolsDisabledReason,
         hasAttachments: event.payload.hasAttachments,
+        topLevelImageParts: event.payload.topLevelImageParts,
+        toolResultImageParts: event.payload.toolResultImageParts,
+        totalImageBytes: event.payload.totalImageBytes,
+        images: event.payload.images,
         finishReason: event.payload.finishReason,
         usage: summarizeUsage(event.payload.usage),
       })
@@ -971,6 +1003,10 @@ function updateTurnFromEvent(turn: MutableTurnSummary, event: RuntimeEvent.Runti
         requestedToolCount: event.payload.requestedToolCount,
         toolsDisabledReason: event.payload.toolsDisabledReason,
         hasAttachments: event.payload.hasAttachments,
+        topLevelImageParts: event.payload.topLevelImageParts,
+        toolResultImageParts: event.payload.toolResultImageParts,
+        totalImageBytes: event.payload.totalImageBytes,
+        images: event.payload.images,
         error: event.payload.error,
         retryable: event.payload.retryable,
       })

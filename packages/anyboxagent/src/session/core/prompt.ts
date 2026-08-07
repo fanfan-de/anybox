@@ -855,6 +855,7 @@ async function runLoop(input: LoopRuntimeInput): Promise<RunLoopResult> {
                 turnID: turn.turnID,
                 messageID: assistantMessageID,
                 abort,
+                model,
                 messages,
                 turnUserMessageID: lastUser.id,
                 turnMcpServerIDs: lastUser.turnMcpServerIDs,

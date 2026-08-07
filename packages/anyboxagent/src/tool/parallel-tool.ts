@@ -3,6 +3,7 @@ import z from "zod"
 import * as Agent from "#agent/agent.ts"
 import * as Config from "#config/config.ts"
 import * as Identifier from "#id/id.ts"
+import type * as Provider from "#provider/provider.ts"
 import {
   createToolExecution,
   getToolAccessFailure,
@@ -65,6 +66,10 @@ function findToolByName(tools: Tool.ToolInfo[], name: string) {
 }
 
 function getChildEligibilityFailure(item: Tool.ToolInfo) {
+  if ((item.modelRequirements?.inputModalities?.length ?? 0) > 0) {
+    return `Tool "${item.id}" must be called directly because model-dependent content tools cannot be wrapped by ${PARALLEL_TOOL_ID}.`
+  }
+
   const kind = item.capabilities?.kind
   if (
     item.capabilities?.readOnly !== true ||
@@ -93,6 +98,7 @@ async function runChildCall(input: {
   call: ParallelCallInput
   index: number
   agent: Agent.AgentInfo
+  model?: Provider.Model
   sessionID: string
   turnID?: string
   messageID: string
@@ -130,6 +136,7 @@ async function runChildCall(input: {
     const accessFailure = getToolAccessFailure({
       item,
       agent: input.agent,
+      model: input.model,
       builtinToolIDs: input.builtinToolIDs,
       globalToolSelection: input.globalToolSelection,
       readOnlyToolsOnly: input.readOnlyToolsOnly,
@@ -154,6 +161,7 @@ async function runChildCall(input: {
     const execution = await createToolExecution({
       item,
       agent: input.agent,
+      model: input.model,
       sessionID: input.sessionID,
       turnID: input.turnID,
       messageID: input.messageID,
@@ -222,6 +230,7 @@ export const ParallelTool = Tool.define(
               call,
               index,
               agent,
+              model: ctx.model ?? initctx?.model,
               sessionID: ctx.sessionID,
               turnID: ctx.turnID,
               messageID: ctx.messageID,

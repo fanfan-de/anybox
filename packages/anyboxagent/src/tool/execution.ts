@@ -3,6 +3,7 @@ import * as Config from "#config/config.ts"
 import * as Identifier from "#id/id.ts"
 import * as Permission from "#permission/permission.ts"
 import { Instance } from "#project/instance.ts"
+import type * as Provider from "#provider/provider.ts"
 import * as Session from "#session/core/session.ts"
 import * as ToolResultPersistence from "#session/support/tool-result-persistence.ts"
 import * as Tool from "#tool/tool.ts"
@@ -87,10 +88,14 @@ export function readOnlyToolsOnlyForSession(
 export function getToolAccessFailure(input: {
   item: Tool.ToolInfo
   agent: Agent.AgentInfo
+  model?: Provider.Model
   builtinToolIDs: Set<string>
   globalToolSelection: GlobalToolSelection
   readOnlyToolsOnly: boolean
 }) {
+  const modelFailure = getToolModelRequirementFailure(input.item, input.model)
+  if (modelFailure) return modelFailure
+
   if (
     input.builtinToolIDs.has(input.item.id) &&
     !isToolGloballyEnabled(input.item, input.globalToolSelection.tools)
@@ -107,15 +112,26 @@ export function getToolAccessFailure(input: {
   }
 }
 
+export function getToolModelRequirementFailure(
+  item: Tool.ToolInfo,
+  model?: Provider.Model,
+) {
+  return Tool.getModelRequirementFailure(item, model)
+}
+
 export async function createToolExecution(input: {
   item: Tool.ToolInfo
   agent: Agent.AgentInfo
+  model?: Provider.Model
   sessionID: string
   turnID?: string
   messageID: string
   abort: AbortSignal
 }): Promise<ToolExecution> {
-  const runtime = await input.item.init({ agent: input.agent })
+  const modelFailure = getToolModelRequirementFailure(input.item, input.model)
+  if (modelFailure) throw new Error(modelFailure)
+
+  const runtime = await input.item.init({ agent: input.agent, model: input.model })
   const title = runtime.title ?? input.item.title ?? input.item.id
   const decisionCache = new Map<string, Awaited<ReturnType<typeof Permission.evaluate>>>()
 
@@ -127,6 +143,7 @@ export async function createToolExecution(input: {
     worktree: Instance.worktree,
     abort: input.abort,
     toolCallID,
+    model: input.model,
   })
 
   const persistOutputIfLarge = async (
@@ -204,6 +221,9 @@ export async function createToolExecution(input: {
       return decision.action === "ask"
     },
     execute: async (args, options) => {
+      const modelFailure = getToolModelRequirementFailure(input.item, input.model)
+      if (modelFailure) throw new Error(modelFailure)
+
       const toolCallID = options?.toolCallID ?? Identifier.ascending("tool")
       const decision = await evaluatePermission(args, toolCallID)
 

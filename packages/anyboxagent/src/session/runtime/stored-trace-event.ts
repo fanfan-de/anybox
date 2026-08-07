@@ -10,6 +10,16 @@ const ArtifactReference = z.object({
   sha256: z.string().optional(),
 })
 
+const ImageSummary = z.object({
+  location: z.enum(["top-level", "tool-result"]),
+  mime: z.string(),
+  bytes: z.number().int().nonnegative().optional(),
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional(),
+  sha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  sourceTool: z.string().optional(),
+})
+
 export const StoredTracePayload = z.object({
   messageID: z.string().optional(),
   partID: z.string().optional(),
@@ -30,6 +40,10 @@ export const StoredTracePayload = z.object({
     cacheWriteTokens: z.number().nonnegative().optional(),
   }).optional(),
   textChars: z.number().int().nonnegative().optional(),
+  topLevelImageParts: z.number().int().nonnegative().optional(),
+  toolResultImageParts: z.number().int().nonnegative().optional(),
+  totalImageBytes: z.number().int().nonnegative().optional(),
+  images: ImageSummary.array().optional(),
   payloadBytes: z.number().int().nonnegative(),
   artifacts: ArtifactReference.array().optional(),
   payloadTruncated: z.boolean().optional(),
@@ -122,6 +136,7 @@ export function summarizeRuntimeEvent(event: RuntimeEvent.RuntimeEvent): StoredT
   const start = finiteNumber(time?.start)
   const end = finiteNumber(time?.end)
   const artifacts = collectArtifactReferences(event.payload)
+  const parsedImages = ImageSummary.array().safeParse(payload.images)
   const summary: StoredTracePayload = {
     messageID: shortString(part?.messageID ?? message?.id ?? payload.messageID, 300),
     partID: shortString(part?.id ?? payload.partID, 300),
@@ -152,6 +167,10 @@ export function summarizeRuntimeEvent(event: RuntimeEvent.RuntimeEvent): StoredT
         }
       : undefined,
     textChars: text?.length,
+    topLevelImageParts: finiteNumber(payload.topLevelImageParts),
+    toolResultImageParts: finiteNumber(payload.toolResultImageParts),
+    totalImageBytes: finiteNumber(payload.totalImageBytes),
+    images: parsedImages.success ? parsedImages.data : undefined,
     payloadBytes: originalBytes,
     artifacts: artifacts.length > 0 ? artifacts : undefined,
     payloadTruncated: originalBytes > MAX_STORED_TRACE_PAYLOAD_BYTES ? true : undefined,
@@ -160,6 +179,7 @@ export function summarizeRuntimeEvent(event: RuntimeEvent.RuntimeEvent): StoredT
   let serialized = JSON.stringify(summary)
   if (Buffer.byteLength(serialized, "utf8") > MAX_STORED_TRACE_PAYLOAD_BYTES) {
     summary.artifacts = summary.artifacts?.slice(0, 10)
+    summary.images = summary.images?.slice(0, 10)
     summary.error = shortString(summary.error, 300)
     summary.payloadTruncated = true
     serialized = JSON.stringify(summary)
@@ -172,6 +192,10 @@ export function summarizeRuntimeEvent(event: RuntimeEvent.RuntimeEvent): StoredT
       partID: summary.partID,
       callID: summary.callID,
       toolName: summary.toolName,
+      topLevelImageParts: summary.topLevelImageParts,
+      toolResultImageParts: summary.toolResultImageParts,
+      totalImageBytes: summary.totalImageBytes,
+      images: summary.images?.slice(0, 4),
     }
   }
   return summary

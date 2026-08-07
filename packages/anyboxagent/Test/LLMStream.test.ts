@@ -3,6 +3,7 @@ import z from "zod"
 import * as Agent from "#agent/agent.ts"
 import * as Identifier from "#id/id.ts"
 import * as RuntimeEvent from "#session/runtime/runtime-event.ts"
+import * as StoredTrace from "#session/runtime/stored-trace-event.ts"
 import type * as Message from "#session/core/message.ts"
 import {
   setRuntimeDependenciesForTesting,
@@ -274,7 +275,19 @@ describe("LLM stream", () => {
       toolCount: 0,
       requestedToolCount: 22,
       toolsDisabledReason: "model_does_not_support_toolcall",
-      hasAttachments: false,
+      hasAttachments: true,
+      topLevelImageParts: 0,
+      toolResultImageParts: 1,
+      totalImageBytes: 68,
+      images: [{
+        location: "tool-result",
+        mime: "image/png",
+        bytes: 68,
+        width: 1,
+        height: 1,
+        sha256: "a".repeat(64),
+        sourceTool: "view_image",
+      }],
     })
 
     if (event.type !== "llm.call.started") {
@@ -284,5 +297,15 @@ describe("LLM stream", () => {
     expect(event.payload.toolCount).toBe(0)
     expect(event.payload.requestedToolCount).toBe(22)
     expect(event.payload.toolsDisabledReason).toBe("model_does_not_support_toolcall")
+    expect(event.payload.toolResultImageParts).toBe(1)
+    expect(event.payload.images?.[0]?.sourceTool).toBe("view_image")
+    const stored = StoredTrace.summarizeRuntimeEvent(event)
+    expect(stored).toMatchObject({
+      topLevelImageParts: 0,
+      toolResultImageParts: 1,
+      totalImageBytes: 68,
+      images: [{ sourceTool: "view_image", sha256: "a".repeat(64) }],
+    })
+    expect(JSON.stringify(stored)).not.toContain("data:image")
   })
 })

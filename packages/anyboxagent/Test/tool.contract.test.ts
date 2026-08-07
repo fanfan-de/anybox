@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test"
 import "./sqlite.cleanup.ts"
 import { $ } from "bun"
-import { assistantModelMessageSchema } from "ai"
+import { assistantModelMessageSchema, toolModelMessageSchema } from "ai"
 import { EventEmitter } from "node:events"
 import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -10,9 +10,10 @@ import z from "zod"
 import * as Agent from "#agent/agent.ts"
 import * as Identifier from "#id/id.ts"
 import { Instance } from "#project/instance.ts"
+import type * as Provider from "#provider/provider.ts"
 import { getShellTaskRegistry } from "#shell/task-registry.ts"
 import * as Message from "#session/core/message.ts"
-import { resolveTools } from "#session/core/resolve-tools.ts"
+import { resolveToolPlan, resolveTools } from "#session/core/resolve-tools.ts"
 import * as ImageAssets from "#session/support/image-assets.ts"
 import * as ToolResultPersistence from "#session/support/tool-result-persistence.ts"
 import { AskUserQuestionTool, answerAskUserQuestion } from "#tool/ask-user-question.ts"
@@ -37,9 +38,11 @@ import { ReadFileTool } from "#tool/read-file.ts"
 import { ReplaceTextTool } from "#tool/replace-text.ts"
 import { TerminalReadTool, TerminalRunCommandTool, TerminalWriteInputTool } from "#tool/terminal-tools.ts"
 import * as Tool from "#tool/tool.ts"
+import { createToolExecution } from "#tool/execution.ts"
 import * as ToolRegistry from "#tool/registry.ts"
 import { TOOL_SEARCH_ID, TOOL_SEARCH_MODEL_NAME } from "#tool/tool-search.ts"
 import { WebFetchTool } from "#tool/web-fetch.ts"
+import { ViewImageTool } from "#tool/view-image.ts"
 import { WriteStdinTool } from "#tool/write-stdin.ts"
 import {
   LoadWorkspaceDependenciesTool,
@@ -60,6 +63,74 @@ async function createGitRepo(root: string, seed: string) {
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+const ONE_PIXEL_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=",
+  "base64",
+)
+
+function textOnlyTestModel(): Provider.Model {
+  return {
+    id: "text-test-model",
+    providerID: "test-provider",
+    api: {
+      id: "text-test-model",
+      url: "https://example.test/v1",
+      npm: "@ai-sdk/openai-compatible",
+    },
+    name: "Text Test Model",
+    family: "test",
+    capabilities: {
+      temperature: true,
+      reasoning: false,
+      replayAssistantReasoning: true,
+      attachment: false,
+      toolcall: true,
+      input: {
+        text: true,
+        audio: false,
+        image: false,
+        video: false,
+        pdf: false,
+      },
+      output: {
+        text: true,
+        audio: false,
+        image: false,
+        video: false,
+        pdf: false,
+      },
+      interleaved: false,
+    },
+    cost: {
+      input: 0,
+      output: 0,
+      cache: { read: 0, write: 0 },
+    },
+    limit: { context: 128_000, output: 8_000 },
+    status: "active",
+    options: {},
+    headers: {},
+    release_date: "2024-01-01",
+  }
+}
+
+function visionTestModel(): Provider.Model {
+  const model = textOnlyTestModel()
+  return {
+    ...model,
+    id: "vision-test-model",
+    name: "Vision Test Model",
+    capabilities: {
+      ...model.capabilities,
+      attachment: true,
+      input: {
+        ...model.capabilities.input,
+        image: true,
+      },
+    },
+  }
 }
 
 async function withProcessEnv<T>(
@@ -353,8 +424,8 @@ describe("tool contract", () => {
             calls: [
               { tool: "replace_text", input: {} },
               ...(shellToolID ? [{ tool: shellToolID, input: {} }] : []),
-              { tool: "terminal_run_command", input: {} },
               { tool: "generate_image", input: {} },
+              { tool: "view_image", input: { path: "pixel.png" } },
               { tool: "ask_user_question", input: {} },
               { tool: "multi_tool_use_parallel", input: {} },
               { tool: "multi_tool_use.parallel", input: {} },
@@ -371,8 +442,8 @@ describe("tool contract", () => {
           if (shellToolID) {
             expect(results.find((result) => result.tool === shellToolID)?.error).toContain("not eligible")
           }
-          expect(results.find((result) => result.tool === "terminal_run_command")?.error).toContain("not eligible")
           expect(results.find((result) => result.tool === "generate_image")?.error).toContain("not eligible")
+          expect(results.find((result) => result.tool === "view_image")?.error).toContain("must be called directly")
           expect(results.find((result) => result.tool === "ask_user_question")?.error).toContain("not eligible")
           expect(results.find((result) => result.tool === "multi_tool_use_parallel")?.error).toContain("cannot call itself")
           expect(results.find((result) => result.tool === "multi_tool_use.parallel")?.error).toContain("cannot call itself")
@@ -4251,6 +4322,307 @@ describe("tool contract", () => {
 
       await expect(ImageAssets.readLocalImage(fakePath)).rejects.toThrow("Unsupported image file type")
     } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it("loads view_image bytes into content/file output while persisting only an asset reference", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "anybox-view-image-content-"))
+    const pngPath = path.join(root, "pixel.png")
+    let assetPath: string | undefined
+
+    try {
+      await writeFile(pngPath, ONE_PIXEL_PNG)
+
+      await Instance.provide({
+        directory: root,
+        async fn() {
+          const runtime = await ViewImageTool.init({ model: visionTestModel() })
+          const output = await runtime.execute(
+            { path: pngPath },
+            {
+              sessionID: `session-view-image-${Date.now()}`,
+              messageID: "message-view-image",
+              model: visionTestModel(),
+            },
+          )
+
+          expect(output.data).toMatchObject({
+            image: {
+              path: pngPath,
+              width: 1,
+              height: 1,
+              mimeType: "image/png",
+              sourceTool: "view_image",
+            },
+          })
+          expect(output.attachments?.[0]).toMatchObject({
+            mime: "image/png",
+            filename: "pixel.png",
+          })
+          expect(output.attachments?.[0]?.url).toContain("/api/sessions/")
+
+          const ref = output.metadata?.modelImageRef as ImageAssets.ImageAssetRef
+          expect(ref.sessionID).toBeString()
+          expect(ref.assetID).toBeString()
+          const stored = await ImageAssets.readImageAsset(ref.sessionID, ref.assetID)
+          assetPath = stored.metadata.path
+          expect(stored.metadata.sha256).toMatch(/^[a-f0-9]{64}$/)
+          expect(stored.metadata.sizeBytes).toBe(ONE_PIXEL_PNG.byteLength)
+
+          const serializedOutput = JSON.stringify(output)
+          const serializedMetadata = await readFile(`${stored.metadata.path}.json`, "utf8")
+          expect(serializedOutput).not.toContain("iVBORw0KGgo")
+          expect(serializedMetadata).not.toContain("iVBORw0KGgo")
+
+          const modelOutput = await runtime.toModelOutput?.(output)
+          expect(modelOutput).toMatchObject({ type: "content" })
+          if (!modelOutput || typeof modelOutput === "string" || modelOutput.type !== "content") {
+            throw new Error("Expected content tool output")
+          }
+          const file = modelOutput.value.find((part) => part.type === "file")
+          expect(file).toBeDefined()
+          if (!file || file.type !== "file") throw new Error("Expected model image file")
+          expect(file.mediaType).toBe("image/png")
+          expect(file.data.data).toBeInstanceOf(Uint8Array)
+          expect([...file.data.data.slice(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+
+          const { modelImageRef: _ignored, ...legacyMetadata } = output.metadata ?? {}
+          const legacyOutput = {
+            ...output,
+            metadata: legacyMetadata,
+            attachments: output.attachments?.map((attachment) => ({
+              ...attachment,
+              url: `http://127.0.0.1:1${new URL(attachment.url).pathname}`,
+            })),
+          }
+          const legacyModelOutput = await runtime.toModelOutput?.(legacyOutput)
+          expect(legacyModelOutput).toMatchObject({ type: "content" })
+
+          const missingLegacyModelOutput = await runtime.toModelOutput?.({
+            ...legacyOutput,
+            attachments: legacyOutput.attachments?.map((attachment) => ({
+              ...attachment,
+              url: "https://example.test/not-an-anybox-asset",
+            })),
+          })
+          expect(missingLegacyModelOutput).toMatchObject({ type: "text" })
+          if (
+            !missingLegacyModelOutput ||
+            typeof missingLegacyModelOutput === "string" ||
+            missingLegacyModelOutput.type !== "text"
+          ) {
+            throw new Error("Expected legacy recovery fallback text")
+          }
+          expect(missingLegacyModelOutput.value).toContain("Please call view_image again")
+        },
+      })
+    } finally {
+      if (assetPath) {
+        await rm(assetPath, { force: true })
+        await rm(`${assetPath}.json`, { force: true })
+      }
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it("rejects non-transport image formats and images above the 20 MB limit", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "anybox-view-image-validation-"))
+    const gifPath = path.join(root, "pixel.gif")
+    const oversizedPath = path.join(root, "oversized.png")
+
+    try {
+      await writeFile(
+        gifPath,
+        Buffer.from("R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==", "base64"),
+      )
+      const oversized = Buffer.alloc(ImageAssets.MAX_IMAGE_BYTES + 1)
+      ONE_PIXEL_PNG.copy(oversized)
+      await writeFile(oversizedPath, oversized)
+
+      await Instance.provide({
+        directory: root,
+        async fn() {
+          const runtime = await ViewImageTool.init({ model: visionTestModel() })
+          const context = {
+            sessionID: "session-view-image-validation",
+            messageID: "message-view-image-validation",
+            model: visionTestModel(),
+          }
+          await expect(runtime.execute({ path: gifPath }, context)).rejects.toThrow(
+            "Convert it to PNG, JPEG, or WebP first",
+          )
+          await expect(runtime.execute({ path: oversizedPath }, context)).rejects.toThrow(
+            "Maximum supported size",
+          )
+        },
+      })
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it("gates view_image registration and direct execution by model image capability", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "anybox-view-image-gating-"))
+
+    try {
+      await Instance.provide({
+        directory: root,
+        async fn() {
+          const agent = await Agent.get("default")
+          expect(agent).toBeDefined()
+          const deepSeekModel = (await import("#provider/provider.ts")).testDeepSeekModel
+
+          const visualPlan = await resolveToolPlan({
+            agent: agent!,
+            model: visionTestModel(),
+            sessionID: "session-view-image-visual-plan",
+            messageID: "message-view-image-visual-plan",
+            abort: new AbortController().signal,
+          })
+          expect(visualPlan.entries.some((entry) => entry.item.id === "view_image")).toBe(true)
+          expect(visualPlan.registryTools.view_image).toBeDefined()
+          expect(visualPlan.activeToolNames).toContain("view_image")
+
+          const textPlan = await resolveToolPlan({
+            agent: agent!,
+            model: deepSeekModel,
+            sessionID: "session-view-image-text-plan",
+            messageID: "message-view-image-text-plan",
+            abort: new AbortController().signal,
+          })
+          expect(textPlan.entries.some((entry) => entry.item.id === "view_image")).toBe(false)
+          expect(textPlan.registryTools.view_image).toBeUndefined()
+          expect(textPlan.activeToolNames).not.toContain("view_image")
+
+          await expect(createToolExecution({
+            item: ViewImageTool,
+            agent: agent!,
+            model: deepSeekModel,
+            sessionID: "session-view-image-direct",
+            messageID: "message-view-image-direct",
+            abort: new AbortController().signal,
+          })).rejects.toThrow("requires model input support for: image")
+        },
+      })
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it("replays real view_image bytes only to visual models and windows tool-result images", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "anybox-view-image-replay-"))
+    const pngPath = path.join(root, "pixel.png")
+    let assetPath: string | undefined
+
+    try {
+      await writeFile(pngPath, ONE_PIXEL_PNG)
+
+      await Instance.provide({
+        directory: root,
+        async fn() {
+          const agent = await Agent.get("default")
+          expect(agent).toBeDefined()
+          const model = visionTestModel()
+          const deepSeekModel = (await import("#provider/provider.ts")).testDeepSeekModel
+          const runtime = await ViewImageTool.init({ agent: agent!, model })
+          const output = await runtime.execute(
+            { path: pngPath },
+            {
+              sessionID: `session-view-image-replay-${Date.now()}`,
+              messageID: "message-view-image-replay",
+              model,
+            },
+          )
+          const ref = output.metadata?.modelImageRef as ImageAssets.ImageAssetRef
+          assetPath = (await ImageAssets.readImageAsset(ref.sessionID, ref.assetID)).metadata.path
+
+          const assistantMessage = (id: string, count: number): Message.WithParts => ({
+            info: {
+              id,
+              sessionID: ref.sessionID,
+              role: "assistant",
+              created: Date.now(),
+              parentID: "user-view-image-replay",
+              modelID: model.id,
+              providerID: model.providerID,
+              agent: "default",
+            } as unknown as Message.Assistant,
+            parts: Array.from({ length: count }, (_, index) => ({
+              id: `${id}-part-${index}`,
+              sessionID: ref.sessionID,
+              messageID: id,
+              type: "tool",
+              callID: `${id}-call-${index}`,
+              tool: "view_image",
+              state: {
+                status: "completed",
+                input: { path: pngPath },
+                output: output.text,
+                modelOutput: output,
+                title: output.title ?? "View pixel.png",
+                metadata: output.metadata ?? {},
+                time: { start: 1, end: 2 },
+                attachments: output.attachments?.map((attachment, attachmentIndex) => ({
+                  id: `${id}-attachment-${index}-${attachmentIndex}`,
+                  sessionID: ref.sessionID,
+                  messageID: id,
+                  type: "image",
+                  mime: attachment.mime,
+                  filename: attachment.filename,
+                  url: attachment.url,
+                  width: 1,
+                  height: 1,
+                  metadata: attachment.metadata,
+                })),
+              },
+            } as Message.ToolPart)),
+          })
+
+          const oneBatch = [assistantMessage("assistant-view-image", 1)]
+          const visualMessages = await Message.toModelMessages(oneBatch, model, { agent: agent! })
+          const visualToolMessage = visualMessages.find((message) => message.role === "tool") as any
+          const visualOutput = visualToolMessage.content[0].output
+          expect(visualOutput.type).toBe("content")
+          expect(visualOutput.value.find((part: any) => part.type === "file")?.data.data).toBeInstanceOf(Uint8Array)
+          expect(toolModelMessageSchema.safeParse(visualToolMessage).success).toBe(true)
+
+          const textMessages = await Message.toModelMessages(oneBatch, deepSeekModel, { agent: agent! })
+          const textToolMessage = textMessages.find((message) => message.role === "tool") as any
+          expect(textToolMessage.content[0].output).toMatchObject({ type: "text" })
+          expect(textToolMessage.content[0].output.value).toContain("Select a multimodal model")
+          expect(textToolMessage.content[0].output.value).toContain("no image bytes were sent")
+
+          const windowedMessages = await Message.toModelMessages(
+            [
+              assistantMessage("assistant-old-view-image", 1),
+              assistantMessage("assistant-latest-view-image", 5),
+            ],
+            model,
+            {
+              agent: agent!,
+              imageWindow: {
+                maxHistoricalImageParts: 1,
+                maxLatestToolResultImageParts: 4,
+              },
+            },
+          )
+          const outputs = windowedMessages
+            .filter((message) => message.role === "tool" && Array.isArray(message.content))
+            .flatMap((message) => message.content as any[])
+            .map((part) => part.output)
+          expect(outputs.filter((candidate) => candidate.type === "content")).toHaveLength(4)
+          expect(outputs.filter((candidate) =>
+            candidate.type === "text" &&
+            String(candidate.value).includes("tool-result image history window"),
+          )).toHaveLength(2)
+        },
+      })
+    } finally {
+      if (assetPath) {
+        await rm(assetPath, { force: true })
+        await rm(`${assetPath}.json`, { force: true })
+      }
       await rm(root, { recursive: true, force: true })
     }
   })
