@@ -559,6 +559,97 @@ test("preparePromptContext prunes oversized tool outputs when compaction cannot 
   }
 })
 
+test("fallback compaction preserves tool input when the result omits the shell command", async () => {
+  const sessionID = "ses_compaction_tool_input"
+  const command = "Get-Date -Format o"
+  const messages: Message.WithParts[] = []
+
+  for (let index = 0; index < 7; index += 1) {
+    const userID = `msg-user-${index}`
+    const assistantID = `msg-assistant-${index}`
+    messages.push(
+      {
+        info: {
+          id: userID,
+          sessionID,
+          role: "user",
+          created: index * 2,
+        } as Message.User,
+        parts: [
+          {
+            id: `part-user-${index}`,
+            sessionID,
+            messageID: userID,
+            type: "text",
+            text: `user turn ${index}`,
+          } as Message.TextPart,
+        ],
+      },
+      {
+        info: {
+          id: assistantID,
+          sessionID,
+          role: "assistant",
+          created: index * 2 + 1,
+        } as Message.Assistant,
+        parts: index === 0
+          ? [
+              {
+                id: "part-shell-result",
+                sessionID,
+                messageID: assistantID,
+                type: "tool",
+                callID: "call-shell-result",
+                tool: "powershell_command",
+                state: {
+                  status: "completed",
+                  input: {
+                    command,
+                    tty: false,
+                  },
+                  output: "Exit: 0\nSTDOUT:\n2026-08-07T12:00:00.0000000+08:00\nSTDERR:\n(no stderr)",
+                  title: "PowerShell command completed",
+                  metadata: {},
+                  time: {
+                    start: 1,
+                    end: 2,
+                  },
+                },
+              } as Message.ToolPart,
+            ]
+          : [
+              {
+                id: `part-assistant-${index}`,
+                sessionID,
+                messageID: assistantID,
+                type: "text",
+                text: `assistant turn ${index}`,
+              } as Message.TextPart,
+            ],
+      },
+    )
+  }
+
+  let recorded: Message.WithParts | undefined
+  const result = await ContextWindow.compactPromptContext({
+    sessionID,
+    model: baseModel,
+    system: ["base-system"],
+    messages,
+    generateSummary: async () => "",
+    recordCompactionMessage: ({ message, parts }) => {
+      recorded = { info: message, parts }
+    },
+    auto: false,
+  })
+
+  expect(result.status).toBe("compacted")
+  if (!recorded) throw new Error("Expected fallback compaction to be recorded")
+  const textPart = recorded.parts.find((part): part is Message.TextPart => part.type === "text")
+  expect(textPart?.text).toContain(`tool powershell_command input: {"command":"${command}","tty":false}`)
+  expect(textPart?.text).toContain("completed: Exit: 0")
+})
+
 test("CompactionPart is internal and is not sent to the model", async () => {
   const compacted = compactedHistoryMessage("ses_compaction_part_internal", {
     compactedFromMessageID: "msg-start",

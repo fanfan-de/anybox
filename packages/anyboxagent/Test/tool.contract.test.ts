@@ -42,6 +42,7 @@ import { GlobTool } from "#tool/glob.ts"
 import { GrepTool } from "#tool/grep.ts"
 import { ReadFileTool } from "#tool/read-file.ts"
 import { ReplaceTextTool } from "#tool/replace-text.ts"
+import { SshShellCommandTool } from "#tool/ssh-shell-command.ts"
 import { TerminalReadTool, TerminalRunCommandTool, TerminalWriteInputTool } from "#tool/terminal-tools.ts"
 import * as Tool from "#tool/tool.ts"
 import { createToolExecution } from "#tool/execution.ts"
@@ -1241,8 +1242,6 @@ describe("tool contract", () => {
           expect(Tool.normalizeToolModelOutput(modelOutput!)).toEqual({
             type: "json",
             value: {
-              title: "git_bash_command: printf hello",
-              command: "printf hello",
               workdir: ".",
               shell: "/bin/bash",
               tty: false,
@@ -1259,6 +1258,8 @@ describe("tool contract", () => {
               stderr: "",
             },
           })
+
+          expect(JSON.stringify(modelOutput)).not.toContain("printf hello")
         },
       })
     } finally {
@@ -1279,6 +1280,47 @@ describe("tool contract", () => {
       code: 0,
       signal: null,
     })
+  })
+
+  it("formats SSH shell model output without repeating invocation fields", async () => {
+    const runtime = await SshShellCommandTool.init()
+    const modelOutput = Tool.normalizeToolModelOutput(await runtime.toModelOutput!({
+      title: "ssh_shell_command: printf ssh-result",
+      text: [
+        "Command: printf ssh-result",
+        "Workdir: /srv/project",
+        "Shell: remote sh -lc",
+        "Exit: 0",
+        "STDOUT:",
+        "ssh-result",
+        "STDERR:",
+        "(no stderr)",
+      ].join("\n"),
+      metadata: {
+        command: "printf ssh-result",
+        shell: "remote sh -lc",
+        cwd: "ssh://profile/srv/project",
+        displayCwd: "/srv/project",
+        timeoutMs: 60_000,
+        exitCode: 0,
+        stdout: "ssh-result",
+        stderr: "",
+        durationMs: 12,
+      },
+    }))
+
+    expect(modelOutput).toEqual({
+      type: "json",
+      value: {
+        workdir: "/srv/project",
+        shell: "remote sh -lc",
+        exitCode: 0,
+        status: "ok",
+        stdout: "ssh-result",
+        stderr: "",
+      },
+    })
+    expect(JSON.stringify(modelOutput)).not.toContain("printf ssh-result")
   })
 
   it("starts background shell tasks, polls them with write_stdin, and cleans them up through the registry", async () => {
@@ -1311,6 +1353,12 @@ describe("tool contract", () => {
         const modelOutput = await execRuntime.toModelOutput?.(started as any)
         expect(started.text).toContain("Status: started in background")
         expect(started.text).toContain("Session Information > Background Processes")
+        expect(started.text).not.toContain("printf hello && exec sleep 30")
+        expect(started.text).not.toContain("Command:")
+        expect(started.text).not.toContain("Workdir:")
+        expect(started.text).not.toContain("Shell:")
+        expect(started.text).not.toContain("TTY:")
+        expect(started.title).toMatch(/command running$/)
         expect(started.metadata).toMatchObject({
           runInBackground: true,
           backgroundTaskId: expect.stringMatching(/^tsk_/),
@@ -1325,6 +1373,8 @@ describe("tool contract", () => {
         expect(String((normalizedModelOutput.value as any).backgroundTaskId)).toStartWith("tsk_")
         expect((normalizedModelOutput.value as any).session_id).toBe(backgroundTaskId)
         expect((normalizedModelOutput.value as any).runInBackground).toBe(true)
+        expect(normalizedModelOutput.value).not.toHaveProperty("title")
+        expect(normalizedModelOutput.value).not.toHaveProperty("command")
 
         const snapshot = Tool.normalizeToolOutput(await writeRuntime.execute(
           {
@@ -1460,6 +1510,15 @@ describe("tool contract", () => {
           runInBackground: false,
           backgroundTaskId: null,
         })
+        expect(result.title).toMatch(/command completed$/)
+        expect(result.text).toContain("Exit: 0")
+        expect(result.text).toContain("STDOUT:")
+        expect(result.text).toContain("STDERR:")
+        expect(result.text).not.toContain(shellCase.command)
+        expect(result.text).not.toContain("Command:")
+        expect(result.text).not.toContain("Workdir:")
+        expect(result.text).not.toContain("Shell:")
+        expect(result.text).not.toContain("TTY:")
         expect(stdout).toContain("short-result")
         if (process.platform === "win32") {
           const modelOutput = await runtime.toModelOutput!(result)
@@ -1474,6 +1533,8 @@ describe("tool contract", () => {
               shellEdition: "Core",
             },
           })
+          expect((modelOutput as any).value).not.toHaveProperty("title")
+          expect((modelOutput as any).value).not.toHaveProperty("command")
         }
       },
     })
@@ -1510,7 +1571,13 @@ describe("tool contract", () => {
         ))
 
         expect(result.text).toContain("TERMINAL OUTPUT:")
+        expect(result.text).toContain("Exit: 0")
         expect(result.text).not.toContain("STDOUT:")
+        expect(result.text).not.toContain(shellCase.command)
+        expect(result.text).not.toContain("Command:")
+        expect(result.text).not.toContain("Workdir:")
+        expect(result.text).not.toContain("Shell:")
+        expect(result.text).not.toContain("TTY:")
         expect(result.metadata).toMatchObject({
           tty: true,
           exitCode: 0,
@@ -1529,6 +1596,138 @@ describe("tool contract", () => {
         expect((modelOutput as any).type).toBe("json")
         expect((modelOutput as any).value.tty).toBe(true)
         expect((modelOutput as any).value.terminalOutput).toContain("terminal-short")
+        expect((modelOutput as any).value).not.toHaveProperty("title")
+        expect((modelOutput as any).value).not.toHaveProperty("command")
+      },
+    })
+  }, 120000)
+
+  it("keeps foreground truncation state in model output without adding display notes", async () => {
+    await Instance.provide({
+      directory: process.cwd(),
+      async fn() {
+        const shellCase = process.platform === "darwin"
+          ? MacOSShellCommandTool
+          : process.platform === "win32"
+            ? GitBashCommandTool
+            : null
+        if (!shellCase) return
+
+        const runtime = await shellCase.init()
+        const command = "i=0; while [ \"$i\" -lt 400 ]; do printf x; i=$((i+1)); done"
+        const result = Tool.normalizeToolOutput(await runtime.execute(
+          {
+            command,
+            maxOutputChars: 80,
+            "yield-time-ms": 5_000,
+            tty: false,
+          },
+          {
+            sessionID: "session-shell-truncated-command",
+            messageID: "message-shell-truncated-command",
+          },
+        ))
+
+        expect(result.text).toContain("Exit: 0")
+        expect(result.text).toContain("STDOUT:")
+        expect(result.text).toContain("STDERR:")
+        expect(result.text).not.toContain("Note:")
+        expect(result.text).not.toContain(command)
+        expect(result.metadata).toMatchObject({
+          stdoutTruncated: true,
+          runInBackground: false,
+        })
+
+        const modelOutput = await runtime.toModelOutput!(result)
+        expect(modelOutput).toMatchObject({
+          type: "json",
+          value: {
+            stdoutTruncated: true,
+          },
+        })
+        expect((modelOutput as any).value).not.toHaveProperty("title")
+        expect((modelOutput as any).value).not.toHaveProperty("command")
+      },
+    })
+  }, 120000)
+
+  it("formats failed shell commands as result-only output", async () => {
+    await Instance.provide({
+      directory: process.cwd(),
+      async fn() {
+        const shellCase = process.platform === "darwin"
+          ? {
+              tool: MacOSShellCommandTool,
+              command: "exit 7",
+            }
+          : process.platform === "win32"
+            ? {
+                tool: GitBashCommandTool,
+                command: "exit 7",
+              }
+            : null
+        if (!shellCase) return
+
+        const runtime = await shellCase.tool.init()
+        const result = Tool.normalizeToolOutput(await runtime.execute(
+          {
+            command: shellCase.command,
+            "yield-time-ms": 5_000,
+            tty: false,
+          },
+          {
+            sessionID: "session-shell-failed-command",
+            messageID: "message-shell-failed-command",
+          },
+        ))
+
+        expect(result.title).toMatch(/command failed$/)
+        expect(result.text).toContain("Exit: 7")
+        expect(result.text).not.toContain(shellCase.command)
+        expect(result.text).not.toContain("Command:")
+      },
+    })
+  }, 120000)
+
+  it("formats timed-out shell commands as result-only output", async () => {
+    await Instance.provide({
+      directory: process.cwd(),
+      async fn() {
+        const shellCase = process.platform === "darwin"
+          ? {
+              tool: MacOSShellCommandTool,
+              command: "sleep 5",
+            }
+          : process.platform === "win32"
+            ? {
+                tool: GitBashCommandTool,
+                command: "sleep 5",
+              }
+            : null
+        if (!shellCase) return
+
+        const runtime = await shellCase.tool.init()
+        const result = Tool.normalizeToolOutput(await runtime.execute(
+          {
+            command: shellCase.command,
+            timeoutMs: 50,
+            "yield-time-ms": 5_000,
+            tty: false,
+          },
+          {
+            sessionID: "session-shell-timed-out-command",
+            messageID: "message-shell-timed-out-command",
+          },
+        ))
+
+        expect(result.title).toMatch(/command timed out$/)
+        expect(result.text).toContain("(timed out)")
+        expect(result.text).not.toContain(shellCase.command)
+        expect(result.text).not.toContain("Command:")
+        expect(result.metadata).toMatchObject({
+          timedOut: true,
+          runInBackground: false,
+        })
       },
     })
   }, 120000)
@@ -2025,13 +2224,45 @@ describe("tool contract", () => {
 
       const shape = (runtime.parameters as z.ZodObject<any>).shape
       expect(Boolean(shape.tty)).toBe(true)
-      expect(shape.tty.parse(undefined)).toBe(false)
+      expect(shape.tty.parse(undefined)).toBe(item.id === "cmd_command")
       expect(Boolean(shape["yield-time_ms"])).toBe(true)
       expect(Boolean(shape.runInBackground)).toBe(true)
       expect(Boolean(shape.run_in_background)).toBe(true)
       expect(Boolean(shape.distro)).toBe(item.distro)
     }
   })
+
+  it("runs Command Prompt through a pseudoconsole by default", async () => {
+    if (process.platform !== "win32") return
+
+    await Instance.provide({
+      directory: process.cwd(),
+      async fn() {
+        const runtime = await CmdCommandTool.init()
+        const parameters = runtime.parameters.parse({
+          command: "echo CMD 默认 PTY 中文正常",
+          "yield-time_ms": 5_000,
+        })
+        expect(parameters.tty).toBe(true)
+
+        const result = Tool.normalizeToolOutput(await runtime.execute(
+          parameters,
+          {
+            sessionID: "session-cmd-default-pty",
+            messageID: "message-cmd-default-pty",
+          },
+        ))
+
+        expect(result.text).toContain("TERMINAL OUTPUT:")
+        expect(result.text).not.toContain("STDOUT:")
+        expect(result.metadata).toMatchObject({
+          tty: true,
+          exitCode: 0,
+        })
+        expect(String(result.metadata?.terminalOutput)).toContain("CMD 默认 PTY 中文正常")
+      },
+    })
+  }, 120000)
 
   it("keeps PowerShell non-interactive by default and removes the flag for tty sessions", () => {
     expect(buildPowerShellArgs("python", false)).toContain("-NonInteractive")
@@ -2428,10 +2659,23 @@ describe("tool contract", () => {
             model,
           )
 
+          const assistantMessage = messages.find((item) => item.role === "assistant") as any
+          const toolCall = assistantMessage?.content.find(
+            (item: any) => item.type === "tool-call" && item.toolCallId === "call-history",
+          )
           const toolMessage = messages.find((item) => item.role === "tool") as any
+          expect(toolCall).toMatchObject({
+            type: "tool-call",
+            toolCallId: "call-history",
+            toolName: shellToolID,
+            input: {
+              command: "printf hello",
+            },
+          })
           expect(toolMessage).toBeDefined()
           expect(toolMessage.content).toHaveLength(1)
-          expect(toolMessage.content.find((item: any) => item.toolName === shellToolID)).toMatchObject({
+          const toolResult = toolMessage.content.find((item: any) => item.toolName === shellToolID)
+          expect(toolResult).toMatchObject({
             type: "tool-result",
             toolCallId: "call-history",
             toolName: shellToolID,
@@ -2445,6 +2689,9 @@ describe("tool contract", () => {
               },
             },
           })
+          expect(toolResult.output.value).not.toHaveProperty("title")
+          expect(toolResult.output.value).not.toHaveProperty("command")
+          expect(JSON.stringify(messages).match(/printf hello/g)).toHaveLength(1)
         },
       })
     } finally {

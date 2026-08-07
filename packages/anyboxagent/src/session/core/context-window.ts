@@ -24,6 +24,7 @@ const MIN_TURNS_TO_KEEP = 2
 const MAX_COMPACTION_BATCH_TOKENS = 12_000
 const PRUNED_TOOL_OUTPUT_CHARS = 1_200
 const EMERGENCY_TOOL_OUTPUT_CHARS = 320
+const FALLBACK_TOOL_INPUT_CHARS = 600
 const MEMORY_BLOCK_MAX_CHARS = 10_000
 const MEMORY_BLOCK_MIN_CHARS = 1_500
 export const CURRENT_SUMMARY_VERSION = 1
@@ -743,19 +744,22 @@ function renderPartForSummary(part: Message.Part) {
 
 function renderToolPartForSummary(part: Message.ToolPart) {
   const state = part.state
+  const input = truncateInline(safeStringify(state.input), FALLBACK_TOOL_INPUT_CHARS)
+  const header = `- tool ${part.tool}${input ? ` input: ${input}` : ""}`
+
   if (state.status === "completed") {
-    return `- tool ${part.tool} completed: ${truncateInline(state.output, 1_000)}`
+    return `${header}\n  completed: ${truncateInline(state.output, 1_000)}`
   }
   if (state.status === "error") {
-    return `- tool ${part.tool} error: ${truncateInline(state.error, 600)}`
+    return `${header}\n  error: ${truncateInline(state.error, 600)}`
   }
   if (state.status === "denied") {
-    return `- tool ${part.tool} denied: ${truncateInline(state.reason, 300)}`
+    return `${header}\n  denied: ${truncateInline(state.reason, 300)}`
   }
   if (state.status === "waiting-approval") {
-    return `- tool ${part.tool} waiting for approval`
+    return `${header}\n  waiting for approval`
   }
-  return `- tool ${part.tool} pending`
+  return `${header}\n  pending`
 }
 
 function pruneToolOutputsInMessages(messages: Message.WithParts[], maxChars: number) {

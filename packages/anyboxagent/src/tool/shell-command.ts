@@ -173,14 +173,20 @@ function getResolverParts(options?: ResolverOptions) {
 function shellCommandParameters(input: {
   commandDescription: string
   wslDistro?: boolean
+  defaultTty?: boolean
 }) {
+  const defaultTty = input.defaultTty ?? false
   const shape = {
     command: z.string().min(1).describe(input.commandDescription),
     workdir: z.string().optional().describe("Working directory. Defaults to the current project directory."),
     timeoutMs: z.number().int().positive().max(10 * 60 * 1000).optional().describe("Optional hard runtime limit in milliseconds. A task that exceeds it is terminated."),
     "yield-time_ms": z.number().int().nonnegative().max(MAX_YIELD_TIME_MS).optional().describe("How long to wait before returning a background task id for a still-running command. Defaults to 10000 ms; use 0 to return immediately."),
     maxOutputChars: z.number().int().positive().max(200_000).optional().describe("Maximum chars kept per pipe stream, or for the merged terminal stream when tty=true."),
-    tty: z.boolean().optional().default(false).describe("Allocate a real terminal for interactive or TTY-dependent programs. Defaults to false."),
+    tty: z.boolean().optional().default(defaultTty).describe(
+      defaultTty
+        ? "Allocate a real terminal. Defaults to true for this shell so Windows can normalize localized console output to UTF-8; set false only when separate stdout and stderr pipes are required."
+        : "Allocate a real terminal for interactive or TTY-dependent programs. Defaults to false.",
+    ),
     allowUnsafe: z.boolean().optional().describe("Allow known dangerous command patterns."),
     description: z.string().optional().describe("Short description for the command intent."),
     runInBackground: z.boolean().optional().describe("Compatibility shortcut for yield-time_ms=0. True returns a managed background task immediately."),
@@ -209,6 +215,7 @@ const PowerShellCommandParameters = shellCommandParameters({
 
 const CmdCommandParameters = shellCommandParameters({
   commandDescription: "Windows Command Prompt command to execute.",
+  defaultTty: true,
 })
 
 const WslBashCommandParameters = shellCommandParameters({
@@ -763,7 +770,6 @@ function createShellCommandTool<Parameters extends z.ZodType>(
           const maxOutputChars = input.maxOutputChars ?? DEFAULT_MAX_OUTPUT_CHARS
           const displayCwd = toDisplayPath(cwd)
           const invocation = await config.resolveInvocation(parameters, cwd)
-          const title = input.description?.trim() || `${config.id}: ${command}`
           const registry = getShellTaskRegistry()
           const task = await registry.start({
             ownerSessionID: ctx.sessionID,
@@ -785,10 +791,13 @@ function createShellCommandTool<Parameters extends z.ZodType>(
             if (result.timedOut) suffix.push("timed out")
             if (aborted) suffix.push("aborted")
 
-            const notes: string[] = []
-            if (result.tty ? result.terminalOutputTruncated : result.stdoutTruncated || result.stderrTruncated) {
-              notes.push("Output was truncated. Increase maxOutputChars to inspect more.")
-            }
+            const title = result.timedOut
+              ? `${config.title} command timed out`
+              : aborted
+                ? `${config.title} command aborted`
+                : result.exitCode === 0
+                  ? `${config.title} command completed`
+                  : `${config.title} command failed`
 
             const normalizedStdout = result.stdout.trimEnd()
             const normalizedStderr = result.stderr.trimEnd()
@@ -809,12 +818,7 @@ function createShellCommandTool<Parameters extends z.ZodType>(
             return {
               title,
               text: [
-                `Command: ${command}`,
-                `Workdir: ${displayCwd}`,
-                `Shell: ${invocation.shell}`,
-                `TTY: ${result.tty ? "yes" : "no"}`,
                 `Exit: ${result.exitCode ?? "unknown"}${suffix.length ? ` (${suffix.join(", ")})` : ""}`,
-                notes.length ? `Note: ${notes.join(" ")}` : undefined,
                 "",
                 ...outputSections,
               ].filter(Boolean).join("\n"),
@@ -915,12 +919,8 @@ function createShellCommandTool<Parameters extends z.ZodType>(
               ]
 
           return {
-            title,
+            title: `${config.title} command running`,
             text: [
-              `Command: ${command}`,
-              `Workdir: ${displayCwd}`,
-              `Shell: ${invocation.shell}`,
-              `TTY: ${snapshot.tty ? "yes" : "no"}`,
               `Session ID: ${task.id}`,
               explicitBackground
                 ? "Status: started in background"
@@ -974,8 +974,6 @@ function createShellCommandTool<Parameters extends z.ZodType>(
           return {
             type: "json",
             value: {
-              title: result.title ?? config.title,
-              command: metadata.command,
               workdir: metadata.displayCwd,
               shell: metadata.shell,
               ...(metadata.shellVersion ? { shellVersion: metadata.shellVersion } : {}),
@@ -1115,7 +1113,7 @@ export const CmdCommandTool = createShellCommandTool({
   id: "cmd_command",
   title: "Command Prompt",
   shellKind: "cmd",
-  description: "Run a Windows Command Prompt command inside the current project boundary. Use CMD syntax such as dir, copy, set VAR=value, and %VAR%.",
+  description: "Run a Windows Command Prompt command inside the current project boundary. Commands use a Windows pseudoconsole by default so localized output is normalized to UTF-8. Use CMD syntax such as dir, copy, set VAR=value, and %VAR%.",
   parameters: CmdCommandParameters,
   async resolveInvocation(parameters) {
     const executable = await resolveCmdExecutable()

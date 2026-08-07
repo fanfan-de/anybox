@@ -93,14 +93,13 @@ export const SshShellCommandTool = Tool.define(
         })
         const stdout = result.stdout.trimEnd()
         const stderr = result.stderr.trimEnd()
-        const title = parameters.description?.trim() || `ssh_shell_command: ${command}`
+        const title = result.exitCode === 0
+          ? "SSH command completed"
+          : "SSH command failed"
 
         return {
           title,
           text: [
-            `Command: ${command}`,
-            `Workdir: ${toDisplayPath(cwd)}`,
-            "Shell: remote sh -lc",
             `Exit: ${result.exitCode}`,
             "",
             "STDOUT:",
@@ -128,8 +127,6 @@ export const SshShellCommandTool = Tool.define(
         return {
           type: "json",
           value: {
-            title: result.title ?? "SSH Shell",
-            command: metadata.command,
             workdir: metadata.displayCwd,
             shell: metadata.shell,
             exitCode: metadata.exitCode,

@@ -893,6 +893,60 @@ describe("ThreadView trace item renderers", () => {
     expect(within(outputPane).getByRole("button", { name: "Collapse Tool completed output content" })).toHaveAttribute("aria-expanded", "true")
   })
 
+  it("shows a shell command only in the input pane and copies result-only output", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    })
+
+    const command = "Get-Date -Format o"
+    const rawInput = JSON.stringify({ command, tty: false })
+    const resultOutput = [
+      "Exit: 0",
+      "STDOUT:",
+      "2026-08-07T12:00:00.0000000+08:00",
+      "STDERR:",
+      "(no stderr)",
+    ].join("\n")
+    const toolItem: AssistantTraceItem = {
+      ...toolStatusTraceItem("completed"),
+      title: "powershell_command",
+      toolName: "powershell_command",
+      detail: "PowerShell command completed",
+      toolInputText: rawInput,
+      toolOutputText: resultOutput,
+    }
+
+    renderThread(
+      [assistantTraceMessage("assistant-shell-result", [toolItem], false)],
+      {
+        assistantTraceVisibility: {
+          ...DEFAULT_ASSISTANT_TRACE_VISIBILITY,
+          toolInputs: true,
+          toolOutputs: true,
+        },
+      },
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: /powershell_command/i }))
+
+    const inputPane = screen.getByRole("region", { name: "powershell_command input content" })
+    const outputPane = screen.getByRole("region", { name: "powershell_command output content" })
+    expect(inputPane).toHaveTextContent(command)
+    expect(outputPane).not.toHaveTextContent(command)
+    expect(outputPane).toHaveTextContent("Exit: 0")
+    expect(outputPane).toHaveTextContent("STDOUT:")
+    expect(outputPane).toHaveTextContent("STDERR:")
+    expect(`${inputPane.textContent ?? ""}${outputPane.textContent ?? ""}`.match(/Get-Date -Format o/g)).toHaveLength(1)
+
+    fireEvent.click(within(outputPane).getByRole("button", { name: "Copy powershell_command output content" }))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(
+      `${resultOutput}\n\nPowerShell command completed`,
+    ))
+    expect(writeText.mock.calls.at(-1)?.[0]).not.toContain(command)
+  })
+
   it("formats JSON tool input and output while expanding multiline and serialized JSON strings", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.defineProperty(navigator, "clipboard", {

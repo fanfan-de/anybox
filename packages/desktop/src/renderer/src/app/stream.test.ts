@@ -1833,6 +1833,38 @@ describe("stream trace reducer", () => {
     expect(toolItems[0]?.detail).toBe("Updated notes.txt")
   })
 
+  it("keeps shell commands in input while projecting result-only output", () => {
+    const command = "Get-Date -Format o"
+    let message = buildStreamingAssistantThreadMessage("Inspect shell payloads")
+
+    message = applyAgentStreamEventToThreadMessage(message, {
+      event: "part",
+      data: {
+        part: {
+          id: "tool-shell-result",
+          type: "tool",
+          tool: "powershell_command",
+          state: {
+            status: "completed",
+            input: {
+              command,
+              tty: false,
+            },
+            output: "Exit: 0\nSTDOUT:\n2026-08-07T12:00:00.0000000+08:00\nSTDERR:\n(no stderr)",
+            title: "PowerShell command completed",
+          },
+        },
+      },
+    })
+
+    const toolItems = message.items.filter((item) => item.kind === "tool")
+    expect(toolItems).toHaveLength(1)
+    expect(toolItems[0]?.toolInputText).toContain(`"command": "${command}"`)
+    expect(toolItems[0]?.toolOutputText).toContain("Exit: 0")
+    expect(toolItems[0]?.toolOutputText).not.toContain(command)
+    expect(toolItems[0]?.detail).toBe("PowerShell command completed")
+  })
+
   it("preserves the full streamed tool input while the call is running", () => {
     const longRawInput = `${"streamed input line\n".repeat(40)}tail-input-marker`
 
