@@ -108,7 +108,7 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
         },
         {
           content: toolsZh,
-          description: "管理内置工具，理解权限、渐进发现与 JavaScript Exec。",
+          description: "按模块查阅内置与 Planner 工具，理解每项能力的用途、加载方式与权限边界。",
           slug: "tools",
           title: "工具系统",
         },
@@ -241,7 +241,7 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
         },
         {
           content: toolsEn,
-          description: "Manage built-ins and understand permissions, discovery, and JavaScript Exec.",
+          description: "Browse built-in and Planner tools by module, purpose, loading behavior, and permission boundary.",
           slug: "tools",
           title: "Tool System",
         },
