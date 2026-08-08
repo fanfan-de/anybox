@@ -3,20 +3,20 @@
   "catalogID": "anybox-plugins",
   "repositoryRef": "master",
   "catalogPath": "plugins/Anybox-Plugins/.catalog",
-  "sourceCommit": "407c7bfd8d5893f9bc4524b0a90978709c82f879",
-  "pluginCount": 61,
+  "sourceCommit": "cc229c5d03366b9e9df8dbee744f0ac80a562bc6",
+  "pluginCount": 62,
   "registry": {
     "name": "anybox-plugin-registry.json",
-    "sha256": "4e0ba87ab68942056a16af102ba8c7f65e40b5773d93f9af9dea2d498320c8ff",
-    "size": 400056
+    "sha256": "aecf107ffda44cd7bc5259620c595c7a681b13be896ce57667062969672f1851",
+    "size": 414553
   },
   "assets": [
     {
       "pluginID": "anybox-plugin-development",
-      "pluginVersion": "0.1.0",
-      "name": "anybox-plugin-anybox-plugin-development-0.1.0.zip",
-      "sha256": "64beaacf3c2a1f5186c2f672cd25467e18ad443ab71659ac9a6ffe06a0d58f05",
-      "size": 15787
+      "pluginVersion": "0.1.1",
+      "name": "anybox-plugin-anybox-plugin-development-0.1.1.zip",
+      "sha256": "3ea61280b711819b101db14a3c79c4dec6ca80354848dec7e0d42813dc0fd077",
+      "size": 16282
     },
     {
       "pluginID": "atlassian-rovo",
@@ -24,6 +24,13 @@
       "name": "anybox-plugin-atlassian-rovo-1.0.2.zip",
       "sha256": "1f10268fac6de4ab91e430a13dde3fbb4dce2360519d947e0e9d11beba6f5033",
       "size": 88858
+    },
+    {
+      "pluginID": "bilibili-creator",
+      "pluginVersion": "0.1.0",
+      "name": "anybox-plugin-bilibili-creator-0.1.0.zip",
+      "sha256": "1c4413c9d0d9c2516e8774398cb07e665536c3daddc7bc672ff9d6a11cfa61c1",
+      "size": 22551
     },
     {
       "pluginID": "box",
@@ -97,10 +104,10 @@
     },
     {
       "pluginID": "computer-use-windows",
-      "pluginVersion": "0.3.5",
-      "name": "anybox-plugin-computer-use-windows-0.3.5.zip",
-      "sha256": "e806b3e49fc1b8a8f7a3df196eaa0cdc54a7569d55db8bcf27b34292bc047828",
-      "size": 51345195
+      "pluginVersion": "0.3.6",
+      "name": "anybox-plugin-computer-use-windows-0.3.6.zip",
+      "sha256": "f573cb320d4fb67f85d2b36364809d8db8cca4db11cab852c8ff9eea1cc103d2",
+      "size": 51347130
     },
     {
       "pluginID": "context7",
@@ -321,10 +328,10 @@
     },
     {
       "pluginID": "remotion",
-      "pluginVersion": "1.0.0",
-      "name": "anybox-plugin-remotion-1.0.0.zip",
-      "sha256": "fb8bc3d51fcf1cd76bfeb0869329593279cca53bf76ebb9cf93e818672350f18",
-      "size": 124179
+      "pluginVersion": "1.0.6",
+      "name": "anybox-plugin-remotion-1.0.6.zip",
+      "sha256": "cb662316c79db3f25cd2a42b286aee05922230cb1e31db5c520cefb44f8f8311",
+      "size": 905435
     },
     {
       "pluginID": "render",
