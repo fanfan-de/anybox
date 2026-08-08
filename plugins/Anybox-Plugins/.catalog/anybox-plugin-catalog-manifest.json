@@ -3,20 +3,20 @@
   "catalogID": "anybox-plugins",
   "repositoryRef": "master",
   "catalogPath": "plugins/Anybox-Plugins/.catalog",
-  "sourceCommit": "cc229c5d03366b9e9df8dbee744f0ac80a562bc6",
-  "pluginCount": 62,
+  "sourceCommit": "832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d",
+  "pluginCount": 64,
   "registry": {
     "name": "anybox-plugin-registry.json",
-    "sha256": "aecf107ffda44cd7bc5259620c595c7a681b13be896ce57667062969672f1851",
-    "size": 414553
+    "sha256": "04dadcdcde671bc74ff3fd0b69efc47438a9285f9905d0a14312215a0b1cdb70",
+    "size": 435068
   },
   "assets": [
     {
       "pluginID": "anybox-plugin-development",
-      "pluginVersion": "0.1.1",
-      "name": "anybox-plugin-anybox-plugin-development-0.1.1.zip",
-      "sha256": "3ea61280b711819b101db14a3c79c4dec6ca80354848dec7e0d42813dc0fd077",
-      "size": 16282
+      "pluginVersion": "0.1.2",
+      "name": "anybox-plugin-anybox-plugin-development-0.1.2.zip",
+      "sha256": "c52c1a23ed1eca6e36536ba60e41c0322fa7df6f64513787556ee1039410321a",
+      "size": 16576
     },
     {
       "pluginID": "atlassian-rovo",
@@ -425,6 +425,13 @@
       "size": 1388
     },
     {
+      "pluginID": "tiktok-creator",
+      "pluginVersion": "0.1.0",
+      "name": "anybox-plugin-tiktok-creator-0.1.0.zip",
+      "sha256": "3f87647e538aec3f9f40747cff8997df8dbfd7e3a2514b71f369ae6ad7f6dbcc",
+      "size": 17855
+    },
+    {
       "pluginID": "twilio-developer-kit",
       "pluginVersion": "0.2.0",
       "name": "anybox-plugin-twilio-developer-kit-0.2.0.zip",
@@ -437,6 +444,13 @@
       "name": "anybox-plugin-vercel-0.44.0.zip",
       "sha256": "5c2c31a8bf2de69b125ac61b75d200f14ce8470a9b8de377b4723097fbadfc19",
       "size": 573422
+    },
+    {
+      "pluginID": "youtube-creator",
+      "pluginVersion": "0.1.0",
+      "name": "anybox-plugin-youtube-creator-0.1.0.zip",
+      "sha256": "b554da1a48a07f4848cb099dc3fb89eaa7eb8a389f8611e827593774682fab0f",
+      "size": 18987
     },
     {
       "pluginID": "zotero",
