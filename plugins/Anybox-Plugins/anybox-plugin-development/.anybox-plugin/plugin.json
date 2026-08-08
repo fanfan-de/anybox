@@ -1,6 +1,6 @@
 {
   "name": "anybox-plugin-development",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Anybox 插件开发指南，帮助创建、审查和验证第三方插件包。",
   "author": {
     "name": "Anybox"
