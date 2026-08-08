@@ -21,7 +21,7 @@ interface RegistryPlugin {
   }
 }
 
-const EXPECTED_PLUGIN_COUNT = 61
+const EXPECTED_PLUGIN_COUNT = 62
 
 const registryFile = process.argv[2] ? resolve(process.argv[2]) : ""
 const pluginID = process.argv[3]?.trim() || "context7"
