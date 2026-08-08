@@ -64,6 +64,24 @@ function createDeferred<T>() {
   return { promise, reject, resolve }
 }
 
+type WorkspaceFileChangeTestEvent = { directory: string; paths: string[] }
+
+function installWorkspaceFileChangeMock() {
+  const listeners = new Set<(event: WorkspaceFileChangeTestEvent) => void>()
+  window.desktop!.onWorkspaceFileChange = vi.fn((listener) => {
+    listeners.add(listener)
+    return () => {
+      listeners.delete(listener)
+    }
+  })
+
+  return (event: WorkspaceFileChangeTestEvent) => {
+    for (const listener of listeners) {
+      listener(event)
+    }
+  }
+}
+
 function getComposerSendButton() {
   return screen.getByRole("button", { name: /^(Send|Sending|Stop) task$|^Resolve approval first$/ })
 }
@@ -1065,6 +1083,7 @@ describe("App", () => {
         updatedAt: 1,
         cursor: 0,
       }),
+      getSessionPty: vi.fn().mockResolvedValue(null),
       getPtySession: vi.fn().mockResolvedValue({
         id: "pty-1",
         sessionID: "session-chat-1",
@@ -4866,13 +4885,7 @@ describe("App", () => {
         },
       ],
     }
-    let workspaceFileChangeListener: ((event: { directory: string; paths: string[] }) => void) | null = null
-    window.desktop!.onWorkspaceFileChange = vi.fn((listener) => {
-      workspaceFileChangeListener = listener
-      return vi.fn(() => {
-        workspaceFileChangeListener = null
-      })
-    })
+    const emitWorkspaceFileChange = installWorkspaceFileChangeMock()
     window.desktop!.listFolderWorkspaces = vi.fn().mockResolvedValue([workspace])
     window.desktop!.openFolderWorkspace = vi.fn().mockResolvedValue(workspace)
     window.desktop!.gitGetCapabilities = vi.fn().mockResolvedValue({
@@ -4913,7 +4926,7 @@ describe("App", () => {
     getSessionDiff.mockClear()
 
     act(() => {
-      workspaceFileChangeListener?.({
+      emitWorkspaceFileChange({
         directory: workspace.directory,
         paths: ["C:\\Projects\\Atlas\\client\\.git\\index"],
       })
@@ -4950,13 +4963,7 @@ describe("App", () => {
         },
       ],
     }
-    let workspaceFileChangeListener: ((event: { directory: string; paths: string[] }) => void) | null = null
-    window.desktop!.onWorkspaceFileChange = vi.fn((listener) => {
-      workspaceFileChangeListener = listener
-      return vi.fn(() => {
-        workspaceFileChangeListener = null
-      })
-    })
+    const emitWorkspaceFileChange = installWorkspaceFileChangeMock()
     window.desktop!.listFolderWorkspaces = vi.fn().mockResolvedValue([workspace])
     window.desktop!.openFolderWorkspace = vi.fn().mockResolvedValue(workspace)
     window.desktop!.gitGetCapabilities = vi.fn().mockResolvedValue({
@@ -4991,7 +4998,7 @@ describe("App", () => {
     openFolderWorkspace.mockClear()
 
     act(() => {
-      workspaceFileChangeListener?.({
+      emitWorkspaceFileChange({
         directory: workspace.directory,
         paths: ["C:\\Projects\\Atlas\\client\\.git\\config"],
       })
@@ -5099,7 +5106,7 @@ describe("App", () => {
         },
       ],
     }
-    let workspaceFileChangeListener: ((event: { directory: string; paths: string[] }) => void) | null = null
+    const emitWorkspaceFileChange = installWorkspaceFileChangeMock()
     let diffRequestCount = 0
     const changedDiff = {
       title: "1 file change (+3 -1)",
@@ -5127,12 +5134,6 @@ describe("App", () => {
       ],
     }
 
-    window.desktop!.onWorkspaceFileChange = vi.fn((listener) => {
-      workspaceFileChangeListener = listener
-      return vi.fn(() => {
-        workspaceFileChangeListener = null
-      })
-    })
     window.desktop!.listFolderWorkspaces = vi.fn().mockResolvedValue([workspace])
     window.desktop!.getSessionDiff = vi.fn().mockImplementation(async () => {
       diffRequestCount += 1
@@ -5154,7 +5155,7 @@ describe("App", () => {
     vi.useFakeTimers()
     try {
       act(() => {
-        workspaceFileChangeListener?.({
+        emitWorkspaceFileChange({
           directory: workspace.directory,
           paths: ["C:\\Projects\\Atlas\\client\\src\\App.tsx"],
         })

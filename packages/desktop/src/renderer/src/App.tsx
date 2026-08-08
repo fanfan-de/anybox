@@ -1243,6 +1243,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
   }, [isUpdateDialogOpen])
 
   const {
+    activeMessages,
     activeSession,
     activeSessionDirectory,
     activeSessionRuntimeDebug,
@@ -2061,6 +2062,33 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     const { session } = findSession(state.sessions.workspaces, reference.sessionID)
     return session?.id ?? null
   })
+  const terminalActivityKey = useMemo(() => {
+    if (!terminalSessionID || activeSession?.id !== terminalSessionID) return ""
+
+    const terminalToolNames = new Set([
+      "terminal_run_command",
+      "terminal_read",
+      "terminal_write_input",
+    ])
+    for (let messageIndex = activeMessages.length - 1; messageIndex >= 0; messageIndex -= 1) {
+      const message = activeMessages[messageIndex]
+      if (!message || message.kind !== "assistant") continue
+      for (let itemIndex = message.items.length - 1; itemIndex >= 0; itemIndex -= 1) {
+        const item = message.items[itemIndex]
+        if (!item || item.kind !== "tool" || !item.toolName) continue
+        const normalizedToolName = item.toolName.trim().toLowerCase()
+        const toolName = normalizedToolName.split(/[.:/]/).at(-1) ?? normalizedToolName
+        if (!terminalToolNames.has(toolName)) continue
+        return [
+          terminalSessionID,
+          item.toolCallID ?? item.id,
+          item.status ?? "pending",
+          item.timestamp,
+        ].join(":")
+      }
+    }
+    return ""
+  }, [activeMessages, activeSession?.id, terminalSessionID])
   const activeRightSidebarTab = rightSidebar.tabs.find((tab) => tab.id === rightSidebar.activeTabID) ?? null
   const conversationWorkspaceID = useMemo(() => {
     const defaultDirectory = agentDefaultDirectory.trim()
@@ -3336,6 +3364,14 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
                   storageKey={WORKBENCH_TERMINAL_STORAGE_KEY}
                 />
               )}
+              terminalWorkspace={{
+                brandTheme,
+                codeFontFamily,
+                colorMode,
+                currentSessionID: terminalSessionID,
+                discoveryKey: terminalActivityKey,
+                storageKey: WORKBENCH_TERMINAL_STORAGE_KEY,
+              }}
               isCompanionCollapsed={isCompanionCollapsed}
               isRegionHidden={isToolsRegionHidden}
               onToggleCompanion={handleCompanionToggle}

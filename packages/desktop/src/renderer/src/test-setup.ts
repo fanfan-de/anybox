@@ -93,6 +93,8 @@ class MockTerminal {
 
   constructor(options: Record<string, unknown> = {}) {
     this.options = { ...options }
+    if (typeof options.rows === "number") this.rows = options.rows
+    if (typeof options.cols === "number") this.cols = options.cols
     const testState = globalThis as {
       __mockXtermInstanceCount?: number
       __mockXtermLastOptions?: Record<string, unknown>
@@ -184,6 +186,22 @@ class MockTerminal {
 
   scrollToLine(line: number) {
     this.buffer.active.viewportY = line
+  }
+
+  scrollToBottom() {
+    this.buffer.active.viewportY = Math.max(0, this.rows - 1)
+  }
+
+  resize(cols: number, rows: number) {
+    this.cols = cols
+    this.rows = rows
+    const testState = globalThis as {
+      __mockXtermResizeCalls?: Array<{ cols: number; rows: number }>
+    }
+    testState.__mockXtermResizeCalls = [
+      ...(testState.__mockXtermResizeCalls ?? []),
+      { cols, rows },
+    ]
   }
 
   dispose() {

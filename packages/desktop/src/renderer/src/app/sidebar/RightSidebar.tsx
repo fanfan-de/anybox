@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import type { AppearanceCodeFontFamily } from "../../../../shared/appearance"
 import { ChangesPanel } from "../changes/ChangesPanel"
 import { WorkspaceFilesPanel } from "../files/WorkspaceFilesPanel"
 import {
@@ -14,6 +15,11 @@ import {
 import { useI18n } from "../i18n/I18nProvider"
 import { UnifiedPreviewPanel } from "../preview/UnifiedPreviewPanel"
 import { ShellTopMenu, SidebarToggleButton } from "../shared-ui"
+import { TerminalView } from "../terminal/TerminalView"
+import {
+  TerminalWorkspaceProvider,
+  useOptionalTerminalWorkspace,
+} from "../terminal/TerminalWorkspaceProvider"
 import type { ShellRegionRole } from "../shell-layout"
 import type { CodeHighlightTheme } from "../code-theme"
 import {
@@ -24,6 +30,8 @@ import {
 } from "../session-message-tree"
 import type {
   AssistantTraceVisibility,
+  BrandTheme,
+  ColorMode,
   PreviewInteractionCommitInput,
   PreviewInteractionPluginID,
   RightSidebarState,
@@ -105,6 +113,14 @@ interface RightSidebarProps {
   onWorkspaceFileQueryChange: (value: string) => void
   onWorkspaceFileSelect: (path: string, options?: { linkedLineRange?: MarkdownLocalFileLinkTarget["lineRange"] }) => void
   renderTerminalTab: (input: RenderTerminalTabInput) => ReactNode
+  terminalWorkspace?: {
+    brandTheme: BrandTheme
+    codeFontFamily?: AppearanceCodeFontFamily
+    colorMode: ColorMode
+    currentSessionID: string | null
+    discoveryKey?: string
+    storageKey?: string
+  }
   isCompanionCollapsed?: boolean
   isRegionHidden?: boolean
   onToggleCompanion?: () => void
@@ -123,6 +139,79 @@ interface LauncherCard {
   icon: ReactNode
   key: RightSidebarLauncherTabKind
   title: string
+}
+
+interface LauncherCardButtonProps {
+  card: LauncherCard
+  onOpen: () => void
+}
+
+function LauncherCardButton({ card, onOpen }: LauncherCardButtonProps) {
+  return (
+    <button
+      type="button"
+      className={`right-sidebar-launcher-card is-${card.key}`}
+      disabled={card.disabled}
+      onClick={onOpen}
+    >
+      <span className="right-sidebar-launcher-card-icon">{card.icon}</span>
+      <span className="right-sidebar-launcher-card-copy">
+        <span className="right-sidebar-launcher-card-title">{card.title}</span>
+      </span>
+    </button>
+  )
+}
+
+function TerminalLauncherCard({
+  brandTheme,
+  card,
+  codeFontFamily,
+  colorMode,
+  onOpen,
+}: LauncherCardButtonProps & {
+  brandTheme: BrandTheme
+  codeFontFamily?: AppearanceCodeFontFamily
+  colorMode: ColorMode
+}) {
+  const workspace = useOptionalTerminalWorkspace()
+  const session = workspace?.activeSession
+  const canPreview = Boolean(
+    !card.disabled &&
+    session &&
+    session.purpose === "interactive" &&
+    session.terminalKey === "interactive" &&
+    session.status === "running",
+  )
+
+  if (!workspace || !session || !canPreview) {
+    return <LauncherCardButton card={card} onOpen={onOpen} />
+  }
+
+  return (
+    <div className="right-sidebar-launcher-card is-terminal is-terminal-preview">
+      <div className="right-sidebar-terminal-preview-content" aria-hidden="true" inert>
+        <TerminalView
+          brandTheme={brandTheme}
+          codeFontFamily={codeFontFamily}
+          colorMode={colorMode}
+          panelHeight={0}
+          session={session}
+          variant="preview"
+          onInput={workspace.handleTerminalInput}
+          onResize={workspace.handleTerminalResize}
+          onSnapshotChange={workspace.handleTerminalSnapshotChange}
+          subscribeToTerminalStream={workspace.subscribeToTerminalStream}
+        />
+      </div>
+      <button
+        type="button"
+        className="right-sidebar-terminal-preview-open"
+        aria-label={card.title}
+        title={card.title}
+        onClick={onOpen}
+      />
+    </div>
+  )
 }
 
 function findSessionByID(workspaces: WorkspaceGroup[], sessionID: string | null | undefined) {
@@ -269,6 +358,7 @@ export function RightSidebar({
   onWorkspaceFileQueryChange,
   onWorkspaceFileSelect,
   renderTerminalTab,
+  terminalWorkspace,
   isCompanionCollapsed = false,
   isRegionHidden = false,
   onToggleCompanion,
@@ -384,20 +474,24 @@ export function RightSidebar({
       <div className="right-sidebar-launcher" aria-label="Right sidebar launcher">
         <div className="right-sidebar-launcher-shell">
           <div className="right-sidebar-launcher-tile-grid">
-            {launcherCards.map((card) => (
-              <button
-                key={card.key}
-                type="button"
-                className={`right-sidebar-launcher-card is-${card.key}`}
-                disabled={card.disabled}
-                onClick={() => handleOpenLauncherCard(card.key)}
-              >
-                <span className="right-sidebar-launcher-card-icon">{card.icon}</span>
-                <span className="right-sidebar-launcher-card-copy">
-                  <span className="right-sidebar-launcher-card-title">{card.title}</span>
-                </span>
-              </button>
-            ))}
+            {launcherCards.map((card) => card.key === "terminal" && terminalWorkspace
+              ? (
+                  <TerminalLauncherCard
+                    key={card.key}
+                    brandTheme={terminalWorkspace.brandTheme}
+                    card={card}
+                    codeFontFamily={terminalWorkspace.codeFontFamily}
+                    colorMode={terminalWorkspace.colorMode}
+                    onOpen={() => handleOpenLauncherCard(card.key)}
+                  />
+                )
+              : (
+                  <LauncherCardButton
+                    key={card.key}
+                    card={card}
+                    onOpen={() => handleOpenLauncherCard(card.key)}
+                  />
+                ))}
           </div>
         </div>
       </div>
@@ -524,7 +618,7 @@ export function RightSidebar({
       )
     : null
 
-  return (
+  const sidebar = (
     <aside
       id="app-sidebar-right"
       className={[
@@ -630,5 +724,28 @@ export function RightSidebar({
         </div>
       </div>
     </aside>
+  )
+
+  if (!terminalWorkspace) return sidebar
+
+  const terminalWorkspaceSessionID = !isLauncherVisible && activeTab?.kind === "terminal"
+    ? activeTab.sessionID
+    : terminalWorkspace.currentSessionID
+  const terminalConnectionEnabled = !isRegionHidden && (
+    isLauncherVisible ? canOpenTerminal : activeTab?.kind === "terminal"
+  )
+  const terminalDiscoveryKey = terminalWorkspaceSessionID === terminalWorkspace.currentSessionID
+    ? terminalWorkspace.discoveryKey
+    : undefined
+
+  return (
+    <TerminalWorkspaceProvider
+      connectionEnabled={terminalConnectionEnabled}
+      currentSessionID={terminalWorkspaceSessionID}
+      discoveryKey={terminalDiscoveryKey}
+      storageKey={terminalWorkspace.storageKey}
+    >
+      {sidebar}
+    </TerminalWorkspaceProvider>
   )
 }

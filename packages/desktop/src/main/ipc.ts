@@ -2966,6 +2966,18 @@ async function getSessionBackgroundProcesses(
   return result.data
 }
 
+async function getSessionPty(input: DesktopIpcInput<"desktop:get-session-pty">) {
+  const sessionID = input.sessionID.trim()
+  if (!sessionID) {
+    throw new Error("PTY lookup requires a sessionID")
+  }
+  const result = await requestAgentJSON<AgentPtySessionInfo | null>(
+    `/api/sessions/${encodeURIComponent(sessionID)}/pty`,
+  )
+
+  return result.data
+}
+
 async function terminateSessionBackgroundProcess(
   input: DesktopIpcInput<"desktop:terminate-session-background-process">,
 ) {
@@ -4709,6 +4721,8 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
       return result.data
     },
   )
+
+  handleDesktopIpc("desktop:get-session-pty", async (_event, input) => getSessionPty(input))
 
   handleDesktopIpc("desktop:get-pty-session", async (_event, input: { id: string }) => {
     const id = input.id.trim()
@@ -7642,6 +7656,7 @@ export const internal = {
   downloadSkillRegistrySkill,
   disposeSessionStreamSubscriptionsForWebContents,
   getSessionBackgroundProcesses,
+  getSessionPty,
   getSessionTraceExport,
   getAnyboxSubscriptionOverview,
   getAnyboxRechargeOrder,

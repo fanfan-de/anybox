@@ -77,11 +77,18 @@ interface PendingTerminalCreateRequest {
 type TerminalStreamListener = (event: TerminalStreamEvent) => void
 
 export interface UseTerminalWorkspaceOptions {
+  autoCreateWhenOpen?: boolean
+  connectionEnabled?: boolean
   currentSessionID?: string | null
   storageKey?: string
 }
 
-export function useTerminalWorkspace({ currentSessionID, storageKey }: UseTerminalWorkspaceOptions) {
+export function useTerminalWorkspace({
+  autoCreateWhenOpen = true,
+  connectionEnabled,
+  currentSessionID,
+  storageKey,
+}: UseTerminalWorkspaceOptions) {
   const normalizedCurrentSessionID = currentSessionID?.trim() || null
   const shellProfilesRef = useRef<TerminalShellProfile[]>(
     resolveTerminalShellProfiles(typeof window === "undefined" ? undefined : window.desktop?.platform),
@@ -91,6 +98,7 @@ export function useTerminalWorkspace({ currentSessionID, storageKey }: UseTermin
   const [isCreatingTerminal, setIsCreatingTerminal] = useState(false)
   const [pendingCreateRequestID, setPendingCreateRequestID] = useState<number | null>(null)
   const workspaceRef = useRef(workspace)
+  const connectionEnabledRef = useRef(connectionEnabled ?? workspace.isOpen)
   const currentSessionIDRef = useRef<string | null>(normalizedCurrentSessionID)
   // Keep the hot terminal buffer path outside React state so typing does not trigger
   // a render + diff cycle for every PTY output chunk.
@@ -243,6 +251,7 @@ export function useTerminalWorkspace({ currentSessionID, storageKey }: UseTermin
       ? materializeSession(workspace.sessions[workspace.activePtyID]!)
       : null
   workspaceRef.current = workspace
+  connectionEnabledRef.current = connectionEnabled ?? workspace.isOpen
   currentSessionIDRef.current = normalizedCurrentSessionID
 
   const shellProfiles = shellProfilesRef.current
@@ -290,14 +299,14 @@ export function useTerminalWorkspace({ currentSessionID, storageKey }: UseTermin
       delete terminalStreamListenersRef.current[active.ptyID]
     }
 
-    if (workspaceRef.current.isOpen && normalizedCurrentSessionID) {
+    if (autoCreateWhenOpen && workspaceRef.current.isOpen && normalizedCurrentSessionID) {
       const nextActivePtyID = workspaceRef.current.activePtyID
       const nextActive = nextActivePtyID ? workspaceRef.current.sessions[nextActivePtyID] : null
       if (!nextActive || nextActive.sessionID !== normalizedCurrentSessionID) {
         void handleCreateTerminal(true)
       }
     }
-  }, [normalizedCurrentSessionID])
+  }, [autoCreateWhenOpen, normalizedCurrentSessionID])
 
   function updateWorkspace(updater: (current: TerminalWorkspaceState) => TerminalWorkspaceState) {
     startTransition(() => {
@@ -417,7 +426,7 @@ export function useTerminalWorkspace({ currentSessionID, storageKey }: UseTermin
     const current = workspaceRef.current
     const session = current.sessions[ptyID]
     if (
-      !current.isOpen ||
+      !connectionEnabledRef.current ||
       current.activePtyID !== ptyID ||
       !session ||
       session.sessionID !== currentSessionIDRef.current ||
@@ -702,7 +711,7 @@ export function useTerminalWorkspace({ currentSessionID, storageKey }: UseTermin
   }, [])
 
   useEffect(() => {
-    const targetPtyID = workspace.isOpen ? workspace.activePtyID : null
+    const targetPtyID = (connectionEnabled ?? workspace.isOpen) ? workspace.activePtyID : null
     if (!targetPtyID) {
       if (attachedPtyIDRef.current) {
         void detachSession(attachedPtyIDRef.current, true)
@@ -714,7 +723,7 @@ export function useTerminalWorkspace({ currentSessionID, storageKey }: UseTermin
     if (!targetSession || targetSession.sessionID !== normalizedCurrentSessionID) return
     if (attachedPtyIDRef.current === targetPtyID) return
     void attachSession(targetPtyID, getKnownCursor(targetPtyID))
-  }, [workspace.activePtyID, workspace.isOpen, normalizedCurrentSessionID])
+  }, [connectionEnabled, workspace.activePtyID, workspace.isOpen, normalizedCurrentSessionID])
 
   async function handleCreateTerminal(openPanel = true, shellOverride?: string | null) {
     const ownerSessionID = currentSessionIDRef.current
@@ -885,26 +894,95 @@ export function useTerminalWorkspace({ currentSessionID, storageKey }: UseTermin
     }))
   }
 
-  function handleOpenPtySession(info: PtySessionInfo) {
+  function adoptPtySession(info: PtySessionInfo, openPanel: boolean) {
     if (info.sessionID !== currentSessionIDRef.current) return
-    writeLiveSessionSnapshot(info.id, {
-      buffer: "",
-      cursor: info.cursor,
-      scrollTop: workspaceRef.current.scrollTopBySessionID[info.sessionID] ?? 0,
-    })
-    updateWorkspace((current) =>
-      upsertSession(
+    if (info.purpose !== "interactive" || info.terminalKey !== "interactive" || info.status !== "running") return
+
+    const currentWorkspace = workspaceRef.current
+    const existing = currentWorkspace.sessions[info.id]
+    const obsoletePtyIDs = Object.values(currentWorkspace.sessions)
+      .filter((session) => (
+        session.sessionID === info.sessionID &&
+        session.purpose === "interactive" &&
+        session.ptyID !== info.id
+      ))
+      .map((session) => session.ptyID)
+
+    for (const ptyID of obsoletePtyIDs) {
+      cancelReconnect(ptyID)
+      delete liveSessionsRef.current[ptyID]
+      delete terminalStreamListenersRef.current[ptyID]
+      delete pendingInputRef.current[ptyID]
+      if (attachedPtyIDRef.current === ptyID) {
+        void detachSession(ptyID, true)
+      }
+    }
+
+    const scrollTop = currentWorkspace.scrollTopBySessionID[info.sessionID] ?? 0
+    if (!existing) {
+      // A PTY discovered through the owning session may already have emitted
+      // output before the renderer attached. Start at zero so the ready replay
+      // reconstructs the complete retained server buffer.
+      liveSessionsRef.current[info.id] = {
+        buffer: "",
+        cursor: 0,
+        scrollTop,
+      }
+    }
+
+    updateWorkspace((current) => {
+      let next = current
+      for (const ptyID of obsoletePtyIDs) {
+        next = removeSession(next, ptyID)
+      }
+
+      const previous = next.sessions[info.id]
+      const live = readLiveSessionSnapshot(info.id, previous)
+      return upsertSession(
         {
-          ...current,
-          isOpen: true,
+          ...next,
+          isOpen: openPanel ? true : next.isOpen,
         },
         mapPtySessionInfoToRecord(info, {
-          scrollTop: workspaceRef.current.scrollTopBySessionID[info.sessionID] ?? 0,
-          transportState: "idle",
+          buffer: live.buffer,
+          scrollTop: live.scrollTop,
+          transportState: previous?.transportState ?? "idle",
+          lastError: previous?.lastError,
         }),
         true,
-      ),
-    )
+      )
+    })
+  }
+
+  function handleSyncSessionPty(info: PtySessionInfo | null) {
+    const ownerSessionID = currentSessionIDRef.current
+    if (!ownerSessionID) return
+
+    if (info) {
+      adoptPtySession(info, false)
+      return
+    }
+
+    const interactiveSessions = Object.values(workspaceRef.current.sessions).filter((session) => (
+      session.sessionID === ownerSessionID && session.purpose === "interactive"
+    ))
+    if (interactiveSessions.length === 0) return
+
+    const stalePtyIDs = interactiveSessions.map((session) => session.ptyID)
+    for (const ptyID of stalePtyIDs) {
+      cancelReconnect(ptyID)
+      delete liveSessionsRef.current[ptyID]
+      delete terminalStreamListenersRef.current[ptyID]
+      delete pendingInputRef.current[ptyID]
+      if (attachedPtyIDRef.current === ptyID) {
+        void detachSession(ptyID, true)
+      }
+    }
+    updateWorkspace((current) => stalePtyIDs.reduce(removeSession, current))
+  }
+
+  function handleOpenPtySession(info: PtySessionInfo) {
+    adoptPtySession(info, true)
   }
 
   useEffect(() => {
@@ -1085,6 +1163,7 @@ export function useTerminalWorkspace({ currentSessionID, storageKey }: UseTermin
     handleShellProfileChange,
     handlePanelHeightChange,
     handleOpenPtySession,
+    handleSyncSessionPty,
     handleSelectTerminal,
     handleTerminalInput,
     handleTerminalResize,

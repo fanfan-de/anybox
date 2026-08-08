@@ -13,6 +13,8 @@ import type { TerminalSessionRecord, TerminalStreamEvent } from "./types"
 const TERMINAL_CONTEXT_MENU_WIDTH = 184
 const TERMINAL_CONTEXT_MENU_HEIGHT = 44
 const TERMINAL_CONTEXT_MENU_MARGIN = 8
+const TERMINAL_FONT_SIZE = 13
+const TERMINAL_PREVIEW_MIN_FONT_SIZE = 2
 
 interface TerminalContextMenuState {
   hasSelection: boolean
@@ -82,6 +84,7 @@ interface TerminalViewProps {
   onResize: (ptyID: string, rows: number, cols: number) => void
   onSnapshotChange: (ptyID: string, input: { scrollTop?: number }) => void
   subscribeToTerminalStream: (ptyID: string, listener: (event: TerminalStreamEvent) => void) => () => void
+  variant?: "full" | "preview"
 }
 
 function readCssVariable(styles: CSSStyleDeclaration, name: string, fallback: string) {
@@ -137,7 +140,7 @@ export function createTerminalOptions(codeFontFamily: AppearanceCodeFontFamily =
     cursorBlink: true,
     cursorInactiveStyle: "outline",
     fontFamily: resolveCodeFontFamilyStack(codeFontFamily),
-    fontSize: 13,
+    fontSize: TERMINAL_FONT_SIZE,
     lineHeight: 1.25,
     scrollback: 5_000,
     theme: getTerminalTheme(),
@@ -155,6 +158,7 @@ export const TerminalView = memo(function TerminalView({
   onResize,
   onSnapshotChange,
   subscribeToTerminalStream,
+  variant = "full",
 }: TerminalViewProps) {
   const { t } = useI18n()
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -169,6 +173,7 @@ export const TerminalView = memo(function TerminalView({
   const writeQueueRef = useRef<string[]>([])
   const isFlushingRef = useRef(false)
   const [contextMenu, setContextMenu] = useState<TerminalContextMenuState | null>(null)
+  const isPreview = variant === "preview"
   const themeSignature = `${brandTheme}:${colorMode}`
   const handleInput = useEffectEvent(onInput)
   const handleResize = useEffectEvent(onResize)
@@ -181,7 +186,35 @@ export const TerminalView = memo(function TerminalView({
   })
   const fitTerminal = useEffectEvent(() => {
     const fitAddon = fitAddonRef.current
-    if (!fitAddon) return
+    const terminal = terminalRef.current
+    if (!fitAddon || !terminal) return
+
+    if (isPreview) {
+      if (terminal.rows !== session.rows || terminal.cols !== session.cols) {
+        terminal.resize(session.cols, session.rows)
+      }
+
+      terminal.options.fontSize = TERMINAL_FONT_SIZE
+      let dimensions: { rows: number; cols: number } | undefined
+      try {
+        dimensions = fitAddon.proposeDimensions()
+      } catch {
+        return
+      }
+      if (!dimensions || dimensions.rows <= 0 || dimensions.cols <= 0) return
+
+      const scale = Math.min(
+        1,
+        dimensions.rows / Math.max(1, session.rows),
+        dimensions.cols / Math.max(1, session.cols),
+      )
+      const fontSize = Math.max(
+        TERMINAL_PREVIEW_MIN_FONT_SIZE,
+        Math.floor(TERMINAL_FONT_SIZE * scale * 4) / 4,
+      )
+      terminal.options.fontSize = fontSize
+      return
+    }
 
     let dimensions: { rows: number; cols: number } | undefined
     try {
@@ -218,12 +251,20 @@ export const TerminalView = memo(function TerminalView({
       terminal.reset()
 
       if (!event.buffer) {
-        terminal.scrollToLine(event.scrollTop)
+        if (isPreview) {
+          terminal.scrollToBottom()
+        } else {
+          terminal.scrollToLine(event.scrollTop)
+        }
         return
       }
 
       terminal.write(event.buffer, () => {
-        terminal.scrollToLine(event.scrollTop)
+        if (isPreview) {
+          terminal.scrollToBottom()
+        } else {
+          terminal.scrollToLine(event.scrollTop)
+        }
       })
       return
     }
@@ -250,6 +291,9 @@ export const TerminalView = memo(function TerminalView({
       }
 
       currentTerminal.write(nextChunk, () => {
+        if (isPreview) {
+          currentTerminal.scrollToBottom()
+        }
         if (writeQueueRef.current.length > 0) {
           flushFrameRef.current = window.requestAnimationFrame(flushWrites)
           return
@@ -280,6 +324,8 @@ export const TerminalView = memo(function TerminalView({
 
     const terminal = new Terminal({
       ...createTerminalOptions(codeFontFamily),
+      cursorBlink: !isPreview,
+      disableStdin: isPreview,
       rows: session.rows,
       cols: session.cols,
     })
@@ -299,41 +345,51 @@ export const TerminalView = memo(function TerminalView({
     fitTerminal()
     terminal.write(session.buffer)
     lastReportedScrollTopRef.current = session.scrollTop
-    terminal.scrollToLine(session.scrollTop)
-    if (shouldAutoFocusTerminal(container)) {
+    if (isPreview) {
+      terminal.scrollToBottom()
+    } else {
+      terminal.scrollToLine(session.scrollTop)
+    }
+    if (!isPreview && shouldAutoFocusTerminal(container)) {
       terminal.focus()
     }
 
-    terminal.attachCustomKeyEventHandler((event) => {
-      if (!isTerminalCopyShortcut(event) || !terminal.hasSelection()) return true
+    if (!isPreview) {
+      terminal.attachCustomKeyEventHandler((event) => {
+        if (!isTerminalCopyShortcut(event) || !terminal.hasSelection()) return true
 
-      event.preventDefault()
-      event.stopPropagation()
-      void copyTerminalSelection(terminal).catch((error) => {
-        console.error("[desktop] Failed to copy terminal selection:", error)
-      })
-      return false
-    })
-
-    const disposeInput = terminal.onData((data) => {
-      void handleInput(session.ptyID, data)
-    })
-    const disposeScroll = terminal.onScroll(() => {
-      const nextScrollTop = terminal.buffer.active.viewportY
-      if (nextScrollTop === lastReportedScrollTopRef.current) return
-
-      lastReportedScrollTopRef.current = nextScrollTop
-      if (scrollFrameRef.current !== null) {
-        window.cancelAnimationFrame(scrollFrameRef.current)
-      }
-
-      scrollFrameRef.current = window.requestAnimationFrame(() => {
-        scrollFrameRef.current = null
-        handleSnapshotChange(session.ptyID, {
-          scrollTop: nextScrollTop,
+        event.preventDefault()
+        event.stopPropagation()
+        void copyTerminalSelection(terminal).catch((error) => {
+          console.error("[desktop] Failed to copy terminal selection:", error)
         })
+        return false
       })
-    })
+    }
+
+    const disposeInput = isPreview
+      ? null
+      : terminal.onData((data) => {
+          void handleInput(session.ptyID, data)
+        })
+    const disposeScroll = isPreview
+      ? null
+      : terminal.onScroll(() => {
+          const nextScrollTop = terminal.buffer.active.viewportY
+          if (nextScrollTop === lastReportedScrollTopRef.current) return
+
+          lastReportedScrollTopRef.current = nextScrollTop
+          if (scrollFrameRef.current !== null) {
+            window.cancelAnimationFrame(scrollFrameRef.current)
+          }
+
+          scrollFrameRef.current = window.requestAnimationFrame(() => {
+            scrollFrameRef.current = null
+            handleSnapshotChange(session.ptyID, {
+              scrollTop: nextScrollTop,
+            })
+          })
+        })
 
     const scheduleFit = () => {
       if (fitFrameRef.current !== null) return
@@ -362,8 +418,8 @@ export const TerminalView = memo(function TerminalView({
       if (scrollFrameRef.current !== null) {
         window.cancelAnimationFrame(scrollFrameRef.current)
       }
-      disposeInput.dispose()
-      disposeScroll.dispose()
+      disposeInput?.dispose()
+      disposeScroll?.dispose()
       fitAddon.dispose()
       terminal.dispose()
       terminalRef.current = null
@@ -375,7 +431,7 @@ export const TerminalView = memo(function TerminalView({
       flushFrameRef.current = null
       setContextMenu(null)
     }
-  }, [session.ptyID])
+  }, [session.ptyID, variant])
 
   useEffect(() => {
     const terminal = terminalRef.current
@@ -478,7 +534,14 @@ export const TerminalView = memo(function TerminalView({
       rows: session.rows,
       cols: session.cols,
     }
-  }, [session.cols, session.rows])
+    if (isPreview) {
+      const terminal = terminalRef.current
+      if (terminal && (terminal.rows !== session.rows || terminal.cols !== session.cols)) {
+        terminal.resize(session.cols, session.rows)
+      }
+      fitTerminal()
+    }
+  }, [isPreview, session.cols, session.rows])
 
   useEffect(() => {
     return subscribeToTerminalStream(session.ptyID, handleTerminalStream)
@@ -512,22 +575,22 @@ export const TerminalView = memo(function TerminalView({
   }
 
   return (
-    <div className="terminal-view-shell">
-      {session.lastError ? <p className="terminal-view-error">{session.lastError}</p> : null}
+    <div className={isPreview ? "terminal-view-shell is-preview" : "terminal-view-shell"}>
+      {!isPreview && session.lastError ? <p className="terminal-view-error">{session.lastError}</p> : null}
 
       <div
-        id={`terminal-panel-${session.ptyID}`}
-        aria-label={ariaLabel}
-        aria-labelledby={ariaLabel ? undefined : `terminal-tab-${session.ptyID}`}
-        className="terminal-surface"
-        onContextMenu={handleContextMenu}
-        onMouseDown={() => focusTerminal()}
-        role="tabpanel"
+        id={isPreview ? undefined : `terminal-panel-${session.ptyID}`}
+        aria-label={isPreview ? undefined : ariaLabel}
+        aria-labelledby={isPreview || ariaLabel ? undefined : `terminal-tab-${session.ptyID}`}
+        className={isPreview ? "terminal-surface is-preview" : "terminal-surface"}
+        onContextMenu={isPreview ? undefined : handleContextMenu}
+        onMouseDown={isPreview ? undefined : () => focusTerminal()}
+        role={isPreview ? undefined : "tabpanel"}
       >
         <div ref={containerRef} className="terminal-xterm" />
       </div>
 
-      {contextMenu
+      {!isPreview && contextMenu
         ? createPortal(
             <div
               ref={contextMenuRef}

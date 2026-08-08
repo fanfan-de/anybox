@@ -12,6 +12,7 @@ import {
 import { DEFAULT_WORKSPACE_FILE_REVIEW_STATE, DEFAULT_WORKSPACE_PREVIEW_STATE } from "../agent-workspace/review-preview-state"
 import { I18nProvider } from "../i18n/I18nProvider"
 import type { SessionMessageTree } from "../session-message-tree"
+import type { PtyEvent, PtySessionInfo } from "../terminal/types"
 import { ToastProvider } from "../toast"
 import { RightSidebar } from "./RightSidebar"
 
@@ -269,6 +270,7 @@ type RenderRightSidebarInput = {
   onLocateBranchAnchor?: ComponentProps<typeof RightSidebar>["onLocateBranchAnchor"]
   onUpdateTab?: ComponentProps<typeof RightSidebar>["onUpdateTab"]
   renderTerminalTab?: ComponentProps<typeof RightSidebar>["renderTerminalTab"]
+  terminalWorkspace?: ComponentProps<typeof RightSidebar>["terminalWorkspace"]
   threadPaneContext?: ComponentProps<typeof RightSidebar>["threadPaneContext"]
   withI18n?: boolean
 }
@@ -326,6 +328,7 @@ function createRightSidebarUI(input: RenderRightSidebarInput) {
         onWorkspaceFileQueryChange={vi.fn()}
         onWorkspaceFileSelect={vi.fn()}
         renderTerminalTab={input.renderTerminalTab ?? (() => <div role="region" aria-label="Terminal tab" />)}
+        terminalWorkspace={input.terminalWorkspace}
       />
     </ToastProvider>
   )
@@ -380,6 +383,110 @@ describe("RightSidebar", () => {
     expect(screen.queryByRole("button", { name: /^Tree/ })).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: /^Terminal/ })).toBeDisabled()
     expect(onOpenTerminalTab).not.toHaveBeenCalled()
+  })
+
+  it("turns only the terminal launcher card into a live read-only preview", async () => {
+    const previousDesktop = window.desktop
+    const onOpenTerminalTab = vi.fn()
+    let ptyListener: ((event: PtyEvent) => void) | undefined
+    const session: PtySessionInfo = {
+      id: "pty-preview",
+      sessionID: "session-1",
+      terminalKey: "interactive",
+      purpose: "interactive",
+      title: "Terminal preview",
+      cwd: workspace.directory,
+      shell: "powershell.exe",
+      rows: 24,
+      cols: 80,
+      status: "running",
+      exitCode: null,
+      createdAt: 1,
+      updatedAt: 1,
+      cursor: 12,
+    }
+    window.desktop = {
+      platform: "win32",
+      versions: {} as NodeJS.ProcessVersions,
+      getInfo: vi.fn(),
+      createPtySession: vi.fn(),
+      getSessionPty: vi.fn().mockResolvedValue(session),
+      getPtySession: vi.fn(),
+      updatePtySession: vi.fn(),
+      deletePtySession: vi.fn(),
+      attachPtySession: vi.fn().mockResolvedValue(session),
+      detachPtySession: vi.fn().mockResolvedValue(true),
+      writePtyInput: vi.fn(),
+      onPtyEvent: vi.fn((listener: (event: PtyEvent) => void) => {
+        ptyListener = listener
+        return () => {
+          if (ptyListener === listener) ptyListener = undefined
+        }
+      }),
+    } as typeof window.desktop
+
+    try {
+      const { container } = renderRightSidebar({
+        onOpenTerminalTab,
+        rightSidebar: {
+          activeTabID: null,
+          tabs: [],
+        },
+        terminalWorkspace: {
+          brandTheme: "terra",
+          colorMode: "light",
+          currentSessionID: "session-1",
+          discoveryKey: "terminal_run_command:running",
+        },
+      })
+
+      await waitFor(() => {
+        expect(container.querySelector(".right-sidebar-launcher-card.is-terminal-preview")).not.toBeNull()
+        expect(container.querySelectorAll(".right-sidebar-launcher-card")).toHaveLength(5)
+      })
+
+      act(() => {
+        ptyListener?.({
+          ptyID: session.id,
+          type: "ready",
+          session,
+          replay: {
+            mode: "reset",
+            buffer: "live terminal output",
+            cursor: 20,
+            startCursor: 0,
+          },
+        })
+      })
+      await waitFor(() => {
+        expect(container.querySelector(".right-sidebar-terminal-preview-content")).toHaveTextContent("live terminal output")
+      })
+
+      fireEvent.click(screen.getByRole("button", { name: "Terminal" }))
+      expect(onOpenTerminalTab).toHaveBeenCalledTimes(1)
+
+      await act(async () => {
+        await Promise.resolve()
+      })
+      act(() => {
+        ptyListener?.({
+          ptyID: session.id,
+          type: "exited",
+          session: {
+            ...session,
+            status: "exited",
+            exitCode: 0,
+          },
+        })
+      })
+
+      await waitFor(() => {
+        expect(container.querySelector(".right-sidebar-launcher-card.is-terminal-preview")).toBeNull()
+        expect(screen.getByRole("button", { name: "Terminal" })).toHaveTextContent("Terminal")
+      })
+    } finally {
+      window.desktop = previousDesktop
+    }
   })
 
   it("keeps recent branches out of the right sidebar launcher", () => {

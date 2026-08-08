@@ -5,6 +5,10 @@ import { useI18n } from "../i18n/I18nProvider"
 import { TerminalHeaderActions } from "./TerminalHeaderActions"
 import { TerminalPanel } from "./TerminalPanel"
 import { TerminalPanelToggleButton } from "./TerminalPanelToggleButton"
+import {
+  useOptionalTerminalWorkspace,
+  type TerminalWorkspaceController,
+} from "./TerminalWorkspaceProvider"
 import { useTerminalWorkspace } from "./use-terminal-workspace"
 
 interface TerminalAreaHostProps {
@@ -20,6 +24,23 @@ interface TerminalAreaHostProps {
 }
 
 export const TerminalAreaHost = memo(function TerminalAreaHost(props: TerminalAreaHostProps) {
+  const sharedWorkspace = useOptionalTerminalWorkspace()
+  if (sharedWorkspace) {
+    return <TerminalAreaContent {...props} workspace={sharedWorkspace} />
+  }
+
+  return <StandaloneTerminalAreaHost {...props} />
+})
+
+const StandaloneTerminalAreaHost = memo(function StandaloneTerminalAreaHost(props: TerminalAreaHostProps) {
+  const workspace = useTerminalWorkspace({
+    currentSessionID: props.currentSessionID,
+    storageKey: props.storageKey,
+  })
+  return <TerminalAreaContent {...props} workspace={workspace} />
+})
+
+function TerminalAreaContent(props: TerminalAreaHostProps & { workspace: TerminalWorkspaceController }) {
   const {
     brandTheme,
     codeFontFamily = "default",
@@ -28,8 +49,8 @@ export const TerminalAreaHost = memo(function TerminalAreaHost(props: TerminalAr
     currentSessionID,
     layout = "panel",
     onTabTitleChange,
-    storageKey,
     togglePortalTarget,
+    workspace,
   } = props
   const {
     activeSession,
@@ -55,10 +76,7 @@ export const TerminalAreaHost = memo(function TerminalAreaHost(props: TerminalAr
     shellProfiles,
     sessions,
     subscribeToTerminalStream,
-  } = useTerminalWorkspace({
-    currentSessionID,
-    storageKey,
-  })
+  } = workspace
 
   const { t } = useI18n()
   const emitTabTitleChange = useEffectEvent((title: string) => onTabTitleChange?.(title))
@@ -133,4 +151,4 @@ export const TerminalAreaHost = memo(function TerminalAreaHost(props: TerminalAr
       />
     </>
   )
-})
+}

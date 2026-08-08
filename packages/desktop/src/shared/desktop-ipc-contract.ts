@@ -1562,6 +1562,10 @@ export interface DesktopIpcContract {
     }
     output: AgentPtySessionInfo
   }
+  "desktop:get-session-pty": {
+    input: { sessionID: string }
+    output: AgentPtySessionInfo | null
+  }
   "desktop:list-project-environments": {
     input: { projectID: string; directory: string }
     output: AgentEnvironmentListResult
@@ -2672,6 +2676,7 @@ export interface DesktopApiMethods {
   rotateMobileBridgeToken(): Promise<DesktopIpcOutput<"desktop:rotate-mobile-bridge-token">>
   revokeMobileDevice(input: DesktopIpcInput<"desktop:revoke-mobile-device">): Promise<DesktopIpcOutput<"desktop:revoke-mobile-device">>
   createPtySession(input: DesktopIpcInput<"desktop:create-pty-session">): Promise<DesktopIpcOutput<"desktop:create-pty-session">>
+  getSessionPty(input: DesktopIpcInput<"desktop:get-session-pty">): Promise<DesktopIpcOutput<"desktop:get-session-pty">>
   getPtySession(input: DesktopIpcInput<"desktop:get-pty-session">): Promise<DesktopIpcOutput<"desktop:get-pty-session">>
   updatePtySession(input: DesktopIpcInput<"desktop:update-pty-session">): Promise<DesktopIpcOutput<"desktop:update-pty-session">>
   deletePtySession(input: DesktopIpcInput<"desktop:delete-pty-session">): Promise<DesktopIpcOutput<"desktop:delete-pty-session">>

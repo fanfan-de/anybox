@@ -1104,6 +1104,46 @@
   opacity: 0.42;
 }
 
+.right-sidebar-launcher-card.is-terminal-preview {
+  padding: 0;
+  display: block;
+  isolation: isolate;
+  background: var(--semantic-button-secondary-surface);
+}
+
+.right-sidebar-launcher-card.is-terminal-preview:focus-within {
+  border-color: var(--semantic-button-secondary-border-hover);
+  background: var(--semantic-button-secondary-surface-hover);
+  color: var(--semantic-button-secondary-text-hover);
+}
+
+.right-sidebar-terminal-preview-content {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--semantic-terminal-surface);
+}
+
+.right-sidebar-terminal-preview-open {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  outline: none;
+  -webkit-app-region: no-drag;
+}
+
 .right-sidebar-launcher-card-icon {
   width: min(50%, 132px);
   min-width: 86px;

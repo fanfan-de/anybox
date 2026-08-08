@@ -65,6 +65,29 @@ beforeEach(() => {
   vi.unstubAllGlobals()
 })
 
+describe("session PTY IPC helpers", () => {
+  it("looks up the owning PTY with a trimmed and encoded session ID", async () => {
+    const pty = {
+      id: "pty-1",
+      sessionID: "session/1",
+      terminalKey: "interactive",
+      purpose: "interactive",
+      status: "running",
+    }
+    requestAgentJSONMock.mockResolvedValueOnce({ data: pty, requestId: "request-pty" })
+
+    await expect(internal.getSessionPty({ sessionID: " session/1 " })).resolves.toEqual(pty)
+    expect(requestAgentJSONMock).toHaveBeenCalledWith("/api/sessions/session%2F1/pty")
+  })
+
+  it("rejects an empty session ID before requesting a PTY", async () => {
+    await expect(internal.getSessionPty({ sessionID: "   " })).rejects.toThrow(
+      "PTY lookup requires a sessionID",
+    )
+    expect(requestAgentJSONMock).not.toHaveBeenCalled()
+  })
+})
+
 describe("session metadata IPC helpers", () => {
   const session = {
     id: "session-1",

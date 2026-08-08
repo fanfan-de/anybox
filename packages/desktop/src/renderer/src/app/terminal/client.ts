@@ -20,6 +20,9 @@ export const terminalClient = {
   }) {
     return requireDesktopApi(window.desktop?.createPtySession, "PTY create bridge is unavailable")(input)
   },
+  getSessionPty(input: { sessionID: string }) {
+    return requireDesktopApi(window.desktop?.getSessionPty, "Session PTY lookup bridge is unavailable")(input)
+  },
   getSession(input: { id: string }) {
     return requireDesktopApi(window.desktop?.getPtySession, "PTY get bridge is unavailable")(input)
   },

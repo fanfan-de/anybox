@@ -104,6 +104,16 @@ describe("desktop preload bridge", () => {
     expect(electronMock.invoke).toHaveBeenNthCalledWith(3, "desktop:terminate-all-session-background-processes", listInput)
   })
 
+  it("exposes read-only session PTY lookup", async () => {
+    const api = electronMock.exposedDesktopApi as Record<string, (...args: unknown[]) => Promise<unknown>>
+    const input = { sessionID: "session-1" }
+    const pty = { id: "pty-1", sessionID: "session-1", status: "running" }
+    electronMock.invoke.mockResolvedValueOnce(pty)
+
+    await expect(api.getSessionPty(input)).resolves.toEqual(pty)
+    expect(electronMock.invoke).toHaveBeenCalledWith("desktop:get-session-pty", input)
+  })
+
   it("exposes the bounded semantic token inspector bridge and detach events", async () => {
     const api = electronMock.exposedDesktopApi as Record<string, (...args: unknown[]) => unknown>
     const input = {

@@ -291,6 +291,8 @@ try {
       invokeDesktop("desktop:revoke-mobile-device", input) as Promise<DesktopIpcOutput<"desktop:revoke-mobile-device">>,
     createPtySession: (input: DesktopIpcInput<"desktop:create-pty-session">) =>
       invokeDesktop("desktop:create-pty-session", input) as Promise<PtySessionInfo>,
+    getSessionPty: (input: DesktopIpcInput<"desktop:get-session-pty">) =>
+      invokeDesktop("desktop:get-session-pty", input) as Promise<PtySessionInfo | null>,
     getPtySession: (input: { id: string }) =>
       invokeDesktop("desktop:get-pty-session", input) as Promise<PtySessionInfo>,
     updatePtySession: (input: { id: string; title?: string; rows?: number; cols?: number }) =>

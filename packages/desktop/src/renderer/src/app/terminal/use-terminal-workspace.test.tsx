@@ -162,6 +162,7 @@ describe("useTerminalWorkspace", () => {
           updatedAt: 2,
           cursor: 0,
         }),
+      getSessionPty: vi.fn().mockResolvedValue(null),
       getPtySession: vi.fn(),
       updatePtySession: vi.fn().mockResolvedValue(undefined),
       deletePtySession: vi.fn().mockResolvedValue(undefined),

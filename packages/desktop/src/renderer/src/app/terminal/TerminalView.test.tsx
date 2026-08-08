@@ -34,6 +34,7 @@ function renderTerminalView(input?: {
   onSnapshotChange?: (ptyID: string, input: { scrollTop?: number }) => void
   session?: TerminalSessionRecord
   subscribeToTerminalStream?: (ptyID: string, listener: (event: TerminalStreamEvent) => void) => () => void
+  variant?: "full" | "preview"
 }) {
   return (
     <TerminalView
@@ -46,6 +47,7 @@ function renderTerminalView(input?: {
       onResize={input?.onResize ?? vi.fn()}
       onSnapshotChange={input?.onSnapshotChange ?? vi.fn()}
       subscribeToTerminalStream={input?.subscribeToTerminalStream ?? (() => () => {})}
+      variant={input?.variant}
     />
   )
 }
@@ -336,6 +338,73 @@ describe("TerminalView", () => {
     })
 
     expect(onInput).toHaveBeenCalledWith("pty-focused", "a")
+  })
+
+  it("keeps preview terminals read-only and scales without resizing the PTY", async () => {
+    const testState = globalThis as {
+      __mockXtermFitCount?: number
+      __mockXtermFitDimensions?: { rows: number; cols: number } | null
+      __mockXtermLastOptions?: Record<string, unknown>
+      __mockXtermResizeCalls?: Array<{ cols: number; rows: number }>
+    }
+    const previousFitCount = testState.__mockXtermFitCount
+    const previousFitDimensions = testState.__mockXtermFitDimensions
+    const previousResizeCalls = testState.__mockXtermResizeCalls
+    testState.__mockXtermFitCount = 0
+    testState.__mockXtermFitDimensions = { rows: 8, cols: 20 }
+    testState.__mockXtermResizeCalls = []
+
+    try {
+      const onInput = vi.fn()
+      const onResize = vi.fn()
+      const onSnapshotChange = vi.fn()
+      const session = {
+        ...baseSession,
+        buffer: "live preview",
+      }
+      const { container, rerender } = render(renderTerminalView({
+        onInput,
+        onResize,
+        onSnapshotChange,
+        session,
+        variant: "preview",
+      }))
+      await flushTimer()
+
+      const terminal = container.querySelector(".terminal-xterm")
+      const surface = container.querySelector(".terminal-surface")
+      expect(terminal).toHaveTextContent("live preview")
+      expect(testState.__mockXtermLastOptions?.disableStdin).toBe(true)
+      expect(Number(testState.__mockXtermLastOptions?.fontSize)).toBeLessThan(13)
+      expect(testState.__mockXtermFitCount).toBe(0)
+
+      fireEvent.keyDown(terminal!, { key: "a" })
+      fireEvent.contextMenu(surface!)
+      expect(onInput).not.toHaveBeenCalled()
+      expect(onResize).not.toHaveBeenCalled()
+      expect(onSnapshotChange).not.toHaveBeenCalled()
+      expect(screen.queryByRole("menu", { name: "Terminal Copy" })).not.toBeInTheDocument()
+
+      rerender(renderTerminalView({
+        onInput,
+        onResize,
+        onSnapshotChange,
+        session: {
+          ...session,
+          rows: 30,
+          cols: 100,
+        },
+        variant: "preview",
+      }))
+      await flushFrame()
+
+      expect(testState.__mockXtermResizeCalls).toContainEqual({ cols: 100, rows: 30 })
+      expect(onResize).not.toHaveBeenCalled()
+    } finally {
+      testState.__mockXtermFitCount = previousFitCount
+      testState.__mockXtermFitDimensions = previousFitDimensions
+      testState.__mockXtermResizeCalls = previousResizeCalls
+    }
   })
 
   it("copies a selection with the terminal shortcut while preserving Ctrl+C as interrupt", async () => {
