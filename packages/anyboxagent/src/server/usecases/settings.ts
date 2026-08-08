@@ -22,9 +22,11 @@ import * as PromptUrlInstall from "#session/support/prompt-url-install.ts"
 import * as SkillGitInstall from "#skill/git-install.ts"
 import * as Skill from "#skill/skill.ts"
 import * as SkillManager from "#skill/manage.ts"
+import { isToolGloballyEnabled } from "#tool/execution.ts"
 import * as ToolModule from "#tool/module.ts"
 import * as ToolRegistry from "#tool/registry.ts"
 import * as Log from "#util/log.ts"
+import { disposeIpythonRegistry } from "#ipython/registry.ts"
 
 const log = Log.create({ service: "settings" })
 const SKILL_FILENAME = "SKILL.md"
@@ -1615,10 +1617,6 @@ export async function listBuiltinTools() {
         if (!moduleID) {
           throw new Error(`Built-in tool '${item.id}' is missing Tool Module ownership.`)
         }
-        const explicitStates = [item.id, ...(item.aliases ?? [])]
-          .map((name) => selection.tools[name])
-          .filter((value): value is boolean => typeof value === "boolean")
-
         return {
           id: item.id,
           title: runtime.title ?? item.title ?? item.id,
@@ -1627,7 +1625,8 @@ export async function listBuiltinTools() {
           aliases: item.aliases ?? [],
           capabilities: item.capabilities ?? {},
           moduleID,
-          enabled: !explicitStates.includes(false),
+          defaultEnabled: item.defaultEnabled !== false,
+          enabled: isToolGloballyEnabled(item, selection.tools),
         }
       }),
     ),
@@ -1668,7 +1667,12 @@ export async function updateBuiltinToolSelection(input: z.infer<typeof UpdateBui
     tools[canonicalToolID] = enabled
   }
 
-  return Config.setToolSelection(Config.GLOBAL_CONFIG_ID, tools)
+  const selection = await Config.setToolSelection(Config.GLOBAL_CONFIG_ID, tools)
+  const ipython = items.find((item) => item.id === "ipython")
+  if (ipython && !isToolGloballyEnabled(ipython, tools)) {
+    await disposeIpythonRegistry()
+  }
+  return selection
 }
 
 export async function getToolPermissionMode() {

@@ -620,10 +620,11 @@ export interface AgentBuiltinToolSummary {
   aliases: string[]
   capabilities: AgentBuiltinToolCapabilities
   moduleID: string
+  defaultEnabled: boolean
   enabled: boolean
 }
 
-export type AgentOnDemandToolSummary = Omit<AgentBuiltinToolSummary, "enabled">
+export type AgentOnDemandToolSummary = Omit<AgentBuiltinToolSummary, "defaultEnabled" | "enabled">
 
 export interface AgentToolModuleInspectionFailure {
   moduleID: string

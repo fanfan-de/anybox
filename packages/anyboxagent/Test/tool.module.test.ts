@@ -198,6 +198,28 @@ describe("universal tool module catalog", () => {
     })
   })
 
+  it("assigns the IPython builtin to the Python runtime module", () => {
+    const item = ToolModule.attachRegisteredToolSource(probeTool("ipython"), "builtin")
+    const catalog = ToolModule.catalogRegisteredTools({ tools: [item] })
+    const pythonRuntime = catalog.entries.find(
+      (entry) => entry.descriptor.id === "runtime.python",
+    )
+
+    expect(item.source?.moduleID).toBe("runtime.python")
+    expect(pythonRuntime).toMatchObject({
+      descriptor: {
+        title: "Python Runtime",
+        provider: {
+          kind: "builtin",
+          id: "anybox",
+        },
+      },
+      active: true,
+      exposure: "direct",
+    })
+    expect(pythonRuntime?.tools.map((tool) => tool.id)).toEqual(["ipython"])
+  })
+
   it("does not register removed tools or aliases", async () => {
     const tools = await ToolRegistry.builtinTools()
     const exposedNames = tools.flatMap((tool) => [tool.id, ...(tool.aliases ?? [])])

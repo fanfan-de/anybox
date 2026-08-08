@@ -225,6 +225,8 @@ export interface ToolInfo<
   title?: string
   description?: string
   aliases?: string[]
+  /** Used for built-ins when global selection has no explicit state. Defaults to true. */
+  defaultEnabled?: boolean
   capabilities?: ToolCapabilities
   modelRequirements?: ToolModelRequirements
   source?: ToolSource

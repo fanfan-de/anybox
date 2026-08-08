@@ -1616,10 +1616,11 @@ export interface BuiltinToolSummary {
   aliases: string[]
   capabilities: BuiltinToolCapabilities
   moduleID: string
+  defaultEnabled: boolean
   enabled: boolean
 }
 
-export type OnDemandToolSummary = Omit<BuiltinToolSummary, "enabled">
+export type OnDemandToolSummary = Omit<BuiltinToolSummary, "defaultEnabled" | "enabled">
 
 export interface ToolModuleInspectionFailure {
   moduleID: string

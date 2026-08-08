@@ -14,7 +14,7 @@ const desktopDir = path.resolve(scriptDir, "..")
 const runtimeDir = path.join(desktopDir, "build", "agent-runtime")
 const cacheDir = path.join(desktopDir, "build", "workspace-dependencies-cache")
 const dependenciesDir = path.join(runtimeDir, "dependencies")
-const bundleVersion = "1.0.0"
+const bundleVersion = "1.1.0"
 const pythonVersion = "3.12.10"
 const pythonMajorMinor = pythonVersion.split(".").slice(0, 2).join(".")
 const pythonTag = pythonVersion.replaceAll(".", "")
@@ -27,6 +27,21 @@ const linuxPythonArchive = `cpython-${pythonVersion}+${linuxPythonRelease}-x86_6
 const linuxPythonUrl = `https://github.com/astral-sh/python-build-standalone/releases/download/${linuxPythonRelease}/${linuxPythonArchive.replace("+", "%2B")}`
 const linuxPythonSha256 = "0356bd1db292781a20e011d789f0c41ea5ec04731c8236c8185b53a54faf2871"
 const getPipUrl = "https://bootstrap.pypa.io/get-pip.py"
+const ipythonHostSourceDir = path.resolve(
+  desktopDir,
+  "..",
+  "anyboxagent",
+  "python",
+  "anybox_ipython_host",
+  "src",
+  "anybox_ipython_host",
+)
+
+export const IPYTHON_HOST_RUNTIME = Object.freeze({
+  module: "anybox_ipython_host",
+  version: "1.0.0",
+  protocolVersion: 1,
+})
 
 export const LINUX_PYTHON_DISTRIBUTION = Object.freeze({
   project: "astral-sh/python-build-standalone",
@@ -59,6 +74,10 @@ export const NODE_PACKAGES = {
 }
 
 export const PYTHON_PACKAGES = {
+  ipython: "9.7.0",
+  ipykernel: "7.1.0",
+  "jupyter-client": "8.6.3",
+  pyzmq: "27.1.0",
   "python-docx": "1.2.0",
   openpyxl: "3.1.5",
   pandas: "3.0.1",
@@ -275,6 +294,7 @@ async function preparePythonDependencies(input) {
 
   console.log(`[desktop][build] installing workspace Python dependencies into ${sitePackagesDir}`)
   installPythonPackages(pythonExe, requirementsPath, pythonDir)
+  await installIpythonHost(pythonExe, pythonDir)
 }
 
 async function ensurePip(pythonExe, cwd) {
@@ -307,6 +327,70 @@ function installPythonPackages(pythonExe, requirementsPath, cwd) {
   )
 }
 
+async function installIpythonHost(pythonExe, pythonDir) {
+  if (!(await pathExists(path.join(ipythonHostSourceDir, "__main__.py")))) {
+    throw new Error(`Anybox IPython host source is missing: ${ipythonHostSourceDir}`)
+  }
+
+  const purelibProbe = spawnSync(
+    pythonExe,
+    ["-c", "import sysconfig; print(sysconfig.get_path('purelib'))"],
+    { cwd: pythonDir, encoding: "utf8", windowsHide: true },
+  )
+  if (purelibProbe.status !== 0) {
+    throw new Error(
+      `Unable to resolve workspace Python site-packages: ${(purelibProbe.stderr || purelibProbe.stdout || "unknown Python error").trim()}`,
+    )
+  }
+
+  const purelibDir = path.resolve(purelibProbe.stdout.trim())
+  const relativePurelib = path.relative(path.resolve(pythonDir), purelibDir)
+  if (!relativePurelib || relativePurelib.startsWith("..") || path.isAbsolute(relativePurelib)) {
+    throw new Error(
+      `Workspace Python resolved site-packages outside its managed runtime: ${purelibDir}`,
+    )
+  }
+
+  const targetDir = path.join(purelibDir, IPYTHON_HOST_RUNTIME.module)
+  await fsp.mkdir(purelibDir, { recursive: true })
+  await fsp.rm(targetDir, { recursive: true, force: true })
+  await fsp.cp(ipythonHostSourceDir, targetDir, {
+    recursive: true,
+    force: true,
+    filter: (sourcePath) => {
+      const basename = path.basename(sourcePath)
+      return basename !== "__pycache__" && !/\.py[co]$/.test(basename)
+    },
+  })
+
+  const probe = spawnSync(
+    pythonExe,
+    ["-I", "-m", IPYTHON_HOST_RUNTIME.module, "--probe"],
+    { cwd: pythonDir, encoding: "utf8", windowsHide: true },
+  )
+  if (probe.status !== 0) {
+    throw new Error(
+      `Bundled Anybox IPython host failed its probe: ${(probe.stderr || probe.stdout || "unknown Python error").trim()}`,
+    )
+  }
+
+  let result
+  try {
+    result = JSON.parse(probe.stdout.trim())
+  } catch {
+    throw new Error(`Bundled Anybox IPython host emitted an invalid probe: ${probe.stdout.trim()}`)
+  }
+  if (
+    result.type !== "probe"
+    || result.hostVersion !== IPYTHON_HOST_RUNTIME.version
+    || result.protocolVersion !== IPYTHON_HOST_RUNTIME.protocolVersion
+  ) {
+    throw new Error(
+      `Bundled Anybox IPython host probe mismatch: ${JSON.stringify(result)}`,
+    )
+  }
+}
+
 async function prepareLinuxPythonDependencies(input) {
   if (process.arch !== "x64") {
     throw new Error(`Workspace Python dependencies are not supported on Linux ${process.arch}.`)
@@ -335,6 +419,7 @@ async function prepareLinuxPythonDependencies(input) {
 
   console.log(`[desktop][build] installing workspace Python dependencies into ${pythonDir}`)
   installPythonPackages(pythonExe, requirementsPath, pythonDir)
+  await installIpythonHost(pythonExe, pythonDir)
 }
 
 function codesignMacBinary(filePath) {
@@ -489,6 +574,7 @@ async function prepareMacPythonDependencies(input) {
 
   console.log(`[desktop][build] installing workspace Python dependencies into ${pythonDir}`)
   installPythonPackages(pythonExe, requirementsPath, pythonDir)
+  await installIpythonHost(pythonExe, pythonDir)
 }
 
 async function writeManifest(input) {
@@ -501,6 +587,7 @@ async function writeManifest(input) {
     generatedAt: new Date().toISOString(),
     pythonVersion,
     pythonDistribution: process.platform === "linux" ? LINUX_PYTHON_DISTRIBUTION : undefined,
+    ipythonHost: IPYTHON_HOST_RUNTIME,
     nodePackages: NODE_PACKAGES,
     pythonPackages: PYTHON_PACKAGES,
   })

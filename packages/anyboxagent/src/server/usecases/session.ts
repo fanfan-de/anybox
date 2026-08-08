@@ -45,6 +45,11 @@ import {
   resolveEffectiveModelWithFallback,
 } from "#server/usecases/model-list-cache.ts"
 import { answerAskUserQuestion } from "#tool/ask-user-question.ts"
+import {
+  disposeIpythonSession,
+  interruptIpythonSession,
+  resumeIpythonSession,
+} from "#ipython/registry.ts"
 
 export { createSessionExecutionStream } from "#server/usecases/session-stream.ts"
 
@@ -389,7 +394,7 @@ export function listArchivedSessions() {
   return Session.listArchivedSessionSummaries().map(mapArchivedSessionSummary)
 }
 
-export function archiveSession(sessionID: string, options?: { ptyRegistry?: PtyRegistry }) {
+export async function archiveSession(sessionID: string, options?: { ptyRegistry?: PtyRegistry }) {
   const session = safeReadSession(sessionID)
   if (!session) {
     throw new ApiError(404, "SESSION_NOT_FOUND", `Session '${sessionID}' not found`)
@@ -403,6 +408,11 @@ export function archiveSession(sessionID: string, options?: { ptyRegistry?: PtyR
     throw new ApiError(409, "SESSION_ALREADY_ARCHIVED", `Session '${sessionID}' is already archived`)
   }
 
+  await disposeIpythonSession(sessionID)
+  if (RunningState.isRunning(sessionID)) {
+    resumeIpythonSession(sessionID)
+    throw new ApiError(409, "SESSION_RUNNING", `Session '${sessionID}' started running while it was being archived`)
+  }
   const archived = Session.archiveSession(sessionID)
   if (!archived) {
     throw new ApiError(404, "SESSION_NOT_FOUND", `Session '${sessionID}' not found`)
@@ -441,6 +451,8 @@ export function restoreArchivedSession(sessionID: string) {
   if (!restored) {
     throw new ApiError(404, "ARCHIVED_SESSION_NOT_FOUND", `Archived session '${sessionID}' not found`)
   }
+
+  resumeIpythonSession(sessionID)
 
   return mapSessionSummary(restored)
 }
@@ -922,6 +934,7 @@ export async function deleteSession(sessionID: string, options?: { ptyRegistry?:
       await clearInProcessPermissionSession(sessionID)
     },
   })
+  await disposeIpythonSession(sessionID)
   Session.removeSession(sessionID)
   options?.ptyRegistry?.deleteBySession(sessionID)
   await getShellTaskRegistry().stopByOwnerSession(sessionID)
@@ -949,10 +962,14 @@ export async function cancelSession(sessionID: string, input: CancelSessionInput
           cancelQueued: true,
         })
       : { cancelled: false }
+  const ipythonCancelled =
+    !input.executionID || input.executionID === "active-thread"
+      ? await interruptIpythonSession(sessionID)
+      : false
 
   return {
     sessionID,
-    cancelled: result.cancelled || subtasks.cancelled,
+    cancelled: result.cancelled || subtasks.cancelled || ipythonCancelled,
     activeCancelled: result.activeCancelled,
     queuedCancelled: result.queuedCancelled,
   }

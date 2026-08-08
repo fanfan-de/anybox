@@ -36,6 +36,7 @@ import { ViewImageTool } from "#tool/view-image.ts"
 import { WaitSubagentTool } from "#tool/wait-subagent.ts"
 import { WebFetchTool } from "#tool/web-fetch.ts"
 import { LoadWorkspaceDependenciesTool } from "#tool/workspace-dependencies.ts"
+import { IpythonTool } from "#tool/ipython.ts"
 import * as Mcp from "#mcp/manager.ts"
 import { isSshWorkspaceUri } from "@anybox/shared"
 
@@ -142,6 +143,7 @@ async function rawBuiltinTools(): Promise<Tool.ToolInfo[]> {
 
   return [
     ...commonTools,
+    IpythonTool,
     TerminalRunCommandTool,
     TerminalReadTool,
     TerminalWriteInputTool,

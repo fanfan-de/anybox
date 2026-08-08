@@ -9,6 +9,7 @@ const databaseFile = join(databaseRoot, "agent-local-test.db")
 
 try {
   const testFiles = [
+    "Test/server.lifecycle.test.ts",
     "Test/server.api.test.ts",
     "Test/plugin.test.ts",
     "Test/cinema.api.test.ts",

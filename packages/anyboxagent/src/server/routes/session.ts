@@ -30,7 +30,7 @@ export function SessionRoutes(options: { ptyRegistry: PtyRegistry; shellTaskRegi
 
   app.get("/archived", (c) => ok(c, SessionUseCase.listArchivedSessions()))
 
-  app.post("/:id/archive", (c) => ok(c, SessionUseCase.archiveSession(c.req.param("id"), options)))
+  app.post("/:id/archive", async (c) => ok(c, await SessionUseCase.archiveSession(c.req.param("id"), options)))
 
   app.post("/archived/:id/restore", (c) => ok(c, SessionUseCase.restoreArchivedSession(c.req.param("id"))))
 

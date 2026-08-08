@@ -8,7 +8,11 @@ import {
   validateMediaRuntimeLock,
   verifyMediaRuntime,
 } from "./verify-media-runtime.mjs"
-import { LINUX_PYTHON_DISTRIBUTION } from "./prepare-workspace-dependencies.mjs"
+import {
+  IPYTHON_HOST_RUNTIME,
+  LINUX_PYTHON_DISTRIBUTION,
+  PYTHON_PACKAGES,
+} from "./prepare-workspace-dependencies.mjs"
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const desktopDir = path.resolve(scriptDir, "..")
@@ -34,6 +38,10 @@ function resolveRuntimeOutputDirectory() {
 const pythonExecutable = process.platform === "win32"
   ? path.join(dependenciesDir, "python", "python.exe")
   : path.join(dependenciesDir, "python", "bin", "python3")
+const pythonMajorMinor = LINUX_PYTHON_DISTRIBUTION.version.split(".").slice(0, 2).join(".")
+const pythonPurelibDir = process.platform === "win32"
+  ? path.join(dependenciesDir, "python", "Lib", "site-packages")
+  : path.join(dependenciesDir, "python", "lib", `python${pythonMajorMinor}`, "site-packages")
 const mediaLock = validateMediaRuntimeLock(JSON.parse(
   fs.readFileSync(path.join(desktopDir, "media-runtime.lock.json"), "utf8"),
 ))
@@ -126,6 +134,8 @@ const requiredFiles = [
   path.join(runtimeDir, "node_modules", "node-pty", "package.json"),
   path.join(dependenciesDir, "manifest.json"),
   pythonExecutable,
+  path.join(pythonPurelibDir, IPYTHON_HOST_RUNTIME.module, "__init__.py"),
+  path.join(pythonPurelibDir, IPYTHON_HOST_RUNTIME.module, "__main__.py"),
   ...bundledMediaTools,
 ]
 
@@ -216,6 +226,234 @@ async function verifyPackagedPtyWorker() {
       cols: 120,
       env: process.env,
     })}\n`)
+  })
+}
+
+function isProcessAlive(pid) {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return error?.code === "EPERM"
+  }
+}
+
+async function waitForProcessExit(pid, timeoutMs = 3_000) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (!isProcessAlive(pid)) return true
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+  return !isProcessAlive(pid)
+}
+
+async function verifyPackagedIpythonHost() {
+  await new Promise((resolve, reject) => {
+    const child = spawn(
+      pythonExecutable,
+      ["-I", "-m", IPYTHON_HOST_RUNTIME.module],
+      {
+        cwd: runtimeDir,
+        env: process.env,
+        stdio: ["pipe", "pipe", "pipe"],
+        windowsHide: true,
+      },
+    )
+    let stdoutBuffer = ""
+    let stderr = ""
+    let phase = "ready"
+    let firstResult = false
+    let persistentResult = false
+    let kernelPid
+    let backgroundPid
+    let backgroundOutput = ""
+    let completed = false
+    let failure
+    let settled = false
+    let killTimer
+
+    const send = (type, payload = {}) => {
+      child.stdin.write(`${JSON.stringify({
+        type,
+        protocolVersion: IPYTHON_HOST_RUNTIME.protocolVersion,
+        ...payload,
+      })}\n`)
+    }
+
+    const fail = (error) => {
+      if (failure) return
+      failure = error instanceof Error ? error : new Error(String(error))
+      try {
+        if (!child.killed && child.stdin.writable) {
+          send("shutdown", { requestId: "verify-cleanup" })
+        }
+      } catch {
+        // The close handler below reports the original verification failure.
+      }
+      killTimer = setTimeout(() => {
+        if (!child.killed) child.kill()
+      }, 2_000)
+      killTimer.unref?.()
+    }
+
+    const finish = (error) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      clearTimeout(killTimer)
+      if (error) reject(error)
+      else resolve()
+    }
+
+    const timer = setTimeout(() => {
+      fail(new Error("Packaged IPython host smoke test timed out"))
+    }, 30_000)
+    timer.unref?.()
+
+    child.stdout.setEncoding("utf8")
+    child.stdout.on("data", (chunk) => {
+      stdoutBuffer += chunk
+      const lines = stdoutBuffer.split(/\r?\n/)
+      stdoutBuffer = lines.pop() ?? ""
+      for (const line of lines) {
+        if (!line.trim()) continue
+        let event
+        try {
+          event = JSON.parse(line)
+        } catch {
+          fail(new Error(`Packaged IPython host emitted invalid JSON: ${line}`))
+          continue
+        }
+
+        if (event.protocolVersion !== IPYTHON_HOST_RUNTIME.protocolVersion) {
+          fail(new Error(`Packaged IPython host protocol mismatch: ${JSON.stringify(event)}`))
+          continue
+        }
+        if (event.type === "fatal") {
+          fail(new Error(`Packaged IPython host failed: ${event.message ?? "unknown error"}`))
+          continue
+        }
+
+        if (phase === "ready" && event.type === "ready") {
+          if (
+            event.hostVersion !== IPYTHON_HOST_RUNTIME.version
+            || event.ipythonVersion !== PYTHON_PACKAGES.ipython
+            || event.ipykernelVersion !== PYTHON_PACKAGES.ipykernel
+            || event.jupyterClientVersion !== PYTHON_PACKAGES["jupyter-client"]
+            || event.pyzmqVersion !== PYTHON_PACKAGES.pyzmq
+            || typeof event.kernelPid !== "number"
+          ) {
+            fail(new Error(`Packaged IPython host readiness mismatch: ${JSON.stringify(event)}`))
+            continue
+          }
+          kernelPid = event.kernelPid
+          phase = "probe"
+          send("probe", { requestId: "verify-probe" })
+          continue
+        }
+
+        if (phase === "probe" && event.type === "probe" && event.requestId === "verify-probe") {
+          if (event.kernelAlive !== true || event.hostVersion !== IPYTHON_HOST_RUNTIME.version) {
+            fail(new Error(`Packaged IPython host probe mismatch: ${JSON.stringify(event)}`))
+            continue
+          }
+          phase = "first-cell"
+          send("execute", { requestId: "verify-1", code: "1 + 1", maxOutputChars: 10_000 })
+          continue
+        }
+
+        if (phase === "first-cell" && event.requestId === "verify-1") {
+          if (event.type === "result" && event.text === "2") firstResult = true
+          if (event.type === "idle") {
+            if (!firstResult) {
+              fail(new Error("Packaged IPython host did not return 2 for 1 + 1"))
+              continue
+            }
+            phase = "define-value"
+            send("execute", { requestId: "verify-2", code: "anybox_value = 40" })
+          }
+          continue
+        }
+
+        if (phase === "define-value" && event.requestId === "verify-2" && event.type === "idle") {
+          phase = "persistent-value"
+          send("execute", { requestId: "verify-3", code: "anybox_value + 2" })
+          continue
+        }
+
+        if (phase === "persistent-value" && event.requestId === "verify-3") {
+          if (event.type === "result" && event.text === "42") persistentResult = true
+          if (event.type === "idle") {
+            if (!persistentResult) {
+              fail(new Error("Packaged IPython host did not preserve variables between cells"))
+              continue
+            }
+            phase = "background-process"
+            send("execute", {
+              requestId: "verify-background",
+              code: [
+                "import subprocess, sys",
+                "anybox_background = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])",
+                "print(anybox_background.pid, flush=True)",
+              ].join("\n"),
+            })
+          }
+          continue
+        }
+
+        if (phase === "background-process" && event.requestId === "verify-background") {
+          if (event.type === "stream" && event.name === "stdout") {
+            backgroundOutput += event.text ?? ""
+          }
+          if (event.type === "idle") {
+            const parsedPid = Number.parseInt(backgroundOutput.trim(), 10)
+            if (!Number.isInteger(parsedPid) || parsedPid <= 0 || !isProcessAlive(parsedPid)) {
+              fail(new Error(`Packaged IPython host did not start its background-process smoke: ${backgroundOutput}`))
+              continue
+            }
+            backgroundPid = parsedPid
+            phase = "shutdown"
+            send("shutdown", { requestId: "verify-shutdown" })
+          }
+          continue
+        }
+
+        if (phase === "shutdown" && event.type === "shutdown" && event.requestId === "verify-shutdown") {
+          completed = true
+          phase = "closed"
+        }
+      }
+    })
+    child.stderr.setEncoding("utf8")
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk
+    })
+    child.once("error", (error) => fail(error))
+    child.once("close", async (exitCode) => {
+      if (failure) {
+        finish(new Error(`${failure.message}: ${stderr || stdoutBuffer || "no host diagnostics"}`))
+        return
+      }
+      if (!completed || exitCode !== 0) {
+        finish(new Error(
+          `Packaged IPython host smoke failed (phase=${phase}, exit=${exitCode ?? "missing"}): ${stderr || stdoutBuffer || "no output"}`,
+        ))
+        return
+      }
+      if (typeof kernelPid !== "number" || !(await waitForProcessExit(kernelPid))) {
+        finish(new Error(
+          `Packaged IPython kernel PID ${kernelPid ?? "missing"} remained alive after host shutdown`,
+        ))
+        return
+      }
+      if (typeof backgroundPid !== "number" || !(await waitForProcessExit(backgroundPid))) {
+        finish(new Error(
+          `Packaged IPython background PID ${backgroundPid ?? "missing"} remained alive after host shutdown`,
+        ))
+        return
+      }
+      finish()
+    })
   })
 }
 
@@ -325,6 +563,24 @@ if (manifest.pythonVersion !== LINUX_PYTHON_DISTRIBUTION.version) {
   process.exit(1)
 }
 
+for (const [key, expected] of Object.entries(IPYTHON_HOST_RUNTIME)) {
+  if (manifest.ipythonHost?.[key] !== expected) {
+    console.error(
+      `[desktop][build] dependency manifest IPython host ${key} mismatch: got ${manifest.ipythonHost?.[key] ?? "missing"}, expected ${expected}`,
+    )
+    process.exit(1)
+  }
+}
+
+for (const packageName of ["ipython", "ipykernel", "jupyter-client", "pyzmq"]) {
+  if (manifest.pythonPackages?.[packageName] !== PYTHON_PACKAGES[packageName]) {
+    console.error(
+      `[desktop][build] dependency manifest ${packageName} version mismatch: got ${manifest.pythonPackages?.[packageName] ?? "missing"}, expected ${PYTHON_PACKAGES[packageName]}`,
+    )
+    process.exit(1)
+  }
+}
+
 if (process.platform === "linux") {
   const distribution = manifest.pythonDistribution
   for (const [key, expected] of Object.entries(LINUX_PYTHON_DISTRIBUTION)) {
@@ -345,6 +601,9 @@ const pythonSmoke = spawnSync(
       "import sys",
       `assert sys.version_info[:3] == (${LINUX_PYTHON_DISTRIBUTION.version.split(".").join(", ")})`,
       "import docx, openpyxl, pandas, PIL, pypdf, reportlab, lxml, numpy, pydantic, dateutil, pdf2image",
+      "import IPython, ipykernel, jupyter_client, zmq, anybox_ipython_host",
+      `assert anybox_ipython_host.HOST_VERSION == ${JSON.stringify(IPYTHON_HOST_RUNTIME.version)}`,
+      `assert anybox_ipython_host.PROTOCOL_VERSION == ${IPYTHON_HOST_RUNTIME.protocolVersion}`,
     ].join("; "),
   ],
   { encoding: "utf8", windowsHide: true },
@@ -354,6 +613,8 @@ if (pythonSmoke.status !== 0) {
   console.error((pythonSmoke.stderr || pythonSmoke.stdout || "unknown Python error").trim())
   process.exit(1)
 }
+
+await verifyPackagedIpythonHost()
 
 const workspaceNodeDir = path.join(dependenciesDir, "node")
 const nodeSmoke = spawnSync(

@@ -157,6 +157,7 @@ export type ProviderRuntimeAuthOptions = {
 
 export type GenericOAuthTokenEndpointAuthMethod = "none" | "client_secret_post" | "client_secret_basic"
 export type GenericOAuthTokenRequestFormat = "form" | "json"
+export type GenericOAuthProviderDialect = "standard" | "bilibili"
 
 export type GenericOAuthDynamicClientRegistrationConfig = {
   registrationURL: string
@@ -170,12 +171,14 @@ export type GenericOAuthProviderConfig = {
   clientSecret?: string
   authorizationURL: string
   tokenURL: string
+  refreshURL?: string
   scopes: string[]
   revocationURL?: string
   authorizationParams?: Record<string, string>
   tokenParams?: Record<string, string>
   tokenEndpointAuthMethod?: GenericOAuthTokenEndpointAuthMethod
   tokenRequestFormat?: GenericOAuthTokenRequestFormat
+  dialect?: GenericOAuthProviderDialect
   registration?: GenericOAuthDynamicClientRegistrationConfig
 }
 
@@ -1646,13 +1649,18 @@ function buildGenericOAuthAuthorizeURL(input: {
   state: string
 }) {
   const url = new URL(input.oauth.authorizationURL)
-  url.searchParams.set("response_type", "code")
   url.searchParams.set("client_id", input.oauth.clientID)
-  url.searchParams.set("redirect_uri", input.redirectURI)
-  url.searchParams.set("scope", input.oauth.scopes.join(" "))
   url.searchParams.set("state", input.state)
-  url.searchParams.set("code_challenge", input.codeChallenge)
-  url.searchParams.set("code_challenge_method", "S256")
+
+  if (input.oauth.dialect === "bilibili") {
+    url.searchParams.set("gourl", input.redirectURI)
+  } else {
+    url.searchParams.set("response_type", "code")
+    url.searchParams.set("redirect_uri", input.redirectURI)
+    url.searchParams.set("scope", input.oauth.scopes.join(" "))
+    url.searchParams.set("code_challenge", input.codeChallenge)
+    url.searchParams.set("code_challenge_method", "S256")
+  }
 
   for (const [key, value] of Object.entries(input.oauth.authorizationParams ?? {})) {
     url.searchParams.set(key, value)
@@ -1672,9 +1680,11 @@ async function exchangeGenericOAuthAuthorizationCode(input: {
     request.setBodyParam(key, value)
   }
   request.setBodyParam("grant_type", "authorization_code")
-  request.setBodyParam("redirect_uri", input.redirectURI)
   request.setBodyParam("code", input.authorizationCode)
-  request.setBodyParam("code_verifier", input.codeVerifier)
+  if (input.oauth.dialect !== "bilibili") {
+    request.setBodyParam("redirect_uri", input.redirectURI)
+    request.setBodyParam("code_verifier", input.codeVerifier)
+  }
   applyGenericOAuthClientAuthentication({
     setBodyParam: request.setBodyParam,
     headers: request.headers,
@@ -1749,6 +1759,34 @@ function parseOAuthScopeSet(scope?: string) {
   return new Set((scope ?? "").split(/\s+/).map((item) => item.trim()).filter(Boolean))
 }
 
+function readGenericOAuthScope(payload: Record<string, unknown>, fallback?: string) {
+  const scope = normalizeString(payload.scope)
+  if (scope) return scope
+
+  if (Array.isArray(payload.scopes)) {
+    const scopes = payload.scopes.map(normalizeString).filter((item): item is string => Boolean(item))
+    if (scopes.length > 0) return scopes.join(" ")
+  }
+
+  return fallback
+}
+
+function computeGenericOAuthTokenExpiry(
+  payload: Record<string, unknown>,
+  oauth: GenericOAuthProviderConfig | undefined,
+  input: { accessToken?: string; idToken?: string },
+) {
+  const explicit = parseNumeric(payload.expires_in)
+  if (oauth?.dialect === "bilibili" && explicit && explicit > 0) {
+    return explicit * 1000
+  }
+
+  return computeTokenExpiry({
+    ...input,
+    expiresIn: payload.expires_in,
+  })
+}
+
 function requiredGenericOAuthScopes(oauth?: GenericOAuthProviderConfig) {
   return (oauth?.scopes ?? []).filter((scope) => !OPTIONAL_IDENTITY_OAUTH_SCOPES.has(scope))
 }
@@ -1774,7 +1812,7 @@ function buildGenericOAuthCredential(
   const refreshToken = normalizeString(payload.refresh_token) ?? fallback?.refreshToken ?? ""
   const idToken = normalizeString(payload.id_token) ?? fallback?.idToken
   const account = readGenericOAuthTokenAccount(payload, idToken, fallback)
-  const scope = normalizeString(payload.scope) ?? fallback?.scope
+  const scope = readGenericOAuthScope(payload, fallback?.scope)
 
   if (!accessToken) {
     throw new Error("OAuth token response did not include an access token.")
@@ -1790,10 +1828,9 @@ function buildGenericOAuthCredential(
     kind: "oauth_session",
     accessToken,
     refreshToken,
-    expiresAt: computeTokenExpiry({
+    expiresAt: computeGenericOAuthTokenExpiry(payload, oauth, {
       accessToken,
       idToken,
-      expiresIn: payload.expires_in,
     }),
     tokenType: normalizeString(payload.token_type) ?? fallback?.tokenType,
     idToken,
@@ -1835,7 +1872,7 @@ export async function refreshGenericOAuthSession(
     oauth,
   })
 
-  const response = await fetch(oauth.tokenURL, {
+  const response = await fetch(oauth.refreshURL ?? oauth.tokenURL, {
     method: "POST",
     headers: request.headers,
     body: request.body(),

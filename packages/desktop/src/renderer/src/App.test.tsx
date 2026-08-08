@@ -9954,6 +9954,8 @@ describe("App", () => {
             needsShell: true,
           },
           moduleID: "workspace.shell",
+          defaultEnabled: true,
+          enabled: true,
         },
         {
           id: "read_file",
@@ -9967,6 +9969,8 @@ describe("App", () => {
             concurrency: "safe",
           },
           moduleID: "workspace.file-io",
+          defaultEnabled: true,
+          enabled: false,
         },
       ],
       selection: {
@@ -10025,10 +10029,10 @@ describe("App", () => {
     expect(screen.queryByText("Read File")).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole("button", { name: "File Read and Write module, 0 of 1 tools enabled" }))
-    expect(screen.getByText("Read File")).toBeInTheDocument()
+    expect(await screen.findByText("Read File")).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole("button", { name: "Planner module, 1 tools, on demand" }))
-    expect(screen.getByText("List Planner Todos")).toBeInTheDocument()
+    expect(await screen.findByText("List Planner Todos")).toBeInTheDocument()
     expect(screen.getByText("Current-turn scope")).toBeInTheDocument()
     expect(screen.queryByRole("group", { name: "Availability" })).not.toBeInTheDocument()
     expect(screen.queryByRole("switch")).not.toBeInTheDocument()

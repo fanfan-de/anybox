@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "anybox-ipython-host"
+version = "1.0.0"
+description = "Private IPython kernel host for the Anybox built-in IPython tool"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+  "ipython==9.7.0",
+  "ipykernel==7.1.0",
+  "jupyter-client==8.6.3",
+  "pyzmq==27.1.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+

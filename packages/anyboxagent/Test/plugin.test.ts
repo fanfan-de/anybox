@@ -134,8 +134,11 @@ type PluginCatalogEnvelope = JsonEnvelope<
         clientSecret?: string
         authorizationURL?: string
         tokenURL?: string
+        refreshURL?: string
         scopes?: string[]
         tokenEndpointAuthMethod?: string
+        tokenRequestFormat?: string
+        dialect?: string
         registration?: {
           registrationURL: string
           initialAccessToken?: string
@@ -1107,6 +1110,74 @@ async function writeChromePluginPackage() {
     "chrome",
   )
   await cp(chromePluginRoot, packageRoot, { recursive: true })
+
+  return packageSourceRoot
+}
+
+async function writeBilibiliOAuthPluginPackage() {
+  if (!activeRoot) throw new Error("Temp root has not been initialized.")
+
+  const packageSourceRoot = pluginInstallRoot()
+  const packageRoot = join(packageSourceRoot, "bilibili-oauth-lab", "0.1.0")
+  const manifestRoot = join(packageRoot, ".anybox-plugin")
+  await mkdir(manifestRoot, { recursive: true })
+
+  await writeFile(join(manifestRoot, "plugin.json"), JSON.stringify({
+    name: "bilibili-oauth-lab",
+    version: "0.1.0",
+    description: "Fixture plugin package with Bilibili's OAuth dialect.",
+    author: "Anybox Tests",
+    interface: {
+      displayName: "Bilibili OAuth Lab",
+      shortDescription: "Bilibili OAuth connector fixture.",
+      developerName: "Anybox Tests",
+      category: "Docs",
+    },
+    connectors: [
+      {
+        id: "creator",
+        name: "Bilibili Creator OAuth",
+        description: "Fixture Bilibili OAuth remote MCP connector.",
+        configFields: [
+          {
+            key: "BILIBILI_CLIENT_ID",
+            label: "Client ID",
+            type: "text",
+            required: true,
+          },
+          {
+            key: "BILIBILI_CLIENT_SECRET",
+            label: "Client secret",
+            type: "password",
+            required: true,
+            secret: true,
+          },
+        ],
+        credential: {
+          kind: "oauth",
+          label: "Bilibili OAuth",
+          clientID: "${BILIBILI_CLIENT_ID}",
+          clientSecret: "${BILIBILI_CLIENT_SECRET}",
+          authorizationURL: "https://account.bilibili.com/pc/account-pc/auth/oauth",
+          tokenURL: "https://api.bilibili.com/x/account-oauth2/v1/token",
+          refreshURL: "https://api.bilibili.com/x/account-oauth2/v1/refresh_token",
+          scopes: ["USER_INFO", "USER_DATA"],
+          tokenEndpointAuthMethod: "client_secret_post",
+          tokenRequestFormat: "form",
+          dialect: "bilibili",
+          tokenPlacement: {
+            type: "header",
+            name: "access-token",
+            value: "${OAUTH_ACCESS_TOKEN}",
+          },
+        },
+        runtime: {
+          transport: "remote",
+          serverUrl: "https://creator.example.test/mcp",
+        },
+      },
+    ],
+  }, null, 2))
 
   return packageSourceRoot
 }
@@ -5065,6 +5136,142 @@ describe("plugin marketplace API", () => {
     const cancelBody = (await cancelResponse.json()) as JsonEnvelope<{ status: string }>
     expect(cancelResponse.status).toBe(200)
     expect(cancelBody.data?.status).toBe("cancelled")
+  })
+
+  test("supports Bilibili OAuth authorization, absolute expiry, and dedicated refresh endpoints", async () => {
+    await useTempDatabase()
+    await writeBilibiliOAuthPluginPackage()
+    const app = createServerApp()
+
+    const catalogResponse = await app.request("/api/plugins/catalog")
+    const catalogBody = (await catalogResponse.json()) as PluginCatalogEnvelope
+    const plugin = catalogBody.data?.find((item) => item.id === "bilibili-oauth-lab")
+    expect(catalogResponse.status).toBe(200)
+    expect(plugin?.apps[0]?.credential.dialect).toBe("bilibili")
+    expect(plugin?.apps[0]?.credential.refreshURL).toContain("/refresh_token")
+
+    const installResponse = await app.request("/api/plugins/installed/bilibili-oauth-lab", {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        enabled: true,
+        config: {
+          BILIBILI_CLIENT_ID: "bilibili-client",
+          BILIBILI_CLIENT_SECRET: "bilibili-secret",
+        },
+      }),
+    })
+    expect(installResponse.status).toBe(200)
+
+    const absoluteExpirySeconds = Math.floor(Date.now() / 1000) + 3600
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
+      expect(url).toBe("https://api.bilibili.com/x/account-oauth2/v1/token")
+      expect(init?.method).toBe("POST")
+      const body = init?.body instanceof URLSearchParams ? init.body : new URLSearchParams(String(init?.body))
+      expect(body.get("grant_type")).toBe("authorization_code")
+      expect(body.get("client_id")).toBe("bilibili-client")
+      expect(body.get("client_secret")).toBe("bilibili-secret")
+      expect(body.get("code")).toBe("bilibili-code")
+      expect(body.has("redirect_uri")).toBe(false)
+      expect(body.has("code_verifier")).toBe(false)
+      return new Response(JSON.stringify({
+        code: 0,
+        data: {
+          access_token: "bilibili-access",
+          refresh_token: "bilibili-refresh",
+          expires_in: absoluteExpirySeconds,
+          scopes: ["USER_INFO", "USER_DATA"],
+        },
+      }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+        },
+      })
+    }) as typeof fetch
+
+    const flowResponse = await app.request("/api/plugins/installed/bilibili-oauth-lab/connectors/creator/auth/flows", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({}),
+    })
+    const flowBody = (await flowResponse.json()) as JsonEnvelope<{
+      id: string
+      authorizationURL: string
+      status: string
+    }>
+    expect(flowResponse.status).toBe(200)
+    const authorizationURL = new URL(flowBody.data?.authorizationURL ?? "")
+    expect(authorizationURL.searchParams.get("client_id")).toBe("bilibili-client")
+    expect(authorizationURL.searchParams.get("gourl")).toContain("/auth/callback")
+    expect(authorizationURL.searchParams.get("state")).toBeTruthy()
+    expect(authorizationURL.searchParams.has("response_type")).toBe(false)
+    expect(authorizationURL.searchParams.has("redirect_uri")).toBe(false)
+    expect(authorizationURL.searchParams.has("scope")).toBe(false)
+    expect(authorizationURL.searchParams.has("code_challenge")).toBe(false)
+
+    const state = authorizationURL.searchParams.get("state") ?? ""
+    const callbackResult = await ProviderAuth.completeProviderBrowserCallback({
+      providerID: "plugin-connector:bilibili-oauth-lab:creator",
+      url: new URL(`http://localhost/auth/callback?code=bilibili-code&state=${encodeURIComponent(state)}`),
+    })
+    expect(callbackResult.ok).toBe(true)
+
+    const storedCredential = await Auth.getProviderCredential("plugin-connector:bilibili-oauth-lab:creator", "oauth")
+    expect(storedCredential?.kind === "oauth_session" ? storedCredential.expiresAt : undefined)
+      .toBe(absoluteExpirySeconds * 1000)
+    expect(storedCredential?.kind === "oauth_session" ? storedCredential.scope : undefined)
+      .toBe("USER_INFO USER_DATA")
+
+    await Auth.setProviderCredential(
+      "plugin-connector:bilibili-oauth-lab:creator",
+      "oauth",
+      {
+        kind: "oauth_session",
+        accessToken: "expired-bilibili-access",
+        refreshToken: "bilibili-refresh",
+        expiresAt: Date.now() - 1000,
+      },
+      { activate: true, lastError: null },
+    )
+
+    const refreshedExpirySeconds = absoluteExpirySeconds + 3600
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
+      expect(url).toBe("https://api.bilibili.com/x/account-oauth2/v1/refresh_token")
+      const body = init?.body instanceof URLSearchParams ? init.body : new URLSearchParams(String(init?.body))
+      expect(body.get("grant_type")).toBe("refresh_token")
+      expect(body.get("client_id")).toBe("bilibili-client")
+      expect(body.get("client_secret")).toBe("bilibili-secret")
+      expect(body.get("refresh_token")).toBe("bilibili-refresh")
+      return new Response(JSON.stringify({
+        code: 0,
+        data: {
+          access_token: "bilibili-access-two",
+          refresh_token: "bilibili-refresh-two",
+          expires_in: refreshedExpirySeconds,
+          scopes: ["USER_INFO", "USER_DATA"],
+        },
+      }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+        },
+      })
+    }) as typeof fetch
+
+    const runtime = await Plugin.resolveConnectorRemoteServer("plugin-connector:bilibili-oauth-lab:creator")
+    expect(runtime.headers?.["access-token"]).toBe("bilibili-access-two")
+    const refreshedCredential = await Auth.getProviderCredential("plugin-connector:bilibili-oauth-lab:creator", "oauth")
+    expect(refreshedCredential?.kind === "oauth_session" ? refreshedCredential.refreshToken : undefined)
+      .toBe("bilibili-refresh-two")
+    expect(refreshedCredential?.kind === "oauth_session" ? refreshedCredential.expiresAt : undefined)
+      .toBe(refreshedExpirySeconds * 1000)
   })
 
   test("registers dynamic OAuth app connector clients before PKCE auth", async () => {

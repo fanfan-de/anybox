@@ -33,6 +33,7 @@ import * as Session from "#session/core/session.ts"
 import * as PromptPresets from "#session/support/prompt-presets.ts"
 import * as Subtask from "#session/tasks/subtask.ts"
 import * as Skill from "#skill/skill.ts"
+import { disposeIpythonSession } from "#ipython/registry.ts"
 
 export const CreateProjectBody = z.object({
   directory: z.string().min(1),
@@ -896,10 +897,17 @@ export async function deleteProject(projectID: string, options?: { ptyRegistry?:
   if (options?.ptyRegistry) {
     await EnvironmentActions.cancelProjectActions(projectID, options.ptyRegistry)
   }
+  // Finish fallible runtime cleanup before deleting session records. If a
+  // kernel cannot be stopped, the project remains intact and the delete can
+  // be retried instead of leaving a half-deleted project.
+  const projectSessions = Session.listByProject(projectID)
+  for (const session of projectSessions) {
+    await disposeIpythonSession(session.id)
+    await getShellTaskRegistry().stopByOwnerSession(session.id)
+  }
   const deletedSessions = Session.removeProjectSessions(projectID)
   for (const session of deletedSessions) {
     options?.ptyRegistry?.deleteBySession(session.id)
-    await getShellTaskRegistry().stopByOwnerSession(session.id)
   }
   db.deleteById("projects", projectID)
   db.deleteById("project_configs", projectID, "projectID")

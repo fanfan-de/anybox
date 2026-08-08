@@ -38,6 +38,11 @@ import { startAutomationScheduler } from "#automation/scheduler.ts"
 import { startStorageMaintenance } from "#session/runtime/storage-maintenance.ts"
 import * as EnvironmentActions from "#environment/actions.ts"
 import * as EnvironmentRunner from "#environment/runner.ts"
+import {
+  beginIpythonRuntimeShutdown,
+  disposeIpythonRegistry,
+  resumeIpythonRuntime,
+} from "#ipython/registry.ts"
 
 export interface ServerOptions {
   host?: string
@@ -54,6 +59,7 @@ interface ServerRuntimeOptions extends Pick<ServerOptions, "corsWhitelist" | "pt
 const log = Log.create({ service: "server" })
 let activeServer: Bun.Server<unknown> | undefined
 let activePtyRegistry: PtyRegistry | undefined
+let activeStopOperation: { promise: Promise<void> } | undefined
 
 function getRequestId(c: Context<AppEnv>) {
   return c.get("requestId") ?? "unknown"
@@ -198,7 +204,12 @@ export function url() {
 }
 
 export function startServer(options: ServerOptions = {}) {
+  if (activeStopOperation) {
+    throw new Error("Cannot start the Anybox Agent server while it is stopping")
+  }
   if (activeServer) return activeServer
+
+  resumeIpythonRuntime()
 
   const host = options.host ?? getProcessEnvValue("ANYBOX_SERVER_HOST") ?? "127.0.0.1"
   const port = options.port ?? parsePort(getProcessEnvValue("ANYBOX_SERVER_PORT"), 4096)
@@ -230,14 +241,47 @@ export function startServer(options: ServerOptions = {}) {
   return activeServer
 }
 
-export async function stopServer() {
-  if (activeServer) {
-    await EnvironmentRunner.cancelAllRuns()
-    if (activePtyRegistry) await EnvironmentActions.cancelAllActions(activePtyRegistry)
-    await disposeShellTaskRegistry()
-    activeServer.stop(true)
-    activeServer = undefined
-    activePtyRegistry = undefined
-    log.info("server-stopped")
+async function stopServerRuntime(
+  server: Bun.Server<unknown>,
+  ptyRegistry: PtyRegistry | undefined,
+) {
+  // Stop accepting work before tearing down stateful runtimes. Otherwise a
+  // request arriving between registry disposal and server.stop() can create a
+  // fresh kernel that this shutdown pass never sees.
+  beginIpythonRuntimeShutdown()
+  server.stop(true)
+  const failures: unknown[] = []
+  const cleanup = async (action: () => Promise<unknown>) => {
+    try {
+      await action()
+    } catch (error) {
+      failures.push(error)
+    }
   }
+
+  await cleanup(() => EnvironmentRunner.cancelAllRuns())
+  if (ptyRegistry) await cleanup(() => EnvironmentActions.cancelAllActions(ptyRegistry))
+  await cleanup(() => disposeIpythonRegistry())
+  await cleanup(() => disposeShellTaskRegistry())
+
+  if (activeServer === server) activeServer = undefined
+  if (activePtyRegistry === ptyRegistry) activePtyRegistry = undefined
+  log.info("server-stopped")
+  if (failures.length > 0) {
+    throw new AggregateError(failures, "One or more Agent runtimes failed to stop cleanly")
+  }
+}
+
+export function stopServer(): Promise<void> {
+  if (activeStopOperation) return activeStopOperation.promise
+
+  const server = activeServer
+  if (!server) return Promise.resolve()
+
+  const operation = {} as { promise: Promise<void> }
+  activeStopOperation = operation
+  operation.promise = stopServerRuntime(server, activePtyRegistry).finally(() => {
+    if (activeStopOperation === operation) activeStopOperation = undefined
+  })
+  return operation.promise
 }

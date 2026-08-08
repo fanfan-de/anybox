@@ -80,7 +80,7 @@ function getBuiltinToolKindLabelForKind(
 ) {
   switch (kind) {
     case "exec":
-      return t("tools.shell")
+      return t("tools.modules.codeExecution")
     case "write":
       return t("tools.write")
     case "search":
@@ -103,7 +103,8 @@ function getBuiltinToolKindLabel(tool: ToolSummary, t: Translate) {
 }
 
 function getBuiltinToolRiskLabel(tool: ToolSummary, t: Translate) {
-  if (tool.capabilities.needsShell || tool.capabilities.kind === "exec") return t("tools.shellAccess")
+  if (tool.capabilities.needsShell) return t("tools.shellAccess")
+  if (tool.capabilities.kind === "exec") return t("tools.highRisk")
   if (tool.capabilities.kind === "delegation") {
     return tool.capabilities.readOnly ? t("tools.delegationStatus") : t("tools.delegatesWork")
   }
@@ -600,6 +601,9 @@ export function BuiltinToolsPage({
                                   <span className={getBuiltinToolRiskBadgeClassName(tool)}>
                                     {getBuiltinToolRiskLabel(tool, t)}
                                   </span>
+                                  {isConfigurable && !tool.defaultEnabled ? (
+                                    <span className="tools-badge">{t("tools.modules.defaultOff")}</span>
+                                  ) : null}
                                   {tool.aliases.length > 0 ? (
                                     <span className="tools-badge">{t("tools.modules.aliasCount", { count: tool.aliases.length })}</span>
                                   ) : null}

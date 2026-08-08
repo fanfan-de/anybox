@@ -67,7 +67,11 @@ export function isToolGloballyEnabled(
     return false
   }
 
-  return true
+  if (matches.includes(true)) {
+    return true
+  }
+
+  return tool.defaultEnabled !== false
 }
 
 export function readOnlyToolsOnlyForSession(

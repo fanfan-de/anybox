@@ -150,6 +150,11 @@ const BUILTIN_MODULE_METADATA = {
     description: "Compose supported tool calls with isolated JavaScript or safe parallel execution.",
     keywords: ["orchestration", "javascript", "exec", "parallel", "compose"],
   },
+  "runtime.python": {
+    title: "Python Runtime",
+    description: "Execute Python code in a persistent IPython kernel for the current Agent session.",
+    keywords: ["python", "ipython", "kernel", "notebook", "runtime"],
+  },
   "agent.multiagent": {
     title: "Multi-agent",
     description: "Spawn, inspect, wait for, and cancel delegated child Agent sessions.",
@@ -213,6 +218,7 @@ const PROGRAMMATIC_ORCHESTRATION_TOOL_IDS = new Set([
   "exec",
   "multi_tool_use_parallel",
 ])
+const PYTHON_RUNTIME_TOOL_IDS = new Set(["ipython"])
 const MULTIAGENT_TOOL_IDS = new Set([
   "spawn_subagent",
   "cancel_subagent",
@@ -240,6 +246,7 @@ function builtinModuleID(toolID: string): BuiltinModuleID {
   if (FILE_IO_TOOL_IDS.has(toolID)) return "workspace.file-io"
   if (FILE_SEARCH_TOOL_IDS.has(toolID)) return "workspace.file-search"
   if (PROGRAMMATIC_ORCHESTRATION_TOOL_IDS.has(toolID)) return "runtime.programmatic-orchestration"
+  if (PYTHON_RUNTIME_TOOL_IDS.has(toolID)) return "runtime.python"
   if (MULTIAGENT_TOOL_IDS.has(toolID)) return "agent.multiagent"
   if (PROGRESSIVE_DISCLOSURE_TOOL_IDS.has(toolID)) return PROGRESSIVE_DISCLOSURE_TOOL_MODULE_ID
   if (METACOGNITION_TOOL_IDS.has(toolID)) return "agent.metacognition"

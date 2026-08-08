@@ -460,6 +460,7 @@ type BuiltinToolListEnvelope = JsonEnvelope<{
       needsShell?: boolean
     }
     moduleID: string
+    defaultEnabled: boolean
     enabled: boolean
   }>
   selection: {
@@ -1111,6 +1112,7 @@ describe("server api", () => {
       expect(listBody.data?.items.find((tool) => tool.id === "tool_search")).toMatchObject({
         title: "Tool Search",
         moduleID: "runtime.progressive-disclosure",
+        defaultEnabled: true,
         enabled: true,
         inputSchema: {
           type: "object",
@@ -1123,6 +1125,7 @@ describe("server api", () => {
       })
       expect(JSON.stringify(listBody.data?.items.find((tool) => tool.id === "tool_search")?.inputSchema)).toContain("query")
       expect(listBody.data?.items.find((tool) => tool.id === "load_workspace_dependencies")).toMatchObject({
+        defaultEnabled: true,
         enabled: true,
         aliases: ["load-workspace-dependencies"],
         capabilities: {
@@ -1130,6 +1133,19 @@ describe("server api", () => {
           readOnly: true,
           destructive: false,
           concurrency: "safe",
+        },
+      })
+      expect(listBody.data?.items.find((tool) => tool.id === "ipython")).toMatchObject({
+        title: "IPython",
+        moduleID: "runtime.python",
+        defaultEnabled: false,
+        enabled: false,
+        capabilities: {
+          kind: "exec",
+          readOnly: false,
+          destructive: true,
+          concurrency: "exclusive",
+          needsShell: true,
         },
       })
       expect(listBody.data?.onDemand.failures).toEqual([])
@@ -1168,6 +1184,7 @@ describe("server api", () => {
       })
       expect(plannerListTodos).not.toHaveProperty("enabled")
       expect(listBody.data?.items.find((tool) => tool.id === "git_bash_command")).toMatchObject({
+        defaultEnabled: true,
         enabled: true,
         moduleID: "workspace.shell",
         inputSchema: {
@@ -1214,6 +1231,7 @@ describe("server api", () => {
           tools: {
             git_bash_command: false,
             tool_search: false,
+            ipython: true,
           },
         }),
       })
@@ -1224,6 +1242,7 @@ describe("server api", () => {
         tools: {
           git_bash_command: false,
           tool_search: false,
+          ipython: true,
         },
       })
 
@@ -1231,6 +1250,7 @@ describe("server api", () => {
       const disabledListBody = (await disabledListResponse.json()) as BuiltinToolListEnvelope
       expect(disabledListBody.data?.items.find((tool) => tool.id === "git_bash_command")?.enabled).toBe(false)
       expect(disabledListBody.data?.items.find((tool) => tool.id === "tool_search")?.enabled).toBe(false)
+      expect(disabledListBody.data?.items.find((tool) => tool.id === "ipython")?.enabled).toBe(true)
 
       const resetResponse = await app.request("http://localhost/api/tools/builtins/selection", {
         method: "PUT",
@@ -1242,6 +1262,9 @@ describe("server api", () => {
       const resetBody = (await resetResponse.json()) as BuiltinToolSelectionEnvelope
       expect(resetResponse.status).toBe(200)
       expect(resetBody.data?.tools).toEqual({})
+      const resetListResponse = await app.request("http://localhost/api/tools/builtins")
+      const resetListBody = (await resetListResponse.json()) as BuiltinToolListEnvelope
+      expect(resetListBody.data?.items.find((tool) => tool.id === "ipython")?.enabled).toBe(false)
 
       const legacyAliasResponse = await app.request("http://localhost/api/tools/builtins/selection", {
         method: "PUT",

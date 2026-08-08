@@ -113,6 +113,12 @@ describe("i18n translations", () => {
     expect(t("zh-CN", "tools.modules.catalog.runtime.progressive-disclosure.description")).toBe(
       "仅在需要时发现可选工具、Skills、MCP 资源及内置工作区运行环境。",
     )
+    expect(t("zh-CN", "tools.modules.catalog.runtime.python.title")).toBe("Python")
+    expect(t("zh-CN", "tools.modules.tool.ipython.title")).toBe("IPython")
+    expect(t("zh-CN", "tools.modules.tool.ipython.description")).toContain("不是安全沙箱")
+    expect(t("zh-TW", "tools.modules.tool.ipython.description")).toContain("不是安全沙箱")
+    expect(t("en-US", "tools.modules.codeExecution")).toBe("Code execution")
+    expect(t("zh-CN", "tools.modules.defaultOff")).toBe("默认关闭")
     expect(t("zh-CN", "tools.modules.catalog.agent.metacognition.title")).toBe("元认知工具")
     expect(t("zh-CN", "tools.modules.catalog.network.web.title")).toBe("网络")
     expect(t("zh-CN", "tools.modules.catalog.media.visual-generation.title")).toBe("视觉生成")

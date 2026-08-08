@@ -7,7 +7,7 @@ import * as db from "#database/Sqlite.ts"
 import { Instance } from "#project/instance.ts"
 import { resolveTools } from "#session/core/resolve-tools.ts"
 import * as Session from "#session/core/session.ts"
-import { readOnlyToolsOnlyForSession } from "#tool/execution.ts"
+import { isToolGloballyEnabled, readOnlyToolsOnlyForSession } from "#tool/execution.ts"
 import * as ToolRegistry from "#tool/registry.ts"
 import * as Tool from "#tool/tool.ts"
 
@@ -36,6 +36,31 @@ describe("global built-in tool selection", () => {
     await Config.setToolSelection(Config.GLOBAL_CONFIG_ID, {})
   })
 
+  it("resolves explicit false before true and otherwise uses the tool default", () => {
+    const defaultOnTool = Tool.define("default-on", async () => ({
+      description: "Default-on test tool.",
+      parameters: z.object({}),
+      execute: async () => "ok",
+    }))
+    const defaultOffTool = Tool.define("default-off", async () => ({
+      description: "Default-off test tool.",
+      parameters: z.object({}),
+      execute: async () => "ok",
+    }), {
+      aliases: ["default-off-alias"],
+      defaultEnabled: false,
+    })
+
+    expect(isToolGloballyEnabled(defaultOnTool, {})).toBe(true)
+    expect(isToolGloballyEnabled(defaultOffTool, {})).toBe(false)
+    expect(isToolGloballyEnabled(defaultOffTool, { "default-off": true })).toBe(true)
+    expect(isToolGloballyEnabled(defaultOffTool, { "default-off-alias": true })).toBe(true)
+    expect(isToolGloballyEnabled(defaultOffTool, {
+      "default-off": true,
+      "default-off-alias": false,
+    })).toBe(false)
+  })
+
   it("exposes only provider-safe tool names to the model", async () => {
     await Instance.provide({
       directory: process.cwd(),
@@ -62,6 +87,7 @@ describe("global built-in tool selection", () => {
         expect(toolNames).toContain("read_file")
         expect(toolNames).toContain("multi_tool_use_parallel")
         expect(toolNames).toContain("exec")
+        expect(toolNames).not.toContain("ipython")
         expect(toolNames.some((name) => name.startsWith("planner_"))).toBe(false)
         for (const shellToolID of shellToolIDs) {
           expect(toolNames).toContain(shellToolID)
@@ -78,6 +104,18 @@ describe("global built-in tool selection", () => {
         expect(await ToolRegistry.get("exec_command")).toBeUndefined()
         expect(await ToolRegistry.get("bash")).toBeUndefined()
         expect(await ToolRegistry.get("exec-command")).toBeUndefined()
+      },
+    })
+  })
+
+  it("exposes the optional IPython tool only after an explicit global opt-in", async () => {
+    await Config.setToolSelection(Config.GLOBAL_CONFIG_ID, { ipython: true })
+
+    await Instance.provide({
+      directory: process.cwd(),
+      async fn() {
+        expect(await resolveAgentToolNames("default")).toContain("ipython")
+        expect(await resolveAgentToolNames("plan")).not.toContain("ipython")
       },
     })
   })

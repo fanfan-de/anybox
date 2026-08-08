@@ -95,6 +95,7 @@ export const ConnectorOAuthCredential = z
     clientSecretConfigKey: z.string().min(1).optional(),
     authorizationURL: z.string().min(1),
     tokenURL: z.string().min(1),
+    refreshURL: z.string().min(1).optional(),
     scopes: z.array(z.string().min(1)),
     revocationURL: z.string().min(1).optional(),
     tokenPlacement: ConnectorOAuthTokenPlacement.optional(),
@@ -102,6 +103,7 @@ export const ConnectorOAuthCredential = z
     tokenParams: z.record(z.string(), z.string()).optional(),
     tokenEndpointAuthMethod: z.enum(["none", "client_secret_post", "client_secret_basic"]).optional(),
     tokenRequestFormat: z.enum(["form", "json"]).optional(),
+    dialect: z.enum(["standard", "bilibili"]).optional(),
     description: z.string().optional(),
   })
   .strict()
@@ -842,12 +844,14 @@ async function oauthConfigForCredential(
     clientSecret,
     authorizationURL: credential.authorizationURL,
     tokenURL: credential.tokenURL,
+    refreshURL: credential.refreshURL,
     scopes: credential.scopes,
     revocationURL: credential.revocationURL,
     authorizationParams: credential.authorizationParams,
     tokenParams: credential.tokenParams,
     tokenEndpointAuthMethod: clientSecret ? credential.tokenEndpointAuthMethod ?? "client_secret_post" : credential.tokenEndpointAuthMethod,
     tokenRequestFormat: credential.tokenRequestFormat,
+    dialect: credential.dialect,
   }
 }
 

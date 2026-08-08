@@ -191,12 +191,14 @@ function normalizeBuiltinToolSelection(selection?: BuiltinToolSelection | null):
   }
 }
 
-function resolveBuiltinToolEnabled(tool: BuiltinToolSummary, selection: BuiltinToolSelection) {
+export function resolveBuiltinToolEnabled(tool: BuiltinToolSummary, selection: BuiltinToolSelection) {
   const explicitStates = [tool.id, ...tool.aliases]
     .map((name) => selection.tools[name])
     .filter((value): value is boolean => typeof value === "boolean")
 
-  return !explicitStates.includes(false)
+  if (explicitStates.includes(false)) return false
+  if (explicitStates.includes(true)) return true
+  return tool.defaultEnabled
 }
 
 function applyBuiltinToolSelection(

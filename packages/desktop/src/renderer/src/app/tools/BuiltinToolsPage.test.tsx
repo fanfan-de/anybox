@@ -76,6 +76,7 @@ const builtinTools: BuiltinToolSummary[] = [
       needsShell: true,
     },
     moduleID: "workspace.shell",
+    defaultEnabled: true,
     enabled: true,
   },
   {
@@ -90,6 +91,7 @@ const builtinTools: BuiltinToolSummary[] = [
       concurrency: "safe",
     },
     moduleID: "workspace.file-io",
+    defaultEnabled: true,
     enabled: false,
   },
   {
@@ -104,6 +106,7 @@ const builtinTools: BuiltinToolSummary[] = [
       concurrency: "exclusive",
     },
     moduleID: "workspace.file-io",
+    defaultEnabled: true,
     enabled: false,
   },
   {
@@ -126,6 +129,7 @@ const builtinTools: BuiltinToolSummary[] = [
       destructive: false,
     },
     moduleID: "runtime.progressive-disclosure",
+    defaultEnabled: true,
     enabled: true,
   },
 ]
@@ -195,6 +199,7 @@ function createTool(
       destructive: kind === "write" || kind === "exec",
     },
     moduleID,
+    defaultEnabled: true,
     enabled,
   }
 }
@@ -284,6 +289,7 @@ describe("BuiltinToolsPage", () => {
     expect(screen.getByText("Activation: Always available")).toBeInTheDocument()
     expect(screen.getByText("Global scope")).toBeInTheDocument()
     expect(screen.getByText("Git Bash")).toBeInTheDocument()
+    expect(screen.getByText("Code execution")).toBeInTheDocument()
     expect(screen.getByText("Shell access")).toBeInTheDocument()
     expect(props.container.querySelector("[class*='settings-']")).toBeNull()
 
@@ -370,6 +376,54 @@ describe("BuiltinToolsPage", () => {
     expect(labels).toEqual(["LSP Tools", "Shell"])
     expect(screen.getByText("Code Probe")).toBeInTheDocument()
     expect(screen.queryByText("Execution Probe")).not.toBeInTheDocument()
+  })
+
+  it("shows native IPython as a default-off, high-risk, non-sandboxed code tool", () => {
+    const props = renderBuiltinToolsPage({
+      builtinToolModules: [createModule(
+        "runtime.python",
+        "Backend Python Runtime",
+        "Backend Python description.",
+        ["ipython"],
+      )],
+      builtinTools: [{
+        id: "ipython",
+        title: "Backend IPython",
+        description: "Backend IPython description.",
+        aliases: [],
+        capabilities: {
+          kind: "exec",
+          readOnly: false,
+          destructive: false,
+          concurrency: "exclusive",
+        },
+        moduleID: "runtime.python",
+        defaultEnabled: false,
+        enabled: false,
+      }],
+      onDemandToolModules: [],
+      onDemandTools: [],
+    }, "zh-CN")
+
+    expect(screen.getByRole("button", {
+      name: "Python 模块，已启用 0/1 个工具",
+    })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Python" })).toBeInTheDocument()
+    expect(screen.getByText("在托管的本地内核中运行持久化 Python 和 IPython 代码。")).toBeInTheDocument()
+    expect(screen.getByText("IPython")).toBeInTheDocument()
+    expect(screen.getByText("代码执行")).toBeInTheDocument()
+    expect(screen.getByText("高风险")).toBeInTheDocument()
+    expect(screen.getByText("默认关闭")).toBeInTheDocument()
+
+    const toolSwitch = screen.getByRole("switch", { name: "IPython" })
+    expect(toolSwitch).toHaveAttribute("aria-checked", "false")
+    fireEvent.click(toolSwitch)
+    expect(props.onBuiltinToolToggle).toHaveBeenCalledWith("ipython", true)
+
+    fireEvent.click(screen.getByRole("button", { name: "显示 IPython 的详情" }))
+    expect(screen.getByText(
+      "在持久化本地内核中以当前用户权限运行 Python 和 IPython 代码。该运行环境不是安全沙箱。",
+    )).toBeInTheDocument()
   })
 
   it("disables Module and tool switches while changes are being saved", () => {
