@@ -55,7 +55,7 @@ description: 构建、说明、迁移、评审或验证 Anybox 插件包及其 .
 - 桌面开发版与正式版默认共享仓库内稳定的 `.catalog/anybox-plugin-registry.json`，且默认不扫描本地仓库源码包；只有显式设置 `ANYBOX_PLUGIN_INCLUDE_SOURCE_PACKAGES=1` 才进入源码插件开发模式。插件目录不跟随桌面版本，所有 Registry 和版本化 ZIP 都在本地生成、验证后作为普通 Git 文件提交；不得依赖 GitHub Actions、Release 或 API。
 - 除非确实希望阻止安装，否则不要把风险标记为 `critical`。
 - 迁移或验证期间保留用户文件和工作区中的无关改动。
-- OAuth Credential 的实时字段包括 `refreshURL`、`tokenRequestFormat` 和可选 `dialect`；使用非标准方言前必须核对 Provider 官方文档并补覆盖授权码交换与刷新行为的测试。
+- OAuth Credential 的实时字段包括 `refreshURL`、`tokenRequestFormat` 和可选 `dialect`；当前方言为 `standard`、`bilibili` 和 `tiktok`。使用非标准方言前必须核对 Provider 官方文档并补覆盖授权码交换与刷新行为的测试。
 
 ## 输出评审结果
 

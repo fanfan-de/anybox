@@ -1710,6 +1710,7 @@ describe("stream trace reducer", () => {
           id: "tool-question",
           type: "tool",
           tool: "AskUserQuestion",
+          time: { start: 100 },
           state: {
             status: "completed",
             metadata: {
@@ -1734,6 +1735,7 @@ describe("stream trace reducer", () => {
           id: "tool-question",
           type: "tool",
           tool: "AskUserQuestion",
+          time: { start: 100 },
           state: {
             status: "completed",
             output: "Question answered.",
@@ -1761,6 +1763,7 @@ describe("stream trace reducer", () => {
       id: "tool-question",
       sourceID: "tool-question",
       kind: "question",
+      timestamp: 100,
       questionPrompt: {
         questionID: "que_target",
         question: "Where should I deploy?",

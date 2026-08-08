@@ -251,12 +251,21 @@ registration, description
 
 `tokenRequestFormat` 支持 `form` 和 `json`，默认使用 `form`。如果刷新 Token 使用独立端点，使用 `refreshURL`；省略时继续使用 `tokenURL`。
 
-`dialect` 默认是 `standard`，当前还支持 `bilibili`。Bilibili 方言会：
+`dialect` 默认是 `standard`，当前还支持 `bilibili` 和 `tiktok`。Bilibili 方言会：
 
 - 在授权 URL 中使用 `gourl`，不添加标准 PKCE、`redirect_uri` 和 `scope` 参数；
 - 在授权码交换时不发送 `redirect_uri` 与 `code_verifier`；
 - 接受 Token 响应中的 `scopes` 数组；
 - 把 Token 响应中的 `expires_in` 解释为绝对 Unix 秒时间戳。
+
+TikTok Desktop 方言会：
+
+- 在授权 URL 和 Token 请求中使用 `client_key`，而不是 `client_id`；
+- 使用逗号连接授权 URL 中的 scope；
+- 按 TikTok Desktop Login Kit 要求，用 SHA-256 十六进制字符串生成 PKCE challenge；
+- 在授权码交换中发送 `redirect_uri` 和 `code_verifier`；
+- 在授权码交换、刷新和撤销请求中以表单字段发送 `client_key` 与 `client_secret`；
+- 把 Token 响应中逗号分隔的 scope 规范化为空格分隔后保存和校验。
 
 只在 Provider 的当前官方文档明确要求这些行为时使用非标准方言。
 

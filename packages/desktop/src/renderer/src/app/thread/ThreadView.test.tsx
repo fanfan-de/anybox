@@ -4367,34 +4367,26 @@ describe("ThreadView execution disclosure", () => {
     )).toBe("auto")
   })
 
-  it("keeps a running process visible until response streaming starts, then atomically collapses it", async () => {
+  it("keeps a running response visible and atomically collapses the process only after completion", async () => {
     const running = executionFixture("running")
-    const processOnlyAssistant = {
-      ...running.assistant,
-      items: running.assistant.items.filter((item) => item.kind !== "text"),
-    }
-    const processOnlyTurn = {
-      ...running.turn,
-      messages: [running.user, processOnlyAssistant],
-    }
-    const { props, rerender } = renderThread(
-      [running.user, processOnlyAssistant],
-      { activeTurns: [processOnlyTurn] },
-    )
+    const { props, rerender } = renderThread(running.activeMessages, { activeTurns: [running.turn] })
 
     expect(screen.queryByRole("button", { name: /processing details/i })).toBeNull()
     expect(screen.getByText("read-thread-view")).toBeInTheDocument()
+    expect(screen.getByText("The implementation is ready.")).toBeInTheDocument()
+
+    const completed = executionFixture("completed")
 
     rerender(
       <ThreadView
         {...props}
-        activeMessages={running.activeMessages}
-        activeTurns={[running.turn]}
+        activeMessages={completed.activeMessages}
+        activeTurns={[completed.turn]}
       />,
     )
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Expand processing details: Processing/ })).toHaveAttribute(
+      expect(screen.getByRole("button", { name: /Expand processing details: Processed/ })).toHaveAttribute(
         "aria-expanded",
         "false",
       )
@@ -4511,15 +4503,7 @@ describe("ThreadView execution disclosure", () => {
 
   it("moves focus from a disappearing process row to the execution summary", async () => {
     const running = executionFixture("running")
-    const processOnlyAssistant = {
-      ...running.assistant,
-      items: running.assistant.items.filter((item) => item.kind !== "text"),
-    }
-    const processOnlyTurn = { ...running.turn, messages: [running.user, processOnlyAssistant] }
-    const { props, rerender } = renderThread(
-      [running.user, processOnlyAssistant],
-      { activeTurns: [processOnlyTurn] },
-    )
+    const { props, rerender } = renderThread(running.activeMessages, { activeTurns: [running.turn] })
     const reasoningToggle = screen.getByText("Inspect the existing renderer structure.").closest<HTMLElement>(
       '[role="button"]',
     )
@@ -4527,30 +4511,23 @@ describe("ThreadView execution disclosure", () => {
     reasoningToggle!.focus()
     expect(document.activeElement).toBe(reasoningToggle)
 
+    const completed = executionFixture("completed")
     rerender(
       <ThreadView
         {...props}
-        activeMessages={running.activeMessages}
-        activeTurns={[running.turn]}
+        activeMessages={completed.activeMessages}
+        activeTurns={[completed.turn]}
       />,
     )
 
-    const summary = await screen.findByRole("button", { name: /Expand processing details: Processing/ })
+    const summary = await screen.findByRole("button", { name: /Expand processing details: Processed/ })
     await waitFor(() => expect(summary).toHaveFocus())
     expect(screen.queryByText("Inspect the existing renderer structure.")).toBeNull()
   })
 
   it("clears a text selection only when it intersects disappearing process rows", async () => {
     const running = executionFixture("running")
-    const processOnlyAssistant = {
-      ...running.assistant,
-      items: running.assistant.items.filter((item) => item.kind !== "text"),
-    }
-    const processOnlyTurn = { ...running.turn, messages: [running.user, processOnlyAssistant] }
-    const { props, rerender } = renderThread(
-      [running.user, processOnlyAssistant],
-      { activeTurns: [processOnlyTurn] },
-    )
+    const { props, rerender } = renderThread(running.activeMessages, { activeTurns: [running.turn] })
     const processText = screen.getByText("Inspect the existing renderer structure.")
     const selection = window.getSelection()
     const processRange = document.createRange()
@@ -4559,26 +4536,27 @@ describe("ThreadView execution disclosure", () => {
     selection?.addRange(processRange)
     expect(selection?.rangeCount).toBe(1)
 
+    const completed = executionFixture("completed")
     rerender(
       <ThreadView
         {...props}
-        activeMessages={running.activeMessages}
-        activeTurns={[running.turn]}
+        activeMessages={completed.activeMessages}
+        activeTurns={[completed.turn]}
       />,
     )
 
     await waitFor(() => expect(selection?.rangeCount).toBe(0))
 
-    fireEvent.click(screen.getByRole("button", { name: /Expand processing details: Processing/ }))
+    fireEvent.click(screen.getByRole("button", { name: /Expand processing details: Processed/ }))
     const survivingResponse = screen.getByText("The implementation is ready.")
     const responseRange = document.createRange()
     responseRange.selectNodeContents(survivingResponse)
     selection?.addRange(responseRange)
     expect(selection?.rangeCount).toBe(1)
 
-    fireEvent.click(screen.getByRole("button", { name: /Collapse processing details: Processing/ }))
+    fireEvent.click(screen.getByRole("button", { name: /Collapse processing details: Processed/ }))
     await waitFor(() => expect(
-      screen.getByRole("button", { name: /Expand processing details: Processing/ }),
+      screen.getByRole("button", { name: /Expand processing details: Processed/ }),
     ).toBeInTheDocument())
     expect(selection?.rangeCount).toBe(1)
     expect(selection?.toString()).toBe("The implementation is ready.")

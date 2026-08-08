@@ -12980,7 +12980,7 @@ describe("App", () => {
     expect(screen.queryByText("Preparing...")).not.toBeInTheDocument()
   })
 
-  it("keeps a subscription-first multi-segment turn under one processing summary", async () => {
+  it("keeps a subscription-first multi-segment turn visible until completion, then uses one processing summary", async () => {
     let streamListener: DesktopAgentSessionEventListener | undefined
     let releaseStream: (() => void) | undefined
     let activeStreamID = ""
@@ -13089,9 +13089,8 @@ describe("App", () => {
     })
 
     await waitFor(() => {
-      const summaries = executionSummaries()
-      expect(summaries).toHaveLength(1)
-      expect(summaries[0]).toHaveAttribute("data-thread-execution-group-id", "turn:turn-one")
+      expect(executionSummaries()).toHaveLength(0)
+      expect(screen.getByText(firstReasoning.trim())).toBeInTheDocument()
     })
 
     act(() => {
@@ -13130,10 +13129,44 @@ describe("App", () => {
     })
 
     await waitFor(() => {
-      expect(executionSummaries()).toHaveLength(1)
+      expect(executionSummaries()).toHaveLength(0)
       expect(screen.getByText(firstReasoning.trim())).toBeInTheDocument()
       expect(screen.getByText(secondReasoning.trim())).toBeInTheDocument()
     })
+
+    act(() => {
+      streamListener?.(createRequestStreamEvent({
+        backendSessionID: activeSessionID,
+        clientTurnID: activeStreamID,
+        id: "105:turn-one:6",
+        event: "runtime",
+        data: {
+          eventID: "event-turn-completed",
+          sessionID: activeSessionID,
+          turnID: "turn-one",
+          seq: 6,
+          timestamp: 105,
+          type: "turn.completed",
+          payload: {
+            status: "completed",
+            finishReason: "stop",
+            parts: [{ id: "response-final", type: "text", text: "Multi-segment complete." }],
+          },
+        },
+      }))
+    })
+
+    const summary = await waitFor(() => {
+      const summaries = executionSummaries()
+      expect(summaries).toHaveLength(1)
+      expect(summaries[0]).toHaveAttribute("data-thread-execution-group-id", "turn:turn-one")
+      return summaries[0]!
+    })
+    expect(summary).toHaveAttribute("aria-expanded", "false")
+    expect(screen.getByText("Multi-segment complete.")).toBeInTheDocument()
+    fireEvent.click(summary)
+    expect(screen.getByText(firstReasoning.trim())).toBeInTheDocument()
+    expect(screen.getByText(secondReasoning.trim())).toBeInTheDocument()
 
     await act(async () => {
       releaseStream?.()

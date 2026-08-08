@@ -806,7 +806,8 @@ function deriveGroup(
   const ownerMessage = finalMessage ?? candidate.assistantMessages.at(-1)!
   const firstGroupRow = groupRows[0]
   const messageIndex = messageIndexByID.get(ownerMessage.id) ?? firstGroupRow?.messageIndex ?? 0
-  const autoCollapseReady = !finalResolution.authoritativeMetadataPending &&
+  const autoCollapseReady = candidate.status === "completed" &&
+    !finalResolution.authoritativeMetadataPending &&
     Boolean(finalResolution.responseBlock)
 
   return {

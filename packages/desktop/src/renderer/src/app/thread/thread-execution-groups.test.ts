@@ -782,7 +782,7 @@ describe("thread execution groups", () => {
     }).some((row) => row.kind === "assistant-execution-summary")).toBe(false)
   })
 
-  it("makes a running process collapsible as soon as response streaming starts", () => {
+  it("keeps a running process visible after response streaming starts", () => {
     const message = assistantMessage("assistant-streaming-response", [
       reasoningItem("reasoning-streaming-1", "Inspecting the implementation."),
       traceItem("tool-streaming", "tool", {
@@ -805,16 +805,16 @@ describe("thread execution groups", () => {
       rows,
     ).groups[0]!
 
-    expect(group.autoCollapseReady).toBe(true)
-    expect(resolveExecutionGroupExpanded(group, "auto")).toBe(false)
+    expect(group.autoCollapseReady).toBe(false)
+    expect(resolveExecutionGroupExpanded(group, "auto")).toBe(true)
     expect(projectThreadDisplayRowsWithExecutionGroups({
       groups: [group],
       rows,
-    }).map((row) => row.kind)).toContain("assistant-execution-summary")
+    }).map((row) => row.kind)).not.toContain("assistant-execution-summary")
     expect(projectThreadDisplayRowsWithExecutionGroups({
       groups: [group],
       rows,
-    }).some((row) => row.rowID === rowIDForItem(rows, "tool-streaming"))).toBe(false)
+    }).some((row) => row.rowID === rowIDForItem(rows, "tool-streaming"))).toBe(true)
   })
 
   it("keeps the last failure outside when a completed turn has no resolved final response", () => {
@@ -840,7 +840,7 @@ describe("thread execution groups", () => {
     expect(resolveExecutionGroupExpanded(group, "auto")).toBe(true)
   })
 
-  it("keeps the terminal failure visible while folding earlier process rows once an abnormal turn has a response", () => {
+  it("keeps an abnormal turn visible even when it contains response text", () => {
     const message = assistantMessage("assistant-failed-with-response", [
       reasoningItem("reasoning-failed-with-response", "Trying the operation."),
       traceItem("terminal-failure-before-response", "tool", {
@@ -862,12 +862,16 @@ describe("thread execution groups", () => {
 
     expect(group.outcomeRowIDs).toContain(failureRowID)
     expect(group.prefixRowIDs).not.toContain(failureRowID)
-    expect(group.autoCollapseReady).toBe(true)
-    expect(resolveExecutionGroupExpanded(group, "auto")).toBe(false)
+    expect(group.autoCollapseReady).toBe(false)
+    expect(resolveExecutionGroupExpanded(group, "auto")).toBe(true)
     expect(projectThreadDisplayRowsWithExecutionGroups({
       groups: [group],
       rows,
     }).some((row) => row.rowID === failureRowID)).toBe(true)
+    expect(projectThreadDisplayRowsWithExecutionGroups({
+      groups: [group],
+      rows,
+    }).some((row) => row.kind === "assistant-execution-summary")).toBe(false)
   })
 
   it.each<ThreadTurnStatus>([

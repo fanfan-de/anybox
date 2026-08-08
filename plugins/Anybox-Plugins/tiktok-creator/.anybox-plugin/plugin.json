@@ -1,0 +1,207 @@
+{
+  "name": "tiktok-creator",
+  "version": "0.1.0",
+  "description": "TikTok creator connector for Display API insights, draft uploads, and guarded Content Posting workflows.",
+  "author": {
+    "name": "Anybox"
+  },
+  "homepage": "https://developers.tiktok.com/",
+  "repository": "https://github.com/fanfan-de/anybox",
+  "license": "MIT",
+  "keywords": [
+    "tiktok",
+    "creator",
+    "video",
+    "display-api",
+    "content-posting",
+    "mcp"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "TikTok Creator",
+      "zh-CN": "TikTok 创作助手"
+    },
+    "shortDescription": {
+      "en-US": "Inspect public videos and run guarded posting workflows",
+      "zh-CN": "查看公开视频并执行受保护的投稿流程"
+    },
+    "longDescription": {
+      "en-US": "Connect TikTok Desktop Login Kit to read the authorized profile and public videos, summarize bounded public engagement counts, upload local videos as inbox drafts, or run Direct Post after refreshing creator constraints and obtaining explicit confirmation.",
+      "zh-CN": "通过 TikTok Desktop Login Kit 连接账号，读取资料和公开视频、汇总有限范围内的公开互动数据、将本地视频上传到收件箱草稿，或在刷新创作者约束并获得明确确认后执行 Direct Post。"
+    },
+    "developerName": "Anybox",
+    "category": "Automation",
+    "capabilities": [
+      "OAuth",
+      "Display API",
+      "Draft Upload",
+      "Direct Post"
+    ],
+    "websiteURL": "https://developers.tiktok.com/products/content-posting-api",
+    "privacyPolicyURL": "https://www.tiktok.com/legal/page/row/privacy-policy/en",
+    "termsOfServiceURL": "https://www.tiktok.com/legal/page/global/tiktok-developer-terms-of-service/en",
+    "defaultPrompt": [
+      "汇总我的 TikTok 资料和最近公开视频表现",
+      "把这个本地视频上传为 TikTok 草稿",
+      "读取当前 TikTok 发布选项并准备一次 Direct Post"
+    ],
+    "brandColor": "#111111",
+    "logo": "TT",
+    "screenshots": []
+  },
+  "skills": "./skills/",
+  "connectors": [
+    {
+      "id": "creator",
+      "name": "TikTok Creator",
+      "description": "Local MCP connector for TikTok Display API and Content Posting API.",
+      "risk": "high",
+      "permissions": [
+        "Stores the TikTok client secret and OAuth session in Anybox credential storage.",
+        "Reads the connected TikTok profile, public videos, public engagement counts, and current creator posting constraints.",
+        "Uploads user-selected local video files to TikTok only after an explicit confirmed tool call.",
+        "Can create a TikTok inbox draft that still requires the creator to open TikTok and complete editing and posting.",
+        "Can initiate Direct Post only after refreshing creator identity and constraints and receiving confirm=true for the exact payload.",
+        "Can request cancellation of one exact in-flight publishing task only when the destructive tool receives confirm=true.",
+        "Does not provide modification or deletion of already-published TikTok videos because the selected official APIs do not expose those operations."
+      ],
+      "configFields": [
+        {
+          "key": "TIKTOK_CLIENT_KEY",
+          "label": "TikTok Client Key",
+          "type": "text",
+          "required": true,
+          "placeholder": "TikTok for Developers client key",
+          "description": "Client key for an app configured with Login Kit for Desktop, Display API, and Content Posting API."
+        },
+        {
+          "key": "TIKTOK_CLIENT_SECRET",
+          "label": "TikTok Client Secret",
+          "type": "password",
+          "required": true,
+          "secret": true,
+          "placeholder": "TikTok for Developers client secret",
+          "description": "Client secret used for TikTok OAuth code exchange, refresh, and revocation."
+        }
+      ],
+      "credential": {
+        "kind": "oauth",
+        "label": "TikTok Desktop OAuth",
+        "clientID": "${TIKTOK_CLIENT_KEY}",
+        "clientSecret": "${TIKTOK_CLIENT_SECRET}",
+        "authorizationURL": "https://www.tiktok.com/v2/auth/authorize/",
+        "tokenURL": "https://open.tiktokapis.com/v2/oauth/token/",
+        "refreshURL": "https://open.tiktokapis.com/v2/oauth/token/",
+        "revocationURL": "https://open.tiktokapis.com/v2/oauth/revoke/",
+        "scopes": [
+          "user.info.basic",
+          "user.info.profile",
+          "user.info.stats",
+          "video.list",
+          "video.upload",
+          "video.publish"
+        ],
+        "tokenEndpointAuthMethod": "client_secret_post",
+        "tokenRequestFormat": "form",
+        "dialect": "tiktok",
+        "tokenPlacement": {
+          "type": "authorization_bearer"
+        },
+        "description": "Uses TikTok Desktop Login Kit client_key parameters, comma-separated scopes, and SHA-256 hex PKCE."
+      },
+      "runtime": {
+        "transport": "stdio",
+        "command": "node",
+        "args": [
+          "${PLUGIN_ROOT}/connectors/tiktok/server.js"
+        ],
+        "cwd": "${PLUGIN_ROOT}",
+        "env": {
+          "TIKTOK_ACCESS_TOKEN": "${OAUTH_ACCESS_TOKEN}"
+        },
+        "timeoutMs": 1800000
+      },
+      "tools": [
+        {
+          "name": "tiktok_test_auth",
+          "title": "Test TikTok Auth",
+          "description": "Validate OAuth access and identify the connected TikTok account.",
+          "readOnly": true
+        },
+        {
+          "name": "tiktok_profile_get",
+          "title": "Get TikTok Profile",
+          "description": "Read profile identity and available engagement statistics.",
+          "readOnly": true
+        },
+        {
+          "name": "tiktok_dashboard_summary",
+          "title": "Summarize TikTok Dashboard",
+          "description": "Combine profile statistics with bounded totals for recently listed public videos.",
+          "readOnly": true
+        },
+        {
+          "name": "tiktok_video_list",
+          "title": "List TikTok Videos",
+          "description": "List public videos with Display API metadata and counts.",
+          "readOnly": true
+        },
+        {
+          "name": "tiktok_video_query",
+          "title": "Query TikTok Videos",
+          "description": "Read public metadata and counts for up to 20 exact video IDs.",
+          "readOnly": true
+        },
+        {
+          "name": "tiktok_creator_info",
+          "title": "Get TikTok Posting Identity",
+          "description": "Fetch the current creator identity, privacy choices, disabled interactions, and duration limit.",
+          "readOnly": true
+        },
+        {
+          "name": "tiktok_video_upload_draft",
+          "title": "Upload TikTok Draft",
+          "description": "Upload a confirmed local video to the creator's TikTok inbox for later editing and posting.",
+          "readOnly": false,
+          "destructive": false
+        },
+        {
+          "name": "tiktok_video_direct_post",
+          "title": "Post TikTok Video",
+          "description": "Refresh creator constraints and directly post a confirmed local video.",
+          "readOnly": false,
+          "destructive": false
+        },
+        {
+          "name": "tiktok_publish_status",
+          "title": "Get TikTok Publish Status",
+          "description": "Fetch processing, inbox, publication, moderation, or failure status for one publish ID.",
+          "readOnly": true
+        },
+        {
+          "name": "tiktok_publish_cancel",
+          "title": "Cancel TikTok Publish Task",
+          "description": "Request cancellation of one exact in-flight task after explicit confirmation.",
+          "readOnly": false,
+          "destructive": true
+        }
+      ],
+      "installReview": [
+        "Configure Login Kit for Desktop and register http://localhost:1455/auth/callback as a static redirect URI.",
+        "Add Display API and Content Posting API to the TikTok developer app, then request user.info.basic, user.info.profile, user.info.stats, video.list, video.upload, and video.publish.",
+        "TikTok scopes and production products require developer-app approval; each connected user must also grant the requested scopes.",
+        "Unaudited Direct Post clients are restricted to private accounts and SELF_ONLY visibility and remain subject to user, creator, and posting caps.",
+        "Direct Post requires the current creator identity, editable caption and settings, explicit consent, upload feedback, and publish-status feedback; the bundled Skill enforces that workflow.",
+        "Draft upload delivers an inbox notification; the creator must enter TikTok to review, edit, and complete the post.",
+        "The plugin does not claim support for editing or deleting already-published TikTok videos."
+      ]
+    }
+  ],
+  "skillPreviews": [
+    {
+      "name": "tiktok-creator",
+      "description": "Use TikTok Display and Content Posting tools with current creator checks, editable metadata, explicit consent, and status tracking.",
+      "directory": "tiktok-creator"
+    }
+  ]
+}

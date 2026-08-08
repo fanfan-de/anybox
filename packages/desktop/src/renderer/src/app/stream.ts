@@ -1512,6 +1512,7 @@ function buildTraceItemFromPart(
         title: questionPrompt.header || "Question for you",
         text: questionPrompt.question,
         detail: createAskUserQuestionTraceDetail(questionPrompt),
+        timestamp: timestamp ?? undefined,
         status,
         section: "response",
         visibilityKey: "response",

@@ -157,7 +157,7 @@ export type ProviderRuntimeAuthOptions = {
 
 export type GenericOAuthTokenEndpointAuthMethod = "none" | "client_secret_post" | "client_secret_basic"
 export type GenericOAuthTokenRequestFormat = "form" | "json"
-export type GenericOAuthProviderDialect = "standard" | "bilibili"
+export type GenericOAuthProviderDialect = "standard" | "bilibili" | "tiktok"
 
 export type GenericOAuthDynamicClientRegistrationConfig = {
   registrationURL: string
@@ -1623,6 +1623,15 @@ function applyGenericOAuthClientAuthentication(input: {
   headers: Record<string, string>
   oauth: GenericOAuthProviderConfig & { clientID: string }
 }) {
+  if (input.oauth.dialect === "tiktok") {
+    if (!input.oauth.clientSecret) {
+      throw new Error("TikTok OAuth token endpoints require a client secret.")
+    }
+    input.setBodyParam("client_key", input.oauth.clientID)
+    input.setBodyParam("client_secret", input.oauth.clientSecret)
+    return
+  }
+
   const method = input.oauth.tokenEndpointAuthMethod ?? (input.oauth.clientSecret ? "client_secret_basic" : "none")
 
   if (method === "client_secret_basic") {
@@ -1649,7 +1658,7 @@ function buildGenericOAuthAuthorizeURL(input: {
   state: string
 }) {
   const url = new URL(input.oauth.authorizationURL)
-  url.searchParams.set("client_id", input.oauth.clientID)
+  url.searchParams.set(input.oauth.dialect === "tiktok" ? "client_key" : "client_id", input.oauth.clientID)
   url.searchParams.set("state", input.state)
 
   if (input.oauth.dialect === "bilibili") {
@@ -1657,7 +1666,7 @@ function buildGenericOAuthAuthorizeURL(input: {
   } else {
     url.searchParams.set("response_type", "code")
     url.searchParams.set("redirect_uri", input.redirectURI)
-    url.searchParams.set("scope", input.oauth.scopes.join(" "))
+    url.searchParams.set("scope", input.oauth.scopes.join(input.oauth.dialect === "tiktok" ? "," : " "))
     url.searchParams.set("code_challenge", input.codeChallenge)
     url.searchParams.set("code_challenge_method", "S256")
   }
@@ -1749,8 +1758,8 @@ function readGenericOAuthTokenAccount(
   const jwtPayload = idToken ? decodeJwtPayload(idToken) : undefined
   const subject = normalizeString(jwtPayload?.sub) ?? fallback?.userID ?? fallback?.accountID
   return {
-    accountID: normalizeString(payload.account_id) ?? subject,
-    userID: normalizeString(payload.user_id) ?? subject,
+    accountID: normalizeString(payload.account_id) ?? normalizeString(payload.open_id) ?? subject,
+    userID: normalizeString(payload.user_id) ?? normalizeString(payload.open_id) ?? subject,
     email: normalizeString(jwtPayload?.email) ?? normalizeString(payload.email) ?? fallback?.email,
   }
 }
@@ -1759,9 +1768,17 @@ function parseOAuthScopeSet(scope?: string) {
   return new Set((scope ?? "").split(/\s+/).map((item) => item.trim()).filter(Boolean))
 }
 
-function readGenericOAuthScope(payload: Record<string, unknown>, fallback?: string) {
+function readGenericOAuthScope(
+  payload: Record<string, unknown>,
+  fallback?: string,
+  oauth?: GenericOAuthProviderConfig,
+) {
   const scope = normalizeString(payload.scope)
-  if (scope) return scope
+  if (scope) {
+    return oauth?.dialect === "tiktok"
+      ? scope.split(",").map((item) => item.trim()).filter(Boolean).join(" ")
+      : scope
+  }
 
   if (Array.isArray(payload.scopes)) {
     const scopes = payload.scopes.map(normalizeString).filter((item): item is string => Boolean(item))
@@ -1812,7 +1829,7 @@ function buildGenericOAuthCredential(
   const refreshToken = normalizeString(payload.refresh_token) ?? fallback?.refreshToken ?? ""
   const idToken = normalizeString(payload.id_token) ?? fallback?.idToken
   const account = readGenericOAuthTokenAccount(payload, idToken, fallback)
-  const scope = readGenericOAuthScope(payload, fallback?.scope)
+  const scope = readGenericOAuthScope(payload, fallback?.scope, oauth)
 
   if (!accessToken) {
     throw new Error("OAuth token response did not include an access token.")
@@ -2074,10 +2091,13 @@ export async function startGenericOAuthFlow(input: ProviderFlowContext & {
     oauth: input.oauth,
     redirectURI,
   })
+  const providerCodeChallenge = oauth.dialect === "tiktok"
+    ? createHash("sha256").update(codeVerifier).digest("hex")
+    : codeChallenge
   const authorizationURL = buildGenericOAuthAuthorizeURL({
     oauth,
     redirectURI,
-    codeChallenge,
+    codeChallenge: providerCodeChallenge,
     state,
   })
   const label = oauth.label ?? input.method

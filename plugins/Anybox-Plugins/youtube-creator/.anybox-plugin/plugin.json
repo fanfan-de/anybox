@@ -1,0 +1,218 @@
+{
+  "name": "youtube-creator",
+  "version": "0.1.0",
+  "description": "YouTube creator connector for channel metrics, video management, and YouTube Analytics reports.",
+  "author": {
+    "name": "Anybox"
+  },
+  "homepage": "https://developers.google.com/youtube",
+  "repository": "https://github.com/fanfan-de/anybox",
+  "license": "MIT",
+  "keywords": [
+    "youtube",
+    "creator",
+    "video",
+    "analytics",
+    "publishing",
+    "mcp"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "YouTube Creator",
+      "zh-CN": "YouTube 创作助手"
+    },
+    "shortDescription": {
+      "en-US": "Manage videos and inspect channel analytics",
+      "zh-CN": "管理视频并查看频道运营数据"
+    },
+    "longDescription": {
+      "en-US": "Connect a Google OAuth application to inspect an authorized YouTube channel, list and manage videos, upload local media with the resumable protocol, and query watch time, traffic sources, audience demographics, and optional revenue metrics.",
+      "zh-CN": "通过 Google OAuth 连接已授权的 YouTube 频道，读取频道与视频数据、使用可续传协议上传本地视频、修改或删除视频，并查询观看时长、流量来源、观众画像和可选收益指标。"
+    },
+    "developerName": "Anybox",
+    "category": "Automation",
+    "capabilities": [
+      "OAuth",
+      "Channel Analytics",
+      "Video Management",
+      "Resumable Uploads"
+    ],
+    "websiteURL": "https://developers.google.com/youtube",
+    "privacyPolicyURL": "https://policies.google.com/privacy",
+    "termsOfServiceURL": "https://developers.google.com/youtube/terms/api-services-terms-of-service",
+    "defaultPrompt": [
+      "汇总我的 YouTube 频道数据和最近视频表现",
+      "分析最近 28 天的观看时长和流量来源",
+      "把这个本地视频以私密状态上传到 YouTube"
+    ],
+    "brandColor": "#FF0033",
+    "logo": "YT",
+    "screenshots": []
+  },
+  "skills": "./skills/",
+  "connectors": [
+    {
+      "id": "creator",
+      "name": "YouTube Creator",
+      "description": "Local MCP connector for an authorized YouTube channel and its Analytics reports.",
+      "risk": "high",
+      "permissions": [
+        "Stores the Google OAuth client secret and OAuth session in Anybox credential storage.",
+        "Reads the authorized YouTube channel, video metadata, statistics, watch-time reports, traffic sources, audience demographics, and available revenue reports.",
+        "Uploads user-selected local video files to YouTube only after an explicit confirmed tool call.",
+        "Can update video metadata and privacy settings only after an explicit confirmed tool call.",
+        "Can permanently delete one exact YouTube video only when the destructive tool receives confirm=true.",
+        "Sends requests only to configured Google YouTube Data API, upload, Analytics, OAuth, and revocation endpoints."
+      ],
+      "configFields": [
+        {
+          "key": "YOUTUBE_CLIENT_ID",
+          "label": "Google OAuth Client ID",
+          "type": "text",
+          "required": true,
+          "placeholder": "OAuth 2.0 client ID",
+          "description": "Client ID for a Google OAuth application with YouTube Data API v3 and YouTube Analytics API enabled."
+        },
+        {
+          "key": "YOUTUBE_CLIENT_SECRET",
+          "label": "Google OAuth Client Secret",
+          "type": "password",
+          "required": true,
+          "secret": true,
+          "placeholder": "OAuth 2.0 client secret",
+          "description": "Client secret for the Google OAuth application; it is stored in Anybox credential storage."
+        }
+      ],
+      "credential": {
+        "kind": "oauth",
+        "label": "Google YouTube OAuth",
+        "clientID": "${YOUTUBE_CLIENT_ID}",
+        "clientSecret": "${YOUTUBE_CLIENT_SECRET}",
+        "authorizationURL": "https://accounts.google.com/o/oauth2/v2/auth",
+        "tokenURL": "https://oauth2.googleapis.com/token",
+        "revocationURL": "https://oauth2.googleapis.com/revoke",
+        "scopes": [
+          "https://www.googleapis.com/auth/youtube.force-ssl",
+          "https://www.googleapis.com/auth/yt-analytics.readonly",
+          "https://www.googleapis.com/auth/yt-analytics-monetary.readonly"
+        ],
+        "authorizationParams": {
+          "access_type": "offline",
+          "prompt": "consent",
+          "include_granted_scopes": "true"
+        },
+        "tokenEndpointAuthMethod": "client_secret_post",
+        "tokenRequestFormat": "form",
+        "dialect": "standard",
+        "tokenPlacement": {
+          "type": "authorization_bearer"
+        },
+        "description": "Requests video-management, analytics, and monetary-report scopes for the complete initial tool set."
+      },
+      "runtime": {
+        "transport": "stdio",
+        "command": "node",
+        "args": [
+          "${PLUGIN_ROOT}/connectors/youtube/server.js"
+        ],
+        "cwd": "${PLUGIN_ROOT}",
+        "env": {
+          "YOUTUBE_ACCESS_TOKEN": "${OAUTH_ACCESS_TOKEN}"
+        },
+        "timeoutMs": 1800000
+      },
+      "tools": [
+        {
+          "name": "youtube_test_auth",
+          "title": "Test YouTube Auth",
+          "description": "Validate OAuth access and identify the authorized YouTube channel.",
+          "readOnly": true
+        },
+        {
+          "name": "youtube_channel_get",
+          "title": "Get YouTube Channel",
+          "description": "Read the authorized channel profile, statistics, status, and uploads playlist.",
+          "readOnly": true
+        },
+        {
+          "name": "youtube_dashboard_summary",
+          "title": "Summarize YouTube Dashboard",
+          "description": "Return channel totals, recent videos, and a bounded Analytics summary.",
+          "readOnly": true
+        },
+        {
+          "name": "youtube_video_categories",
+          "title": "List YouTube Video Categories",
+          "description": "List assignable video categories for a region.",
+          "readOnly": true
+        },
+        {
+          "name": "youtube_video_list",
+          "title": "List YouTube Videos",
+          "description": "List recent uploads with optional statistics and status.",
+          "readOnly": true
+        },
+        {
+          "name": "youtube_video_get",
+          "title": "Get YouTube Video",
+          "description": "Read one video's metadata, status, statistics, and content details.",
+          "readOnly": true
+        },
+        {
+          "name": "youtube_video_upload",
+          "title": "Upload YouTube Video",
+          "description": "Upload a confirmed local video using YouTube's resumable protocol.",
+          "readOnly": false,
+          "destructive": false
+        },
+        {
+          "name": "youtube_video_update",
+          "title": "Update YouTube Video",
+          "description": "Safely read, merge, and update confirmed video metadata or status.",
+          "readOnly": false,
+          "destructive": false
+        },
+        {
+          "name": "youtube_video_delete",
+          "title": "Delete YouTube Video",
+          "description": "Permanently delete one exact video after explicit confirmation.",
+          "readOnly": false,
+          "destructive": true
+        },
+        {
+          "name": "youtube_analytics_summary",
+          "title": "Summarize YouTube Analytics",
+          "description": "Query activity, watch-time, subscriber, engagement, and optional revenue metrics.",
+          "readOnly": true
+        },
+        {
+          "name": "youtube_traffic_sources",
+          "title": "Get YouTube Traffic Sources",
+          "description": "Break down views and watch time by traffic-source type.",
+          "readOnly": true
+        },
+        {
+          "name": "youtube_audience_demographics",
+          "title": "Get YouTube Audience Demographics",
+          "description": "Return available viewer-percentage rows by age group and gender.",
+          "readOnly": true
+        }
+      ],
+      "installReview": [
+        "Create a Google OAuth web application and register http://localhost:1455/auth/callback as an authorized redirect URI.",
+        "Enable YouTube Data API v3 and YouTube Analytics API in the same Google Cloud project.",
+        "The complete initial version requests youtube.force-ssl, yt-analytics.readonly, and yt-analytics-monetary.readonly; public use may require Google OAuth verification.",
+        "Videos uploaded by unverified API projects created after July 28, 2020 are restricted to private viewing until the project passes a YouTube compliance audit.",
+        "Uploads and updates require confirm=true. Permanent deletion is irreversible and additionally marked destructive.",
+        "Revenue rows are available only when the authorized channel and Google project are eligible to access monetary reports."
+      ]
+    }
+  ],
+  "skillPreviews": [
+    {
+      "name": "youtube-creator",
+      "description": "Use an authorized YouTube channel for guarded video management and evidence-based Analytics summaries.",
+      "directory": "youtube-creator"
+    }
+  ]
+}

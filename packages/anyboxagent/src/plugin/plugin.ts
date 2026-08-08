@@ -278,7 +278,7 @@ const PluginOAuthAppCredentialBase = z
     tokenParams: z.record(z.string(), z.string()).optional(),
     tokenEndpointAuthMethod: z.enum(["none", "client_secret_post", "client_secret_basic"]).optional(),
     tokenRequestFormat: z.enum(["form", "json"]).optional(),
-    dialect: z.enum(["standard", "bilibili"]).optional(),
+    dialect: z.enum(["standard", "bilibili", "tiktok"]).optional(),
     registration: PluginOAuthClientRegistration.optional(),
     description: z.string().optional(),
   })

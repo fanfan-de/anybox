@@ -674,6 +674,24 @@ OAuth Credential 还支持：
 }
 ```
 
+`dialect: "tiktok"` 用于 TikTok Desktop Login Kit。它使用 `client_key`、逗号分隔的 scope，以及 SHA-256 十六进制 PKCE challenge；授权码交换、刷新和撤销会按 TikTok 文档以表单字段发送 `client_key` 与 `client_secret`。插件仍应声明标准的 `clientID` 与 `clientSecret` 字段，运行时会为该方言映射参数名：
+
+```json
+{
+  "kind": "oauth",
+  "label": "TikTok OAuth",
+  "clientID": "${TIKTOK_CLIENT_KEY}",
+  "clientSecret": "${TIKTOK_CLIENT_SECRET}",
+  "authorizationURL": "https://www.tiktok.com/v2/auth/authorize/",
+  "tokenURL": "https://open.tiktokapis.com/v2/oauth/token/",
+  "refreshURL": "https://open.tiktokapis.com/v2/oauth/token/",
+  "revocationURL": "https://open.tiktokapis.com/v2/oauth/revoke/",
+  "scopes": ["user.info.basic", "video.list"],
+  "tokenRequestFormat": "form",
+  "dialect": "tiktok"
+}
+```
+
 非标准方言只应在 Provider 当前官方文档明确要求时使用，并应覆盖授权 URL、授权码交换、绝对过期时间和独立刷新端点的测试。
 
 如果你的 OAuth provider 支持 RFC 7591 dynamic client registration，可以省略 `clientID`，改用 `registration`：

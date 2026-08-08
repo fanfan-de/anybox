@@ -407,6 +407,7 @@ async function useTempDatabase() {
   await Auth.clearProvider("plugin-connector:manifest-lab:docs")
   await Auth.clearProvider("plugin-connector:local-connector-lab:docs-local")
   await Auth.clearProvider("plugin-connector:dynamic-oauth-lab:mail")
+  await Auth.clearProvider("plugin-connector:tiktok-oauth-lab:creator")
   await Auth.clearProvider("plugin-connector:gmail:gmail")
   await Auth.clearProvider("connector:docs:default")
   await Auth.clearProvider("connector:gmail:default")
@@ -1182,6 +1183,73 @@ async function writeBilibiliOAuthPluginPackage() {
   return packageSourceRoot
 }
 
+async function writeTikTokOAuthPluginPackage() {
+  if (!activeRoot) throw new Error("Temp root has not been initialized.")
+
+  const packageSourceRoot = pluginInstallRoot()
+  const packageRoot = join(packageSourceRoot, "tiktok-oauth-lab", "0.1.0")
+  const manifestRoot = join(packageRoot, ".anybox-plugin")
+  await mkdir(manifestRoot, { recursive: true })
+
+  await writeFile(join(manifestRoot, "plugin.json"), JSON.stringify({
+    name: "tiktok-oauth-lab",
+    version: "0.1.0",
+    description: "Fixture plugin package with TikTok's desktop OAuth dialect.",
+    author: "Anybox Tests",
+    interface: {
+      displayName: "TikTok OAuth Lab",
+      shortDescription: "TikTok OAuth connector fixture.",
+      developerName: "Anybox Tests",
+      category: "Automation",
+    },
+    connectors: [
+      {
+        id: "creator",
+        name: "TikTok Creator OAuth",
+        description: "Fixture TikTok OAuth remote MCP connector.",
+        configFields: [
+          {
+            key: "TIKTOK_CLIENT_KEY",
+            label: "Client key",
+            type: "text",
+            required: true,
+          },
+          {
+            key: "TIKTOK_CLIENT_SECRET",
+            label: "Client secret",
+            type: "password",
+            required: true,
+            secret: true,
+          },
+        ],
+        credential: {
+          kind: "oauth",
+          label: "TikTok OAuth",
+          clientID: "${TIKTOK_CLIENT_KEY}",
+          clientSecret: "${TIKTOK_CLIENT_SECRET}",
+          authorizationURL: "https://www.tiktok.com/v2/auth/authorize/",
+          tokenURL: "https://open.tiktokapis.com/v2/oauth/token/",
+          refreshURL: "https://open.tiktokapis.com/v2/oauth/token/",
+          revocationURL: "https://open.tiktokapis.com/v2/oauth/revoke/",
+          scopes: ["user.info.basic", "video.list"],
+          tokenEndpointAuthMethod: "client_secret_post",
+          tokenRequestFormat: "form",
+          dialect: "tiktok",
+          tokenPlacement: {
+            type: "authorization_bearer",
+          },
+        },
+        runtime: {
+          transport: "remote",
+          serverUrl: "https://creator.example.test/mcp",
+        },
+      },
+    ],
+  }, null, 2))
+
+  return packageSourceRoot
+}
+
 async function writeComputerUsePluginPackage() {
   const sourceRoot = join(
     import.meta.dir,
@@ -1382,6 +1450,7 @@ afterEach(async () => {
   await Auth.clearProvider("plugin-connector:oauth-lab:mail")
   await Auth.clearProvider("plugin-connector:local-connector-lab:docs-local")
   await Auth.clearProvider("plugin-connector:dynamic-oauth-lab:mail")
+  await Auth.clearProvider("plugin-connector:tiktok-oauth-lab:creator")
   await Auth.clearProvider("plugin-connector:gmail:gmail")
   await Auth.clearProvider("connector:docs:default")
   if (previousPluginLocalDir === undefined) {
@@ -5272,6 +5341,140 @@ describe("plugin marketplace API", () => {
       .toBe("bilibili-refresh-two")
     expect(refreshedCredential?.kind === "oauth_session" ? refreshedCredential.expiresAt : undefined)
       .toBe(refreshedExpirySeconds * 1000)
+  })
+
+  test("supports TikTok desktop OAuth client_key, hex PKCE, comma scopes, and refresh", async () => {
+    await useTempDatabase()
+    await writeTikTokOAuthPluginPackage()
+    const app = createServerApp()
+
+    const catalogResponse = await app.request("/api/plugins/catalog")
+    const catalogBody = (await catalogResponse.json()) as PluginCatalogEnvelope
+    const plugin = catalogBody.data?.find((item) => item.id === "tiktok-oauth-lab")
+    expect(catalogResponse.status).toBe(200)
+    expect(plugin?.apps[0]?.credential.dialect).toBe("tiktok")
+
+    const installResponse = await app.request("/api/plugins/installed/tiktok-oauth-lab", {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        enabled: true,
+        config: {
+          TIKTOK_CLIENT_KEY: "tiktok-client-key",
+          TIKTOK_CLIENT_SECRET: "tiktok-client-secret",
+        },
+      }),
+    })
+    expect(installResponse.status).toBe(200)
+
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
+      expect(url).toBe("https://open.tiktokapis.com/v2/oauth/token/")
+      expect(init?.method).toBe("POST")
+      const body = init?.body instanceof URLSearchParams ? init.body : new URLSearchParams(String(init?.body))
+      expect(body.get("grant_type")).toBe("authorization_code")
+      expect(body.get("client_key")).toBe("tiktok-client-key")
+      expect(body.get("client_secret")).toBe("tiktok-client-secret")
+      expect(body.has("client_id")).toBe(false)
+      expect(body.get("code")).toBe("tiktok-code")
+      expect(body.get("redirect_uri")).toContain("/auth/callback")
+      expect(body.get("code_verifier")).toMatch(/^[A-Za-z0-9_-]{43}$/)
+      return new Response(JSON.stringify({
+        access_token: "tiktok-access",
+        expires_in: 86_400,
+        open_id: "tiktok-open-id",
+        refresh_expires_in: 31_536_000,
+        refresh_token: "tiktok-refresh",
+        scope: "user.info.basic,video.list",
+        token_type: "Bearer",
+      }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+        },
+      })
+    }) as typeof fetch
+
+    const flowResponse = await app.request("/api/plugins/installed/tiktok-oauth-lab/connectors/creator/auth/flows", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({}),
+    })
+    const flowBody = (await flowResponse.json()) as JsonEnvelope<{
+      id: string
+      authorizationURL: string
+      status: string
+    }>
+    expect(flowResponse.status).toBe(200)
+    const authorizationURL = new URL(flowBody.data?.authorizationURL ?? "")
+    expect(authorizationURL.searchParams.get("client_key")).toBe("tiktok-client-key")
+    expect(authorizationURL.searchParams.has("client_id")).toBe(false)
+    expect(authorizationURL.searchParams.get("scope")).toBe("user.info.basic,video.list")
+    expect(authorizationURL.searchParams.get("response_type")).toBe("code")
+    expect(authorizationURL.searchParams.get("redirect_uri")).toContain("/auth/callback")
+    expect(authorizationURL.searchParams.get("code_challenge")).toMatch(/^[a-f0-9]{64}$/)
+    expect(authorizationURL.searchParams.get("code_challenge_method")).toBe("S256")
+
+    const state = authorizationURL.searchParams.get("state") ?? ""
+    const callbackResult = await ProviderAuth.completeProviderBrowserCallback({
+      providerID: "plugin-connector:tiktok-oauth-lab:creator",
+      url: new URL(`http://localhost/auth/callback?code=tiktok-code&state=${encodeURIComponent(state)}`),
+    })
+    expect(callbackResult.ok).toBe(true)
+
+    const storedCredential = await Auth.getProviderCredential("plugin-connector:tiktok-oauth-lab:creator", "oauth")
+    expect(storedCredential?.kind === "oauth_session" ? storedCredential.accountID : undefined).toBe("tiktok-open-id")
+    expect(storedCredential?.kind === "oauth_session" ? storedCredential.scope : undefined)
+      .toBe("user.info.basic video.list")
+
+    await Auth.setProviderCredential(
+      "plugin-connector:tiktok-oauth-lab:creator",
+      "oauth",
+      {
+        kind: "oauth_session",
+        accessToken: "expired-tiktok-access",
+        refreshToken: "tiktok-refresh",
+        expiresAt: Date.now() - 1000,
+      },
+      { activate: true, lastError: null },
+    )
+
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
+      expect(url).toBe("https://open.tiktokapis.com/v2/oauth/token/")
+      const body = init?.body instanceof URLSearchParams ? init.body : new URLSearchParams(String(init?.body))
+      expect(body.get("grant_type")).toBe("refresh_token")
+      expect(body.get("client_key")).toBe("tiktok-client-key")
+      expect(body.get("client_secret")).toBe("tiktok-client-secret")
+      expect(body.has("client_id")).toBe(false)
+      expect(body.get("refresh_token")).toBe("tiktok-refresh")
+      expect(body.has("redirect_uri")).toBe(false)
+      expect(body.has("code_verifier")).toBe(false)
+      return new Response(JSON.stringify({
+        access_token: "tiktok-access-two",
+        expires_in: 86_400,
+        open_id: "tiktok-open-id",
+        refresh_expires_in: 31_536_000,
+        refresh_token: "tiktok-refresh-two",
+        scope: "user.info.basic,video.list",
+        token_type: "Bearer",
+      }), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+        },
+      })
+    }) as typeof fetch
+
+    const runtime = await Plugin.resolveConnectorRemoteServer("plugin-connector:tiktok-oauth-lab:creator")
+    expect(runtime.authorization).toBe("Bearer tiktok-access-two")
+    const refreshedCredential = await Auth.getProviderCredential("plugin-connector:tiktok-oauth-lab:creator", "oauth")
+    expect(refreshedCredential?.kind === "oauth_session" ? refreshedCredential.refreshToken : undefined)
+      .toBe("tiktok-refresh-two")
   })
 
   test("registers dynamic OAuth app connector clients before PKCE auth", async () => {
