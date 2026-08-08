@@ -1,6 +1,7 @@
 [
   "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/anybox-plugin-development/.anybox-plugin/plugin.json",
   "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/atlassian-rovo/.anybox-plugin/plugin.json",
+  "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/bilibili-creator/.anybox-plugin/plugin.json",
   "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/box/.anybox-plugin/plugin.json",
   "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/build-ios-apps/.anybox-plugin/plugin.json",
   "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/build-macos-apps/.anybox-plugin/plugin.json",

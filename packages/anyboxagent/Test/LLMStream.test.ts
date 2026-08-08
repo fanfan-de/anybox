@@ -301,6 +301,15 @@ describe("LLM stream", () => {
     expect(event.payload.images?.[0]?.sourceTool).toBe("view_image")
     const stored = StoredTrace.summarizeRuntimeEvent(event)
     expect(stored).toMatchObject({
+      messageID: "assistant-message",
+      providerID: "google",
+      modelID: "gemini-2.5-flash-image",
+      agent: "default",
+      messageCount: 1,
+      toolCount: 0,
+      requestedToolCount: 22,
+      toolsDisabledReason: "model_does_not_support_toolcall",
+      hasAttachments: true,
       topLevelImageParts: 0,
       toolResultImageParts: 1,
       totalImageBytes: 68,

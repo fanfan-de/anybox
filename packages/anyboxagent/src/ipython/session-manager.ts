@@ -66,10 +66,17 @@ export class IpythonSessionManager {
           throw new IpythonRuntimeError(
             "IPYTHON_HOST_EXITED",
             "The IPython session has already been closed.",
-            { stateLost: true },
+            { stateLost: true, kernelGeneration: this.generation },
           )
         }
-        return await this.client.execute(input)
+        try {
+          return await this.client.execute(input)
+        } catch (error) {
+          if (error instanceof IpythonRuntimeError) {
+            throw error.withKernelGeneration(this.generation)
+          }
+          throw error
+        }
       })
     this.tail = run.then(() => undefined, () => undefined)
     if (!input.signal) return run

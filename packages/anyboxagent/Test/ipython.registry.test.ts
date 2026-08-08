@@ -13,7 +13,7 @@ import {
   IpythonSessionManager,
   type IpythonSessionWorker,
 } from "../src/ipython/session-manager.ts"
-import type { IpythonExecutionResult } from "../src/ipython/types.ts"
+import { IpythonRuntimeError, type IpythonExecutionResult } from "../src/ipython/types.ts"
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -40,6 +40,33 @@ function result(input: Partial<IpythonExecutionResult> = {}): IpythonExecutionRe
 }
 
 describe("IPython session manager", () => {
+  test("adds the active kernel generation to runtime failures", async () => {
+    const worker: IpythonSessionWorker = {
+      isExited: true,
+      execute: async () => {
+        throw new IpythonRuntimeError(
+          "IPYTHON_HOST_PROTOCOL_ERROR",
+          "simulated fatal transport failure",
+          { stateLost: true },
+        )
+      },
+      interruptActive: async () => false,
+      shutdown: async () => undefined,
+    }
+    const manager = new IpythonSessionManager({
+      sessionID: "session-fatal",
+      cwd: process.cwd(),
+      generation: 7,
+      client: worker,
+    })
+
+    await expect(manager.execute({ code: "print('never completes')" })).rejects.toMatchObject({
+      code: "IPYTHON_HOST_PROTOCOL_ERROR",
+      stateLost: true,
+      kernelGeneration: 7,
+    })
+  })
+
   test("serializes cells and skips a queued cell that was cancelled", async () => {
     const first = deferred<IpythonExecutionResult>()
     const calls: string[] = []
@@ -294,7 +321,7 @@ describe("IPython registry", () => {
 
     await registry.execute({ sessionID: "broken", cwd: process.cwd(), code: "hang" })
     await expect(registry.execute({ sessionID: "broken", cwd: process.cwd(), code: "again" }))
-      .rejects.toMatchObject({ code: "IPYTHON_HOST_EXITED", stateLost: true })
+      .rejects.toMatchObject({ code: "IPYTHON_HOST_EXITED", stateLost: true, kernelGeneration: 1 })
     expect(created).toBe(1)
     await expect(registry.disposeAll()).rejects.toBeInstanceOf(AggregateError)
   })

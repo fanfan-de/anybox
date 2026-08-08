@@ -4,7 +4,11 @@ import z from "zod"
 import { isSshWorkspaceUri } from "@anybox/shared"
 import * as Config from "#config/config.ts"
 import { disposeIpythonRegistry, getIpythonRegistry } from "#ipython/registry.ts"
-import type { IpythonExecutionResult } from "#ipython/types.ts"
+import {
+  IpythonRuntimeError,
+  type IpythonExecutionResult,
+  type IpythonRuntimeFailure,
+} from "#ipython/types.ts"
 import { normalizeTerminalOutput } from "#shell/terminal-output.ts"
 import * as Tool from "#tool/tool.ts"
 
@@ -62,7 +66,37 @@ function formatExecutionResult(result: IpythonExecutionResult) {
   return sections.join("\n\n")
 }
 
-export const IpythonTool = Tool.define(
+function runtimeFailure(error: IpythonRuntimeError): IpythonRuntimeFailure {
+  return {
+    status: "runtime_error",
+    errorCode: error.code,
+    message: normalizeTerminalOutput(error.message),
+    kernelGeneration: error.kernelGeneration ?? 0,
+    stateLost: true,
+  }
+}
+
+function formatRuntimeFailure(failure: IpythonRuntimeFailure) {
+  return [
+    `${failure.errorCode}: ${failure.message}`,
+    `[The IPython kernel stopped. In-memory state from kernel generation ${failure.kernelGeneration} was lost.]`,
+  ].join("\n\n")
+}
+
+function isRuntimeFailure(value: unknown): value is IpythonRuntimeFailure {
+  return Boolean(
+    value
+      && typeof value === "object"
+      && "status" in value
+      && value.status === "runtime_error",
+  )
+}
+
+export const IpythonTool = Tool.define<
+  typeof IpythonParameters,
+  Record<string, unknown>,
+  IpythonExecutionResult | IpythonRuntimeFailure
+>(
   IPYTHON_TOOL_ID,
   async () => ({
     title: "IPython",
@@ -124,12 +158,27 @@ export const IpythonTool = Tool.define(
         throw new Error("IPython was disabled before this cell could start.")
       }
 
-      const result = normalizeExecutionResult(await registry.execute({
-        sessionID: ctx.sessionID,
-        cwd,
-        code,
-        signal: ctx.abort,
-      }))
+      let result: IpythonExecutionResult
+      try {
+        result = normalizeExecutionResult(await registry.execute({
+          sessionID: ctx.sessionID,
+          cwd,
+          code,
+          signal: ctx.abort,
+        }))
+      } catch (error) {
+        if (!(error instanceof IpythonRuntimeError) || !error.stateLost) throw error
+        // Thrown tool errors are flattened to text before the next model turn.
+        // Return a tagged result so toModelOutput can preserve the fatal
+        // runtime metadata as error-json.
+        const failure = runtimeFailure(error)
+        return {
+          title: "IPython runtime failed",
+          text: formatRuntimeFailure(failure),
+          metadata: { ...failure },
+          data: failure,
+        }
+      }
       return {
         title:
           result.status === "ok"
@@ -144,10 +193,13 @@ export const IpythonTool = Tool.define(
         data: result,
       }
     },
-    toModelOutput: (output) => ({
-      type: "json" as const,
-      value: (output.data ?? output.metadata ?? { text: output.text }) as unknown as JSONValue,
-    }),
+    toModelOutput: (output) => {
+      const value = (output.data ?? output.metadata ?? { text: output.text }) as unknown
+      return {
+        type: isRuntimeFailure(value) ? "error-json" as const : "json" as const,
+        value: value as JSONValue,
+      }
+    },
   }),
   {
     title: "IPython",

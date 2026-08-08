@@ -43,10 +43,14 @@ function existingHostSourceRoot() {
 }
 
 function hostCommandArgs(hostSourceRoot?: string) {
-  if (!hostSourceRoot) return ["-I", "-u", "-m", "anybox_ipython_host"]
+  if (!hostSourceRoot) {
+    return ["-I", "-X", "utf8", "-u", "-m", "anybox_ipython_host"]
+  }
 
   return [
     "-I",
+    "-X",
+    "utf8",
     "-u",
     "-c",
     [

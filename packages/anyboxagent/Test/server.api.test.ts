@@ -1713,6 +1713,29 @@ describe("server api", () => {
 
     try {
       Session.upsertMessage(assistantMessage)
+      turn.emit("llm.call.started", {
+        messageID: assistantMessageID,
+        providerID: "test-provider",
+        modelID: "test-model",
+        agent: "default",
+        iteration: 1,
+        messageCount: 2,
+        toolCount: 1,
+      })
+      turn.emit("llm.call.completed", {
+        messageID: assistantMessageID,
+        providerID: "test-provider",
+        modelID: "test-model",
+        agent: "default",
+        iteration: 1,
+        messageCount: 2,
+        toolCount: 1,
+        finishReason: "tool-calls",
+        usage: {
+          inputTokens: 10,
+          outputTokens: 5,
+        },
+      })
       turn.emit("tool.call.failed", {
         part: toolPart,
       })
@@ -1726,7 +1749,21 @@ describe("server api", () => {
           payload: unknown
         }>
         runtime: {
-          turns: unknown[]
+          turns: Array<{
+            turnID: string
+            llmCalls: Array<{
+              messageID: string
+              providerID: string
+              modelID: string
+              status: string
+              durationMs?: number
+              finishReason?: string
+              usage?: {
+                inputTokens?: number
+                outputTokens?: number
+              }
+            }>
+          }>
         }
         stats: {
           messageCount: number
@@ -1752,8 +1789,22 @@ describe("server api", () => {
       expect(body.data?.schemaVersion).toBe(2)
       expect(body.data?.messages).toHaveLength(1)
       expect(body.data?.events.some((event) => event.type === "turn.started")).toBe(true)
+      expect(body.data?.events.some((event) => event.type === "llm.call.completed")).toBe(true)
       expect(body.data?.events.some((event) => event.type === "tool.call.failed")).toBe(true)
       expect(body.data?.runtime.turns.length).toBeGreaterThanOrEqual(1)
+      expect(body.data?.runtime.turns.find((item) => item.turnID === turn.turnID)?.llmCalls).toEqual([
+        expect.objectContaining({
+          messageID: assistantMessageID,
+          providerID: "test-provider",
+          modelID: "test-model",
+          status: "completed",
+          finishReason: "tool-calls",
+          usage: expect.objectContaining({
+            inputTokens: 10,
+            outputTokens: 5,
+          }),
+        }),
+      ])
       expect(body.data?.stats.messageCount).toBe(1)
       expect(body.data?.stats.eventCount).toBeGreaterThanOrEqual(2)
       expect(body.data?.stats.toolCallCount).toBe(1)

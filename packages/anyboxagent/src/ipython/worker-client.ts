@@ -20,7 +20,9 @@ import * as Log from "#util/log.ts"
 export const IPYTHON_STARTUP_TIMEOUT_MS = 25_000
 export const IPYTHON_CELL_TIMEOUT_MS = 120_000
 export const IPYTHON_INTERRUPT_GRACE_MS = 2_000
-export const IPYTHON_SHUTDOWN_GRACE_MS = 5_000
+// Keep this above the Python host's bounded Windows cleanup budget. A slow
+// taskkill can consume 2s before the host confirms the kernel tree is gone.
+export const IPYTHON_SHUTDOWN_GRACE_MS = 7_000
 export const IPYTHON_FORCE_EXIT_GRACE_MS = 3_000
 export const IPYTHON_MAX_OUTPUT_CHARS = 100_000
 

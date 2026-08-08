@@ -1,0 +1,294 @@
+{
+  "name": "bilibili-creator",
+  "version": "0.1.0",
+  "description": "Unofficial Bilibili Open Platform connector for creator metrics, video publishing, and article publishing.",
+  "author": {
+    "name": "Anybox"
+  },
+  "homepage": "https://openhome.bilibili.com/doc",
+  "repository": "https://github.com/fanfan-de/Anybox-Plugins",
+  "license": "MIT",
+  "keywords": [
+    "bilibili",
+    "creator",
+    "video",
+    "article",
+    "analytics",
+    "mcp"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "Bilibili Creator (Unofficial)",
+      "zh-CN": "B站创作助手（非官方）"
+    },
+    "shortDescription": {
+      "en-US": "Track creator metrics and publish videos or articles",
+      "zh-CN": "汇总创作数据并发布视频或专栏"
+    },
+    "longDescription": {
+      "en-US": "Connect an approved Bilibili Open Platform app through OAuth to inspect account and submission data, track follower snapshots, aggregate video playback, and publish videos or Bilibili-compatible articles.",
+      "zh-CN": "通过 OAuth 连接已审核的哔哩哔哩开放平台应用，读取账号与稿件数据、记录粉丝快照、汇总视频播放量，并发布视频或 B 站兼容的专栏文章。"
+    },
+    "developerName": "Anybox",
+    "category": "Automation",
+    "capabilities": [
+      "OAuth",
+      "Analytics",
+      "Video Publishing",
+      "Article Publishing"
+    ],
+    "websiteURL": "https://openhome.bilibili.com/doc",
+    "privacyPolicyURL": "https://openhome.bilibili.com/agreement/privacy-policy",
+    "termsOfServiceURL": "https://openhome.bilibili.com/agreement/developer-service",
+    "defaultPrompt": [
+      "汇总我的 B 站粉丝数、近 30 天增量和视频播放量",
+      "列出最近发布的 B 站视频及其数据",
+      "把这个本地视频发布到 B 站"
+    ],
+    "brandColor": "#00A1D6",
+    "logo": "BL",
+    "screenshots": []
+  },
+  "skills": "./skills/",
+  "connectors": [
+    {
+      "id": "creator",
+      "name": "Bilibili Open Platform",
+      "description": "Local MCP connector for an authorized Bilibili creator account.",
+      "risk": "high",
+      "permissions": [
+        "Stores the Bilibili OAuth client secret and OAuth session in Anybox credential storage.",
+        "Sends signed HTTPS requests to Bilibili Open Platform and uploads user-selected local media files.",
+        "Reads the authorized account profile, granted scopes, follower counts, submissions, and submission metrics.",
+        "Can publish videos and articles when the user explicitly requests publishing.",
+        "Can permanently delete a specified video or article only when the destructive tool receives confirm=true.",
+        "Stores only numeric metric snapshots under the local Anybox data directory for follower change tracking."
+      ],
+      "configFields": [
+        {
+          "key": "BILIBILI_CLIENT_ID",
+          "label": "Bilibili OAuth Client ID",
+          "type": "text",
+          "required": true,
+          "placeholder": "Open Platform client_id",
+          "description": "Client ID of your approved Bilibili Open Platform application."
+        },
+        {
+          "key": "BILIBILI_CLIENT_SECRET",
+          "label": "Bilibili OAuth Client Secret",
+          "type": "password",
+          "required": true,
+          "secret": true,
+          "placeholder": "Open Platform client_secret",
+          "description": "Client secret used for OAuth exchange and Open Platform HMAC signing."
+        },
+        {
+          "key": "BILIBILI_API_MODE",
+          "label": "Bilibili API mode",
+          "type": "text",
+          "required": true,
+          "defaultValue": "production",
+          "placeholder": "production or sandbox",
+          "description": "Use production for real creator operations or sandbox for documented mock endpoints."
+        },
+        {
+          "key": "BILIBILI_MEMBER_BASE_URL",
+          "label": "Bilibili member API base URL",
+          "type": "url",
+          "required": true,
+          "defaultValue": "https://member.bilibili.com",
+          "description": "Advanced override for the signed Open Platform API base URL."
+        },
+        {
+          "key": "BILIBILI_UPLOAD_BASE_URL",
+          "label": "Bilibili upload base URL",
+          "type": "url",
+          "required": true,
+          "defaultValue": "https://openupos.bilivideo.com",
+          "description": "Advanced override for raw video upload endpoints."
+        }
+      ],
+      "credential": {
+        "kind": "oauth",
+        "label": "Bilibili creator OAuth",
+        "clientID": "${BILIBILI_CLIENT_ID}",
+        "clientSecret": "${BILIBILI_CLIENT_SECRET}",
+        "authorizationURL": "https://account.bilibili.com/pc/account-pc/auth/oauth",
+        "tokenURL": "https://api.bilibili.com/x/account-oauth2/v1/token",
+        "refreshURL": "https://api.bilibili.com/x/account-oauth2/v1/refresh_token",
+        "scopes": [
+          "USER_INFO",
+          "USER_DATA",
+          "ARC_BASE",
+          "ARC_DATA",
+          "ATC_BASE",
+          "ATC_DATA"
+        ],
+        "tokenEndpointAuthMethod": "client_secret_post",
+        "tokenRequestFormat": "form",
+        "dialect": "bilibili",
+        "tokenPlacement": {
+          "type": "header",
+          "name": "access-token",
+          "value": "${OAUTH_ACCESS_TOKEN}"
+        },
+        "description": "Bilibili's web OAuth flow uses gourl, returns scopes as an array, and reports expires_in as an absolute Unix timestamp."
+      },
+      "runtime": {
+        "transport": "stdio",
+        "command": "node",
+        "args": [
+          "${PLUGIN_ROOT}/connectors/bilibili/server.js"
+        ],
+        "cwd": "${PLUGIN_ROOT}",
+        "env": {
+          "BILIBILI_CLIENT_ID": "${BILIBILI_CLIENT_ID}",
+          "BILIBILI_CLIENT_SECRET": "${BILIBILI_CLIENT_SECRET}",
+          "BILIBILI_ACCESS_TOKEN": "${OAUTH_ACCESS_TOKEN}",
+          "BILIBILI_API_MODE": "${BILIBILI_API_MODE}",
+          "BILIBILI_MEMBER_BASE_URL": "${BILIBILI_MEMBER_BASE_URL}",
+          "BILIBILI_UPLOAD_BASE_URL": "${BILIBILI_UPLOAD_BASE_URL}"
+        },
+        "timeoutMs": 1800000
+      },
+      "tools": [
+        {
+          "name": "bilibili_test_auth",
+          "title": "Test Bilibili Auth",
+          "description": "Validate OAuth access and return the granted Open Platform scopes.",
+          "readOnly": true
+        },
+        {
+          "name": "bilibili_account_get",
+          "title": "Get Bilibili Account",
+          "description": "Read account profile, scopes, followers, following, and approved video count.",
+          "readOnly": true
+        },
+        {
+          "name": "bilibili_dashboard_summary",
+          "title": "Summarize Bilibili Dashboard",
+          "description": "Aggregate account metrics, 30-day increments, and playback totals.",
+          "readOnly": true
+        },
+        {
+          "name": "bilibili_metrics_snapshot",
+          "title": "Save Metrics Snapshot",
+          "description": "Append a local numeric snapshot for follower change tracking.",
+          "readOnly": false,
+          "destructive": false
+        },
+        {
+          "name": "bilibili_metrics_history",
+          "title": "Read Metrics History",
+          "description": "Read locally saved metric snapshots.",
+          "readOnly": true
+        },
+        {
+          "name": "bilibili_metrics_clear",
+          "title": "Clear Metrics History",
+          "description": "Permanently delete the plugin's local metric history file.",
+          "readOnly": false,
+          "destructive": true
+        },
+        {
+          "name": "bilibili_video_categories",
+          "title": "List Video Categories",
+          "description": "List video submission category IDs.",
+          "readOnly": true
+        },
+        {
+          "name": "bilibili_video_list",
+          "title": "List Bilibili Videos",
+          "description": "List video submissions by state.",
+          "readOnly": true
+        },
+        {
+          "name": "bilibili_video_get",
+          "title": "Get Bilibili Video",
+          "description": "Read one video submission.",
+          "readOnly": true
+        },
+        {
+          "name": "bilibili_video_stats",
+          "title": "Get Video Stats",
+          "description": "Read metrics for one video submission.",
+          "readOnly": true
+        },
+        {
+          "name": "bilibili_video_publish",
+          "title": "Publish Bilibili Video",
+          "description": "Upload local video media and submit a video for review.",
+          "readOnly": false,
+          "destructive": false
+        },
+        {
+          "name": "bilibili_video_delete",
+          "title": "Delete Bilibili Video",
+          "description": "Permanently delete one video after exact confirmation.",
+          "readOnly": false,
+          "destructive": true
+        },
+        {
+          "name": "bilibili_article_categories",
+          "title": "List Article Categories",
+          "description": "List article child category IDs.",
+          "readOnly": true
+        },
+        {
+          "name": "bilibili_article_list",
+          "title": "List Bilibili Articles",
+          "description": "List article submissions.",
+          "readOnly": true
+        },
+        {
+          "name": "bilibili_article_get",
+          "title": "Get Bilibili Article",
+          "description": "Read one article submission.",
+          "readOnly": true
+        },
+        {
+          "name": "bilibili_article_stats",
+          "title": "Get Article Stats",
+          "description": "Read metrics for up to 30 articles.",
+          "readOnly": true
+        },
+        {
+          "name": "bilibili_article_upload_image",
+          "title": "Upload Article Image",
+          "description": "Upload an image for use in article HTML.",
+          "readOnly": false,
+          "destructive": false
+        },
+        {
+          "name": "bilibili_article_publish",
+          "title": "Publish Bilibili Article",
+          "description": "Submit Bilibili-compatible HTML as an article for review.",
+          "readOnly": false,
+          "destructive": false
+        },
+        {
+          "name": "bilibili_article_delete",
+          "title": "Delete Bilibili Article",
+          "description": "Permanently delete one article after exact confirmation.",
+          "readOnly": false,
+          "destructive": true
+        }
+      ],
+      "installReview": [
+        "Requires an approved Bilibili Open Platform application and an associated creator account.",
+        "Configure the OAuth callback URL as http://localhost:1455/auth/callback in the Open Platform application.",
+        "Request USER_INFO, USER_DATA, ARC_BASE, ARC_DATA, ATC_BASE, and ATC_DATA permissions for the complete V1 tool set.",
+        "Publishing uploads user-selected local files and creates content on the connected account.",
+        "Delete tools are irreversible and require both explicit user intent and confirm=true.",
+        "This integration is unofficial and does not use Bilibili artwork or claim endorsement."
+      ]
+    }
+  ],
+  "skillPreviews": [
+    {
+      "name": "bilibili-creator",
+      "description": "Use Bilibili Open Platform tools for creator metrics, video workflows, and article workflows with guarded publishing and deletion.",
+      "directory": "bilibili-creator"
+    }
+  ]
+}

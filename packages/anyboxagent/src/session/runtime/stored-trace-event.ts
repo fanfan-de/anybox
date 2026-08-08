@@ -22,6 +22,15 @@ const ImageSummary = z.object({
 
 export const StoredTracePayload = z.object({
   messageID: z.string().optional(),
+  providerID: z.string().optional(),
+  modelID: z.string().optional(),
+  agent: z.string().optional(),
+  iteration: z.number().int().positive().optional(),
+  messageCount: z.number().int().nonnegative().optional(),
+  toolCount: z.number().int().nonnegative().optional(),
+  requestedToolCount: z.number().int().nonnegative().optional(),
+  toolsDisabledReason: z.literal("model_does_not_support_toolcall").optional(),
+  hasAttachments: z.boolean().optional(),
   partID: z.string().optional(),
   callID: z.string().optional(),
   toolName: z.string().optional(),
@@ -139,6 +148,17 @@ export function summarizeRuntimeEvent(event: RuntimeEvent.RuntimeEvent): StoredT
   const parsedImages = ImageSummary.array().safeParse(payload.images)
   const summary: StoredTracePayload = {
     messageID: shortString(part?.messageID ?? message?.id ?? payload.messageID, 300),
+    providerID: shortString(payload.providerID, 300),
+    modelID: shortString(payload.modelID, 300),
+    agent: shortString(payload.agent, 300),
+    iteration: finiteNumber(payload.iteration),
+    messageCount: finiteNumber(payload.messageCount),
+    toolCount: finiteNumber(payload.toolCount),
+    requestedToolCount: finiteNumber(payload.requestedToolCount),
+    toolsDisabledReason: payload.toolsDisabledReason === "model_does_not_support_toolcall"
+      ? payload.toolsDisabledReason
+      : undefined,
+    hasAttachments: typeof payload.hasAttachments === "boolean" ? payload.hasAttachments : undefined,
     partID: shortString(part?.id ?? payload.partID, 300),
     callID: shortString(part?.callID ?? payload.toolCallID, 300),
     toolName: shortString(part?.tool ?? payload.toolName, 300),
@@ -188,6 +208,16 @@ export function summarizeRuntimeEvent(event: RuntimeEvent.RuntimeEvent): StoredT
     return {
       payloadBytes: originalBytes,
       payloadTruncated: true,
+      messageID: summary.messageID,
+      providerID: summary.providerID,
+      modelID: summary.modelID,
+      agent: summary.agent,
+      iteration: summary.iteration,
+      messageCount: summary.messageCount,
+      toolCount: summary.toolCount,
+      requestedToolCount: summary.requestedToolCount,
+      toolsDisabledReason: summary.toolsDisabledReason,
+      hasAttachments: summary.hasAttachments,
       status: summary.status,
       partID: summary.partID,
       callID: summary.callID,

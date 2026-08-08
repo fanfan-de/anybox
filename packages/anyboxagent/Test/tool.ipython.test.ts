@@ -4,6 +4,7 @@ import os from "node:os"
 import path from "node:path"
 import * as Config from "../src/config/config.ts"
 import { createIpythonRegistry, setIpythonRegistryForTest } from "../src/ipython/registry.ts"
+import { IpythonRuntimeError } from "../src/ipython/types.ts"
 import { IpythonTool } from "../src/tool/ipython.ts"
 
 const tempDirectories: string[] = []
@@ -85,6 +86,107 @@ describe("IPython tool", () => {
     expect(output.text).toContain("hello")
     expect(output.text).toContain("42")
     expect(output.data).toMatchObject({ status: "ok", result: "42", executionCount: 2 })
+  })
+
+  test("returns a structured model-visible error when a fatal runtime failure loses state", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "anybox-ipython-tool-fatal-"))
+    tempDirectories.push(directory)
+    const registry = createIpythonRegistry({
+      createManager: ({ sessionID, cwd, generation }) => ({
+        sessionID,
+        cwd,
+        generation,
+        isExited: true,
+        execute: async () => {
+          throw new IpythonRuntimeError(
+            "IPYTHON_HOST_PROTOCOL_ERROR",
+            "simulated fatal host error",
+            { stateLost: true },
+          )
+        },
+        interrupt: async () => false,
+        dispose: async () => undefined,
+      }),
+    })
+    setIpythonRegistryForTest(registry)
+    await Config.setToolSelection(Config.GLOBAL_CONFIG_ID, { ipython: true })
+    const runtime = await IpythonTool.init()
+    const context = {
+      sessionID: "session-fatal",
+      messageID: "message-fatal",
+      cwd: directory,
+      worktree: directory,
+    }
+
+    const output = await runtime.execute({ code: "print('fatal')" }, context)
+    expect(output).toMatchObject({
+      title: "IPython runtime failed",
+      data: {
+        status: "runtime_error",
+        errorCode: "IPYTHON_HOST_PROTOCOL_ERROR",
+        message: "simulated fatal host error",
+        kernelGeneration: 1,
+        stateLost: true,
+      },
+    })
+    expect(await runtime.toModelOutput?.(output)).toMatchObject({
+      type: "error-json",
+      value: {
+        status: "runtime_error",
+        errorCode: "IPYTHON_HOST_PROTOCOL_ERROR",
+        kernelGeneration: 1,
+        stateLost: true,
+      },
+    })
+  })
+
+  test("keeps ordinary user-code errors as completed JSON results", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "anybox-ipython-tool-code-error-"))
+    tempDirectories.push(directory)
+    const registry = createIpythonRegistry({
+      createManager: ({ sessionID, cwd, generation }) => ({
+        sessionID,
+        cwd,
+        generation,
+        isExited: false,
+        execute: async () => ({
+          status: "error",
+          executionCount: 1,
+          stdout: "",
+          stderr: "",
+          displays: [],
+          error: {
+            name: "ValueError",
+            message: "bad input",
+            traceback: ["ValueError: bad input"],
+          },
+          durationMs: 5,
+          kernelGeneration: generation,
+          stateLost: false,
+          outputTruncated: false,
+        }),
+        interrupt: async () => false,
+        dispose: async () => undefined,
+      }),
+    })
+    setIpythonRegistryForTest(registry)
+    await Config.setToolSelection(Config.GLOBAL_CONFIG_ID, { ipython: true })
+    const runtime = await IpythonTool.init()
+    const output = await runtime.execute({ code: "raise ValueError('bad input')" }, {
+      sessionID: "session-code-error",
+      messageID: "message-code-error",
+      cwd: directory,
+      worktree: directory,
+    })
+
+    expect(output).toMatchObject({
+      title: "IPython error",
+      data: { status: "error", stateLost: false, kernelGeneration: 1 },
+    })
+    expect(await runtime.toModelOutput?.(output)).toMatchObject({
+      type: "json",
+      value: { status: "error", stateLost: false, kernelGeneration: 1 },
+    })
   })
 
   test("does not execute an approved stale call after the tool is disabled", async () => {

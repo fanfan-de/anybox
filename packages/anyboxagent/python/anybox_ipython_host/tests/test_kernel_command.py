@@ -19,12 +19,11 @@ class KernelCommandTests(unittest.TestCase):
         command = manager.format_kernel_cmd(["--AnyboxTest=1"])
 
         self.assertEqual(
-            command[:4],
-            [sys.executable, "-I", "-m", "ipykernel_launcher"],
+            command[:6],
+            [sys.executable, "-I", "-X", "utf8", "-m", "ipykernel_launcher"],
         )
         self.assertEqual(command[-1], "--AnyboxTest=1")
 
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -25,6 +25,14 @@ export interface IpythonExecutionResult {
   outputTruncated: boolean
 }
 
+export interface IpythonRuntimeFailure {
+  status: "runtime_error"
+  errorCode: IpythonRuntimeErrorCode
+  message: string
+  kernelGeneration: number
+  stateLost: true
+}
+
 export type IpythonHostCommand =
   | {
       type: "probe"
@@ -139,15 +147,28 @@ export type IpythonRuntimeErrorCode =
 export class IpythonRuntimeError extends Error {
   readonly code: IpythonRuntimeErrorCode
   readonly stateLost: boolean
+  readonly kernelGeneration?: number
 
   constructor(
     code: IpythonRuntimeErrorCode,
     message: string,
-    options: { cause?: unknown; stateLost?: boolean } = {},
+    options: { cause?: unknown; stateLost?: boolean; kernelGeneration?: number } = {},
   ) {
     super(message, options.cause === undefined ? undefined : { cause: options.cause })
     this.name = "IpythonRuntimeError"
     this.code = code
     this.stateLost = options.stateLost ?? false
+    this.kernelGeneration = options.kernelGeneration
+  }
+
+  withKernelGeneration(kernelGeneration: number) {
+    if (this.kernelGeneration !== undefined) return this
+    const enriched = new IpythonRuntimeError(this.code, this.message, {
+      cause: this,
+      stateLost: this.stateLost,
+      kernelGeneration,
+    })
+    enriched.stack = this.stack
+    return enriched
   }
 }

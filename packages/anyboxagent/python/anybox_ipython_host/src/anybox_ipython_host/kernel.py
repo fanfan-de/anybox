@@ -36,7 +36,11 @@ KERNEL_BOOTSTRAP_TIMEOUT_SECONDS = 5
 CHANNEL_POLL_SECONDS = 0.1
 ACTIVE_INTERRUPT_GRACE_SECONDS = 0.5
 MANAGED_SHUTDOWN_GRACE_SECONDS = 1.5
-FALLBACK_KILL_COMMAND_TIMEOUT_SECONDS = 0.5
+# Windows taskkill can take longer than 500 ms while it enumerates an
+# ipykernel tree, especially immediately after a cell finishes.  Keep this
+# below the controller's five-second graceful-shutdown budget while allowing
+# the helper enough time to return the process-tree confirmation we require.
+FALLBACK_KILL_COMMAND_TIMEOUT_SECONDS = 2.0
 FALLBACK_KILL_GRACE_SECONDS = 1.0
 
 
@@ -51,6 +55,8 @@ class AnyboxKernelManager(KernelManager):
         command = [
             sys.executable,
             "-I",
+            "-X",
+            "utf8",
             "-m",
             "ipykernel_launcher",
             "-f",

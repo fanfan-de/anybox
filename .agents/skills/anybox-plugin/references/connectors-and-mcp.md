@@ -225,7 +225,8 @@ OAuth Credential 支持以下字段：
 ```text
 kind, label, clientID, clientSecret, authorizationURL, tokenURL, scopes,
 revocationURL, tokenPlacement, authorizationParams, tokenParams,
-tokenEndpointAuthMethod, registration, description
+tokenEndpointAuthMethod, tokenRequestFormat, refreshURL, dialect,
+registration, description
 ```
 
 必须提供 `clientID` 或动态 `registration` 其中之一。
@@ -247,6 +248,17 @@ tokenEndpointAuthMethod, registration, description
 ```
 
 支持的 Token Endpoint 认证方式为 `none`、`client_secret_post` 和 `client_secret_basic`。
+
+`tokenRequestFormat` 支持 `form` 和 `json`，默认使用 `form`。如果刷新 Token 使用独立端点，使用 `refreshURL`；省略时继续使用 `tokenURL`。
+
+`dialect` 默认是 `standard`，当前还支持 `bilibili`。Bilibili 方言会：
+
+- 在授权 URL 中使用 `gourl`，不添加标准 PKCE、`redirect_uri` 和 `scope` 参数；
+- 在授权码交换时不发送 `redirect_uri` 与 `code_verifier`；
+- 接受 Token 响应中的 `scopes` 数组；
+- 把 Token 响应中的 `expires_in` 解释为绝对 Unix 秒时间戳。
+
+只在 Provider 的当前官方文档明确要求这些行为时使用非标准方言。
 
 使用 RFC 7591 风格的动态注册时：
 

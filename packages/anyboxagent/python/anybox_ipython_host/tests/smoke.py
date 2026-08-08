@@ -39,6 +39,8 @@ def resolve_host_python() -> str:
             [
                 candidate,
                 "-I",
+                "-X",
+                "utf8",
                 "-c",
                 "import IPython, ipykernel, jupyter_client, zmq",
             ],
@@ -62,6 +64,8 @@ def host_command() -> list[str]:
     return [
         HOST_PYTHON,
         "-I",
+        "-X",
+        "utf8",
         "-u",
         "-c",
         "; ".join(

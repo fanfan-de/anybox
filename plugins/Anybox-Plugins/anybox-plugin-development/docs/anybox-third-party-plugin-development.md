@@ -648,6 +648,34 @@ http://localhost:1455/auth/callback
 
 OAuth token 返回 `scope` 时，Anybox 会校验插件声明的非身份类 scope 是否都被授予。缺少必需 scope 时，连接会失败并显示明确错误。
 
+OAuth Credential 还支持：
+
+- `tokenRequestFormat`: `form`（默认）或 `json`；
+- `refreshURL`: Refresh Token 使用的独立端点，省略时使用 `tokenURL`；
+- `dialect`: 默认 `standard`，当前还支持 `bilibili`。
+
+`dialect: "bilibili"` 用于哔哩哔哩开放平台的非标准网页 OAuth：授权 URL 使用 `gourl` 而不是 `redirect_uri`，不发送 PKCE 参数，Token 响应的 `scopes` 是数组，`expires_in` 是绝对 Unix 秒时间戳。典型声明如下：
+
+```json
+{
+  "credential": {
+    "kind": "oauth",
+    "label": "Bilibili OAuth",
+    "clientID": "${BILIBILI_CLIENT_ID}",
+    "clientSecret": "${BILIBILI_CLIENT_SECRET}",
+    "authorizationURL": "https://account.bilibili.com/pc/account-pc/auth/oauth",
+    "tokenURL": "https://api.bilibili.com/x/account-oauth2/v1/token",
+    "refreshURL": "https://api.bilibili.com/x/account-oauth2/v1/refresh_token",
+    "scopes": ["USER_INFO", "USER_DATA"],
+    "tokenEndpointAuthMethod": "client_secret_post",
+    "tokenRequestFormat": "form",
+    "dialect": "bilibili"
+  }
+}
+```
+
+非标准方言只应在 Provider 当前官方文档明确要求时使用，并应覆盖授权 URL、授权码交换、绝对过期时间和独立刷新端点的测试。
+
 如果你的 OAuth provider 支持 RFC 7591 dynamic client registration，可以省略 `clientID`，改用 `registration`：
 
 ```json

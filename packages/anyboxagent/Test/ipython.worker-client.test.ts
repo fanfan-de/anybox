@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test"
 import { spawn } from "node:child_process"
-import { IpythonWorkerClient } from "../src/ipython/worker-client.ts"
+import {
+  IPYTHON_SHUTDOWN_GRACE_MS,
+  IpythonWorkerClient,
+} from "../src/ipython/worker-client.ts"
 
 function inlineHost(source: string) {
   return {
@@ -33,6 +36,10 @@ function isProcessAlive(pid: number) {
 }
 
 describe("IPython worker client protocol failures", () => {
+  test("allows the host to finish its bounded Windows process-tree cleanup", () => {
+    expect(IPYTHON_SHUTDOWN_GRACE_MS).toBeGreaterThanOrEqual(7_000)
+  })
+
   test("waits until a known kernel process tree is confirmed stopped", async () => {
     const kernel = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
       detached: process.platform !== "win32",

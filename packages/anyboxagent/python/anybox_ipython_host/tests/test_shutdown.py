@@ -236,6 +236,18 @@ class ShutdownTests(unittest.TestCase):
 
         self.assertEqual(events, ["taskkill", "manager"])
 
+    @mock.patch.object(kernel.subprocess, "run")
+    def test_windows_taskkill_has_time_to_confirm_the_process_tree(self, run: mock.Mock) -> None:
+        run.return_value = subprocess.CompletedProcess([], 0)
+
+        self.assertEqual(kernel.KernelHost._kill_windows_kernel_tree(12345), [])
+
+        self.assertEqual(
+            run.call_args.kwargs["timeout"],
+            kernel.FALLBACK_KILL_COMMAND_TIMEOUT_SECONDS,
+        )
+        self.assertGreaterEqual(kernel.FALLBACK_KILL_COMMAND_TIMEOUT_SECONDS, 2.0)
+
 
 if __name__ == "__main__":
     unittest.main()

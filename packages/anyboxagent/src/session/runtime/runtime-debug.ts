@@ -837,6 +837,87 @@ function updateTurnFromStoredTrace(
       : turn.phase
     turn.phaseUpdatedAt = event.timestamp
   }
+  if (event.type === "llm.call.started") {
+    turn.llmCalls.push({
+      id: event.eventID,
+      messageID: payload.messageID ?? `unknown:${event.eventID}`,
+      providerID: payload.providerID ?? "unknown",
+      modelID: payload.modelID ?? "unknown",
+      agent: payload.agent,
+      iteration: payload.iteration,
+      status: "running",
+      startedAt: event.timestamp,
+      messageCount: payload.messageCount ?? 0,
+      toolCount: payload.toolCount,
+      requestedToolCount: payload.requestedToolCount,
+      toolsDisabledReason: payload.toolsDisabledReason,
+      hasAttachments: payload.hasAttachments,
+      topLevelImageParts: payload.topLevelImageParts,
+      toolResultImageParts: payload.toolResultImageParts,
+      totalImageBytes: payload.totalImageBytes,
+      images: payload.images,
+    })
+    return
+  }
+  if (event.type === "llm.call.completed" || event.type === "llm.call.failed") {
+    const existing = payload.messageID
+      ? findOpenLlmCall(turn, payload.messageID, payload.iteration)
+      : undefined
+    const status = event.type === "llm.call.completed" ? "completed" : "failed"
+
+    if (existing) {
+      existing.status = status
+      existing.endedAt = event.timestamp
+      existing.durationMs = Math.max(0, event.timestamp - existing.startedAt)
+      existing.providerID = payload.providerID ?? existing.providerID
+      existing.modelID = payload.modelID ?? existing.modelID
+      existing.agent = payload.agent ?? existing.agent
+      existing.messageCount = payload.messageCount ?? existing.messageCount
+      existing.toolCount = payload.toolCount ?? existing.toolCount
+      existing.requestedToolCount = payload.requestedToolCount ?? existing.requestedToolCount
+      existing.toolsDisabledReason = payload.toolsDisabledReason ?? existing.toolsDisabledReason
+      existing.hasAttachments = payload.hasAttachments ?? existing.hasAttachments
+      existing.topLevelImageParts = payload.topLevelImageParts ?? existing.topLevelImageParts
+      existing.toolResultImageParts = payload.toolResultImageParts ?? existing.toolResultImageParts
+      existing.totalImageBytes = payload.totalImageBytes ?? existing.totalImageBytes
+      existing.images = payload.images ?? existing.images
+      if (status === "completed") {
+        existing.finishReason = payload.finishReason
+        existing.usage = summarizeUsage(payload.usage)
+      } else {
+        existing.error = payload.error
+        existing.retryable = payload.retryable
+      }
+      return
+    }
+
+    turn.llmCalls.push({
+      id: event.eventID,
+      messageID: payload.messageID ?? `unknown:${event.eventID}`,
+      providerID: payload.providerID ?? "unknown",
+      modelID: payload.modelID ?? "unknown",
+      agent: payload.agent,
+      iteration: payload.iteration,
+      status,
+      startedAt: event.timestamp,
+      endedAt: event.timestamp,
+      durationMs: 0,
+      messageCount: payload.messageCount ?? 0,
+      toolCount: payload.toolCount,
+      requestedToolCount: payload.requestedToolCount,
+      toolsDisabledReason: payload.toolsDisabledReason,
+      hasAttachments: payload.hasAttachments,
+      topLevelImageParts: payload.topLevelImageParts,
+      toolResultImageParts: payload.toolResultImageParts,
+      totalImageBytes: payload.totalImageBytes,
+      images: payload.images,
+      finishReason: status === "completed" ? payload.finishReason : undefined,
+      usage: status === "completed" ? summarizeUsage(payload.usage) : undefined,
+      error: status === "failed" ? payload.error : undefined,
+      retryable: status === "failed" ? payload.retryable : undefined,
+    })
+    return
+  }
   if (event.type.startsWith("tool.call.") && payload.callID) {
     const previous = turn.tools.get(payload.callID)
     const terminal = event.type.endsWith(".completed") || event.type.endsWith(".failed") || event.type.endsWith(".denied") || event.type.endsWith(".cancelled")

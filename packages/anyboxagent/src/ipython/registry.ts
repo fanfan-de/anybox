@@ -68,19 +68,26 @@ export class IpythonRegistry {
     return this.sessions.size
   }
 
+  private generationFor(sessionID: string) {
+    return this.sessions.get(sessionID)?.generation
+      ?? this.managerRetirements.get(sessionID)?.manager.generation
+      ?? this.generations.get(sessionID)
+      ?? 0
+  }
+
   private managerFor(sessionID: string, cwd: string) {
     if (globallyClosedSessionIDs.has(sessionID) || this.closedSessionIDs.has(sessionID)) {
       throw new IpythonRuntimeError(
         "IPYTHON_HOST_EXITED",
         "The IPython session is closing or no longer active.",
-        { stateLost: true },
+        { stateLost: true, kernelGeneration: this.generationFor(sessionID) },
       )
     }
     if (this.managerRetirements.has(sessionID)) {
       throw new IpythonRuntimeError(
         "IPYTHON_HOST_EXITED",
         "The previous IPython kernel is still shutting down.",
-        { stateLost: true },
+        { stateLost: true, kernelGeneration: this.generationFor(sessionID) },
       )
     }
     const normalizedCwd = path.resolve(cwd)
@@ -99,7 +106,7 @@ export class IpythonRegistry {
       throw new IpythonRuntimeError(
         "IPYTHON_HOST_EXITED",
         "The IPython runtime has been shut down.",
-        { stateLost: true },
+        { stateLost: true, kernelGeneration: this.generationFor(sessionID) },
       )
     }
     if (this.sessions.size >= this.maxActiveSessions) {
@@ -154,13 +161,16 @@ export class IpythonRegistry {
       }
       return result
     } catch (error) {
+      const enrichedError = error instanceof IpythonRuntimeError
+        ? error.withKernelGeneration(manager.generation)
+        : error
       if (
-        (manager.isExited || (error instanceof IpythonRuntimeError && error.stateLost))
+        (manager.isExited || (enrichedError instanceof IpythonRuntimeError && enrichedError.stateLost))
         && this.sessions.get(input.sessionID) === manager
       ) {
         this.beginManagerRetirement(input.sessionID, manager)
       }
-      throw error
+      throw enrichedError
     }
   }
 
@@ -218,7 +228,11 @@ export class IpythonRegistry {
       throw new IpythonRuntimeError(
         "IPYTHON_HOST_EXITED",
         "The previous IPython kernel could not be stopped cleanly.",
-        { cause: retirement.error, stateLost: true },
+        {
+          cause: retirement.error,
+          stateLost: true,
+          kernelGeneration: retirement.manager.generation,
+        },
       )
     }
     return true
@@ -265,7 +279,7 @@ export class IpythonRegistry {
       throw new IpythonRuntimeError(
         "IPYTHON_HOST_EXITED",
         "The previous IPython kernel is still shutting down.",
-        { stateLost: true },
+        { stateLost: true, kernelGeneration: this.generationFor(sessionID) },
       )
     }
     this.closedSessionIDs.delete(sessionID)
