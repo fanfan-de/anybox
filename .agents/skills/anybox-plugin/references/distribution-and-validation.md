@@ -220,7 +220,7 @@ bun run packages/anyboxagent/scripts/smoke-plugin-release-install.ts `
   <anybox-plugin-registry.json> context7
 ```
 
-该 smoke 必须读取完整 62 项目录、只加载一次本地 ZIP，并拒绝访问 `api.github.com`。确认无误后，将 `.catalog/` 作为普通 Git 变更提交并执行普通 `git push`；插件目录发布与桌面候选版、RC 和公开桌面 Release 相互独立。
+该 smoke 必须读取完整 64 项目录、只加载一次本地 ZIP，并拒绝访问 `api.github.com`。确认无误后，将 `.catalog/` 作为普通 Git 变更提交并执行普通 `git push`；插件目录发布与桌面候选版、RC 和公开桌面 Release 相互独立。
 
 如果只修改插件包，优先执行有针对性的目录加载和安装验证。当插件包覆盖了新修改的解析器路径，或风险足以证明有必要时，再运行完整回归测试文件。
 
