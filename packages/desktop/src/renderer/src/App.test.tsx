@@ -3689,6 +3689,67 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "algorithmic-art" })).toBeInTheDocument()
   })
 
+  it("refreshes the global skills tree when the skills directory changes outside the app", async () => {
+    const root = "C:\\Users\\19128\\.anybox\\skills"
+    const firstDirectoryPath = `${root}\\existing`
+    const firstFilePath = `${firstDirectoryPath}\\SKILL.md`
+    const addedDirectoryPath = `${root}\\added-externally`
+    const addedFilePath = `${addedDirectoryPath}\\SKILL.md`
+    const workspaceListeners: Array<(event: { directory: string; paths: string[] }) => void> = []
+
+    window.desktop!.onWorkspaceFileChange = vi.fn((listener) => {
+      workspaceListeners.push(listener)
+      return () => undefined
+    })
+    window.desktop!.getGlobalSkillsTree = vi
+      .fn()
+      .mockResolvedValueOnce({
+        root,
+        items: [{
+          name: "existing",
+          path: firstDirectoryPath,
+          kind: "directory",
+          children: [{ name: "SKILL.md", path: firstFilePath, kind: "file" }],
+        }],
+      })
+      .mockResolvedValue({
+        root,
+        items: [
+          {
+            name: "existing",
+            path: firstDirectoryPath,
+            kind: "directory",
+            children: [{ name: "SKILL.md", path: firstFilePath, kind: "file" }],
+          },
+          {
+            name: "added-externally",
+            path: addedDirectoryPath,
+            kind: "directory",
+            children: [{ name: "SKILL.md", path: addedFilePath, kind: "file" }],
+          },
+        ],
+      })
+    window.desktop!.readGlobalSkillFile = vi.fn().mockResolvedValue({
+      path: firstFilePath,
+      content: "# Existing",
+    })
+
+    render(<App />)
+    openActivityRailConfigurationView("Open skills")
+
+    expect(await screen.findByRole("button", { name: "existing" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "added-externally" })).not.toBeInTheDocument()
+
+    await act(async () => {
+      for (const listener of workspaceListeners) {
+        listener({ directory: root, paths: [addedFilePath] })
+      }
+    })
+
+    expect(await screen.findByRole("button", { name: "added-externally" })).toBeInTheDocument()
+    expect(window.desktop!.getGlobalSkillsTree).toHaveBeenCalledTimes(2)
+  })
+
   it("switches the global skill editor between edit and markdown preview", async () => {
     const root = "C:\\Users\\19128\\.anybox\\skills"
     const directoryPath = `${root}\\layout-review`

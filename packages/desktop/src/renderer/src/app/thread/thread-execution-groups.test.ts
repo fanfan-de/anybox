@@ -774,7 +774,47 @@ describe("thread execution groups", () => {
       expandedByGroupID: { [group.groupID]: false },
       groups: [group],
       rows,
-    }).some((row) => row.rowID === failureRowID)).toBe(false)
+    }).some((row) => row.rowID === failureRowID)).toBe(true)
+    expect(projectThreadDisplayRowsWithExecutionGroups({
+      expandedByGroupID: { [group.groupID]: false },
+      groups: [group],
+      rows,
+    }).some((row) => row.kind === "assistant-execution-summary")).toBe(false)
+  })
+
+  it("makes a running process collapsible as soon as response streaming starts", () => {
+    const message = assistantMessage("assistant-streaming-response", [
+      reasoningItem("reasoning-streaming-1", "Inspecting the implementation."),
+      traceItem("tool-streaming", "tool", {
+        status: "completed",
+        toolOutputText: "Loaded the relevant source files",
+      }),
+      traceItem("response-streaming", "text", {
+        isStreaming: true,
+        status: "running",
+        text: "The implementation",
+      }),
+    ], { phase: "responding" })
+    const rows = buildRows([message])
+    const group = derive(
+      [message],
+      [threadTurn("turn-streaming-response", [message], {
+        finalSegmentID: message.segmentID,
+        status: "running",
+      })],
+      rows,
+    ).groups[0]!
+
+    expect(group.autoCollapseReady).toBe(true)
+    expect(resolveExecutionGroupExpanded(group, "auto")).toBe(false)
+    expect(projectThreadDisplayRowsWithExecutionGroups({
+      groups: [group],
+      rows,
+    }).map((row) => row.kind)).toContain("assistant-execution-summary")
+    expect(projectThreadDisplayRowsWithExecutionGroups({
+      groups: [group],
+      rows,
+    }).some((row) => row.rowID === rowIDForItem(rows, "tool-streaming"))).toBe(false)
   })
 
   it("keeps the last failure outside when a completed turn has no resolved final response", () => {
@@ -800,7 +840,7 @@ describe("thread execution groups", () => {
     expect(resolveExecutionGroupExpanded(group, "auto")).toBe(true)
   })
 
-  it("keeps the terminal failure outside an abnormal turn even when a final response exists", () => {
+  it("keeps the terminal failure visible while folding earlier process rows once an abnormal turn has a response", () => {
     const message = assistantMessage("assistant-failed-with-response", [
       reasoningItem("reasoning-failed-with-response", "Trying the operation."),
       traceItem("terminal-failure-before-response", "tool", {
@@ -823,6 +863,11 @@ describe("thread execution groups", () => {
     expect(group.outcomeRowIDs).toContain(failureRowID)
     expect(group.prefixRowIDs).not.toContain(failureRowID)
     expect(group.autoCollapseReady).toBe(true)
+    expect(resolveExecutionGroupExpanded(group, "auto")).toBe(false)
+    expect(projectThreadDisplayRowsWithExecutionGroups({
+      groups: [group],
+      rows,
+    }).some((row) => row.rowID === failureRowID)).toBe(true)
   })
 
   it.each<ThreadTurnStatus>([
@@ -831,7 +876,7 @@ describe("thread execution groups", () => {
     "stopped",
     "blocked",
     "continued_by_user",
-  ])("protects the last failure outcome and marks %s ready for auto-collapse", (status) => {
+  ])("protects the last failure outcome without offering disclosure for %s", (status) => {
     const message = assistantMessage("assistant-1", [
       reasoningItem("reasoning-1", "One"),
       reasoningItem("reasoning-2", "Two"),
@@ -845,8 +890,8 @@ describe("thread execution groups", () => {
       rowIDForItem(rows, "reasoning-2"),
     ])
     expect(group.outcomeRowIDs).toContain(rowIDForItem(rows, "terminal-error"))
-    expect(group.autoCollapseReady).toBe(true)
-    expect(resolveExecutionGroupExpanded(group, "auto")).toBe(false)
+    expect(group.autoCollapseReady).toBe(false)
+    expect(resolveExecutionGroupExpanded(group, "auto")).toBe(true)
   })
 
   it("keeps unresolved questions outside the process prefix", () => {

@@ -478,6 +478,22 @@ export function useGlobalSkills({ onSkillsUpdated }: UseGlobalSkillsOptions = {}
     void refreshGlobalSkillsTree()
   }, [])
 
+  useEffect(() => {
+    if (!globalSkillsRoot) return
+
+    const unsubscribe = window.desktop?.onWorkspaceFileChange?.((event) => {
+      if (!isPathWithinDirectory(event.directory, globalSkillsRoot) && !isPathWithinDirectory(globalSkillsRoot, event.directory)) {
+        return
+      }
+
+      void refreshGlobalSkillsTree().then(() => notifySkillsUpdated())
+    })
+
+    return () => {
+      unsubscribe?.()
+    }
+  }, [globalSkillsRoot])
+
   async function handleGlobalSkillFileSelect(path: string) {
     if (path === selectedGlobalSkillFilePath) return
     if (!confirmDiscardChanges("switch files")) return

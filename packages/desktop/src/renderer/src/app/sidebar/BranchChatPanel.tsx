@@ -1975,6 +1975,7 @@ export function BranchChatPanel({
             scrollStateKey={`branch-chat:${tab.id}`}
             showTurnNavigator={false}
             threadColumnRef={threadColumnRef}
+            workspaceDirectory={workspace?.directory ?? null}
             onArtifactLinkOpen={onArtifactLinkOpen}
             onLocalFileLinkOpen={onLocalFileLinkOpen}
             onRetryUserMessage={handleRetryUserMessage}

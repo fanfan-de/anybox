@@ -35,6 +35,7 @@ import {
 import {
   ThreadMarkdown,
   normalizeMarkdownLinkTarget,
+  resolveWorkspaceMarkdownImageSrc,
   type MarkdownArtifactLinkTarget,
   type MarkdownLocalFileLinkTarget,
 } from "../thread-markdown"
@@ -291,6 +292,7 @@ export interface ThreadViewProps {
   isThreadVisible?: boolean
   navigationRequest?: ThreadNavigationRequest | null
   virtualMeasurementKey?: string | null
+  workspaceDirectory?: string | null
   readScrollSnapshot?: (key: string) => ThreadScrollSnapshot | null
   saveScrollSnapshot?: (key: string, snapshot: ThreadScrollSnapshot) => void
   showTurnNavigator?: boolean
@@ -410,6 +412,7 @@ function useThreadViewActions(source: ThreadViewActionSource) {
 }
 
 interface ThreadInteractionContextValue {
+  resolveImageSrc: (src: string) => string | null
   scopeID: string
   store: ThreadInteractionStoreApi
 }
@@ -439,6 +442,14 @@ function useThreadInteractionScopeID() {
   }
 
   return context.scopeID
+}
+
+function useThreadImageSourceResolver() {
+  const context = useContext(ThreadInteractionContext)
+  if (!context) {
+    throw new Error("Thread image source resolution is unavailable outside ThreadView.")
+  }
+  return context.resolveImageSrc
 }
 
 const IMAGE_LIGHTBOX_BODY_CLASS = "is-image-lightbox-open"
@@ -2436,6 +2447,7 @@ function CompletedResponseText({
   onLocalFileLinkOpen?: (target: MarkdownLocalFileLinkTarget) => void
   text: string
 }) {
+  const resolveImageSrc = useThreadImageSourceResolver()
   const response = parseAssistantResponseFormat(text)
 
   if (response.format === "html") {
@@ -2456,6 +2468,7 @@ function CompletedResponseText({
       text={response.text}
       onArtifactLinkOpen={onArtifactLinkOpen}
       onLocalFileLinkOpen={onLocalFileLinkOpen}
+      resolveImageSrc={resolveImageSrc}
     />
   )
 }
@@ -2471,6 +2484,7 @@ function StreamingResponseText({
   onLocalFileLinkOpen?: (target: MarkdownLocalFileLinkTarget) => void
   text: string
 }) {
+  const resolveImageSrc = useThreadImageSourceResolver()
   const response = parseAssistantResponseFormat(text)
   if (response.marker && response.format === "html") {
     return (
@@ -2493,6 +2507,7 @@ function StreamingResponseText({
       text={markdownText}
       onArtifactLinkOpen={onArtifactLinkOpen}
       onLocalFileLinkOpen={onLocalFileLinkOpen}
+      resolveImageSrc={resolveImageSrc}
     />
   )
 }
@@ -5263,6 +5278,7 @@ function getThreadViewPropsChangeReason(left: ThreadViewViewportProps, right: Th
   if (left.navigationRequest?.paneID !== right.navigationRequest?.paneID) return "navigationRequest"
   if (left.navigationRequest?.turnID !== right.navigationRequest?.turnID) return "navigationRequest"
   if (left.virtualMeasurementKey !== right.virtualMeasurementKey) return "virtualMeasurementKey"
+  if (left.workspaceDirectory !== right.workspaceDirectory) return "workspaceDirectory"
   if (left.readScrollSnapshot !== right.readScrollSnapshot) return "readScrollSnapshot"
   if (left.saveScrollSnapshot !== right.saveScrollSnapshot) return "saveScrollSnapshot"
   if (left.showTurnNavigator !== right.showTurnNavigator) return "showTurnNavigator"
@@ -5379,6 +5395,7 @@ function VisibleThreadView({
   threadColumnRef,
   isThreadVisible = true,
   virtualMeasurementKey,
+  workspaceDirectory = null,
   readScrollSnapshot,
   saveScrollSnapshot,
   showTurnNavigator = true,
@@ -5475,9 +5492,10 @@ function VisibleThreadView({
     ? focusedVirtualRow.rowID
     : null
   const threadInteractionContextValue = useMemo<ThreadInteractionContextValue>(() => ({
+    resolveImageSrc: (src) => resolveWorkspaceMarkdownImageSrc(src, workspaceDirectory),
     scopeID: effectiveScrollStateKey,
     store: interactionStore,
-  }), [effectiveScrollStateKey, interactionStore])
+  }), [effectiveScrollStateKey, interactionStore, workspaceDirectory])
   const pinnedVirtualRowIDs = useMemo(
     () => Array.from(new Set([
       ...(focusedVirtualRowID ? [focusedVirtualRowID] : []),

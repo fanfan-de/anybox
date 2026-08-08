@@ -302,13 +302,13 @@ Composer 的 `tool-module` 标签用于一次性加载 Anybox 原生能力，不
 
 ### Turn execution disclosure
 
-桌面端长 turn 会在 semantic rows 生成后派生 `ThreadExecutionGroup`。分组边界来自 canonical `ThreadTurn`、`lastMessageID` 和 `finalSegmentID`，而不是相邻 DOM 或 user row。最终 response block 的边界在 trace visibility 过滤前计算；最终 response、response 后置内容、未解决 permission/question 和用户插入内容始终不会进入可折叠前缀。`completed` 且最终 response 已解析时，response 之前的 error、失败 tool/workflow 属于可恢复执行过程，随 process prefix 折叠；仅非 `completed` 终态，或 `completed` 但仍无可解析最终 response 时，才保护最后一条失败/终态 trace 作为 outcome。
+桌面端长 turn 会在 semantic rows 生成后派生 `ThreadExecutionGroup`。分组边界来自 canonical `ThreadTurn`、`lastMessageID` 和 `finalSegmentID`，而不是相邻 DOM 或 user row。最终 response block 的边界在 trace visibility 过滤前计算；最终 response、response 后置内容、未解决 permission/question 和用户插入内容始终不会进入可折叠前缀。执行期间先完整展示 reasoning、tools 等 process rows；当首个非空 response block 开始流式输出且最终 response metadata 已解析时，满足长度阈值的前置连续 process prefix 立即生成“处理中”summary 并默认折叠。turn 完成后沿用同一个 disclosure，仅把摘要状态更新为“已处理”。response 之前的 error、失败 tool/workflow 属于可恢复执行过程，随 process prefix 折叠；没有可解析 response 的 turn 永不生成 disclosure，错误与终态 trace 保持直接可见。
 
 一个用户可见的连续执行在任一投影帧最多产生一个 execution summary。状态层重建历史时必须把共享 `userMessageID` 的 user row 保留在原始非 resume turn，不能移动到后创建的续跑 turn。投影层只对具有相同 backend/segment/raw-turn 强身份的相邻 canonical wrappers，或“共享 `userMessageID` 且至少一侧明确带有 `resume: true`”的审批续跑链做保守合并；合并后的状态和最终 response 取最新 authoritative turn，过程 rows 仍按原始消息顺序排列，因此最终回复位于整个审批前后 trace 之后。普通 user、steer、stream insertion 或 `continued_by_user` 边界会阻止跨界 disclosure。Legacy candidates 和仅共享 user ID、但没有明确 resume 元数据的两个真实 turn 不自动合并。
 
 投影顺序固定为：完整 base rows → execution group 派生 → diff/actions decoration → disclosure 裁剪。展开时输出 summary 与原 process rows；折叠时 process rows 从 `displayRows` 中真正移除，只保留 `assistant-execution-summary`、最终结果与后置 rows。summary 不持有隐藏 DOM，因此仍保持逐行虚拟化和 lazy mount。
 
-`ThreadPresentationStore` 以 `scrollStateKey + groupID` 保存 `auto | expanded | collapsed` 语义。`auto` 在 running 时展开；`completed` 等最终 response 可解析后折叠，其他终态可立即折叠并在存在时保留受保护 outcome。显式用户选择覆盖后续 stream patch、late hydration 和虚拟卸载。pending group 被 canonical group 认领时，显式 preference 和 eligibility/auto-collapse 状态迁移到 canonical group，冲突时以 expanded 为安全优先级。store 只属于当前应用生命周期，不写回 conversation、IPC 或磁盘。
+`ThreadPresentationStore` 以 `scrollStateKey + groupID` 保存 `auto | expanded | collapsed` 语义。disclosure 可用后，`auto` 默认折叠；显式用户选择覆盖后续 stream patch、late hydration 和虚拟卸载。running process 在 response 出现前不渲染 summary；response 开始流式输出后立即提供 disclosure。没有可解析 response 的 turn 仍不提供折叠入口；异常终态即使已有 response，也会把最后一条失败或终态 trace 保留在折叠区外。pending group 被 canonical group 认领时，显式 preference 和 eligibility/auto-collapse 状态迁移到 canonical group，冲突时以 expanded 为安全优先级。store 只属于当前应用生命周期，不写回 conversation、IPC 或磁盘。
 
 自动折叠和手动 toggle 都使用 projection layout transaction。事务记录 surviving `rowID + viewportOffset + turnID`，临时 pin summary/outcome row，暂停普通 follow sync 与 TanStack size compensation，并在新投影提交后最多用两个 animation frame 做 DOM rect 校正。虚拟 thread column 使用 `overflow-anchor: none`，避免浏览器原生 anchoring 与应用语义锚竞争；事务期间若收到用户滚动意图，保留 disclosure 结果但取消余下校正。
 
@@ -610,6 +610,7 @@ TraceItemView
 - 非 streaming Markdown 在 16000 字符以内继续使用同步 `ThreadMarkdown`。16001–256000 字符由专用 Web Worker 完成全文 GFM 解析和 MDAST→HAST，再按约 8000 字符的 HAST 顶层 block 逐块返回；主线程先请求首尾 block，随后一次提交一个中间 block，避免一次长解析和大提交阻塞输入、滚动。
 - 超过 256000 字符的 completed response 默认保留最多 12000 字符的 plain-text 首尾预览，用户显式选择“渲染完整格式”后才启动 Worker。单一 table、list、blockquote、paragraph 或 code block 不拆分；节点数超过 8000 或文本超过 256000 字符的 atomic block 同样先显示安全预览，防止一次挂载巨量 DOM。
 - Worker 只处理 immutable completed Markdown；streaming Markdown 仍在 16000 字符以内保持完整语义渲染，超过阈值后切换为 bounded plain-text 首尾预览并保留最新 live tail。HTML response、proposed plan 和其他 Markdown surface 不进入 Worker 路径。
+- ThreadView 从所属 workbench pane 或 Branch Chat workspace 接收工作区目录。Markdown 图片的绝对本地路径继续直接转换为 `anybox-local-image://`；相对路径以该工作区目录为基准解析，且拒绝通过 `..` 越出工作区。streaming 与 completed/Worker 分段渲染必须复用同一解析器。
 - Worker 先返回 document manifest，主线程再按 index 请求 block HAST。缓存键包含 thread scope、semantic row、trace item field、完整 source text 和 pipeline version；缓存只持有 immutable HAST，不缓存 React element、handler 或 URL resolver，虚拟 row 重挂载时可以复用解析结果。
 - 文本颜色使用主文本色，行高适合长文阅读。
 

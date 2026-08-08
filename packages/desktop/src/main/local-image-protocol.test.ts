@@ -37,6 +37,12 @@ afterEach(async () => {
 })
 
 describe("local image protocol", () => {
+  it("decodes URL-encoded absolute Windows paths before creating protocol URLs", () => {
+    expect(toLocalImageProtocolUrl("C:/新建文件夹%20(12)/verify-start.png")).toBe(
+      `anybox-local-image://image?source=${encodeURIComponent("C:/新建文件夹 (12)/verify-start.png")}`,
+    )
+  })
+
   it("resolves a valid raster image absolute path", async () => {
     const directory = await createFixtureDirectory()
     const imagePath = join(directory, "image.png")

@@ -21,6 +21,7 @@ export interface SizeAwareStreamingMarkdownProps {
   isStreaming: boolean
   onArtifactLinkOpen?: (target: MarkdownArtifactLinkTarget) => void
   onLocalFileLinkOpen?: (target: MarkdownLocalFileLinkTarget) => void
+  resolveImageSrc?: (src: string) => string | null
   text: string
 }
 
@@ -39,6 +40,7 @@ export const SizeAwareStreamingMarkdown = memo(function SizeAwareStreamingMarkdo
   isStreaming,
   onArtifactLinkOpen,
   onLocalFileLinkOpen,
+  resolveImageSrc,
   text,
 }: SizeAwareStreamingMarkdownProps) {
   if (shouldRenderFullStreamingMarkdown(text, isStreaming)) {
@@ -47,6 +49,7 @@ export const SizeAwareStreamingMarkdown = memo(function SizeAwareStreamingMarkdo
         className={className}
         onArtifactLinkOpen={onArtifactLinkOpen}
         onLocalFileLinkOpen={onLocalFileLinkOpen}
+        resolveImageSrc={resolveImageSrc}
         text={text}
       />
     )

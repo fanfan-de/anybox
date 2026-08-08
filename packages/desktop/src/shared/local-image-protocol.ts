@@ -19,14 +19,17 @@ function isLocalImageSourceValue(value: string) {
 
 export function normalizeLocalImageSource(value: string) {
   const source = value.trim()
-  if (isLocalImageSourceValue(source)) return source
+  if (!source) return null
+  if (source.toLowerCase().startsWith("file://")) return source
 
   try {
     const decodedSource = decodeURIComponent(source)
-    return isLocalImageSourceValue(decodedSource) ? decodedSource : null
+    if (isLocalImageSourceValue(decodedSource)) return decodedSource
   } catch {
-    return null
+    // Keep checking the literal source so valid paths containing a bare percent sign still work.
   }
+
+  return isLocalImageSourceValue(source) ? source : null
 }
 
 export function isLocalImageSource(value: string) {

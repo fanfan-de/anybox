@@ -4115,12 +4115,12 @@ describe("ThreadView execution disclosure", () => {
       presentationStore,
     })
 
-    fireEvent.click(screen.getByRole("button", { name: /Collapse processing details: Processing/ }))
-    expect(screen.getByRole("button", { name: /Expand processing details: Processing/ })).toHaveAttribute(
-      "data-thread-execution-group-id",
+    const presentationScopeID = props.scrollStateKey ?? props.activeSession?.id ?? "thread:no-session"
+    presentationStore.getState().setProcessDisclosurePreference(
+      presentationScopeID,
       `turn:${pendingTurnID}`,
+      "collapsed",
     )
-    expect(screen.queryByText("read-thread-view")).toBeNull()
 
     const canonicalAssistant = {
       ...pendingAssistant,
@@ -4139,12 +4139,6 @@ describe("ThreadView execution disclosure", () => {
       />,
     )
 
-    expect(screen.getByRole("button", { name: /Expand processing details: Processing/ })).toHaveAttribute(
-      "data-thread-execution-group-id",
-      "turn:turn-execution",
-    )
-    expect(screen.queryByText("read-thread-view")).toBeNull()
-    const presentationScopeID = props.scrollStateKey ?? props.activeSession?.id ?? "thread:no-session"
     expect(presentationStore.getState().getProcessDisclosurePreference(
       presentationScopeID,
       `turn:${pendingTurnID}`,
@@ -4173,7 +4167,12 @@ describe("ThreadView execution disclosure", () => {
       presentationStore,
     })
 
-    fireEvent.click(screen.getByRole("button", { name: /Collapse processing details: Processing/ }))
+    const presentationScopeID = props.scrollStateKey ?? props.activeSession?.id ?? "thread:no-session"
+    presentationStore.getState().setProcessDisclosurePreference(
+      presentationScopeID,
+      "turn:wrapper-turn-1",
+      "collapsed",
+    )
     const finalAssistant = cloneExecutionAssistant(
       firstAssistant,
       "assistant-execution-final",
@@ -4194,11 +4193,6 @@ describe("ThreadView execution disclosure", () => {
       />,
     )
 
-    expect(screen.getByRole("button", { name: /Expand processing details: Processing/ })).toHaveAttribute(
-      "data-thread-execution-group-id",
-      "turn:wrapper-turn-2",
-    )
-    const presentationScopeID = props.scrollStateKey ?? props.activeSession?.id ?? "thread:no-session"
     expect(presentationStore.getState().getProcessDisclosurePreference(
       presentationScopeID,
       "turn:wrapper-turn-1",
@@ -4220,7 +4214,12 @@ describe("ThreadView execution disclosure", () => {
       },
     )
 
-    fireEvent.click(screen.getByRole("button", { name: /Collapse processing details: Processing/ }))
+    const presentationScopeID = props.scrollStateKey ?? props.activeSession?.id ?? "thread:no-session"
+    presentationStore.getState().setProcessDisclosurePreference(
+      presentationScopeID,
+      `turn:${fixture.pendingTurnID}`,
+      "collapsed",
+    )
     const insertedUser = userMessage("user-execution-steer", "Change direction")
     const canonicalTurnID = "turn-execution-canonical"
     const canonicalAssistant = {
@@ -4249,7 +4248,6 @@ describe("ThreadView execution disclosure", () => {
       />,
     )
 
-    const presentationScopeID = props.scrollStateKey ?? props.activeSession?.id ?? "thread:no-session"
     expect(presentationStore.getState().getProcessDisclosurePreference(
       presentationScopeID,
       `turn:${fixture.pendingTurnID}`,
@@ -4271,7 +4269,12 @@ describe("ThreadView execution disclosure", () => {
       },
     )
 
-    fireEvent.click(screen.getByRole("button", { name: /Collapse processing details: Processing/ }))
+    const presentationScopeID = props.scrollStateKey ?? props.activeSession?.id ?? "thread:no-session"
+    presentationStore.getState().setProcessDisclosurePreference(
+      presentationScopeID,
+      `turn:${fixture.pendingTurnID}`,
+      "collapsed",
+    )
     const canonicalTurnID = "turn-execution-canonical"
     const canonicalAssistant = {
       ...fixture.secondAssistant,
@@ -4292,7 +4295,6 @@ describe("ThreadView execution disclosure", () => {
       />,
     )
 
-    const presentationScopeID = props.scrollStateKey ?? props.activeSession?.id ?? "thread:no-session"
     expect(presentationStore.getState().getProcessDisclosurePreference(
       presentationScopeID,
       `turn:${fixture.pendingTurnID}`,
@@ -4322,7 +4324,12 @@ describe("ThreadView execution disclosure", () => {
       presentationStore,
     })
 
-    fireEvent.click(screen.getByRole("button", { name: /Collapse processing details: Processing/ }))
+    const presentationScopeID = props.scrollStateKey ?? props.activeSession?.id ?? "thread:no-session"
+    presentationStore.getState().setProcessDisclosurePreference(
+      presentationScopeID,
+      `turn:${reusedTurnID}`,
+      "collapsed",
+    )
     const newUser = userMessage("user-reused-turn", "Start another task")
     const newAssistant = cloneExecutionAssistant(
       originalAssistant,
@@ -4350,7 +4357,6 @@ describe("ThreadView execution disclosure", () => {
       />,
     )
 
-    const presentationScopeID = props.scrollStateKey ?? props.activeSession?.id ?? "thread:no-session"
     expect(presentationStore.getState().getProcessDisclosurePreference(
       presentationScopeID,
       `turn:${reusedTurnID}`,
@@ -4361,29 +4367,34 @@ describe("ThreadView execution disclosure", () => {
     )).toBe("auto")
   })
 
-  it("shows a running long turn expanded and atomically collapses it at completion", async () => {
+  it("keeps a running process visible until response streaming starts, then atomically collapses it", async () => {
     const running = executionFixture("running")
-    const { props, rerender } = renderThread(running.activeMessages, { activeTurns: [running.turn] })
-
-    const runningSummary = screen.getByRole("button", { name: /Collapse processing details: Processing/ })
-    expect(runningSummary).toHaveAttribute(
-      "aria-expanded",
-      "true",
+    const processOnlyAssistant = {
+      ...running.assistant,
+      items: running.assistant.items.filter((item) => item.kind !== "text"),
+    }
+    const processOnlyTurn = {
+      ...running.turn,
+      messages: [running.user, processOnlyAssistant],
+    }
+    const { props, rerender } = renderThread(
+      [running.user, processOnlyAssistant],
+      { activeTurns: [processOnlyTurn] },
     )
-    expect(runningSummary.querySelector(".assistant-execution-summary-duration")).toBeNull()
+
+    expect(screen.queryByRole("button", { name: /processing details/i })).toBeNull()
     expect(screen.getByText("read-thread-view")).toBeInTheDocument()
 
-    const completed = executionFixture("completed")
     rerender(
       <ThreadView
         {...props}
-        activeMessages={completed.activeMessages}
-        activeTurns={[completed.turn]}
+        activeMessages={running.activeMessages}
+        activeTurns={[running.turn]}
       />,
     )
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /Expand processing details: Processed/ })).toHaveAttribute(
+      expect(screen.getByRole("button", { name: /Expand processing details: Processing/ })).toHaveAttribute(
         "aria-expanded",
         "false",
       )
@@ -4466,10 +4477,7 @@ describe("ThreadView execution disclosure", () => {
     })
     const { props, rerender } = renderThread([user, process], { activeTurns: [initialTurn] })
 
-    expect(screen.getByRole("button", { name: /Collapse processing details: Processed/ })).toHaveAttribute(
-      "aria-expanded",
-      "true",
-    )
+    expect(screen.queryByRole("button", { name: /processing details/i })).toBeNull()
     expect(screen.getByText("late-hydration-tool")).toBeInTheDocument()
 
     const final = assistantTraceMessage(
@@ -4503,7 +4511,15 @@ describe("ThreadView execution disclosure", () => {
 
   it("moves focus from a disappearing process row to the execution summary", async () => {
     const running = executionFixture("running")
-    const { props, rerender } = renderThread(running.activeMessages, { activeTurns: [running.turn] })
+    const processOnlyAssistant = {
+      ...running.assistant,
+      items: running.assistant.items.filter((item) => item.kind !== "text"),
+    }
+    const processOnlyTurn = { ...running.turn, messages: [running.user, processOnlyAssistant] }
+    const { props, rerender } = renderThread(
+      [running.user, processOnlyAssistant],
+      { activeTurns: [processOnlyTurn] },
+    )
     const reasoningToggle = screen.getByText("Inspect the existing renderer structure.").closest<HTMLElement>(
       '[role="button"]',
     )
@@ -4511,23 +4527,30 @@ describe("ThreadView execution disclosure", () => {
     reasoningToggle!.focus()
     expect(document.activeElement).toBe(reasoningToggle)
 
-    const completed = executionFixture("completed")
     rerender(
       <ThreadView
         {...props}
-        activeMessages={completed.activeMessages}
-        activeTurns={[completed.turn]}
+        activeMessages={running.activeMessages}
+        activeTurns={[running.turn]}
       />,
     )
 
-    const summary = await screen.findByRole("button", { name: /Expand processing details: Processed/ })
+    const summary = await screen.findByRole("button", { name: /Expand processing details: Processing/ })
     await waitFor(() => expect(summary).toHaveFocus())
     expect(screen.queryByText("Inspect the existing renderer structure.")).toBeNull()
   })
 
   it("clears a text selection only when it intersects disappearing process rows", async () => {
     const running = executionFixture("running")
-    const { props, rerender } = renderThread(running.activeMessages, { activeTurns: [running.turn] })
+    const processOnlyAssistant = {
+      ...running.assistant,
+      items: running.assistant.items.filter((item) => item.kind !== "text"),
+    }
+    const processOnlyTurn = { ...running.turn, messages: [running.user, processOnlyAssistant] }
+    const { props, rerender } = renderThread(
+      [running.user, processOnlyAssistant],
+      { activeTurns: [processOnlyTurn] },
+    )
     const processText = screen.getByText("Inspect the existing renderer structure.")
     const selection = window.getSelection()
     const processRange = document.createRange()
@@ -4536,27 +4559,26 @@ describe("ThreadView execution disclosure", () => {
     selection?.addRange(processRange)
     expect(selection?.rangeCount).toBe(1)
 
-    const completed = executionFixture("completed")
     rerender(
       <ThreadView
         {...props}
-        activeMessages={completed.activeMessages}
-        activeTurns={[completed.turn]}
+        activeMessages={running.activeMessages}
+        activeTurns={[running.turn]}
       />,
     )
 
     await waitFor(() => expect(selection?.rangeCount).toBe(0))
 
-    fireEvent.click(screen.getByRole("button", { name: /Expand processing details: Processed/ }))
+    fireEvent.click(screen.getByRole("button", { name: /Expand processing details: Processing/ }))
     const survivingResponse = screen.getByText("The implementation is ready.")
     const responseRange = document.createRange()
     responseRange.selectNodeContents(survivingResponse)
     selection?.addRange(responseRange)
     expect(selection?.rangeCount).toBe(1)
 
-    fireEvent.click(screen.getByRole("button", { name: /Collapse processing details: Processed/ }))
+    fireEvent.click(screen.getByRole("button", { name: /Collapse processing details: Processing/ }))
     await waitFor(() => expect(
-      screen.getByRole("button", { name: /Expand processing details: Processed/ }),
+      screen.getByRole("button", { name: /Expand processing details: Processing/ }),
     ).toBeInTheDocument())
     expect(selection?.rangeCount).toBe(1)
     expect(selection?.toString()).toBe("The implementation is ready.")
@@ -6801,6 +6823,28 @@ describe("ThreadView message actions", () => {
     }
   })
 
+  it("resolves completed response image paths from the session workspace", async () => {
+    renderThread([
+      assistantTraceMessage(
+        "assistant-relative-image",
+        [{
+          id: "response-relative-image",
+          kind: "text",
+          timestamp: 1,
+          label: "Assistant",
+          text: "![Start screen](screenshots/start.png)",
+          status: "completed",
+        }],
+        false,
+      ),
+    ], { workspaceDirectory: String.raw`C:\Projects\game` })
+
+    expect(await screen.findByRole("img", { name: "Start screen" })).toHaveAttribute(
+      "src",
+      `anybox-local-image://image?source=${encodeURIComponent(String.raw`C:\Projects\game\screenshots\start.png`)}`,
+    )
+  })
+
   it("copies assistant response images through the desktop clipboard bridge when available", async () => {
     const hadDesktop = "desktop" in window
     const previousDesktop = window.desktop
@@ -7974,31 +8018,31 @@ describe("ThreadView virtual list", () => {
         })
       }
 
-      await waitFor(() => expect(readNextRowOffset()).toBe(142))
+      await waitFor(() => expect(readNextRowOffset()).toBe(87))
 
       toolRowHeight = 220
       fireEvent.click(screen.getByRole("button", { name: /^Tool completed/ }))
       flushScheduledMeasurements()
 
-      await waitFor(() => expect(readNextRowOffset()).toBe(282))
+      await waitFor(() => expect(readNextRowOffset()).toBe(227))
 
       toolRowHeight = 360
       fireEvent.click(screen.getByRole("button", { name: "Expand Tool completed output content" }))
       flushScheduledMeasurements()
 
-      await waitFor(() => expect(readNextRowOffset()).toBe(422))
+      await waitFor(() => expect(readNextRowOffset()).toBe(367))
 
       toolRowHeight = 220
       fireEvent.click(screen.getByRole("button", { name: "Collapse Tool completed output content" }))
       flushScheduledMeasurements()
 
-      await waitFor(() => expect(readNextRowOffset()).toBe(282))
+      await waitFor(() => expect(readNextRowOffset()).toBe(227))
 
       toolRowHeight = 80
       fireEvent.click(screen.getByRole("button", { name: /^Tool completed/ }))
       flushScheduledMeasurements()
 
-      await waitFor(() => expect(readNextRowOffset()).toBe(142))
+      await waitFor(() => expect(readNextRowOffset()).toBe(87))
     } finally {
       layoutSpy.mockRestore()
       animationFrame.restore()

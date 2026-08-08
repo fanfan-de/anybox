@@ -1001,19 +1001,19 @@ body.is-resizing-sidebar .trace-log-detail.is-collapsing {
 }
 
 .assistant-execution-summary-button:hover {
-  background: var(--semantic-thread-panel-surface-hover);
+  background: transparent;
   color: var(--seg-text-1);
 }
 
 .assistant-execution-summary-button:focus-visible {
   outline: none;
   border-color: var(--seg-accent-strong);
-  background: var(--semantic-thread-panel-surface-hover);
+  background: transparent;
   color: var(--seg-text-1);
 }
 
 .assistant-execution-summary-button:active {
-  background: var(--brand-primary-soft-active);
+  background: transparent;
   color: var(--seg-text-1);
 }
 

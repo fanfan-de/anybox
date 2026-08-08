@@ -952,6 +952,7 @@ const ActiveWorkbenchPaneSurface = memo(function ActiveWorkbenchPaneSurface({
                   isThreadVisible={pane.isActivePanel}
                   navigationRequest={paneNavigationRequest}
                   virtualMeasurementKey={`${pane.tabKey ?? pane.sessionID ?? pane.id}:${String(threadActivationVersion)}`}
+                  workspaceDirectory={pane.workspace?.directory ?? null}
                   readScrollSnapshot={readThreadScrollSnapshot}
                   saveScrollSnapshot={saveThreadScrollSnapshot}
                   onBranchSelect={(messageID) => onBranchSelect({ messageID, sessionID: pane.sessionID })}

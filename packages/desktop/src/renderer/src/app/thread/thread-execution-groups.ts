@@ -806,11 +806,8 @@ function deriveGroup(
   const ownerMessage = finalMessage ?? candidate.assistantMessages.at(-1)!
   const firstGroupRow = groupRows[0]
   const messageIndex = messageIndexByID.get(ownerMessage.id) ?? firstGroupRow?.messageIndex ?? 0
-  const abnormalTerminalStatus = isTerminalTurnStatus(candidate.status) && candidate.status !== "completed"
-  const autoCollapseReady = isTerminalTurnStatus(candidate.status) && (
-    abnormalTerminalStatus ||
-    (!finalResolution.authoritativeMetadataPending && Boolean(finalResolution.responseBlock))
-  )
+  const autoCollapseReady = !finalResolution.authoritativeMetadataPending &&
+    Boolean(finalResolution.responseBlock)
 
   return {
     assistantMessageIDs: candidate.assistantMessages.map((message) => message.id),
@@ -924,7 +921,10 @@ export function projectThreadDisplayRowsWithExecutionGroups(
   input: ProjectThreadDisplayRowsWithExecutionGroupsInput,
 ): ExecutionProjectedThreadDisplayRow[] {
   const visibleGroups = input.groups.filter((group) =>
-    group.eligible && group.hasVisiblePrefix && Boolean(group.summaryInsertBeforeRowID),
+    group.eligible &&
+    group.autoCollapseReady &&
+    group.hasVisiblePrefix &&
+    Boolean(group.summaryInsertBeforeRowID),
   )
   if (visibleGroups.length === 0) return input.rows
 

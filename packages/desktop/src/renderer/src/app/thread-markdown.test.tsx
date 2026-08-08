@@ -1,6 +1,11 @@
 import { fireEvent, render, screen } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { normalizeMarkdownLinkTarget, ThreadMarkdown, type MarkdownLinkTarget } from "./thread-markdown"
+import {
+  normalizeMarkdownLinkTarget,
+  resolveWorkspaceMarkdownImageSrc,
+  ThreadMarkdown,
+  type MarkdownLinkTarget,
+} from "./thread-markdown"
 
 describe("ThreadMarkdown", () => {
   beforeEach(() => {
@@ -227,6 +232,30 @@ describe("ThreadMarkdown", () => {
       "src",
       `anybox-local-image://image?source=${encodeURIComponent("file:///C:/Users/19128/AppData/Local/Temp/a.png")}`,
     )
+  })
+
+  it("decodes markdown-encoded absolute image paths with spaces", () => {
+    const imagePath = "C:/新建文件夹 (12)/verify-start.png"
+    render(<ThreadMarkdown text={`![开始画面](<${imagePath}>)`} />)
+
+    expect(screen.getByRole("img", { name: "开始画面" })).toHaveAttribute(
+      "src",
+      `anybox-local-image://image?source=${encodeURIComponent(imagePath)}`,
+    )
+  })
+
+  it("resolves relative image paths against a local workspace directory", () => {
+    expect(resolveWorkspaceMarkdownImageSrc(
+      "./screenshots/start screen.png",
+      String.raw`C:\Projects\game`,
+    )).toBe(
+      `anybox-local-image://image?source=${encodeURIComponent(String.raw`C:\Projects\game\screenshots\start screen.png`)}`,
+    )
+  })
+
+  it("does not let relative image paths escape the workspace directory", () => {
+    expect(resolveWorkspaceMarkdownImageSrc("../outside.png", String.raw`C:\Projects\game`)).toBeNull()
+    expect(resolveWorkspaceMarkdownImageSrc("ftp://example.com/a.png", String.raw`C:\Projects\game`)).toBeNull()
   })
 
   it("renders unsafe and relative image sources as alt text", () => {

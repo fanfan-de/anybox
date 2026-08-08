@@ -122,6 +122,37 @@ function normalizeMarkdownImageSrc(value: string) {
   return toLocalImageProtocolUrl(value)
 }
 
+export function resolveWorkspaceMarkdownImageSrc(value: string, workspaceDirectory?: string | null) {
+  const normalizedSource = normalizeMarkdownImageSrc(value)
+  if (normalizedSource || !workspaceDirectory?.trim()) return normalizedSource
+
+  const source = value.trim()
+  if (!source || /^[a-z][a-z0-9+.-]*:/i.test(source)) return null
+
+  let decodedSource: string
+  try {
+    decodedSource = decodeURIComponent(source)
+  } catch {
+    return null
+  }
+
+  const relativeSegments: string[] = []
+  for (const segment of decodedSource.replace(/\\/g, "/").split("/")) {
+    if (!segment || segment === ".") continue
+    if (segment === "..") {
+      if (relativeSegments.length === 0) return null
+      relativeSegments.pop()
+      continue
+    }
+    relativeSegments.push(segment)
+  }
+  if (relativeSegments.length === 0) return null
+
+  const workspaceRoot = workspaceDirectory.trim().replace(/[\\/]+$/, "")
+  const separator = workspaceRoot.includes("\\") ? "\\" : "/"
+  return toLocalImageProtocolUrl(`${workspaceRoot}${separator}${relativeSegments.join(separator)}`)
+}
+
 function MarkdownLink({
   children,
   href,

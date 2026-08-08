@@ -3728,6 +3728,7 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
   })
   const ptyProxyManager = new PtyProxyManager()
   const workspaceWatchManager = new WorkspaceWatchManager()
+  const globalSkillsWatchManager = new WorkspaceWatchManager()
   const semanticTokenInspectorManager = new SemanticTokenInspectorSessionManager((target, event) => {
     sendDesktopIpcEvent(target, DESKTOP_SEMANTIC_TOKEN_INSPECTOR_EVENT_CHANNEL, event)
   }, {
@@ -6645,8 +6646,10 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
     return result.data
   })
 
-  handleDesktopIpc("desktop:get-global-skills-tree", async () => {
+  handleDesktopIpc("desktop:get-global-skills-tree", async (event) => {
     const result = await requestAgentJSON<AgentGlobalSkillTree>("/api/skills/tree")
+
+    globalSkillsWatchManager.updateDirectories(event.sender, [result.data.root])
 
     return result.data
   })
