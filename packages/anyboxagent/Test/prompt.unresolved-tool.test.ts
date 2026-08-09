@@ -4,6 +4,7 @@ import * as Identifier from "#id/id.ts"
 import { Instance } from "#project/instance.ts"
 import * as LLM from "#session/core/llm.ts"
 import * as Provider from "#provider/provider.ts"
+import type * as MessageTypes from "#session/core/message.ts"
 
 function createTestModel(): Provider.Model {
   return {
@@ -124,16 +125,19 @@ describe("prompt loop unresolved tool guard", () => {
           type: "tool",
           callID: "call-stuck",
           tool: "removed_shell_tool",
-          state: {
-            status: "running",
-            input: {
+          schemaVersion: 3,
+          turnID: "turn-test",
+          input: { raw: JSON.stringify({
               command: "pwd",
-            },
-            title: "Removed Shell Tool",
-            time: {
-              start: Date.now() + 2,
-            },
-          },
+            }), value: {
+              command: "pwd",
+            } },
+          source: { kind: "model" },
+          retry: { attempt: 1 },
+          revision: 1,
+          timestamps: { createdAt: Date.now() + 2, startedAt: Date.now() + 2 },
+          presentation: { title: "Removed Shell Tool" },
+          state: { phase: "running" },
         })
 
         Session.DataBaseCreate("messages", user)
@@ -163,14 +167,18 @@ describe("prompt loop unresolved tool guard", () => {
 
         const recoveredAssistant = allAssistants.find((item) => item.info.id === assistant.id)
         const recoveredTool = recoveredAssistant?.parts.find(
-          (part) => part.type === "tool" && part.callID === "call-stuck",
+          (part): part is MessageTypes.ToolPart => part.type === "tool" && part.callID === "call-stuck",
         )
 
-        expect(recoveredTool?.state.status).toBe("error")
-        if (!recoveredTool || recoveredTool.state.status !== "error") {
+        expect(recoveredTool?.state.phase).toBe("settled")
+        if (
+          !recoveredTool ||
+          recoveredTool.state.phase !== "settled" ||
+          recoveredTool.state.outcome.kind !== "failed"
+        ) {
           throw new Error("expected dangling tool call to be repaired as an error")
         }
-        expect(recoveredTool.state.error).toContain("interrupted run")
+        expect(recoveredTool.state.outcome.error.message).toContain("interrupted run")
         },
       })
     } finally {

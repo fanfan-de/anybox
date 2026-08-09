@@ -157,7 +157,7 @@ function createTransportTerminalEvent(input: {
     | RuntimeEvent.RuntimeEventPayloadByType["turn.cancelled"]
 }) {
   return RuntimeEvent.RuntimeEvent.parse({
-    schemaVersion: 2,
+    schemaVersion: 3,
     scope: input.turnID ? "turn" : "session",
     eventID: Identifier.ascending("event"),
     sessionID: input.sessionID,
@@ -203,16 +203,8 @@ function isFinalFinishReason(finishReason?: string) {
 
 function isBlockingToolPart(part: Message.Part) {
   if (part.type !== "tool") return false
-  if (part.state.status === "waiting-approval") return true
-  const metadata = part.state.status === "completed" ? part.state.metadata : undefined
-  return Boolean(
-    metadata &&
-    typeof metadata === "object" &&
-    !Array.isArray(metadata) &&
-    "kind" in metadata &&
-    metadata.kind === "ask-user-question" &&
-    metadata.answered !== true,
-  )
+  if (part.state.phase !== "settled") return true
+  return part.state.control.mode === "wait-user"
 }
 
 function createResolvedFallbackTerminalEvent(input: {

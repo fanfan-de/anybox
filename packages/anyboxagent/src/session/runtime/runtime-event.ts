@@ -1,4 +1,10 @@
 import z from "zod"
+import {
+  ToolCallPhaseSchema,
+  ToolCallResultCompletenessSchema,
+  ToolCallResultPolaritySchema,
+  ToolCallTurnControlModeSchema,
+} from "@anybox/shared"
 import * as Identifier from "#id/id.ts"
 import * as Permission from "#permission/schema.ts"
 import * as Message from "#session/core/message.ts"
@@ -11,7 +17,7 @@ const ModelRef = z.object({
 })
 
 export const RuntimeEventBase = z.object({
-  schemaVersion: z.literal(2).default(2),
+  schemaVersion: z.literal(3).default(3),
   scope: z.enum(["turn", "session"]).default("turn"),
   eventID: Identifier.schema("event"),
   sessionID: Identifier.schema("session"),
@@ -125,11 +131,12 @@ const ReasoningPartCompletedPayload = z.object({
   part: Message.ReasoningPart,
 })
 
-const ToolCallPayload = z.object({
+const ToolCallSnapshotPayload = z.object({
   part: Message.ToolPart,
 })
 
 const ToolInputDeltaPayload = z.object({
+  part: Message.ToolPart,
   messageID: z.string(),
   partID: z.string(),
   toolCallID: z.string(),
@@ -137,6 +144,15 @@ const ToolInputDeltaPayload = z.object({
   delta: z.string(),
   rawLength: z.number().int().nonnegative().optional(),
   metadata: z.record(z.string(), z.any()).optional(),
+})
+
+const ToolCallProgressPayload = z.object({
+  part: Message.ToolPart,
+})
+
+const ToolCallPhaseChangedPayload = z.object({
+  part: Message.ToolPart,
+  previousPhase: z.enum(["pending", "waiting-approval", "running"]),
 })
 
 const SourceRecordedPayload = z.object({
@@ -248,7 +264,11 @@ const LlmCallFailedPayload = LlmCallStartedPayload.extend({
 const ErrorContextToolSummary = z.object({
   callID: z.string(),
   tool: z.string(),
-  status: z.string(),
+  phase: ToolCallPhaseSchema,
+  outcome: z.enum(["returned", "blocked", "denied", "cancelled", "timeout", "failed"]).optional(),
+  result: ToolCallResultPolaritySchema.optional(),
+  completeness: ToolCallResultCompletenessSchema.optional(),
+  turnControl: ToolCallTurnControlModeSchema.optional(),
 })
 
 const TurnErrorContextPayload = z.object({
@@ -348,49 +368,29 @@ export const ReasoningPartCompletedEvent = RuntimeEventBase.extend({
   payload: ReasoningPartCompletedPayload,
 })
 
-export const ToolCallStartedEvent = RuntimeEventBase.extend({
-  type: z.literal("tool.call.started"),
-  payload: ToolCallPayload,
-})
-
-export const ToolCallPendingEvent = RuntimeEventBase.extend({
-  type: z.literal("tool.call.pending"),
-  payload: ToolCallPayload,
+export const ToolCallCreatedEvent = RuntimeEventBase.extend({
+  type: z.literal("tool.call.created"),
+  payload: ToolCallSnapshotPayload,
 })
 
 export const ToolInputDeltaEvent = RuntimeEventBase.extend({
-  type: z.literal("tool.input.delta"),
+  type: z.literal("tool.call.input_delta"),
   payload: ToolInputDeltaPayload,
 })
 
-export const ToolCallWaitingApprovalEvent = RuntimeEventBase.extend({
-  type: z.literal("tool.call.waiting_approval"),
-  payload: ToolCallPayload,
+export const ToolCallProgressEvent = RuntimeEventBase.extend({
+  type: z.literal("tool.call.progress"),
+  payload: ToolCallProgressPayload,
 })
 
-export const ToolCallApprovedEvent = RuntimeEventBase.extend({
-  type: z.literal("tool.call.approved"),
-  payload: ToolCallPayload,
+export const ToolCallPhaseChangedEvent = RuntimeEventBase.extend({
+  type: z.literal("tool.call.phase_changed"),
+  payload: ToolCallPhaseChangedPayload,
 })
 
-export const ToolCallDeniedEvent = RuntimeEventBase.extend({
-  type: z.literal("tool.call.denied"),
-  payload: ToolCallPayload,
-})
-
-export const ToolCallCancelledEvent = RuntimeEventBase.extend({
-  type: z.literal("tool.call.cancelled"),
-  payload: ToolCallPayload,
-})
-
-export const ToolCallCompletedEvent = RuntimeEventBase.extend({
-  type: z.literal("tool.call.completed"),
-  payload: ToolCallPayload,
-})
-
-export const ToolCallFailedEvent = RuntimeEventBase.extend({
-  type: z.literal("tool.call.failed"),
-  payload: ToolCallPayload,
+export const ToolCallSettledEvent = RuntimeEventBase.extend({
+  type: z.literal("tool.call.settled"),
+  payload: ToolCallSnapshotPayload,
 })
 
 export const SourceRecordedEvent = RuntimeEventBase.extend({
@@ -476,14 +476,10 @@ export const RuntimeEvent = z.discriminatedUnion("type", [
   ReasoningPartDeltaEvent,
   ReasoningPartCompletedEvent,
   ToolInputDeltaEvent,
-  ToolCallPendingEvent,
-  ToolCallStartedEvent,
-  ToolCallWaitingApprovalEvent,
-  ToolCallApprovedEvent,
-  ToolCallDeniedEvent,
-  ToolCallCancelledEvent,
-  ToolCallCompletedEvent,
-  ToolCallFailedEvent,
+  ToolCallCreatedEvent,
+  ToolCallProgressEvent,
+  ToolCallPhaseChangedEvent,
+  ToolCallSettledEvent,
   SourceRecordedEvent,
   FileGeneratedEvent,
   PatchGeneratedEvent,
@@ -504,7 +500,8 @@ export type TransientStreamEventType =
   | "reasoning.part.started"
   | "reasoning.part.delta"
   | "reasoning.part.completed"
-  | "tool.input.delta"
+  | "tool.call.input_delta"
+  | "tool.call.progress"
 
 export type RuntimeEventPayloadByType = {
   "turn.started": z.infer<typeof TurnStartedPayload>
@@ -528,15 +525,11 @@ export type RuntimeEventPayloadByType = {
   "reasoning.part.started": z.infer<typeof ReasoningPartStartedPayload>
   "reasoning.part.delta": z.infer<typeof ReasoningPartDeltaPayload>
   "reasoning.part.completed": z.infer<typeof ReasoningPartCompletedPayload>
-  "tool.input.delta": z.infer<typeof ToolInputDeltaPayload>
-  "tool.call.pending": z.infer<typeof ToolCallPayload>
-  "tool.call.started": z.infer<typeof ToolCallPayload>
-  "tool.call.waiting_approval": z.infer<typeof ToolCallPayload>
-  "tool.call.approved": z.infer<typeof ToolCallPayload>
-  "tool.call.denied": z.infer<typeof ToolCallPayload>
-  "tool.call.cancelled": z.infer<typeof ToolCallPayload>
-  "tool.call.completed": z.infer<typeof ToolCallPayload>
-  "tool.call.failed": z.infer<typeof ToolCallPayload>
+  "tool.call.created": z.infer<typeof ToolCallSnapshotPayload>
+  "tool.call.input_delta": z.infer<typeof ToolInputDeltaPayload>
+  "tool.call.progress": z.infer<typeof ToolCallProgressPayload>
+  "tool.call.phase_changed": z.infer<typeof ToolCallPhaseChangedPayload>
+  "tool.call.settled": z.infer<typeof ToolCallSnapshotPayload>
   "source.recorded": z.infer<typeof SourceRecordedPayload>
   "file.generated": z.infer<typeof FileGeneratedPayload>
   "patch.generated": z.infer<typeof PatchGeneratedPayload>
@@ -564,7 +557,7 @@ export function createRuntimeEventFactory<TTurnID extends string | null>(input: 
     ): Extract<RuntimeEvent, { type: TType }> & { turnID: TTurnID } {
       seq += 1
       return RuntimeEvent.parse({
-        schemaVersion: 2,
+        schemaVersion: 3,
         scope: input.turnID ? "turn" : "session",
         eventID: Identifier.ascending("event"),
         sessionID: input.sessionID,

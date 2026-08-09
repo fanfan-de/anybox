@@ -15,11 +15,11 @@ import * as TurnError from "#session/core/turn-error.ts"
 import * as ToolResultPersistence from "#session/support/tool-result-persistence.ts"
 import {
     createAskUserQuestionMetadataFromInput,
-    isAnsweredAskUserQuestionMetadata,
 } from "#tool/ask-user-question.ts"
 import * as Tool from "#tool/tool.ts"
 import { createHash } from "node:crypto"
 import { readImageDimensions } from "#session/support/image-assets.ts"
+import { ToolCallTurnControlSchema, type ToolCallTurnControl } from "@anybox/shared"
 
 const log = Log.create({ service: "session.processor" })
 const ENABLE_STREAM_STDOUT_DEBUG = Flag.ANYBOX_DEBUG_STREAM_STDOUT
@@ -232,10 +232,8 @@ function summarizeLlmUsage(usage: LanguageModelUsage | undefined) {
     }
 }
 
-function readToolRaw(state: Message.ToolPart["state"] | undefined) {
-    return state && typeof (state as { raw?: unknown }).raw === "string"
-        ? (state as { raw: string }).raw
-        : ""
+function readToolRaw(part: Message.ToolPart | undefined) {
+    return part?.input.raw ?? ""
 }
 
 function serializeToolInput(value: unknown) {
@@ -748,6 +746,11 @@ async function extractToolResultState(
     let data: unknown
     let toolAttachments: Tool.ToolAttachment[] | undefined
     let attachments: Message.AttachmentPart[] | undefined
+    let result: "success" | "negative" | undefined
+    let completeness: "complete" | "partial" | undefined
+    let sideEffect: "none" | "possible" | "confirmed" | "unknown" | undefined
+    let retry: "safe" | "unsafe" | "unknown" | undefined
+    let control: ToolCallTurnControl | undefined
 
     if (output && typeof output === "object" && !Array.isArray(output)) {
         const candidate = output as Record<string, unknown>
@@ -768,6 +771,19 @@ async function extractToolResultState(
         }
 
         data = candidate.data
+        result = candidate.result === "success" || candidate.result === "negative"
+            ? candidate.result
+            : undefined
+        completeness = candidate.completeness === "complete" || candidate.completeness === "partial"
+            ? candidate.completeness
+            : undefined
+        sideEffect = ["none", "possible", "confirmed", "unknown"].includes(String(candidate.sideEffect))
+            ? candidate.sideEffect as typeof sideEffect
+            : undefined
+        retry = ["safe", "unsafe", "unknown"].includes(String(candidate.retry))
+            ? candidate.retry as typeof retry
+            : undefined
+        control = ToolCallTurnControlSchema.safeParse(candidate.control).data
         if (Array.isArray(candidate.attachments)) {
             toolAttachments = candidate.attachments
                 .filter((attachment): attachment is Tool.ToolAttachment => Boolean(
@@ -794,6 +810,11 @@ async function extractToolResultState(
             metadata,
             attachments,
             modelOutput: undefined,
+            result,
+            completeness,
+            sideEffect,
+            retry,
+            control,
         }
     }
 
@@ -830,24 +851,36 @@ async function extractToolResultState(
         metadata: processed.metadata,
         attachments,
         modelOutput: processed.modelOutput,
+        result,
+        completeness,
+        sideEffect,
+        retry,
+        control,
     }
 }
 
-function isAskUserQuestionToolResult(
-    metadata: Record<string, unknown> | undefined,
+function structuredToolOutcome(
+    normalized: Awaited<ReturnType<typeof extractToolResultState>>,
+    capabilities?: Tool.ToolCapabilities,
 ) {
-    return Boolean(metadata && metadata.kind === "ask-user-question" && !isAnsweredAskUserQuestionMetadata(metadata))
+    return Tool.returnedToolOutcome({
+        text: normalized.output,
+        title: normalized.title,
+        metadata: normalized.metadata,
+        result: normalized.result ?? "success",
+        completeness: normalized.completeness ?? "complete",
+        sideEffect: normalized.sideEffect,
+        retry: normalized.retry,
+    }, {
+        capabilities,
+        modelOutput: normalized.modelOutput,
+        attachments: normalized.attachments,
+    })
 }
 
 function isAskUserQuestionToolName(toolName: string | undefined) {
     if (!toolName) return false
     return ["ask_user_question", "question"].includes(Tool.toModelToolName(toolName))
-}
-
-function isWorkflowControlToolResult(
-    metadata: Record<string, unknown> | undefined,
-) {
-    return Boolean(metadata && metadata.kind === "workflow-control" && metadata.restartLoop === true)
 }
 
 type FinalToolResultCandidate = {
@@ -973,18 +1006,77 @@ export function create(input: {
     turn?: TurnContext
     toolSources?: Readonly<Record<string, Tool.ToolSource>>
 }) {
+    const canonicalTurnID = input.turn?.turnID ?? input.Assistant.turnID
+    if (!canonicalTurnID) {
+        throw new Error("ToolCall v3 requires a canonical turn ID before stream processing starts.")
+    }
     const toolcalls: Record<string, Message.ToolPart> = {}
-    const pendingToolInputChunks: Record<string, string[]> = {}
-    const pendingToolInputLengths: Record<string, number> = {}
     let snapshot: string | undefined
     let blocked = false
     let restartLoop = false
+    let requestedTurnControl: ToolCallTurnControl | undefined
     let attempt = 0
     let needsCompaction = false
+    const toolTurnControlPriority: Record<ToolCallTurnControl["mode"], number> = {
+        "continue-model": 0,
+        "restart-loop": 1,
+        "finish-turn": 2,
+        "wait-user": 3,
+        "fail-turn": 4,
+        "cancel-turn": 5,
+    }
+    const requestToolTurnControl = (control: ToolCallTurnControl) => {
+        if (
+            !requestedTurnControl ||
+            toolTurnControlPriority[control.mode] > toolTurnControlPriority[requestedTurnControl.mode]
+        ) {
+            requestedTurnControl = control
+        }
+
+        if (control.mode === "wait-user") blocked = true
+        if (control.mode === "restart-loop") restartLoop = true
+    }
+    const requestSettledToolTurnControl = (part: Message.ToolPart) => {
+        if (part.state.phase !== "settled") {
+            throw new Error(`Tool '${part.callID}' did not enter the settled phase.`)
+        }
+        requestToolTurnControl(part.state.control)
+    }
     const emitRuntimeEvent = input.turn?.emit.bind(input.turn)
     const emitStreamRuntimeEvent = input.turn?.emitStream?.bind(input.turn) ?? emitRuntimeEvent
     const emittedCanonicalPartIDs = new Set<string>()
     let currentPhase: string | undefined
+    const toolCallSource = (
+        providerExecuted = false,
+        metadata?: Record<string, unknown>,
+    ) => ({
+        kind: providerExecuted ? "provider" as const : "model" as const,
+        providerID: input.Assistant.providerID,
+        modelID: input.Assistant.modelID,
+        metadata,
+    })
+    const createPendingToolCall = (value: {
+        id?: string
+        callID: string
+        tool: string
+        input?: Record<string, unknown>
+        raw?: string
+        providerExecuted?: boolean
+        providerMetadata?: Record<string, unknown>
+        createdAt?: number
+    }) => Message.createToolPart({
+        id: value.id ?? Identifier.ascending("part"),
+        sessionID: input.Assistant.sessionID,
+        turnID: canonicalTurnID,
+        messageID: input.Assistant.id,
+        executionID: input.turn?.executionID,
+        callID: value.callID,
+        tool: value.tool,
+        input: value.input ?? {},
+        raw: value.raw ?? "",
+        source: toolCallSource(value.providerExecuted, value.providerMetadata),
+        createdAt: value.createdAt,
+    })
     const metadataWithToolSource = (
         toolName: string,
         ...metadataValues: Array<Record<string, unknown> | undefined>
@@ -1066,6 +1158,9 @@ export function create(input: {
     const result = {
         get message() {
             return input.Assistant
+        },
+        get turnControl() {
+            return requestedTurnControl
         },
         partFromToolCall(toolCallID: string) {
             return toolcalls[toolCallID]
@@ -1161,42 +1256,36 @@ export function create(input: {
                 )
             }
 
-            const flushPendingToolInput = (toolCallID: string, options?: { emitPending?: boolean }) => {
+            const flushPendingToolInput = (toolCallID: string, options?: { emitDelta?: boolean }) => {
                 const current = toolcalls[toolCallID]
                 const pendingState = Message.ToolStatePending.safeParse(current?.state)
-                const chunks = pendingToolInputChunks[toolCallID]
 
                 if (!current || !pendingState.success) {
-                    delete pendingToolInputChunks[toolCallID]
-                    delete pendingToolInputLengths[toolCallID]
                     return current
                 }
 
-                const raw = chunks && chunks.length > 0
-                    ? chunks.join("")
-                    : pendingState.data.raw
-                delete pendingToolInputChunks[toolCallID]
-                delete pendingToolInputLengths[toolCallID]
+                if (!current.input.raw || current.input.value !== undefined) {
+                    return current
+                }
+                if (!options?.emitDelta) return current
 
-                const normalizedInput = normalizeToolInput(raw, raw)
-                const pendingPart: Message.ToolPart =
-                    raw === pendingState.data.raw && pendingState.data.input === normalizedInput.input
-                        ? current
-                        : {
-                            ...current,
-                            state: {
-                                ...pendingState.data,
-                                input: normalizedInput.input,
-                                raw: normalizedInput.raw,
-                            },
-                        }
+                const normalizedInput = normalizeToolInput(current.input.raw, current.input.raw)
+                const pendingPart = Message.appendToolPartInput(current, {
+                    delta: "",
+                    value: normalizedInput.input,
+                })
 
                 toolcalls[toolCallID] = pendingPart
-                if (options?.emitPending) {
-                    emitRuntimeEvent?.("tool.call.pending", {
-                        part: pendingPart,
-                    })
-                }
+                emitRuntimeEvent?.("tool.call.input_delta", {
+                    part: pendingPart,
+                    messageID: pendingPart.messageID,
+                    partID: pendingPart.id,
+                    toolCallID: pendingPart.callID,
+                    toolName: pendingPart.tool,
+                    delta: "",
+                    rawLength: pendingPart.input.raw.length,
+                    metadata: pendingPart.presentation?.metadata,
+                })
 
                 return pendingPart
             }
@@ -1229,71 +1318,101 @@ export function create(input: {
             try {
             const settleOpenToolCalls = async (
                 reason: string,
-                status: "error" | "cancelled" = "error",
+                kind: "failed" | "cancelled" = "failed",
             ) => {
                 const end = Date.now()
 
                 for (const [toolCallID, original] of Object.entries(toolcalls)) {
                     const current = flushPendingToolInput(toolCallID) ?? original
-                    if (
-                        current.state.status === "completed" ||
-                        current.state.status === "error" ||
-                        current.state.status === "cancelled" ||
-                        current.state.status === "denied" ||
-                        current.state.status === "waiting-approval"
-                    ) {
+                    if (current.state.phase === "settled" || current.state.phase === "waiting-approval") {
                         continue
                     }
 
-                    const start =
-                        current.state.status === "running"
-                            ? current.state.time.start
-                            : end
-                    const normalizedInput = normalizeToolInput(current.state.input, readToolRaw(current.state))
-
-                    const settled: Message.ToolPart = {
-                        ...current,
-                        state: status === "cancelled"
+                    const metadata = Message.toolPartMetadata(current) ?? {}
+                    const execution = Tool.toolExecutionSemantics(undefined)
+                    const settled = Message.settleToolPart(
+                        current,
+                        kind === "cancelled"
                             ? {
-                                status: "cancelled",
-                                input: normalizedInput.input,
-                                raw: normalizedInput.raw,
+                                kind: "cancelled",
                                 reason,
-                                metadata:
-                                    current.state.status === "running"
-                                        ? current.state.metadata ?? {}
-                                        : current.metadata ?? {},
-                                time: {
-                                    start,
-                                    end,
-                                },
+                                by: "framework",
+                                metadata,
+                                execution,
                             }
                             : {
-                                status: "error",
-                                input: normalizedInput.input,
-                                raw: normalizedInput.raw,
-                                error: reason,
-                                metadata:
-                                    current.state.status === "running"
-                                        ? current.state.metadata ?? {}
-                                        : current.metadata ?? {},
-                                time: {
-                                    start,
-                                    end,
-                                },
+                                kind: "failed",
+                                error: Tool.toolFailure(reason, {
+                                    stage: "internal",
+                                    source: "runtime",
+                                    code: "TOOL_CALL_INTERRUPTED",
+                                    handlerExecuted: current.state.phase === "running",
+                                    severity: "turn-fatal",
+                                }),
+                                metadata,
+                                execution,
                             },
-                    }
+                        { mode: kind === "cancelled" ? "cancel-turn" : "fail-turn", reason },
+                        { timestamp: end },
+                    )
+                    requestSettledToolTurnControl(settled)
 
                     toolcalls[toolCallID] = settled
-                    emitRuntimeEvent?.(status === "cancelled" ? "tool.call.cancelled" : "tool.call.failed", {
+                    emitRuntimeEvent?.("tool.call.settled", {
                         part: settled,
                     })
                     await persistPart(settled)
                 }
             }
 
-            const failOpenToolCalls = (reason: string) => settleOpenToolCalls(reason, "error")
+            const failOpenToolCalls = (reason: string) => settleOpenToolCalls(reason, "failed")
             const cancelOpenToolCalls = (reason: string) => settleOpenToolCalls(reason, "cancelled")
+
+            const settleToolArgumentFailures = async (reason: string) => {
+                const end = Date.now()
+
+                for (const [toolCallID, original] of Object.entries(toolcalls)) {
+                    const current = flushPendingToolInput(toolCallID) ?? original
+                    if (current.state.phase !== "pending" && current.state.phase !== "running") continue
+
+                    const metadata = Message.toolPartMetadata(current) ?? {}
+                    const execution = Tool.toolExecutionSemantics(undefined, {
+                        sideEffect: current.state.phase === "pending" ? "none" : "possible",
+                        retry: current.state.phase === "pending" ? "safe" : "unknown",
+                    })
+                    const outcome = current.state.phase === "pending"
+                        ? {
+                            kind: "blocked" as const,
+                            reason,
+                            code: "TOOL_INPUT_VALIDATION_BLOCKED",
+                            metadata,
+                            execution,
+                        }
+                        : {
+                            kind: "failed" as const,
+                            error: Tool.toolFailure(reason, {
+                                stage: "validation",
+                                source: "model",
+                                code: "TOOL_INPUT_VALIDATION_INTERRUPTED",
+                                handlerExecuted: true,
+                                severity: "recoverable",
+                            }),
+                            metadata,
+                            execution,
+                        }
+                    const settled = Message.settleToolPart(
+                        current,
+                        outcome,
+                        { mode: "continue-model", reason },
+                        { timestamp: end },
+                    )
+                    requestSettledToolTurnControl(settled)
+
+                    toolcalls[toolCallID] = settled
+                    emitRuntimeEvent?.("tool.call.settled", { part: settled })
+                    await persistPart(settled)
+                }
+            }
 
             const listActiveToolCalls = () =>
                 Object.keys(toolcalls)
@@ -1302,7 +1421,7 @@ export function create(input: {
                         (part): part is Message.ToolPart => {
                             if (!part) return false
 
-                            return part.state.status === "pending" || part.state.status === "running"
+                            return part.state.phase === "pending" || part.state.phase === "running"
                         },
                     )
 
@@ -1316,14 +1435,14 @@ export function create(input: {
                 input.Assistant.error = undefined
                 input.Assistant.finishReason = "tool-calls"
                 input.Assistant.completed = input.Assistant.completed ?? Date.now()
-                await failOpenToolCalls(reason)
+                await settleToolArgumentFailures(reason)
                 await persistAssistantMessage()
                 log.warn("converted tool argument validation failure into tool errors", {
                     error: message,
                     activeToolCalls: activeToolCalls.map((part) => ({
                         callID: part.callID,
                         tool: part.tool,
-                        status: part.state.status,
+                        phase: part.state.phase,
                     })),
                 })
                 return true
@@ -1337,10 +1456,10 @@ export function create(input: {
                     return "Tool call did not complete before the model response finished."
                 }
 
-                const pending = activeToolCalls.find((part) => part.state.status === "pending")
+                const pending = activeToolCalls.find((part) => part.state.phase === "pending")
                 const rawLength =
-                    pending?.state.status === "pending"
-                        ? pending.state.raw.length
+                    pending?.state.phase === "pending"
+                        ? pending.input.raw.length
                         : undefined
 
                 const detail = rawLength && rawLength > 0
@@ -1406,18 +1525,10 @@ export function create(input: {
                         }
 
                         const rawToolOutput = candidate.output ?? candidate.result
-                        const fallbackTitle =
-                            candidate.title ??
-                            (current.state.status === "running"
-                                ? current.state.title
-                                : undefined)
+                        const fallbackTitle = candidate.title ?? Message.toolPartTitle(current)
                         const fallbackMetadata =
                             candidate.providerMetadata ??
-                            (
-                                current.state.status === "running"
-                                    ? current.state.metadata
-                                    : current.metadata
-                            ) ??
+                            Message.toolPartMetadata(current) ??
                             {}
                         const normalized = await extractToolResultState(
                             rawToolOutput,
@@ -1426,38 +1537,44 @@ export function create(input: {
                             current,
                         )
                         const normalizedInput = normalizeToolInput(
-                            candidate.input === undefined ? current.state.input : candidate.input,
-                            readToolRaw(current.state),
+                            candidate.input === undefined ? Message.toolPartInput(current) : candidate.input,
+                            readToolRaw(current),
                         )
-                        const match: Message.ToolPart = {
-                            ...current,
-                            tool: candidate.toolName ?? current.tool,
-                            providerExecuted:
-                                candidate.providerExecuted === true
-                                    ? true
-                                    : current.providerExecuted,
-                            state: {
-                                status: "completed",
-                                input: normalizedInput.input,
-                                raw: normalizedInput.raw,
-                                output: normalized.output,
-                                modelOutput: normalized.modelOutput,
-                                metadata: normalized.metadata,
-                                title: normalized.title,
-                                time: {
-                                    start:
-                                        current.state.status === "running"
-                                            ? current.state.time.start
-                                            : Date.now(),
-                                    end: Date.now(),
+                        let running = current
+                        if (running.state.phase === "pending") {
+                            if (normalizedInput.raw.startsWith(running.input.raw)) {
+                                running = Message.appendToolPartInput(running, {
+                                    delta: normalizedInput.raw.slice(running.input.raw.length),
+                                    value: normalizedInput.input,
+                                })
+                            }
+                            running = Message.changeToolPartPhase(running, { phase: "running" }, {
+                                presentation: {
+                                    title: fallbackTitle,
+                                    metadata: fallbackMetadata,
                                 },
-                                attachments: normalized.attachments,
-                            },
-                            metadata: candidate.providerMetadata ?? current.metadata,
+                            })
+                            emitRuntimeEvent?.("tool.call.phase_changed", {
+                                part: running,
+                                previousPhase: "pending",
+                            })
                         }
+                        const control = normalized.control ?? { mode: "continue-model" as const }
+                        const match = Message.settleToolPart(
+                            running,
+                            structuredToolOutcome(normalized),
+                            control,
+                            {
+                                presentation: {
+                                    title: normalized.title || fallbackTitle,
+                                    metadata: normalized.metadata,
+                                },
+                            },
+                        )
+                        requestSettledToolTurnControl(match)
 
                         toolcalls[current.callID] = match
-                        emitRuntimeEvent?.("tool.call.completed", {
+                        emitRuntimeEvent?.("tool.call.settled", {
                             part: match,
                         })
                         await persistPart(match)
@@ -1470,7 +1587,7 @@ export function create(input: {
                             activeToolCalls: activeToolCalls.map((part) => ({
                                 callID: part.callID,
                                 tool: part.tool,
-                                status: part.state.status,
+                                phase: part.state.phase,
                             })),
                         })
                     }
@@ -1770,24 +1887,13 @@ export function create(input: {
                                 break
 
                             case "tool-input-start":
-                                const pendingPart: Message.ToolPart = {
-                                    id: Identifier.ascending("part"),
-                                    sessionID: input.Assistant.sessionID,
-                                    messageID: input.Assistant.id,
-                                    type: "tool",
+                                const pendingPart = createPendingToolCall({
                                     callID: value.id,
                                     tool: value.toolName,
-                                    state: {
-                                        status: "pending",
-                                        input: {},
-                                        raw: "",
-                                    },
-                                    metadata: value.providerMetadata,
-                                }
+                                    providerMetadata: value.providerMetadata,
+                                })
                                 toolcalls[value.id] = pendingPart
-                                pendingToolInputChunks[value.id] = []
-                                pendingToolInputLengths[value.id] = 0
-                                emitRuntimeEvent?.("tool.call.pending", {
+                                emitRuntimeEvent?.("tool.call.created", {
                                     part: pendingPart,
                                 })
 
@@ -1800,26 +1906,24 @@ export function create(input: {
                                 // }
                                 break;
                             case "tool-input-end":
-                                flushPendingToolInput(value.id, { emitPending: true })
+                                flushPendingToolInput(value.id, { emitDelta: true })
                                 break;
                             case "tool-input-delta":
                                 if (value.id in toolcalls && typeof value.delta === "string") {
                                     const current = toolcalls[value.id]
                                     const pendingState = Message.ToolStatePending.safeParse(current?.state)
                                     if (current && pendingState.success) {
-                                        const chunks = pendingToolInputChunks[value.id] ?? []
-                                        chunks.push(value.delta)
-                                        pendingToolInputChunks[value.id] = chunks
-                                        const rawLength = (pendingToolInputLengths[value.id] ?? pendingState.data.raw.length) + value.delta.length
-                                        pendingToolInputLengths[value.id] = rawLength
-                                        emitStreamRuntimeEvent?.("tool.input.delta", {
-                                            messageID: current.messageID,
-                                            partID: current.id,
-                                            toolCallID: current.callID,
-                                            toolName: current.tool,
+                                        const next = Message.appendToolPartInput(current, { delta: value.delta })
+                                        toolcalls[value.id] = next
+                                        emitStreamRuntimeEvent?.("tool.call.input_delta", {
+                                            part: next,
+                                            messageID: next.messageID,
+                                            partID: next.id,
+                                            toolCallID: next.callID,
+                                            toolName: next.tool,
                                             delta: value.delta,
-                                            rawLength,
-                                            metadata: current.metadata,
+                                            rawLength: next.input.raw.length,
+                                            metadata: next.presentation?.metadata,
                                         })
                                     }
                                 }
@@ -1861,7 +1965,7 @@ export function create(input: {
                                 // value.toolName 工具名称
                                 // value.args 工具参数
                                 const match = flushPendingToolInput(value.toolCallId)
-                                const rawToolInput = readToolRaw(match?.state)
+                                const rawToolInput = readToolRaw(match)
                                 const normalizedInput = normalizeToolInput(value.input, rawToolInput)
                                 const askUserQuestionMetadata = isAskUserQuestionToolName(value.toolName)
                                     ? createAskUserQuestionMetadataFromInput(normalizedInput.input, {
@@ -1870,43 +1974,85 @@ export function create(input: {
                                     : undefined
                                 const runningStateMetadata = metadataWithToolSource(
                                     value.toolName,
-                                    value.providerMetadata,
                                     askUserQuestionMetadata,
                                 )
-                                const part: Message.ToolPart = {
-                                    ...(match ?? {
-                                        id: Identifier.ascending("part"),
-                                        sessionID: input.Assistant.sessionID,
-                                        messageID: input.Assistant.id,
-                                        type: "tool" as const,
+                                let part = match
+                                if (!part) {
+                                    part = createPendingToolCall({
                                         callID: value.toolCallId,
-                                    }),
-                                    tool: value.toolName,
-                                    providerExecuted: value.providerExecuted === true ? true : match?.providerExecuted,
-                                    state: {
-                                        status: "running",
+                                        tool: value.toolName,
                                         input: normalizedInput.input,
                                         raw: normalizedInput.raw,
-                                        title: value.title,
-                                        metadata: runningStateMetadata,
-                                        time: {
-                                            start:
-                                                match?.state.status === "running"
-                                                    ? match.state.time.start
-                                                    : Date.now(),
-                                        }
-                                    },
-                                    metadata: value.providerMetadata ?? match?.metadata,
+                                        providerExecuted: value.providerExecuted === true,
+                                        providerMetadata: value.providerMetadata,
+                                    })
+                                    toolcalls[value.toolCallId] = part
+                                    emitRuntimeEvent?.("tool.call.created", { part })
                                 }
+
+                                const beforeInputUpdate = part
+                                if (part.state.phase === "pending") {
+                                    if (normalizedInput.raw.startsWith(part.input.raw) && (
+                                        normalizedInput.raw !== part.input.raw ||
+                                        part.input.value === undefined ||
+                                        value.title !== undefined ||
+                                        runningStateMetadata !== undefined ||
+                                        value.providerExecuted === true
+                                    )) {
+                                        part = Message.appendToolPartInput(part, {
+                                            delta: normalizedInput.raw.slice(part.input.raw.length),
+                                            value: normalizedInput.input,
+                                            presentation: {
+                                                title: value.title,
+                                                metadata: runningStateMetadata,
+                                            },
+                                            source: toolCallSource(
+                                                value.providerExecuted === true || part.source.kind === "provider",
+                                                { ...part.source.metadata, ...value.providerMetadata },
+                                            ),
+                                        })
+                                    }
+                                }
+                                if (part.revision > beforeInputUpdate.revision) {
+                                    emitRuntimeEvent?.("tool.call.input_delta", {
+                                        part,
+                                        messageID: part.messageID,
+                                        partID: part.id,
+                                        toolCallID: part.callID,
+                                        toolName: part.tool,
+                                        delta: part.input.raw.startsWith(beforeInputUpdate.input.raw)
+                                            ? part.input.raw.slice(beforeInputUpdate.input.raw.length)
+                                            : "",
+                                        rawLength: part.input.raw.length,
+                                        metadata: part.presentation?.metadata,
+                                    })
+                                }
+
+                                if (part.state.phase === "pending" && askUserQuestionMetadata) {
+                                    const previousPhase = part.state.phase
+                                    part = Message.changeToolPartPhase(part, { phase: "running" })
+                                    emitRuntimeEvent?.("tool.call.phase_changed", { part, previousPhase })
+                                }
+
                                 toolcalls[value.toolCallId] = part
-                                emitRuntimeEvent?.("tool.call.started", {
-                                    part,
-                                })
                                 requestPartPersistence(part)
                                 break;
                             case 'tool-result':
-                                if (toolcalls[value.toolCallId] && toolcalls[value.toolCallId]?.state.status === "running") {
-                                    const current = toolcalls[value.toolCallId]!
+                                if (
+                                    toolcalls[value.toolCallId]?.state.phase === "pending" ||
+                                    toolcalls[value.toolCallId]?.state.phase === "running"
+                                ) {
+                                    let current = toolcalls[value.toolCallId]!
+                                    if (current.state.phase === "pending") {
+                                        const previousPhase = current.state.phase
+                                        current = Message.changeToolPartPhase(current, { phase: "running" }, {
+                                            source: toolCallSource(
+                                                value.providerExecuted === true || current.source.kind === "provider",
+                                                { ...current.source.metadata, ...value.providerMetadata },
+                                            ),
+                                        })
+                                        emitRuntimeEvent?.("tool.call.phase_changed", { part: current, previousPhase })
+                                    }
                                     const resultValue = value as { output?: unknown; result?: unknown }
                                     const rawToolOutput = resultValue.output ?? resultValue.result
                                     const normalized = await extractToolResultState(
@@ -1918,73 +2064,74 @@ export function create(input: {
                                         ) ?? {},
                                         current,
                                     )
-                                    const normalizedInput = normalizeToolInput(value.input, readToolRaw(current.state))
-                                    const match: Message.ToolPart = {
-                                        ...current,
-                                        providerExecuted:
-                                            value.providerExecuted === true
-                                                ? true
-                                                : current.providerExecuted,
-                                        state: {
-                                            status: "completed",
-                                            input: normalizedInput.input,
-                                            raw: normalizedInput.raw,
-                                            output: normalized.output,
-                                            modelOutput: normalized.modelOutput,
-                                            metadata: normalized.metadata,
-                                            title: normalized.title,
-                                            time: {
-                                                start: (current.state as Message.ToolStateRunning).time.start,
-                                                end: Date.now(),
+                                    const control = normalized.control ?? { mode: "continue-model" as const }
+                                    const match = Message.settleToolPart(
+                                        current,
+                                        structuredToolOutcome(normalized),
+                                        control,
+                                        {
+                                            presentation: {
+                                                title: normalized.title || Message.toolPartTitle(current),
+                                                metadata: normalized.metadata,
                                             },
-                                            attachments: normalized.attachments,
                                         },
-                                        metadata: current.metadata,
-                                    }
+                                    )
+                                    requestSettledToolTurnControl(match)
 
                                     toolcalls[value.toolCallId] = match
-                                    emitRuntimeEvent?.("tool.call.completed", {
+                                    emitRuntimeEvent?.("tool.call.settled", {
                                         part: match,
                                     })
                                     requestPartPersistence(match)
 
-                                    if (isAskUserQuestionToolResult(normalized.metadata)) {
-                                        blocked = true
-                                    }
-                                    if (isWorkflowControlToolResult(normalized.metadata)) {
-                                        restartLoop = true
-                                    }
                                 }
                                 break;
 
                             case "tool-error":
-                                if (toolcalls[value.toolCallId] && toolcalls[value.toolCallId]?.state.status === "running") {
-                                    const current = toolcalls[value.toolCallId]!
-                                    const normalizedInput = normalizeToolInput(value.input, readToolRaw(current.state))
-                                    const match: Message.ToolPart = {
-                                        ...current,
-                                        providerExecuted:
-                                            value.providerExecuted === true
-                                                ? true
-                                                : current.providerExecuted,
-                                        state: {
-                                            status: "error",
-                                            input: normalizedInput.input,
-                                            raw: normalizedInput.raw,
-                                            error: normalizeToolError(value.error),
-                                            metadata: metadataWithToolSource(
-                                                current.tool,
-                                                value.providerMetadata,
-                                            ) ?? {},
-                                            time: {
-                                                start: (current.state as Message.ToolStateRunning).time.start,
-                                                end: Date.now(),
-                                            },
-                                        },
+                                if (
+                                    toolcalls[value.toolCallId]?.state.phase === "pending" ||
+                                    toolcalls[value.toolCallId]?.state.phase === "running"
+                                ) {
+                                    let current = toolcalls[value.toolCallId]!
+                                    if (current.state.phase === "pending") {
+                                        const previousPhase = current.state.phase
+                                        current = Message.changeToolPartPhase(current, { phase: "running" }, {
+                                            source: toolCallSource(
+                                                value.providerExecuted === true || current.source.kind === "provider",
+                                                { ...current.source.metadata, ...value.providerMetadata },
+                                            ),
+                                        })
+                                        emitRuntimeEvent?.("tool.call.phase_changed", { part: current, previousPhase })
                                     }
+                                    const signal = Tool.findToolControlSignal(value.error)
+                                    const structuredFailure = Tool.findToolFailureError(value.error)
+                                    const errorMessage = normalizeToolError(value.error)
+                                    const metadata = metadataWithToolSource(
+                                        current.tool,
+                                        value.providerMetadata,
+                                    ) ?? {}
+                                    const match = Message.settleToolPart(current, signal?.outcome ?? {
+                                        kind: "failed" as const,
+                                        error: Tool.toolFailure(value.error, {
+                                            message: errorMessage,
+                                            source: value.providerExecuted === true ? "provider" : "tool",
+                                            code: value.providerExecuted === true
+                                                ? "PROVIDER_TOOL_ERROR"
+                                                : "TOOL_EXECUTION_ERROR",
+                                        }),
+                                        partialOutput: structuredFailure?.partialOutput,
+                                        metadata,
+                                        execution: Tool.toolExecutionSemantics(undefined),
+                                    }, signal?.control ?? {
+                                        mode: "continue-model" as const,
+                                        reason: errorMessage,
+                                    }, {
+                                        presentation: { metadata },
+                                    })
+                                    requestSettledToolTurnControl(match)
 
                                     toolcalls[value.toolCallId] = match
-                                    emitRuntimeEvent?.("tool.call.failed", {
+                                    emitRuntimeEvent?.("tool.call.settled", {
                                         part: match,
                                     })
                                     requestPartPersistence(match)
@@ -1994,41 +2141,28 @@ export function create(input: {
                                 if (
                                     toolcalls[value.toolCallId] &&
                                     (
-                                        toolcalls[value.toolCallId]?.state.status === "running" ||
-                                        toolcalls[value.toolCallId]?.state.status === "waiting-approval"
+                                        toolcalls[value.toolCallId]?.state.phase === "running" ||
+                                        toolcalls[value.toolCallId]?.state.phase === "waiting-approval"
                                     )
                                 ) {
                                     const current = toolcalls[value.toolCallId]!
-                                    const start =
-                                        current.state.status === "waiting-approval"
-                                            ? current.state.time.start
-                                            : (current.state as Message.ToolStateRunning).time.start
-                                    const normalizedInput = normalizeToolInput(current.state.input, readToolRaw(current.state))
-
-                                    const match: Message.ToolPart = {
-                                        ...current,
-                                        state: {
-                                            status: "denied",
-                                            approvalID:
-                                                current.state.status === "waiting-approval"
-                                                    ? current.state.approvalID
-                                                    : undefined,
-                                            input: normalizedInput.input,
-                                            raw: normalizedInput.raw,
-                                            reason: "Tool execution was denied.",
-                                            metadata:
-                                                current.state.status === "waiting-approval"
-                                                    ? current.state.metadata
-                                                    : (current.state as Message.ToolStateRunning).metadata,
-                                            time: {
-                                                start,
-                                                end: Date.now(),
-                                            },
-                                        },
-                                    }
+                                    const metadata = Message.toolPartMetadata(current) ?? {}
+                                    const match = Message.settleToolPart(current, {
+                                        kind: "denied",
+                                        approvalID: current.state.phase === "waiting-approval"
+                                            ? current.state.approval.id
+                                            : undefined,
+                                        reason: "Tool execution was denied.",
+                                        metadata,
+                                        execution: Tool.toolExecutionSemantics(undefined, {
+                                            sideEffect: "none",
+                                            retry: "safe",
+                                        }),
+                                    }, { mode: "continue-model" })
+                                    requestSettledToolTurnControl(match)
 
                                     toolcalls[value.toolCallId] = match
-                                    emitRuntimeEvent?.("tool.call.denied", {
+                                    emitRuntimeEvent?.("tool.call.settled", {
                                         part: match,
                                     })
                                     requestPartPersistence(match)
@@ -2161,42 +2295,24 @@ export function create(input: {
                                     })
                                     break
                                 }
-                                flushPendingToolInput(approvalToolCallID, { emitPending: true })
+                                flushPendingToolInput(approvalToolCallID, { emitDelta: true })
                                 if (
                                     toolcalls[approvalToolCallID] &&
-                                    (
-                                        toolcalls[approvalToolCallID]?.state.status === "running" ||
-                                        toolcalls[approvalToolCallID]?.state.status === "pending"
-                                    )
+                                    toolcalls[approvalToolCallID]?.state.phase === "pending"
                                 ) {
                                     const current = toolcalls[approvalToolCallID]!
-                                    const normalizedInput = normalizeToolInput(current.state.input, readToolRaw(current.state))
-                                    const waiting: Message.ToolPart = {
-                                        ...current,
-                                        state: {
-                                            status: "waiting-approval",
-                                            approvalID: value.approvalId,
-                                            input: normalizedInput.input,
-                                            raw: normalizedInput.raw,
-                                            title:
-                                                current.state.status === "running"
-                                                    ? current.state.title
-                                                    : undefined,
-                                            metadata:
-                                                (current.state.status === "running" ? current.state.metadata : undefined),
-                                            time: {
-                                                start:
-                                                    current.state.status === "running"
-                                                        ? current.state.time.start
-                                                        : Date.now(),
-                                            },
+                                    const waiting = Message.changeToolPartPhase(current, {
+                                        phase: "waiting-approval",
+                                        approval: {
+                                            id: value.approvalId,
+                                            metadata: current.presentation?.metadata,
                                         },
-                                        metadata: current.metadata,
-                                    }
+                                    })
 
                                     toolcalls[approvalToolCallID] = waiting
-                                    emitRuntimeEvent?.("tool.call.waiting_approval", {
+                                    emitRuntimeEvent?.("tool.call.phase_changed", {
                                         part: waiting,
+                                        previousPhase: "pending",
                                     })
                                     requestPartPersistence(waiting)
                                     requestToolApprovalRegistration(waiting)
@@ -2306,7 +2422,7 @@ export function create(input: {
                                 activeToolCalls: activeToolCalls.map((part) => ({
                                     callID: part.callID,
                                     tool: part.tool,
-                                    status: part.state.status,
+                                    phase: part.state.phase,
                                 })),
                             })
                             return "stop"
@@ -2364,12 +2480,36 @@ export function create(input: {
                     }
                     throw e  // 重新抛出错误
                 }
-                if (needsCompaction) return "compact"
-                if (restartLoop) {
+                const turnControl = requestedTurnControl
+                if (turnControl?.mode === "cancel-turn") {
+                    const reason = turnControl.reason ?? "A tool requested cancellation of the current turn."
+                    input.Assistant.error = input.Assistant.error ?? {
+                        name: "MessageAbortedError",
+                        data: { message: reason },
+                    } as Message.Assistant["error"]
+                    input.Assistant.completed = input.Assistant.completed ?? Date.now()
+                    await persistAssistantMessage()
+                    return "cancel"
+                }
+                if (turnControl?.mode === "fail-turn") {
+                    const reason = turnControl.reason ?? "A tool requested failure of the current turn."
+                    input.Assistant.error = input.Assistant.error ?? TurnError.toAssistantError(new Error(reason))
+                    input.Assistant.completed = input.Assistant.completed ?? Date.now()
+                    await persistAssistantMessage()
+                    return "fail"
+                }
+                if (turnControl?.mode === "wait-user" || blocked) return "stop"
+                if (turnControl?.mode === "finish-turn") {
+                    input.Assistant.finishReason = "stop"
+                    input.Assistant.completed = input.Assistant.completed ?? Date.now()
+                    await persistAssistantMessage()
+                    return "finish"
+                }
+                if (turnControl?.mode === "restart-loop" || restartLoop) {
                     input.Assistant.finishReason = "tool-calls"
                     return "restart"
                 }
-                if (blocked) return "stop"
+                if (needsCompaction) return "compact"
                 if (input.Assistant.error) return "stop"
                 return "continue"
             }

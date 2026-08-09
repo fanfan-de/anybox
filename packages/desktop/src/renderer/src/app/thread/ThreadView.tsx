@@ -68,6 +68,10 @@ import type {
 } from "../types"
 import { formatTime } from "../utils"
 import {
+  projectToolCallVisualState,
+  toolCallIsSettled,
+} from "../tool-call-view"
+import {
   getUserMessageBodyText,
   shouldCollapseUserMessageText,
   traceSectionKeyForItem,
@@ -4173,84 +4177,38 @@ function TaskStateTraceItemView(props: TraceItemRendererProps) {
   return <WorkflowLogTraceItemView {...props} />
 }
 
-type ToolTraceDisplayTone = "preparing" | "running" | "waiting-approval" | "success" | "error" | "denied" | "cancelled" | "idle"
-type ToolTraceDisplayIconType = "dot" | "success" | "error" | "tool"
 type ToolTraceIoPaneKind = "input" | "output"
 
 const TOOL_TRACE_JSON_STRING_PARSE_MAX_DEPTH = 6
 
 function getToolTraceDisplayState(item: AssistantTraceItem): {
-  iconType: ToolTraceDisplayIconType
-  isBreathing: boolean
   label: string | null
-  shouldShowLabel: boolean
-  tone: ToolTraceDisplayTone
+  visual: ReturnType<typeof projectToolCallVisualState>
 } {
-  switch (item.status) {
+  const visual = projectToolCallVisualState(item.toolCall)
+  switch (visual.key) {
     case "pending":
-      return {
-        iconType: "tool",
-        isBreathing: true,
-        label: "准备中",
-        shouldShowLabel: true,
-        tone: "idle",
-      }
+      return { label: "准备中", visual }
     case "running":
-      return {
-        iconType: "tool",
-        isBreathing: true,
-        label: "执行中",
-        shouldShowLabel: true,
-        tone: "idle",
-      }
+      return { label: "执行中", visual }
     case "waiting-approval":
-      return {
-        iconType: "dot",
-        isBreathing: true,
-        label: "等待确认",
-        shouldShowLabel: true,
-        tone: "waiting-approval",
-      }
-    case "completed":
-      return {
-        iconType: "success",
-        isBreathing: false,
-        label: null,
-        shouldShowLabel: false,
-        tone: "success",
-      }
-    case "error":
-      return {
-        iconType: "error",
-        isBreathing: false,
-        label: "失败",
-        shouldShowLabel: true,
-        tone: "error",
-      }
+      return { label: "等待确认", visual }
+    case "returned":
+      return { label: "已完成", visual }
+    case "returned-negative":
+      return { label: "未达成", visual }
+    case "returned-partial":
+      return { label: "部分完成", visual }
+    case "blocked":
+      return { label: "已阻止", visual }
     case "denied":
-      return {
-        iconType: "error",
-        isBreathing: false,
-        label: "已拒绝",
-        shouldShowLabel: true,
-        tone: "denied",
-      }
+      return { label: "已拒绝", visual }
     case "cancelled":
-      return {
-        iconType: "error",
-        isBreathing: false,
-        label: "已取消",
-        shouldShowLabel: true,
-        tone: "cancelled",
-      }
-    default:
-      return {
-        iconType: "tool",
-        isBreathing: false,
-        label: null,
-        shouldShowLabel: false,
-        tone: "idle",
-      }
+      return { label: "已取消", visual }
+    case "timeout":
+      return { label: "已超时", visual }
+    case "failed":
+      return { label: "执行故障", visual }
   }
 }
 
@@ -4582,18 +4540,17 @@ function ToolTraceItemView({
         fileChanges: draftPatchFileChanges,
       }
     : null
-  const toolNameStatus = draftPatch?.status ?? item.status
-  const isToolNameActive =
-    toolNameStatus === "pending" ||
-    toolNameStatus === "running" ||
-    Boolean(item.isStreaming && item.status !== "completed" && item.status !== "error" && item.status !== "denied" && item.status !== "cancelled")
+  const toolVisualKey = displayState.visual.key
+  const toolNameStatus = draftPatch?.status ?? toolVisualKey
+  const isToolNameActive = displayState.visual.active && item.isStreaming !== false
   const toolNameClassName = joinClassNames(
     "trace-log-summary",
     "trace-tool-name",
     toolNameStatus ? `is-${toolNameStatus}` : undefined,
+    `is-tone-${displayState.visual.tone}`,
     isToolNameActive ? "is-active" : undefined,
   )
-  const showsToolInputs = item.status === "pending" || item.status === "running" || item.status === "waiting-approval" || item.status === "cancelled"
+  const showsToolInputs = !toolCallIsSettled(item.toolCall)
   const visibleToolInputText = traceVisibility.toolInputs ? item.toolInputText : undefined
   const visibleToolOutputText = traceVisibility.toolOutputs ? item.toolOutputText : undefined
   const execInputCode = item.toolName === "exec" ? parseExecToolInputCode(visibleToolInputText) : null
@@ -4610,8 +4567,8 @@ function ToolTraceItemView({
     id: `${item.id}-draft-patch`,
     isDraftPatch: Boolean(draftPatch),
   })
-  const statusText = displayState.shouldShowLabel && displayState.label ? displayState.label : formatTraceStatusText(item.status)
-  const rowAriaLabel = displayState.shouldShowLabel && displayState.label ? `${summaryTitle} ${displayState.label}` : summaryTitle
+  const statusText = displayState.label
+  const rowAriaLabel = displayState.label ? `${summaryTitle} ${displayState.label}` : summaryTitle
   const shouldRenderToolRowButton = hasDisclosureContent && !draftPatch
   const rowContent = (
     <>
@@ -4636,7 +4593,13 @@ function ToolTraceItemView({
       ) : null}
       <span className="trace-log-filler" aria-hidden="true" />
       <span className="trace-log-meta">
-        {statusText ? <span className={`trace-log-status-text is-${item.status}`}>{statusText}</span> : null}
+        {statusText ? (
+          <span className={joinClassNames(
+            "trace-log-status-text",
+            `is-${toolVisualKey}`,
+            `is-tone-${displayState.visual.tone}`,
+          )}>{statusText}</span>
+        ) : null}
         {hasDisclosureContent ? (
           draftPatch ? (
             <button
@@ -4895,27 +4858,18 @@ const TraceItemView = memo(function TraceItemView({
   suppressReasoningMessageCompletionCollapse = false,
   traceVisibility,
 }: TraceItemViewProps) {
-  const renderedItem =
-    assistantMessagePhase === "cancelled" &&
-    item.kind === "tool" &&
-    item.status !== "cancelled" &&
-    item.status !== "completed" &&
-    item.status !== "denied" &&
-    item.status !== "error"
-      ? {
-          ...item,
-          status: "cancelled" as const,
-          detail: item.detail || "Prompt cancellation requested.",
-          isStreaming: false,
-        }
-      : item
+  const renderedItem = item
+  const toolVisual = renderedItem.kind === "tool"
+    ? projectToolCallVisualState(renderedItem.toolCall)
+    : undefined
   const className = [
     "trace-item",
     `trace-kind-${renderedItem.kind}`,
     renderedItem.kind === "reasoning" || renderedItem.kind === "tool" ? "is-plain" : "",
     isWorkflowLogItem(renderedItem) ? "is-workflow-log" : "",
     renderedItem.isStreaming ? "is-streaming" : "",
-    renderedItem.status ? `is-${renderedItem.status}` : "",
+    toolVisual ? `is-${toolVisual.key}` : renderedItem.status ? `is-${renderedItem.status}` : "",
+    toolVisual ? `is-tone-${toolVisual.tone}` : "",
   ]
     .filter(Boolean)
     .join(" ")

@@ -2,6 +2,7 @@ import z from "zod"
 import { parseWorkspaceLocation } from "@anybox/shared"
 import { Instance } from "#project/instance.ts"
 import * as Ssh from "#remote/ssh/index.ts"
+import { isApiError } from "#server/error.ts"
 import { assessShellPermission, isCriticalShellCommand } from "#tool/shell-command.ts"
 import { resolveToolPath, statResolvedPath, toDisplayPath } from "#tool/shared.ts"
 import * as Tool from "#tool/tool.ts"
@@ -40,7 +41,14 @@ export const SshShellCommandTool = Tool.define(
       description: "Run a non-interactive POSIX shell command on the configured SSH server inside the current remote project boundary.",
       parameters: SshShellCommandParameters,
       validate: async (parameters, ctx) => {
-        if (ctx.abort?.aborted) return "Tool execution was cancelled before command start."
+        if (ctx.abort?.aborted) {
+          throw new Tool.ToolControlSignal({
+            kind: "cancelled",
+            reason: "SSH command was cancelled before it started.",
+            by: "framework",
+            execution: { sideEffect: "none", retry: "safe" },
+          }, { mode: "cancel-turn", reason: "SSH command was cancelled." })
+        }
         const command = parameters.command.trim()
         if (!command) return "Command must contain non-whitespace characters."
 
@@ -81,7 +89,14 @@ export const SshShellCommandTool = Tool.define(
         }
       },
       execute: async (parameters, ctx) => {
-        if (ctx.abort?.aborted) throw new Error("Tool execution was cancelled before command start.")
+        if (ctx.abort?.aborted) {
+          throw new Tool.ToolControlSignal({
+            kind: "cancelled",
+            reason: "SSH command was cancelled before it started.",
+            by: "framework",
+            execution: { sideEffect: "none", retry: "safe" },
+          }, { mode: "cancel-turn", reason: "SSH command was cancelled." })
+        }
         const cwd = resolveRemoteCwd(parameters, ctx)
         const location = splitRemoteUri(cwd)
         const command = parameters.command.trim()
@@ -90,6 +105,25 @@ export const SshShellCommandTool = Tool.define(
         const result = await Ssh.exec(location.profileID, location.remotePath, command, {
           timeoutMs,
           maxOutputChars,
+        }).catch((error) => {
+          if (isApiError(error) && error.code === "SSH_COMMAND_TIMEOUT") {
+            throw new Tool.ToolControlSignal({
+              kind: "timeout",
+              reason: "SSH command exceeded its configured timeout.",
+              timeoutMs,
+              execution: { sideEffect: "possible", retry: "unsafe" },
+            }, { mode: "continue-model", reason: "SSH command timed out." })
+          }
+          if (isApiError(error)) {
+            throw new Tool.ToolFailureError(error, {
+              stage: "transport",
+              source: "provider",
+              code: error.code,
+              handlerExecuted: true,
+              details: { status: error.status },
+            })
+          }
+          throw error
         })
         const stdout = result.stdout.trimEnd()
         const stderr = result.stderr.trimEnd()
@@ -117,8 +151,14 @@ export const SshShellCommandTool = Tool.define(
             exitCode: result.exitCode,
             stdout,
             stderr,
+            stdoutTruncated: result.stdoutTruncated,
+            stderrTruncated: result.stderrTruncated,
             durationMs: result.durationMs,
           },
+          result: result.exitCode === 0 ? "success" : "negative",
+          completeness: result.stdoutTruncated || result.stderrTruncated ? "partial" : "complete",
+          sideEffect: "possible",
+          retry: "unsafe",
         }
       },
       toModelOutput: async (result) => {
@@ -130,7 +170,8 @@ export const SshShellCommandTool = Tool.define(
             workdir: metadata.displayCwd,
             shell: metadata.shell,
             exitCode: metadata.exitCode,
-            status: metadata.exitCode === 0 ? "ok" : "failed",
+            result: result.result ?? "success",
+            completeness: result.completeness ?? "complete",
             stdout: metadata.stdout,
             stderr: metadata.stderr,
           },

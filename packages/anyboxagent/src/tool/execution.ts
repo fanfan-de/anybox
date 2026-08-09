@@ -29,27 +29,6 @@ function asRecord(args: unknown): Record<string, unknown> {
   return {}
 }
 
-function mcpFailureMessage(output: Tool.ToolOutput): string | undefined {
-  const metadata = output.metadata
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return undefined
-  const values = metadata as Record<string, unknown>
-  if (values.mcpIsError !== true) return undefined
-
-  const data = output.data && typeof output.data === "object" && !Array.isArray(output.data)
-    ? output.data as Record<string, unknown>
-    : undefined
-  const structured = values.mcpStructuredContent ?? data?.structuredContent
-  if (structured !== undefined) {
-    try {
-      return JSON.stringify(structured)
-    } catch {
-      // Fall back to the textual MCP error below.
-    }
-  }
-
-  return output.text || "MCP tool execution failed."
-}
-
 export function isToolAllowedForAgent(tool: Tool.ToolInfo, agent: Agent.AgentInfo) {
   const policy = agent.tools
   if (!policy) return true
@@ -254,10 +233,25 @@ export async function createToolExecution(input: {
       const decision = await evaluatePermission(args, toolCallID)
 
       if (decision.action === "deny") {
-        throw new Error(decision.reason)
+        throw new Tool.ToolControlSignal({
+          kind: "denied",
+          reason: decision.reason,
+          execution: Tool.toolExecutionSemantics(input.item.capabilities, {
+            sideEffect: "none",
+            retry: "safe",
+          }),
+        }, { mode: "continue-model", reason: decision.reason })
       }
       if (decision.action === "ask") {
-        throw new Error("Tool execution requires approval before it can continue.")
+        const reason = "Tool execution requires approval before it can continue."
+        throw new Tool.ToolControlSignal({
+          kind: "blocked",
+          reason,
+          execution: Tool.toolExecutionSemantics(input.item.capabilities, {
+            sideEffect: "none",
+            retry: "safe",
+          }),
+        }, { mode: "wait-user", reason })
       }
 
       const execute = () => runtime.execute(args, runtimeContext(toolCallID))
@@ -265,8 +259,6 @@ export async function createToolExecution(input: {
         ? await runWithFilesystemAuthorization(decision.filesystemAuthorization, execute)
         : await execute()
       const normalizedOutput = Tool.normalizeToolOutput(rawOutput)
-      const reportedFailure = mcpFailureMessage(normalizedOutput)
-      if (reportedFailure) throw new Error(reportedFailure)
       const source = input.item.source
       const output = source && (source.kind === "mcp" || source.kind === "native-module")
         ? {

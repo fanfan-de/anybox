@@ -1590,13 +1590,26 @@ function summarizeTraceExportToolCall(
   file: string,
 ) {
   const record = readTraceExportRecord(toolCall)
+  const failure = readTraceExportRecord(record?.failure)
 
   return {
     index: index + 1,
     file,
     callID: readTraceExportString(record?.callID),
     tool: readTraceExportString(record?.tool),
-    status: readTraceExportString(record?.status),
+    phase: readTraceExportString(record?.phase),
+    outcome: readTraceExportString(record?.outcome),
+    result: readTraceExportString(record?.result),
+    completeness: readTraceExportString(record?.completeness),
+    turnControl: readTraceExportString(record?.turnControl),
+    sideEffect: readTraceExportString(record?.sideEffect),
+    retry: readTraceExportString(record?.retry),
+    failureStage: readTraceExportString(failure?.stage),
+    failureSource: readTraceExportString(failure?.source),
+    failureCode: readTraceExportString(failure?.code),
+    failureSeverity: readTraceExportString(failure?.severity),
+    failureRetryable: typeof failure?.retryable === "boolean" ? failure.retryable : undefined,
+    handlerExecuted: typeof failure?.handlerExecuted === "boolean" ? failure.handlerExecuted : undefined,
     turnID: readTraceExportString(record?.turnID),
     messageID: readTraceExportString(record?.messageID),
     title: readTraceExportString(record?.title),
@@ -1824,13 +1837,19 @@ function summarizeTraceFlowEventFacts(
   const payload = readTraceExportRecord(record?.payload)
   const part = readTraceExportRecord(payload?.part)
   const state = readTraceExportRecord(part?.state)
+  const outcomeRecord = readTraceExportRecord(state?.outcome)
+  const control = readTraceExportRecord(state?.control)
   const request = readTraceExportRecord(payload?.request)
   const message = readTraceExportRecord(payload?.message)
   const facts: string[] = []
   const eventID = readTraceExportString(record?.eventID)
   const callID = readTraceFlowToolCallID(payload)
   const tool = readTraceExportString(part?.tool) ?? readTraceExportString(payload?.tool) ?? readTraceExportString(request?.tool)
-  const status = readTraceExportString(state?.status) ?? readTraceExportString(part?.status) ?? readTraceExportString(payload?.status)
+  const phase = readTraceExportString(state?.phase) ?? readTraceExportString(payload?.phase)
+  const outcome = readTraceExportString(outcomeRecord?.kind) ?? readTraceExportString(payload?.outcome)
+  const result = readTraceExportString(outcomeRecord?.result) ?? readTraceExportString(payload?.result)
+  const completeness = readTraceExportString(outcomeRecord?.completeness) ?? readTraceExportString(payload?.completeness)
+  const turnControl = readTraceExportString(control?.mode) ?? readTraceExportString(payload?.turnControl)
   const messageID = readTraceExportString(message?.id) ?? readTraceExportString(payload?.messageID) ?? readTraceExportString(part?.messageID)
   const role = readTraceExportString(message?.role) ?? readTraceExportString(payload?.role)
   const text = readTraceExportString(message?.text) ?? readTraceExportString(payload?.text)
@@ -1843,7 +1862,11 @@ function summarizeTraceFlowEventFacts(
   if (text) facts.push(`text=${formatTraceFlowInline(text, 180)}`)
   if (tool) facts.push(`tool=${formatTraceFlowInline(tool, 80)}`)
   if (callID) facts.push(`callID=${formatTraceFlowInline(callID, 80)}`)
-  if (status) facts.push(`status=${formatTraceFlowInline(status, 60)}`)
+  if (phase) facts.push(`phase=${formatTraceFlowInline(phase, 60)}`)
+  if (outcome) facts.push(`outcome=${formatTraceFlowInline(outcome, 60)}`)
+  if (result) facts.push(`result=${formatTraceFlowInline(result, 60)}`)
+  if (completeness) facts.push(`completeness=${formatTraceFlowInline(completeness, 60)}`)
+  if (turnControl) facts.push(`control=${formatTraceFlowInline(turnControl, 60)}`)
 
   if (callID) {
     const refs = toolPayloadRefsByCallID.get(callID)
@@ -1906,7 +1929,7 @@ function buildSessionTraceEventFlowMarkdown(input: {
     "## How To Read",
     "- Every row in Event Flow corresponds to one exported event, in exported order.",
     "- The `record` column points to the complete per-event JSON. Large tool inputs and outputs are represented as refs and listed in Payload References.",
-    "- Tool-call `status` is lifecycle status. Use `diagnostics` to spot command-level failures such as non-zero exit codes, timeouts, or stderr output.",
+    "- Tool calls keep lifecycle (`phase`), execution semantics (`outcome`, `result`, `completeness`), and turn behavior (`turnControl`) separate. Technical failures retain `stage`, `source`, `code`, handler execution, retryability, and severity; use `diagnostics` for command-level details.",
     "- Use `records/index.json`, `tool-calls/index.json`, and `payload-index.json` as machine-readable indexes.",
     "",
     "## Turn Index",
@@ -1937,19 +1960,29 @@ function buildSessionTraceEventFlowMarkdown(input: {
   if (input.toolCallIndex.length === 0) {
     lines.push("- No tool calls exported.")
   } else {
-    lines.push("| # | callID | tool | status | diagnostics | turnID | durationMs | payloadRefs | file |")
-    lines.push("|---:|---|---|---|---|---|---:|---|---|")
+    lines.push("| # | callID | tool | phase | outcome | result | completeness | control | failure | diagnostics | turnID | durationMs | payloadRefs | file |")
+    lines.push("|---:|---|---|---|---|---|---|---|---|---|---|---:|---|---|")
     for (const toolCall of input.toolCallIndex) {
       const refs = toolCall.callID ? input.toolPayloadRefsByCallID.get(toolCall.callID) : undefined
       const payloadRefs = refs
         ? Object.entries(refs).map(([field, ref]) => `${field}=${ref}`).join("; ")
         : "-"
       const diagnostics = formatTraceFlowToolDiagnostics(toolCall)
+      const failure = toolCall.failureCode
+        ? [toolCall.failureStage, toolCall.failureSource, toolCall.failureCode, toolCall.failureSeverity]
+            .filter(Boolean)
+            .join("/")
+        : "-"
       lines.push([
         toolCall.index,
         toolCall.callID ?? "-",
         toolCall.tool ?? "-",
-        toolCall.status ?? "-",
+        toolCall.phase ?? "-",
+        toolCall.outcome ?? "-",
+        toolCall.result ?? "-",
+        toolCall.completeness ?? "-",
+        toolCall.turnControl ?? "-",
+        failure,
         diagnostics,
         toolCall.turnID ?? "-",
         toolCall.durationMs ?? "-",
@@ -2282,7 +2315,19 @@ function buildTraceFlowSemanticRows(input: {
     const diagnostics = summary ? formatTraceFlowToolDiagnostics(summary) : "-"
     const facts = [
       `callID=${formatTraceFlowInline(callID, 80)}`,
-      summary?.status ? `status=${formatTraceFlowInline(summary.status, 60)}` : "",
+      summary?.phase ? `phase=${formatTraceFlowInline(summary.phase, 60)}` : "",
+      summary?.outcome ? `outcome=${formatTraceFlowInline(summary.outcome, 60)}` : "",
+      summary?.result ? `result=${formatTraceFlowInline(summary.result, 60)}` : "",
+      summary?.completeness ? `completeness=${formatTraceFlowInline(summary.completeness, 60)}` : "",
+      summary?.turnControl ? `control=${formatTraceFlowInline(summary.turnControl, 60)}` : "",
+      summary?.failureCode
+        ? `failure=${formatTraceFlowInline([
+            summary.failureStage,
+            summary.failureSource,
+            summary.failureCode,
+            summary.failureSeverity,
+          ].filter(Boolean).join("/"), 180)}`
+        : "",
       diagnostics !== "-" ? `diagnostics=${formatTraceFlowInline(diagnostics, 220)}` : "",
       summary?.durationMs !== undefined ? `durationMs=${summary.durationMs}` : "",
       summary?.title ? `title=${formatTraceFlowInline(summary.title, 140)}` : "",
@@ -2435,7 +2480,7 @@ function buildSessionTraceReadmeMarkdown(input: {
     "- For the raw chronological event stream, read `event-flow.md`. It keeps low-level runtime events and points to exact record files.",
     "- For exact JSON records, use an `index.json` file first, then open the referenced per-record file.",
     "- For large text, tool input, tool output, or patch content, follow `[ref:payloads/...]` links and verify them with `payload-index.json`.",
-    "- Tool-call `status` is lifecycle status; use `diagnosticStatus` and `diagnostics` to find shell failures, stderr warnings, timeouts, and truncated output.",
+    "- Tool-call `phase`, `outcome`, `result`, `completeness`, and `turnControl` are independent. Failed calls also preserve structured `failure`; use `diagnosticStatus` and `diagnostics` for command-level details.",
     "",
     "## Directory Map",
     "- `manifest.json`: export metadata, counts, redaction settings, and the canonical layout map.",
@@ -2445,8 +2490,8 @@ function buildSessionTraceReadmeMarkdown(input: {
     "- `messages/`: full message records. Open these when you need original message `info` and `parts`.",
     "- `records/index.json`: searchable raw event index by event ID, timestamp, seq, type, turn ID, and related tool-call files.",
     "- `records/`: full raw runtime event records. Use these to prove exactly what happened at a specific event.",
-    "- `tool-calls/index.json`: searchable tool-call index by call ID, tool name, status, message ID, turn ID, timing, and related event IDs.",
-    "- `tool-calls/`: full tool-call records. Use these for exact raw input/output/status fields.",
+    "- `tool-calls/index.json`: searchable tool-call index by call ID, tool name, phase, outcome, result, completeness, turn control, timing, and related event IDs.",
+    "- `tool-calls/`: full canonical tool-call records. Use these for exact input, output, execution certainty, and retry-safety fields.",
     "- `payload-index.json`: index for large payload files. `chars` and `sha256` describe the exact bytes written to `payloads/`.",
     "- `payloads/`: large payload bodies split out from flow files. These files are written exactly as hashed and may not end with a newline.",
     "- `runtime/status.json`: compact runtime state plus pointers to recent events and turn index.",
@@ -2466,7 +2511,7 @@ function buildSessionTraceReadmeMarkdown(input: {
     "- All paths in indexes are relative to this directory.",
     "- JSON and Markdown files are UTF-8.",
     "- Sensitive keys matching the redaction pattern in `manifest.json` may be replaced with `[REDACTED]`.",
-    "- This export uses `schemaVersion: 2`; optional files such as this README are discoverability aids, not required wire fields.",
+    "- This export uses `schemaVersion: 3`; optional files such as this README are discoverability aids, not required wire fields.",
     "",
   ]
 
@@ -2636,7 +2681,7 @@ async function writeSplitSessionTraceExportDirectory(
   const writeTracePage = async (pageNumber: number, pageEvents: AgentSessionTraceExport["events"]) => {
     const file = traceExportRelativePath("records", "pages", `page-${String(pageNumber).padStart(6, "0")}.json`)
     await writeJSON(file, {
-      schemaVersion: 2,
+      schemaVersion: trace.schemaVersion,
       mode: "safe",
       page: pageNumber,
       pageSize: 1_000,
@@ -2674,7 +2719,7 @@ async function writeSplitSessionTraceExportDirectory(
     }
   }
   await writeJSON("records/pages/index.json", {
-    schemaVersion: 2,
+    schemaVersion: trace.schemaVersion,
     mode: "safe",
     pageSize: 1_000,
     totalRetainedEventCount: totalTraceRecordCount,
@@ -2682,7 +2727,7 @@ async function writeSplitSessionTraceExportDirectory(
   })
 
   await writeJSON("manifest.json", {
-    schemaVersion: 2,
+    schemaVersion: trace.schemaVersion,
     exportFormat: "anybox-session-trace-directory",
     generatedAt: trace.generatedAt,
     mode: trace.mode,
@@ -2715,7 +2760,7 @@ async function writeSplitSessionTraceExportDirectory(
   await writeJSON("records/index.json", recordIndex)
   for (const [index, event] of events.entries()) {
     await writeJSON(recordIndex[index].file, {
-      schemaVersion: 2,
+      schemaVersion: trace.schemaVersion,
       recordType: "event",
       index: index + 1,
       event,
@@ -2726,7 +2771,7 @@ async function writeSplitSessionTraceExportDirectory(
   await writeJSON("messages/index.json", messageIndex)
   for (const [index, message] of messages.entries()) {
     await writeJSON(messageIndex[index].file, {
-      schemaVersion: 2,
+      schemaVersion: trace.schemaVersion,
       recordType: "message",
       index: index + 1,
       message,
@@ -2736,7 +2781,7 @@ async function writeSplitSessionTraceExportDirectory(
   await writeJSON("tool-calls/index.json", toolCallIndex)
   for (const [index, toolCall] of toolCalls.entries()) {
     await writeJSON(toolCallIndex[index].file, {
-      schemaVersion: 2,
+      schemaVersion: trace.schemaVersion,
       recordType: "tool-call",
       index: index + 1,
       toolCall,
@@ -2744,7 +2789,7 @@ async function writeSplitSessionTraceExportDirectory(
   }
 
   await writeJSON("runtime/status.json", {
-    schemaVersion: 2,
+    schemaVersion: trace.schemaVersion,
     runtime: runtimeStatus,
     latestTurn: latestTurn && latestTurnIndex >= 0
       ? runtimeTurnIndex[latestTurnIndex]
@@ -2772,7 +2817,7 @@ async function writeSplitSessionTraceExportDirectory(
   await writeJSON("runtime/turns/index.json", runtimeTurnIndex)
   for (const [index, turn] of runtimeTurns.entries()) {
     await writeJSON(runtimeTurnIndex[index].file, {
-      schemaVersion: 2,
+      schemaVersion: trace.schemaVersion,
       recordType: "runtime-turn",
       index: index + 1,
       turn,

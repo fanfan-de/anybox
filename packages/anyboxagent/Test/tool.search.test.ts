@@ -426,16 +426,24 @@ describe("deferred tool planning", () => {
           role: "assistant",
         },
         parts: [{
+          id: "tool-part-v3-53",
           type: "tool",
           tool: TOOL_SEARCH_MODEL_NAME,
-          state: {
-            status: "completed",
-            metadata: {
+          sessionID: "session-test",
+          messageID: "message-test",
+          callID: "tool-call-v3-53",
+          schemaVersion: 3,
+          turnID: "turn-test",
+          input: { raw: JSON.stringify({}), value: {} },
+          source: { kind: "model" },
+          retry: { attempt: 1 },
+          revision: 1,
+          timestamps: { createdAt: 1, settledAt: 1 },
+          state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: "", metadata: {
               kind: "tool-search",
               loadedToolNames: [GMAIL_MODEL_TOOL_NAME],
               loadedToolModuleIDs: ["planner.core"],
-            },
-          },
+            }, execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
         }],
       },
       {
@@ -464,15 +472,23 @@ describe("deferred tool planning", () => {
           role: "assistant",
         },
         parts: [{
+          id: "tool-part-v3-60",
           type: "tool",
           tool: TOOL_SEARCH_ID,
-          state: {
-            status: "completed",
-            metadata: {
+          sessionID: "session-test",
+          messageID: "message-test",
+          callID: "tool-call-v3-60",
+          schemaVersion: 3,
+          turnID: "turn-test",
+          input: { raw: JSON.stringify({}), value: {} },
+          source: { kind: "model" },
+          retry: { attempt: 1 },
+          revision: 1,
+          timestamps: { createdAt: 1, settledAt: 1 },
+          state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: "", metadata: {
               kind: "tool-search",
               loadedToolNames: ["mcp_feishu_search_docs"],
-            },
-          },
+            }, execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
         }],
       },
     ] as unknown as Message.WithParts[]

@@ -4,7 +4,7 @@ import type { EvalExecutor, EvalExecutorContext } from "#eval/runner.ts"
 import { Instance } from "#project/instance.ts"
 import * as Session from "#session/core/session.ts"
 import * as Prompt from "#session/core/prompt.ts"
-import type * as Message from "#session/core/message.ts"
+import * as Message from "#session/core/message.ts"
 
 export type StaticEvalResponse =
   | string
@@ -55,26 +55,30 @@ function textFromParts(parts: Message.Part[]) {
 }
 
 function toolCallsFromParts(parts: Message.Part[]): EvalToolCall[] {
-  function stateMetadata(state: Message.ToolPart["state"]) {
-    return "metadata" in state ? state.metadata : undefined
-  }
-
   return parts
     .filter((part): part is Message.ToolPart => part.type === "tool")
-    .map((part) => ({
-      name: part.tool,
-      input: "input" in part.state ? part.state.input : undefined,
-      output: part.state.status === "completed" ? part.state.output : undefined,
-      status: part.state.status,
-      startedAt: "time" in part.state ? part.state.time.start : undefined,
-      endedAt: "time" in part.state && "end" in part.state.time ? part.state.time.end : undefined,
-      metadata: part.metadata ?? stateMetadata(part.state),
-    }))
+    .map((part) => {
+      const outcome = Message.toolPartOutcome(part)
+      const returned = Message.toolPartReturnedOutcome(part)
+      return {
+        name: part.tool,
+        input: Message.toolPartInput(part),
+        output: returned?.output,
+        phase: part.state.phase,
+        outcome: outcome?.kind,
+        result: returned?.result,
+        completeness: returned?.completeness,
+        turnControl: part.state.phase === "settled" ? part.state.control.mode : undefined,
+        startedAt: part.timestamps.startedAt,
+        endedAt: part.timestamps.settledAt,
+        metadata: Message.toolPartMetadata(part),
+      }
+    })
 }
 
 function statusFromAssistant(result: Message.WithParts): EvalExecutionStatus {
   const blocked = result.parts.some((part) =>
-    part.type === "tool" && part.state.status === "waiting-approval"
+    part.type === "tool" && part.state.phase === "waiting-approval"
   )
   if (blocked) return "blocked"
   if (result.info.role === "assistant" && result.info.error) return "failed"

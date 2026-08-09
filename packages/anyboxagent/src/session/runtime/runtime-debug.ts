@@ -5,8 +5,17 @@ import * as SessionRunner from "#session/runtime/session-runner.ts"
 import * as RuntimeEvent from "#session/runtime/runtime-event.ts"
 import type * as StoredTrace from "#session/runtime/stored-trace-event.ts"
 import * as Session from "#session/core/session.ts"
+import * as Message from "#session/core/message.ts"
 import * as Task from "#session/tasks/task.ts"
 import * as Log from "#util/log.ts"
+import type {
+  ToolCallOutcome,
+  ToolCallFailure,
+  ToolCallPhase,
+  ToolCallResultCompleteness,
+  ToolCallResultPolarity,
+  ToolCallTurnControlMode,
+} from "@anybox/shared"
 
 type RuntimeEventTone = "info" | "success" | "warning" | "error"
 
@@ -28,7 +37,12 @@ export type RuntimeToolSummary = {
   callID: string
   tool: string
   title?: string
-  status: string
+  phase: ToolCallPhase
+  outcome?: ToolCallOutcome["kind"]
+  result?: ToolCallResultPolarity
+  completeness?: ToolCallResultCompleteness
+  turnControl?: ToolCallTurnControlMode
+  failure?: ToolCallFailure
   startedAt?: number
   endedAt?: number
   durationMs?: number
@@ -94,12 +108,20 @@ export type RuntimeErrorContextSummary = {
   activeTools: Array<{
     callID: string
     tool: string
-    status: string
+    phase: ToolCallPhase
+    outcome?: ToolCallOutcome["kind"]
+    result?: ToolCallResultPolarity
+    completeness?: ToolCallResultCompleteness
+    turnControl?: ToolCallTurnControlMode
   }>
   latestTool?: {
     callID: string
     tool: string
-    status: string
+    phase: ToolCallPhase
+    outcome?: ToolCallOutcome["kind"]
+    result?: ToolCallResultPolarity
+    completeness?: ToolCallResultCompleteness
+    turnControl?: ToolCallTurnControlMode
   }
 }
 
@@ -269,33 +291,42 @@ function summarizeMessage(value: unknown) {
   }
 }
 
-function summarizeToolState(part: {
-  callID: string
-  tool: string
-  state: Record<string, unknown>
-}) {
-  const status = readString(part.state.status) || "unknown"
-  const startedAt = readNumber(readRecord(part.state.time)?.start)
-  const endedAt = readNumber(readRecord(part.state.time)?.end)
+function summarizeToolState(part: Message.ToolPart) {
+  const outcome = Message.toolPartOutcome(part)
+  const returned = Message.toolPartReturnedOutcome(part)
+  const startedAt = part.timestamps.startedAt
+  const endedAt = part.timestamps.settledAt
 
   return {
     callID: part.callID,
     tool: part.tool,
-    title: readString(part.state.title) || undefined,
-    status,
+    title: Message.toolPartTitle(part),
+    phase: part.state.phase,
+    outcome: outcome?.kind,
+    result: returned?.result,
+    completeness: returned?.completeness,
+    turnControl: part.state.phase === "settled" ? part.state.control.mode : undefined,
+    failure: outcome?.kind === "failed" ? outcome.error : undefined,
     startedAt,
     endedAt,
     durationMs:
       typeof startedAt === "number" && typeof endedAt === "number"
         ? Math.max(0, endedAt - startedAt)
         : undefined,
-    approvalID: readString(part.state.approvalID) || undefined,
-    inputPreview: summarizeStructuredValue(part.state.input),
-    outputPreview:
-      status === "completed"
-        ? summarizeStructuredValue(part.state.output ?? part.state.modelOutput)
+    approvalID: part.state.phase === "waiting-approval"
+      ? part.state.approval.id
+      : outcome?.kind === "denied"
+        ? outcome.approvalID
         : undefined,
-    error: readString(part.state.error) || readString(part.state.reason) || undefined,
+    inputPreview: summarizeStructuredValue(Message.toolPartInput(part)),
+    outputPreview: returned
+      ? summarizeStructuredValue(returned.output ?? returned.modelOutput)
+      : undefined,
+    error: outcome?.kind === "failed"
+      ? outcome.error.message
+      : outcome && outcome.kind !== "returned"
+        ? outcome.reason
+        : undefined,
   } satisfies RuntimeToolSummary
 }
 
@@ -513,108 +544,68 @@ function summarizeRuntimeEvent(event: RuntimeEvent.RuntimeEvent): RuntimeEventSu
         detail: `length=${event.payload.part.text.length} chars`,
         tone: "success",
       }
-    case "tool.call.pending": {
-      const summary = summarizeToolState({
-        callID: event.payload.part.callID,
-        tool: event.payload.part.tool,
-        state: readRecord(event.payload.part.state) ?? {},
-      })
+    case "tool.call.created": {
+      const summary = summarizeToolState(event.payload.part)
       return {
         ...base,
-        title: `Tool input streaming: ${summary.tool}`,
+        title: `Tool created: ${summary.tool}`,
         detail: summary.inputPreview,
         tone: "info",
         summary,
       }
     }
-    case "tool.call.started": {
-      const summary = summarizeToolState({
-        callID: event.payload.part.callID,
-        tool: event.payload.part.tool,
-        state: readRecord(event.payload.part.state) ?? {},
-      })
+    case "tool.call.input_delta": {
+      const summary = summarizeToolState(event.payload.part)
       return {
         ...base,
-        title: `Tool started: ${summary.tool}`,
-        detail: summary.title ?? summary.inputPreview,
+        title: `Tool input updated: ${summary.tool}`,
+        detail: `revision=${event.payload.part.revision}, raw=${event.payload.rawLength ?? event.payload.part.input.raw.length} chars`,
         tone: "info",
         summary,
       }
     }
-    case "tool.call.waiting_approval": {
-      const summary = summarizeToolState({
-        callID: event.payload.part.callID,
-        tool: event.payload.part.tool,
-        state: readRecord(event.payload.part.state) ?? {},
-      })
+    case "tool.call.progress": {
+      const summary = summarizeToolState(event.payload.part)
       return {
         ...base,
-        title: `Tool waiting for approval: ${summary.tool}`,
-        detail: summary.title ?? summary.inputPreview,
-        tone: "warning",
-        summary,
-      }
-    }
-    case "tool.call.approved":
-      return {
-        ...base,
-        title: `Tool approved: ${event.payload.part.tool}`,
-        detail: event.payload.part.callID,
+        title: `Tool progress: ${summary.tool}`,
+        detail: event.payload.part.progress?.message ?? summary.title,
         tone: "info",
-      }
-    case "tool.call.denied": {
-      const summary = summarizeToolState({
-        callID: event.payload.part.callID,
-        tool: event.payload.part.tool,
-        state: readRecord(event.payload.part.state) ?? {},
-      })
-      return {
-        ...base,
-        title: `Tool denied: ${summary.tool}`,
-        detail: summary.error,
-        tone: "warning",
         summary,
       }
     }
-    case "tool.call.cancelled": {
-      const summary = summarizeToolState({
-        callID: event.payload.part.callID,
-        tool: event.payload.part.tool,
-        state: readRecord(event.payload.part.state) ?? {},
-      })
+    case "tool.call.phase_changed": {
+      const summary = summarizeToolState(event.payload.part)
       return {
         ...base,
-        title: `Tool cancelled: ${summary.tool}`,
-        detail: summary.error,
-        tone: "warning",
+        title: event.payload.part.state.phase === "waiting-approval"
+          ? `Tool waiting for approval: ${summary.tool}`
+          : `Tool running: ${summary.tool}`,
+        detail: summary.title ?? summary.inputPreview,
+        tone: event.payload.part.state.phase === "waiting-approval" ? "warning" : "info",
         summary,
       }
     }
-    case "tool.call.completed": {
-      const summary = summarizeToolState({
-        callID: event.payload.part.callID,
-        tool: event.payload.part.tool,
-        state: readRecord(event.payload.part.state) ?? {},
-      })
+    case "tool.call.settled": {
+      const summary = summarizeToolState(event.payload.part)
+      const outcome = event.payload.part.state.phase === "settled"
+        ? event.payload.part.state.outcome
+        : undefined
+      const label = outcome?.kind === "returned"
+        ? outcome.result === "success" && outcome.completeness === "complete"
+          ? "returned"
+          : `${outcome.result} ${outcome.completeness}`
+        : outcome?.kind ?? "settled"
+      const tone: RuntimeEventTone = outcome?.kind === "failed"
+        ? "error"
+        : outcome?.kind === "returned" && outcome.result === "success" && outcome.completeness === "complete"
+          ? "success"
+          : "warning"
       return {
         ...base,
-        title: `Tool completed: ${summary.tool}`,
-        detail: summary.outputPreview,
-        tone: "success",
-        summary,
-      }
-    }
-    case "tool.call.failed": {
-      const summary = summarizeToolState({
-        callID: event.payload.part.callID,
-        tool: event.payload.part.tool,
-        state: readRecord(event.payload.part.state) ?? {},
-      })
-      return {
-        ...base,
-        title: `Tool failed: ${summary.tool}`,
-        detail: summary.error,
-        tone: "error",
+        title: `Tool ${label}: ${summary.tool}`,
+        detail: summary.outputPreview ?? summary.error,
+        tone,
         summary,
       }
     }
@@ -796,8 +787,9 @@ function summarizeStoredTraceEvent(event: StoredTrace.StoredTraceEvent): Runtime
   const failed = event.type.endsWith(".failed") || event.type === "turn.error.context"
   const warning = event.type.includes("waiting_approval") || event.type.endsWith(".denied") || event.type.endsWith(".cancelled")
   const success = event.type.endsWith(".completed")
+  const toolState = payload.outcome ?? payload.phase
   const subject = payload.toolName
-    ? `${payload.toolName}${payload.status ? ` · ${payload.status}` : ""}`
+    ? `${payload.toolName}${toolState ? ` · ${toolState}` : ""}`
     : payload.phase ?? payload.status ?? payload.finishReason
   return {
     eventID: event.eventID,
@@ -920,12 +912,23 @@ function updateTurnFromStoredTrace(
   }
   if (event.type.startsWith("tool.call.") && payload.callID) {
     const previous = turn.tools.get(payload.callID)
-    const terminal = event.type.endsWith(".completed") || event.type.endsWith(".failed") || event.type.endsWith(".denied") || event.type.endsWith(".cancelled")
+    const terminal = event.type === "tool.call.settled"
     turn.tools.set(payload.callID, {
       callID: payload.callID,
       tool: payload.toolName ?? previous?.tool ?? "unknown",
-      status: payload.status ?? event.type.slice("tool.call.".length).replaceAll("_", "-"),
-      startedAt: previous?.startedAt ?? (event.type.endsWith(".started") ? event.timestamp : undefined),
+      phase: payload.phase === "pending" || payload.phase === "waiting-approval" || payload.phase === "running" || payload.phase === "settled"
+        ? payload.phase
+        : previous?.phase ?? (terminal ? "settled" : "pending"),
+      outcome: payload.outcome ?? previous?.outcome,
+      result: payload.result ?? previous?.result,
+      completeness: payload.completeness ?? previous?.completeness,
+      turnControl: payload.turnControl ?? previous?.turnControl,
+      failure: payload.failure ?? previous?.failure,
+      startedAt: previous?.startedAt ?? (
+        event.type === "tool.call.phase_changed" && payload.phase === "running"
+          ? event.timestamp
+          : undefined
+      ),
       endedAt: terminal ? event.timestamp : previous?.endedAt,
       durationMs: payload.durationMs ?? previous?.durationMs,
       error: payload.error,
@@ -968,7 +971,7 @@ function createTurnSummary(turnID: string): MutableTurnSummary {
   }
 }
 
-function upsertTool(turn: MutableTurnSummary, part: { callID: string; tool: string; state: Record<string, unknown> }) {
+function upsertTool(turn: MutableTurnSummary, part: Message.ToolPart) {
   turn.tools.set(part.callID, summarizeToolState(part))
 }
 
@@ -1093,19 +1096,12 @@ function updateTurnFromEvent(turn: MutableTurnSummary, event: RuntimeEvent.Runti
       })
       return
     }
-    case "tool.call.pending":
-    case "tool.call.started":
-    case "tool.call.waiting_approval":
-    case "tool.call.approved":
-    case "tool.call.denied":
-    case "tool.call.cancelled":
-    case "tool.call.completed":
-    case "tool.call.failed":
-      upsertTool(turn, {
-        callID: event.payload.part.callID,
-        tool: event.payload.part.tool,
-        state: readRecord(event.payload.part.state) ?? {},
-      })
+    case "tool.call.created":
+    case "tool.call.input_delta":
+    case "tool.call.progress":
+    case "tool.call.phase_changed":
+    case "tool.call.settled":
+      upsertTool(turn, event.payload.part)
       return
     case "turn.completed":
       turn.endedAt = event.timestamp
@@ -1292,9 +1288,9 @@ export function getSessionRuntimeDebugSnapshot(input: {
     diagnostics: {
       blockedOnApproval: latestTurn?.phase === "waiting_approval" || latestTurn?.status === "blocked",
       activeToolCount: latestTurn?.tools.filter((tool) =>
-        tool.status === "running" || tool.status === "pending" || tool.status === "waiting-approval"
+        tool.phase !== "settled"
       ).length ?? 0,
-      failedToolCount: latestTurn?.tools.filter((tool) => tool.status === "error" || tool.status === "denied").length ?? 0,
+      failedToolCount: latestTurn?.tools.filter((tool) => tool.outcome === "failed").length ?? 0,
       llmFailureCount: latestTurn?.llmCalls.filter((call) => call.status === "failed").length ?? 0,
       lastErrorMessage:
         latestTurn?.error?.message ??

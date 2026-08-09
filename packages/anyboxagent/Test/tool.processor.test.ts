@@ -108,6 +108,7 @@ describe("processor tool persistence", () => {
           modelID: "test-model",
           providerID: "test-provider",
           agent: "plan",
+          turnID: "trn_test",
           path: {
             cwd: Instance.directory,
             root: Instance.worktree,
@@ -303,15 +304,16 @@ describe("processor tool persistence", () => {
 
       const completed = recorded.events.find(
         (event) =>
-          event.type === "tool.call.completed" &&
+          event.type === "tool.call.settled" &&
           event.payload.part.type === "tool" &&
           event.payload.part.callID === "tool-1" &&
-          event.payload.part.state?.status === "completed",
+          event.payload.part.state?.phase === "settled" &&
+          event.payload.part.state.outcome.kind === "returned",
       )
       expect(completed).toBeDefined()
-      expect(completed?.payload.part.state.output).toBe("alpha")
-      expect(completed?.payload.part.state.title).toBe("Read a.txt")
-      expect(completed?.payload.part.state.metadata).toEqual({
+      expect(completed?.payload.part.state.outcome.output).toBe("alpha")
+      expect(completed?.payload.part.state.outcome.title).toBe("Read a.txt")
+      expect(completed?.payload.part.state.outcome.metadata).toEqual({
         source: "unit",
         toolSource: {
           kind: "native-module",
@@ -320,7 +322,7 @@ describe("processor tool persistence", () => {
           description: "Plan and delegate Todo work.",
         },
       })
-      const attachments = completed?.payload.part.state.attachments
+      const attachments = completed?.payload.part.state.outcome.attachments
       expect(attachments).toHaveLength(2)
       expect(attachments?.[0]).toMatchObject({
         type: "file",
@@ -344,14 +346,15 @@ describe("processor tool persistence", () => {
 
       const failed = recorded.events.find(
         (event) =>
-          event.type === "tool.call.failed" &&
+          event.type === "tool.call.settled" &&
           event.payload.part.type === "tool" &&
           event.payload.part.callID === "tool-2" &&
-          event.payload.part.state?.status === "error",
+          event.payload.part.state?.phase === "settled" &&
+          event.payload.part.state.outcome.kind === "failed",
       )
       expect(failed).toBeDefined()
-      expect(failed?.payload.part.state.error).toBe("boom")
-      expect(failed?.payload.part.state.metadata).toEqual({
+      expect(failed?.payload.part.state.outcome.error.message).toBe("boom")
+      expect(failed?.payload.part.state.outcome.metadata).toEqual({
         source: "unit",
         toolSource: {
           kind: "native-module",
@@ -361,8 +364,14 @@ describe("processor tool persistence", () => {
         },
       })
 
-      expect(processor.partFromToolCall("tool-1")?.state.status).toBe("completed")
-      expect(processor.partFromToolCall("tool-2")?.state.status).toBe("error")
+      expect(processor.partFromToolCall("tool-1")?.state).toMatchObject({
+        phase: "settled",
+        outcome: { kind: "returned" },
+      })
+      expect(processor.partFromToolCall("tool-2")?.state).toMatchObject({
+        phase: "settled",
+        outcome: { kind: "failed" },
+      })
     } finally {
       Date.now = originalNow
     }
@@ -460,24 +469,37 @@ describe("processor tool persistence", () => {
 
     expect(await processor.process(createStreamInput())).toBe("continue")
 
-    const started = recorded.events.find((event) => event.type === "tool.call.started")
-    expect(started?.payload.part.metadata).toEqual({
+    const lifecycle = recorded.events.filter((event) =>
+      event.payload.part?.callID === "call-ask" &&
+      ["tool.call.created", "tool.call.input_delta", "tool.call.phase_changed", "tool.call.settled"].includes(event.type),
+    )
+    expect(lifecycle.map((event) => [event.type, event.payload.part.revision])).toEqual([
+      ["tool.call.created", 0],
+      ["tool.call.input_delta", 1],
+      ["tool.call.phase_changed", 2],
+      ["tool.call.settled", 3],
+    ])
+    expect(lifecycle[0]?.payload.part.state).toEqual({ phase: "pending" })
+
+    const started = recorded.events.find((event) => event.type === "tool.call.phase_changed")
+    expect(started?.payload.part.state).toEqual({ phase: "running" })
+    expect(started?.payload.part.source.metadata).toEqual({
       openai: {
         itemId: "item-1",
       },
     })
-    expect(started?.payload.part.state.metadata).toMatchObject({
+    expect(started?.payload.part.presentation.metadata).toMatchObject({
       kind: "ask-user-question",
       questionID: "que_call_ask",
     })
 
-    const completed = recorded.events.find((event) => event.type === "tool.call.completed")
-    expect(completed?.payload.part.metadata).toEqual({
+    const completed = recorded.events.find((event) => event.type === "tool.call.settled")
+    expect(completed?.payload.part.source.metadata).toEqual({
       openai: {
         itemId: "item-1",
       },
     })
-    expect(completed?.payload.part.state.metadata).toMatchObject({
+    expect(completed?.payload.part.state.outcome.metadata).toMatchObject({
       kind: "ask-user-question",
       answered: true,
       answerText: "feature",
@@ -567,29 +589,33 @@ describe("processor tool persistence", () => {
 
       const completed = recorded.events.find(
         (event) =>
-          event.type === "tool.call.completed" &&
+          event.type === "tool.call.settled" &&
           event.payload.part.type === "tool" &&
           event.payload.part.callID === "tool-large" &&
-          event.payload.part.state?.status === "completed",
+          event.payload.part.state?.phase === "settled" &&
+          event.payload.part.state.outcome.kind === "returned",
       )
 
       expect(completed).toBeDefined()
-      const state = completed?.payload.part.state
-      expect(state.output).toContain("<persisted-output>")
-      expect(state.output).toContain("large-output")
-      expect(state.output).not.toContain("tail-marker")
-      expect(state.modelOutput).toBeUndefined()
-      expect(state.metadata.keep).toBe("small")
-      expect(state.metadata.stdout).toContain("[omitted from context; full tool result is saved at")
-      expect(state.metadata.persistedOutput).toMatchObject({
+      const outcome = completed?.payload.part.state.outcome
+      expect(outcome.output).toContain("<persisted-output>")
+      expect(outcome.output).toContain("large-output")
+      expect(outcome.output).not.toContain("tail-marker")
+      expect(outcome.modelOutput).toBeUndefined()
+      expect(outcome.metadata.keep).toBe("small")
+      expect(outcome.metadata.stdout).toContain("[omitted from context; full tool result is saved at")
+      expect(outcome.metadata.persistedOutput).toMatchObject({
         kind: "persisted-tool-output",
         hasMore: true,
       })
       expect(existsSync(ToolResultPersistence.getSessionDirectory(sessionID))).toBe(true)
 
       const stored = processor.partFromToolCall("tool-large")
-      expect(stored?.state.status).toBe("completed")
-      expect((stored?.state as any).output).toContain("<persisted-output>")
+      expect(stored?.state).toMatchObject({ phase: "settled", outcome: { kind: "returned" } })
+      if (stored?.state.phase !== "settled" || stored.state.outcome.kind !== "returned") {
+        throw new Error("Expected the persisted tool output to return.")
+      }
+      expect(String(stored.state.outcome.output)).toContain("<persisted-output>")
     } finally {
       ToolResultPersistence.removeSessionOutputDirectory(sessionID)
     }
@@ -669,24 +695,25 @@ describe("processor tool persistence", () => {
 
     const running = recorded.events.find(
       (event) =>
-        event.type === "tool.call.started" &&
+        event.type === "tool.call.phase_changed" &&
         event.payload.part.type === "tool" &&
         event.payload.part.callID === "remote-tool-1" &&
-        event.payload.part.state?.status === "running",
+        event.payload.part.state?.phase === "running",
     )
     expect(running).toBeDefined()
-    expect(running?.payload.part.providerExecuted).toBe(true)
+    expect(running?.payload.part.source.kind).toBe("provider")
 
     const completed = recorded.events.find(
       (event) =>
-        event.type === "tool.call.completed" &&
+        event.type === "tool.call.settled" &&
         event.payload.part.type === "tool" &&
         event.payload.part.callID === "remote-tool-1" &&
-        event.payload.part.state?.status === "completed",
+        event.payload.part.state?.phase === "settled" &&
+        event.payload.part.state.outcome.kind === "returned",
     )
     expect(completed).toBeDefined()
-    expect(completed?.payload.part.providerExecuted).toBe(true)
-    expect(completed?.payload.part.state.modelOutput).toEqual({
+    expect(completed?.payload.part.source.kind).toBe("provider")
+    expect(completed?.payload.part.state.outcome.modelOutput).toEqual({
       type: "call",
       serverLabel: "remote-search",
       name: "search",
@@ -695,9 +722,12 @@ describe("processor tool persistence", () => {
     })
 
     const persisted = processor.partFromToolCall("remote-tool-1")
-    expect(persisted?.providerExecuted).toBe(true)
-    expect(persisted?.state.status).toBe("completed")
-    expect((persisted?.state as any).modelOutput).toEqual({
+    expect(persisted?.source.kind).toBe("provider")
+    expect(persisted?.state).toMatchObject({ phase: "settled", outcome: { kind: "returned" } })
+    if (persisted?.state.phase !== "settled" || persisted.state.outcome.kind !== "returned") {
+      throw new Error("Expected the provider tool call to return.")
+    }
+    expect(persisted.state.outcome.modelOutput).toEqual({
       type: "call",
       serverLabel: "remote-search",
       name: "search",
@@ -773,20 +803,20 @@ describe("processor tool persistence", () => {
         })
 
         expect(await processor.process(createStreamInput())).toBe("stop")
-        expect(processor.partFromToolCall("tool-approval")?.state.status).toBe("waiting-approval")
+        expect(processor.partFromToolCall("tool-approval")?.state.phase).toBe("waiting-approval")
       },
     })
 
     const waiting = recorded.events.find(
       (event) =>
-        event.type === "tool.call.waiting_approval" &&
+        event.type === "tool.call.phase_changed" &&
         event.payload.part.type === "tool" &&
         event.payload.part.callID === "tool-approval" &&
-        event.payload.part.state?.status === "waiting-approval",
+        event.payload.part.state?.phase === "waiting-approval",
     )
     expect(waiting).toBeDefined()
-    expect(waiting?.payload.part.state.approvalID).toBe("approval-1")
-    expect(waiting?.payload.part.state.input).toEqual({ file_path: "a.txt", old_string: "", new_string: "alpha" })
+    expect(waiting?.payload.part.state.approval.id).toBe("approval-1")
+    expect(waiting?.payload.part.input.value).toEqual({ file_path: "a.txt", old_string: "", new_string: "alpha" })
 
     const request = recorded.events.find((event) => event.type === "permission.requested")
     expect(request).toBeDefined()
@@ -855,15 +885,19 @@ describe("processor tool persistence", () => {
 
     const failed = recorded.events.find(
       (event) =>
-        event.type === "tool.call.failed" &&
+        event.type === "tool.call.settled" &&
         event.payload.part.type === "tool" &&
         event.payload.part.callID === "tool-stuck" &&
-        event.payload.part.state?.status === "error",
+        event.payload.part.state?.phase === "settled" &&
+        event.payload.part.state.outcome.kind === "failed",
     )
 
     expect(failed).toBeDefined()
-    expect(failed?.payload.part.state.error).toContain("did not complete")
-    expect(processor.partFromToolCall("tool-stuck")?.state.status).toBe("error")
+    expect(failed?.payload.part.state.outcome.error.message).toContain("did not complete")
+    expect(processor.partFromToolCall("tool-stuck")?.state).toMatchObject({
+      phase: "settled",
+      outcome: { kind: "failed" },
+    })
   })
 
   it("surfaces stream timeout aborts when tool input never becomes a tool call", async () => {
@@ -934,16 +968,20 @@ describe("processor tool persistence", () => {
 
     const failed = recorded.events.find(
       (event) =>
-        event.type === "tool.call.failed" &&
+        event.type === "tool.call.settled" &&
         event.payload.part.type === "tool" &&
         event.payload.part.callID === "tool-timeout" &&
-        event.payload.part.state?.status === "error",
+        event.payload.part.state?.phase === "settled" &&
+        event.payload.part.state.outcome.kind === "failed",
     )
 
     expect(failed).toBeDefined()
-    expect(failed?.payload.part.state.error).toContain("The operation timed out.")
-    expect(failed?.payload.part.state.error).toContain("ANYBOX_EXPERIMENTAL_LLM_TOTAL_TIMEOUT_MS")
-    expect(processor.partFromToolCall("tool-timeout")?.state.status).toBe("error")
+    expect(failed?.payload.part.state.outcome.error.message).toContain("The operation timed out.")
+    expect(failed?.payload.part.state.outcome.error.message).toContain("ANYBOX_EXPERIMENTAL_LLM_TOTAL_TIMEOUT_MS")
+    expect(processor.partFromToolCall("tool-timeout")?.state).toMatchObject({
+      phase: "settled",
+      outcome: { kind: "failed" },
+    })
   })
 
   it("reconciles dangling tool calls from final stream metadata when fullStream misses tool-result", async () => {
@@ -1025,17 +1063,21 @@ describe("processor tool persistence", () => {
 
     const completed = recorded.events.find(
       (event) =>
-        event.type === "tool.call.completed" &&
+        event.type === "tool.call.settled" &&
         event.payload.part.type === "tool" &&
         event.payload.part.callID === "tool-reconciled" &&
-        event.payload.part.state?.status === "completed",
+        event.payload.part.state?.phase === "settled" &&
+        event.payload.part.state.outcome.kind === "returned",
     )
 
     expect(completed).toBeDefined()
-    expect(completed?.payload.part.state.output).toBe("created a.txt")
-    expect(completed?.payload.part.state.title).toBe("Created a.txt")
-    expect(completed?.payload.part.state.metadata).toEqual({ source: "toolResults" })
-    expect(recorded.events.some((event) => event.type === "tool.call.failed")).toBe(false)
-    expect(processor.partFromToolCall("tool-reconciled")?.state.status).toBe("completed")
+    expect(completed?.payload.part.state.outcome.output).toBe("created a.txt")
+    expect(completed?.payload.part.state.outcome.title).toBe("Created a.txt")
+    expect(completed?.payload.part.state.outcome.metadata).toEqual({ source: "toolResults" })
+    expect(recorded.events.filter((event) => event.type === "tool.call.settled")).toHaveLength(1)
+    expect(processor.partFromToolCall("tool-reconciled")?.state).toMatchObject({
+      phase: "settled",
+      outcome: { kind: "returned" },
+    })
   })
 })

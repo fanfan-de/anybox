@@ -115,7 +115,7 @@ describe("session trace export sanitization", () => {
     expect(stats.redactedCount).toBe(1)
   })
 
-  test("adds diagnostics for completed shell calls with command-level failures", () => {
+  test("keeps negative results and structured technical failures distinct in diagnostics", () => {
     const runtime = {
       generatedAt: 1,
       logging: {},
@@ -157,27 +157,67 @@ describe("session trace export sanitization", () => {
           },
           parts: [
             {
+              id: "tool-part-v3-34",
               type: "tool",
               callID: "toolcall-1",
               tool: "powershell_command",
               messageID: "message-1",
-              state: {
-                status: "completed",
-                input: {
+              sessionID: "session-test",
+              schemaVersion: 3,
+              turnID: "turn-test",
+              input: { raw: JSON.stringify({
                   command: "missing-command",
-                },
-                modelOutput: {
+                }), value: {
+                  command: "missing-command",
+                } },
+              source: { kind: "model" },
+              retry: { attempt: 1 },
+              revision: 1,
+              timestamps: { createdAt: 1, settledAt: 1 },
+              state: { phase: "settled", outcome: { kind: "returned", result: "negative", completeness: "complete", output: "", modelOutput: {
                   type: "json",
                   value: {
-                    status: "failed",
+                    result: "negative",
+                    completeness: "complete",
+                    processState: "exited",
                     exitCode: 1,
-                    timedOut: false,
-                    aborted: false,
                     stdoutTruncated: false,
                     stderrTruncated: false,
                     stderr: "missing-command: The term is not recognized",
                   },
+                }, execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
+            },
+            {
+              id: "tool-part-v3-failure",
+              type: "tool",
+              callID: "toolcall-2",
+              tool: "mcp_remote_search",
+              messageID: "message-1",
+              sessionID: "session-test",
+              schemaVersion: 3,
+              turnID: "turn-test",
+              input: { raw: "{}", value: {} },
+              source: { kind: "model" },
+              retry: { attempt: 1 },
+              revision: 1,
+              timestamps: { createdAt: 2, settledAt: 3 },
+              state: {
+                phase: "settled",
+                outcome: {
+                  kind: "failed",
+                  error: {
+                    stage: "transport",
+                    source: "provider",
+                    code: "MCP_CONNECTION_CLOSED",
+                    message: "The MCP connection closed unexpectedly.",
+                    handlerExecuted: true,
+                    retryable: true,
+                    severity: "recoverable",
+                  },
+                  partialOutput: "partial provider output",
+                  execution: { sideEffect: "unknown", retry: "unknown" },
                 },
+                control: { mode: "continue-model" },
               },
             },
           ],
@@ -188,11 +228,13 @@ describe("session trace export sanitization", () => {
 
     expect(trace.toolCalls[0]).toMatchObject({
       callID: "toolcall-1",
-      status: "completed",
-      diagnosticStatus: "error",
+      phase: "settled",
+      outcome: "returned",
+      result: "negative",
+      diagnosticStatus: "warning",
       diagnostics: expect.arrayContaining([
         expect.objectContaining({
-          severity: "error",
+          severity: "warning",
           code: "shell.exit_nonzero",
         }),
         expect.objectContaining({
@@ -201,6 +243,28 @@ describe("session trace export sanitization", () => {
         }),
       ]),
     })
+    expect(trace.toolCalls[1]).toMatchObject({
+      callID: "toolcall-2",
+      phase: "settled",
+      outcome: "failed",
+      output: "partial provider output",
+      failure: {
+        stage: "transport",
+        source: "provider",
+        code: "MCP_CONNECTION_CLOSED",
+        handlerExecuted: true,
+        retryable: true,
+        severity: "recoverable",
+      },
+      diagnosticStatus: "error",
+      diagnostics: [
+        expect.objectContaining({
+          severity: "error",
+          code: "MCP_CONNECTION_CLOSED",
+        }),
+      ],
+    })
+    expect(trace.schemaVersion).toBe(3)
   })
 
   test("single JSON exports keep only the newest 5000 trace records and mark truncation", () => {

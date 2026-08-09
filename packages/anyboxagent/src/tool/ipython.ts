@@ -7,8 +7,8 @@ import { disposeIpythonRegistry, getIpythonRegistry } from "#ipython/registry.ts
 import {
   IpythonRuntimeError,
   type IpythonExecutionResult,
-  type IpythonRuntimeFailure,
 } from "#ipython/types.ts"
+import { IPYTHON_CELL_TIMEOUT_MS } from "#ipython/worker-client.ts"
 import { normalizeTerminalOutput } from "#shell/terminal-output.ts"
 import * as Tool from "#tool/tool.ts"
 
@@ -66,36 +66,10 @@ function formatExecutionResult(result: IpythonExecutionResult) {
   return sections.join("\n\n")
 }
 
-function runtimeFailure(error: IpythonRuntimeError): IpythonRuntimeFailure {
-  return {
-    status: "runtime_error",
-    errorCode: error.code,
-    message: normalizeTerminalOutput(error.message),
-    kernelGeneration: error.kernelGeneration ?? 0,
-    stateLost: true,
-  }
-}
-
-function formatRuntimeFailure(failure: IpythonRuntimeFailure) {
-  return [
-    `${failure.errorCode}: ${failure.message}`,
-    `[The IPython kernel stopped. In-memory state from kernel generation ${failure.kernelGeneration} was lost.]`,
-  ].join("\n\n")
-}
-
-function isRuntimeFailure(value: unknown): value is IpythonRuntimeFailure {
-  return Boolean(
-    value
-      && typeof value === "object"
-      && "status" in value
-      && value.status === "runtime_error",
-  )
-}
-
 export const IpythonTool = Tool.define<
   typeof IpythonParameters,
   Record<string, unknown>,
-  IpythonExecutionResult | IpythonRuntimeFailure
+  IpythonExecutionResult
 >(
   IPYTHON_TOOL_ID,
   async () => ({
@@ -107,7 +81,17 @@ export const IpythonTool = Tool.define<
     ].join(" "),
     parameters: IpythonParameters,
     validate: async (_parameters, ctx) => {
-      if (ctx.abort?.aborted) return "IPython execution was cancelled before the cell started."
+      if (ctx.abort?.aborted) {
+        throw new Tool.ToolControlSignal({
+          kind: "cancelled",
+          reason: "IPython execution was cancelled before the cell started.",
+          by: "framework",
+          execution: { sideEffect: "none", retry: "safe" },
+        }, {
+          mode: "cancel-turn",
+          reason: "IPython execution was cancelled.",
+        })
+      }
       const cwd = ctx.cwd ?? ctx.worktree
       if (!cwd) return "IPython requires a local workspace directory."
       if (isSshWorkspaceUri(cwd)) return "IPython does not support SSH workspaces yet."
@@ -167,36 +151,61 @@ export const IpythonTool = Tool.define<
           signal: ctx.abort,
         }))
       } catch (error) {
-        if (!(error instanceof IpythonRuntimeError) || !error.stateLost) throw error
-        // Thrown tool errors are flattened to text before the next model turn.
-        // Return a tagged result so toModelOutput can preserve the fatal
-        // runtime metadata as error-json.
-        const failure = runtimeFailure(error)
-        return {
-          title: "IPython runtime failed",
-          text: formatRuntimeFailure(failure),
-          metadata: { ...failure },
-          data: failure,
-        }
+        if (!(error instanceof IpythonRuntimeError)) throw error
+        throw new Tool.ToolFailureError(error, {
+          stage: error.code.includes("PROTOCOL") ? "protocol" : "transport",
+          source: "runtime",
+          code: error.code,
+          handlerExecuted: true,
+          retryable: false,
+          severity: "recoverable",
+          details: {
+            stateLost: error.stateLost,
+            kernelGeneration: error.kernelGeneration,
+          },
+        })
+      }
+      const text = formatExecutionResult(result)
+      if (result.status === "timed_out") {
+        throw new Tool.ToolControlSignal({
+          kind: "timeout",
+          reason: "IPython execution exceeded the cell timeout.",
+          timeoutMs: IPYTHON_CELL_TIMEOUT_MS,
+          partialOutput: text,
+          metadata: { ...result },
+          execution: { sideEffect: "possible", retry: "unsafe" },
+        }, {
+          mode: "continue-model",
+          reason: "IPython execution timed out.",
+        })
+      }
+      if (result.status === "aborted") {
+        throw new Tool.ToolControlSignal({
+          kind: "cancelled",
+          reason: "IPython execution was cancelled.",
+          by: "framework",
+          metadata: { ...result },
+          execution: { sideEffect: "possible", retry: "unsafe" },
+        }, {
+          mode: "cancel-turn",
+          reason: "IPython execution was cancelled.",
+        })
       }
       return {
-        title:
-          result.status === "ok"
-            ? "IPython completed"
-            : result.status === "error"
-              ? "IPython error"
-              : result.status === "timed_out"
-                ? "IPython timed out"
-                : "IPython cancelled",
-        text: formatExecutionResult(result),
+        title: result.status === "ok" ? "IPython returned" : "IPython returned an error",
+        text,
         metadata: { ...result },
         data: result,
+        result: result.status === "ok" ? "success" : "negative",
+        completeness: result.outputTruncated ? "partial" : "complete",
+        sideEffect: "possible",
+        retry: "unsafe",
       }
     },
     toModelOutput: (output) => {
       const value = (output.data ?? output.metadata ?? { text: output.text }) as unknown
       return {
-        type: isRuntimeFailure(value) ? "error-json" as const : "json" as const,
+        type: "json" as const,
         value: value as JSONValue,
       }
     },

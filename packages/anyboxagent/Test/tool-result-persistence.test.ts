@@ -407,26 +407,23 @@ test("toModelMessages replays persisted replacement instead of stored modelOutpu
     type: "tool",
     callID: "tool-replay",
     tool: "remote-tool",
-    providerExecuted: true,
-    state: {
-      status: "completed",
-      input: {
+    schemaVersion: 3,
+    turnID: "turn-test",
+    input: { raw: JSON.stringify({
         q: "large",
-      },
-      output: persisted.output,
-      modelOutput: {
+      }), value: {
+        q: "large",
+      } },
+    source: { kind: "provider" },
+    retry: { attempt: 1 },
+    revision: 1,
+    timestamps: { createdAt: Date.now(), settledAt: Date.now() + 1 },
+    state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: persisted.output, modelOutput: {
         type: "json",
         value: {
           leaked: "secret-tail",
         },
-      },
-      title: "Remote Tool",
-      metadata: persisted.metadata,
-      time: {
-        start: Date.now(),
-        end: Date.now() + 1,
-      },
-    },
+      }, title: "Remote Tool", metadata: persisted.metadata, execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
   })
 
   const messages = await Message.toModelMessages([

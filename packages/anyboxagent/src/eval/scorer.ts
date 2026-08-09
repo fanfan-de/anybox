@@ -1,4 +1,11 @@
 import type { EvalAssertion, EvalCase } from "#eval/schema.ts"
+import type {
+  ToolCallOutcome,
+  ToolCallPhase,
+  ToolCallResultCompleteness,
+  ToolCallResultPolarity,
+  ToolCallTurnControlMode,
+} from "@anybox/shared"
 
 export type EvalExecutionStatus = "completed" | "blocked" | "failed" | "cancelled"
 
@@ -6,7 +13,11 @@ export type EvalToolCall = {
   name: string
   input?: unknown
   output?: unknown
-  status?: string
+  phase: ToolCallPhase
+  outcome?: ToolCallOutcome["kind"]
+  result?: ToolCallResultPolarity
+  completeness?: ToolCallResultCompleteness
+  turnControl?: ToolCallTurnControlMode
   startedAt?: number
   endedAt?: number
   metadata?: Record<string, unknown>

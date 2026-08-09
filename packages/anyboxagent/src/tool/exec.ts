@@ -1,4 +1,5 @@
 import type { JSONValue } from "@ai-sdk/provider"
+import { realpath } from "node:fs/promises"
 import {
   containsWorkspaceLocation,
   createSshWorkspaceUri,
@@ -34,13 +35,28 @@ export const EXEC_CHILD_TOOL_IDS = [
 
 export type ExecChildToolID = typeof EXEC_CHILD_TOOL_IDS[number]
 
-export type ExecToolCallSummary = {
+type ExecToolCallSummaryBase = {
   callID: string
   tool: ExecChildToolID
-  status: "completed" | "failed"
   durationMs: number
-  error?: string
 }
+
+export type ExecToolCallSummary = ExecToolCallSummaryBase & (
+  | {
+    phase: "running"
+  }
+  | {
+    phase: "settled"
+    outcome: "returned"
+    result: "success" | "negative"
+    completeness: "complete" | "partial"
+  }
+  | {
+    phase: "settled"
+    outcome: "blocked" | "denied" | "cancelled" | "timeout" | "failed"
+    error?: string
+  }
+)
 
 export type ExecResult = {
   result: JSONValue
@@ -91,6 +107,15 @@ function summarizeError(error: unknown) {
   return message.length > ERROR_SUMMARY_MAX_CHARS
     ? `${message.slice(0, ERROR_SUMMARY_MAX_CHARS)}…`
     : message
+}
+
+function blockedChildCall(reason: string, code: string) {
+  return new Tool.ToolControlSignal({
+    kind: "blocked",
+    reason,
+    code,
+    execution: { sideEffect: "none", retry: "safe" },
+  }, { mode: "continue-model", reason })
 }
 
 function failureCategory(error: unknown, signal: AbortSignal) {
@@ -173,13 +198,13 @@ async function childResultToJson(
   if (modelOutput.type === "text") return modelOutput.value
 
   if (modelOutput.type === "error-text") {
-    throw new Error(modelOutput.value || "Tool returned an error result.")
+    return modelOutput.value || "Tool returned a negative result."
   }
   if (modelOutput.type === "execution-denied") {
-    throw new Error(modelOutput.reason || "Tool execution was denied.")
+    return modelOutput.reason || "Tool execution was denied."
   }
   if (modelOutput.type === "error-json") {
-    throw new Error(JSON.stringify(modelOutput.value) || "Tool returned an error result.")
+    return modelOutput.value
   }
 
   return output.text
@@ -216,12 +241,32 @@ function snapshotAgent(agent: Agent.AgentInfo): Agent.AgentInfo {
 function createCombinedAbortSignal(parent: AbortSignal | undefined, timeoutMs: number) {
   const controller = new AbortController()
   const timeout = setTimeout(() => {
-    controller.abort(new Error(`JavaScript execution timed out after ${timeoutMs}ms.`))
+    controller.abort(new Tool.ToolControlSignal({
+      kind: "timeout",
+      reason: `JavaScript execution timed out after ${timeoutMs}ms.`,
+      timeoutMs,
+      execution: { sideEffect: "none", retry: "safe" },
+    }, {
+      mode: "continue-model",
+      reason: "JavaScript execution timed out.",
+    }))
   }, timeoutMs)
   timeout.unref?.()
 
   const onParentAbort = () => {
-    controller.abort(parent?.reason)
+    const propagated = Tool.findToolControlSignal(parent?.reason)
+    const reason = parent?.reason === undefined
+      ? "JavaScript execution was cancelled by the framework."
+      : `JavaScript execution was cancelled by the framework: ${normalizeError(parent.reason)}`
+    controller.abort(propagated ?? new Tool.ToolControlSignal({
+      kind: "cancelled",
+      reason,
+      by: "framework",
+      execution: { sideEffect: "none", retry: "safe" },
+    }, {
+      mode: "cancel-turn",
+      reason,
+    }))
   }
 
   if (parent?.aborted) {
@@ -287,7 +332,7 @@ function raceWithAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> 
 async function enforceProjectBoundReadFile(
   input: JSONValue,
   signal: AbortSignal,
-  loadCanonicalRemoteRoots: () => Promise<readonly string[]>,
+  loadCanonicalRoots: () => Promise<readonly string[]>,
 ) {
   if (!input || typeof input !== "object" || Array.isArray(input)) return
 
@@ -295,20 +340,16 @@ async function enforceProjectBoundReadFile(
   const requestedPath = parameters.file_path ?? parameters.path
   if (typeof requestedPath === "string") {
     const resolvedPath = resolveToolPath(requestedPath)
-    if (!isSshWorkspaceUri(resolvedPath)) return
-
-    const location = parseWorkspaceLocation(resolvedPath)
-    if (location.kind !== "ssh") return
-    const canonicalPath = await raceWithAbort(
-      Ssh.realpath(resolvedPath),
-      signal,
-    )
-    const canonicalTarget = createSshWorkspaceUri(
-      location.profileID,
-      canonicalPath,
-    )
+    const canonicalTarget = isSshWorkspaceUri(resolvedPath)
+      ? await (async () => {
+          const location = parseWorkspaceLocation(resolvedPath)
+          if (location.kind !== "ssh") return resolvedPath
+          const canonicalPath = await raceWithAbort(Ssh.realpath(resolvedPath), signal)
+          return createSshWorkspaceUri(location.profileID, canonicalPath)
+        })()
+      : await raceWithAbort(realpath(resolvedPath), signal)
     const canonicalRoots = await raceWithAbort(
-      loadCanonicalRemoteRoots(),
+      loadCanonicalRoots(),
       signal,
     )
     if (
@@ -316,8 +357,9 @@ async function enforceProjectBoundReadFile(
         containsWorkspaceLocation(root, canonicalTarget)
       )
     ) {
-      throw new Error(
+      throw blockedChildCall(
         `Path resolves outside the active project boundary: ${requestedPath}`,
+        "EXEC_PROJECT_BOUNDARY_BLOCKED",
       )
     }
   }
@@ -341,10 +383,16 @@ function sortedSummaries(
 
 function resultCounts(summaries: ReadonlyMap<number, OrderedToolCallSummary>) {
   const values = [...summaries.values()]
-  const completedCount = values.filter((item) => item.status === "completed").length
+  const successfulCount = values.filter((item) =>
+    item.phase === "settled" && item.outcome === "returned" && item.result === "success"
+  ).length
+  const negativeCount = values.filter((item) =>
+    item.phase === "settled" && item.outcome === "returned" && item.result === "negative"
+  ).length
   return {
-    completedCount,
-    failedCount: values.length - completedCount,
+    successfulCount,
+    negativeCount,
+    nonReturnedCount: values.length - successfulCount - negativeCount,
   }
 }
 
@@ -391,15 +439,16 @@ export const ExecTool = Tool.define(
           const agent = snapshotAgent(resolvedAgent)
           const readOnlyToolsOnly = readOnlyToolsOnlyForSession(agent, ctx.sessionID, ctx.turnID)
           const childTools = new Map<ExecChildToolID, Tool.ToolInfo>()
-          let canonicalRemoteRootsPromise: Promise<readonly string[]> | undefined
-          const loadCanonicalRemoteRoots = () => {
-            if (!canonicalRemoteRootsPromise) {
-              const remoteRoots = [...new Set([
+          let canonicalRootsPromise: Promise<readonly string[]> | undefined
+          const loadCanonicalRoots = () => {
+            if (!canonicalRootsPromise) {
+              const roots = [...new Set([
                 Instance.directory,
                 Instance.worktree,
-              ])].filter(isSshWorkspaceUri)
-              canonicalRemoteRootsPromise = Promise.all(
-                remoteRoots.map(async (root) => {
+              ])]
+              canonicalRootsPromise = Promise.all(
+                roots.map(async (root) => {
+                  if (!isSshWorkspaceUri(root)) return await realpath(root)
                   const location = parseWorkspaceLocation(root)
                   if (location.kind !== "ssh") return root
                   const canonicalPath = await Ssh.realpath(root)
@@ -410,7 +459,7 @@ export const ExecTool = Tool.define(
                 }),
               )
             }
-            return canonicalRemoteRootsPromise
+            return canonicalRootsPromise
           }
 
           for (const id of EXEC_CHILD_TOOL_IDS) {
@@ -429,7 +478,10 @@ export const ExecTool = Tool.define(
               throwIfAborted(combinedAbort.signal)
 
               if (!EXEC_CHILD_TOOL_IDS.includes(name as ExecChildToolID)) {
-                throw new Error(`Tool "${name}" is not available inside exec.`)
+                throw blockedChildCall(
+                  `Tool "${name}" is not available inside exec.`,
+                  "EXEC_CHILD_TOOL_UNAVAILABLE",
+                )
               }
 
               const tool = name as ExecChildToolID
@@ -440,15 +492,17 @@ export const ExecTool = Tool.define(
                 order,
                 callID,
                 tool,
-                status: "failed",
+                phase: "running",
                 durationMs: 0,
-                error: "Tool call did not complete before JavaScript execution ended.",
               })
 
               try {
                 const item = childTools.get(tool)
                 if (!item) {
-                  throw new Error(`Tool "${tool}" is not available inside exec.`)
+                  throw blockedChildCall(
+                    `Tool "${tool}" is not available inside exec.`,
+                    "EXEC_CHILD_TOOL_UNAVAILABLE",
+                  )
                 }
 
                 const accessFailure = getToolAccessFailure({
@@ -459,13 +513,15 @@ export const ExecTool = Tool.define(
                   globalToolSelection,
                   readOnlyToolsOnly,
                 })
-                if (accessFailure) throw new Error(accessFailure)
+                if (accessFailure) {
+                  throw blockedChildCall(accessFailure, "EXEC_CHILD_TOOL_ACCESS_BLOCKED")
+                }
 
                 if (tool === "read_file") {
                   await enforceProjectBoundReadFile(
                     childInput,
                     combinedAbort.signal,
-                    loadCanonicalRemoteRoots,
+                    loadCanonicalRoots,
                   )
                 }
 
@@ -483,8 +539,9 @@ export const ExecTool = Tool.define(
                 const requiresApproval = await execution.needsApproval(childInput, callID)
                 throwIfAborted(combinedAbort.signal)
                 if (requiresApproval) {
-                  throw new Error(
+                  throw blockedChildCall(
                     `Tool "${tool}" requires approval and cannot run inside exec.`,
+                    "EXEC_CHILD_TOOL_APPROVAL_REQUIRED",
                   )
                 }
 
@@ -500,16 +557,21 @@ export const ExecTool = Tool.define(
                   order,
                   callID,
                   tool,
-                  status: "completed",
+                  phase: "settled",
+                  outcome: "returned",
+                  result: output.result ?? "success",
+                  completeness: output.completeness ?? "complete",
                   durationMs: Math.max(0, Math.round(performance.now() - childStartedAt)),
                 })
                 return childResult
               } catch (error) {
+                const signal = Tool.findToolControlSignal(error)
                 summaries.set(order, {
                   order,
                   callID,
                   tool,
-                  status: "failed",
+                  phase: "settled",
+                  outcome: signal?.outcome.kind ?? "failed",
                   durationMs: Math.max(0, Math.round(performance.now() - childStartedAt)),
                   error: summarizeError(error),
                 })
@@ -533,14 +595,25 @@ export const ExecTool = Tool.define(
             durationMs,
             toolCallCount: issuedToolCallCount,
             ...counts,
-            failureCategory: counts.failedCount > 0 ? "child-tool" : undefined,
+            failureCategory: counts.nonReturnedCount > 0 ? "child-tool" : undefined,
           })
 
+          const partial = toolCalls.some((item) =>
+            item.phase !== "settled" ||
+            item.outcome !== "returned" ||
+            item.completeness === "partial"
+          )
           return {
-            title: `JavaScript exec: ${counts.completedCount} completed, ${counts.failedCount} failed`,
+            title: `JavaScript exec: ${counts.successfulCount} successful, ${counts.negativeCount} negative, ${counts.nonReturnedCount} not returned`,
             text: JSON.stringify(data),
             metadata: data,
             data,
+            result: counts.negativeCount > 0 || counts.nonReturnedCount > 0
+              ? "negative"
+              : "success",
+            completeness: partial ? "partial" : "complete",
+            sideEffect: "none",
+            retry: "safe",
           }
         } catch (error) {
           const durationMs = Math.max(0, Math.round(performance.now() - startedAt))
@@ -554,8 +627,11 @@ export const ExecTool = Tool.define(
             failureCategory: failureCategory(error, combinedAbort.signal),
           })
 
+          const controlSignal = Tool.findToolControlSignal(error)
+          if (controlSignal) throw controlSignal
+
           throw new Error(
-            `JavaScript exec failed: ${normalizeError(error)} (${counts.completedCount} child calls completed, ${counts.failedCount} failed).`,
+            `JavaScript exec failed: ${normalizeError(error)} (${counts.successfulCount} successful, ${counts.negativeCount} negative, ${counts.nonReturnedCount} not returned).`,
             { cause: error },
           )
         } finally {

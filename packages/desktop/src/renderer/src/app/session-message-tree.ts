@@ -1,3 +1,4 @@
+import { parseToolCallSnapshot } from "@anybox/shared"
 import type { LoadedSessionHistoryMessage } from "./types"
 
 const ROOT_PARENT_ID = "__root__"
@@ -79,8 +80,7 @@ function readTurnStatus(message: LoadedSessionHistoryMessage) {
     if (readString(record.type) === "permission" && readString(record.action) === "ask") {
       return true
     }
-    const state = readRecord(record.state)
-    return readString(record.type) === "tool" && readString(state?.status) === "waiting-approval"
+    return readString(record.type) === "tool" && parseToolCallSnapshot(record)?.state.phase === "waiting-approval"
   })
   if (hasWaitingApproval) return "waiting_approval"
 

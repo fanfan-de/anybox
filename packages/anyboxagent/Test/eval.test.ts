@@ -86,6 +86,10 @@ describe("agent eval", () => {
       toolCalls: [
         {
           name: "read_file",
+          phase: "settled",
+          outcome: "returned",
+          result: "success",
+          completeness: "complete",
         },
       ],
       metadata: {

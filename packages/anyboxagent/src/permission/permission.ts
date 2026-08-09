@@ -1313,7 +1313,7 @@ export async function registerApprovalRequest(input: {
   turn?: Orchestrator.TurnContext
 }) {
   ensurePermissionTables()
-  if (input.toolPart.state.status !== "waiting-approval") {
+  if (input.toolPart.state.phase !== "waiting-approval") {
     throw new Error("Tool part must be in waiting-approval state before creating an approval request.")
   }
 
@@ -1325,7 +1325,7 @@ export async function registerApprovalRequest(input: {
     sessionID: input.assistant.sessionID,
     turnID: input.turn?.turnID
       ?? Orchestrator.activeTurn(input.assistant.sessionID, input.assistant.turnID)?.turnID
-      ?? input.toolPart.state.approvalID,
+      ?? input.toolPart.state.approval.id,
     messageID: input.assistant.id,
     cwd: input.assistant.path.cwd,
     worktree: input.assistant.path.root,
@@ -1334,7 +1334,7 @@ export async function registerApprovalRequest(input: {
   let intent: Tool.ToolPermissionIntent | undefined
   if (runtime?.assessPermission) {
     try {
-      intent = await runtime.assessPermission(input.toolPart.state.input, runtimeContext)
+      intent = await runtime.assessPermission(Message.toolPartInput(input.toolPart), runtimeContext)
     } catch (error) {
       log.warn("tool-specific permission assessment failed", {
         tool: input.toolPart.tool,
@@ -1353,14 +1353,14 @@ export async function registerApprovalRequest(input: {
     cwd: input.assistant.path.cwd,
     worktree: input.assistant.path.root,
     tool: descriptor,
-    input: input.toolPart.state.input,
+    input: Message.toolPartInput(input.toolPart),
     intent,
   })
 
   let approvalDescriptor: Tool.ToolApprovalDescriptor | undefined
   if (runtime?.describeApproval) {
     try {
-      approvalDescriptor = await runtime.describeApproval(input.toolPart.state.input, runtimeContext)
+      approvalDescriptor = await runtime.describeApproval(Message.toolPartInput(input.toolPart), runtimeContext)
     } catch (error) {
       log.warn("tool-specific approval description failed", {
         tool: input.toolPart.tool,
@@ -1372,7 +1372,7 @@ export async function registerApprovalRequest(input: {
   const prompt = buildPromptSnapshot({
     descriptor: approvalDescriptor ?? buildFallbackApprovalDescriptor({
       tool: input.toolPart.tool,
-      title: input.toolPart.state.title,
+      title: Message.toolPartTitle(input.toolPart),
       derived: decision.derived,
     }),
     rationale: decision.reason,
@@ -1384,14 +1384,14 @@ export async function registerApprovalRequest(input: {
   const runtimeSnapshot = buildRuntimeSnapshot({
     tool: input.toolPart.tool,
     toolKind: descriptor.kind,
-    rawInput: input.toolPart.state.input,
+    rawInput: Message.toolPartInput(input.toolPart),
     derived: decision.derived,
     filesystemAuthorization: decision.filesystemAuthorization,
   })
 
   const record = Schema.Request.parse({
     id: Identifier.ascending("permission"),
-    approvalID: input.toolPart.state.approvalID,
+    approvalID: input.toolPart.state.approval.id,
     sessionID: input.assistant.sessionID,
     messageID: input.assistant.id,
     toolCallID: input.toolPart.callID,
@@ -1399,13 +1399,13 @@ export async function registerApprovalRequest(input: {
     agent: input.assistant.agent,
     tool: input.toolPart.tool,
     toolKind: descriptor.kind,
-    title: input.toolPart.state.title,
+    title: Message.toolPartTitle(input.toolPart),
     risk: decision.risk,
     status: "pending",
     turnID: input.turn?.turnID
       ?? Orchestrator.activeTurn(input.assistant.sessionID, input.assistant.turnID)?.turnID,
     continuation: "tool-retry",
-    input: input.toolPart.state.input,
+    input: Message.toolPartInput(input.toolPart),
     resource: {
       paths: decision.derived.paths.length > 0 ? decision.derived.paths : undefined,
       command: decision.derived.command,
@@ -1437,12 +1437,6 @@ export async function registerApprovalRequest(input: {
   })
 
   try {
-    if (handle.managed) {
-      handle.turn.emit("tool.call.waiting_approval", {
-        part: input.toolPart,
-      })
-    }
-
     handle.turn.emit("permission.requested", {
       request: record,
       part,
@@ -1565,7 +1559,7 @@ async function completeApprovedRequest(
     directory: session.directory,
     fn: async () => {
       const existing = findToolPart(request.sessionID, request.toolCallID)
-      if (!existing || existing.state.status !== "waiting-approval") {
+      if (!existing || existing.state.phase !== "waiting-approval") {
         throw new Error(`Waiting approval tool call '${request.toolCallID}' was not found.`)
       }
 
@@ -1585,25 +1579,15 @@ async function completeApprovedRequest(
 
       const agentInfo = (await Agent.get(request.agent)) ?? Agent.planAgent
       const runtime = await toolInfo.init({ agent: agentInfo })
-      const startedAt = existing.state.time.start
-      const runningTitle = existing.state.title
-      const running = Message.ToolPart.parse({
-        ...existing,
-        state: {
-          status: "running",
-          input: existing.state.input,
-          raw: existing.state.raw,
-          title: existing.state.title,
-          metadata: existing.state.metadata,
-          time: {
-            start: startedAt,
-          },
-        },
+      const runningTitle = Message.toolPartTitle(existing)
+      const running = Message.changeToolPartPhase(existing, { phase: "running" }, {
+        presentation: existing.presentation,
       })
 
       if (turn) {
-        turn.emit("tool.call.started", {
+        turn.emit("tool.call.phase_changed", {
           part: running,
+          previousPhase: existing.state.phase,
         })
       } else {
         await Session.updatePart(running)
@@ -1633,25 +1617,26 @@ async function completeApprovedRequest(
           .map((attachment) => toAttachmentPart(attachment, existing))
           .filter((attachment): attachment is Message.FilePart => Boolean(attachment))
 
-        const completed = Message.ToolPart.parse({
-          ...running,
-          state: {
-            status: "completed",
-            input: running.state.input,
-            raw: running.state.raw,
-            output: output.text,
+        const completed = Message.settleToolPart(
+          running,
+          Tool.returnedToolOutcome({
+            ...output,
             title: output.title ?? runningTitle ?? running.tool,
-            metadata: output.metadata ?? {},
-            time: {
-              start: startedAt,
-              end: Date.now(),
-            },
+          }, {
+            capabilities: toolInfo.capabilities,
             attachments: attachments.length > 0 ? attachments : undefined,
+          }),
+          output.control ?? { mode: "continue-model" },
+          {
+            presentation: {
+              title: output.title ?? runningTitle ?? running.tool,
+              metadata: output.metadata ?? {},
+            },
           },
-        })
+        )
 
         if (turn) {
-          turn.emit("tool.call.completed", {
+          turn.emit("tool.call.settled", {
             part: completed,
           })
         } else {
@@ -1659,23 +1644,24 @@ async function completeApprovedRequest(
         }
         return completed
       } catch (error) {
-        const failed = Message.ToolPart.parse({
-          ...running,
-          state: {
-            status: "error",
-            input: running.state.input,
-            raw: running.state.raw,
-            error: normalizeExecutionError(error),
-            metadata: {},
-            time: {
-              start: startedAt,
-              end: Date.now(),
-            },
-          },
-        })
+        const message = normalizeExecutionError(error)
+        const structuredFailure = Tool.findToolFailureError(error)
+        const controlSignal = Tool.findToolControlSignal(error)
+        const failed = controlSignal
+          ? Message.settleToolPart(running, controlSignal.outcome, controlSignal.control)
+          : Message.settleToolPart(running, {
+              kind: "failed",
+              error: Tool.toolFailure(error, { message }),
+              partialOutput: structuredFailure?.partialOutput,
+              metadata: {},
+              execution: Tool.toolExecutionSemantics(toolInfo.capabilities),
+            }, {
+              mode: "continue-model",
+              reason: message,
+            })
 
         if (turn) {
-          turn.emit("tool.call.failed", {
+          turn.emit("tool.call.settled", {
             part: failed,
           })
         } else {
@@ -1692,27 +1678,27 @@ async function denyApprovedRequest(
   turn?: Orchestrator.TurnContext,
 ) {
   const existing = findToolPart(request.sessionID, request.toolCallID)
-  if (!existing || existing.state.status !== "waiting-approval") {
+  if (!existing || existing.state.phase !== "waiting-approval") {
     throw new Error(`Waiting approval tool call '${request.toolCallID}' was not found.`)
   }
 
-  const denied = Message.ToolPart.parse({
-    ...existing,
-    state: {
-      status: "denied",
-      approvalID: existing.state.approvalID,
-      input: existing.state.input,
-      reason: request.resolutionReason?.trim() || "Tool execution was denied by the user.",
-      metadata: {},
-      time: {
-        start: existing.state.time.start,
-        end: Date.now(),
-      },
-    },
+  const reason = request.resolutionReason?.trim() || "Tool execution was denied by the user."
+  const denied = Message.settleToolPart(existing, {
+    kind: "denied",
+    approvalID: existing.state.approval.id,
+    reason,
+    metadata: {},
+    execution: Tool.toolExecutionSemantics(undefined, {
+      sideEffect: "none",
+      retry: "safe",
+    }),
+  }, {
+    mode: "continue-model",
+    reason,
   })
 
   if (turn) {
-    turn.emit("tool.call.denied", {
+    turn.emit("tool.call.settled", {
       part: denied,
     })
   } else {
@@ -1830,13 +1816,10 @@ export async function resolveRequest(id: string, resolution: Schema.RequestResol
 
     if (approved) {
       const waiting = findToolPart(next.sessionID, next.toolCallID)
-      if (!waiting || waiting.state.status !== "waiting-approval") {
+      if (!waiting || waiting.state.phase !== "waiting-approval") {
         throw new Error(`Waiting approval tool call '${next.toolCallID}' was not found.`)
       }
 
-      handle.turn.emit("tool.call.approved", {
-        part: waiting,
-      })
       latestToolPart = await completeApprovedRequest(next, handle.turn)
     } else {
       latestToolPart = await denyApprovedRequest(next, handle.turn)

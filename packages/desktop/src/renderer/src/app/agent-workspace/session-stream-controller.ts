@@ -1,4 +1,5 @@
 import { startTransition, useEffect, useEffectEvent, useRef, useState, type MutableRefObject } from "react"
+import { isSameToolCallSettlement, parseToolCallSnapshot } from "@anybox/shared"
 import { getAgentSessionBridge, type AgentSessionBridgeEvent } from "../agent-session/client"
 import { AgentSessionEventRouter } from "../agent-session/event-router"
 import {
@@ -689,14 +690,14 @@ export function isSteerHandoffBoundaryStreamEvent(streamEvent: { event: string; 
 
 export function shouldRefreshRuntimeDebugForStreamEvent(streamEvent: { event: string; data: unknown }) {
   const runtimeType = readRuntimeStreamType(streamEvent)
-  if (runtimeType === "text.part.delta" || runtimeType === "reasoning.part.delta" || runtimeType === "tool.input.delta") return false
+  if (runtimeType === "text.part.delta" || runtimeType === "reasoning.part.delta" || runtimeType === "tool.call.input_delta") return false
   if (!runtimeType && streamEvent.event === "delta") return false
   return true
 }
 
 export function isHighFrequencyDeltaStreamEvent(streamEvent: { event: string; data: unknown }) {
   const runtimeType = readRuntimeStreamType(streamEvent)
-  if (runtimeType === "text.part.delta" || runtimeType === "reasoning.part.delta" || runtimeType === "tool.input.delta") return true
+  if (runtimeType === "text.part.delta" || runtimeType === "reasoning.part.delta" || runtimeType === "tool.call.input_delta") return true
   return !runtimeType && streamEvent.event === "delta"
 }
 
@@ -706,7 +707,7 @@ export function compactHighFrequencyDeltaStreamEvent<T extends { event: string; 
     runtimeEvent &&
     (runtimeEvent.type === "text.part.delta" ||
       runtimeEvent.type === "reasoning.part.delta" ||
-      runtimeEvent.type === "tool.input.delta")
+      runtimeEvent.type === "tool.call.input_delta")
   ) {
     const payload = readRecord(runtimeEvent.payload)
     if (!payload || !readString(payload.delta)) return streamEvent
@@ -755,7 +756,11 @@ export function isLlmCompletedStreamEvent(streamEvent: { event: string; data: un
 export function isPermissionRequestStreamEvent(streamEvent: { event: string; data: unknown }) {
   const runtimeType = readRuntimeStreamType(streamEvent)
   if (runtimeType) {
-    if (runtimeType === "permission.requested" || runtimeType === "tool.call.waiting_approval") return true
+    if (runtimeType === "permission.requested") return true
+    if (runtimeType === "tool.call.phase_changed") {
+      const part = readRecord(readRuntimeStreamPayload(streamEvent.data)?.part)
+      return parseToolCallSnapshot(part)?.state.phase === "waiting-approval"
+    }
   }
 
   if (streamEvent.event !== "part") return false
@@ -773,8 +778,10 @@ export function isTaskStateStreamEvent(streamEvent: { event: string; data: unkno
   const part = readRecord(data?.part)
   if (readString(part?.type) !== "tool") return false
 
-  const state = readRecord(part?.state)
-  const metadata = readRecord(state?.metadata)
+  const call = parseToolCallSnapshot(part)
+  if (!call) return false
+  const outcome = call.state.phase === "settled" ? call.state.outcome : undefined
+  const metadata = readRecord(outcome?.metadata ?? call.presentation?.metadata)
   return readString(metadata?.kind) === "task-state"
 }
 
@@ -813,8 +820,10 @@ export function readSessionTaskListViewFromStreamEvent(streamEvent: { event: str
   const part = readRecord(data?.part)
   if (readString(part?.type) !== "tool") return null
 
-  const state = readRecord(part?.state)
-  const metadata = readRecord(state?.metadata)
+  const call = parseToolCallSnapshot(part)
+  if (!call) return null
+  const outcome = call.state.phase === "settled" ? call.state.outcome : undefined
+  const metadata = readRecord(outcome?.metadata ?? call.presentation?.metadata)
   if (readString(metadata?.kind) !== "task-state") return null
   return readSessionTaskListView(metadata?.state)
 }
@@ -945,8 +954,27 @@ function preserveTraceItemIdentity(
   })
 }
 
-function isTerminalTraceStatus(status: AssistantTraceItem["status"]) {
-  return status === "completed" || status === "error" || status === "denied" || status === "cancelled"
+function toolTracePhase(item: AssistantTraceItem) {
+  return item.kind === "tool" ? item.toolCall?.state.phase : undefined
+}
+
+function toolTraceOutcomeKind(item: AssistantTraceItem) {
+  return item.kind === "tool" && item.toolCall?.state.phase === "settled"
+    ? item.toolCall.state.outcome.kind
+    : undefined
+}
+
+function isTerminalToolTrace(item: AssistantTraceItem) {
+  return toolTracePhase(item) === "settled"
+}
+
+function isWaitingApprovalToolTrace(item: AssistantTraceItem) {
+  return toolTracePhase(item) === "waiting-approval"
+}
+
+function isRunningToolTrace(item: AssistantTraceItem) {
+  const phase = toolTracePhase(item)
+  return phase === "pending" || phase === "running"
 }
 
 function canIncomingMessageOverrideCancellation(message: AssistantThreadMessage) {
@@ -961,11 +989,10 @@ function shouldPreserveCancelledMessage(current: AssistantThreadMessage, incomin
 function cancelInterruptedToolTraceItems(items: AssistantTraceItem[]) {
   let didUpdate = false
   const nextItems = items.map((item) => {
-    if (item.kind !== "tool" || isTerminalTraceStatus(item.status)) return item
+    if (item.kind !== "tool" || isTerminalToolTrace(item)) return item
 
     const nextItem = {
       ...item,
-      status: "cancelled" as const,
       detail: item.detail || "Prompt cancellation requested.",
       isStreaming: false,
     }
@@ -1011,13 +1038,13 @@ function isLateToolFailureForCancelledMessage(current: AssistantThreadMessage, i
 
   const cancelledToolIdentities = new Set(
     current.items
-      .filter((item) => item.kind === "tool" && item.status === "cancelled")
+      .filter((item) => toolTraceOutcomeKind(item) === "cancelled")
       .flatMap(getToolTraceIdentities),
   )
   if (cancelledToolIdentities.size === 0) return false
 
   return incoming.items.some((item) => {
-    if (item.kind !== "tool" || item.status !== "error") return false
+    if (item.kind !== "tool" || toolTraceOutcomeKind(item) !== "failed") return false
     const identity = getToolTraceIdentity(item)
     return Boolean(identity && cancelledToolIdentities.has(identity))
   })
@@ -1042,18 +1069,25 @@ function mergeTraceDebugEntries(
 }
 
 function mergeAssistantTraceItem(existing: AssistantTraceItem, nextItem: AssistantTraceItem): AssistantTraceItem {
-  const keepsTerminalToolState =
+  const keepsNewerToolSnapshot =
     existing.kind === "tool" &&
     nextItem.kind === "tool" &&
-    isTerminalTraceStatus(existing.status) &&
-    !isTerminalTraceStatus(nextItem.status)
-  const keepsCancelledToolState =
+    Boolean(existing.toolCall && nextItem.toolCall) &&
+    existing.toolCall!.revision > nextItem.toolCall!.revision
+  const keepsSettledToolSnapshot =
     existing.kind === "tool" &&
     nextItem.kind === "tool" &&
-    existing.status === "cancelled" &&
-    nextItem.status === "error"
+    isTerminalToolTrace(existing) &&
+    !isTerminalToolTrace(nextItem)
+  const keepsFirstToolSettlement =
+    existing.kind === "tool" &&
+    nextItem.kind === "tool" &&
+    Boolean(existing.toolCall && nextItem.toolCall) &&
+    isTerminalToolTrace(existing) &&
+    isTerminalToolTrace(nextItem) &&
+    !isSameToolCallSettlement(existing.toolCall!, nextItem.toolCall!)
 
-  if (keepsTerminalToolState || keepsCancelledToolState) {
+  if (keepsNewerToolSnapshot || keepsSettledToolSnapshot || keepsFirstToolSettlement) {
     const merged = {
       ...existing,
       messageID: existing.messageID ?? nextItem.messageID,
@@ -1141,7 +1175,7 @@ function upsertAssistantTraceItem(items: AssistantTraceItem[], nextItem: Assista
 }
 
 function removeStaleApprovalBlockers(items: AssistantTraceItem[]) {
-  const hasWaitingTool = items.some((item) => item.kind === "tool" && item.status === "waiting-approval")
+  const hasWaitingTool = items.some(isWaitingApprovalToolTrace)
   if (hasWaitingTool) return items
 
   const hasStaleApprovalBlocker = items.some(
@@ -1169,16 +1203,14 @@ function mergeAssistantTraceItems(currentItems: AssistantTraceItem[], nextItems:
 }
 
 function assistantRuntimeAfterTraceMerge(current: AssistantThreadMessage, incoming: AssistantThreadMessage, items: AssistantTraceItem[]) {
-  const hasWaitingTool = items.some((item) => item.kind === "tool" && item.status === "waiting-approval")
-  const hasActiveTool = items.some(
-    (item) => item.kind === "tool" && (item.status === "pending" || item.status === "running"),
-  )
+  const hasWaitingTool = items.some(isWaitingApprovalToolTrace)
+  const hasActiveTool = items.some(isRunningToolTrace)
   const existingRuntime = current.runtime
   const nextRuntime = incoming.runtime
   const updatedAt = Math.max(existingRuntime.updatedAt, nextRuntime.updatedAt)
 
   if (hasWaitingTool) {
-    const waitingTool = items.find((item) => item.kind === "tool" && item.status === "waiting-approval")
+    const waitingTool = items.find(isWaitingApprovalToolTrace)
     return {
       ...existingRuntime,
       ...nextRuntime,
@@ -1190,9 +1222,7 @@ function assistantRuntimeAfterTraceMerge(current: AssistantThreadMessage, incomi
   }
 
   if (hasActiveTool) {
-    const activeTool = items.find(
-      (item) => item.kind === "tool" && (item.status === "pending" || item.status === "running"),
-    )
+    const activeTool = items.find(isRunningToolTrace)
     return {
       ...existingRuntime,
       ...nextRuntime,

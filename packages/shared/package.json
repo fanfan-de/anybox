@@ -15,6 +15,7 @@
     "./session": "./src/session.ts",
     "./skill-registry": "./src/skill-registry.ts",
     "./tool-module": "./src/tool-module.ts",
+    "./tool-call": "./src/tool-call.ts",
     "./workspace-location": "./src/workspace-location.ts"
   },
   "dependencies": {

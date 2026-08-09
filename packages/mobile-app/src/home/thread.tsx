@@ -2,6 +2,7 @@ import React from "react"
 import Feather from "@expo/vector-icons/Feather"
 import { Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native"
 import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native"
+import type { ToolCallSnapshot } from "@anybox/shared"
 import type { MobileApproval, MobileMessage, MobileProviderModel, MobileSessionSummary, MobileWorkspace } from "@/api/mobile-api"
 import { useI18n } from "@/i18n"
 import { ApprovalCard } from "./approval-card"
@@ -14,7 +15,6 @@ import {
   type MessageContentSegment,
   type MobileQuestionPrompt,
   type MessageToolContentSegment,
-  type MessageToolStatus,
 } from "@/utils/message"
 import { DarkEmpty, DarkNotice } from "./shared"
 
@@ -404,13 +404,13 @@ function AssistantMessageContent({
             return (
               <QuestionSegment
                 disabled={answeringQuestionID === segment.questionPrompt.questionID}
-                key={`question-${segment.callID}-${index}`}
+                key={`question-${segment.call.callID}-${index}`}
                 onAnswerQuestion={onAnswerQuestion}
                 prompt={segment.questionPrompt}
               />
             )
           }
-          return <ToolSegment key={`tool-${segment.callID}-${index}`} segment={segment} />
+          return <ToolSegment key={`tool-${segment.call.callID}-${index}`} segment={segment} />
         }
         if (segment.kind === "reasoning") {
           return <ReasoningSegment key={`reasoning-${index}`} pending={reasoningPending} text={segment.text} />
@@ -677,15 +677,22 @@ function ResponseSegment({ text }: { text: string }) {
 function ToolSegment({ segment }: { segment: MessageToolContentSegment }) {
   const { t } = useI18n()
   const [expanded, setExpanded] = React.useState(false)
-  const descriptor = toolStatusDescriptor(segment.status, t)
-  const title = segment.title?.trim() || formatToolName(segment.tool)
-  const preview = segment.status === "completed"
+  const descriptor = toolCallDescriptor(segment.call, t)
+  const title = segment.title?.trim() || formatToolName(segment.call.tool)
+  const preview = segment.call.state.phase === "settled" && segment.call.state.outcome.kind === "returned"
     ? segment.outputPreview || segment.inputPreview
     : segment.error || segment.reason || segment.inputPreview || segment.outputPreview
   const detailRows = [
     segment.inputPreview ? { label: t("thread.toolInput"), value: segment.inputPreview } : null,
     segment.outputPreview ? { label: t("thread.toolOutput"), value: segment.outputPreview } : null,
     segment.error ? { label: t("thread.toolError"), value: segment.error } : null,
+    segment.failure ? {
+      label: t("thread.toolFailureDetails"),
+      value: [
+        `${segment.failure.stage}/${segment.failure.source} · ${segment.failure.code}`,
+        `${segment.failure.handlerExecuted ? "handler executed" : "handler not executed"} · ${segment.failure.retryable ? "retryable" : "not retryable"} · ${segment.failure.severity}`,
+      ].join("\n"),
+    } : null,
     segment.reason ? { label: t("thread.toolReason"), value: segment.reason } : null,
   ].filter((item): item is { label: string; value: string } => Boolean(item))
   const canExpand = detailRows.length > 0
@@ -740,25 +747,40 @@ function ToolSegment({ segment }: { segment: MessageToolContentSegment }) {
   )
 }
 
-function toolStatusDescriptor(status: MessageToolStatus, t: ReturnType<typeof useI18n>["t"]) {
-  switch (status) {
-    case "pending":
+function toolCallDescriptor(call: ToolCallSnapshot, t: ReturnType<typeof useI18n>["t"]) {
+  if (call.state.phase === "pending") {
       return { borderColor: "#3a3a3a", color: "#9a9a9a", icon: "clock" as FeatherName, label: t("thread.toolPending") }
-    case "running":
-      return { borderColor: "#3b4750", color: "#8fb7d8", icon: "activity" as FeatherName, label: t("thread.toolRunning") }
-    case "waiting-approval":
-      return { borderColor: "#4d432e", color: "#d6b76b", icon: "alert-circle" as FeatherName, label: t("thread.toolWaitingApproval") }
-    case "completed":
-      return { borderColor: "#334438", color: "#83c18b", icon: "check-circle" as FeatherName, label: t("thread.toolCompleted") }
-    case "failed":
-      return { borderColor: "#513635", color: "#e28a83", icon: "alert-triangle" as FeatherName, label: t("thread.toolFailed") }
-    case "denied":
-      return { borderColor: "#4a3934", color: "#c89a79", icon: "slash" as FeatherName, label: t("thread.toolDenied") }
-    case "cancelled":
-      return { borderColor: "#3f3f3f", color: "#a7a7a7", icon: "x-circle" as FeatherName, label: t("thread.toolCancelled") }
-    default:
-      return { borderColor: "#3a3a3a", color: "#9a9a9a", icon: "tool" as FeatherName, label: t("thread.toolUnknown") }
   }
+  if (call.state.phase === "running") {
+      return { borderColor: "#3b4750", color: "#8fb7d8", icon: "activity" as FeatherName, label: t("thread.toolRunning") }
+  }
+  if (call.state.phase === "waiting-approval") {
+      return { borderColor: "#4d432e", color: "#d6b76b", icon: "alert-circle" as FeatherName, label: t("thread.toolWaitingApproval") }
+  }
+
+  const outcome = call.state.outcome
+  if (outcome.kind === "returned") {
+    if (outcome.result === "negative") {
+      return { borderColor: "#4d432e", color: "#d6b76b", icon: "alert-circle" as FeatherName, label: t("thread.toolReturnedNegative") }
+    }
+    if (outcome.completeness === "partial") {
+      return { borderColor: "#4d432e", color: "#d6b76b", icon: "pie-chart" as FeatherName, label: t("thread.toolReturnedPartial") }
+    }
+    return { borderColor: "#34473a", color: "#7fb58a", icon: "check" as FeatherName, label: t("thread.toolCompleted") }
+  }
+  if (outcome.kind === "failed") {
+    return { borderColor: "#513635", color: "#e28a83", icon: "alert-triangle" as FeatherName, label: t("thread.toolFailed") }
+  }
+  if (outcome.kind === "blocked") {
+    return { borderColor: "#3f3f3f", color: "#a7a7a7", icon: "pause-circle" as FeatherName, label: t("thread.toolBlocked") }
+  }
+  if (outcome.kind === "timeout") {
+    return { borderColor: "#4d432e", color: "#d6b76b", icon: "clock" as FeatherName, label: t("thread.toolTimeout") }
+  }
+  if (outcome.kind === "denied") {
+    return { borderColor: "#3f3f3f", color: "#a7a7a7", icon: "slash" as FeatherName, label: t("thread.toolDenied") }
+  }
+  return { borderColor: "#3f3f3f", color: "#a7a7a7", icon: "x-circle" as FeatherName, label: t("thread.toolCancelled") }
 }
 
 function formatToolName(tool: string | undefined) {

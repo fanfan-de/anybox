@@ -403,8 +403,8 @@
       </tr>
       <tr>
         <td><code>ToolOutput</code></td>
-        <td><code>text</code>, <code>title?</code>, <code>metadata?</code>, <code>data?</code>, <code>attachments?</code></td>
-        <td><code>text</code> 是默认模型可见输出；<code>data/metadata</code> 支持 UI、持久化和结构化消费。</td>
+        <td><code>text</code>, <code>title?</code>, <code>metadata?</code>, <code>data?</code>, <code>attachments?</code>, <code>result?</code>, <code>completeness?</code>, <code>sideEffect?</code>, <code>retry?</code>, <code>control?</code></td>
+        <td><code>text</code> 是默认模型可见输出；业务结果、完整度、执行语义和 Turn 控制保持独立。</td>
       </tr>
       <tr>
         <td><code>ToolPermissionIntent</code></td>
@@ -420,22 +420,22 @@
       <tr>
         <td>参数解析</td>
         <td><code>runtime.parameters.safeParse(args)</code></td>
-        <td>抛出包含工具 id 和 Zod 错误的异常；若定义了 <code>formatValidationError</code> 则用自定义文案。</td>
+        <td>产生结构化 <code>ToolFailureError(validation/model)</code>；若定义了 <code>formatValidationError</code> 则使用自定义文案。</td>
       </tr>
       <tr>
         <td>validate</td>
         <td>工具自定义业务校验，返回 string 或 <code>{ message }</code> 表示失败。</td>
-        <td>抛出校验失败消息。</td>
+        <td>产生 <code>blocked</code>，handler 不执行。</td>
       </tr>
       <tr>
         <td>authorize</td>
         <td>工具级硬授权检查，不同于全局权限审批。</td>
-        <td>抛出授权失败消息。</td>
+        <td>产生 <code>blocked</code>，handler 不执行。</td>
       </tr>
       <tr>
         <td>execute</td>
         <td>调用原始 runtime.execute，并把 string 输出标准化为 <code>{ text }</code>。</td>
-        <td>工具异常向上传递，由 processor 记为 failed/error。</td>
+        <td>正常业务否定返回 <code>returned/negative</code>；未预期异常由框架记录为结构化 <code>failed</code>。</td>
       </tr>
       <tr>
         <td>assessPermission</td>
@@ -570,9 +570,9 @@
       <tr><td><code>ToolApprovalDescriptor</code></td><td>runtime.<code>describeApproval</code> 或 fallback</td><td>生成用户看到的标题、摘要、路径/命令/正文详情。</td></tr>
       <tr><td><code>permission_requests</code></td><td><code>registerApprovalRequest</code></td><td>持久化 pending/approved/denied 审批记录。</td></tr>
       <tr><td><code>PermissionPart</code></td><td><code>createPermissionPart</code></td><td>写入对话消息 parts，连接 approvalID 与 toolCallID。</td></tr>
-      <tr><td><code>tool.call.waiting_approval</code></td><td>processor 或 permission registration</td><td>通知 runtime/UI 工具正在等待用户。</td></tr>
+      <tr><td><code>tool.call.phase_changed</code></td><td>processor 或 permission registration</td><td>携带 v3 快照，通知 runtime/UI 进入 <code>waiting-approval</code> 或 <code>running</code>。</td></tr>
       <tr><td><code>permission.resolved</code></td><td><code>resolveRequest</code></td><td>用户审批结果进入事件流。</td></tr>
-      <tr><td><code>tool.call.approved/completed/denied/failed</code></td><td><code>completeApprovedRequest</code>/<code>denyApprovedRequest</code></td><td>审批后补执行工具或写入拒绝状态。</td></tr>
+      <tr><td><code>tool.call.settled</code></td><td><code>completeApprovedRequest</code>/<code>denyApprovedRequest</code></td><td>审批后执行或拒绝均写入一个 canonical outcome；同一调用 first settlement wins。</td></tr>
     </table>
 
     <h2 id="filesystem">10. 文件系统安全边界</h2>

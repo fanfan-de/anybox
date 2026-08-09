@@ -593,6 +593,8 @@ export class McpManager {
             return {
               title: displayName,
               text: summary.text,
+              result: summary.isError ? "negative" : "success",
+              completeness: "complete",
               metadata,
               data: hasStructuredContent
                 ? {
@@ -614,7 +616,7 @@ export class McpManager {
                 ? dataValue
                 : undefined
             const hasStructuredContent = structuredContent !== undefined
-            const isError = Boolean(metadata?.[MCP_IS_ERROR_KEY] ?? data?.isError)
+            const isError = output.result === "negative"
 
             if (hasStructuredContent) {
               if (isError) {

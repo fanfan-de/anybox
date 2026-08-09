@@ -89,17 +89,19 @@ async function createApprovalRequest(repositoryRoot: string, targetPath: string)
         type: "tool",
         callID: `toolcall_${Date.now()}_${Math.random().toString(16).slice(2)}`,
         tool: "read_file",
-        state: {
-          status: "waiting-approval",
-          approvalID: `approval_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-          input: {
+        schemaVersion: 3,
+        turnID: "turn-test",
+        input: { raw: JSON.stringify({
             path: targetPath,
-          },
-          title: "Read File",
-          time: {
-            start: Date.now(),
-          },
-        },
+          }), value: {
+            path: targetPath,
+          } },
+        source: { kind: "model" },
+        retry: { attempt: 1 },
+        revision: 1,
+        timestamps: { createdAt: Date.now(), approvalRequestedAt: Date.now() },
+        presentation: { title: "Read File" },
+        state: { phase: "waiting-approval", approval: { id: `approval_${Date.now()}_${Math.random().toString(16).slice(2)}` } },
       })
 
       await Session.updatePart(toolPart)
@@ -142,17 +144,19 @@ async function createAdditionalApprovalRequest(
         type: "tool",
         callID: `toolcall_${Date.now()}_${Math.random().toString(16).slice(2)}`,
         tool: "read_file",
-        state: {
-          status: "waiting-approval",
-          approvalID: `approval_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-          input: {
+        schemaVersion: 3,
+        turnID: "turn-test",
+        input: { raw: JSON.stringify({
             path: input.targetPath,
-          },
-          title: "Read File",
-          time: {
-            start: Date.now(),
-          },
-        },
+          }), value: {
+            path: input.targetPath,
+          } },
+        source: { kind: "model" },
+        retry: { attempt: 1 },
+        revision: 1,
+        timestamps: { createdAt: Date.now(), approvalRequestedAt: Date.now() },
+        presentation: { title: "Read File" },
+        state: { phase: "waiting-approval", approval: { id: `approval_${Date.now()}_${Math.random().toString(16).slice(2)}` } },
       })
 
       await Session.updatePart(toolPart)
@@ -232,9 +236,11 @@ test("permission api approves a waiting tool request and completes the tool part
     })
 
     const toolPart = findToolPart(seeded.messageID, seeded.toolCallID)
-    expect(toolPart?.state.status).toBe("completed")
-    if (toolPart?.state.status === "completed") {
-      expect(toolPart.state.output).toContain("README.md")
+    expect(toolPart?.state.phase).toBe("settled")
+    if (toolPart?.state.phase === "settled" && toolPart.state.outcome.kind === "returned") {
+      expect(String(toolPart.state.outcome.output)).toContain("README.md")
+    } else {
+      throw new Error("Expected the approved tool call to return.")
     }
   } finally {
     await rm(repositoryRoot, { recursive: true, force: true })
@@ -309,9 +315,11 @@ test("permission api deny marks the tool part denied without creating persisted 
     expect("rule" in (denyBody.data ?? {})).toBe(false)
 
     const toolPart = findToolPart(seeded.messageID, seeded.toolCallID)
-    expect(toolPart?.state.status).toBe("denied")
-    if (toolPart?.state.status === "denied") {
-      expect(toolPart.state.reason).toContain("Need explicit review first.")
+    expect(toolPart?.state.phase).toBe("settled")
+    if (toolPart?.state.phase === "settled" && toolPart.state.outcome.kind === "denied") {
+      expect(toolPart.state.outcome.reason).toContain("Need explicit review first.")
+    } else {
+      throw new Error("Expected the tool call to be denied.")
     }
   } finally {
     await rm(repositoryRoot, { recursive: true, force: true })
@@ -341,9 +349,11 @@ test("permission api approval keeps tool history consistent when the approved ex
     expect(approveBody.data?.request.status).toBe("approved")
 
     const toolPart = findToolPart(seeded.messageID, seeded.toolCallID)
-    expect(toolPart?.state.status).toBe("error")
-    if (toolPart?.state.status === "error") {
-      expect(toolPart.state.error).toContain("missing.txt")
+    expect(toolPart?.state.phase).toBe("settled")
+    if (toolPart?.state.phase === "settled" && toolPart.state.outcome.kind === "failed") {
+      expect(toolPart.state.outcome.error.message).toContain("missing.txt")
+    } else {
+      throw new Error("Expected the approved tool call to fail.")
     }
   } finally {
     await rm(repositoryRoot, { recursive: true, force: true })

@@ -1,6 +1,7 @@
 import { createRef, type ComponentProps } from "react"
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
+import type { ToolCallSnapshot, ToolCallState } from "@anybox/shared"
 import { DEFAULT_ASSISTANT_TRACE_VISIBILITY, type AssistantTraceItem, type AssistantTraceItemKind, type AssistantThreadMessage, type PermissionRequest, type SessionSummary, type ThreadMessage, type ThreadTurn, type UserThreadMessage } from "../types"
 import type { SessionMessageTree } from "../session-message-tree"
 import { SIDEBAR_RESIZE_END_EVENT } from "../sidebar-resize-events"
@@ -339,6 +340,8 @@ function traceSmokeItem(kind: AssistantTraceItemKind): AssistantTraceItem {
       ...base,
       title: "Smoke tool",
       toolOutputText: "tool output",
+      toolCall: toolCallFixture("returned", "trace-smoke-tool"),
+      status: undefined,
     }
   }
 
@@ -373,18 +376,134 @@ function traceSmokeItem(kind: AssistantTraceItemKind): AssistantTraceItem {
   return base
 }
 
-function toolStatusTraceItem(status: NonNullable<AssistantTraceItem["status"]>): AssistantTraceItem {
-  const showsInput = status === "pending" || status === "running" || status === "waiting-approval" || status === "cancelled"
+type ToolFixtureState =
+  | "pending"
+  | "running"
+  | "waiting-approval"
+  | "returned"
+  | "returned-negative"
+  | "returned-partial"
+  | "blocked"
+  | "denied"
+  | "cancelled"
+  | "timeout"
+  | "failed"
+
+function toolCallFixture(fixtureState: ToolFixtureState, callID = `tool-${fixtureState}`): ToolCallSnapshot {
+  const execution = { sideEffect: "unknown", retry: "unknown" } as const
+  let state: ToolCallState
+
+  switch (fixtureState) {
+    case "pending":
+      state = { phase: "pending" }
+      break
+    case "running":
+      state = { phase: "running" }
+      break
+    case "waiting-approval":
+      state = { phase: "waiting-approval", approval: { id: `approval-${callID}` } }
+      break
+    case "returned":
+    case "returned-negative":
+    case "returned-partial":
+      state = {
+        phase: "settled",
+        outcome: {
+          kind: "returned",
+          result: fixtureState === "returned-negative" ? "negative" : "success",
+          completeness: fixtureState === "returned-partial" ? "partial" : "complete",
+          output: "tool output",
+          execution,
+        },
+        control: { mode: "continue-model" },
+      }
+      break
+    case "blocked":
+      state = {
+        phase: "settled",
+        outcome: { kind: "blocked", reason: "Blocked by fixture", execution },
+        control: { mode: "wait-user" },
+      }
+      break
+    case "denied":
+      state = {
+        phase: "settled",
+        outcome: { kind: "denied", reason: "Denied by fixture", execution },
+        control: { mode: "continue-model" },
+      }
+      break
+    case "cancelled":
+      state = {
+        phase: "settled",
+        outcome: { kind: "cancelled", reason: "Cancelled by fixture", by: "user", execution },
+        control: { mode: "cancel-turn" },
+      }
+      break
+    case "timeout":
+      state = {
+        phase: "settled",
+        outcome: { kind: "timeout", reason: "Timed out in fixture", execution },
+        control: { mode: "fail-turn" },
+      }
+      break
+    case "failed":
+      state = {
+        phase: "settled",
+        outcome: {
+          kind: "failed",
+          error: {
+            stage: "execution",
+            source: "tool",
+            code: "TOOL_EXECUTION_ERROR",
+            message: "Failed in fixture",
+            handlerExecuted: true,
+            retryable: false,
+            severity: "recoverable",
+          },
+          execution,
+        },
+        control: { mode: "fail-turn" },
+      }
+      break
+  }
+
+  const isSettled = state.phase === "settled"
+  return {
+    schemaVersion: 3,
+    callID,
+    sessionID: session.id,
+    turnID: `turn-${callID}`,
+    messageID: `message-${callID}`,
+    executionID: `execution-${callID}`,
+    tool: `Tool ${fixtureState}`,
+    input: { raw: "tool input" },
+    source: { kind: "model", providerID: "test", modelID: "test-model" },
+    retry: { attempt: 1 },
+    revision: fixtureState === "pending" ? 0 : isSettled ? 2 : 1,
+    timestamps: {
+      createdAt: 1,
+      ...(fixtureState === "waiting-approval" ? { approvalRequestedAt: 2 } : {}),
+      ...(fixtureState === "running" || fixtureState.startsWith("returned") ? { startedAt: 2 } : {}),
+      ...(isSettled ? { settledAt: 3 } : {}),
+    },
+    presentation: { title: `Tool ${fixtureState}` },
+    state,
+  }
+}
+
+function toolTraceItem(fixtureState: ToolFixtureState): AssistantTraceItem {
+  const call = toolCallFixture(fixtureState)
+  const showsInput = call.state.phase !== "settled" || call.state.outcome.kind === "cancelled"
 
   return {
-    id: `tool-${status}`,
+    id: `tool-${fixtureState}`,
     kind: "tool",
     timestamp: 1,
     label: "Tool",
-    title: `Tool ${status}`,
-    toolName: `Tool ${status}`,
+    title: `Tool ${fixtureState}`,
+    toolName: `Tool ${fixtureState}`,
     detail: "Tool detail",
-    status,
+    toolCall: call,
     toolInputText: showsInput ? "tool input" : undefined,
     toolOutputText: showsInput ? undefined : "tool output",
   }
@@ -429,7 +548,7 @@ describe("ThreadView trace item renderers", () => {
               text: "Planning light path",
               status: "completed",
             },
-            toolStatusTraceItem("completed"),
+            toolTraceItem("returned"),
             {
               id: "workflow-lite",
               kind: "step",
@@ -526,7 +645,7 @@ describe("ThreadView trace item renderers", () => {
     }
 
     expect(screen.getByText("Planning light path")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /^Tool completed/ })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /^Tool returned/ })).toBeInTheDocument()
     expect(screen.getByText("Workflow step finished")).toBeInTheDocument()
     expect(screen.getByText("Source visible")).toBeInTheDocument()
     expect(screen.getByText("Approval visible")).toBeInTheDocument()
@@ -680,13 +799,17 @@ describe("ThreadView trace item renderers", () => {
 
   it("renders tool traces as lightweight log rows", () => {
     const items = [
-      toolStatusTraceItem("pending"),
-      toolStatusTraceItem("running"),
-      toolStatusTraceItem("waiting-approval"),
-      toolStatusTraceItem("completed"),
-      toolStatusTraceItem("error"),
-      toolStatusTraceItem("denied"),
-      toolStatusTraceItem("cancelled"),
+      toolTraceItem("pending"),
+      toolTraceItem("running"),
+      toolTraceItem("waiting-approval"),
+      toolTraceItem("returned"),
+      toolTraceItem("returned-negative"),
+      toolTraceItem("returned-partial"),
+      toolTraceItem("blocked"),
+      toolTraceItem("denied"),
+      toolTraceItem("cancelled"),
+      toolTraceItem("timeout"),
+      toolTraceItem("failed"),
     ]
     const { container } = renderThread([
       assistantTraceMessage("assistant-tools", items, true),
@@ -697,10 +820,14 @@ describe("ThreadView trace item renderers", () => {
     expect(screen.getByRole("button", { name: /Tool pending/ })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /Tool running/ })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /Tool waiting-approval/ })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /^Tool completed/ })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /Tool error/ })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /^Tool returned 已完成$/ })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Tool returned-negative 未达成/ })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Tool returned-partial 部分完成/ })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Tool blocked 已阻止/ })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /Tool denied/ })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /Tool cancelled/ })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Tool timeout 已超时/ })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Tool failed 执行故障/ })).toBeInTheDocument()
     expect(container.querySelector(".trace-kind-tool .trace-tool-status-indicator")).toBeNull()
     expect(container.querySelector(".trace-kind-tool .trace-log-label")).toBeNull()
 
@@ -716,13 +843,15 @@ describe("ThreadView trace item renderers", () => {
     expect(runningToolName).not.toBeNull()
     expect(runningToolName).toHaveClass("is-running")
 
-    const completedToolName = container.querySelector(".trace-kind-tool.is-completed .trace-tool-name")
-    expect(completedToolName).not.toBeNull()
-    expect(completedToolName).not.toHaveClass("is-running")
+    const returnedToolName = container.querySelector(".trace-kind-tool.is-returned .trace-tool-name")
+    expect(returnedToolName).not.toBeNull()
+    expect(returnedToolName).toHaveClass("is-tone-success")
+    expect(returnedToolName).not.toHaveClass("is-active")
 
-    const errorToolName = container.querySelector(".trace-kind-tool.is-error .trace-tool-name")
-    expect(errorToolName).not.toBeNull()
-    expect(errorToolName).not.toHaveClass("is-running")
+    const failedToolName = container.querySelector(".trace-kind-tool.is-failed .trace-tool-name")
+    expect(failedToolName).not.toBeNull()
+    expect(failedToolName).toHaveClass("is-tone-danger")
+    expect(failedToolName).not.toHaveClass("is-active")
 
     const deniedToolName = container.querySelector(".trace-kind-tool.is-denied .trace-tool-name")
     expect(deniedToolName).not.toBeNull()
@@ -778,8 +907,9 @@ describe("ThreadView trace item renderers", () => {
     expect(screen.queryByText("Tool")).not.toBeInTheDocument()
   })
 
-  it("renders pending tool traces as cancelled when the assistant message is cancelled", () => {
-    const assistantMessage = assistantTraceMessage("assistant-cancelled", [toolStatusTraceItem("pending")], false)
+  it("does not fabricate a tool outcome when its assistant message is cancelled", () => {
+    const pendingTool = { ...toolTraceItem("pending"), isStreaming: false }
+    const assistantMessage = assistantTraceMessage("assistant-cancelled", [pendingTool], false)
     assistantMessage.runtime = {
       ...assistantMessage.runtime,
       phase: "cancelled",
@@ -789,20 +919,18 @@ describe("ThreadView trace item renderers", () => {
     const { container } = renderThread([assistantMessage])
 
     expect(screen.getByRole("button", { name: /Tool pending/ })).toBeInTheDocument()
-    expect(container.querySelector(".trace-kind-tool.is-pending")).toBeNull()
-    expect(container.querySelector(".trace-kind-tool.is-cancelled .trace-tool-status-indicator")).toBeNull()
-    expect(container.querySelector(".trace-kind-tool.is-cancelled .trace-log-label")).toBeNull()
-    const cancelledToolName = container.querySelector(".trace-kind-tool.is-cancelled .trace-tool-name")
-    expect(cancelledToolName).not.toBeNull()
-    expect(cancelledToolName).not.toHaveClass("is-running")
+    expect(container.querySelector(".trace-kind-tool.is-pending")).not.toBeNull()
+    expect(container.querySelector(".trace-kind-tool.is-cancelled")).toBeNull()
+    const pendingToolName = container.querySelector(".trace-kind-tool.is-pending .trace-tool-name")
+    expect(pendingToolName).not.toBeNull()
+    expect(pendingToolName).not.toHaveClass("is-active")
   })
 
   it("applies the active tool-name treatment to streaming non-patch tools", () => {
     const toolItem: AssistantTraceItem = {
-      ...toolStatusTraceItem("completed"),
+      ...toolTraceItem("running"),
       id: "tool-streaming-shell",
       isStreaming: true,
-      status: undefined,
       title: "powershell_command",
     }
 
@@ -813,13 +941,13 @@ describe("ThreadView trace item renderers", () => {
     const toolName = container.querySelector(".trace-kind-tool .trace-tool-name")
     expect(toolName).not.toBeNull()
     expect(toolName).toHaveClass("is-active")
-    expect(toolName).not.toHaveClass("is-completed")
+    expect(toolName).not.toHaveClass("is-returned")
   })
 
   it("keeps tool details available after expanding compact summaries", () => {
     renderThread(
       [
-        assistantTraceMessage("assistant-tools", [toolStatusTraceItem("running")], true),
+        assistantTraceMessage("assistant-tools", [toolTraceItem("running")], true),
       ],
       {
         assistantTraceVisibility: {
@@ -846,7 +974,7 @@ describe("ThreadView trace item renderers", () => {
     })
 
     const toolItem: AssistantTraceItem = {
-      ...toolStatusTraceItem("completed"),
+      ...toolTraceItem("returned"),
       toolInputText: "tool input",
       toolOutputText: "tool output",
       detail: "tool detail",
@@ -864,18 +992,18 @@ describe("ThreadView trace item renderers", () => {
       },
     )
 
-    fireEvent.click(screen.getByRole("button", { name: /Tool completed/ }))
+    fireEvent.click(screen.getByRole("button", { name: /Tool returned/ }))
 
-    const inputPane = screen.getByRole("region", { name: "Tool completed input content" })
-    const outputPane = screen.getByRole("region", { name: "Tool completed output content" })
+    const inputPane = screen.getByRole("region", { name: "Tool returned input content" })
+    const outputPane = screen.getByRole("region", { name: "Tool returned output content" })
     expect(inputPane).toHaveClass("trace-tool-io-pane")
     expect(inputPane).not.toHaveClass("trace-fixed-content-pane")
     expect(outputPane).toHaveClass("trace-tool-io-pane")
     expect(outputPane).not.toHaveClass("trace-fixed-content-pane")
-    expect(within(inputPane).getByRole("button", { name: "Copy Tool completed input content" })).toBeInTheDocument()
-    expect(within(inputPane).getByRole("button", { name: "Expand Tool completed input content" })).toBeInTheDocument()
-    expect(within(outputPane).getByRole("button", { name: "Copy Tool completed output content" })).toBeInTheDocument()
-    const outputExpandButton = within(outputPane).getByRole("button", { name: "Expand Tool completed output content" })
+    expect(within(inputPane).getByRole("button", { name: "Copy Tool returned input content" })).toBeInTheDocument()
+    expect(within(inputPane).getByRole("button", { name: "Expand Tool returned input content" })).toBeInTheDocument()
+    expect(within(outputPane).getByRole("button", { name: "Copy Tool returned output content" })).toBeInTheDocument()
+    const outputExpandButton = within(outputPane).getByRole("button", { name: "Expand Tool returned output content" })
     expect(outputExpandButton).toHaveAttribute("aria-expanded", "false")
     expect(screen.queryByText("Input")).toBeNull()
     expect(screen.queryByText("Output")).toBeNull()
@@ -883,15 +1011,15 @@ describe("ThreadView trace item renderers", () => {
     expect(container.querySelectorAll(".trace-kind-tool .trace-tool-io-stack .trace-tool-io-pane")).toHaveLength(2)
     expect(container.querySelectorAll(".trace-kind-tool .trace-tool-io-pane")).toHaveLength(2)
 
-    fireEvent.click(within(inputPane).getByRole("button", { name: "Copy Tool completed input content" }))
+    fireEvent.click(within(inputPane).getByRole("button", { name: "Copy Tool returned input content" }))
     await waitFor(() => expect(writeText).toHaveBeenCalledWith("tool input"))
 
-    fireEvent.click(within(outputPane).getByRole("button", { name: "Copy Tool completed output content" }))
+    fireEvent.click(within(outputPane).getByRole("button", { name: "Copy Tool returned output content" }))
     await waitFor(() => expect(writeText).toHaveBeenCalledWith("tool output\n\ntool detail"))
 
     fireEvent.click(outputExpandButton)
     expect(outputPane).toHaveClass("is-expanded")
-    expect(within(outputPane).getByRole("button", { name: "Collapse Tool completed output content" })).toHaveAttribute("aria-expanded", "true")
+    expect(within(outputPane).getByRole("button", { name: "Collapse Tool returned output content" })).toHaveAttribute("aria-expanded", "true")
   })
 
   it("shows a shell command only in the input pane and copies result-only output", async () => {
@@ -911,7 +1039,7 @@ describe("ThreadView trace item renderers", () => {
       "(no stderr)",
     ].join("\n")
     const toolItem: AssistantTraceItem = {
-      ...toolStatusTraceItem("completed"),
+      ...toolTraceItem("returned"),
       title: "powershell_command",
       toolName: "powershell_command",
       detail: "PowerShell command completed",
@@ -960,7 +1088,7 @@ describe("ThreadView trace item renderers", () => {
     })
     const rawOutput = '{"result":{"hits":2}}'
     const toolItem: AssistantTraceItem = {
-      ...toolStatusTraceItem("completed"),
+      ...toolTraceItem("returned"),
       detail: undefined,
       toolInputText: rawInput,
       toolOutputText: rawOutput,
@@ -977,10 +1105,10 @@ describe("ThreadView trace item renderers", () => {
       },
     )
 
-    fireEvent.click(screen.getByRole("button", { name: /Tool completed/ }))
+    fireEvent.click(screen.getByRole("button", { name: /Tool returned/ }))
 
-    const inputPane = screen.getByRole("region", { name: "Tool completed input content" })
-    const outputPane = screen.getByRole("region", { name: "Tool completed output content" })
+    const inputPane = screen.getByRole("region", { name: "Tool returned input content" })
+    const outputPane = screen.getByRole("region", { name: "Tool returned output content" })
     const formattedInput = inputPane.querySelector(".trace-tool-io-json")
     const formattedOutput = outputPane.querySelector(".trace-tool-io-json")
     expect(formattedInput?.textContent).toBe([
@@ -1008,10 +1136,10 @@ describe("ThreadView trace item renderers", () => {
       "}",
     ].join("\n"))
 
-    fireEvent.click(within(inputPane).getByRole("button", { name: "Copy Tool completed input content" }))
+    fireEvent.click(within(inputPane).getByRole("button", { name: "Copy Tool returned input content" }))
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(rawInput))
 
-    fireEvent.click(within(outputPane).getByRole("button", { name: "Copy Tool completed output content" }))
+    fireEvent.click(within(outputPane).getByRole("button", { name: "Copy Tool returned output content" }))
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(rawOutput))
   })
 
@@ -1035,7 +1163,7 @@ describe("ThreadView trace item renderers", () => {
       durationMs: 12,
     })
     const toolItem: AssistantTraceItem = {
-      ...toolStatusTraceItem("completed"),
+      ...toolTraceItem("returned"),
       detail: undefined,
       title: "exec",
       toolName: "exec",
@@ -1078,7 +1206,7 @@ describe("ThreadView trace item renderers", () => {
 
   it("falls back to raw text for incomplete exec input", () => {
     const toolItem: AssistantTraceItem = {
-      ...toolStatusTraceItem("running"),
+      ...toolTraceItem("running"),
       title: "exec",
       toolName: "exec",
       toolInputText: '{"code":"const pending = true"',
@@ -1107,7 +1235,7 @@ describe("ThreadView trace item renderers", () => {
       timeoutMs: 5000,
     })
     const toolItem: AssistantTraceItem = {
-      ...toolStatusTraceItem("completed"),
+      ...toolTraceItem("returned"),
       detail: undefined,
       title: "exec",
       toolName: "exec",
@@ -1134,7 +1262,7 @@ describe("ThreadView trace item renderers", () => {
 
   it("keeps incomplete JSON tool inputs as raw text while streaming", () => {
     const toolItem: AssistantTraceItem = {
-      ...toolStatusTraceItem("running"),
+      ...toolTraceItem("running"),
       toolInputText: '{"command":"rg ThreadView"',
     }
 
@@ -1161,7 +1289,7 @@ describe("ThreadView trace item renderers", () => {
     window.localStorage.setItem("desktop.locale", "zh-CN")
 
     const toolItem: AssistantTraceItem = {
-      ...toolStatusTraceItem("completed"),
+      ...toolTraceItem("returned"),
       toolInputText: "tool input",
       toolOutputText: "tool output",
     }
@@ -1186,17 +1314,17 @@ describe("ThreadView trace item renderers", () => {
     )
 
     try {
-      fireEvent.click(await screen.findByRole("button", { name: /Tool completed/ }))
+      fireEvent.click(await screen.findByRole("button", { name: /Tool returned/ }))
 
       expect(screen.queryByText("\u8f93\u5165")).toBeNull()
       expect(screen.queryByText("\u8f93\u51fa")).toBeNull()
       expect(screen.queryByText("Input")).toBeNull()
       expect(screen.queryByText("Output")).toBeNull()
 
-      expect(screen.getByRole("region", { name: "Tool completed \u8f93\u5165\u5185\u5bb9" })).toBeInTheDocument()
-      expect(screen.getByRole("region", { name: "Tool completed \u8f93\u51fa\u5185\u5bb9" })).toBeInTheDocument()
-      expect(screen.getByRole("button", { name: "\u590d\u5236 Tool completed \u8f93\u5165\u5185\u5bb9" })).toBeInTheDocument()
-      expect(screen.getByRole("button", { name: "\u5c55\u5f00 Tool completed \u8f93\u51fa\u5185\u5bb9" })).toBeInTheDocument()
+      expect(screen.getByRole("region", { name: "Tool returned \u8f93\u5165\u5185\u5bb9" })).toBeInTheDocument()
+      expect(screen.getByRole("region", { name: "Tool returned \u8f93\u51fa\u5185\u5bb9" })).toBeInTheDocument()
+      expect(screen.getByRole("button", { name: "\u590d\u5236 Tool returned \u8f93\u5165\u5185\u5bb9" })).toBeInTheDocument()
+      expect(screen.getByRole("button", { name: "\u5c55\u5f00 Tool returned \u8f93\u51fa\u5185\u5bb9" })).toBeInTheDocument()
     } finally {
       view.unmount()
       window.localStorage.removeItem("desktop.locale")
@@ -1271,7 +1399,7 @@ describe("ThreadView trace item renderers", () => {
 
   it("does not mount tool debug entries while disclosure content is collapsed", () => {
     const toolItem: AssistantTraceItem = {
-      ...toolStatusTraceItem("completed"),
+      ...toolTraceItem("returned"),
       debugEntries: [
         {
           label: "Debug payload",
@@ -1294,7 +1422,7 @@ describe("ThreadView trace item renderers", () => {
 
     expect(screen.queryByText("Hidden until expanded")).toBeNull()
 
-    fireEvent.click(screen.getByRole("button", { name: /Tool completed/ }))
+    fireEvent.click(screen.getByRole("button", { name: /Tool returned/ }))
 
     expect(screen.getByText("Hidden until expanded")).toBeInTheDocument()
   })
@@ -5250,13 +5378,12 @@ describe("ThreadView assistant response markdown", () => {
             isStreaming: true,
           },
           {
+            ...toolTraceItem("returned"),
             id: "tool-1",
-            kind: "tool",
-            timestamp: 1,
-            label: "Tool",
             title: "Shell",
+            toolName: "Shell",
             detail: "## Tool output\n\n**Plain tool output**",
-            status: "completed",
+            toolCall: toolCallFixture("returned", "tool-1"),
           },
         ],
         true,
@@ -5712,12 +5839,12 @@ describe("ThreadView message actions", () => {
             status: "completed",
           },
           {
+            ...toolTraceItem("returned"),
             id: "assistant-tool",
-            kind: "tool",
             timestamp: 2,
-            label: "Tool",
             title: "load-skill",
-            status: "completed",
+            toolName: "load-skill",
+            toolCall: toolCallFixture("returned", "assistant-tool"),
           },
           {
             id: "assistant-after",
@@ -7966,7 +8093,7 @@ describe("ThreadView virtual list", () => {
         return createElementRect()
       })
     const toolItem: AssistantTraceItem = {
-      ...toolStatusTraceItem("completed"),
+      ...toolTraceItem("returned"),
       toolOutputText: "tool output\n".repeat(24),
       detail: "Tool detail\n".repeat(8),
     }
@@ -7999,25 +8126,25 @@ describe("ThreadView virtual list", () => {
       await waitFor(() => expect(readNextRowOffset()).toBe(87))
 
       toolRowHeight = 220
-      fireEvent.click(screen.getByRole("button", { name: /^Tool completed/ }))
+      fireEvent.click(screen.getByRole("button", { name: /^Tool returned/ }))
       flushScheduledMeasurements()
 
       await waitFor(() => expect(readNextRowOffset()).toBe(227))
 
       toolRowHeight = 360
-      fireEvent.click(screen.getByRole("button", { name: "Expand Tool completed output content" }))
+      fireEvent.click(screen.getByRole("button", { name: "Expand Tool returned output content" }))
       flushScheduledMeasurements()
 
       await waitFor(() => expect(readNextRowOffset()).toBe(367))
 
       toolRowHeight = 220
-      fireEvent.click(screen.getByRole("button", { name: "Collapse Tool completed output content" }))
+      fireEvent.click(screen.getByRole("button", { name: "Collapse Tool returned output content" }))
       flushScheduledMeasurements()
 
       await waitFor(() => expect(readNextRowOffset()).toBe(227))
 
       toolRowHeight = 80
-      fireEvent.click(screen.getByRole("button", { name: /^Tool completed/ }))
+      fireEvent.click(screen.getByRole("button", { name: /^Tool returned/ }))
       flushScheduledMeasurements()
 
       await waitFor(() => expect(readNextRowOffset()).toBe(87))

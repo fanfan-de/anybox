@@ -191,19 +191,29 @@ describe("processor stream error persistence", () => {
 
     expect(await processor.process(createStreamInput())).toBe("continue")
 
-    const started = recorded.events.find((event) => event.type === "tool.call.started")
-    expect(started?.payload.part.state.input).toEqual({ path: "README.md" })
-    expect(started?.payload.part.state.raw).toBe("{\"path\":\"README.md\"}")
+    const started = recorded.events.find((event) => event.type === "tool.call.phase_changed")
+    expect(started?.payload.part.input.value).toEqual({ path: "README.md" })
+    expect(started?.payload.part.input.raw).toBe("{\"path\":\"README.md\"}")
     expect(Message.ToolPart.safeParse(started?.payload.part).success).toBe(true)
 
-    const failed = recorded.events.find((event) => event.type === "tool.call.failed")
-    expect(failed?.payload.part.state.input).toEqual({})
-    expect(failed?.payload.part.state.raw).toBe("not-json")
-    expect(failed?.payload.part.state.error).toBe("read failed")
+    const failed = recorded.events.find((event) => event.type === "tool.call.settled")
+    expect(failed?.payload.part.input.value).toEqual({ path: "README.md" })
+    expect(failed?.payload.part.input.raw).toBe("{\"path\":\"README.md\"}")
+    expect(failed?.payload.part.state).toMatchObject({
+      phase: "settled",
+      outcome: {
+        kind: "failed",
+        error: {
+          code: "TOOL_EXECUTION_ERROR",
+          message: "read failed",
+        },
+      },
+      control: { mode: "continue-model" },
+    })
     expect(Message.ToolPart.safeParse(failed?.payload.part).success).toBe(true)
   })
 
-  it("recovers tool argument shape stream errors as tool failures", async () => {
+  it("recovers tool argument shape stream errors as blocked calls", async () => {
     restoreLLM = LLM.setRuntimeDependenciesForTesting({
       getLanguage: async (model) => model as never,
       streamText: (() => ({
@@ -265,28 +275,31 @@ describe("processor stream error persistence", () => {
     expect(typeof assistant.completed).toBe("number")
     expect(recorded.events.some((event) => event.type === "llm.call.failed")).toBe(false)
 
-    const failed = recorded.events.find((event) => event.type === "tool.call.failed")
-    expect(failed?.payload.part.state).toMatchObject({
-      status: "error",
-      input: {},
-      raw: "{\"calls\":",
+    const blocked = recorded.events.find((event) => event.type === "tool.call.settled")
+    expect(blocked?.payload.part.input).toMatchObject({ raw: "{\"calls\":" })
+    const parsedBlockedPart = Message.ToolPart.safeParse(blocked?.payload.part)
+    if (!parsedBlockedPart.success) throw parsedBlockedPart.error
+    expect(blocked?.payload.part.state).toMatchObject({
+      phase: "settled",
+      outcome: {
+        kind: "blocked",
+        code: "TOOL_INPUT_VALIDATION_BLOCKED",
+      },
+      control: { mode: "continue-model" },
     })
-    expect(failed?.payload.part.state.error).toContain("Tool argument validation failed")
-    expect(Message.ToolPart.safeParse(failed?.payload.part).success).toBe(true)
+    expect(blocked?.payload.part.state.outcome.reason).toContain("Tool argument validation failed")
 
     const modelMessages = await Message.toModelMessages(
       [
         {
           info: assistant,
-          parts: [failed?.payload.part],
+          parts: [blocked?.payload.part],
         },
       ] as any,
       createStreamInput().model,
     )
     const toolMessage = modelMessages.find((message) => message.role === "tool") as any
-    expect(toolMessage?.content[0]?.output).toMatchObject({
-      type: "error-text",
-      value: expect.stringContaining("Tool argument validation failed"),
-    })
+    expect(toolMessage?.content[0]?.output?.type).toBe("error-text")
+    expect(toolMessage?.content[0]?.output?.value).toContain("Tool argument validation failed")
   })
 })

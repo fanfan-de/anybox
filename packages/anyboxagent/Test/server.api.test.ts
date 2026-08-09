@@ -1518,17 +1518,19 @@ describe("server api", () => {
       type: "tool",
       callID: "toolcall_debug_runtime",
       tool: "read_file",
-      state: {
-        status: "waiting-approval",
-        approvalID: "approval_debug_runtime",
-        input: {
+      schemaVersion: 3,
+      turnID: "turn-test",
+      input: { raw: JSON.stringify({
           path: "README.md",
-        },
-        title: "Read File",
-        time: {
-          start: Date.now(),
-        },
-      },
+        }), value: {
+          path: "README.md",
+        } },
+      source: { kind: "model" },
+      retry: { attempt: 1 },
+      revision: 1,
+      timestamps: { createdAt: Date.now(), approvalRequestedAt: Date.now() },
+      presentation: { title: "Read File" },
+      state: { phase: "waiting-approval", approval: { id: "approval_debug_runtime" } },
     }
 
     RunningState.register(session.id, controller, {
@@ -1547,8 +1549,9 @@ describe("server api", () => {
     })
 
     try {
-      turn.emit("tool.call.waiting_approval", {
+      turn.emit("tool.call.phase_changed", {
         part: toolPart,
+        previousPhase: "pending",
       })
 
       const globalResponse = await app.request("http://localhost/api/debug/runtime?limit=3")
@@ -1588,7 +1591,7 @@ describe("server api", () => {
       expect(globalBody.data?.runningSessions[0]?.turn?.id).toBe(turn.turnID)
       expect(globalBody.data?.runningSessions[0]?.recentEvents.some((event) => event.type === "turn.started")).toBe(true)
       expect(
-        globalBody.data?.runningSessions[0]?.recentEvents.some((event) => event.type === "tool.call.waiting_approval"),
+        globalBody.data?.runningSessions[0]?.recentEvents.some((event) => event.type === "tool.call.phase_changed"),
       ).toBe(true)
 
       const detailResponse = await app.request(`http://localhost/api/debug/sessions/${session.id}/runtime?limit=5`)
@@ -1619,9 +1622,9 @@ describe("server api", () => {
       expect(detailBody.data?.turn?.id).toBe(turn.turnID)
       const detailEvents = detailBody.data?.recentEvents ?? []
       const latestEvent = detailEvents[detailEvents.length - 1]
-      expect(latestEvent?.type).toBe("tool.call.waiting_approval")
+      expect(latestEvent?.type).toBe("tool.call.phase_changed")
       expect(latestEvent?.summary?.["toolName"]).toBe("read_file")
-      expect(latestEvent?.summary?.["status"]).toBe("waiting-approval")
+      expect(latestEvent?.summary?.["phase"]).toBe("waiting-approval")
     } finally {
       Orchestrator.finishTurn(turn)
       RunningState.finish(session.id, controller)
@@ -1647,30 +1650,28 @@ describe("server api", () => {
       type: "tool",
       callID: "toolcall_debug_trace_export",
       tool: "grep",
-      state: {
-        status: "error",
-        input: {
+      schemaVersion: 3,
+      turnID: "turn-test",
+      input: { raw: JSON.stringify({
+          apiKey: "raw-api-key-value",
+          path: "README.md",
+        }), value: {
           apiKey: "direct-api-key-value",
           path: "README.md",
           nested: {
             authorization: "Bearer auth-token-value",
           },
-        },
-        raw: JSON.stringify({
-          apiKey: "raw-api-key-value",
-          path: "README.md",
-        }),
-        error: "grep failed because the pattern was invalid",
-        metadata: {
+        } },
+      source: { kind: "model" },
+      retry: { attempt: 1 },
+      revision: 1,
+      timestamps: { createdAt: now, startedAt: now, settledAt: now + 7 },
+      presentation: { metadata: {
           stdout: longOutput,
           cookie: "cookie-value",
           screenshot: "data:image/png;base64,AAAA",
-        },
-        time: {
-          start: now,
-          end: now + 7,
-        },
-      },
+        } },
+      state: { phase: "settled", outcome: { kind: "failed", error: { stage: "execution", source: "tool", code: "TOOL_EXECUTION_ERROR", message: "grep failed because the pattern was invalid", handlerExecuted: true, retryable: false, severity: "recoverable" }, execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
     }
     const assistantMessage: Message.Assistant = {
       id: assistantMessageID,
@@ -1736,13 +1737,13 @@ describe("server api", () => {
           outputTokens: 5,
         },
       })
-      turn.emit("tool.call.failed", {
+      turn.emit("tool.call.settled", {
         part: toolPart,
       })
 
       const response = await app.request(`http://localhost/api/debug/sessions/${session.id}/trace-export`)
       const body = (await response.json()) as JsonEnvelope<{
-        schemaVersion: 2
+        schemaVersion: 3
         messages: unknown[]
         events: Array<{
           type: string
@@ -1775,10 +1776,19 @@ describe("server api", () => {
         toolCalls: Array<{
           callID: string
           tool: string
-          status: string
+          phase: string
+          outcome?: string
+          turnControl?: string
           input?: Record<string, unknown>
           rawInput?: string
           error?: string
+          failure?: {
+            stage: string
+            source: string
+            code: string
+            message: string
+          }
+          diagnosticStatus: string
           durationMs?: number
           eventIDs: string[]
         }>
@@ -1786,11 +1796,11 @@ describe("server api", () => {
 
       expect(response.status).toBe(200)
       expect(body.success).toBe(true)
-      expect(body.data?.schemaVersion).toBe(2)
+      expect(body.data?.schemaVersion).toBe(3)
       expect(body.data?.messages).toHaveLength(1)
       expect(body.data?.events.some((event) => event.type === "turn.started")).toBe(true)
       expect(body.data?.events.some((event) => event.type === "llm.call.completed")).toBe(true)
-      expect(body.data?.events.some((event) => event.type === "tool.call.failed")).toBe(true)
+      expect(body.data?.events.some((event) => event.type === "tool.call.settled")).toBe(true)
       expect(body.data?.runtime.turns.length).toBeGreaterThanOrEqual(1)
       expect(body.data?.runtime.turns.find((item) => item.turnID === turn.turnID)?.llmCalls).toEqual([
         expect.objectContaining({
@@ -1814,11 +1824,20 @@ describe("server api", () => {
       const toolCall = body.data?.toolCalls[0]
       expect(toolCall?.callID).toBe(toolPart.callID)
       expect(toolCall?.tool).toBe("grep")
-      expect(toolCall?.status).toBe("error")
+      expect(toolCall?.phase).toBe("settled")
+      expect(toolCall?.outcome).toBe("failed")
+      expect(toolCall?.turnControl).toBe("continue-model")
+      expect(toolCall?.diagnosticStatus).toBe("error")
       expect(toolCall?.input?.path).toBe("README.md")
       expect(toolCall?.input?.apiKey).toBe("[REDACTED]")
       expect(toolCall?.rawInput).toContain("[REDACTED]")
       expect(toolCall?.error).toBe("grep failed because the pattern was invalid")
+      expect(toolCall?.failure).toMatchObject({
+        stage: "execution",
+        source: "tool",
+        code: "TOOL_EXECUTION_ERROR",
+        message: "grep failed because the pattern was invalid",
+      })
       expect(toolCall?.durationMs).toBe(7)
       expect(toolCall?.eventIDs.length).toBeGreaterThanOrEqual(1)
 
@@ -5948,17 +5967,19 @@ describe("server api", () => {
       type: "tool",
       callID: "toolcall_stream_replay",
       tool: "read_file",
-      state: {
-        status: "waiting-approval",
-        approvalID: "approval_stream_replay",
-        input: {
+      schemaVersion: 3,
+      turnID: "turn-test",
+      input: { raw: JSON.stringify({
           path: "README.md",
-        },
-        title: "Read File",
-        time: {
-          start: 301,
-        },
-      },
+        }), value: {
+          path: "README.md",
+        } },
+      source: { kind: "model" },
+      retry: { attempt: 1 },
+      revision: 1,
+      timestamps: { createdAt: 301, approvalRequestedAt: 301 },
+      presentation: { title: "Read File" },
+      state: { phase: "waiting-approval", approval: { id: "approval_stream_replay" } },
     }
 
     const turn1Factory = RuntimeEvent.createRuntimeEventFactory({
@@ -5988,8 +6009,9 @@ describe("server api", () => {
         modelID: assistantMessage.modelID,
       },
     })
-    const turn2WaitingApproval = turn2Factory.next("tool.call.waiting_approval", {
+    const turn2WaitingApproval = turn2Factory.next("tool.call.phase_changed", {
       part: waitingToolPart,
+      previousPhase: "pending",
     })
     const turn2Completed = turn2Factory.next("turn.completed", {
       status: "blocked",
@@ -6017,7 +6039,7 @@ describe("server api", () => {
     expect(response.status).toBe(200)
     expect(raw).toContain("event: runtime")
     expect(raw).toContain(`"type":"turn.started"`)
-    expect(raw).toContain(`"type":"tool.call.waiting_approval"`)
+    expect(raw).toContain(`"type":"tool.call.phase_changed"`)
     expect(raw).toContain(`"type":"turn.completed"`)
     expect(raw).toContain(`id: ${LiveStreamHub.serializeCursor(LiveStreamHub.cursorForEvent(turn2Started))}`)
     expect(raw).toContain(`"tool":"read_file"`)
@@ -6042,7 +6064,23 @@ describe("server api", () => {
     })
 
     try {
-      turn.emitStream("tool.input.delta", {
+      turn.emitStream("tool.call.input_delta", {
+        part: {
+          id: partID,
+          sessionID: session.id,
+          messageID,
+          type: "tool",
+          schemaVersion: 3,
+          turnID,
+          callID: "toolcall_apply_patch_late",
+          tool: "apply_patch",
+          input: { raw: "{\"cmd\":\"patch\"}" },
+          source: { kind: "model" },
+          retry: { attempt: 1 },
+          revision: 1,
+          timestamps: { createdAt: Date.now(), inputUpdatedAt: Date.now() },
+          state: { phase: "pending" },
+        },
         messageID,
         partID,
         toolCallID: "toolcall_apply_patch_late",
@@ -6056,14 +6094,14 @@ describe("server api", () => {
         `http://localhost/api/sessions/${session.id}/events/stream`,
       )
       const raw = await readStreamUntil(response, [
-        `"type":"tool.input.delta"`,
+        `"type":"tool.call.input_delta"`,
         `"toolName":"apply_patch"`,
         `"turnID":"${turnID}"`,
       ])
 
       expect(response.status).toBe(200)
       expect(raw).toContain(`"type":"turn.started"`)
-      expect(raw).toContain(`"type":"tool.input.delta"`)
+      expect(raw).toContain(`"type":"tool.call.input_delta"`)
       expect(raw).toContain(`"toolCallID":"toolcall_apply_patch_late"`)
       expect(raw).toContain(`"delta":"{\\"cmd\\":\\"patch\\"}"`)
     } finally {

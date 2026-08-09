@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test"
 import * as LLM from "#session/core/llm.ts"
+import * as Message from "#session/core/message.ts"
 import * as Provider from "#provider/provider.ts"
 import * as Log from "#util/log.ts"
 
@@ -443,13 +444,13 @@ describe("processor fullStream consumption probe", () => {
 
     expect(await processor.process(createStreamInput())).toBe("continue")
 
-    const pendingEvents = recorded.events.filter((event) => event.type === "tool.call.pending")
-    const deltaEvents = recorded.events.filter((event) => event.type === "tool.input.delta")
-    const startedEvent = recorded.events.find((event) => event.type === "tool.call.started")
-    const completedEvent = recorded.events.find((event) => event.type === "tool.call.completed")
+    const pendingEvents = recorded.events.filter((event) => event.type === "tool.call.created")
+    const deltaEvents = recorded.events.filter((event) => event.type === "tool.call.input_delta")
+    const startedEvent = recorded.events.find((event) => event.type === "tool.call.phase_changed")
+    const completedEvent = recorded.events.find((event) => event.type === "tool.call.settled")
 
-    expect(pendingEvents).toHaveLength(2)
-    expect(deltaEvents).toHaveLength(raw.length)
+    expect(pendingEvents).toHaveLength(1)
+    expect(deltaEvents.filter((event) => event.payload.delta.length > 0)).toHaveLength(raw.length)
     expect(deltaEvents[0]?.payload).toMatchObject({
       messageID: assistantID,
       toolCallID: "call_1",
@@ -458,11 +459,10 @@ describe("processor fullStream consumption probe", () => {
       rawLength: 1,
     })
     expect(deltaEvents[raw.length - 1]?.payload.rawLength).toBe(raw.length)
-    expect(deltaEvents.every((event) => !("part" in event.payload))).toBe(true)
-    expect(pendingEvents[0]?.payload.part.state.raw).toBe("")
-    expect(pendingEvents[1]?.payload.part.state.raw).toBe(raw)
-    expect(startedEvent?.payload.part.state.raw).toBe(raw)
-    expect(completedEvent?.payload.part.state.raw).toBe(raw)
+    expect(deltaEvents.every((event) => Message.ToolPart.safeParse(event.payload.part).success)).toBe(true)
+    expect(pendingEvents[0]?.payload.part.input.raw).toBe("")
+    expect(startedEvent?.payload.part.input.raw).toBe(raw)
+    expect(completedEvent?.payload.part.input.raw).toBe(raw)
   })
 
   it("stops consuming streamed tool input after abort", async () => {
@@ -526,28 +526,39 @@ describe("processor fullStream consumption probe", () => {
       abort: controller.signal,
     })).rejects.toThrow("Prompt aborted")
 
-    expect(recorded.events.some((event) => event.type === "tool.call.started")).toBe(false)
-    expect(recorded.events.some((event) => event.type === "tool.call.failed")).toBe(false)
+    expect(recorded.events.some((event) => event.type === "tool.call.phase_changed")).toBe(false)
+    expect(recorded.events.some((event) => event.type === "tool.call.settled")).toBe(true)
     expect(assistant.error).toMatchObject({
       name: "MessageAbortedError",
       data: {
         message: "Prompt cancellation requested.",
       },
     })
-    const cancelled = recorded.events.find((event) => event.type === "tool.call.cancelled")
+    const cancelled = recorded.events.find((event) => event.type === "tool.call.settled")
     expect(cancelled?.payload.part).toMatchObject({
       type: "tool",
       callID: "call_1",
       tool: "write",
+      sessionID,
+      messageID: assistantID,
+      schemaVersion: 3,
+      turnID: "turn-stream-probe",
+      input: { raw: "{" },
+      source: { kind: "model" },
+      retry: { attempt: 1 },
       state: {
-        status: "cancelled",
-        raw: "{",
-        reason: "Prompt cancellation requested.",
+        phase: "settled",
+        outcome: {
+          kind: "cancelled",
+          reason: "Prompt cancellation requested.",
+          by: "framework",
+        },
+        control: { mode: "cancel-turn" },
       },
     })
   })
 
-  it("marks running tool calls as cancelled after abort", async () => {
+  it("marks parsed tool calls as cancelled after abort", async () => {
     const controller = new AbortController()
 
     restoreLLM = LLM.setRuntimeDependenciesForTesting({
@@ -614,19 +625,28 @@ describe("processor fullStream consumption probe", () => {
       abort: controller.signal,
     })).rejects.toThrow("Prompt aborted")
 
-    expect(recorded.events.some((event) => event.type === "tool.call.started")).toBe(true)
-    expect(recorded.events.some((event) => event.type === "tool.call.completed")).toBe(false)
-    expect(recorded.events.some((event) => event.type === "tool.call.failed")).toBe(false)
-    const cancelled = recorded.events.find((event) => event.type === "tool.call.cancelled")
+    expect(recorded.events.some((event) => event.type === "tool.call.phase_changed")).toBe(false)
+    expect(recorded.events.some((event) => event.type === "tool.call.settled")).toBe(true)
+    const cancelled = recorded.events.find((event) => event.type === "tool.call.settled")
     expect(cancelled?.payload.part).toMatchObject({
       type: "tool",
       callID: "call_1",
       tool: "write",
+      sessionID,
+      messageID: assistantID,
+      schemaVersion: 3,
+      turnID: "turn-stream-probe",
+      input: { raw: "{\"path\":\"README.md\"}", value: { path: "README.md" } },
+      source: { kind: "model" },
+      retry: { attempt: 1 },
       state: {
-        status: "cancelled",
-        input: { path: "README.md" },
-        raw: "{\"path\":\"README.md\"}",
-        reason: "Prompt cancellation requested.",
+        phase: "settled",
+        outcome: {
+          kind: "cancelled",
+          reason: "Prompt cancellation requested.",
+          by: "framework",
+        },
+        control: { mode: "cancel-turn" },
       },
     })
   })

@@ -417,7 +417,12 @@ function createTextDecoder(contentType: string) {
 async function readResponseText(response: Response, maxBytes: number) {
   const contentLength = Number.parseInt(response.headers.get("content-length") ?? "", 10)
   if (Number.isFinite(contentLength) && contentLength > maxBytes) {
-    throw new Error(`web_fetch aborted because the response is larger than maxBytes (${maxBytes}).`)
+    throw new Tool.ToolControlSignal({
+      kind: "blocked",
+      reason: `web_fetch stopped because the response is larger than maxBytes (${maxBytes}).`,
+      code: "WEB_FETCH_MAX_BYTES_EXCEEDED",
+      execution: { sideEffect: "none", retry: "safe" },
+    }, { mode: "continue-model", reason: "Web response exceeded the configured byte limit." })
   }
 
   if (!response.body) {
@@ -439,7 +444,12 @@ async function readResponseText(response: Response, maxBytes: number) {
     bodyBytes += value.byteLength
     if (bodyBytes > maxBytes) {
       await reader.cancel().catch(() => undefined)
-      throw new Error(`web_fetch aborted because the response exceeded maxBytes (${maxBytes}).`)
+      throw new Tool.ToolControlSignal({
+        kind: "blocked",
+        reason: `web_fetch stopped because the response exceeded maxBytes (${maxBytes}).`,
+        code: "WEB_FETCH_MAX_BYTES_EXCEEDED",
+        execution: { sideEffect: "none", retry: "safe" },
+      }, { mode: "continue-model", reason: "Web response exceeded the configured byte limit." })
     }
 
     chunks.push(value)
@@ -462,11 +472,22 @@ async function readResponseText(response: Response, maxBytes: number) {
 function createAbortSignal(timeoutMs: number, external?: AbortSignal) {
   const controller = new AbortController()
   const timer = setTimeout(() => {
-    controller.abort(new Error(`web_fetch timed out after ${timeoutMs}ms.`))
+    controller.abort(new Tool.ToolControlSignal({
+      kind: "timeout",
+      reason: `web_fetch timed out after ${timeoutMs}ms.`,
+      timeoutMs,
+      execution: { sideEffect: "none", retry: "safe" },
+    }, { mode: "continue-model", reason: "web_fetch timed out." }))
   }, timeoutMs)
 
   const onAbort = () => {
-    controller.abort(external?.reason)
+    const propagated = Tool.findToolControlSignal(external?.reason)
+    controller.abort(propagated ?? new Tool.ToolControlSignal({
+      kind: "cancelled",
+      reason: "web_fetch was cancelled by the framework.",
+      by: "framework",
+      execution: { sideEffect: "none", retry: "safe" },
+    }, { mode: "cancel-turn", reason: "web_fetch was cancelled." }))
   }
 
   if (external) {
@@ -527,7 +548,12 @@ async function fetchWithValidatedRedirects(input: {
       }
 
       if (index === MAX_REDIRECTS) {
-        throw new Error(`web_fetch exceeded the redirect limit (${MAX_REDIRECTS}).`)
+        throw new Tool.ToolControlSignal({
+          kind: "blocked",
+          reason: `web_fetch exceeded the redirect limit (${MAX_REDIRECTS}).`,
+          code: "WEB_FETCH_REDIRECT_LIMIT",
+          execution: { sideEffect: "none", retry: "safe" },
+        }, { mode: "continue-model", reason: "Web redirect limit was exceeded." })
       }
 
       const nextUrl = assertAllowedWebUrl(new URL(location, current).toString())
@@ -535,7 +561,17 @@ async function fetchWithValidatedRedirects(input: {
       current = nextUrl
     }
 
-    throw new Error(`web_fetch exceeded the redirect limit (${MAX_REDIRECTS}).`)
+    throw new Tool.ToolControlSignal({
+      kind: "blocked",
+      reason: `web_fetch exceeded the redirect limit (${MAX_REDIRECTS}).`,
+      code: "WEB_FETCH_REDIRECT_LIMIT",
+      execution: { sideEffect: "none", retry: "safe" },
+    }, { mode: "continue-model", reason: "Web redirect limit was exceeded." })
+  } catch (error) {
+    const signal = Tool.findToolControlSignal(error) ??
+      Tool.findToolControlSignal(abortHandle.signal.reason)
+    if (signal) throw signal
+    throw error
   } finally {
     abortHandle.cleanup()
   }
@@ -649,7 +685,12 @@ export const WebFetchTool = Tool.define(
       parameters: WebFetchParameters,
       validate: (parameters, ctx) => {
         if (ctx.abort?.aborted) {
-          return "web_fetch was cancelled before the request started."
+          throw new Tool.ToolControlSignal({
+            kind: "cancelled",
+            reason: "web_fetch was cancelled before the request started.",
+            by: "framework",
+            execution: { sideEffect: "none", retry: "safe" },
+          }, { mode: "cancel-turn", reason: "web_fetch was cancelled." })
         }
 
         try {
@@ -684,9 +725,13 @@ export const WebFetchTool = Tool.define(
         const bodyKind = detectBodyKind(contentType)
 
         if (method === "GET" && bodyKind === "unsupported") {
-          throw new Error(
-            `web_fetch does not support content-type "${contentType || "unknown"}". Prefer HTML, JSON, or plain text endpoints.`,
-          )
+          const reason = `web_fetch does not support content-type "${contentType || "unknown"}". Prefer HTML, JSON, or plain text endpoints.`
+          throw new Tool.ToolControlSignal({
+            kind: "blocked",
+            reason,
+            code: "WEB_FETCH_UNSUPPORTED_CONTENT_TYPE",
+            execution: { sideEffect: "none", retry: "safe" },
+          }, { mode: "continue-model", reason })
         }
 
         let content = ""
@@ -773,6 +818,10 @@ export const WebFetchTool = Tool.define(
           title: `Fetched ${finalUrl}`,
           text: buildTextOutput(metadata),
           metadata,
+          result: response.ok ? "success" : "negative",
+          completeness: contentTruncated ? "partial" : "complete",
+          sideEffect: "none",
+          retry: "safe",
         }
       },
       toModelOutput: async (result) => {
@@ -787,6 +836,8 @@ export const WebFetchTool = Tool.define(
           type: "json",
           value: {
             title: result.title ?? "Web Fetch",
+            result: result.result ?? "success",
+            completeness: result.completeness ?? "complete",
             url: result.metadata.url,
             finalUrl: result.metadata.finalUrl,
             status: result.metadata.status,

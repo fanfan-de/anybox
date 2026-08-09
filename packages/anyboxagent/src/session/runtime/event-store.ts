@@ -122,7 +122,7 @@ function isTransientStreamEvent(event: RuntimeEvent.RuntimeEvent) {
   return (
     event.type === "text.part.delta" ||
     event.type === "reasoning.part.delta" ||
-    event.type === "tool.input.delta"
+    event.type === "tool.call.input_delta"
   )
 }
 

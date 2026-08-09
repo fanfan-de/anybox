@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import type { ToolCallSnapshot, ToolCallState } from "@anybox/shared"
 import {
   applyAgentStreamEventToThreadMessage,
   LIVE_SESSION_ACTIVITY_PRESENTATION,
@@ -187,6 +188,27 @@ function createCancelledAssistantThreadMessage(id: string, messageID?: string): 
   }
 }
 
+function createTraceToolCall(state: ToolCallState, messageID = "message-tool"): ToolCallSnapshot {
+  const settled = state.phase === "settled"
+  return {
+    schemaVersion: 3,
+    sessionID: "session-test",
+    turnID: "turn-test",
+    messageID,
+    callID: "late-tool-call",
+    tool: "replace-text",
+    input: { raw: "{\"path\":\"game.ts\"" },
+    source: { kind: "model" },
+    retry: { attempt: 1 },
+    revision: settled ? 2 : 1,
+    timestamps: {
+      createdAt: 2,
+      ...(settled ? { settledAt: 3 } : {}),
+    },
+    state,
+  }
+}
+
 function createPendingToolAssistantThreadMessage(id: string, messageID?: string): AssistantThreadMessage {
   return {
     id,
@@ -209,7 +231,7 @@ function createPendingToolAssistantThreadMessage(id: string, messageID?: string)
         kind: "tool",
         label: "Tool",
         title: "replace-text",
-        status: "pending",
+        toolCall: createTraceToolCall({ phase: "pending" }, messageID),
         sourceID: "late-tool-input-part",
         partID: "late-tool-input-part",
         messageID,
@@ -242,7 +264,16 @@ function createCancelledToolAssistantThreadMessage(id: string, messageID?: strin
         kind: "tool",
         label: "Tool",
         title: "replace-text",
-        status: "cancelled",
+        toolCall: createTraceToolCall({
+          phase: "settled",
+          outcome: {
+            kind: "cancelled",
+            reason: "Prompt cancellation requested.",
+            by: "user",
+            execution: { sideEffect: "unknown", retry: "unknown" },
+          },
+          control: { mode: "cancel-turn" },
+        }, messageID),
         sourceID: "late-tool-input-part",
         partID: "late-tool-input-part",
         messageID,
@@ -287,7 +318,23 @@ function createErroredToolAssistantThreadMessage(id: string, messageID?: string)
         kind: "tool",
         label: "Tool",
         title: "replace-text",
-        status: "error",
+        toolCall: createTraceToolCall({
+          phase: "settled",
+          outcome: {
+            kind: "failed",
+            error: {
+              stage: "execution",
+              source: "tool",
+              code: "TOOL_EXECUTION_ERROR",
+              message: "Late tool failure",
+              handlerExecuted: true,
+              retryable: false,
+              severity: "recoverable",
+            },
+            execution: { sideEffect: "unknown", retry: "unknown" },
+          },
+          control: { mode: "fail-turn" },
+        }, messageID),
         sourceID: "late-tool-input-part",
         partID: "late-tool-input-part",
         messageID,
@@ -377,7 +424,7 @@ describe("session stream controller helpers", () => {
       }),
     })).toBe("message-assistant-direct")
     expect(resolveStreamMessageID({
-      data: createRuntimeEvent("tool.call.completed", {
+      data: createRuntimeEvent("tool.call.settled", {
         part: {
           id: "part-tool-1",
           messageID: "message-assistant-1",
@@ -438,13 +485,22 @@ describe("session stream controller helpers", () => {
       event: "part",
       data: {
         part: {
+          id: "tool-part-v3-73",
           type: "tool",
-          state: {
-            status: "completed",
-            metadata: {
+          sessionID: "session-test",
+          messageID: "message-test",
+          callID: "tool-call-v3-73",
+          tool: "tool",
+          schemaVersion: 3,
+          turnID: "turn-test",
+          input: { raw: JSON.stringify({}), value: {} },
+          source: { kind: "model" },
+          retry: { attempt: 1 },
+          revision: 1,
+          timestamps: { createdAt: 1, settledAt: 1 },
+          state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: "", metadata: {
               kind: "task-state",
-            },
-          },
+            }, execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
         },
       },
     })).toBe(true)
@@ -474,11 +530,20 @@ describe("session stream controller helpers", () => {
       event: "part",
       data: {
         part: {
+          id: "tool-part-v3-82",
           type: "tool",
           tool: "spawn_subagent",
-          state: {
-            status: "completed",
-          },
+          sessionID: "session-test",
+          messageID: "message-test",
+          callID: "tool-call-v3-82",
+          schemaVersion: 3,
+          turnID: "turn-test",
+          input: { raw: JSON.stringify({}), value: {} },
+          source: { kind: "model" },
+          retry: { attempt: 1 },
+          revision: 1,
+          timestamps: { createdAt: 1, settledAt: 1 },
+          state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: "", execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
         },
       },
     })).toBe(false)
@@ -486,11 +551,20 @@ describe("session stream controller helpers", () => {
       event: "part",
       data: {
         part: {
+          id: "tool-part-v3-86",
           type: "tool",
           tool: "spawn_subagent",
-          state: {
-            status: "completed",
-          },
+          sessionID: "session-test",
+          messageID: "message-test",
+          callID: "tool-call-v3-86",
+          schemaVersion: 3,
+          turnID: "turn-test",
+          input: { raw: JSON.stringify({}), value: {} },
+          source: { kind: "model" },
+          retry: { attempt: 1 },
+          revision: 1,
+          timestamps: { createdAt: 1, settledAt: 1 },
+          state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: "", execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
         },
       },
     })).toBeNull()
@@ -1215,14 +1289,23 @@ describe("session stream controller helpers", () => {
       event: "part",
       data: {
         part: {
+          id: "tool-part-v3-200",
           type: "tool",
-          state: {
-            status: "completed",
-            metadata: {
+          sessionID: "session-test",
+          messageID: "message-test",
+          callID: "tool-call-v3-200",
+          tool: "tool",
+          schemaVersion: 3,
+          turnID: "turn-test",
+          input: { raw: JSON.stringify({}), value: {} },
+          source: { kind: "model" },
+          retry: { attempt: 1 },
+          revision: 1,
+          timestamps: { createdAt: 1, settledAt: 1 },
+          state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: "", metadata: {
               kind: "task-state",
               state: taskList,
-            },
-          },
+            }, execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
         },
       },
     })).toBe(taskList)
@@ -1239,7 +1322,7 @@ describe("session stream controller helpers", () => {
     })).toBe(false)
     expect(shouldRefreshRuntimeDebugForStreamEvent({
       event: "runtime",
-      data: createRuntimeEvent("tool.input.delta"),
+      data: createRuntimeEvent("tool.call.input_delta"),
     })).toBe(false)
     expect(shouldRefreshRuntimeDebugForStreamEvent({
       event: "delta",
@@ -1266,7 +1349,7 @@ describe("session stream controller helpers", () => {
     })).toBe(true)
     expect(isHighFrequencyDeltaStreamEvent({
       event: "runtime",
-      data: createRuntimeEvent("tool.input.delta"),
+      data: createRuntimeEvent("tool.call.input_delta"),
     })).toBe(true)
     expect(isHighFrequencyDeltaStreamEvent({
       event: "delta",
@@ -1278,7 +1361,7 @@ describe("session stream controller helpers", () => {
     })).toBe(false)
     expect(isHighFrequencyDeltaStreamEvent({
       event: "runtime",
-      data: createRuntimeEvent("tool.call.pending"),
+      data: createRuntimeEvent("tool.call.created"),
     })).toBe(false)
     expect(isHighFrequencyDeltaStreamEvent({
       event: "runtime",
@@ -1676,7 +1759,7 @@ describe("session stream controller helpers", () => {
         expect.objectContaining({
           kind: "tool",
           title: "replace-text",
-          status: "cancelled",
+          toolCall: expect.objectContaining({ state: { phase: "pending" } }),
           isStreaming: false,
         }),
         expect.objectContaining({
@@ -1707,7 +1790,7 @@ describe("session stream controller helpers", () => {
         expect.objectContaining({
           kind: "tool",
           title: "replace-text",
-          status: "cancelled",
+          toolCall: expect.objectContaining({ state: { phase: "pending" } }),
           isStreaming: false,
         }),
       ]),
@@ -1734,7 +1817,12 @@ describe("session stream controller helpers", () => {
         expect.objectContaining({
           kind: "tool",
           title: "replace-text",
-          status: "cancelled",
+          toolCall: expect.objectContaining({
+            state: expect.objectContaining({
+              phase: "settled",
+              outcome: expect.objectContaining({ kind: "cancelled" }),
+            }),
+          }),
           isStreaming: false,
         }),
       ]),

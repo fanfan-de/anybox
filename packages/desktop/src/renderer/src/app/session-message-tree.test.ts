@@ -50,6 +50,35 @@ function createMessage(input: {
   }
 }
 
+function settledToolPart(id: string, tool: string) {
+  return {
+    id,
+    sessionID: "session-1",
+    messageID: `message-${id}`,
+    type: "tool",
+    callID: `call-${id}`,
+    tool,
+    schemaVersion: 3,
+    turnID: `turn-${id}`,
+    input: { raw: "{}", value: {} },
+    source: { kind: "model" },
+    retry: { attempt: 1 },
+    revision: 1,
+    timestamps: { createdAt: 1, settledAt: 2 },
+    state: {
+      phase: "settled",
+      outcome: {
+        kind: "returned",
+        result: "success",
+        completeness: "complete",
+        output: "done",
+        execution: { sideEffect: "none", retry: "safe" },
+      },
+      control: { mode: "continue-model" },
+    },
+  }
+}
+
 describe("session message tree", () => {
   it("recognizes only final completed assistant responses as branch anchors", () => {
     expect(isCompletedAssistantResponse(createMessage({
@@ -126,7 +155,7 @@ describe("session message tree", () => {
         text: "",
         parts: [
           { id: "reasoning-1", type: "reasoning", text: "Private reasoning" },
-          { id: "tool-1", type: "tool", tool: "read-file", state: { status: "completed" } },
+          settledToolPart("tool-1", "read-file"),
         ],
       }),
       createMessage({
@@ -144,7 +173,7 @@ describe("session message tree", () => {
         text: "",
         parts: [
           { id: "reasoning-2", type: "reasoning", text: "More private reasoning" },
-          { id: "tool-2", type: "tool", tool: "grep", state: { status: "completed" } },
+          settledToolPart("tool-2", "grep"),
           { id: "text-1", type: "text", text: "Final response only" },
         ],
       }),
@@ -390,14 +419,21 @@ describe("session message tree", () => {
           },
           {
             id: "tool-waiting",
+            sessionID: "session-1",
+            messageID: "assistant-waiting",
             type: "tool",
             callID: "tool-call",
             tool: "read-file",
+            schemaVersion: 3,
+            turnID: "turn-waiting",
+            input: { raw: "{}", value: {} },
+            source: { kind: "model" },
+            retry: { attempt: 1 },
+            revision: 1,
+            timestamps: { createdAt: 1, approvalRequestedAt: 2 },
             state: {
-              status: "waiting-approval",
-              approvalID: "approval",
-              input: {},
-              time: { start: 1 },
+              phase: "waiting-approval",
+              approval: { id: "approval" },
             },
           },
         ],

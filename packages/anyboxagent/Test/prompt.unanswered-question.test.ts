@@ -89,14 +89,18 @@ describe("prompt loop unanswered question guard", () => {
           type: "tool",
           callID: "call-question",
           tool: "ask_user_question",
-          state: {
-            status: "completed",
-            input: {
+          schemaVersion: 3,
+          turnID: "turn-test",
+          input: { raw: JSON.stringify({
               question: "Where should I deploy this app?",
-            },
-            output: "Question shown to the user.",
-            title: "Question for user",
-            metadata: {
+            }), value: {
+              question: "Where should I deploy this app?",
+            } },
+          source: { kind: "model" },
+          retry: { attempt: 1 },
+          revision: 1,
+          timestamps: { createdAt: Date.now() + 2, startedAt: Date.now() + 3 },
+          presentation: { title: "Question for user", metadata: {
               kind: "ask-user-question",
               version: 1,
               questionID: "que_deploy_target",
@@ -110,12 +114,8 @@ describe("prompt loop unanswered question guard", () => {
               allowFreeform: true,
               multiple: false,
               required: true,
-            },
-            time: {
-              start: Date.now() + 2,
-              end: Date.now() + 3,
-            },
-          },
+            } },
+          state: { phase: "running" },
         })
 
         Session.DataBaseCreate("messages", user)

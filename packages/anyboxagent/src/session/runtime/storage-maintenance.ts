@@ -149,8 +149,9 @@ function normalizeReference(file: string) {
 }
 
 function addPartArtifactReferences(part: Message.Part, references: Set<string>) {
-  const persisted = part.type === "tool" && part.state.status === "completed"
-    ? ToolResultPersistence.readPersistedOutputMetadata(part.state.metadata)
+  const returned = part.type === "tool" ? Message.toolPartReturnedOutcome(part) : undefined
+  const persisted = returned
+    ? ToolResultPersistence.readPersistedOutputMetadata(returned.metadata ?? {})
     : (part.type === "file" || part.type === "image")
       ? ToolResultPersistence.readPersistedOutputMetadata(part.metadata)
       : undefined
@@ -165,8 +166,8 @@ function addPartArtifactReferences(part: Message.Part, references: Set<string>) 
   for (const artifact of persisted.artifacts ?? []) {
     add(path.join(ToolResultPersistence.getSessionOutputDirectory(part.sessionID), artifact.path))
   }
-  if (part.type === "tool" && part.state.status === "completed") {
-    for (const attachment of part.state.attachments ?? []) add(attachment.url)
+  if (part.type === "tool" && returned) {
+    for (const attachment of Message.toolPartAttachments(part) ?? []) add(attachment.url)
   } else if (part.type === "file" || part.type === "image") {
     add(part.url)
   }
@@ -204,21 +205,23 @@ async function cleanupOrphanArtifacts(now = Date.now()) {
 }
 
 async function compactToolPart(part: Message.Part) {
-  if (part.type !== "tool" || part.state.status !== "completed") return undefined
-  if (ToolResultPersistence.readPersistedOutputMetadata(part.state.metadata)) return undefined
-  const originalAttachments = part.state.attachments
+  if (part.type !== "tool") return undefined
+  const returned = Message.toolPartReturnedOutcome(part)
+  if (!returned) return undefined
+  if (ToolResultPersistence.readPersistedOutputMetadata(returned.metadata ?? {})) return undefined
+  const originalAttachments = Message.toolPartAttachments(part)
   const processed = await ToolResultPersistence.maybePersistToolResult({
     sessionID: part.sessionID,
     toolCallID: part.callID,
     toolName: part.tool,
-    output: part.state.output,
-    metadata: part.state.metadata,
-    modelOutput: part.state.modelOutput,
+    output: Message.normalizeToolOutputText(returned.output),
+    metadata: returned.metadata ?? {},
+    modelOutput: returned.modelOutput,
     attachments: originalAttachments,
     rawResult: {
-      text: part.state.output,
-      metadata: part.state.metadata,
-      modelOutput: part.state.modelOutput,
+      text: Message.normalizeToolOutputText(returned.output),
+      metadata: returned.metadata ?? {},
+      modelOutput: returned.modelOutput,
       attachments: originalAttachments,
     },
   })
@@ -229,16 +232,20 @@ async function compactToolPart(part: Message.Part) {
   }))
   return Message.ToolPart.parse({
     ...part,
+    revision: part.revision + 1,
     state: {
       ...part.state,
-      output: processed.output,
-      modelOutput: processed.modelOutput,
-      metadata: processed.metadata,
-      attachments,
-      time: {
-        ...part.state.time,
-        compacted: Date.now(),
+      outcome: {
+        ...returned,
+        output: processed.output,
+        modelOutput: processed.modelOutput,
+        metadata: processed.metadata,
+        attachments,
       },
+    },
+    timestamps: {
+      ...part.timestamps,
+      compactedAt: Date.now(),
     },
   })
 }

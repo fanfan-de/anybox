@@ -534,6 +534,9 @@ importers:
 
   packages/mobile-app:
     dependencies:
+      '@anybox/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@expo/metro-runtime':
         specifier: ~56.0.18
         version: 56.0.18(@expo/log-box@56.0.14)(expo@56.0.18)(react-dom@19.2.3(react@19.2.3))(react-native@0.85.3(@babel/core@7.28.6)(@react-native/metro-config@0.85.3(@babel/core@7.28.6))(@types/react@19.2.16)(react@19.2.3))(react@19.2.3)
@@ -10115,7 +10118,9 @@ snapshots:
       metro-runtime: 0.84.4
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
 
   '@react-native/normalize-colors@0.85.3': {}
 

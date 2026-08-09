@@ -32,7 +32,7 @@ interface WriteStdinMetadata extends Record<string, unknown> {
   cwd: string
   displayCwd: string
   shell: string
-  status: string
+  processState: string
   exitCode: number | null
   signal: NodeJS.Signals | null
   tty: boolean
@@ -172,7 +172,12 @@ export const WriteStdinTool = Tool.define(
     },
     execute: async (parameters, ctx) => {
       if (ctx.abort?.aborted) {
-        throw new Error("write_stdin was cancelled before interacting with the shell session.")
+        throw new Tool.ToolControlSignal({
+          kind: "cancelled",
+          reason: "write_stdin was cancelled before interacting with the shell session.",
+          by: "framework",
+          execution: { sideEffect: "none", retry: "safe" },
+        }, { mode: "cancel-turn", reason: "write_stdin was cancelled." })
       }
       const chars = parameters.chars ?? ""
       const yieldTimeMs = resolveYieldTimeMs(chars, parameters["yield-time_ms"])
@@ -184,7 +189,12 @@ export const WriteStdinTool = Tool.define(
         abort: ctx.abort,
       })
       if (!interaction) {
-        throw new Error(`Shell session '${parameters.session_id}' was not found.`)
+        throw new Tool.ToolControlSignal({
+          kind: "blocked",
+          reason: `Shell session '${parameters.session_id}' was not found.`,
+          code: "SHELL_SESSION_NOT_FOUND",
+          execution: { sideEffect: "none", retry: "safe" },
+        }, { mode: "continue-model", reason: "Shell session was not found." })
       }
 
       const replayOutput = interaction.task.tty
@@ -230,7 +240,7 @@ export const WriteStdinTool = Tool.define(
           displayCwd,
           shell: interaction.task.shell,
           tty: interaction.task.tty,
-          status: interaction.task.status,
+          processState: interaction.task.status,
           exitCode: interaction.task.exitCode,
           signal: interaction.task.signal,
           timedOut: interaction.task.timedOut,
@@ -241,6 +251,10 @@ export const WriteStdinTool = Tool.define(
           originalTokenCount: retained.originalTokenCount,
           wallTimeSeconds,
         },
+        result: running || interaction.task.exitCode === 0 ? "success" : "negative",
+        completeness: running || outputTruncated ? "partial" : "complete",
+        sideEffect: chars ? "confirmed" : "none",
+        retry: chars ? "unsafe" : "safe",
       }
     },
     toModelOutput: async (result) => {
@@ -257,7 +271,9 @@ export const WriteStdinTool = Tool.define(
         value: {
           ...(metadata.sessionID ? { session_id: metadata.sessionID } : {}),
           ...(typeof metadata.exitCode === "number" ? { exit_code: metadata.exitCode } : {}),
-          status: metadata.status,
+          result: result.result ?? "success",
+          completeness: result.completeness ?? "complete",
+          process_state: metadata.processState,
           tty: metadata.tty,
           signal: metadata.signal,
           timed_out: metadata.timedOut,

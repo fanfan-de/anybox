@@ -839,17 +839,22 @@ describe("prompt loop concurrency", () => {
           const firstTool = assistants[0]?.parts.find(
             (part): part is MessageTypes.ToolPart => part.type === "tool" && part.tool === "view_image",
           )
-          expect(firstTool?.state.status).toBe("completed")
-          if (!firstTool || firstTool.state.status !== "completed") {
+          expect(firstTool?.state.phase).toBe("settled")
+          if (
+            !firstTool ||
+            firstTool.state.phase !== "settled" ||
+            firstTool.state.outcome.kind !== "returned"
+          ) {
             throw new Error("Expected a completed view_image tool result")
           }
-          expect(firstTool.state.attachments?.[0]).toMatchObject({
+          expect(firstTool.state.outcome.attachments?.[0]).toMatchObject({
             type: "image",
             mime: "image/png",
             width: 1,
             height: 1,
           })
-          expect(firstTool.state.attachments?.[0]?.url).toContain("/api/sessions/")
+          expect((firstTool.state.outcome.attachments?.[0] as { url?: string } | undefined)?.url)
+            .toContain("/api/sessions/")
           expect(JSON.stringify(firstTool.state)).not.toContain("iVBORw0KGgo")
         },
       })
@@ -865,7 +870,7 @@ describe("prompt loop concurrency", () => {
     }
   })
 
-  it("persists a Node REPL timeout for the original tool call and continues to the next model call", async () => {
+  it("persists a negative Node REPL timeout result for the original tool call and continues to the next model call", async () => {
     const tempDir = await mkdtemp(join(tmpdir(), "anybox-node-repl-timeout-loop-"))
     let streamCalls = 0
     let secondProviderMessages: any[] | undefined
@@ -896,17 +901,15 @@ describe("prompt loop concurrency", () => {
               const js = toolName ? input.tools?.[toolName] : undefined
               if (!toolName || !js?.execute) throw new Error("Node REPL js was not exposed to the model")
               const toolInput = { code: "while (true) {}", timeoutMs: 120 }
-              let toolError: unknown
-              try {
-                await js.execute(toolInput, {
-                  toolCallId,
-                  messages: input.prompt,
-                  abortSignal: input.abortSignal,
-                })
-              } catch (error) {
-                toolError = error
-              }
-              if (!toolError) throw new Error("Expected the Node REPL call to time out")
+              const toolOutput = await js.execute(toolInput, {
+                toolCallId,
+                messages: input.prompt,
+                abortSignal: input.abortSignal,
+              })
+              expect(toolOutput).toMatchObject({
+                result: "negative",
+                completeness: "complete",
+              })
 
               yield {
                 type: "tool-call",
@@ -915,11 +918,13 @@ describe("prompt loop concurrency", () => {
                 input: toolInput,
               }
               yield {
-                type: "tool-error",
+                type: "tool-result",
                 toolCallId,
                 toolName,
                 input: toolInput,
-                error: toolError,
+                output: toolOutput,
+                title: toolOutput.title,
+                providerMetadata: {},
               }
               yield { type: "finish", finishReason: "tool-calls", totalUsage: {} }
               await input.onFinish?.({
@@ -993,17 +998,20 @@ describe("prompt loop concurrency", () => {
           for await (const item of Message.stream(session.id)) {
             if (item.info.role === "assistant") assistants.push(item)
           }
-          const failedTool = assistants[0]?.parts.find(
+          const timedOutTool = assistants[0]?.parts.find(
             (part): part is MessageTypes.ToolPart => part.type === "tool" && part.callID === "call-node-repl-timeout",
           )
-          expect(failedTool?.state.status).toBe("error")
-          if (!failedTool || failedTool.state.status !== "error") {
-            throw new Error("Expected a persisted Node REPL tool error")
+          expect(timedOutTool?.state.phase).toBe("settled")
+          if (
+            !timedOutTool ||
+            timedOutTool.state.phase !== "settled" ||
+            timedOutTool.state.outcome.kind !== "returned"
+          ) {
+            throw new Error("Expected a persisted Node REPL tool result")
           }
-          expect(JSON.parse(failedTool.state.error)).toMatchObject({
-            status: "error",
-            runtimeReset: true,
-            code: "EXECUTION_TIMEOUT",
+          expect(timedOutTool.state.outcome).toMatchObject({
+            result: "negative",
+            completeness: "complete",
           })
         },
       })

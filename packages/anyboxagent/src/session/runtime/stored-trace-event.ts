@@ -1,4 +1,10 @@
 import z from "zod"
+import {
+  ToolCallResultCompletenessSchema,
+  ToolCallResultPolaritySchema,
+  ToolCallTurnControlModeSchema,
+  ToolCallFailureSchema,
+} from "@anybox/shared"
 import type * as RuntimeEvent from "#session/runtime/runtime-event.ts"
 
 export const MAX_STORED_TRACE_PAYLOAD_BYTES = 32 * 1024
@@ -36,6 +42,11 @@ export const StoredTracePayload = z.object({
   toolName: z.string().optional(),
   status: z.string().optional(),
   phase: z.string().optional(),
+  outcome: z.enum(["returned", "blocked", "denied", "cancelled", "timeout", "failed"]).optional(),
+  result: ToolCallResultPolaritySchema.optional(),
+  completeness: ToolCallResultCompletenessSchema.optional(),
+  turnControl: ToolCallTurnControlModeSchema.optional(),
+  failure: ToolCallFailureSchema.optional(),
   finishReason: z.string().optional(),
   durationMs: z.number().nonnegative().optional(),
   error: z.string().optional(),
@@ -133,7 +144,10 @@ export function summarizeRuntimeEvent(event: RuntimeEvent.RuntimeEvent): StoredT
   const part = record(payload.part)
   const message = record(payload.message)
   const state = record(part?.state)
-  const time = record(state?.time)
+  const outcome = record(state?.outcome)
+  const outcomeError = record(outcome?.error)
+  const control = record(state?.control)
+  const timestamps = record(part?.timestamps)
   const error = record(payload.error)
   const usage = record(payload.usage)
   const originalBytes = jsonBytes(event.payload)
@@ -142,10 +156,11 @@ export function summarizeRuntimeEvent(event: RuntimeEvent.RuntimeEvent): StoredT
     : typeof payload.text === "string"
       ? payload.text
       : undefined
-  const start = finiteNumber(time?.start)
-  const end = finiteNumber(time?.end)
+  const start = finiteNumber(timestamps?.startedAt)
+  const end = finiteNumber(timestamps?.settledAt)
   const artifacts = collectArtifactReferences(event.payload)
   const parsedImages = ImageSummary.array().safeParse(payload.images)
+  const isToolCall = typeof part?.callID === "string" && part?.type === "tool"
   const summary: StoredTracePayload = {
     messageID: shortString(part?.messageID ?? message?.id ?? payload.messageID, 300),
     providerID: shortString(payload.providerID, 300),
@@ -162,20 +177,29 @@ export function summarizeRuntimeEvent(event: RuntimeEvent.RuntimeEvent): StoredT
     partID: shortString(part?.id ?? payload.partID, 300),
     callID: shortString(part?.callID ?? payload.toolCallID, 300),
     toolName: shortString(part?.tool ?? payload.toolName, 300),
-    status: shortString(state?.status ?? payload.status ?? payload.action, 100),
-    phase: shortString(payload.phase, 100),
+    status: isToolCall ? undefined : shortString(payload.status ?? payload.action, 100),
+    phase: shortString(payload.phase ?? state?.phase, 100),
+    outcome: isToolCall && typeof outcome?.kind === "string"
+      ? StoredTracePayload.shape.outcome.safeParse(outcome.kind).data
+      : undefined,
+    result: isToolCall ? ToolCallResultPolaritySchema.safeParse(outcome?.result).data : undefined,
+    completeness: isToolCall ? ToolCallResultCompletenessSchema.safeParse(outcome?.completeness).data : undefined,
+    turnControl: isToolCall ? ToolCallTurnControlModeSchema.safeParse(control?.mode).data : undefined,
+    failure: isToolCall ? ToolCallFailureSchema.safeParse(outcomeError).data : undefined,
     finishReason: shortString(payload.finishReason, 300),
     durationMs: start !== undefined && end !== undefined ? Math.max(0, end - start) : undefined,
     error: shortString(
       typeof payload.error === "string"
         ? payload.error
-        : error?.message ?? state?.error ?? payload.detail,
+        : error?.message ?? outcomeError?.message ?? outcome?.reason ?? payload.detail,
     ),
-    errorCode: shortString(payload.code ?? error?.code, 200),
+    errorCode: shortString(payload.code ?? error?.code ?? outcomeError?.code, 200),
     retryable: typeof payload.retryable === "boolean"
       ? payload.retryable
       : typeof error?.retryable === "boolean"
         ? error.retryable
+        : typeof outcomeError?.retryable === "boolean"
+          ? outcomeError.retryable
         : undefined,
     usage: usage
       ? {
@@ -219,6 +243,12 @@ export function summarizeRuntimeEvent(event: RuntimeEvent.RuntimeEvent): StoredT
       toolsDisabledReason: summary.toolsDisabledReason,
       hasAttachments: summary.hasAttachments,
       status: summary.status,
+      phase: summary.phase,
+      outcome: summary.outcome,
+      result: summary.result,
+      completeness: summary.completeness,
+      turnControl: summary.turnControl,
+      failure: summary.failure,
       partID: summary.partID,
       callID: summary.callID,
       toolName: summary.toolName,

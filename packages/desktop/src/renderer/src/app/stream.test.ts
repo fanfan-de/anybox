@@ -12,6 +12,35 @@ import {
 } from "./stream"
 import { deriveActiveMessages } from "./thread-turn-state"
 
+function inputDeltaToolPart(input: {
+  callID: string
+  id: string
+  raw: string
+  revision: number
+  timestamp: number
+  tool: string
+  messageID?: string
+  sessionID?: string
+  turnID?: string
+}) {
+  return {
+    id: input.id,
+    type: "tool" as const,
+    schemaVersion: 3 as const,
+    sessionID: input.sessionID ?? "session-runtime",
+    turnID: input.turnID ?? "turn-runtime",
+    messageID: input.messageID ?? "message-runtime",
+    callID: input.callID,
+    tool: input.tool,
+    input: { raw: input.raw },
+    source: { kind: "model" as const },
+    retry: { attempt: 1 },
+    revision: input.revision,
+    timestamps: { createdAt: input.timestamp, inputUpdatedAt: input.timestamp },
+    state: { phase: "pending" as const },
+  }
+}
+
 describe("stream trace reducer", () => {
   it("trusts backend order when history includes parent metadata", () => {
     const messages = buildThreadMessagesFromHistory([
@@ -386,10 +415,15 @@ describe("stream trace reducer", () => {
             messageID: "message-running-after-tool",
             callID: "call-task-create",
             tool: "task_create",
-            state: {
-              status: "completed",
-              output: "Tasks created",
-            },
+            sessionID: "session-test",
+            schemaVersion: 3,
+            turnID: "turn-test",
+            input: { raw: JSON.stringify({}), value: {} },
+            source: { kind: "model" },
+            retry: { attempt: 1 },
+            revision: 1,
+            timestamps: { createdAt: 1, settledAt: 1 },
+            state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: "Tasks created", execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
           },
         ],
       },
@@ -844,12 +878,16 @@ describe("stream trace reducer", () => {
             type: "tool",
             tool: "TaskUpdate",
             callID: "toolcall-task",
-            state: {
-              status: "completed",
-              input: {},
-              output: "Task updated",
-              title: "Task updated",
-              metadata: {
+            sessionID: "session-test",
+            messageID: "message-test",
+            schemaVersion: 3,
+            turnID: "turn-test",
+            input: { raw: JSON.stringify({}), value: {} },
+            source: { kind: "model" },
+            retry: { attempt: 1 },
+            revision: 1,
+            timestamps: { createdAt: 101, settledAt: 110 },
+            state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: "Task updated", title: "Task updated", metadata: {
                 kind: "task-state",
                 toolCallID: "toolcall-task",
                 state: {
@@ -904,12 +942,7 @@ describe("stream trace reducer", () => {
                     blocked: 0,
                   },
                 },
-              },
-              time: {
-                start: 101,
-                end: 110,
-              },
-            },
+              }, execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
           },
         ],
       },
@@ -1032,7 +1065,7 @@ describe("stream trace reducer", () => {
         turnID: "turn-runtime",
         seq: 11,
         timestamp: 310,
-        type: "tool.call.completed",
+        type: "tool.call.settled",
         payload: {
           part: {
             id: "part-spawn-tool",
@@ -1041,12 +1074,14 @@ describe("stream trace reducer", () => {
             type: "tool",
             callID: "call-spawn",
             tool: "spawn_subagent",
-            state: {
-              status: "completed",
-              input: {},
-              output: "spawned",
-              time: { start: 310, end: 320 },
-            },
+            schemaVersion: 3,
+            turnID: "turn-test",
+            input: { raw: JSON.stringify({}), value: {} },
+            source: { kind: "model" },
+            retry: { attempt: 1 },
+            revision: 1,
+            timestamps: { createdAt: 310, settledAt: 320 },
+            state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: "spawned", execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
           },
         },
       },
@@ -1079,7 +1114,7 @@ describe("stream trace reducer", () => {
         turnID: "turn-runtime",
         seq: 6,
         timestamp: 110,
-        type: "tool.call.completed",
+        type: "tool.call.settled",
         payload: {
           part: {
             id: "part-task-tool",
@@ -1088,12 +1123,14 @@ describe("stream trace reducer", () => {
             type: "tool",
             callID: "call-task-create",
             tool: "task_create",
-            state: {
-              status: "completed",
-              input: {},
-              output: "created",
-              time: { start: 110, end: 120 },
-            },
+            schemaVersion: 3,
+            turnID: "turn-test",
+            input: { raw: JSON.stringify({}), value: {} },
+            source: { kind: "model" },
+            retry: { attempt: 1 },
+            revision: 1,
+            timestamps: { createdAt: 110, settledAt: 120 },
+            state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: "created", execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
           },
         },
       },
@@ -1238,16 +1275,24 @@ describe("stream trace reducer", () => {
         turnID: "turn-runtime",
         seq: 2,
         timestamp: 101,
-        type: "tool.call.started",
+        type: "tool.call.phase_changed",
         payload: {
           part: {
             id: "tool-runtime",
             type: "tool",
             tool: "shell",
-            state: {
-              status: "running",
-              title: "Run tests",
-            },
+            sessionID: "session-test",
+            messageID: "message-test",
+            schemaVersion: 3,
+            turnID: "turn-test",
+            input: { raw: JSON.stringify({}), value: {} },
+            source: { kind: "model" },
+            retry: { attempt: 1 },
+            revision: 1,
+            timestamps: { createdAt: 1, startedAt: 1 },
+            presentation: { title: "Run tests" },
+            state: { phase: "running" },
+            callID: "tool-call-v3-212",
           },
         },
       },
@@ -1309,16 +1354,24 @@ describe("stream trace reducer", () => {
         turnID: "turn-runtime",
         seq: 1,
         timestamp: 100,
-        type: "tool.call.started",
+        type: "tool.call.phase_changed",
         payload: {
           part: {
             id: "tool-runtime",
             type: "tool",
             tool: "shell",
-            state: {
-              status: "running",
-              title: "Run tests",
-            },
+            sessionID: "session-test",
+            messageID: "message-test",
+            schemaVersion: 3,
+            turnID: "turn-test",
+            input: { raw: JSON.stringify({}), value: {} },
+            source: { kind: "model" },
+            retry: { attempt: 1 },
+            revision: 1,
+            timestamps: { createdAt: 1, startedAt: 1 },
+            presentation: { title: "Run tests" },
+            state: { phase: "running" },
+            callID: "tool-call-v3-230",
           },
         },
       },
@@ -1636,10 +1689,18 @@ describe("stream trace reducer", () => {
           id: "tool-1",
           type: "tool",
           tool: "eslint",
-          state: {
-            status: "running",
-            title: "Linting workspace",
-          },
+          sessionID: "session-test",
+          messageID: "message-test",
+          schemaVersion: 3,
+          turnID: "turn-test",
+          input: { raw: JSON.stringify({}), value: {} },
+          source: { kind: "model" },
+          retry: { attempt: 1 },
+          revision: 1,
+          timestamps: { createdAt: 1, startedAt: 1 },
+          presentation: { title: "Linting workspace" },
+          state: { phase: "running" },
+          callID: "tool-call-v3-287",
         },
       },
     })
@@ -1651,19 +1712,29 @@ describe("stream trace reducer", () => {
           id: "tool-1",
           type: "tool",
           tool: "eslint",
-          state: {
-            status: "completed",
-            output: {
+          sessionID: "session-test",
+          messageID: "message-test",
+          schemaVersion: 3,
+          turnID: "turn-test",
+          input: { raw: JSON.stringify({}), value: {} },
+          source: { kind: "model" },
+          retry: { attempt: 1 },
+          revision: 1,
+          timestamps: { createdAt: 100, settledAt: 100 },
+          state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: {
               fixed: 3,
-            },
-          },
+            }, execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
+          callID: "tool-call-v3-298",
         },
       },
     })
 
     const toolItems = message.items.filter((item) => item.kind === "tool")
     expect(toolItems).toHaveLength(1)
-    expect(toolItems[0]?.status).toBe("completed")
+    expect(toolItems[0]?.toolCall?.state).toMatchObject({
+      phase: "settled",
+      outcome: { kind: "returned", result: "success", completeness: "complete" },
+    })
     expect(toolItems[0]?.toolOutputText).toContain("\"fixed\": 3")
     expect(toolItems[0]?.text).toContain("\"fixed\": 3")
   })
@@ -1678,9 +1749,16 @@ describe("stream trace reducer", () => {
           id: "tool-question",
           type: "tool",
           tool: "AskUserQuestion",
-          state: {
-            status: "completed",
-            metadata: {
+          sessionID: "session-test",
+          messageID: "message-test",
+          schemaVersion: 3,
+          turnID: "turn-test",
+          input: { raw: JSON.stringify({}), value: {} },
+          source: { kind: "model" },
+          retry: { attempt: 1 },
+          revision: 1,
+          timestamps: { createdAt: 100, startedAt: 100 },
+          presentation: { metadata: {
               kind: "ask-user-question",
               questionID: "que_target",
               header: "Deploy target",
@@ -1689,8 +1767,9 @@ describe("stream trace reducer", () => {
               allowFreeform: true,
               multiple: false,
               required: true,
-            },
-          },
+            } },
+          state: { phase: "running" },
+          callID: "tool-call-v3-312",
         },
       },
     })
@@ -1710,10 +1789,16 @@ describe("stream trace reducer", () => {
           id: "tool-question",
           type: "tool",
           tool: "AskUserQuestion",
-          time: { start: 100 },
-          state: {
-            status: "completed",
-            metadata: {
+          sessionID: "session-test",
+          messageID: "message-test",
+          schemaVersion: 3,
+          turnID: "turn-test",
+          input: { raw: JSON.stringify({}), value: {} },
+          source: { kind: "model" },
+          retry: { attempt: 1 },
+          revision: 1,
+          timestamps: { createdAt: 100, startedAt: 100 },
+          presentation: { metadata: {
               kind: "ask-user-question",
               questionID: "que_target",
               header: "Deploy target",
@@ -1722,8 +1807,9 @@ describe("stream trace reducer", () => {
               allowFreeform: true,
               multiple: false,
               required: true,
-            },
-          },
+            } },
+          state: { phase: "running" },
+          callID: "tool-call-v3-327",
         },
       },
     })
@@ -1735,11 +1821,16 @@ describe("stream trace reducer", () => {
           id: "tool-question",
           type: "tool",
           tool: "AskUserQuestion",
-          time: { start: 100 },
-          state: {
-            status: "completed",
-            output: "Question answered.",
-            metadata: {
+          sessionID: "session-test",
+          messageID: "message-test",
+          schemaVersion: 3,
+          turnID: "turn-test",
+          input: { raw: JSON.stringify({}), value: {} },
+          source: { kind: "model" },
+          retry: { attempt: 1 },
+          revision: 2,
+          timestamps: { createdAt: 100, startedAt: 100, settledAt: 101 },
+          state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: "Question answered.", metadata: {
               kind: "ask-user-question",
               questionID: "que_target",
               header: "Deploy target",
@@ -1751,8 +1842,8 @@ describe("stream trace reducer", () => {
               answered: true,
               answerText: "vercel",
               selectedOptions: ["vercel"],
-            },
-          },
+            }, execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
+          callID: "tool-call-v3-327",
         },
       },
     })
@@ -1788,10 +1879,17 @@ describe("stream trace reducer", () => {
           id: "tool-long-output",
           type: "tool",
           tool: "shell",
-          state: {
-            status: "completed",
-            output: longOutput,
-          },
+          sessionID: "session-test",
+          messageID: "message-test",
+          schemaVersion: 3,
+          turnID: "turn-test",
+          input: { raw: JSON.stringify({}), value: {} },
+          source: { kind: "model" },
+          retry: { attempt: 1 },
+          revision: 1,
+          timestamps: { createdAt: 1, settledAt: 1 },
+          state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: longOutput, execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
+          callID: "tool-call-v3-361",
         },
       },
     })
@@ -1814,16 +1912,25 @@ describe("stream trace reducer", () => {
           id: "tool-with-inputs",
           type: "tool",
           tool: "replace-text",
-          state: {
-            status: "completed",
-            input: {
+          sessionID: "session-test",
+          messageID: "message-test",
+          schemaVersion: 3,
+          turnID: "turn-test",
+          input: { raw: JSON.stringify({
               file_path: "notes.txt",
               old_string: "old-marker",
               new_string: "input-marker",
-            },
-            output: "output-marker",
-            title: "Updated notes.txt",
-          },
+            }), value: {
+              file_path: "notes.txt",
+              old_string: "old-marker",
+              new_string: "input-marker",
+            } },
+          source: { kind: "model" },
+          retry: { attempt: 1 },
+          revision: 1,
+          timestamps: { createdAt: 1, settledAt: 1 },
+          state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: "output-marker", title: "Updated notes.txt", execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
+          callID: "tool-call-v3-374",
         },
       },
     })
@@ -1847,15 +1954,23 @@ describe("stream trace reducer", () => {
           id: "tool-shell-result",
           type: "tool",
           tool: "powershell_command",
-          state: {
-            status: "completed",
-            input: {
+          sessionID: "session-test",
+          messageID: "message-test",
+          schemaVersion: 3,
+          turnID: "turn-test",
+          input: { raw: JSON.stringify({
               command,
               tty: false,
-            },
-            output: "Exit: 0\nSTDOUT:\n2026-08-07T12:00:00.0000000+08:00\nSTDERR:\n(no stderr)",
-            title: "PowerShell command completed",
-          },
+            }), value: {
+              command,
+              tty: false,
+            } },
+          source: { kind: "model" },
+          retry: { attempt: 1 },
+          revision: 1,
+          timestamps: { createdAt: 1, settledAt: 1 },
+          state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: "Exit: 0\nSTDOUT:\n2026-08-07T12:00:00.0000000+08:00\nSTDERR:\n(no stderr)", title: "PowerShell command completed", execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
+          callID: "tool-call-v3-387",
         },
       },
     })
@@ -1880,10 +1995,17 @@ describe("stream trace reducer", () => {
           id: "tool-streaming-input",
           type: "tool",
           tool: "shell",
-          state: {
-            status: "running",
-            raw: longRawInput,
-          },
+          sessionID: "session-test",
+          messageID: "message-test",
+          schemaVersion: 3,
+          turnID: "turn-test",
+          input: { raw: longRawInput, value: {} },
+          source: { kind: "model" },
+          retry: { attempt: 1 },
+          revision: 1,
+          timestamps: { createdAt: 1, startedAt: 1 },
+          state: { phase: "running" },
+          callID: "tool-call-v3-400",
         },
       },
     })
@@ -1906,8 +2028,16 @@ describe("stream trace reducer", () => {
         turnID: "turn-runtime",
         seq: 1,
         timestamp: 100,
-        type: "tool.input.delta",
+        type: "tool.call.input_delta",
         payload: {
+          part: inputDeltaToolPart({
+            id: "tool-input-part",
+            callID: "call-live-input",
+            tool: "write",
+            raw: "{\"path\"",
+            revision: 1,
+            timestamp: 100,
+          }),
           messageID: "message-runtime",
           partID: "tool-input-part",
           toolCallID: "call-live-input",
@@ -1926,8 +2056,16 @@ describe("stream trace reducer", () => {
         turnID: "turn-runtime",
         seq: 2,
         timestamp: 101,
-        type: "tool.input.delta",
+        type: "tool.call.input_delta",
         payload: {
+          part: inputDeltaToolPart({
+            id: "tool-input-part",
+            callID: "call-live-input",
+            tool: "write",
+            raw: "{\"path\":\"README.md\"}",
+            revision: 2,
+            timestamp: 101,
+          }),
           messageID: "message-runtime",
           partID: "tool-input-part",
           toolCallID: "call-live-input",
@@ -1941,11 +2079,11 @@ describe("stream trace reducer", () => {
     const toolItems = message.items.filter((item) => item.kind === "tool")
     expect(toolItems).toHaveLength(1)
     expect(message.runtime.phase).toBe("tool_running")
-    expect(message.state).toBe("Preparing tool call")
+    expect(message.state).toBe("Running tools")
     expect(toolItems[0]).toMatchObject({
       kind: "tool",
       title: "write",
-      status: "pending",
+      toolCall: { state: { phase: "pending" } },
       sourceID: "tool-input-part",
       toolCallID: "call-live-input",
       toolInputText: "{\"path\":\"README.md\"}",
@@ -1965,8 +2103,16 @@ describe("stream trace reducer", () => {
         turnID: "turn-runtime",
         seq: 1,
         timestamp: 200,
-        type: "tool.input.delta",
+        type: "tool.call.input_delta",
         payload: {
+          part: inputDeltaToolPart({
+            id: "stream-task-create",
+            callID: "call-task-create",
+            tool: "task_create",
+            raw: "{\"tasks\":[{\"subject\":\"Implement\"}]}",
+            revision: 1,
+            timestamp: 200,
+          }),
           messageID: "message-runtime",
           partID: "stream-task-create",
           toolCallID: "call-task-create",
@@ -1985,7 +2131,7 @@ describe("stream trace reducer", () => {
         turnID: "turn-runtime",
         seq: 2,
         timestamp: 220,
-        type: "tool.call.completed",
+        type: "tool.call.settled",
         payload: {
           part: {
             id: "recorded-task-create",
@@ -1994,13 +2140,14 @@ describe("stream trace reducer", () => {
             type: "tool",
             callID: "call-task-create",
             tool: "task_create",
-            state: {
-              status: "completed",
-              input: { tasks: [{ subject: "Implement" }] },
-              output: "Tasks created",
-              title: "Tasks created",
-              time: { start: 180, end: 220 },
-            },
+            schemaVersion: 3,
+            turnID: "turn-test",
+            input: { raw: JSON.stringify({ tasks: [{ subject: "Implement" }] }), value: { tasks: [{ subject: "Implement" }] } },
+            source: { kind: "model" },
+            retry: { attempt: 1 },
+            revision: 1,
+            timestamps: { createdAt: 180, settledAt: 220 },
+            state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: "Tasks created", title: "Tasks created", execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
           },
         },
       },
@@ -2014,7 +2161,7 @@ describe("stream trace reducer", () => {
       partID: "recorded-task-create",
       toolName: "task_create",
       toolCallID: "call-task-create",
-      status: "completed",
+      toolCall: { state: { phase: "settled", outcome: { kind: "returned" } } },
       toolOutputText: "Tasks created",
     })
   })
@@ -2030,8 +2177,16 @@ describe("stream trace reducer", () => {
         turnID: "turn-runtime",
         seq: 1,
         timestamp: 200,
-        type: "tool.input.delta",
+        type: "tool.call.input_delta",
         payload: {
+          part: inputDeltaToolPart({
+            id: "stream-write",
+            callID: "call-write",
+            tool: "write",
+            raw: "{\"path\":\"README.md\"}",
+            revision: 1,
+            timestamp: 200,
+          }),
           messageID: "message-runtime",
           partID: "stream-write",
           toolCallID: "call-write",
@@ -2050,7 +2205,7 @@ describe("stream trace reducer", () => {
         turnID: "turn-runtime",
         seq: 2,
         timestamp: 220,
-        type: "tool.call.completed",
+        type: "tool.call.settled",
         payload: {
           part: {
             id: "recorded-write",
@@ -2058,13 +2213,15 @@ describe("stream trace reducer", () => {
             messageID: "message-runtime",
             type: "tool",
             callID: "call-write",
-            tool: "   ",
-            state: {
-              status: "completed",
-              input: { path: "README.md" },
-              output: "ok",
-              time: { start: 180, end: 220 },
-            },
+            tool: "write",
+            schemaVersion: 3,
+            turnID: "turn-test",
+            input: { raw: JSON.stringify({ path: "README.md" }), value: { path: "README.md" } },
+            source: { kind: "model" },
+            retry: { attempt: 1 },
+            revision: 1,
+            timestamps: { createdAt: 180, settledAt: 220 },
+            state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: "ok", execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
           },
         },
       },
@@ -2075,7 +2232,7 @@ describe("stream trace reducer", () => {
     expect(toolItems[0]).toMatchObject({
       toolName: "write",
       title: "write",
-      status: "completed",
+      toolCall: { state: { phase: "settled", outcome: { kind: "returned" } } },
       toolOutputText: "ok",
     })
   })
@@ -2102,8 +2259,16 @@ describe("stream trace reducer", () => {
         turnID: "turn-runtime",
         seq: 1,
         timestamp: 100,
-        type: "tool.input.delta",
+        type: "tool.call.input_delta",
         payload: {
+          part: inputDeltaToolPart({
+            id: "tool-input-patch",
+            callID: "call-live-patch",
+            tool: "apply_patch",
+            raw: fullInput.slice(0, splitIndex),
+            revision: 1,
+            timestamp: 100,
+          }),
           messageID: "message-runtime",
           partID: "tool-input-patch",
           toolCallID: "call-live-patch",
@@ -2122,8 +2287,16 @@ describe("stream trace reducer", () => {
         turnID: "turn-runtime",
         seq: 2,
         timestamp: 101,
-        type: "tool.input.delta",
+        type: "tool.call.input_delta",
         payload: {
+          part: inputDeltaToolPart({
+            id: "tool-input-patch",
+            callID: "call-live-patch",
+            tool: "apply_patch",
+            raw: fullInput,
+            revision: 2,
+            timestamp: 101,
+          }),
           messageID: "message-runtime",
           partID: "tool-input-patch",
           toolCallID: "call-live-patch",
@@ -2141,7 +2314,7 @@ describe("stream trace reducer", () => {
       kind: "tool",
       title: "apply_patch",
       sourceID: "tool-input-patch",
-      status: "pending",
+      toolCall: { state: { phase: "pending" } },
       toolCallID: "call-live-patch",
       draftPatch: {
         status: "running",
@@ -2179,8 +2352,16 @@ describe("stream trace reducer", () => {
         turnID: "turn-runtime",
         seq: 1,
         timestamp: 100,
-        type: "tool.input.delta",
+        type: "tool.call.input_delta",
         payload: {
+          part: inputDeltaToolPart({
+            id: "tool-input-patch",
+            callID: "call-freeform-patch",
+            tool: "apply_patch",
+            raw: fullInput.slice(0, splitIndex),
+            revision: 1,
+            timestamp: 100,
+          }),
           messageID: "message-runtime",
           partID: "tool-input-patch",
           toolCallID: "call-freeform-patch",
@@ -2199,8 +2380,16 @@ describe("stream trace reducer", () => {
         turnID: "turn-runtime",
         seq: 2,
         timestamp: 101,
-        type: "tool.input.delta",
+        type: "tool.call.input_delta",
         payload: {
+          part: inputDeltaToolPart({
+            id: "tool-input-patch",
+            callID: "call-freeform-patch",
+            tool: "apply_patch",
+            raw: fullInput,
+            revision: 2,
+            timestamp: 101,
+          }),
           messageID: "message-runtime",
           partID: "tool-input-patch",
           toolCallID: "call-freeform-patch",
@@ -2244,17 +2433,23 @@ describe("stream trace reducer", () => {
         turnID: "turn-runtime",
         seq: 1,
         timestamp: 100,
-        type: "tool.call.started",
+        type: "tool.call.phase_changed",
         payload: {
           part: {
             id: "tool-lifecycle-patch",
             type: "tool",
             tool: "apply_patch",
             callID: "call-lifecycle-patch",
-            state: {
-              status: "running",
-              raw: rawInput,
-            },
+            sessionID: "session-test",
+            messageID: "message-test",
+            schemaVersion: 3,
+            turnID: "turn-test",
+            input: { raw: rawInput, value: {} },
+            source: { kind: "model" },
+            retry: { attempt: 1 },
+            revision: 1,
+            timestamps: { createdAt: 1, startedAt: 1 },
+            state: { phase: "running" },
           },
         },
       },
@@ -2265,7 +2460,7 @@ describe("stream trace reducer", () => {
     expect(message.items.filter((item) => item.kind === "patch")).toHaveLength(0)
     expect(toolItems[0]).toMatchObject({
       sourceID: "tool-lifecycle-patch",
-      status: "running",
+      toolCall: { state: { phase: "running" } },
       draftPatch: {
         status: "running",
         fileChanges: [
@@ -2300,8 +2495,16 @@ describe("stream trace reducer", () => {
         turnID: "turn-runtime",
         seq: 1,
         timestamp: 100,
-        type: "tool.input.delta",
+        type: "tool.call.input_delta",
         payload: {
+          part: inputDeltaToolPart({
+            id: "tool-input-patch",
+            callID: "call-live-patch",
+            tool: "apply_patch",
+            raw: fullInput,
+            revision: 1,
+            timestamp: 100,
+          }),
           messageID: "message-runtime",
           partID: "tool-input-patch",
           toolCallID: "call-live-patch",
@@ -2393,8 +2596,16 @@ describe("stream trace reducer", () => {
         turnID: "turn-runtime",
         seq: 1,
         timestamp: 100,
-        type: "tool.input.delta",
+        type: "tool.call.input_delta",
         payload: {
+          part: inputDeltaToolPart({
+            id: "tool-input-patch",
+            callID: "call-live-patch",
+            tool: "apply_patch",
+            raw: fullInput,
+            revision: 1,
+            timestamp: 100,
+          }),
           messageID: "message-runtime",
           partID: "tool-input-patch",
           toolCallID: "call-live-patch",
@@ -2413,18 +2624,23 @@ describe("stream trace reducer", () => {
         turnID: "turn-runtime",
         seq: 2,
         timestamp: 101,
-        type: "tool.call.failed",
+        type: "tool.call.settled",
         payload: {
           part: {
             id: "tool-input-patch",
             type: "tool",
             tool: "apply_patch",
             callID: "call-live-patch",
-            state: {
-              status: "error",
-              input: { patch: "..." },
-              error: "Patch failed",
-            },
+            sessionID: "session-test",
+            messageID: "message-test",
+            schemaVersion: 3,
+            turnID: "turn-test",
+            input: { raw: JSON.stringify({ patch: "..." }), value: { patch: "..." } },
+            source: { kind: "model" },
+            retry: { attempt: 1 },
+            revision: 1,
+            timestamps: { createdAt: 1, settledAt: 1 },
+            state: { phase: "settled", outcome: { kind: "failed", error: { stage: "execution", source: "tool", code: "TOOL_EXECUTION_ERROR", message: "Patch failed", handlerExecuted: true, retryable: false, severity: "recoverable" }, execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
           },
         },
       },
@@ -2435,7 +2651,7 @@ describe("stream trace reducer", () => {
     expect(message.items.filter((item) => item.kind === "patch")).toHaveLength(0)
     expect(toolItems[0]).toMatchObject({
       sourceID: "tool-input-patch",
-      status: "error",
+      toolCall: { state: { phase: "settled", outcome: { kind: "failed" } } },
       isStreaming: false,
       draftPatch: {
         status: "error",
@@ -2465,8 +2681,16 @@ describe("stream trace reducer", () => {
         turnID: "turn-runtime",
         seq: 1,
         timestamp: 100,
-        type: "tool.input.delta",
+        type: "tool.call.input_delta",
         payload: {
+          part: inputDeltaToolPart({
+            id: "tool-input-patch",
+            callID: "call-live-patch",
+            tool: "apply_patch",
+            raw: fullInput,
+            revision: 1,
+            timestamp: 100,
+          }),
           messageID: "message-runtime",
           partID: "tool-input-patch",
           toolCallID: "call-live-patch",
@@ -2485,19 +2709,23 @@ describe("stream trace reducer", () => {
         turnID: "turn-runtime",
         seq: 2,
         timestamp: 101,
-        type: "tool.call.cancelled",
+        type: "tool.call.settled",
         payload: {
           part: {
             id: "tool-input-patch",
             type: "tool",
             tool: "apply_patch",
             callID: "call-live-patch",
-            state: {
-              status: "cancelled",
-              input: { patch: "..." },
-              raw: fullInput,
-              reason: "Prompt cancellation requested.",
-            },
+            sessionID: "session-test",
+            messageID: "message-test",
+            schemaVersion: 3,
+            turnID: "turn-test",
+            input: { raw: fullInput, value: { patch: "..." } },
+            source: { kind: "model" },
+            retry: { attempt: 1 },
+            revision: 1,
+            timestamps: { createdAt: 1, settledAt: 1 },
+            state: { phase: "settled", outcome: { kind: "cancelled", reason: "Prompt cancellation requested.", by: "user", execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
           },
         },
       },
@@ -2508,7 +2736,7 @@ describe("stream trace reducer", () => {
     expect(message.items.filter((item) => item.kind === "patch")).toHaveLength(0)
     expect(toolItems[0]).toMatchObject({
       sourceID: "tool-input-patch",
-      status: "cancelled",
+      toolCall: { state: { phase: "settled", outcome: { kind: "cancelled" } } },
       isStreaming: false,
       draftPatch: {
         status: "cancelled",
@@ -2517,7 +2745,7 @@ describe("stream trace reducer", () => {
     })
   })
 
-  it("marks unfinished streamed tool input as cancelled when the turn is interrupted", () => {
+  it("stops animating unfinished tool input without fabricating a tool settlement", () => {
     let message = buildStreamingAssistantThreadMessage("Inspect live tool input")
 
     message = applyAgentStreamEventToThreadMessage(message, {
@@ -2528,8 +2756,16 @@ describe("stream trace reducer", () => {
         turnID: "turn-runtime",
         seq: 1,
         timestamp: 100,
-        type: "tool.input.delta",
+        type: "tool.call.input_delta",
         payload: {
+          part: inputDeltaToolPart({
+            id: "tool-input-part",
+            callID: "call-live-input",
+            tool: "replace-text",
+            raw: "{\"path\":\"game.ts\"",
+            revision: 1,
+            timestamp: 100,
+          }),
           messageID: "message-runtime",
           partID: "tool-input-part",
           toolCallID: "call-live-input",
@@ -2562,7 +2798,7 @@ describe("stream trace reducer", () => {
     expect(toolItems[0]).toMatchObject({
       kind: "tool",
       title: "replace-text",
-      status: "cancelled",
+      toolCall: { state: { phase: "pending" } },
       sourceID: "tool-input-part",
       toolCallID: "call-live-input",
       toolInputText: "{\"path\":\"game.ts\"",
@@ -2578,7 +2814,7 @@ describe("stream trace reducer", () => {
     )
   })
 
-  it("keeps cancelled streamed tool input when a late failed part arrives", () => {
+  it("applies a canonical late tool settlement without changing the cancelled turn", () => {
     let message = buildStreamingAssistantThreadMessage("Inspect live tool input")
 
     message = applyAgentStreamEventToThreadMessage(message, {
@@ -2589,8 +2825,16 @@ describe("stream trace reducer", () => {
         turnID: "turn-runtime",
         seq: 1,
         timestamp: 100,
-        type: "tool.input.delta",
+        type: "tool.call.input_delta",
         payload: {
+          part: inputDeltaToolPart({
+            id: "tool-input-part",
+            callID: "call-live-input",
+            tool: "replace-text",
+            raw: "{\"path\":\"game.ts\"",
+            revision: 1,
+            timestamp: 100,
+          }),
           messageID: "message-runtime",
           partID: "tool-input-part",
           toolCallID: "call-live-input",
@@ -2625,18 +2869,23 @@ describe("stream trace reducer", () => {
         turnID: "turn-runtime",
         seq: 3,
         timestamp: 102,
-        type: "tool.call.failed",
+        type: "tool.call.settled",
         payload: {
           part: {
             id: "tool-input-part",
             type: "tool",
             tool: "replace-text",
             callID: "call-live-input",
-            state: {
-              status: "error",
-              input: { path: "game.ts" },
-              error: "Late failure should not replace cancellation.",
-            },
+            sessionID: "session-test",
+            messageID: "message-test",
+            schemaVersion: 3,
+            turnID: "turn-test",
+            input: { raw: JSON.stringify({ path: "game.ts" }), value: { path: "game.ts" } },
+            source: { kind: "model" },
+            retry: { attempt: 1 },
+            revision: 1,
+            timestamps: { createdAt: 1, settledAt: 1 },
+            state: { phase: "settled", outcome: { kind: "failed", error: { stage: "execution", source: "tool", code: "TOOL_EXECUTION_ERROR", message: "Late failure should not replace cancellation.", handlerExecuted: true, retryable: false, severity: "recoverable" }, execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
           },
         },
       },
@@ -2648,14 +2897,14 @@ describe("stream trace reducer", () => {
     expect(toolItems[0]).toMatchObject({
       kind: "tool",
       title: "replace-text",
-      status: "cancelled",
+      toolCall: { state: { phase: "settled", outcome: { kind: "failed" } } },
       sourceID: "tool-input-part",
       toolCallID: "call-live-input",
       isStreaming: false,
     })
   })
 
-  it("keeps late batched tool input cancelled after a local interrupt marker", () => {
+  it("keeps late batched tool input canonical after a local interrupt marker", () => {
     let message = buildStreamingAssistantThreadMessage("Inspect live tool input")
 
     message = applyAgentStreamEventToThreadMessage(message, {
@@ -2682,8 +2931,16 @@ describe("stream trace reducer", () => {
         turnID: "turn-runtime",
         seq: 2,
         timestamp: 101,
-        type: "tool.input.delta",
+        type: "tool.call.input_delta",
         payload: {
+          part: inputDeltaToolPart({
+            id: "tool-input-part",
+            callID: "call-live-input",
+            tool: "AskUserQuestion",
+            raw: "{}",
+            revision: 1,
+            timestamp: 101,
+          }),
           messageID: "message-runtime",
           partID: "tool-input-part",
           toolCallID: "call-live-input",
@@ -2700,7 +2957,9 @@ describe("stream trace reducer", () => {
         expect.objectContaining({
           kind: "tool",
           title: "AskUserQuestion",
-          status: "cancelled",
+          toolCall: expect.objectContaining({
+            state: { phase: "pending" },
+          }),
           toolInputText: "{}",
           isStreaming: false,
         }),
@@ -2708,7 +2967,7 @@ describe("stream trace reducer", () => {
     )
   })
 
-  it("restores cancelled tool history without leaving pending tool traces active", () => {
+  it("does not fabricate a tool outcome while restoring an inconsistent cancelled history", () => {
     const messages = buildThreadMessagesFromHistory([
       {
         info: {
@@ -2725,10 +2984,16 @@ describe("stream trace reducer", () => {
             type: "tool",
             tool: "replace-text",
             callID: "tool-call",
-            state: {
-              status: "pending",
-              raw: "{}",
-            },
+            sessionID: "session-test",
+            messageID: "message-test",
+            schemaVersion: 3,
+            turnID: "turn-test",
+            input: { raw: "{}", value: {} },
+            source: { kind: "model" },
+            retry: { attempt: 1 },
+            revision: 0,
+            timestamps: { createdAt: 1 },
+            state: { phase: "pending" },
           },
         ],
       },
@@ -2747,7 +3012,9 @@ describe("stream trace reducer", () => {
       expect.arrayContaining([
         expect.objectContaining({
           kind: "tool",
-          status: "cancelled",
+          toolCall: expect.objectContaining({
+            state: { phase: "pending" },
+          }),
           isStreaming: false,
         }),
         expect.objectContaining({
@@ -2780,10 +3047,16 @@ describe("stream trace reducer", () => {
             type: "tool",
             tool: "apply_patch",
             callID: "tool-call",
-            state: {
-              status: "pending",
-              raw: "{}",
-            },
+            sessionID: "session-test",
+            messageID: "message-test",
+            schemaVersion: 3,
+            turnID: "turn-test",
+            input: { raw: "{}", value: {} },
+            source: { kind: "model" },
+            retry: { attempt: 1 },
+            revision: 0,
+            timestamps: { createdAt: 1 },
+            state: { phase: "pending" },
           },
         ],
         turn: {
@@ -2816,7 +3089,9 @@ describe("stream trace reducer", () => {
         expect.objectContaining({
           kind: "tool",
           title: "apply_patch",
-          status: "cancelled",
+          toolCall: expect.objectContaining({
+            state: { phase: "pending" },
+          }),
           isStreaming: false,
         }),
         expect.objectContaining({
@@ -2875,8 +3150,16 @@ describe("stream trace reducer", () => {
         turnID: "turn-runtime",
         seq: 3,
         timestamp: 102,
-        type: "tool.input.delta",
+        type: "tool.call.input_delta",
         payload: {
+          part: inputDeltaToolPart({
+            id: "tool-input-part",
+            callID: "call-live-input",
+            tool: "shell",
+            raw: "{\"command\":\"rg ThreadView\"}",
+            revision: 1,
+            timestamp: 102,
+          }),
           messageID: "message-runtime",
           partID: "tool-input-part",
           toolCallID: "call-live-input",
@@ -2928,10 +3211,16 @@ describe("stream trace reducer", () => {
             id: "part-tool-1",
             type: "tool",
             tool: "generate-report",
-            state: {
-              status: "completed",
-              output: { ok: true },
-              attachments: [
+            sessionID: "session-test",
+            messageID: "message-test",
+            schemaVersion: 3,
+            turnID: "turn-test",
+            input: { raw: JSON.stringify({}), value: {} },
+            source: { kind: "model" },
+            retry: { attempt: 1 },
+            revision: 1,
+            timestamps: { createdAt: 1, settledAt: 1 },
+            state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: { ok: true }, attachments: [
                 {
                   mime: "image/png",
                   filename: "preview.png",
@@ -2942,8 +3231,8 @@ describe("stream trace reducer", () => {
                     prompt: "preview prompt",
                   },
                 },
-              ],
-            },
+              ], execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
+            callID: "tool-call-v3-621",
           },
         ],
       },
@@ -3048,10 +3337,18 @@ describe("stream trace reducer", () => {
           id: "tool-2",
           type: "tool",
           tool: "npm test",
-          state: {
-            status: "running",
-            title: "Executing tests",
-          },
+          sessionID: "session-test",
+          messageID: "message-test",
+          schemaVersion: 3,
+          turnID: "turn-test",
+          input: { raw: JSON.stringify({}), value: {} },
+          source: { kind: "model" },
+          retry: { attempt: 1 },
+          revision: 1,
+          timestamps: { createdAt: 1, startedAt: 1 },
+          presentation: { title: "Executing tests" },
+          state: { phase: "running" },
+          callID: "tool-call-v3-648",
         },
       },
     })
@@ -3070,7 +3367,22 @@ describe("stream trace reducer", () => {
       data: {
         parts: [
           { id: "reasoning-1", type: "reasoning", text: "Inspecting workspace." },
-          { id: "tool-2", type: "tool", tool: "npm test", state: { status: "completed", output: "ok" } },
+          {
+            id: "tool-2",
+            type: "tool",
+            tool: "npm test",
+            sessionID: "session-test",
+            messageID: "message-test",
+            schemaVersion: 3,
+            turnID: "turn-test",
+            input: { raw: JSON.stringify({}), value: {} },
+            source: { kind: "model" },
+            retry: { attempt: 1 },
+            revision: 1,
+            timestamps: { createdAt: 1, settledAt: 1 },
+            state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: "ok", execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
+            callID: "tool-call-v3-662",
+          },
           { id: "reasoning-2", type: "reasoning", text: "Evaluating test output." },
         ],
       },
@@ -3091,10 +3403,16 @@ describe("stream trace reducer", () => {
           id: "tool-planner",
           type: "tool",
           tool: "planner_list_todos",
-          state: {
-            status: "completed",
-            output: "ok",
-            metadata: {
+          sessionID: "session-test",
+          messageID: "message-test",
+          schemaVersion: 3,
+          turnID: "turn-test",
+          input: { raw: JSON.stringify({}), value: {} },
+          source: { kind: "model" },
+          retry: { attempt: 1 },
+          revision: 1,
+          timestamps: { createdAt: 1, settledAt: 1 },
+          state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: "ok", metadata: {
               toolSource: {
                 kind: "native-module",
                 id: "planner.core",
@@ -3106,8 +3424,8 @@ describe("stream trace reducer", () => {
                   name: "Anybox",
                 },
               },
-            },
-          },
+            }, execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
+          callID: "tool-call-v3-676",
         }],
       },
     })
@@ -3135,10 +3453,16 @@ describe("stream trace reducer", () => {
           id: "tool-read-file",
           type: "tool",
           tool: "read_file",
-          state: {
-            status: "completed",
-            output: "ok",
-            metadata: {
+          sessionID: "session-test",
+          messageID: "message-test",
+          schemaVersion: 3,
+          turnID: "turn-test",
+          input: { raw: JSON.stringify({}), value: {} },
+          source: { kind: "model" },
+          retry: { attempt: 1 },
+          revision: 1,
+          timestamps: { createdAt: 1, settledAt: 1 },
+          state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: "ok", metadata: {
               toolSource: {
                 kind: "builtin-module",
                 id: "workspace.file-io",
@@ -3149,8 +3473,8 @@ describe("stream trace reducer", () => {
                   id: "anybox",
                 },
               },
-            },
-          },
+            }, execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
+          callID: "tool-call-v3-694",
         }],
       },
     })
@@ -3185,10 +3509,18 @@ describe("stream trace reducer", () => {
           id: "tool-3",
           type: "tool",
           tool: "npm test",
-          state: {
-            status: "running",
-            title: "Executing tests",
-          },
+          sessionID: "session-test",
+          messageID: "message-test",
+          schemaVersion: 3,
+          turnID: "turn-test",
+          input: { raw: JSON.stringify({}), value: {} },
+          source: { kind: "model" },
+          retry: { attempt: 1 },
+          revision: 1,
+          timestamps: { createdAt: 1, startedAt: 1 },
+          presentation: { title: "Executing tests" },
+          state: { phase: "running" },
+          callID: "tool-call-v3-714",
         },
       },
     })
@@ -3215,7 +3547,22 @@ describe("stream trace reducer", () => {
       event: "done",
       data: {
         parts: [
-          { id: "tool-3", type: "tool", tool: "npm test", state: { status: "completed", output: "ok" } },
+          {
+            id: "tool-3",
+            type: "tool",
+            tool: "npm test",
+            sessionID: "session-test",
+            messageID: "message-test",
+            schemaVersion: 3,
+            turnID: "turn-test",
+            input: { raw: JSON.stringify({}), value: {} },
+            source: { kind: "model" },
+            retry: { attempt: 1 },
+            revision: 1,
+            timestamps: { createdAt: 1, settledAt: 1 },
+            state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: "ok", execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
+            callID: "tool-call-v3-728",
+          },
           { id: "text-1", type: "text", text: "First sentence. Second sentence." },
         ],
       },
@@ -3266,10 +3613,18 @@ describe("stream trace reducer", () => {
           id: "tool-waiting",
           type: "tool",
           tool: "read-file",
-          state: {
-            status: "waiting-approval",
-            title: "Read repo config",
-          },
+          sessionID: "session-test",
+          messageID: "message-test",
+          schemaVersion: 3,
+          turnID: "turn-test",
+          input: { raw: JSON.stringify({}), value: {} },
+          source: { kind: "model" },
+          retry: { attempt: 1 },
+          revision: 1,
+          timestamps: { createdAt: 1, approvalRequestedAt: 1 },
+          presentation: { title: "Read repo config" },
+          state: { phase: "waiting-approval", approval: { id: "approval-test" } },
+          callID: "tool-call-v3-748",
         },
       },
     })
@@ -3283,10 +3638,18 @@ describe("stream trace reducer", () => {
             id: "tool-waiting",
             type: "tool",
             tool: "read-file",
-            state: {
-              status: "waiting-approval",
-              title: "Read repo config",
-            },
+            sessionID: "session-test",
+            messageID: "message-test",
+            schemaVersion: 3,
+            turnID: "turn-test",
+            input: { raw: JSON.stringify({}), value: {} },
+            source: { kind: "model" },
+            retry: { attempt: 1 },
+            revision: 1,
+            timestamps: { createdAt: 1, approvalRequestedAt: 1 },
+            presentation: { title: "Read repo config" },
+            state: { phase: "waiting-approval", approval: { id: "approval-test" } },
+            callID: "tool-call-v3-760",
           },
         ],
       },

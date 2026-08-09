@@ -41,11 +41,14 @@ function toolPart(input: {
     type: "tool",
     callID,
     tool: "test-tool",
-    state: {
-      status: "pending",
-      input: {},
-      raw: "{}",
-    },
+    schemaVersion: 3,
+    turnID: "turn-test",
+    input: { raw: "{}", value: {} },
+    source: { kind: "model" },
+    retry: { attempt: 1 },
+    revision: 0,
+    timestamps: { createdAt: 1 },
+    state: { phase: "pending" },
   }
 }
 
@@ -603,7 +606,7 @@ describe("session runner", () => {
           turnID: runtime.turnID,
           steerable: true,
         })
-        turn.emit("tool.call.pending", { part })
+        turn.emit("tool.call.created", { part })
         activeStarted.resolve(turn)
         try {
           await finish.promise
@@ -639,18 +642,14 @@ describe("session runner", () => {
     expect(pendingSteer.mode).toBe("steer")
     expect(pendingSteer.turnID).not.toBe(first.turnID)
 
-    turn.emit("tool.call.started", {
+    turn.emit("tool.call.phase_changed", {
       part: {
         ...part,
-        state: {
-          status: "running",
-          input: {},
-          raw: "{}",
-          time: {
-            start: Date.now(),
-          },
-        },
+        revision: 1,
+        timestamps: { ...part.timestamps, startedAt: Date.now() },
+        state: { phase: "running" },
       },
+      previousPhase: "pending",
     })
     expect(turn.concurrentInputDisposition()).toBe("steer")
 
@@ -666,19 +665,16 @@ describe("session runner", () => {
     expect(runningSteer.turnID).not.toBe(first.turnID)
     expect(runningSteer.turnID).not.toBe(pendingSteer.turnID)
 
-    turn.emit("tool.call.waiting_approval", {
+    const approvalPart = toolPart({ sessionID })
+    turn.emit("tool.call.created", { part: approvalPart })
+    turn.emit("tool.call.phase_changed", {
       part: {
-        ...part,
-        state: {
-          status: "waiting-approval",
-          approvalID: "approval-test",
-          input: {},
-          raw: "{}",
-          time: {
-            start: Date.now(),
-          },
-        },
+        ...approvalPart,
+        revision: 1,
+        timestamps: { ...approvalPart.timestamps, approvalRequestedAt: Date.now() },
+        state: { phase: "waiting-approval", approval: { id: "approval-test" } },
       },
+      previousPhase: "pending",
     })
     expect(turn.concurrentInputDisposition()).toBe("steer")
 

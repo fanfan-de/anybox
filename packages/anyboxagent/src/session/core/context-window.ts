@@ -744,19 +744,20 @@ function renderPartForSummary(part: Message.Part) {
 
 function renderToolPartForSummary(part: Message.ToolPart) {
   const state = part.state
-  const input = truncateInline(safeStringify(state.input), FALLBACK_TOOL_INPUT_CHARS)
+  const input = truncateInline(safeStringify(Message.toolPartInput(part)), FALLBACK_TOOL_INPUT_CHARS)
   const header = `- tool ${part.tool}${input ? ` input: ${input}` : ""}`
 
-  if (state.status === "completed") {
-    return `${header}\n  completed: ${truncateInline(state.output, 1_000)}`
+  if (state.phase === "settled") {
+    const outcome = state.outcome
+    if (outcome.kind === "returned") {
+      return `${header}\n  returned (${outcome.result}, ${outcome.completeness}): ${truncateInline(Message.normalizeToolOutputText(outcome.output), 1_000)}`
+    }
+    if (outcome.kind === "failed") {
+      return `${header}\n  failed: ${truncateInline(outcome.error.message, 600)}`
+    }
+    return `${header}\n  ${outcome.kind}: ${truncateInline(outcome.reason, 300)}`
   }
-  if (state.status === "error") {
-    return `${header}\n  error: ${truncateInline(state.error, 600)}`
-  }
-  if (state.status === "denied") {
-    return `${header}\n  denied: ${truncateInline(state.reason, 300)}`
-  }
-  if (state.status === "waiting-approval") {
+  if (state.phase === "waiting-approval") {
     return `${header}\n  waiting for approval`
   }
   return `${header}\n  pending`
@@ -773,38 +774,51 @@ function prunePartForContext(part: Message.Part, maxChars: number): Message.Part
   if (part.type !== "tool") return part
 
   const state = part.state
-  if (state.status === "completed") {
-    const output = truncateText(state.output, maxChars)
+  if (state.phase === "settled" && state.outcome.kind === "returned") {
+    const sourceOutput = Message.normalizeToolOutputText(state.outcome.output)
+    const output = truncateText(sourceOutput, maxChars)
     return {
       ...part,
       state: {
         ...state,
-        output,
-        modelOutput: undefined,
-        metadata: {
-          ...(state.metadata ?? {}),
-          truncatedForContext: output !== state.output,
+        outcome: {
+          ...state.outcome,
+          output,
+          modelOutput: undefined,
+          metadata: {
+            ...(state.outcome.metadata ?? {}),
+            truncatedForContext: output !== sourceOutput,
+          },
         },
       },
     }
   }
 
-  if (state.status === "error") {
+  if (state.phase === "settled" && state.outcome.kind === "failed") {
     return {
       ...part,
       state: {
         ...state,
-        error: truncateText(state.error, maxChars),
+        outcome: {
+          ...state.outcome,
+          error: {
+            ...state.outcome.error,
+            message: truncateText(state.outcome.error.message, maxChars),
+          },
+        },
       },
     }
   }
 
-  if (state.status === "denied") {
+  if (state.phase === "settled" && state.outcome.kind !== "returned" && state.outcome.kind !== "failed") {
     return {
       ...part,
       state: {
         ...state,
-        reason: truncateText(state.reason, maxChars),
+        outcome: {
+          ...state.outcome,
+          reason: truncateText(state.outcome.reason, maxChars),
+        },
       },
     }
   }
@@ -916,20 +930,18 @@ function estimatePartTokens(part: Message.Part): number {
 
 function estimateToolPartTokens(part: Message.ToolPart) {
   const state = part.state
-  const inputTokens = estimateStringTokens(safeStringify(state.input))
+  const inputTokens = estimateStringTokens(safeStringify(Message.toolPartInput(part)))
 
-  switch (state.status) {
-    case "completed":
-      return inputTokens + estimateStringTokens(state.output) + 24
-    case "error":
-      return inputTokens + estimateStringTokens(state.error) + 16
-    case "denied":
-      return inputTokens + estimateStringTokens(state.reason) + 16
-    case "waiting-approval":
-      return inputTokens + 16
-    default:
-      return inputTokens + 12
+  if (state.phase === "settled") {
+    if (state.outcome.kind === "returned") {
+      return inputTokens + estimateStringTokens(Message.normalizeToolOutputText(state.outcome.output)) + 24
+    }
+    if (state.outcome.kind === "failed") {
+      return inputTokens + estimateStringTokens(state.outcome.error.message) + 16
+    }
+    return inputTokens + estimateStringTokens(state.outcome.reason) + 16
   }
+  return inputTokens + (state.phase === "waiting-approval" ? 16 : 12)
 }
 
 function estimateStringTokens(value: string) {

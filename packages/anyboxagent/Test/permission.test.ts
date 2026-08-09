@@ -1019,17 +1019,19 @@ test("permission approval can complete a waiting read_file tool call without res
           type: "tool",
           callID: "toolcall_readme",
           tool: "read_file",
-          state: {
-            status: "waiting-approval",
-            approvalID: "approval_readme",
-            input: {
+          schemaVersion: 3,
+          turnID: "turn-test",
+          input: { raw: JSON.stringify({
               path: "README.md",
-            },
-            title: "Read File",
-            time: {
-              start: Date.now(),
-            },
-          },
+            }), value: {
+              path: "README.md",
+            } },
+          source: { kind: "model" },
+          retry: { attempt: 1 },
+          revision: 1,
+          timestamps: { createdAt: Date.now(), approvalRequestedAt: Date.now() },
+          presentation: { title: "Read File" },
+          state: { phase: "waiting-approval", approval: { id: "approval_readme" } },
         })
 
         await Session.updatePart(toolPart)
@@ -1061,20 +1063,24 @@ test("permission approval can complete a waiting read_file tool call without res
 
     const eventTypes = observedEvents.map((event) => event.type)
     const resolvedIndex = eventTypes.indexOf("permission.resolved")
-    const approvedIndex = eventTypes.indexOf("tool.call.approved")
-    const startedIndex = eventTypes.indexOf("tool.call.started")
-    const completedIndex = eventTypes.indexOf("tool.call.completed")
+    const startedIndex = observedEvents.findIndex((event) =>
+      event.type === "tool.call.phase_changed" && event.payload.part.state.phase === "running"
+    )
+    const completedIndex = observedEvents.findIndex((event) =>
+      event.type === "tool.call.settled" &&
+      event.payload.part.state.phase === "settled" &&
+      event.payload.part.state.outcome.kind === "returned"
+    )
     expect(resolvedIndex).toBeGreaterThanOrEqual(0)
-    expect(approvedIndex).toBeGreaterThan(resolvedIndex)
-    expect(startedIndex).toBeGreaterThan(approvedIndex)
+    expect(startedIndex).toBeGreaterThan(resolvedIndex)
     expect(completedIndex).toBeGreaterThan(startedIndex)
 
     const startedEvent = observedEvents[startedIndex]
-    expect(startedEvent?.type).toBe("tool.call.started")
-    if (startedEvent?.type === "tool.call.started") {
+    expect(startedEvent?.type).toBe("tool.call.phase_changed")
+    if (startedEvent?.type === "tool.call.phase_changed") {
       expect(startedEvent.payload.part.callID).toBe(request.toolCallID)
-      expect(startedEvent.payload.part.state.status).toBe("running")
-      expect(startedEvent.payload.part.state.input).toEqual({
+      expect(startedEvent.payload.part.state.phase).toBe("running")
+      expect(startedEvent.payload.part.input.value).toEqual({
         path: "README.md",
       })
     }
@@ -1090,9 +1096,11 @@ test("permission approval can complete a waiting read_file tool call without res
       (part): part is Message.ToolPart => part.type === "tool" && part.callID === request.toolCallID,
     )
 
-    expect(updatedTool?.state.status).toBe("completed")
-    if (updatedTool?.state.status === "completed") {
-      expect(updatedTool.state.output).toContain("README.md")
+    expect(updatedTool?.state.phase).toBe("settled")
+    if (updatedTool?.state.phase === "settled" && updatedTool.state.outcome.kind === "returned") {
+      expect(String(updatedTool.state.outcome.output)).toContain("README.md")
+    } else {
+      throw new Error("Expected the approved tool call to return.")
     }
   } finally {
     await rm(repositoryRoot, { recursive: true, force: true })
@@ -1147,17 +1155,19 @@ test("permission approval emits tool running before a failed approved tool call"
           type: "tool",
           callID: "toolcall_missing_readme",
           tool: "read_file",
-          state: {
-            status: "waiting-approval",
-            approvalID: "approval_missing_readme",
-            input: {
+          schemaVersion: 3,
+          turnID: "turn-test",
+          input: { raw: JSON.stringify({
               path: "MISSING.md",
-            },
-            title: "Read File",
-            time: {
-              start: Date.now(),
-            },
-          },
+            }), value: {
+              path: "MISSING.md",
+            } },
+          source: { kind: "model" },
+          retry: { attempt: 1 },
+          revision: 1,
+          timestamps: { createdAt: Date.now(), approvalRequestedAt: Date.now() },
+          presentation: { title: "Read File" },
+          state: { phase: "waiting-approval", approval: { id: "approval_missing_readme" } },
         })
 
         await Session.updatePart(toolPart)
@@ -1185,20 +1195,23 @@ test("permission approval emits tool running before a failed approved tool call"
       }
     })()
 
-    const eventTypes = observedEvents.map((event) => event.type)
-    const approvedIndex = eventTypes.indexOf("tool.call.approved")
-    const startedIndex = eventTypes.indexOf("tool.call.started")
-    const failedIndex = eventTypes.indexOf("tool.call.failed")
-    expect(approvedIndex).toBeGreaterThanOrEqual(0)
-    expect(startedIndex).toBeGreaterThan(approvedIndex)
+    const startedIndex = observedEvents.findIndex((event) =>
+      event.type === "tool.call.phase_changed" && event.payload.part.state.phase === "running"
+    )
+    const failedIndex = observedEvents.findIndex((event) =>
+      event.type === "tool.call.settled" &&
+      event.payload.part.state.phase === "settled" &&
+      event.payload.part.state.outcome.kind === "failed"
+    )
+    expect(startedIndex).toBeGreaterThanOrEqual(0)
     expect(failedIndex).toBeGreaterThan(startedIndex)
 
     const startedEvent = observedEvents[startedIndex]
-    expect(startedEvent?.type).toBe("tool.call.started")
-    if (startedEvent?.type === "tool.call.started") {
+    expect(startedEvent?.type).toBe("tool.call.phase_changed")
+    if (startedEvent?.type === "tool.call.phase_changed") {
       expect(startedEvent.payload.part.callID).toBe(request.toolCallID)
-      expect(startedEvent.payload.part.state.status).toBe("running")
-      expect(startedEvent.payload.part.state.input).toEqual({
+      expect(startedEvent.payload.part.state.phase).toBe("running")
+      expect(startedEvent.payload.part.input.value).toEqual({
         path: "MISSING.md",
       })
     }
@@ -1209,7 +1222,10 @@ test("permission approval emits tool running before a failed approved tool call"
     const updatedTool = toolParts.find(
       (part): part is Message.ToolPart => part.type === "tool" && part.callID === request.toolCallID,
     )
-    expect(updatedTool?.state.status).toBe("error")
+    expect(updatedTool?.state.phase).toBe("settled")
+    if (updatedTool?.state.phase !== "settled" || updatedTool.state.outcome.kind !== "failed") {
+      throw new Error("Expected the approved tool call to fail.")
+    }
   } finally {
     await rm(repositoryRoot, { recursive: true, force: true })
   }

@@ -31,7 +31,28 @@ import * as Log from "#util/log.ts"
 import * as ToolResultPersistence from "#session/support/tool-result-persistence.ts"
 import * as Tool from "#tool/tool.ts"
 import { TOOL_SEARCH_ID, TOOL_SEARCH_MODEL_NAME } from "#tool/tool-search.ts"
-import { ReasoningEffortSchema, ToolModuleIDSchema } from "@anybox/shared"
+import {
+    TOOL_CALL_PROTOCOL_VERSION,
+    ReasoningEffortSchema,
+    ToolCallPendingStateSchema,
+    ToolCallRunningStateSchema,
+    ToolCallSettledStateSchema,
+    ToolCallSnapshotSchema,
+    ToolCallStateSchema,
+    ToolCallWaitingApprovalStateSchema,
+    ToolModuleIDSchema,
+    applyToolCallEvent,
+    type ToolCallEvent,
+    type ToolCallOutcome,
+    type ToolCallPendingState,
+    type ToolCallPresentation,
+    type ToolCallRunningState,
+    type ToolCallSource,
+    type ToolCallSettledState,
+    type ToolCallState as SharedToolCallState,
+    type ToolCallTurnControl,
+    type ToolCallWaitingApprovalState,
+} from "@anybox/shared"
 
 export const OutputLengthError = NamedError.create("MessageOutputLengthError", z.object({}))
 export const AbortedError = NamedError.create("MessageAbortedError", z.object({ message: z.string() }))
@@ -389,122 +410,17 @@ export const CompactionPart = PartBase.extend({
 })
 export type CompactionPart = z.infer<typeof CompactionPart>
 
-export const ToolStatePending = z
-    .object({
-        status: z.literal("pending"),
-        input: z.record(z.string(), z.any()),
-        raw: z.string(), // 原始 JSON 字符串，用于调试解析错误
-    })
-    .meta({
-        ref: "ToolStatePending",
-    })
-export type ToolStatePending = z.infer<typeof ToolStatePending>
+export const ToolStatePending = ToolCallPendingStateSchema.meta({ ref: "ToolStatePending" })
+export type ToolStatePending = ToolCallPendingState
 
-export const ToolStateRunning = z
-    .object({
-        status: z.literal("running"),
-        input: z.record(z.string(), z.any()),
-        raw: z.string().optional(),
-        title: z.string().optional(),
-        metadata: z.record(z.string(), z.any()).optional(),
-        time: z.object({
-            start: z.number(),
-        }),
-    })
-    .meta({
-        ref: "ToolStateRunning",
-    })
-export type ToolStateRunning = z.infer<typeof ToolStateRunning>
+export const ToolStateRunning = ToolCallRunningStateSchema.meta({ ref: "ToolStateRunning" })
+export type ToolStateRunning = ToolCallRunningState
 
-export const ToolStateCompleted = z
-    .object({
-        status: z.literal("completed"),
-        input: z.record(z.string(), z.any()),
-        raw: z.string().optional(),
-        output: z.preprocess((value) => normalizeToolOutputText(value), z.string()),
-        modelOutput: z.any().optional(),
-        title: z.string(),
-        metadata: z.record(z.string(), z.any()),
-        time: z.object({
-            start: z.number(),
-            end: z.number(),
-            compacted: z.number().optional(), // 如果工具输出过长被压缩，记录压缩发生的时间
-        }),
-        attachments: AttachmentPart.array().optional(), // 工具可以返回文件，例如生成的图片
-    })
-    .meta({
-        ref: "ToolStateCompleted",
-    })
-export type ToolStateCompleted = z.infer<typeof ToolStateCompleted>
+export const ToolStateWaitingApproval = ToolCallWaitingApprovalStateSchema.meta({ ref: "ToolStateWaitingApproval" })
+export type ToolStateWaitingApproval = ToolCallWaitingApprovalState
 
-export const ToolStateWaitingApproval = z
-    .object({
-        status: z.literal("waiting-approval"),
-        approvalID: z.string(),
-        input: z.record(z.string(), z.any()),
-        raw: z.string().optional(),
-        title: z.string().optional(),
-        metadata: z.record(z.string(), z.any()).optional(),
-        time: z.object({
-            start: z.number(),
-        }),
-    })
-    .meta({
-        ref: "ToolStateWaitingApproval",
-    })
-export type ToolStateWaitingApproval = z.infer<typeof ToolStateWaitingApproval>
-
-export const ToolStateDenied = z
-    .object({
-        status: z.literal("denied"),
-        approvalID: z.string().optional(),
-        input: z.record(z.string(), z.any()),
-        raw: z.string().optional(),
-        reason: z.string(),
-        metadata: z.record(z.string(), z.any()).optional(),
-        time: z.object({
-            start: z.number(),
-            end: z.number(),
-        }),
-    })
-    .meta({
-        ref: "ToolStateDenied",
-    })
-export type ToolStateDenied = z.infer<typeof ToolStateDenied>
-
-export const ToolStateCancelled = z
-    .object({
-        status: z.literal("cancelled"),
-        input: z.record(z.string(), z.any()),
-        raw: z.string().optional(),
-        reason: z.string(),
-        metadata: z.record(z.string(), z.any()).optional(),
-        time: z.object({
-            start: z.number(),
-            end: z.number(),
-        }),
-    })
-    .meta({
-        ref: "ToolStateCancelled",
-    })
-export type ToolStateCancelled = z.infer<typeof ToolStateCancelled>
-
-export const ToolStateError = z
-    .object({
-        status: z.literal("error"),
-        input: z.record(z.string(), z.any()),
-        raw: z.string().optional(),
-        error: z.string(),
-        metadata: z.record(z.string(), z.any()).optional(),
-        time: z.object({
-            start: z.number(),
-            end: z.number(),
-        }),
-    })
-    .meta({
-        ref: "ToolStateError",
-    })
-export type ToolStateError = z.infer<typeof ToolStateError>
+export const ToolStateSettled = ToolCallSettledStateSchema.meta({ ref: "ToolStateSettled" })
+export type ToolStateSettled = ToolCallSettledState
 
 export function normalizeToolOutputText(output: unknown): string {
     if (typeof output === "string") return output
@@ -527,31 +443,194 @@ export function normalizeToolOutputText(output: unknown): string {
     return String(output)
 }
 
-export const ToolState = z
-    .discriminatedUnion("status", [
-        ToolStatePending,
-        ToolStateRunning,
-        ToolStateWaitingApproval,
-        ToolStateCompleted,
-        ToolStateDenied,
-        ToolStateCancelled,
-        ToolStateError,
-    ])
-    .meta({
-        ref: "ToolState",
-    })
+export const ToolState = ToolCallStateSchema.meta({ ref: "ToolState" })
+export type ToolState = SharedToolCallState
+
+const ToolCallSnapshotFields = ToolCallSnapshotSchema.shape
 
 export const ToolPart = PartBase.extend({
     type: z.literal("tool"),
-    callID: z.string(),
-    tool: z.string(),
-    providerExecuted: z.boolean().optional(),
+    schemaVersion: z.literal(TOOL_CALL_PROTOCOL_VERSION),
+    turnID: ToolCallSnapshotFields.turnID,
+    executionID: ToolCallSnapshotFields.executionID,
+    callID: ToolCallSnapshotFields.callID,
+    tool: ToolCallSnapshotFields.tool,
+    input: ToolCallSnapshotFields.input,
+    source: ToolCallSnapshotFields.source,
+    parentCallID: ToolCallSnapshotFields.parentCallID,
+    retry: ToolCallSnapshotFields.retry,
+    revision: ToolCallSnapshotFields.revision,
+    timestamps: ToolCallSnapshotFields.timestamps,
+    progress: ToolCallSnapshotFields.progress,
+    presentation: ToolCallSnapshotFields.presentation,
     state: ToolState,
-    metadata: z.record(z.string(), z.any()).optional(),
+}).superRefine((part, context) => {
+    if (part.state.phase === "waiting-approval" && part.timestamps.approvalRequestedAt === undefined) {
+        context.addIssue({
+            code: "custom",
+            path: ["timestamps", "approvalRequestedAt"],
+            message: "A waiting tool call must record when approval was requested.",
+        })
+    }
+    if (part.state.phase === "running" && part.timestamps.startedAt === undefined) {
+        context.addIssue({
+            code: "custom",
+            path: ["timestamps", "startedAt"],
+            message: "A running tool call must record when execution started.",
+        })
+    }
+    if (part.state.phase === "settled" && part.timestamps.settledAt === undefined) {
+        context.addIssue({
+            code: "custom",
+            path: ["timestamps", "settledAt"],
+            message: "A settled tool call must record when it settled.",
+        })
+    }
 }).meta({
     ref: "ToolPart",
 })
 export type ToolPart = z.infer<typeof ToolPart>
+
+export type CreateToolPartInput = {
+    id: string
+    sessionID: string
+    turnID: string
+    messageID: string
+    executionID?: string
+    callID: string
+    tool: string
+    input: Record<string, unknown>
+    raw: string
+    source: ToolCallSource
+    parentCallID?: string
+    retry?: { attempt: number; previousCallID?: string }
+    createdAt?: number
+    presentation?: ToolCallPresentation
+}
+
+export function createToolPart(input: CreateToolPartInput): ToolPart {
+    const createdAt = input.createdAt ?? Date.now()
+    return ToolPart.parse({
+        id: input.id,
+        sessionID: input.sessionID,
+        messageID: input.messageID,
+        type: "tool",
+        schemaVersion: TOOL_CALL_PROTOCOL_VERSION,
+        turnID: input.turnID,
+        executionID: input.executionID,
+        callID: input.callID,
+        tool: input.tool,
+        input: {
+            raw: input.raw,
+            value: input.input,
+        },
+        source: input.source,
+        parentCallID: input.parentCallID,
+        retry: input.retry ?? { attempt: 1 },
+        revision: 0,
+        timestamps: { createdAt },
+        presentation: input.presentation,
+        state: { phase: "pending" },
+    })
+}
+
+function applyToolPartEvent(part: ToolPart, event: ToolCallEvent): ToolPart {
+    const result = applyToolCallEvent(part, event)
+    if (!result.applied) {
+        throw new Error(
+            `Invalid ToolCall v3 transition for '${part.callID}': ${result.reason}.`,
+        )
+    }
+    return ToolPart.parse({ ...part, ...result.call })
+}
+
+export function appendToolPartInput(
+    part: ToolPart,
+    input: {
+        delta: string
+        value?: Record<string, unknown>
+        timestamp?: number
+        presentation?: ToolCallPresentation
+        source?: ToolCallSource
+    },
+) {
+    return applyToolPartEvent(part, {
+        type: "tool.call.input_delta",
+        callID: part.callID,
+        revision: part.revision + 1,
+        timestamp: input.timestamp ?? Date.now(),
+        delta: input.delta,
+        value: input.value,
+        presentation: input.presentation,
+        source: input.source,
+    })
+}
+
+export function changeToolPartPhase(
+    part: ToolPart,
+    state: ToolCallWaitingApprovalState | ToolCallRunningState,
+    options?: { timestamp?: number; presentation?: ToolCallPresentation; source?: ToolCallSource },
+) {
+    return applyToolPartEvent(part, {
+        type: "tool.call.phase_changed",
+        callID: part.callID,
+        revision: part.revision + 1,
+        timestamp: options?.timestamp ?? Date.now(),
+        state,
+        presentation: options?.presentation,
+        source: options?.source,
+    })
+}
+
+export function settleToolPart(
+    part: ToolPart,
+    outcome: ToolCallOutcome,
+    control: ToolCallTurnControl,
+    options?: { timestamp?: number; presentation?: ToolCallPresentation },
+) {
+    return applyToolPartEvent(part, {
+        type: "tool.call.settled",
+        callID: part.callID,
+        revision: part.revision + 1,
+        timestamp: options?.timestamp ?? Date.now(),
+        outcome,
+        control,
+        presentation: options?.presentation,
+    })
+}
+
+export function toolPartInput(part: ToolPart) {
+    return part.input.value ?? {}
+}
+
+export function toolPartReturnedOutcome(part: ToolPart) {
+    return part.state.phase === "settled" && part.state.outcome.kind === "returned"
+        ? part.state.outcome
+        : undefined
+}
+
+export function toolPartOutcome(part: ToolPart) {
+    return part.state.phase === "settled" ? part.state.outcome : undefined
+}
+
+export function toolPartMetadata(part: ToolPart) {
+    return toolPartOutcome(part)?.metadata ?? part.presentation?.metadata
+}
+
+export function toolPartTitle(part: ToolPart) {
+    const outcome = toolPartReturnedOutcome(part)
+    return outcome?.title ?? part.presentation?.title
+}
+
+export function toolPartAttachments(part: ToolPart): AttachmentPart[] | undefined {
+    const attachments = toolPartReturnedOutcome(part)?.attachments
+    if (!attachments) return undefined
+    const parsed = attachments
+        .map((attachment) => AttachmentPart.safeParse(attachment))
+        .filter((result): result is { success: true; data: AttachmentPart } => result.success)
+        .map((result) => result.data)
+    return parsed.length > 0 ? parsed : undefined
+}
 
 export const PermissionPart = PartBase.extend({
     type: z.literal("permission"),
@@ -961,12 +1040,13 @@ function omittedImageWindowText(part: ImagePart | FilePart) {
 }
 
 function toolPartHasImageResult(part: ToolPart) {
-    if (part.state.status !== "completed") return false
-    if (part.state.attachments?.some((attachment) => attachment.mime.trim().toLowerCase().startsWith("image/"))) {
+    const returned = toolPartReturnedOutcome(part)
+    if (!returned) return false
+    if (toolPartAttachments(part)?.some((attachment) => attachment.mime.trim().toLowerCase().startsWith("image/"))) {
         return true
     }
 
-    const modelOutput = part.state.modelOutput
+    const modelOutput = returned.modelOutput
     if (!modelOutput || typeof modelOutput !== "object" || Array.isArray(modelOutput)) return false
     const output = modelOutput as Record<string, unknown>
     if (output.type !== "content" || !Array.isArray(output.value)) return false
@@ -980,7 +1060,8 @@ function toolPartHasImageResult(part: ToolPart) {
 }
 
 function omittedToolResultImageText(part: ToolPart) {
-    const output = part.state.status === "completed" ? part.state.output : ""
+    const returned = toolPartReturnedOutcome(part)
+    const output = returned ? normalizeToolOutputText(returned.output) : ""
     return [
         output,
         "Image content from this tool result was omitted from model input due to the tool-result image history window.",
@@ -1224,37 +1305,53 @@ export async function toModelMessages(
 
     async function resolveToolModelOutput(part: ToolPart): Promise<Exclude<Tool.ToolModelOutput, string>> {
         const state = part.state
-        if (state.status === "denied") {
+        if (state.phase !== "settled") {
+            return {
+                type: "error-text",
+                value: "Tool execution has not settled.",
+            }
+        }
+
+        const outcome = state.outcome
+        if (outcome.kind === "denied") {
             return {
                 type: "execution-denied",
-                reason: state.reason,
+                reason: outcome.reason,
             }
         }
 
-        if (state.status === "error") {
+        if (outcome.kind === "failed") {
             return {
                 type: "error-text",
-                value: state.error,
+                value: outcome.error.message,
             }
         }
 
-        if (state.status === "cancelled") {
+        if (outcome.kind === "cancelled" || outcome.kind === "timeout" || outcome.kind === "blocked") {
             return {
                 type: "error-text",
-                value: state.reason,
+                value: outcome.reason,
             }
         }
 
-        if (part.providerExecuted && state.status === "completed" && state.modelOutput !== undefined) {
-            return state.modelOutput as Exclude<Tool.ToolModelOutput, string>
-        }
-
-        const completed = state as ToolStateCompleted
+        const completed = outcome
         if (omittedToolResultImagePartIDs.has(part.id)) {
             return {
                 type: "text",
                 value: omittedToolResultImageText(part),
             }
+        }
+
+        const persisted = ToolResultPersistence.readPersistedOutputMetadata(completed.metadata ?? {})
+        if (persisted) {
+            return {
+                type: "text",
+                value: persisted.replacement,
+            }
+        }
+
+        if (part.source.kind === "provider" && outcome.modelOutput !== undefined) {
+            return outcome.modelOutput as Exclude<Tool.ToolModelOutput, string>
         }
 
         const cachedRuntime = toolRuntimeCache.get(part.tool) ?? (async () => {
@@ -1280,25 +1377,17 @@ export async function toModelMessages(
             return {
                 type: "text",
                 value: [
-                    completed.output,
+                    normalizeToolOutputText(completed.output),
                     `${modelRequirementFailure} Only textual metadata from the historical result is being replayed; no image bytes were sent to the model.`,
                 ].filter(Boolean).join("\n\n"),
             }
         }
 
-        const persisted = ToolResultPersistence.readPersistedOutputMetadata(completed.metadata)
-        if (persisted) {
-            return {
-                type: "text",
-                value: persisted.replacement,
-            }
-        }
-
         const reconstructed = {
-            text: completed.output,
-            title: completed.title,
-            metadata: completed.metadata,
-            attachments: completed.attachments?.map((attachment) => ({
+            text: normalizeToolOutputText(completed.output),
+            title: completed.title ?? toolPartTitle(part) ?? part.tool,
+            metadata: completed.metadata ?? {},
+            attachments: toolPartAttachments(part)?.map((attachment) => ({
                 url: attachment.url,
                 mime: attachment.mime,
                 filename: attachment.filename,
@@ -1339,6 +1428,7 @@ export async function toModelMessages(
         for (const part of orderedParts) {
             if (aiRole === "assistant" && part.type === "tool") {
                 const state = part.state
+                const providerExecuted = part.source.kind === "provider"
                 const approvals = approvalsByToolCallID.get(part.callID) ?? []
                 const approvalRequest = approvals.find((approval) => approval.action === "ask")
                 const approvalResponse = approvals.find(
@@ -1346,20 +1436,17 @@ export async function toModelMessages(
                 )
 
                 if (
-                    state.status === "waiting-approval" ||
-                    state.status === "completed" ||
-                    state.status === "error" ||
-                    state.status === "denied" ||
-                    state.status === "cancelled"
+                    state.phase === "waiting-approval" ||
+                    state.phase === "settled"
                 ) {
-                    const toolName = modelSafeToolName(part.tool, part.providerExecuted)
-                    const toolCallProviderOptions = providerOptionsFromMetadata(part.metadata)
+                    const toolName = modelSafeToolName(part.tool, providerExecuted)
+                    const toolCallProviderOptions = providerOptionsFromMetadata(part.source.metadata)
                     assistantContent.push({
                         type: "tool-call" as const,
                         toolCallId: part.callID,
                         toolName,
-                        input: state.input,
-                        ...(part.providerExecuted ? { providerExecuted: true } : {}),
+                        input: toolPartInput(part),
+                        ...(providerExecuted ? { providerExecuted: true } : {}),
                         ...(toolCallProviderOptions ? { providerOptions: toolCallProviderOptions } : {}),
                     })
 
@@ -1371,8 +1458,8 @@ export async function toModelMessages(
                         })
                     }
 
-                    if (part.providerExecuted && (state.status === "completed" || state.status === "error" || state.status === "cancelled")) {
-                        const toolResultProviderOptions = providerOptionsFromMetadata(state.metadata)
+                    if (providerExecuted && state.phase === "settled") {
+                        const toolResultProviderOptions = providerOptionsFromMetadata(part.source.metadata)
                         assistantContent.push({
                             type: "tool-result" as const,
                             toolCallId: part.callID,
@@ -1387,11 +1474,11 @@ export async function toModelMessages(
                             approvalId: approvalRequest.approvalID,
                             approved: approvalResponse.action === "allow",
                             reason: approvalResponse.reason,
-                            ...(part.providerExecuted ? { providerExecuted: true } : {}),
+                            ...(providerExecuted ? { providerExecuted: true } : {}),
                         })
                     }
 
-                    if (!part.providerExecuted && (state.status === "completed" || state.status === "error" || state.status === "denied" || state.status === "cancelled")) {
+                    if (!providerExecuted && state.phase === "settled") {
                         toolContent.push({
                             type: "tool-result" as const,
                             toolCallId: part.callID,

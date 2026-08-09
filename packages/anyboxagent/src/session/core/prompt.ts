@@ -1,5 +1,5 @@
 import { Instance } from "#project/instance.ts";
-import { ToolModuleIDSchema } from "@anybox/shared"
+import { ToolModuleIDSchema, type ToolCallTurnControl } from "@anybox/shared"
 import * as Log from "#util/log.ts";
 import z from "zod";
 import * as Identifier from "#id/id.ts";
@@ -24,6 +24,7 @@ import * as RuntimeEvent from "#session/runtime/runtime-event.ts"
 import * as SessionTitle from "#session/support/title.ts"
 import * as PromptPresets from "#session/support/prompt-presets.ts"
 import * as TurnError from "#session/core/turn-error.ts"
+import * as Tool from "#tool/tool.ts"
 
 import * as Message from "./message";
 import { resolveToolPlan } from "./resolve-tools.ts";
@@ -198,7 +199,7 @@ async function persistRecoveredToolError(
     turn?: Orchestrator.TurnContext,
 ) {
     if (turn) {
-        turn.emit("tool.call.failed", {
+        turn.emit("tool.call.settled", {
             part,
         })
         return
@@ -298,38 +299,46 @@ function resolveRuntimeAgentName(session: Session.SessionInfo, requestedAgentNam
 }
 
 function summarizeRuntimeTool(part: Message.ToolPart) {
+    const outcome = Message.toolPartOutcome(part)
+    const returned = Message.toolPartReturnedOutcome(part)
     return {
         callID: part.callID,
         tool: part.tool,
-        status: part.state.status,
+        phase: part.state.phase,
+        outcome: outcome?.kind,
+        result: returned?.result,
+        completeness: returned?.completeness,
+        turnControl: part.state.phase === "settled" ? part.state.control.mode : undefined,
     }
 }
 
-function isAskUserQuestionPart(part: Message.Part): part is Message.ToolPart & {
-    state: Message.ToolStateCompleted
-} {
-    if (part.type !== "tool" || part.state.status !== "completed") {
+function isAskUserQuestionPart(part: Message.Part): part is Message.ToolPart {
+    if (part.type !== "tool" || Tool.toModelToolName(part.tool) !== "ask_user_question") {
         return false
     }
 
-    const metadata = part.state.metadata
-    return Boolean(
+    const metadata = Message.toolPartMetadata(part)
+    const isUnansweredQuestion = Boolean(
         metadata &&
         typeof metadata === "object" &&
         !Array.isArray(metadata) &&
         metadata.kind === "ask-user-question" &&
         metadata.answered !== true,
     )
+    if (!isUnansweredQuestion) return false
+
+    if (part.state.phase === "running") return true
+    return part.state.phase === "settled" && part.state.control.mode === "wait-user"
 }
 
 function inferFailurePhase(parts: Message.Part[]): RuntimeEvent.TurnRuntimePhase | undefined {
     const toolParts = parts.filter((part): part is Message.ToolPart => part.type === "tool")
 
-    if (toolParts.some((part) => part.state.status === "waiting-approval")) {
+    if (toolParts.some((part) => part.state.phase === "waiting-approval")) {
         return "waiting_approval"
     }
 
-    if (toolParts.some((part) => part.state.status === "running" || part.state.status === "pending")) {
+    if (toolParts.some((part) => part.state.phase === "running" || part.state.phase === "pending")) {
         return "executing_tool"
     }
 
@@ -354,9 +363,9 @@ function emitTurnFailureContext(input: {
     const toolParts = input.parts.filter((part): part is Message.ToolPart => part.type === "tool")
     const activeTools = toolParts
         .filter((part) =>
-            part.state.status === "pending" ||
-            part.state.status === "running" ||
-            part.state.status === "waiting-approval",
+            part.state.phase === "pending" ||
+            part.state.phase === "running" ||
+            part.state.phase === "waiting-approval",
         )
         .map(summarizeRuntimeTool)
     const latestTool = toolParts.length > 0 ? summarizeRuntimeTool(toolParts[toolParts.length - 1]!) : undefined
@@ -440,28 +449,24 @@ function cancelInterruptedToolPart(
     detail: string,
 ) {
     if (
-        part.state.status !== "pending" &&
-        part.state.status !== "running" &&
-        part.state.status !== "waiting-approval"
+        part.state.phase !== "pending" &&
+        part.state.phase !== "running" &&
+        part.state.phase !== "waiting-approval"
     ) {
         return null
     }
 
-    const metadata = "metadata" in part.state ? part.state.metadata : undefined
-    return Message.ToolPart.parse({
-        ...part,
-        state: {
-            status: "cancelled",
-            input: part.state.input,
-            raw: part.state.raw,
-            reason: detail,
-            ...(metadata ? { metadata } : {}),
-            time: {
-                start: "time" in part.state ? part.state.time.start : turn.createdAt,
-                end: endedAt,
-            },
-        },
-    })
+    const metadata = Message.toolPartMetadata(part)
+    return Message.settleToolPart(part, {
+        kind: "cancelled",
+        reason: detail,
+        by: "framework",
+        ...(metadata ? { metadata } : {}),
+        execution: Tool.toolExecutionSemantics(undefined),
+    }, {
+        mode: "cancel-turn",
+        reason: detail,
+    }, { timestamp: endedAt })
 }
 
 function reconcileInterruptedTurn(
@@ -559,6 +564,8 @@ function finishPromptTurnFromResult(
 ) {
     const phase = result.status === "blocked"
         ? "blocked"
+        : result.status === "cancelled"
+            ? "cancelled"
         : result.status === "failed"
             ? "failed"
             : result.status === "continued_by_user"
@@ -573,6 +580,15 @@ function finishPromptTurnFromResult(
         error: result.errorInfo?.message,
         errorInfo: result.errorInfo,
     })
+
+    if (result.status === "cancelled") {
+        emitTurnCancelled({
+            turn,
+            reason: "unknown",
+            detail: result.cancellationDetail ?? "A tool requested cancellation of the current turn.",
+        })
+        return
+    }
 
     if (result.status === "failed") {
         const errorInfo = result.errorInfo ?? TurnError.fromMessage("Assistant turn failed.", "TurnFailed")
@@ -686,9 +702,10 @@ export function cancel(sessionID: string) {
 
 type RunLoopResult = {
     latest: Message.WithParts
-    status: "completed" | "blocked" | "failed" | "continued_by_user"
+    status: "completed" | "blocked" | "cancelled" | "failed" | "continued_by_user"
     finishReason?: string
     errorInfo?: TurnError.TurnErrorInfo
+    cancellationDetail?: string
 }
 
 type AssistantWithParts = Message.WithParts & {
@@ -725,6 +742,7 @@ async function runLoop(input: LoopRuntimeInput): Promise<RunLoopResult> {
         throw new Error(`Session '${sessionID}' was not found.`);
     }
     let currentAssistant: Message.Assistant | undefined;
+    let terminalToolControl: ToolCallTurnControl | undefined;
     let turnDiffStartSnapshot: string | undefined;
     let turnDiffEndSnapshot: string | undefined;
     let continuedByUser = false;
@@ -817,7 +835,7 @@ async function runLoop(input: LoopRuntimeInput): Promise<RunLoopResult> {
                     assistantID: blockingInteraction.assistant.id,
                     toolCallID: blockingInteraction.toolPart.callID,
                     tool: blockingInteraction.toolPart.tool,
-                    status: blockingInteraction.toolPart.state.status,
+                    phase: blockingInteraction.toolPart.state.phase,
                     interaction: blockingInteraction.kind,
                     questionID:
                         blockingInteraction.kind === "question"
@@ -1009,6 +1027,18 @@ async function runLoop(input: LoopRuntimeInput): Promise<RunLoopResult> {
             })
             turnDiffEndSnapshot = modelCallEndSnapshot ?? turnDiffEndSnapshot
 
+            const processorTurnControl = processor.turnControl
+            if (
+                processorTurnControl?.mode === "wait-user" ||
+                processorTurnControl?.mode === "finish-turn" ||
+                processorTurnControl?.mode === "cancel-turn" ||
+                processorTurnControl?.mode === "fail-turn"
+            ) {
+                terminalToolControl = processorTurnControl
+                turn.setAcceptingSteer(false)
+                break
+            }
+
             if (await SessionRunner.consumePendingSteer(sessionID, turn.turnID) > 0) {
                 continuedByUser = true
                 turn.setAcceptingSteer(false)
@@ -1076,25 +1106,44 @@ async function runLoop(input: LoopRuntimeInput): Promise<RunLoopResult> {
         const finishReason = latest.info.role === "assistant" ? latest.info.finishReason : undefined
         const blockedByApproval = latest.parts.some(
             (part): part is Message.ToolPart =>
-                part.type === "tool" && part.state.status === "waiting-approval",
+                part.type === "tool" && part.state.phase === "waiting-approval",
         )
         const blockedByQuestion = latest.parts.some(isAskUserQuestionPart)
-        const blocked = blockedByApproval || blockedByQuestion
+        const blockedByControl = terminalToolControl?.mode === "wait-user"
+        const blocked = blockedByApproval || blockedByQuestion || blockedByControl
+        const cancelledByControl = terminalToolControl?.mode === "cancel-turn"
         const assistantErrorInfo = latest.info.role === "assistant"
             ? TurnError.fromAssistantError(latest.info.error)
             : undefined
-        const stoppedWithoutCompletion = !continuedByUser && !blocked && !assistantErrorInfo && !isFinalFinishReason(finishReason)
+        const toolControlErrorInfo = terminalToolControl?.mode === "fail-turn"
+            ? TurnError.fromMessage(
+                terminalToolControl.reason ?? "A tool requested failure of the current turn.",
+                "ToolRequestedTurnFailure",
+            )
+            : undefined
+        const stoppedWithoutCompletion = !continuedByUser && !blocked && !cancelledByControl && !assistantErrorInfo && !isFinalFinishReason(finishReason)
             ? TurnError.fromMessage(
                 "Assistant turn stopped before producing a final response.",
                 "TurnStoppedWithoutCompletion",
             )
             : undefined
-        const errorInfo = assistantErrorInfo ?? stoppedWithoutCompletion
+        const errorInfo = toolControlErrorInfo ?? (cancelledByControl ? undefined : assistantErrorInfo) ?? stoppedWithoutCompletion
 
         return {
             latest,
-            status: continuedByUser ? "continued_by_user" : blocked ? "blocked" : errorInfo ? "failed" : "completed",
+            status: continuedByUser
+                ? "continued_by_user"
+                : cancelledByControl
+                    ? "cancelled"
+                    : blocked
+                        ? "blocked"
+                        : errorInfo
+                            ? "failed"
+                            : "completed",
             finishReason,
+            cancellationDetail: cancelledByControl
+                ? terminalToolControl?.reason ?? "A tool requested cancellation of the current turn."
+                : undefined,
             errorInfo: errorInfo
                 ? TurnError.withModelContext(
                     errorInfo,
@@ -1553,13 +1602,24 @@ function findBlockingAssistantInteractionAfterUser(
         if (message.info.role !== "assistant") continue;
         if (isLegacyCompactionAssistantMessage(message)) continue;
 
+        const questionPart = message.parts.find(isAskUserQuestionPart)
+        if (questionPart) {
+            const metadata = Message.toolPartMetadata(questionPart) ?? {}
+            return {
+                kind: "question" as const,
+                assistant: message.info as Message.Assistant,
+                toolPart: questionPart,
+                questionID: typeof metadata.questionID === "string" ? metadata.questionID : undefined,
+            }
+        }
+
         const toolPart = message.parts.find(
             (part): part is Message.ToolPart =>
                 part.type === "tool" &&
                 (
-                    part.state.status === "pending" ||
-                    part.state.status === "running" ||
-                    part.state.status === "waiting-approval"
+                    part.state.phase === "pending" ||
+                    part.state.phase === "running" ||
+                    part.state.phase === "waiting-approval"
                 ),
         );
 
@@ -1569,17 +1629,6 @@ function findBlockingAssistantInteractionAfterUser(
                 assistant: message.info as Message.Assistant,
                 toolPart,
             };
-        }
-
-        const questionPart = message.parts.find(isAskUserQuestionPart)
-        if (questionPart) {
-            const metadata = questionPart.state.metadata as Record<string, unknown>
-            return {
-                kind: "question" as const,
-                assistant: message.info as Message.Assistant,
-                toolPart: questionPart,
-                questionID: typeof metadata.questionID === "string" ? metadata.questionID : undefined,
-            }
         }
     }
 }
@@ -1603,29 +1652,24 @@ async function recoverDanglingToolCallsAfterUser(
 
         for (const part of message.parts) {
             if (part.type !== "tool") continue
-            if (part.state.status !== "pending" && part.state.status !== "running") continue
+            if (part.state.phase !== "pending" && part.state.phase !== "running") continue
+            if (isAskUserQuestionPart(part)) continue
 
             const end = Date.now()
-            const repaired = Message.ToolPart.parse({
-                ...part,
-                state: {
-                    status: "error",
-                    input: part.state.input,
-                    raw: part.state.raw,
-                    error: DANGLING_TOOL_CALL_ERROR,
-                    metadata:
-                        part.state.status === "running"
-                            ? part.state.metadata
-                            : undefined,
-                    time: {
-                        start:
-                            part.state.status === "running"
-                                ? part.state.time.start
-                                : end,
-                        end,
-                    },
-                },
-            })
+            const repaired = Message.settleToolPart(part, {
+                kind: "failed",
+                error: Tool.toolFailure(DANGLING_TOOL_CALL_ERROR, {
+                    stage: "internal",
+                    source: "runtime",
+                    code: "DANGLING_TOOL_CALL",
+                    handlerExecuted: false,
+                }),
+                metadata: Message.toolPartMetadata(part),
+                execution: Tool.toolExecutionSemantics(undefined),
+            }, {
+                mode: "continue-model",
+                reason: DANGLING_TOOL_CALL_ERROR,
+            }, { timestamp: end })
 
             await persistRecoveredToolError(repaired, turn)
             recovered += 1

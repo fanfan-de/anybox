@@ -11,6 +11,12 @@ import type {
 } from "../../../shared/permission"
 import type {
   ReasoningEffort as SharedReasoningEffort,
+  ToolCallOutcome,
+  ToolCallPhase,
+  ToolCallResultCompleteness,
+  ToolCallResultPolarity,
+  ToolCallSnapshot,
+  ToolCallTurnControlMode,
   ToolModuleActivationMode,
   ToolModuleActivationScope,
   ToolModuleDiscoveryMode,
@@ -717,7 +723,11 @@ export interface SessionRuntimeToolSummary {
   callID: string
   tool: string
   title?: string
-  status: string
+  phase: ToolCallPhase
+  outcome?: ToolCallOutcome["kind"]
+  result?: ToolCallResultPolarity
+  completeness?: ToolCallResultCompleteness
+  turnControl?: ToolCallTurnControlMode
   startedAt?: number
   endedAt?: number
   durationMs?: number
@@ -769,12 +779,20 @@ export interface SessionRuntimeErrorContext {
   activeTools: Array<{
     callID: string
     tool: string
-    status: string
+    phase: ToolCallPhase
+    outcome?: ToolCallOutcome["kind"]
+    result?: ToolCallResultPolarity
+    completeness?: ToolCallResultCompleteness
+    turnControl?: ToolCallTurnControlMode
   }>
   latestTool?: {
     callID: string
     tool: string
-    status: string
+    phase: ToolCallPhase
+    outcome?: ToolCallOutcome["kind"]
+    result?: ToolCallResultPolarity
+    completeness?: ToolCallResultCompleteness
+    turnControl?: ToolCallTurnControlMode
   }
 }
 
@@ -1169,6 +1187,8 @@ export interface AssistantTraceItem {
   partID?: string
   approvalID?: string
   toolCallID?: string
+  /** Canonical ToolCall v3 state. Tool trace items do not use `status`. */
+  toolCall?: ToolCallSnapshot
   section?: AssistantTraceSectionKey
   visibilityKey?: AssistantTraceVisibilityKey
   isStreaming?: boolean

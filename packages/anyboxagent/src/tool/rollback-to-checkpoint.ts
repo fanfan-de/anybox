@@ -136,6 +136,10 @@ export const RollbackToCheckpointTool = Tool.define(
             preRestoreSnapshot: restore?.preRestoreSnapshot,
             restoredFiles: restore?.restoredFiles ?? [],
           },
+          control: {
+            mode: "restart-loop",
+            reason: "The active session head moved to a corrective branch.",
+          },
         }
       },
       toModelOutput: async (result) => {

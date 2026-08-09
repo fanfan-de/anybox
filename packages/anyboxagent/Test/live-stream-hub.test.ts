@@ -11,6 +11,25 @@ function createFactory() {
   })
 }
 
+function toolPart(raw: string, revision = 0) {
+  return {
+    id: "tool-part-1",
+    sessionID: "session-test",
+    messageID: "assistant-1",
+    type: "tool" as const,
+    schemaVersion: 3 as const,
+    turnID: "turn-test",
+    callID: "call-1",
+    tool: "write",
+    input: { raw },
+    source: { kind: "model" as const },
+    retry: { attempt: 1 },
+    revision,
+    timestamps: { createdAt: 1 },
+    state: { phase: "pending" as const },
+  }
+}
+
 function withEnv(name: string, value: string, fn: () => void) {
   const previous = process.env[name]
   process.env[name] = value
@@ -126,7 +145,8 @@ describe("live stream hub", () => {
 
   it("coalesces queued tool input deltas for slow subscribers", async () => {
     const factory = createFactory()
-    const first = factory.next("tool.input.delta", {
+    const first = factory.next("tool.call.input_delta", {
+      part: toolPart("{\"p", 1),
       messageID: "assistant-1",
       partID: "tool-part-1",
       toolCallID: "call-1",
@@ -134,7 +154,8 @@ describe("live stream hub", () => {
       delta: "{\"p",
       rawLength: 3,
     })
-    const second = factory.next("tool.input.delta", {
+    const second = factory.next("tool.call.input_delta", {
+      part: toolPart("{\"p\":1}", 2),
       messageID: "assistant-1",
       partID: "tool-part-1",
       toolCallID: "call-1",
@@ -153,8 +174,8 @@ describe("live stream hub", () => {
       LiveStreamHub.publish(second)
 
       const next = await subscription.next()
-      if (next?.type !== "tool.input.delta") {
-        throw new Error(`Expected tool.input.delta, got ${next?.type}`)
+      if (next?.type !== "tool.call.input_delta") {
+        throw new Error(`Expected tool.call.input_delta, got ${next?.type}`)
       }
       expect(next?.seq).toBe(second.seq)
       expect(next.payload.delta).toBe("{\"p\":1}")
@@ -166,7 +187,14 @@ describe("live stream hub", () => {
 
   it("buffers recent transient events for late subscribers", async () => {
     const factory = createFactory()
-    const delta = factory.next("tool.input.delta", {
+    const delta = factory.next("tool.call.input_delta", {
+      part: {
+        ...toolPart("{\"cmd\":\"patch\"}", 1),
+        id: "tool-part-late",
+        messageID: "assistant-late",
+        callID: "call-late",
+        tool: "apply_patch",
+      },
       messageID: "assistant-late",
       partID: "tool-part-late",
       toolCallID: "call-late",
@@ -191,7 +219,7 @@ describe("live stream hub", () => {
     try {
       const next = await subscription.next()
       expect(next?.eventID).toBe(delta.eventID)
-      expect(next?.type).toBe("tool.input.delta")
+      expect(next?.type).toBe("tool.call.input_delta")
     } finally {
       subscription.close()
     }

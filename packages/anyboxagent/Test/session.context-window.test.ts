@@ -498,19 +498,18 @@ test("preparePromptContext prunes oversized tool outputs when compaction cannot 
           type: "tool",
           callID: "tool-1",
           tool: "read_file",
-          state: {
-            status: "completed",
-            input: {
+          schemaVersion: 3,
+          turnID: "turn-test",
+          input: { raw: JSON.stringify({
               path: "README.md",
-            },
-            output: "line ".repeat(1_600),
-            title: "read_file",
-            metadata: {},
-            time: {
-              start: Date.now(),
-              end: Date.now() + 1,
-            },
-          },
+            }), value: {
+              path: "README.md",
+            } },
+          source: { kind: "model" },
+          retry: { attempt: 1 },
+          revision: 1,
+          timestamps: { createdAt: Date.now(), settledAt: Date.now() + 1 },
+          state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: "line ".repeat(1_600), title: "read_file", metadata: {}, execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
         })
 
         const prepared = await ContextWindow.preparePromptContext({
@@ -541,11 +540,15 @@ test("preparePromptContext prunes oversized tool outputs when compaction cannot 
         )
 
         expect(prunedTool).toBeDefined()
-        const prunedToolState = prunedTool?.state as Message.ToolStateCompleted | undefined
-        const originalToolState = toolPart.state as Message.ToolStateCompleted
-        if (prunedToolState?.status === "completed") {
-          expect(prunedToolState.output.length).toBeLessThan(originalToolState.output.length)
-        }
+        if (
+          !prunedTool ||
+          prunedTool.state.phase !== "settled" ||
+          prunedTool.state.outcome.kind !== "returned" ||
+          toolPart.state.phase !== "settled" ||
+          toolPart.state.outcome.kind !== "returned"
+        ) throw new Error("Expected returned tool outputs before and after pruning.")
+        expect(String(prunedTool.state.outcome.output).length)
+          .toBeLessThan(String(toolPart.state.outcome.output).length)
       },
     })
   } finally {
@@ -601,20 +604,20 @@ test("fallback compaction preserves tool input when the result omits the shell c
                 type: "tool",
                 callID: "call-shell-result",
                 tool: "powershell_command",
-                state: {
-                  status: "completed",
-                  input: {
+                schemaVersion: 3,
+                turnID: "turn-test",
+                input: { raw: JSON.stringify({
                     command,
                     tty: false,
-                  },
-                  output: "Exit: 0\nSTDOUT:\n2026-08-07T12:00:00.0000000+08:00\nSTDERR:\n(no stderr)",
-                  title: "PowerShell command completed",
-                  metadata: {},
-                  time: {
-                    start: 1,
-                    end: 2,
-                  },
-                },
+                  }), value: {
+                    command,
+                    tty: false,
+                  } },
+                source: { kind: "model" },
+                retry: { attempt: 1 },
+                revision: 1,
+                timestamps: { createdAt: 1, settledAt: 2 },
+                state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: "Exit: 0\nSTDOUT:\n2026-08-07T12:00:00.0000000+08:00\nSTDERR:\n(no stderr)", title: "PowerShell command completed", metadata: {}, execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
               } as Message.ToolPart,
             ]
           : [
@@ -647,7 +650,7 @@ test("fallback compaction preserves tool input when the result omits the shell c
   if (!recorded) throw new Error("Expected fallback compaction to be recorded")
   const textPart = recorded.parts.find((part): part is Message.TextPart => part.type === "text")
   expect(textPart?.text).toContain(`tool powershell_command input: {"command":"${command}","tty":false}`)
-  expect(textPart?.text).toContain("completed: Exit: 0")
+  expect(textPart?.text).toContain("returned (success, complete): Exit: 0")
 })
 
 test("CompactionPart is internal and is not sent to the model", async () => {

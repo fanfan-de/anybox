@@ -687,7 +687,16 @@ function createShellCommandTool<Parameters extends z.ZodType>(
         validate: async (parameters, ctx) => {
           const input = shellInput(parameters)
           if (ctx.abort?.aborted) {
-            return "Tool execution was cancelled before command start."
+            const reason = "Tool execution was cancelled before command start."
+            throw new Tool.ToolControlSignal({
+              kind: "cancelled",
+              reason,
+              by: "framework",
+              execution: Tool.toolExecutionSemantics(undefined, {
+                sideEffect: "none",
+                retry: "safe",
+              }),
+            }, { mode: "cancel-turn", reason })
           }
 
           const command = input.command.trim()
@@ -756,7 +765,16 @@ function createShellCommandTool<Parameters extends z.ZodType>(
         execute: async (parameters, ctx) => {
           const input = shellInput(parameters)
           if (ctx.abort?.aborted) {
-            throw new Error("Tool execution was cancelled before command start.")
+            const reason = "Tool execution was cancelled before command start."
+            throw new Tool.ToolControlSignal({
+              kind: "cancelled",
+              reason,
+              by: "framework",
+              execution: Tool.toolExecutionSemantics(undefined, {
+                sideEffect: "none",
+                retry: "safe",
+              }),
+            }, { mode: "cancel-turn", reason })
           }
 
           const cwd = resolveCommandCwd(input, ctx)
@@ -797,7 +815,7 @@ function createShellCommandTool<Parameters extends z.ZodType>(
                 ? `${config.title} command aborted`
                 : result.exitCode === 0
                   ? `${config.title} command completed`
-                  : `${config.title} command failed`
+                  : `${config.title} command returned a non-zero exit code`
 
             const normalizedStdout = result.stdout.trimEnd()
             const normalizedStderr = result.stderr.trimEnd()
@@ -822,6 +840,13 @@ function createShellCommandTool<Parameters extends z.ZodType>(
                 "",
                 ...outputSections,
               ].filter(Boolean).join("\n"),
+              result: result.exitCode === 0 ? "success" as const : "negative" as const,
+              completeness:
+                result.stdoutTruncated || result.stderrTruncated || result.terminalOutputTruncated
+                  ? "partial" as const
+                  : "complete" as const,
+              sideEffect: "possible" as const,
+              retry: "unknown" as const,
               metadata: {
                 command,
                 shell: invocation.shell,
@@ -888,7 +913,30 @@ function createShellCommandTool<Parameters extends z.ZodType>(
             if (snapshot.status === "running") {
               await registry.stop(task.id, ctx.sessionID)
             }
-            return formatCompleted(registry.take(task.id, ctx.sessionID) ?? snapshot, aborted)
+            const completed = formatCompleted(registry.take(task.id, ctx.sessionID) ?? snapshot, aborted)
+            const execution = Tool.toolExecutionSemantics(undefined, {
+              sideEffect: "possible",
+              retry: "unknown",
+            })
+            if (aborted) {
+              const reason = "Shell command execution was cancelled."
+              throw new Tool.ToolControlSignal({
+                kind: "cancelled",
+                reason,
+                by: "framework",
+                metadata: completed.metadata,
+                execution,
+              }, { mode: "cancel-turn", reason })
+            }
+            const reason = "Shell command execution exceeded its configured timeout."
+            throw new Tool.ToolControlSignal({
+              kind: "timeout",
+              reason,
+              timeoutMs,
+              partialOutput: completed.text,
+              metadata: completed.metadata,
+              execution,
+            }, { mode: "continue-model", reason })
           }
 
           if (snapshot.status !== "running") {
@@ -935,6 +983,10 @@ function createShellCommandTool<Parameters extends z.ZodType>(
                 : `Use write_stdin with session_id=${task.id} and empty chars to read new output, or chars=\\u0003 for cooperative Ctrl-C.`,
               "Ctrl-C does not guarantee that the process exits. If it remains running, tell the user to force terminate it from Session Information > Background Processes.",
             ].filter(Boolean).join("\n"),
+            result: "success",
+            completeness: "partial",
+            sideEffect: "possible",
+            retry: "unsafe",
             metadata: {
               command,
               shell: invocation.shell,
@@ -983,16 +1035,9 @@ function createShellCommandTool<Parameters extends z.ZodType>(
               signal: metadata.signal,
               timedOut: metadata.timedOut,
               aborted: metadata.aborted,
-              status:
-                metadata.runInBackground
-                  ? "background_started"
-                  : metadata.timedOut
-                    ? "timed_out"
-                    : metadata.aborted
-                      ? "aborted"
-                      : metadata.exitCode === 0
-                        ? "ok"
-                        : "failed",
+              result: result.result ?? "success",
+              completeness: result.completeness ?? "complete",
+              processState: metadata.runInBackground ? "running" : "settled",
               backgroundTaskId: metadata.backgroundTaskId,
               ...(metadata.sessionID ? { session_id: metadata.sessionID } : {}),
               ...(typeof metadata.backgroundTaskCursor === "number"

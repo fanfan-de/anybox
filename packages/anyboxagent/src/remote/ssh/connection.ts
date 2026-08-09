@@ -29,6 +29,8 @@ export interface RemoteExecResult {
   exitCode: number
   stdout: string
   stderr: string
+  stdoutTruncated: boolean
+  stderrTruncated: boolean
   durationMs: number
 }
 
@@ -274,6 +276,8 @@ export async function exec(profileID: string, cwd: string, command: string, opti
   return await new Promise<RemoteExecResult>((resolve, reject) => {
     let stdout = ""
     let stderr = ""
+    let stdoutTruncated = false
+    let stderrTruncated = false
     let settled = false
     let streamRef: ClientChannel | undefined
     const timer = setTimeout(() => {
@@ -292,10 +296,14 @@ export async function exec(profileID: string, cwd: string, command: string, opti
 
       streamRef = stream
       stream.on("data", (chunk: Buffer) => {
-        stdout = `${stdout}${chunk.toString("utf8")}`.slice(-maxOutputChars)
+        const next = `${stdout}${chunk.toString("utf8")}`
+        stdoutTruncated ||= next.length > maxOutputChars
+        stdout = next.slice(-maxOutputChars)
       })
       stream.stderr.on("data", (chunk: Buffer) => {
-        stderr = `${stderr}${chunk.toString("utf8")}`.slice(-maxOutputChars)
+        const next = `${stderr}${chunk.toString("utf8")}`
+        stderrTruncated ||= next.length > maxOutputChars
+        stderr = next.slice(-maxOutputChars)
       })
       stream.on("close", (code: number | null) => {
         if (settled) return
@@ -307,6 +315,8 @@ export async function exec(profileID: string, cwd: string, command: string, opti
           exitCode: code ?? 0,
           stdout,
           stderr,
+          stdoutTruncated,
+          stderrTruncated,
           durationMs: Date.now() - started,
         })
       })

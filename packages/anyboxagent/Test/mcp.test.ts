@@ -139,6 +139,7 @@ async function writeLegacyMockMcpServer(root: string) {
       "      process.exit(23)",
       "    }",
       "    const value = message.params?.arguments?.value ?? ''",
+      "    const isError = value === '__negative__'",
       "    send({",
       "      jsonrpc: '2.0',",
       "      id: message.id,",
@@ -147,7 +148,7 @@ async function writeLegacyMockMcpServer(root: string) {
       "        structuredContent: {",
       "          echoed: value,",
       "        },",
-      "        isError: false,",
+      "        isError,",
       "      },",
       "    })",
       "    return",
@@ -795,6 +796,10 @@ describe("mcp integration", () => {
           ))
 
           expect(output.text).toBe("echo:hello")
+          expect(output).toMatchObject({
+            result: "success",
+            completeness: "complete",
+          })
           expect(output.metadata).toMatchObject({
             serverID: "mock",
             toolName: "echo",
@@ -810,6 +815,23 @@ describe("mcp integration", () => {
             value: {
               echoed: "hello",
             },
+          })
+
+          const negativeOutput = Tool.normalizeToolOutput(await runtime.execute(
+            { value: "__negative__" },
+            {
+              sessionID: "session_test",
+              messageID: "message_test_negative",
+            },
+          ))
+          expect(negativeOutput).toMatchObject({
+            result: "negative",
+            completeness: "complete",
+            metadata: { mcpIsError: true },
+          })
+          expect(await runtime.toModelOutput?.(negativeOutput)).toEqual({
+            type: "error-json",
+            value: { echoed: "__negative__" },
           })
 
           const agent = await Agent.get("default")
@@ -999,6 +1021,7 @@ describe("mcp integration", () => {
             messageID: "message-discovery-cancel",
             abort: controller.signal,
           })
+
           setTimeout(() => controller.abort(new Error("turn cancelled")), 100)
 
           await expect(pending).rejects.toThrow("turn cancelled")

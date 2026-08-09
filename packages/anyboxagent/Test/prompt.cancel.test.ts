@@ -104,16 +104,19 @@ test("cancel reconciles a persisted running turn when no runtime is active", () 
     type: "tool",
     callID: "call_orphan",
     tool: "powershell_command",
-    state: {
-      status: "running",
-      input: {
+    schemaVersion: 3,
+    turnID: "turn-test",
+    input: { raw: JSON.stringify({
         command: "Start-BitsTransfer",
-      },
-      title: "PowerShell",
-      time: {
-        start: 200,
-      },
-    },
+      }), value: {
+        command: "Start-BitsTransfer",
+      } },
+    source: { kind: "model" },
+    retry: { attempt: 1 },
+    revision: 1,
+    timestamps: { createdAt: 200, startedAt: 200 },
+    presentation: { title: "PowerShell" },
+    state: { phase: "running" },
   }))
   const factory = RuntimeEvent.createRuntimeEventFactory({
     sessionID,
@@ -139,12 +142,22 @@ test("cancel reconciles a persisted running turn when no runtime is active", () 
     finishReason: "cancelled",
   })
   expect(Session.DataBaseRead("parts", partID)).toMatchObject({
+    revision: 2,
+    timestamps: {
+      createdAt: 200,
+      startedAt: 200,
+      settledAt: expect.any(Number),
+    },
     state: {
-      status: "cancelled",
-      reason: "The turn no longer had an active runtime and was recovered as cancelled.",
-      time: {
-        start: 200,
-        end: expect.any(Number),
+      phase: "settled",
+      outcome: {
+        kind: "cancelled",
+        by: "framework",
+        reason: "The turn no longer had an active runtime and was recovered as cancelled.",
+      },
+      control: {
+        mode: "cancel-turn",
+        reason: "The turn no longer had an active runtime and was recovered as cancelled.",
       },
     },
   })

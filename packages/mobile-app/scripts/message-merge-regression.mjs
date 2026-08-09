@@ -79,18 +79,30 @@ function toolEvent(type, part) {
   }
 }
 
-function toolPart(id, callID, tool, status = "completed") {
+function toolPart(id, callID, tool, overrides = {}) {
+  const outcome = overrides.outcome ?? {
+    kind: "returned",
+    result: "success",
+    completeness: "complete",
+    output: `${tool} output`,
+    execution: { sideEffect: "none", retry: "safe" },
+  }
+  const revision = overrides.revision ?? 1
   return {
     id,
     type: "tool",
+    schemaVersion: 3,
+    sessionID: "s1",
+    turnID: "turn-1",
+    messageID: "message-1",
     callID,
     tool,
-    state: {
-      status,
-      input: {},
-      raw: "",
-      output: `${tool} output`,
-    },
+    input: { raw: "", value: {} },
+    source: { kind: "model" },
+    retry: { attempt: 1 },
+    revision,
+    timestamps: { createdAt: 10, settledAt: 10 + revision },
+    state: { phase: "settled", outcome, control: { mode: "continue-model" } },
   }
 }
 
@@ -137,11 +149,11 @@ function toolPart(id, callID, tool, status = "completed") {
   let segments = []
   segments = appendMessageContentSegment(segments, "response", "final", "part-3")
   segments = applyMobileStreamToolEvent(segments, toolEvent(
-    "tool.call.completed",
+    "tool.call.settled",
     toolPart("part-1", "call-1", "first_tool"),
   ))
   segments = applyMobileStreamToolEvent(segments, toolEvent(
-    "tool.call.completed",
+    "tool.call.settled",
     toolPart("part-2", "call-2", "second_tool"),
   ))
 
@@ -152,13 +164,35 @@ function toolPart(id, callID, tool, status = "completed") {
   let segments = []
   segments = appendMessageContentSegment(segments, "response", "hel", "part-3")
   segments = applyMobileStreamToolEvent(segments, toolEvent(
-    "tool.call.completed",
+    "tool.call.settled",
     toolPart("part-1", "call-1", "first_tool"),
   ))
   segments = appendMessageContentSegment(segments, "response", "lo", "part-3")
 
   assert.deepEqual(sourceIDs(segments), ["part-1", "part-3"])
   assert.equal(segments[1].text, "hello")
+}
+
+{
+  const negativePartial = {
+    kind: "returned",
+    result: "negative",
+    completeness: "partial",
+    output: { exitCode: 1, stderr: "lint failed" },
+    execution: { sideEffect: "possible", retry: "unknown" },
+  }
+  let segments = applyMobileStreamToolEvent([], toolEvent(
+    "tool.call.settled",
+    toolPart("part-1", "call-1", "exec", { outcome: negativePartial, revision: 4 }),
+  ))
+  segments = applyMobileStreamToolEvent(segments, toolEvent(
+    "tool.call.created",
+    toolPart("part-1", "call-1", "exec", { revision: 2 }),
+  ))
+
+  assert.equal(segments[0].call.revision, 4)
+  assert.equal(segments[0].call.state.outcome.result, "negative")
+  assert.equal(segments[0].call.state.outcome.completeness, "partial")
 }
 
 console.log("message merge regression checks passed")

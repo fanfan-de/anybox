@@ -191,24 +191,27 @@ function buildParentNotificationSystemPrompt() {
 
 function isAskUserQuestionPart(
   part: Message.Part,
-): part is Message.ToolPart & { state: Message.ToolStateCompleted } {
-  if (part.type !== "tool" || part.state.status !== "completed") {
+): part is Message.ToolPart {
+  if (
+    part.type !== "tool" ||
+    part.state.phase !== "settled" ||
+    part.state.control.mode !== "wait-user"
+  ) {
     return false
   }
+  const metadata = Message.toolPartMetadata(part)
 
   return Boolean(
-    part.state.metadata &&
-      typeof part.state.metadata === "object" &&
-      !Array.isArray(part.state.metadata) &&
-      part.state.metadata.kind === "ask-user-question" &&
-      part.state.metadata.answered !== true,
+    metadata &&
+      metadata.kind === "ask-user-question" &&
+      metadata.answered !== true,
   )
 }
 
 function hasWaitingApproval(parts: Message.Part[]) {
   return parts.some(
     (part): part is Message.ToolPart =>
-      part.type === "tool" && part.state.status === "waiting-approval",
+      part.type === "tool" && part.state.phase === "waiting-approval",
   )
 }
 
@@ -219,9 +222,9 @@ function isBlockingAssistantInteraction(message: Message.WithParts) {
     (part): part is Message.ToolPart =>
       part.type === "tool" &&
       (
-        part.state.status === "pending" ||
-        part.state.status === "running" ||
-        part.state.status === "waiting-approval"
+        part.state.phase === "pending" ||
+        part.state.phase === "running" ||
+        part.state.phase === "waiting-approval"
       ),
   )
   if (hasOpenTool) return true

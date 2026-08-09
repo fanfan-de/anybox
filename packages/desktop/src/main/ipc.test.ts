@@ -739,7 +739,7 @@ describe("ipc prompt helpers", () => {
 
 describe("ipc session trace export helpers", () => {
   const traceExport = {
-    schemaVersion: 2 as const,
+    schemaVersion: 3 as const,
     generatedAt: 1,
     mode: "safe" as const,
     session: {
@@ -926,7 +926,7 @@ describe("ipc session trace export helpers", () => {
           turnID: "turn-1",
           seq: 1,
           timestamp: 2,
-          type: "tool.call.completed",
+          type: "tool.call.settled",
           payload: {
             part: {
               callID: "toolcall-1",
@@ -963,7 +963,7 @@ describe("ipc session trace export helpers", () => {
         recentEvents: [
           {
             eventID: "event-1",
-            type: "tool.call.completed",
+            type: "tool.call.settled",
             sessionID: "session-1",
             turnID: "turn-1",
             seq: 1,
@@ -1048,7 +1048,7 @@ describe("ipc session trace export helpers", () => {
     expect(writtenPaths.some((filePath) => toWindowsSeparators(filePath).endsWith("\\payload-index.json"))).toBe(true)
     expect(writtenPaths.some((filePath) => toWindowsSeparators(filePath).includes("\\payloads\\payload-000001-grep-toolcall-1-output.json"))).toBe(true)
     expect(writtenPaths.some((filePath) => toWindowsSeparators(filePath).endsWith("\\records\\index.json"))).toBe(true)
-    expect(writtenPaths.some((filePath) => toWindowsSeparators(filePath).includes("\\records\\000001-tool.call.completed-1-event-1.json"))).toBe(true)
+    expect(writtenPaths.some((filePath) => toWindowsSeparators(filePath).includes("\\records\\000001-tool.call.settled-1-event-1.json"))).toBe(true)
     expect(writtenPaths.some((filePath) => toWindowsSeparators(filePath).endsWith("\\runtime\\status.json"))).toBe(true)
 
     const manifestCall = writeTraceFile.mock.calls.find((call) => toWindowsSeparators(call[0]).endsWith("\\manifest.json"))
@@ -1065,7 +1065,7 @@ describe("ipc session trace export helpers", () => {
     expect(readmeCall?.[1]).toContain("payloadRefs: 1")
     const eventFlowCall = writeTraceFile.mock.calls.find((call) => toWindowsSeparators(call[0]).endsWith("\\event-flow.md"))
     expect(eventFlowCall?.[1]).toContain("# Anybox Agent Event Flow")
-    expect(eventFlowCall?.[1]).toContain("tool.call.completed")
+    expect(eventFlowCall?.[1]).toContain("tool.call.settled")
     expect(eventFlowCall?.[1]).toContain("shell.exit_nonzero")
     expect(eventFlowCall?.[1]).toContain("Shell command exited with code 1.")
     expect(eventFlowCall?.[1]).toContain("output=[ref:payloads/payload-000001-grep-toolcall-1-output.json")
@@ -1082,7 +1082,7 @@ describe("ipc session trace export helpers", () => {
     expect(semanticFlowCall?.[1]).toContain("- sourceEvents:")
     expect(semanticFlowCall?.[1]).toContain("output=[ref:payloads/payload-000001-grep-toolcall-1-output.json")
     expect(semanticFlowCall?.[1]).not.toContain("| # | elapsed")
-    expect(semanticFlowCall?.[1]).not.toContain("tool.call.completed")
+    expect(semanticFlowCall?.[1]).not.toContain("tool.call.settled")
     const payloadIndexCall = writeTraceFile.mock.calls.find((call) => toWindowsSeparators(call[0]).endsWith("\\payload-index.json"))
     expect(payloadIndexCall?.[1]).toContain('"fieldPath": "output"')
     expect(payloadIndexCall?.[1]).toContain('"path": "payloads/payload-000001-grep-toolcall-1-output.json"')
@@ -1158,7 +1158,7 @@ describe("ipc session trace export helpers", () => {
       turnID: "turn-1",
     })
     const recordCall = writeTraceFile.mock.calls.find((call) =>
-      toWindowsSeparators(call[0]).includes("\\records\\000001-tool.call.completed-1-event-1.json"))
+      toWindowsSeparators(call[0]).includes("\\records\\000001-tool.call.settled-1-event-1.json"))
     expect(recordCall?.[1]).toContain('"relatedToolCallFiles"')
     expect(recordCall?.[1]).toContain('"tool-calls/000001-grep-toolcall-1.json"')
   })
@@ -1222,9 +1222,18 @@ describe("ipc session trace export helpers", () => {
           parts: [{
             id: "part-1",
             type: "tool",
-            state: {
-              status: "completed",
-              metadata: {
+            sessionID: "session-test",
+            messageID: "message-test",
+            callID: "tool-call-v3-216",
+            tool: "tool",
+            schemaVersion: 3,
+            turnID: "turn-test",
+            input: { raw: JSON.stringify({}), value: {} },
+            source: { kind: "model" },
+            retry: { attempt: 1 },
+            revision: 1,
+            timestamps: { createdAt: 1, settledAt: 1 },
+            state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: "", metadata: {
                 persistedOutput: {
                   kind: "persisted-tool-output",
                   version: 2,
@@ -1241,8 +1250,7 @@ describe("ipc session trace export helpers", () => {
                     kind: "result",
                   }],
                 },
-              },
-            },
+              }, execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
           }],
         }],
       }

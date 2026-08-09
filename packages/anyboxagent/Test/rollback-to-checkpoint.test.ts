@@ -238,6 +238,10 @@ describe("rollback_to_checkpoint", () => {
       targetMessageID: user.id,
       restoreWorkspace: false,
     })
+    expect(result.control).toEqual({
+      mode: "restart-loop",
+      reason: "The active session head moved to a corrective branch.",
+    })
 
     const modelOutput = await runtime.toModelOutput?.(result)
     expect(modelOutput).toEqual({

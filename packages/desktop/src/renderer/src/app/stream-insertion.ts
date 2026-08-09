@@ -1,4 +1,5 @@
 import type { AssistantTraceItem, AssistantThreadMessage, ThreadMessage, UserThreadMessage } from "./types"
+import { toolCallIsSettled, toolCallIsWaitingApproval } from "./tool-call-view"
 
 function readLegacyAssistantThreadMessageID(value: unknown) {
   // Read-only compatibility for persisted steer insertions written before the message rename.
@@ -34,6 +35,9 @@ export interface StreamInsertionIndex {
 }
 
 function isToolInsertionBoundaryReady(item: AssistantTraceItem) {
+  if (item.kind === "tool") {
+    return toolCallIsSettled(item.toolCall) || toolCallIsWaitingApproval(item.toolCall)
+  }
   return item.status === "completed" ||
     item.status === "error" ||
     item.status === "denied" ||

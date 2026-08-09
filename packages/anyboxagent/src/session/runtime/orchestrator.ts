@@ -12,7 +12,7 @@ type PendingStreamEvent = {
   }
 }[RuntimeEvent.TransientStreamEventType]
 
-type PendingDeltaStreamEventType = "text.part.delta" | "reasoning.part.delta" | "tool.input.delta"
+type PendingDeltaStreamEventType = "text.part.delta" | "reasoning.part.delta" | "tool.call.input_delta"
 
 type PendingDeltaStreamEvent = PendingStreamEvent & {
   type: PendingDeltaStreamEventType
@@ -22,13 +22,13 @@ type PendingDeltaStreamEvent = PendingStreamEvent & {
 export type ConcurrentInputDisposition = "steer" | "interrupt"
 
 function isPendingDeltaStreamEvent(event: PendingStreamEvent): event is PendingDeltaStreamEvent {
-  return event.type === "text.part.delta" || event.type === "reasoning.part.delta" || event.type === "tool.input.delta"
+  return event.type === "text.part.delta" || event.type === "reasoning.part.delta" || event.type === "tool.call.input_delta"
 }
 
 function canCoalescePendingStreamEvent(current: PendingStreamEvent, next: PendingStreamEvent) {
   if (!isPendingDeltaStreamEvent(current) || !isPendingDeltaStreamEvent(next)) return false
   if (current.type !== next.type) return false
-  if (current.type === "tool.input.delta" && next.type === "tool.input.delta") {
+  if (current.type === "tool.call.input_delta" && next.type === "tool.call.input_delta") {
     return (
       current.payload.messageID === next.payload.messageID &&
       current.payload.partID === next.payload.partID &&
@@ -54,14 +54,10 @@ function coalescePendingStreamEvent(current: PendingDeltaStreamEvent, next: Pend
 
 function readToolCallID(
   payload: RuntimeEvent.RuntimeEventPayloadByType[
-    | "tool.call.pending"
-    | "tool.call.started"
-    | "tool.call.waiting_approval"
-    | "tool.call.approved"
-    | "tool.call.denied"
-    | "tool.call.cancelled"
-    | "tool.call.completed"
-    | "tool.call.failed"
+    | "tool.call.created"
+    | "tool.call.progress"
+    | "tool.call.phase_changed"
+    | "tool.call.settled"
   ],
 ) {
   return payload.part.callID
@@ -228,32 +224,24 @@ class TurnRuntime implements TurnContext {
     payload: RuntimeEvent.RuntimeEventPayloadByType[TType],
   ) {
     switch (type) {
-      case "tool.call.pending": {
-        const toolCallID = readToolCallID(payload as RuntimeEvent.RuntimeEventPayloadByType["tool.call.pending"])
+      case "tool.call.created": {
+        const toolCallID = readToolCallID(payload as RuntimeEvent.RuntimeEventPayloadByType["tool.call.created"])
         if (toolCallID) this.preparingToolCallIDs.add(toolCallID)
         return
       }
-      case "tool.input.delta": {
-        const toolCallID = (payload as RuntimeEvent.RuntimeEventPayloadByType["tool.input.delta"]).toolCallID
+      case "tool.call.input_delta": {
+        const toolCallID = (payload as RuntimeEvent.RuntimeEventPayloadByType["tool.call.input_delta"]).toolCallID
         if (toolCallID) this.preparingToolCallIDs.add(toolCallID)
         return
       }
-      case "tool.call.started":
-      case "tool.call.waiting_approval":
-      case "tool.call.approved":
-      case "tool.call.denied":
-      case "tool.call.cancelled":
-      case "tool.call.completed":
-      case "tool.call.failed": {
+      case "tool.call.progress":
+      case "tool.call.phase_changed":
+      case "tool.call.settled": {
         const toolCallID = readToolCallID(
           payload as RuntimeEvent.RuntimeEventPayloadByType[
-            | "tool.call.started"
-            | "tool.call.waiting_approval"
-            | "tool.call.approved"
-            | "tool.call.denied"
-            | "tool.call.cancelled"
-            | "tool.call.completed"
-            | "tool.call.failed"
+            | "tool.call.progress"
+            | "tool.call.phase_changed"
+            | "tool.call.settled"
           ],
         )
         if (toolCallID) this.preparingToolCallIDs.delete(toolCallID)

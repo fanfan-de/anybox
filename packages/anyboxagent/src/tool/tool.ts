@@ -1,6 +1,17 @@
 import z from "zod"
 import type { JSONValue } from "@ai-sdk/provider"
-import type { ToolModuleProviderKind } from "@anybox/shared"
+import type {
+  ToolCallExecutionSemantics,
+  ToolCallFailure,
+  ToolCallResultCompleteness,
+  ToolCallResultPolarity,
+  ToolCallReturnedOutcome,
+  ToolCallSideEffectCertainty,
+  ToolCallRetrySafety,
+  ToolCallOutcome,
+  ToolCallTurnControl,
+  ToolModuleProviderKind,
+} from "@anybox/shared"
 import type * as Agent from "#agent/agent.ts"
 import type * as Provider from "#provider/provider.ts"
 
@@ -148,6 +159,160 @@ export interface ToolOutput<M extends Metadata = Metadata, D = unknown> {
   metadata?: M
   data?: D
   attachments?: ToolAttachment<M>[]
+  result?: ToolCallResultPolarity
+  completeness?: ToolCallResultCompleteness
+  sideEffect?: ToolCallSideEffectCertainty
+  retry?: ToolCallRetrySafety
+  control?: ToolCallTurnControl
+}
+
+export class ToolControlSignal extends Error {
+  readonly outcome: Exclude<ToolCallOutcome, ToolCallReturnedOutcome | { kind: "failed" }>
+  readonly control: ToolCallTurnControl
+
+  constructor(
+    outcome: Exclude<ToolCallOutcome, ToolCallReturnedOutcome | { kind: "failed" }>,
+    control: ToolCallTurnControl,
+  ) {
+    super(outcome.reason)
+    this.name = "ToolControlSignal"
+    this.outcome = outcome
+    this.control = control
+  }
+}
+
+export function isToolControlSignal(value: unknown): value is ToolControlSignal {
+  return value instanceof ToolControlSignal
+}
+
+export function findToolControlSignal(value: unknown): ToolControlSignal | undefined {
+  let current = value
+  const seen = new Set<unknown>()
+  for (let depth = 0; depth < 4 && current && !seen.has(current); depth += 1) {
+    if (isToolControlSignal(current)) return current
+    seen.add(current)
+    if (current instanceof Error) {
+      current = current.cause
+      continue
+    }
+    if (typeof current === "object" && !Array.isArray(current) && "cause" in current) {
+      current = (current as { cause?: unknown }).cause
+      continue
+    }
+    break
+  }
+  return undefined
+}
+
+export function toolExecutionSemantics(
+  capabilities?: ToolCapabilities,
+  overrides?: Partial<ToolCallExecutionSemantics>,
+): ToolCallExecutionSemantics {
+  const readOnly = capabilities?.readOnly === true
+  return {
+    sideEffect: overrides?.sideEffect ?? (readOnly ? "none" : "possible"),
+    retry: overrides?.retry ?? (readOnly ? "safe" : capabilities?.destructive ? "unsafe" : "unknown"),
+  }
+}
+
+type ToolFailureOverrides = Partial<Omit<ToolCallFailure, "message">> & { message?: string }
+
+function buildToolFailure(
+  value: unknown,
+  overrides: ToolFailureOverrides = {},
+): ToolCallFailure {
+  const record = value && typeof value === "object" ? value as Record<string, unknown> : undefined
+  const inferredCode = typeof record?.code === "string" && record.code.trim()
+    ? record.code.trim()
+    : undefined
+  const inferredMessage = value instanceof Error
+    ? value.message
+    : typeof value === "string"
+      ? value
+      : undefined
+
+  return {
+    stage: overrides.stage ?? "execution",
+    source: overrides.source ?? "tool",
+    code: overrides.code?.trim() || inferredCode || "TOOL_EXECUTION_ERROR",
+    message: overrides.message?.trim() || inferredMessage?.trim() || "Tool execution failed.",
+    handlerExecuted: overrides.handlerExecuted ?? true,
+    retryable: overrides.retryable ?? false,
+    severity: overrides.severity ?? "recoverable",
+    details: overrides.details,
+  }
+}
+
+export class ToolFailureError extends Error {
+  readonly failure: ToolCallFailure
+  readonly partialOutput?: unknown
+
+  constructor(
+    value: unknown,
+    overrides: ToolFailureOverrides = {},
+    options: { partialOutput?: unknown } = {},
+  ) {
+    const failure = buildToolFailure(value, overrides)
+    super(failure.message, value instanceof Error ? { cause: value } : undefined)
+    this.name = "ToolFailureError"
+    this.failure = failure
+    this.partialOutput = options.partialOutput
+  }
+}
+
+export function findToolFailureError(value: unknown): ToolFailureError | undefined {
+  let current = value
+  const seen = new Set<unknown>()
+  for (let depth = 0; depth < 4 && current && !seen.has(current); depth += 1) {
+    if (current instanceof ToolFailureError) return current
+    seen.add(current)
+    if (current instanceof Error) {
+      current = current.cause
+      continue
+    }
+    if (typeof current === "object" && !Array.isArray(current) && "cause" in current) {
+      current = (current as { cause?: unknown }).cause
+      continue
+    }
+    break
+  }
+  return undefined
+}
+
+export function toolFailure(
+  value: unknown,
+  overrides: ToolFailureOverrides = {},
+): ToolCallFailure {
+  const structured = findToolFailureError(value)?.failure
+  return buildToolFailure(value, {
+    ...structured,
+    ...overrides,
+    message: overrides.message ?? structured?.message,
+  })
+}
+
+export function returnedToolOutcome(
+  output: ToolOutput,
+  options?: {
+    capabilities?: ToolCapabilities
+    modelOutput?: unknown
+    attachments?: unknown[]
+  },
+): ToolCallReturnedOutcome {
+  return {
+    kind: "returned",
+    result: output.result ?? "success",
+    completeness: output.completeness ?? "complete",
+    output: output.text,
+    modelOutput: options?.modelOutput,
+    title: output.title,
+    metadata: output.metadata,
+    attachments: options?.attachments ?? output.attachments,
+    execution: toolExecutionSemantics(output ? options?.capabilities : undefined, {
+      sideEffect: output.sideEffect,
+      retry: output.retry,
+    }),
+  }
 }
 
 export type ToolGuardResult =
@@ -294,6 +459,11 @@ export function normalizeToolOutput<M extends Metadata = Metadata, D = unknown>(
     metadata: result.metadata,
     data: result.data,
     attachments: result.attachments,
+    result: result.result,
+    completeness: result.completeness,
+    sideEffect: result.sideEffect,
+    retry: result.retry,
+    control: result.control,
   }
 }
 
@@ -331,24 +501,43 @@ export function define<Parameters extends z.ZodType, Result extends Metadata, Da
       runtime.execute = async (args, ctx) => {
         const parsed = runtime.parameters.safeParse(args)
         if (!parsed.success) {
-          if (runtime.formatValidationError) {
-            throw new Error(runtime.formatValidationError(parsed.error), { cause: parsed.error })
-          }
-
-          throw new Error(
-            `The ${id} tool was called with invalid arguments: ${parsed.error.message}. Please rewrite the input so it satisfies the expected schema.`,
-            { cause: parsed.error },
-          )
+          const message = runtime.formatValidationError?.(parsed.error) ??
+            `The ${id} tool was called with invalid arguments: ${parsed.error.message}. Please rewrite the input so it satisfies the expected schema.`
+          throw new ToolControlSignal({
+            kind: "blocked",
+            reason: message,
+            code: "TOOL_INPUT_VALIDATION_BLOCKED",
+            execution: toolExecutionSemantics(options.capabilities, {
+              sideEffect: "none",
+              retry: "safe",
+            }),
+          }, { mode: "continue-model", reason: message })
         }
 
         const validationFailure = toGuardErrorMessage(await runtime.validate?.(parsed.data, ctx))
         if (validationFailure) {
-          throw new Error(validationFailure)
+          throw new ToolControlSignal({
+            kind: "blocked",
+            reason: validationFailure,
+            code: "TOOL_PRECONDITION_BLOCKED",
+            execution: toolExecutionSemantics(options.capabilities, {
+              sideEffect: "none",
+              retry: "safe",
+            }),
+          }, { mode: "continue-model", reason: validationFailure })
         }
 
         const authorizationFailure = toGuardErrorMessage(await runtime.authorize?.(parsed.data, ctx))
         if (authorizationFailure) {
-          throw new Error(authorizationFailure)
+          throw new ToolControlSignal({
+            kind: "blocked",
+            reason: authorizationFailure,
+            code: "TOOL_AUTHORIZATION_BLOCKED",
+            execution: toolExecutionSemantics(options.capabilities, {
+              sideEffect: "none",
+              retry: "safe",
+            }),
+          }, { mode: "continue-model", reason: authorizationFailure })
         }
 
         return normalizeToolOutput(await execute(parsed.data, ctx))
@@ -358,14 +547,17 @@ export function define<Parameters extends z.ZodType, Result extends Metadata, Da
         runtime.assessPermission = async (args, ctx) => {
           const parsed = runtime.parameters.safeParse(args)
           if (!parsed.success) {
-            if (runtime.formatValidationError) {
-              throw new Error(runtime.formatValidationError(parsed.error), { cause: parsed.error })
-            }
-
-            throw new Error(
-              `The ${id} tool was called with invalid arguments: ${parsed.error.message}. Please rewrite the input so it satisfies the expected schema.`,
-              { cause: parsed.error },
-            )
+            const message = runtime.formatValidationError?.(parsed.error) ??
+              `The ${id} tool was called with invalid arguments: ${parsed.error.message}. Please rewrite the input so it satisfies the expected schema.`
+            throw new ToolControlSignal({
+              kind: "blocked",
+              reason: message,
+              code: "TOOL_INPUT_VALIDATION_BLOCKED",
+              execution: toolExecutionSemantics(options.capabilities, {
+                sideEffect: "none",
+                retry: "safe",
+              }),
+            }, { mode: "continue-model", reason: message })
           }
 
           return await assessPermission(parsed.data, ctx)

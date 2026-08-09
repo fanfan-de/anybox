@@ -639,9 +639,10 @@ reasoning 和 tools 默认弱化：
 
 - 完成后的 reasoning/tool item 会折叠。
 - 样式整体比 response 更低对比。
+- ToolCall 只读取共享 v3 快照的 `phase + outcome + result + completeness + control`，不再从旧 `status`、事件名、错误文案、退出码或 metadata 推断生命周期。标签与色调按“已完成 / 未达成 / 部分完成 / 已阻止 / 已拒绝 / 已取消 / 已超时 / 执行故障”分别呈现；技术故障展开后保留 stage、source、code、handler 是否执行、retryable 与 severity。
 - tool row 展开后直接显示 input/output 两个可访问 region，不再提供 input/output 内部二级 disclosure，也不显示可见的“输入/输出”标题。
 - Shell command 工具只在 input region 展示一次 command。新执行结果的 output region 只展示状态、退出码、标准输出/错误输出、TTY 输出或后台 session 操作信息；workdir、shell、TTY 等唯一运行元数据继续保存在结构化结果和 debug metadata 中，不再重复拼接 command。
-- 模型历史通过同一 `toolCallId` 配对结构化 `tool-call.input` 与 `tool-result.output`。Shell 的模型结果不重复发送 `title` 或 `command`，但继续保留 workdir、shell/version、状态、截断标记和后台 session 等后续推理所需字段。
+- 模型历史通过同一 `toolCallId` 配对结构化 `tool-call.input` 与 `tool-result.output`。Shell 的模型结果不重复发送 `title` 或 `command`，但继续保留 workdir、shell/version、显式 result/completeness、进程状态、截断标记和后台 session 等后续推理所需字段。
 - streaming reasoning 默认进入固定一行的 `live-compact` viewport，继续按真实 token 内容渲染，并通过自身 `scrollTop` 在绘制前跟随最新视觉行；显式换行和 pane 宽度造成的自动折行都会推进到下一行，不调用 `scrollIntoView`，也不改变外层 thread 的 bottom-lock。
 - `live-compact` 点击后展开完整实时内容；该显式展开选择在同一 item 的后续 token 和完成事件中保持。用户再次收起时恢复单行跟随；从未手动展开的 reasoning 完成后回到现有首个非空行摘要。
 - streaming 时继续用轻微 pulse 和 caret 表达运行中。最新视觉行前进时直接切换到新行，不增加翻页、滑动、淡入或额外逐字动画；pane 宽度重排同样只重新定位。流式 reasoning 的 virtual row 使用紧凑单行预估高度，展开后的高度继续由实测 `ResizeObserver` 更新。

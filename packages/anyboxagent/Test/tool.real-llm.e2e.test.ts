@@ -40,6 +40,13 @@ type Scenario = {
   ) => Promise<void> | void
 }
 
+function returnedOutput(toolPart: Message.ToolPart) {
+  if (toolPart.state.phase !== "settled" || toolPart.state.outcome.kind !== "returned") {
+    throw new Error(`Expected ${toolPart.tool} to return a tool result.`)
+  }
+  return toolPart.state.outcome.output
+}
+
 async function runScenario(scenario: Scenario) {
   const workspaceRoot = process.cwd()
   const tempRoot = path.join(workspaceRoot, "Test", ".tmp")
@@ -85,7 +92,7 @@ async function runScenario(scenario: Scenario) {
           .find((part): part is Message.ToolPart => part.type === "tool" && part.tool === scenario.toolName)
 
         expect(toolPart, `${scenario.name}: expected ${scenario.toolName} to be persisted in DB`).toBeDefined()
-        expect(toolPart?.state.status, `${scenario.name}: tool result was not completed`).toBe("completed")
+        expect(toolPart?.state.phase, `${scenario.name}: tool result was not settled`).toBe("settled")
 
         await scenario.verify(directory, assistant, toolPart as Message.ToolPart)
 
@@ -118,8 +125,7 @@ realTest("real LLM can use prompt() to drive core tools", async () => {
         setup: async () => undefined,
         prompt: "Run echo macos-shell-ok with the macos_shell_command tool and then confirm macos-shell-ok.",
         verify: async (_directory, _assistant, toolPart) => {
-          const completed = toolPart.state as Message.ToolStateCompleted
-          expect(String(completed.output)).toContain("macos-shell-ok")
+          expect(String(returnedOutput(toolPart))).toContain("macos-shell-ok")
         },
       }
     : process.platform === "win32"
@@ -129,8 +135,7 @@ realTest("real LLM can use prompt() to drive core tools", async () => {
           setup: async () => undefined,
           prompt: "Run echo git-bash-ok with the git_bash_command tool and then confirm git-bash-ok.",
           verify: async (_directory, _assistant, toolPart) => {
-            const completed = toolPart.state as Message.ToolStateCompleted
-            expect(String(completed.output)).toContain("git-bash-ok")
+            expect(String(returnedOutput(toolPart))).toContain("git-bash-ok")
           },
         }
       : null
@@ -144,8 +149,7 @@ realTest("real LLM can use prompt() to drive core tools", async () => {
       },
       prompt: "Read readme.txt with the read_file tool and reply with the exact content.",
       verify: async (_directory, _assistant, toolPart) => {
-        const completed = toolPart.state as Message.ToolStateCompleted
-        expect(String(completed.output)).toContain("alpha-content")
+        expect(String(returnedOutput(toolPart))).toContain("alpha-content")
       },
     },
     {
@@ -158,9 +162,9 @@ realTest("real LLM can use prompt() to drive core tools", async () => {
       },
       prompt: "List the current directory recursively with the list-directory tool and mention nested and child.txt.",
       verify: async (_directory, _assistant, toolPart) => {
-        const completed = toolPart.state as Message.ToolStateCompleted
-        expect(String(completed.output)).toContain("nested")
-        expect(String(completed.output)).toContain("child.txt")
+        const output = returnedOutput(toolPart)
+        expect(String(output)).toContain("nested")
+        expect(String(output)).toContain("child.txt")
       },
     },
     {
@@ -174,9 +178,9 @@ realTest("real LLM can use prompt() to drive core tools", async () => {
       },
       prompt: "Find the TypeScript files under src with the glob tool and mention index.ts and child.ts.",
       verify: async (_directory, _assistant, toolPart) => {
-        const completed = toolPart.state as Message.ToolStateCompleted
-        expect(String(completed.output)).toContain("index.ts")
-        expect(String(completed.output)).toContain("child.ts")
+        const output = returnedOutput(toolPart)
+        expect(String(output)).toContain("index.ts")
+        expect(String(output)).toContain("child.ts")
       },
     },
     {
@@ -189,9 +193,9 @@ realTest("real LLM can use prompt() to drive core tools", async () => {
       },
       prompt: "Use the grep tool to search the current directory for needle and mention one.ts.",
       verify: async (_directory, _assistant, toolPart) => {
-        const completed = toolPart.state as Message.ToolStateCompleted
-        expect(String(completed.output)).toContain("needle")
-        expect(String(completed.output)).toContain("one.ts")
+        const output = returnedOutput(toolPart)
+        expect(String(output)).toContain("needle")
+        expect(String(output)).toContain("one.ts")
       },
     },
     {
@@ -204,8 +208,7 @@ realTest("real LLM can use prompt() to drive core tools", async () => {
       verify: async (directory, _assistant, toolPart) => {
         const updated = await fs.readFile(path.join(directory, "edit.txt"), "utf8")
         expect(updated).toBe("omega beta omega")
-        const completed = toolPart.state as Message.ToolStateCompleted
-        expect(String(completed.output)).toContain("Replaced 2")
+        expect(String(returnedOutput(toolPart))).toContain("Replaced 2")
       },
     },
     ...(shellScenario ? [shellScenario] : []),

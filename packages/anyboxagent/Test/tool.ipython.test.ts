@@ -6,6 +6,7 @@ import * as Config from "../src/config/config.ts"
 import { createIpythonRegistry, setIpythonRegistryForTest } from "../src/ipython/registry.ts"
 import { IpythonRuntimeError } from "../src/ipython/types.ts"
 import { IpythonTool } from "../src/tool/ipython.ts"
+import * as Tool from "../src/tool/tool.ts"
 
 const tempDirectories: string[] = []
 
@@ -88,7 +89,7 @@ describe("IPython tool", () => {
     expect(output.data).toMatchObject({ status: "ok", result: "42", executionCount: 2 })
   })
 
-  test("returns a structured model-visible error when a fatal runtime failure loses state", async () => {
+  test("throws a structured technical failure when a fatal runtime failure loses state", async () => {
     const directory = await mkdtemp(path.join(os.tmpdir(), "anybox-ipython-tool-fatal-"))
     tempDirectories.push(directory)
     const registry = createIpythonRegistry({
@@ -118,22 +119,22 @@ describe("IPython tool", () => {
       worktree: directory,
     }
 
-    const output = await runtime.execute({ code: "print('fatal')" }, context)
-    expect(output).toMatchObject({
-      title: "IPython runtime failed",
-      data: {
-        status: "runtime_error",
-        errorCode: "IPYTHON_HOST_PROTOCOL_ERROR",
-        message: "simulated fatal host error",
-        kernelGeneration: 1,
-        stateLost: true,
-      },
-    })
-    expect(await runtime.toModelOutput?.(output)).toMatchObject({
-      type: "error-json",
-      value: {
-        status: "runtime_error",
-        errorCode: "IPYTHON_HOST_PROTOCOL_ERROR",
+    let thrown: unknown
+    try {
+      await runtime.execute({ code: "print('fatal')" }, context)
+    } catch (error) {
+      thrown = error
+    }
+    expect(thrown).toBeInstanceOf(Tool.ToolFailureError)
+    expect(Tool.findToolFailureError(thrown)?.failure).toMatchObject({
+      stage: "protocol",
+      source: "runtime",
+      code: "IPYTHON_HOST_PROTOCOL_ERROR",
+      message: "simulated fatal host error",
+      handlerExecuted: true,
+      retryable: false,
+      severity: "recoverable",
+      details: {
         kernelGeneration: 1,
         stateLost: true,
       },
@@ -180,12 +181,92 @@ describe("IPython tool", () => {
     })
 
     expect(output).toMatchObject({
-      title: "IPython error",
+      title: "IPython returned an error",
+      result: "negative",
+      completeness: "complete",
       data: { status: "error", stateLost: false, kernelGeneration: 1 },
     })
     expect(await runtime.toModelOutput?.(output)).toMatchObject({
       type: "json",
       value: { status: "error", stateLost: false, kernelGeneration: 1 },
+    })
+  })
+
+  test("reports truncation, timeout, and cancellation as distinct explicit semantics", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "anybox-ipython-tool-semantics-"))
+    tempDirectories.push(directory)
+    await Config.setToolSelection(Config.GLOBAL_CONFIG_ID, { ipython: true })
+
+    const installResult = (result: {
+      status: "ok" | "timed_out" | "aborted"
+      stdout: string
+      outputTruncated: boolean
+    }) => {
+      setIpythonRegistryForTest(createIpythonRegistry({
+        createManager: ({ sessionID, cwd, generation }) => ({
+          sessionID,
+          cwd,
+          generation,
+          isExited: false,
+          execute: async () => ({
+            ...result,
+            stderr: "",
+            displays: [],
+            durationMs: 5,
+            kernelGeneration: generation,
+            stateLost: false,
+          }),
+          interrupt: async () => false,
+          dispose: async () => undefined,
+        }),
+      }))
+    }
+    const context = {
+      sessionID: "session-semantics",
+      messageID: "message-semantics",
+      cwd: directory,
+      worktree: directory,
+    }
+
+    installResult({ status: "ok", stdout: "partial output", outputTruncated: true })
+    const partial = await (await IpythonTool.init()).execute({ code: "print('partial')" }, context)
+    expect(partial).toMatchObject({
+      result: "success",
+      completeness: "partial",
+      sideEffect: "possible",
+      retry: "unsafe",
+    })
+
+    installResult({ status: "timed_out", stdout: "before timeout", outputTruncated: false })
+    let timeoutError: unknown
+    try {
+      await (await IpythonTool.init()).execute({ code: "while True: pass" }, context)
+    } catch (error) {
+      timeoutError = error
+    }
+    expect(Tool.findToolControlSignal(timeoutError)).toMatchObject({
+      outcome: {
+        kind: "timeout",
+        partialOutput: expect.stringContaining("before timeout"),
+        execution: { sideEffect: "possible", retry: "unsafe" },
+      },
+      control: { mode: "continue-model" },
+    })
+
+    installResult({ status: "aborted", stdout: "before cancellation", outputTruncated: false })
+    let cancellationError: unknown
+    try {
+      await (await IpythonTool.init()).execute({ code: "print('cancel')" }, context)
+    } catch (error) {
+      cancellationError = error
+    }
+    expect(Tool.findToolControlSignal(cancellationError)).toMatchObject({
+      outcome: {
+        kind: "cancelled",
+        by: "framework",
+        execution: { sideEffect: "possible", retry: "unsafe" },
+      },
+      control: { mode: "cancel-turn" },
     })
   })
 

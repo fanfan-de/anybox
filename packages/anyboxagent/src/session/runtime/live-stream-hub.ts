@@ -64,11 +64,11 @@ export type ReplayResult =
   | { status: "resync-required"; reason: "epoch-changed" | "cursor-expired" | "cursor-invalid"; events: [] }
 
 type StreamDeltaEvent = RuntimeEvent.RuntimeEvent & {
-  type: "text.part.delta" | "reasoning.part.delta" | "tool.input.delta"
+  type: "text.part.delta" | "reasoning.part.delta" | "tool.call.input_delta"
   payload:
     | RuntimeEvent.RuntimeEventPayloadByType["text.part.delta"]
     | RuntimeEvent.RuntimeEventPayloadByType["reasoning.part.delta"]
-    | RuntimeEvent.RuntimeEventPayloadByType["tool.input.delta"]
+    | RuntimeEvent.RuntimeEventPayloadByType["tool.call.input_delta"]
 }
 
 const cursorByEvent = new WeakMap<object, LiveStreamCursor>()
@@ -78,7 +78,7 @@ const latestSequenceBySession = new Map<string, number>()
 const droppedThroughSequenceBySession = new Map<string, number>()
 
 function isStreamDeltaEvent(event: RuntimeEvent.RuntimeEvent): event is StreamDeltaEvent {
-  return event.type === "text.part.delta" || event.type === "reasoning.part.delta" || event.type === "tool.input.delta"
+  return event.type === "text.part.delta" || event.type === "reasoning.part.delta" || event.type === "tool.call.input_delta"
 }
 
 function eventBytes(event: RuntimeEvent.RuntimeEvent) {
@@ -126,7 +126,7 @@ export function getProcessEpoch() {
 function canCoalesceStreamDeltaEvent(current: RuntimeEvent.RuntimeEvent, next: RuntimeEvent.RuntimeEvent) {
   if (!isStreamDeltaEvent(current) || !isStreamDeltaEvent(next)) return false
   if (current.type !== next.type) return false
-  if (current.type === "tool.input.delta" && next.type === "tool.input.delta") {
+  if (current.type === "tool.call.input_delta" && next.type === "tool.call.input_delta") {
     return (
       current.sessionID === next.sessionID &&
       current.turnID === next.turnID &&

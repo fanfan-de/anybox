@@ -124,7 +124,9 @@ return {
             "list_directory",
             "grep",
           ])
-          expect(output.data.toolCalls.every((call) => call.status === "completed")).toBe(true)
+          expect(output.data.toolCalls.every((call) =>
+            call.phase === "settled" && call.outcome === "returned" && call.result === "success"
+          )).toBe(true)
           expect(output.data.durationMs).toBeGreaterThanOrEqual(0)
           expect(JSON.parse(output.text)).toEqual(output.data)
         },
@@ -217,7 +219,8 @@ return {
             expect.objectContaining({
               callID: "tool-exec-boundary:exec:1",
               tool: "read_file",
-              status: "failed",
+              phase: "settled",
+              outcome: "blocked",
               error: expect.stringContaining("outside the active project boundary"),
             }),
           ])
@@ -260,7 +263,8 @@ return { error }
           expect(output.data.toolCalls).toEqual([
             expect.objectContaining({
               tool: "grep",
-              status: "failed",
+              phase: "settled",
+              outcome: "blocked",
               error: expect.stringContaining("disabled by the global tool selection"),
             }),
           ])
@@ -316,7 +320,8 @@ return { error }
           expect(output.data.toolCalls).toEqual([
             expect.objectContaining({
               tool: "grep",
-              status: "failed",
+              phase: "settled",
+              outcome: "blocked",
             }),
           ])
         },
@@ -331,6 +336,7 @@ return { error }
     const originalInit = ReadFileTool.init
 
     try {
+      await writeFile(path.join(root, "missing.txt"), "approval fixture\n")
       ReadFileTool.init = async (context) => {
         const runtime = await originalInit(context)
         return {
@@ -373,7 +379,8 @@ return { error }
           expect(output.data.toolCalls).toEqual([
             expect.objectContaining({
               tool: "read_file",
-              status: "failed",
+              phase: "settled",
+              outcome: "blocked",
             }),
           ])
           expect(await Permission.listRequests({ sessionID })).toEqual([])
@@ -419,7 +426,8 @@ return { error }
           expect(output.data.toolCalls).toEqual([
             expect.objectContaining({
               tool: "read_file",
-              status: "failed",
+              phase: "settled",
+              outcome: "blocked",
               error: expect.stringContaining("outside the active project boundary"),
             }),
           ])
@@ -449,7 +457,7 @@ return { error }
                 messages: [],
               },
             ),
-          ).rejects.toThrow("0 child calls completed, 1 failed")
+          ).rejects.toThrow("0 successful, 0 negative, 1 not returned")
         },
       })
     } finally {
@@ -495,7 +503,7 @@ return "done";
                 messages: [],
               },
             ),
-          ).rejects.toThrow("0 child calls completed, 1 failed")
+          ).rejects.toThrow("0 successful, 0 negative, 1 not returned")
         },
       })
     } finally {
@@ -543,7 +551,7 @@ return "must-not-succeed";
                 messages: [],
               },
             ),
-          ).rejects.toThrow("1 child calls completed, 1 failed")
+          ).rejects.toThrow("1 successful, 0 negative, 1 not returned")
         },
       })
     } finally {
@@ -559,8 +567,8 @@ return "must-not-succeed";
         directory: root,
         async fn() {
           const controller = new AbortController()
-          controller.abort(new Error("Exec integration cancellation."))
           const exec = await resolvedExecTool({ abort: controller.signal })
+          controller.abort(new Error("Exec integration cancellation."))
 
           await expect(
             exec.execute(

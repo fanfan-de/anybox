@@ -5,7 +5,7 @@ import * as Config from "#config/config.ts"
 import { Flag } from "#flag/flag.ts"
 import { Instance } from "#project/instance.ts"
 import type * as Provider from "#provider/provider.ts"
-import type * as Message from "#session/core/message.ts"
+import * as Message from "#session/core/message.ts"
 import {
   createToolSearchIndex,
   type ToolModuleSearchDefinition,
@@ -79,8 +79,9 @@ function uniqueStrings(values: Iterable<string> | undefined) {
 }
 
 function readToolSearchMetadata(part: Message.ToolPart) {
-  if (part.state.status !== "completed") return undefined
-  const metadata = part.state.metadata
+  const returned = Message.toolPartReturnedOutcome(part)
+  if (!returned) return undefined
+  const metadata = returned.metadata ?? {}
   if (metadata.kind !== "tool-search") return undefined
   return {
     toolNames: Array.isArray(metadata.loadedToolNames)

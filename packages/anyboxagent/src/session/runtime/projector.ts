@@ -184,14 +184,11 @@ export function project(event: RuntimeEvent.RuntimeEvent) {
       clearStreamPartProjection(event.sessionID, event.payload.part.id)
       Session.upsertPart(event.payload.part)
       return
-    case "tool.call.pending":
-    case "tool.call.started":
-    case "tool.call.waiting_approval":
-    case "tool.call.approved":
-    case "tool.call.denied":
-    case "tool.call.cancelled":
-    case "tool.call.completed":
-    case "tool.call.failed":
+    case "tool.call.created":
+    case "tool.call.input_delta":
+    case "tool.call.progress":
+    case "tool.call.phase_changed":
+    case "tool.call.settled":
       Session.upsertPart(event.payload.part)
       return
     case "source.recorded":

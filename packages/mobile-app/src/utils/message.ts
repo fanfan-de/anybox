@@ -1,8 +1,14 @@
 import type { MobileMessage, MobileStreamEvent } from "@/api/mobile-api"
+import {
+  isSameToolCallSettlement,
+  parseToolCallSnapshot,
+  type ToolCallOutcome,
+  type ToolCallFailure,
+  type ToolCallSnapshot,
+} from "@anybox/shared"
 
 export type AssistantTextContentKind = "reasoning" | "response"
 export type AssistantContentKind = AssistantTextContentKind | "tool"
-export type MessageToolStatus = "pending" | "running" | "waiting-approval" | "completed" | "failed" | "denied" | "cancelled" | "unknown"
 
 export interface MessageTextContentSegment {
   kind: AssistantTextContentKind
@@ -13,15 +19,14 @@ export interface MessageTextContentSegment {
 
 export interface MessageToolContentSegment {
   kind: "tool"
-  callID: string
-  tool: string
-  status: MessageToolStatus
+  call: ToolCallSnapshot
   title?: string
   questionPrompt?: MobileQuestionPrompt
   input?: Record<string, unknown>
   inputPreview?: string
   outputPreview?: string
   error?: string
+  failure?: ToolCallFailure
   reason?: string
   rawInput?: string
   sourceID?: string
@@ -261,7 +266,7 @@ export function applyMobileStreamToolEvent(segments: MessageContentSegment[], ev
   const update = readMobileStreamToolUpdate(event)
   if (!update) return segments
 
-  const index = segments.findIndex((segment) => segment.kind === "tool" && segment.callID === update.callID)
+  const index = segments.findIndex((segment) => segment.kind === "tool" && segment.call.callID === update.call.callID)
   const previous = index >= 0 ? segments[index] as MessageToolContentSegment : undefined
   const next = {
     ...mergeToolSegmentUpdate(previous, update),
@@ -363,7 +368,7 @@ function createAssistantOverlayMessage(
   const parts = segments
     .map((segment) => (
       segment.kind === "tool"
-        ? toolSegmentToPart(id, segment, updatedAt)
+        ? toolSegmentToPart(segment)
         : segment.text
           ? {
               ...(segment.sourceID ? { id: segment.sourceID } : {}),
@@ -458,18 +463,30 @@ function isNonDisplayablePartPayload(value: unknown): boolean {
 }
 
 interface ToolSegmentUpdate {
-  callID: string
+  call: ToolCallSnapshot
   sourceID?: string
-  tool?: string
-  status?: MessageToolStatus
-  title?: string
-  questionPrompt?: MobileQuestionPrompt
-  input?: Record<string, unknown>
-  output?: unknown
-  error?: string
-  reason?: string
-  rawInput?: string
-  inputDelta?: string
+}
+
+function toolCallOutcome(call: ToolCallSnapshot): ToolCallOutcome | undefined {
+  return call.state.phase === "settled" ? call.state.outcome : undefined
+}
+
+function toolCallMetadata(call: ToolCallSnapshot) {
+  return toolCallOutcome(call)?.metadata ?? call.presentation?.metadata
+}
+
+function toolCallTitle(call: ToolCallSnapshot) {
+  const outcome = toolCallOutcome(call)
+  return (outcome?.kind === "returned" ? outcome.title : undefined) ?? call.presentation?.title
+}
+
+function toolCallOutput(call: ToolCallSnapshot) {
+  const outcome = toolCallOutcome(call)
+  if (outcome?.kind === "returned") return outcome.output ?? outcome.modelOutput
+  if (outcome?.kind === "blocked") return outcome.output
+  if (outcome?.kind === "timeout") return outcome.partialOutput
+  if (outcome?.kind === "failed") return outcome.partialOutput
+  return undefined
 }
 
 function readMobileStreamToolUpdate(event: MobileStreamEvent): ToolSegmentUpdate | null {
@@ -477,64 +494,44 @@ function readMobileStreamToolUpdate(event: MobileStreamEvent): ToolSegmentUpdate
   const data = readRecord(event.data)
   if (!data) return null
   const type = typeof data?.type === "string" ? data.type : ""
-  if (!type.startsWith("tool.")) return null
+  if (!type.startsWith("tool.call.")) return null
 
   const payload = readRecord(data.payload)
   if (!payload) return null
 
-  if (type === "tool.input.delta") {
-    const callID = readString(payload.toolCallID)
-    const delta = readString(payload.delta)
-    if (!callID || !delta) return null
-    return {
-      callID,
-      inputDelta: delta,
-      sourceID: readString(payload.partID) || undefined,
-      status: "pending",
-      tool: readString(payload.toolName) || undefined,
-    }
-  }
-
   const part = readRecord(payload.part)
-  if (!part) return null
-  const callID = readString(part.callID)
-  if (!callID) return null
-  const state = readRecord(part.state)
-  const status = normalizeToolStatus(readString(state?.status), statusFromRuntimeEventType(type))
+  const call = parseToolCallSnapshot(part)
+  if (!call) return null
   return {
-    callID,
-    error: readString(state?.error) || undefined,
-    input: readRecord(state?.input) ?? undefined,
-    output: state && "output" in state ? state.output : undefined,
-    questionPrompt: readAskUserQuestionPrompt(state?.metadata) ?? undefined,
-    rawInput: readString(state?.raw) || undefined,
-    reason: readString(state?.reason) || undefined,
-    sourceID: readString(part.id) || readString(payload.partID) || undefined,
-    status,
-    title: readString(state?.title) || undefined,
-    tool: readString(part.tool) || undefined,
+    call,
+    sourceID: readString(part?.id) || readString(payload.partID) || undefined,
   }
 }
 
 function mergeToolSegmentUpdate(previous: MessageToolContentSegment | undefined, update: ToolSegmentUpdate): MessageToolContentSegment {
-  const rawInput = update.inputDelta
-    ? `${previous?.rawInput ?? ""}${update.inputDelta}`
-    : update.rawInput ?? previous?.rawInput
-  const input = update.input ?? previous?.input
-  const outputPreview = update.output === undefined ? previous?.outputPreview : compactPreview(update.output)
+  const keepsFirstSettlement = previous &&
+    previous.call.state.phase === "settled" &&
+    update.call.state.phase === "settled" &&
+    !isSameToolCallSettlement(previous.call, update.call)
+  const call = previous && (previous.call.revision > update.call.revision || keepsFirstSettlement)
+    ? previous.call
+    : update.call
+  const outcome = toolCallOutcome(call)
+  const input = call.input.value
+  const rawInput = call.input.raw || undefined
+  const output = toolCallOutput(call)
   const next: MessageToolContentSegment = {
     kind: "tool",
-    callID: update.callID,
+    call,
     sourceID: update.sourceID ?? previous?.sourceID,
-    tool: update.tool ?? previous?.tool ?? "tool",
-    status: update.status ?? previous?.status ?? "unknown",
-    title: update.title ?? previous?.title,
-    questionPrompt: update.questionPrompt ?? previous?.questionPrompt,
+    title: toolCallTitle(call),
+    questionPrompt: readAskUserQuestionPrompt(toolCallMetadata(call)) ?? undefined,
     input,
-    inputPreview: summarizeToolInput(input, rawInput) || previous?.inputPreview,
-    outputPreview,
-    error: update.error ?? previous?.error,
-    reason: update.reason ?? previous?.reason,
+    inputPreview: summarizeToolInput(input, rawInput),
+    outputPreview: output === undefined ? undefined : compactPreview(output),
+    error: outcome?.kind === "failed" ? outcome.error.message : undefined,
+    failure: outcome?.kind === "failed" ? outcome.error : undefined,
+    reason: outcome && outcome.kind !== "returned" && outcome.kind !== "failed" ? outcome.reason : undefined,
     rawInput,
   }
   return next
@@ -542,94 +539,20 @@ function mergeToolSegmentUpdate(previous: MessageToolContentSegment | undefined,
 
 function extractToolSegment(record: Record<string, unknown>): MessageToolContentSegment | null {
   if (record.type !== "tool" && record.kind !== "tool") return null
-  const callID = readString(record.callID) || readString(record.toolCallID) || readString(record.id) || "tool"
-  const tool = readString(record.tool) || readString(record.toolName) || "tool"
-  const state = readRecord(record.state)
-  const status = normalizeToolStatus(readString(state?.status) || readString(record.status), "unknown")
-  const input = readRecord(state?.input) ?? readRecord(record.input) ?? undefined
-  const rawInput = readString(state?.raw) || readString(record.raw) || undefined
-  const output = state && "output" in state ? state.output : record.output
-  const questionPrompt = readAskUserQuestionPrompt(state?.metadata ?? record.metadata) ?? undefined
-  return {
-    kind: "tool",
-    callID,
+  const call = parseToolCallSnapshot(record)
+  if (!call) return null
+  return mergeToolSegmentUpdate(undefined, {
+    call,
     sourceID: readString(record.id) || readString(record.partID) || undefined,
-    tool,
-    status,
-    title: readString(state?.title) || readString(record.title) || undefined,
-    questionPrompt,
-    input,
-    inputPreview: summarizeToolInput(input, rawInput),
-    outputPreview: output === undefined ? undefined : compactPreview(output),
-    error: readString(state?.error) || readString(record.error) || undefined,
-    reason: readString(state?.reason) || readString(record.reason) || undefined,
-    rawInput,
-  }
+  })
 }
 
-function toolSegmentToPart(messageID: string, segment: MessageToolContentSegment, now: number) {
-  const state = {
-    status: partStatusFromToolStatus(segment.status),
-    input: segment.input ?? {},
-    raw: segment.rawInput ?? "",
-    ...(segment.title ? { title: segment.title } : {}),
-    ...(segment.questionPrompt
-      ? {
-          metadata: {
-            kind: "ask-user-question",
-            version: 1,
-            ...segment.questionPrompt,
-          },
-        }
-      : {}),
-    ...(segment.outputPreview ? { output: segment.outputPreview } : {}),
-    ...(segment.error ? { error: segment.error } : {}),
-    ...(segment.reason ? { reason: segment.reason } : {}),
-    time: {
-      start: now,
-      ...(isTerminalToolStatus(segment.status) ? { end: now } : {}),
-    },
-  }
+function toolSegmentToPart(segment: MessageToolContentSegment) {
   return {
-    id: segment.sourceID ?? `part-${segment.callID}`,
-    messageID,
+    id: segment.sourceID ?? `part-${segment.call.callID}`,
     type: "tool",
-    callID: segment.callID,
-    tool: segment.tool,
-    state,
+    ...segment.call,
   }
-}
-
-function statusFromRuntimeEventType(type: string): MessageToolStatus {
-  if (type === "tool.call.pending") return "pending"
-  if (type === "tool.call.started" || type === "tool.call.approved") return "running"
-  if (type === "tool.call.waiting_approval") return "waiting-approval"
-  if (type === "tool.call.completed") return "completed"
-  if (type === "tool.call.failed") return "failed"
-  if (type === "tool.call.denied") return "denied"
-  if (type === "tool.call.cancelled") return "cancelled"
-  return "unknown"
-}
-
-function normalizeToolStatus(value: string | undefined, fallback: MessageToolStatus): MessageToolStatus {
-  if (value === "pending") return "pending"
-  if (value === "running") return "running"
-  if (value === "waiting-approval") return "waiting-approval"
-  if (value === "completed") return "completed"
-  if (value === "error" || value === "failed") return "failed"
-  if (value === "denied") return "denied"
-  if (value === "cancelled") return "cancelled"
-  return fallback
-}
-
-function partStatusFromToolStatus(status: MessageToolStatus) {
-  if (status === "failed") return "error"
-  if (status === "unknown") return "pending"
-  return status
-}
-
-function isTerminalToolStatus(status: MessageToolStatus) {
-  return status === "completed" || status === "failed" || status === "denied" || status === "cancelled"
 }
 
 function readAskUserQuestionPrompt(value: unknown): MobileQuestionPrompt | null {

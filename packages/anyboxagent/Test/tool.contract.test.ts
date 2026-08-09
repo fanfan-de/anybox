@@ -278,6 +278,27 @@ describe("tool contract", () => {
       value: "plain-text",
     })
 
+    let invalidArguments: unknown
+    try {
+      await runtime.execute(
+        { value: 42 } as never,
+        {
+          sessionID: "session-invalid-arguments",
+          messageID: "message-invalid-arguments",
+        },
+      )
+    } catch (error) {
+      invalidArguments = error
+    }
+    expect(Tool.findToolControlSignal(invalidArguments)).toMatchObject({
+      outcome: {
+        kind: "blocked",
+        code: "TOOL_INPUT_VALIDATION_BLOCKED",
+        execution: { sideEffect: "none", retry: "safe" },
+      },
+      control: { mode: "continue-model" },
+    })
+
     await expect(
       runtime.execute(
         { value: "invalid" },
@@ -393,13 +414,19 @@ describe("tool contract", () => {
             expect.objectContaining({
               index: 0,
               tool: "parallel-delay-a",
-              status: "completed",
+              phase: "settled",
+              outcome: "returned",
+              result: "success",
+              completeness: "complete",
               output: "parallel-delay-a:first",
             }),
             expect.objectContaining({
               index: 1,
               tool: "parallel-delay-b",
-              status: "completed",
+              phase: "settled",
+              outcome: "returned",
+              result: "success",
+              completeness: "complete",
               output: "parallel-delay-b:second",
             }),
           ])
@@ -443,8 +470,8 @@ describe("tool contract", () => {
             messages: [],
           })
 
-          const results = output.data.results as Array<{ tool: string; status: string; error?: string }>
-          expect(results.every((result) => result.status === "error")).toBe(true)
+          const results = output.data.results as Array<{ tool: string; outcome: string; error?: string }>
+          expect(results.every((result) => result.outcome === "blocked")).toBe(true)
           expect(results.find((result) => result.tool === "replace_text")?.error).toContain("not eligible")
           if (shellToolID) {
             expect(results.find((result) => result.tool === shellToolID)?.error).toContain("not eligible")
@@ -523,7 +550,11 @@ describe("tool contract", () => {
           })
 
           const child = output.data.results[0]
-          expect(child.status).toBe("completed")
+          expect(child).toMatchObject({
+            phase: "settled",
+            outcome: "returned",
+            result: "success",
+          })
           expect(child.output).toContain("<persisted-output>")
           expect(child.modelOutput).toMatchObject({
             type: "text",
@@ -952,10 +983,12 @@ describe("tool contract", () => {
       },
     } as any
 
-    const questionMetadata = {
+    const providerMetadata = {
       openai: {
         itemId: "item-1",
       },
+    }
+    const questionMetadata = {
       kind: "ask-user-question",
       version: 1,
       questionID: "que_call_ask",
@@ -1003,36 +1036,35 @@ describe("tool contract", () => {
               type: "tool",
               callID: "call-ask",
               tool: "AskUserQuestion",
-              providerExecuted: true,
-              metadata: questionMetadata,
-              state: {
-                status: "completed",
-                input: {
+              schemaVersion: 3,
+              turnID: "turn-test",
+              input: { raw: JSON.stringify({
                   header: "Question",
                   question: "What next?",
                   options: [{ label: "Feature", value: "feature" }],
                   allowFreeform: true,
-                },
-                output: "User answer received:\nfeature",
-                modelOutput: {
+                }), value: {
+                  header: "Question",
+                  question: "What next?",
+                  options: [{ label: "Feature", value: "feature" }],
+                  allowFreeform: true,
+                } },
+              source: { kind: "provider", metadata: providerMetadata },
+              retry: { attempt: 1 },
+              revision: 1,
+              timestamps: { createdAt: 1, settledAt: 2 },
+              state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: "User answer received:\nfeature", modelOutput: {
                   type: "json",
                   value: {
                     answered: true,
                     answerText: "feature",
                   },
-                },
-                title: "Question",
-                metadata: {
+                }, title: "Question", metadata: {
                   ...questionMetadata,
                   answered: true,
                   answerText: "feature",
                   selectedOptions: ["feature"],
-                },
-                time: {
-                  start: 1,
-                  end: 2,
-                },
-              },
+                }, execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
             } as Message.ToolPart,
           ],
         },
@@ -1110,12 +1142,14 @@ describe("tool contract", () => {
               type: "tool",
               callID: "call-legacy-search",
               tool: TOOL_SEARCH_ID,
-              state: {
-                status: "denied",
-                input: { query: "computer use", limit: 8 },
-                reason: "test denial",
-                time: { start: 1, end: 2 },
-              },
+              schemaVersion: 3,
+              turnID: "turn-test",
+              input: { raw: JSON.stringify({ query: "computer use", limit: 8 }), value: { query: "computer use", limit: 8 } },
+              source: { kind: "model" },
+              retry: { attempt: 1 },
+              revision: 1,
+              timestamps: { createdAt: 1, settledAt: 2 },
+              state: { phase: "settled", outcome: { kind: "denied", reason: "test denial", approvalID: "approval-test", execution: { sideEffect: "none", retry: "safe" } }, control: { mode: "continue-model" } },
             } as Message.ToolPart,
             {
               id: "part-b-native-search",
@@ -1124,16 +1158,14 @@ describe("tool contract", () => {
               type: "tool",
               callID: "call-native-search",
               tool: TOOL_SEARCH_ID,
-              providerExecuted: true,
-              state: {
-                status: "completed",
-                input: { arguments: { query: "native" } },
-                output: "native search result",
-                modelOutput: { type: "text", value: "native search result" },
-                title: "Native search",
-                metadata: {},
-                time: { start: 1, end: 2 },
-              },
+              schemaVersion: 3,
+              turnID: "turn-test",
+              input: { raw: JSON.stringify({ arguments: { query: "native" } }), value: { arguments: { query: "native" } } },
+              source: { kind: "provider" },
+              retry: { attempt: 1 },
+              revision: 1,
+              timestamps: { createdAt: 1, settledAt: 2 },
+              state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: "native search result", modelOutput: { type: "text", value: "native search result" }, title: "Native search", metadata: {}, execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
             } as Message.ToolPart,
           ],
         },
@@ -1249,7 +1281,9 @@ describe("tool contract", () => {
               signal: null,
               timedOut: false,
               aborted: false,
-              status: "ok",
+              result: "success",
+              completeness: "complete",
+              processState: "settled",
               backgroundTaskId: null,
               runInBackground: false,
               stdoutTruncated: false,
@@ -1305,6 +1339,8 @@ describe("tool contract", () => {
         exitCode: 0,
         stdout: "ssh-result",
         stderr: "",
+        stdoutTruncated: false,
+        stderrTruncated: false,
         durationMs: 12,
       },
     }))
@@ -1315,7 +1351,8 @@ describe("tool contract", () => {
         workdir: "/srv/project",
         shell: "remote sh -lc",
         exitCode: 0,
-        status: "ok",
+        result: "success",
+        completeness: "complete",
         stdout: "ssh-result",
         stderr: "",
       },
@@ -1369,7 +1406,11 @@ describe("tool contract", () => {
         if (normalizedModelOutput.type !== "json") {
           throw new Error(`Expected json model output, received ${normalizedModelOutput.type}`)
         }
-        expect((normalizedModelOutput.value as any).status).toBe("background_started")
+        expect(normalizedModelOutput.value).toMatchObject({
+          result: "success",
+          completeness: "partial",
+          processState: "running",
+        })
         expect(String((normalizedModelOutput.value as any).backgroundTaskId)).toStartWith("tsk_")
         expect((normalizedModelOutput.value as any).session_id).toBe(backgroundTaskId)
         expect((normalizedModelOutput.value as any).runInBackground).toBe(true)
@@ -1387,7 +1428,7 @@ describe("tool contract", () => {
 
         expect(snapshot.text).toContain("OUTPUT:")
         expect(String((snapshot.metadata as any)?.output ?? "")).toContain("hello")
-        expect((snapshot.metadata as any)?.status).toBe("running")
+        expect((snapshot.metadata as any)?.processState).toBe("running")
 
         const stopped = await getShellTaskRegistry().stop(backgroundTaskId, ctx.sessionID)
 
@@ -1444,7 +1485,9 @@ describe("tool contract", () => {
         expect(await execRuntime.toModelOutput!(started)).toMatchObject({
           type: "json",
           value: {
-            status: "background_started",
+            result: "success",
+            completeness: "partial",
+            processState: "running",
             backgroundTaskId,
             backgroundTaskCursor: cursor,
             session_id: backgroundTaskId,
@@ -1619,7 +1662,7 @@ describe("tool contract", () => {
           {
             command,
             maxOutputChars: 80,
-            "yield-time-ms": 5_000,
+            "yield-time_ms": 5_000,
             tty: false,
           },
           {
@@ -1672,7 +1715,7 @@ describe("tool contract", () => {
         const result = Tool.normalizeToolOutput(await runtime.execute(
           {
             command: shellCase.command,
-            "yield-time-ms": 5_000,
+            "yield-time_ms": 5_000,
             tty: false,
           },
           {
@@ -1681,7 +1724,9 @@ describe("tool contract", () => {
           },
         ))
 
-        expect(result.title).toMatch(/command failed$/)
+        expect(result.title).toMatch(/command returned a non-zero exit code$/)
+        expect(result.result).toBe("negative")
+        expect(result.completeness).toBe("complete")
         expect(result.text).toContain("Exit: 7")
         expect(result.text).not.toContain(shellCase.command)
         expect(result.text).not.toContain("Command:")
@@ -1707,27 +1752,33 @@ describe("tool contract", () => {
         if (!shellCase) return
 
         const runtime = await shellCase.tool.init()
-        const result = Tool.normalizeToolOutput(await runtime.execute(
-          {
-            command: shellCase.command,
-            timeoutMs: 50,
-            "yield-time-ms": 5_000,
-            tty: false,
-          },
-          {
-            sessionID: "session-shell-timed-out-command",
-            messageID: "message-shell-timed-out-command",
-          },
-        ))
+        let thrown: unknown
+        try {
+          await runtime.execute(
+            {
+              command: shellCase.command,
+              timeoutMs: 50,
+              "yield-time_ms": 5_000,
+              tty: false,
+            },
+            {
+              sessionID: "session-shell-timed-out-command",
+              messageID: "message-shell-timed-out-command",
+            },
+          )
+        } catch (error) {
+          thrown = error
+        }
 
-        expect(result.title).toMatch(/command timed out$/)
-        expect(result.text).toContain("(timed out)")
-        expect(result.text).not.toContain(shellCase.command)
-        expect(result.text).not.toContain("Command:")
-        expect(result.metadata).toMatchObject({
-          timedOut: true,
-          runInBackground: false,
+        const signal = Tool.findToolControlSignal(thrown)
+        expect(signal?.outcome).toMatchObject({
+          kind: "timeout",
+          timeoutMs: 50,
+          execution: { sideEffect: "possible", retry: "unknown" },
         })
+        if (signal?.outcome.kind !== "timeout") throw new Error("Expected a timeout outcome.")
+        expect(String(signal.outcome.partialOutput)).toContain("(timed out)")
+        expect(String(signal.outcome.partialOutput)).not.toContain(shellCase.command)
       },
     })
   }, 120000)
@@ -1770,7 +1821,9 @@ describe("tool contract", () => {
           type: "json",
           value: {
             session_id: sessionID,
-            status: "background_started",
+            result: "success",
+            completeness: "partial",
+            processState: "running",
           },
         })
 
@@ -1785,13 +1838,15 @@ describe("tool contract", () => {
         expect(completed.metadata).toMatchObject({
           id: sessionID,
           sessionID: null,
-          status: "exited",
+          processState: "exited",
           exitCode: 0,
         })
         expect(String((completed.metadata as any)?.output ?? "")).toContain("final")
         const modelOutput = await writeRuntime.toModelOutput!(completed) as any
         expect(modelOutput.type).toBe("json")
-        expect(modelOutput.value.status).toBe("exited")
+        expect(modelOutput.value.process_state).toBe("exited")
+        expect(modelOutput.value.result).toBe("success")
+        expect(modelOutput.value.completeness).toBe("complete")
         expect(modelOutput.value.exit_code).toBe(0)
         expect(modelOutput.value.output).toContain("final")
         expect(modelOutput.value.session_id).toBeUndefined()
@@ -1845,13 +1900,13 @@ describe("tool contract", () => {
           interrupted: true,
         })
         if (process.platform === "win32") {
-          expect((interrupted.metadata as any)?.status).toBe("running")
+          expect((interrupted.metadata as any)?.processState).toBe("running")
           expect(interrupted.text).toContain("Session Information > Background Processes")
         }
-        if ((interrupted.metadata as any)?.status === "running") {
+        if ((interrupted.metadata as any)?.processState === "running") {
           await getShellTaskRegistry().stop(sessionID, ctx.sessionID)
         } else {
-          expect((interrupted.metadata as any)?.status).toBe("exited")
+          expect((interrupted.metadata as any)?.processState).toBe("exited")
         }
       },
     })
@@ -1982,7 +2037,7 @@ describe("tool contract", () => {
 
         expect(completed.metadata).toMatchObject({
           id: sessionID,
-          status: "exited",
+          processState: "exited",
           exitCode: 0,
           tty: true,
           inputChars: 4,
@@ -2028,7 +2083,7 @@ describe("tool contract", () => {
         expect(interrupted.metadata).toMatchObject({
           id: sessionID,
           tty: true,
-          status: "running",
+          processState: "running",
           interrupted: true,
         })
         expect(String((interrupted.metadata as any)?.output ?? "")).toContain("interrupt-kept-alive")
@@ -2570,12 +2625,14 @@ describe("tool contract", () => {
                     type: "tool",
                     callID: "call-history",
                     tool: shellToolID,
-                    state: {
-                      status: "completed",
-                      input: { command: "printf hello" },
-                      output: "Command: printf hello",
-                      title: `${shellToolID}: printf hello`,
-                      metadata: {
+                    schemaVersion: 3,
+                    turnID: "turn-test",
+                    input: { raw: JSON.stringify({ command: "printf hello" }), value: { command: "printf hello" } },
+                    source: { kind: "model" },
+                    retry: { attempt: 1 },
+                    revision: 1,
+                    timestamps: { createdAt: 1, settledAt: 2 },
+                    state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: "Command: printf hello", title: `${shellToolID}: printf hello`, metadata: {
                         command: "printf hello",
                         shell: "/bin/bash",
                         cwd: repositoryRoot,
@@ -2591,12 +2648,7 @@ describe("tool contract", () => {
                         stderr: "",
                         runInBackground: false,
                         backgroundTaskId: null,
-                      },
-                      time: {
-                        start: 1,
-                        end: 2,
-                      },
-                    },
+                      }, execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
                   } as Message.ToolPart,
                 ],
               },
@@ -2627,7 +2679,9 @@ describe("tool contract", () => {
             output: {
               type: "json",
               value: {
-                status: "ok",
+                result: "success",
+                completeness: "complete",
+                processState: "settled",
                 stdout: "hello",
                 runInBackground: false,
                 backgroundTaskId: null,
@@ -3601,16 +3655,18 @@ describe("tool contract", () => {
               type: "tool",
               callID: "call-reasoning-tool",
               tool: "read-file",
-              state: {
-                status: "waiting-approval",
-                approvalID: "approval-reasoning-tool",
-                input: {
+              schemaVersion: 3,
+              turnID: "turn-test",
+              input: { raw: JSON.stringify({
                   path: "README.md",
-                },
-                time: {
-                  start: Date.now(),
-                },
-              },
+                }), value: {
+                  path: "README.md",
+                } },
+              source: { kind: "model" },
+              retry: { attempt: 1 },
+              revision: 1,
+              timestamps: { createdAt: Date.now(), approvalRequestedAt: Date.now() },
+              state: { phase: "waiting-approval", approval: { id: "approval-reasoning-tool" } },
             } as Message.ToolPart,
           ],
         },
@@ -3687,17 +3743,18 @@ describe("tool contract", () => {
               type: "tool",
               callID: "call-legacy-parallel",
               tool: "multi_tool_use.parallel",
-              state: {
-                status: "denied",
-                input: {
+              schemaVersion: 3,
+              turnID: "turn-test",
+              input: { raw: JSON.stringify({
                   calls: [{ tool: "read-file", input: { path: "README.md" } }],
-                },
-                reason: "approval denied",
-                time: {
-                  start: 1,
-                  end: 2,
-                },
-              },
+                }), value: {
+                  calls: [{ tool: "read-file", input: { path: "README.md" } }],
+                } },
+              source: { kind: "model" },
+              retry: { attempt: 1 },
+              revision: 1,
+              timestamps: { createdAt: 1, settledAt: 2 },
+              state: { phase: "settled", outcome: { kind: "denied", reason: "approval denied", approvalID: "approval-test", execution: { sideEffect: "none", retry: "safe" } }, control: { mode: "continue-model" } },
             } as Message.ToolPart,
           ],
         },
@@ -3802,16 +3859,18 @@ describe("tool contract", () => {
               type: "tool",
               callID: "call-multi-tool-a",
               tool: "read-file",
-              state: {
-                status: "waiting-approval",
-                approvalID: "approval-multi-tool-a",
-                input: {
+              schemaVersion: 3,
+              turnID: "turn-test",
+              input: { raw: JSON.stringify({
                   path: "README.md",
-                },
-                time: {
-                  start: Date.now(),
-                },
-              },
+                }), value: {
+                  path: "README.md",
+                } },
+              source: { kind: "model" },
+              retry: { attempt: 1 },
+              revision: 1,
+              timestamps: { createdAt: Date.now(), approvalRequestedAt: Date.now() },
+              state: { phase: "waiting-approval", approval: { id: "approval-multi-tool-a" } },
             } as Message.ToolPart,
             {
               id: "assistant-multi-tool-3",
@@ -3820,16 +3879,18 @@ describe("tool contract", () => {
               type: "tool",
               callID: "call-multi-tool-b",
               tool: "glob",
-              state: {
-                status: "waiting-approval",
-                approvalID: "approval-multi-tool-b",
-                input: {
+              schemaVersion: 3,
+              turnID: "turn-test",
+              input: { raw: JSON.stringify({
                   pattern: "*.ts",
-                },
-                time: {
-                  start: Date.now(),
-                },
-              },
+                }), value: {
+                  pattern: "*.ts",
+                } },
+              source: { kind: "model" },
+              retry: { attempt: 1 },
+              revision: 1,
+              timestamps: { createdAt: Date.now(), approvalRequestedAt: Date.now() },
+              state: { phase: "waiting-approval", approval: { id: "approval-multi-tool-b" } },
             } as Message.ToolPart,
           ],
         },
@@ -4021,36 +4082,28 @@ describe("tool contract", () => {
               type: "tool",
               callID: "call-provider-executed",
               tool: "mcp.remote-search",
-              providerExecuted: true,
-              metadata: {
-                openai: {
-                  itemId: "item-1",
-                },
-              },
-              state: {
-                status: "completed",
-                input: {
+              schemaVersion: 3,
+              turnID: "turn-test",
+              input: { raw: JSON.stringify({
                   query: "latest ai news",
-                },
-                output: "headline results",
-                modelOutput: {
+                }), value: {
+                  query: "latest ai news",
+                } },
+              source: { kind: "provider", metadata: {
+                  openai: {
+                    itemId: "item-1",
+                  },
+                } },
+              retry: { attempt: 1 },
+              revision: 1,
+              timestamps: { createdAt: 1, settledAt: 2 },
+              state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: "headline results", modelOutput: {
                   type: "call",
                   serverLabel: "remote-search",
                   name: "search",
                   arguments: "{\"query\":\"latest ai news\"}",
                   output: "headline results",
-                },
-                title: "Remote Search",
-                metadata: {
-                  openai: {
-                    itemId: "item-1",
-                  },
-                },
-                time: {
-                  start: 1,
-                  end: 2,
-                },
-              },
+                }, title: "Remote Search", execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
             } as Message.ToolPart,
           ],
         },
@@ -4553,6 +4606,12 @@ describe("tool contract", () => {
           ))
 
           expect(result.title).toBe("Fetched https://example.com/article")
+          expect(result).toMatchObject({
+            result: "success",
+            completeness: "complete",
+            sideEffect: "none",
+            retry: "safe",
+          })
           expect(result.text).toContain("Status: 200 OK")
           expect(result.text).toContain("Final URL: https://example.com/article")
           expect(result.text).toContain("# Example Article")
@@ -4594,6 +4653,49 @@ describe("tool contract", () => {
     }
   })
 
+  it("returns non-2xx web responses as valid negative results and preserves truncation separately", async () => {
+    const repositoryRoot = await mkdtemp(path.join(tmpdir(), "anybox-web-fetch-negative-"))
+    const originalFetch = globalThis.fetch
+
+    try {
+      await createGitRepo(repositoryRoot, "web-fetch-negative")
+      globalThis.fetch = (async () => new Response("missing ".repeat(100), {
+        status: 404,
+        statusText: "Not Found",
+        headers: { "content-type": "text/plain; charset=utf-8" },
+      })) as unknown as typeof fetch
+
+      await Instance.provide({
+        directory: repositoryRoot,
+        async fn() {
+          const runtime = await WebFetchTool.init()
+          const result = await runtime.execute({
+            url: "https://example.com/missing",
+            maxContentChars: 40,
+          }, {
+            sessionID: "session-web-fetch-negative",
+            messageID: "message-web-fetch-negative",
+          })
+
+          expect(result).toMatchObject({
+            result: "negative",
+            completeness: "partial",
+            sideEffect: "none",
+            retry: "safe",
+            metadata: {
+              status: 404,
+              ok: false,
+              contentTruncated: true,
+            },
+          })
+        },
+      })
+    } finally {
+      globalThis.fetch = originalFetch
+      await rm(repositoryRoot, { recursive: true, force: true })
+    }
+  })
+
   it("blocks loopback targets in web_fetch before issuing a network request", async () => {
     const repositoryRoot = await mkdtemp(path.join(tmpdir(), "anybox-web-fetch-blocked-"))
 
@@ -4605,8 +4707,9 @@ describe("tool contract", () => {
         async fn() {
           const runtime = await WebFetchTool.init()
 
-          await expect(
-            runtime.execute(
+          let blocked: unknown
+          try {
+            await runtime.execute(
               {
                 url: "http://localhost:3000/private",
               },
@@ -4614,8 +4717,18 @@ describe("tool contract", () => {
                 sessionID: "session-web-fetch-blocked",
                 messageID: "message-web-fetch-blocked",
               },
-            ),
-          ).rejects.toThrow("loopback or local network host")
+            )
+          } catch (error) {
+            blocked = error
+          }
+          expect(Tool.findToolControlSignal(blocked)).toMatchObject({
+            outcome: {
+              kind: "blocked",
+              code: "TOOL_PRECONDITION_BLOCKED",
+              execution: { sideEffect: "none", retry: "safe" },
+            },
+            control: { mode: "continue-model" },
+          })
         },
       })
     } finally {
@@ -4916,15 +5029,14 @@ describe("tool contract", () => {
               type: "tool",
               callID: `${id}-call-${index}`,
               tool: "view_image",
-              state: {
-                status: "completed",
-                input: { path: pngPath },
-                output: output.text,
-                modelOutput: output,
-                title: output.title ?? "View pixel.png",
-                metadata: output.metadata ?? {},
-                time: { start: 1, end: 2 },
-                attachments: output.attachments?.map((attachment, attachmentIndex) => ({
+              schemaVersion: 3,
+              turnID: "turn-test",
+              input: { raw: JSON.stringify({ path: pngPath }), value: { path: pngPath } },
+              source: { kind: "model" },
+              retry: { attempt: 1 },
+              revision: 1,
+              timestamps: { createdAt: 1, settledAt: 2 },
+              state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: output.text, modelOutput: output, title: output.title ?? "View pixel.png", attachments: output.attachments?.map((attachment, attachmentIndex) => ({
                   id: `${id}-attachment-${index}-${attachmentIndex}`,
                   sessionID: ref.sessionID,
                   messageID: id,
@@ -4935,8 +5047,7 @@ describe("tool contract", () => {
                   width: 1,
                   height: 1,
                   metadata: attachment.metadata,
-                })),
-              },
+                })), metadata: output.metadata ?? {}, execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
             } as Message.ToolPart)),
           })
 

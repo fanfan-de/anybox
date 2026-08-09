@@ -24,6 +24,12 @@ import type {
   UserThreadMessageAttachment,
   UserThreadMessageReference,
 } from "./types"
+import {
+  isSameToolCallSettlement,
+  parseToolCallSnapshot,
+  type ToolCallOutcome,
+  type ToolCallSnapshot,
+} from "@anybox/shared"
 import { toDraftPatchPreview } from "./streaming-patch-preview"
 import { deriveActiveMessages, reconcileThreadTurns } from "./thread-turn-state"
 import { compactText, createID } from "./utils"
@@ -331,6 +337,14 @@ function readPartTimeTimestamp(value: unknown) {
 }
 
 function readCanonicalPartTimestamp(part: Record<string, unknown>) {
+  const timestamps = readRecord(part.timestamps)
+  const createdAt = readTraceTimestamp(timestamps?.createdAt)
+  if (createdAt !== null) return createdAt
+
+  // ToolCall v3 is strict: do not recover timestamps from removed state.time
+  // or part.time fields on an invalid legacy tool record.
+  if (readString(part.type) === "tool") return null
+
   const state = readRecord(part.state)
   const stateTime = readPartTimeTimestamp(state?.time)
   if (stateTime !== null) return stateTime
@@ -508,15 +522,22 @@ function buildPartDebugEntries(input: unknown) {
   }
 
   if (type === "tool") {
-    const state = readRecord(part.state)
-    appendDebugEntry(entries, "tool.call", readString(part.callID))
-    appendDebugEntry(entries, "tool.status", readString(state?.status))
-    appendDebugEntry(entries, "tool.raw", state?.raw, 320)
-    appendDebugEntry(entries, "tool.input", state?.input, 320)
-    appendDebugEntry(entries, "tool.metadata", state?.metadata ?? part.metadata, 320)
-    appendDebugEntry(entries, "tool.time", formatDebugTimeRange(state?.time))
-    if (typeof part.providerExecuted === "boolean") {
-      appendDebugEntry(entries, "tool.providerExecuted", part.providerExecuted)
+    const call = parseToolCallSnapshot(part)
+    if (call) {
+      const outcome = toolCallOutcome(call)
+      appendDebugEntry(entries, "tool.schema", call.schemaVersion)
+      appendDebugEntry(entries, "tool.call", call.callID)
+      appendDebugEntry(entries, "tool.revision", call.revision)
+      appendDebugEntry(entries, "tool.phase", call.state.phase)
+      appendDebugEntry(entries, "tool.outcome", outcome?.kind)
+      appendDebugEntry(entries, "tool.control", call.state.phase === "settled" ? call.state.control.mode : undefined)
+      appendDebugEntry(entries, "tool.input", call.input, 320)
+      appendDebugEntry(entries, "tool.source", call.source, 320)
+      appendDebugEntry(entries, "tool.timestamps", call.timestamps, 320)
+      appendDebugEntry(entries, "tool.presentation", call.presentation, 320)
+      appendDebugEntry(entries, "tool.metadata", toolCallMetadata(call), 320)
+    } else {
+      appendDebugEntry(entries, "tool.protocol", "invalid-or-legacy")
     }
   }
 
@@ -722,66 +743,125 @@ function buildCompletionTraceItem(input: {
   })
 }
 
-function createToolTraceDetail(status: AssistantTraceStatus, state: Record<string, unknown> | null) {
-  if (status === "completed") {
-    return readString(state?.title) || "Tool completed."
-  }
-
-  if (status === "error") {
-    return "Tool failed."
-  }
-
-  if (status === "denied") {
-    return "Tool execution was denied."
-  }
-
-  if (status === "cancelled") {
-    return readString(state?.title) || "Tool call was cancelled."
-  }
-
-  if (status === "waiting-approval") {
-    return "Waiting for permission approval before the tool can continue."
-  }
-
-  return readString(state?.title) || "Preparing tool call."
+function toolCallOutcome(call: ToolCallSnapshot): ToolCallOutcome | undefined {
+  return call.state.phase === "settled" ? call.state.outcome : undefined
 }
 
-function createToolTraceInputText(status: AssistantTraceStatus, state: Record<string, unknown> | null) {
-  if (status === "completed" || status === "error" || status === "denied" || status === "cancelled") {
-    return describeOptionalStructuredValue(state?.input, {
-      pretty: true,
-    })
-  }
-
-  if (status === "waiting-approval" || status === "running" || status === "pending") {
-    return readString(state?.raw) || describeOptionalStructuredValue(state?.input, {
-      pretty: true,
-    })
-  }
-
-  return undefined
+function toolCallMetadata(call: ToolCallSnapshot) {
+  return toolCallOutcome(call)?.metadata ?? call.presentation?.metadata
 }
 
-function createToolTraceOutputText(status: AssistantTraceStatus, state: Record<string, unknown> | null) {
-  if (status === "completed") {
-    return describeStructuredValue(state?.output ?? state?.modelOutput, "Tool completed.", {
+function toolCallTitle(call: ToolCallSnapshot) {
+  const outcome = toolCallOutcome(call)
+  return (outcome?.kind === "returned" ? outcome.title : undefined) ?? call.presentation?.title
+}
+
+function isToolCallTerminal(call: ToolCallSnapshot | undefined) {
+  return call?.state.phase === "settled"
+}
+
+function toolTracePhase(item: AssistantTraceItem) {
+  return item.kind === "tool" ? item.toolCall?.state.phase : undefined
+}
+
+function toolTraceOutcome(item: AssistantTraceItem) {
+  return item.kind === "tool" && item.toolCall ? toolCallOutcome(item.toolCall) : undefined
+}
+
+function isActiveToolTrace(item: AssistantTraceItem) {
+  const phase = toolTracePhase(item)
+  return phase === "pending" || phase === "waiting-approval" || phase === "running"
+}
+
+function isWaitingApprovalToolTrace(item: AssistantTraceItem) {
+  return toolTracePhase(item) === "waiting-approval"
+}
+
+function toolTraceApprovalID(item: AssistantTraceItem) {
+  return item.kind === "tool" && item.toolCall?.state.phase === "waiting-approval"
+    ? item.toolCall.state.approval.id
+    : undefined
+}
+
+function hasToolTraceOutcome(item: AssistantTraceItem, kind: ToolCallOutcome["kind"]) {
+  return toolTraceOutcome(item)?.kind === kind
+}
+
+function toolCallDraftPreviewStatus(call: ToolCallSnapshot): AssistantTraceStatus {
+  if (call.state.phase === "pending") return "pending"
+  if (call.state.phase === "waiting-approval") return "waiting-approval"
+  if (call.state.phase === "running") return "running"
+  if (call.state.outcome.kind === "denied") return "denied"
+  if (call.state.outcome.kind === "cancelled") return "cancelled"
+  if (
+    call.state.outcome.kind === "failed" ||
+    call.state.outcome.kind === "timeout" ||
+    call.state.outcome.kind === "blocked" ||
+    (call.state.outcome.kind === "returned" && call.state.outcome.result === "negative")
+  ) {
+    return "error"
+  }
+  return "completed"
+}
+
+function createToolTraceDetail(call: ToolCallSnapshot) {
+  const title = toolCallTitle(call)
+  if (call.state.phase === "pending") return title || "Preparing tool call."
+  if (call.state.phase === "waiting-approval") {
+    return call.state.approval.reason || "Waiting for permission approval before the tool can continue."
+  }
+  if (call.state.phase === "running") return call.progress?.message || title || "Tool is running."
+
+  const outcome = call.state.outcome
+  if (outcome.kind === "returned") {
+    if (title) return title
+    if (outcome.result === "negative" && outcome.completeness === "partial") return "Tool returned a partial negative result."
+    if (outcome.result === "negative") return "Tool returned a negative result."
+    if (outcome.completeness === "partial") return "Tool returned a partial result."
+    return "Tool returned successfully."
+  }
+  if (outcome.kind === "failed") {
+    const error = outcome.error
+    return [
+      error.message,
+      `${error.stage}/${error.source} · ${error.code} · handler ${error.handlerExecuted ? "executed" : "not executed"} · ${error.retryable ? "retryable" : "not retryable"} · ${error.severity}`,
+    ].join("\n\n")
+  }
+  return outcome.reason
+}
+
+function createToolTraceInputText(call: ToolCallSnapshot) {
+  if (call.state.phase === "settled" && call.input.value) {
+    return describeOptionalStructuredValue(call.input.value, { pretty: true })
+  }
+  return call.input.raw || describeOptionalStructuredValue(call.input.value, { pretty: true })
+}
+
+function createToolTraceOutputText(call: ToolCallSnapshot) {
+  if (call.state.phase !== "settled") return undefined
+  const outcome = call.state.outcome
+  if (outcome.kind === "returned") {
+    return describeStructuredValue(outcome.output ?? outcome.modelOutput, "Tool returned without output.", {
       pretty: true,
     })
   }
-
-  if (status === "error") {
-    return readString(state?.error) || "Tool failed."
+  if (outcome.kind === "blocked") {
+    return outcome.output === undefined
+      ? outcome.reason
+      : describeStructuredValue(outcome.output, outcome.reason, { pretty: true })
   }
-
-  if (status === "denied") {
-    return readString(state?.reason) || "Tool execution was denied."
+  if (outcome.kind === "timeout") {
+    return outcome.partialOutput === undefined
+      ? outcome.reason
+      : describeStructuredValue(outcome.partialOutput, outcome.reason, { pretty: true })
   }
-
-  if (status === "cancelled") {
-    return readString(state?.reason) || readString(state?.title) || "Tool call was cancelled."
+  if (outcome.kind === "failed") {
+    const errorText = createToolTraceDetail(call)
+    return outcome.partialOutput === undefined
+      ? errorText
+      : `${describeStructuredValue(outcome.partialOutput, "Partial output", { pretty: true })}\n\n${errorText}`
   }
-
-  return undefined
+  return outcome.reason
 }
 
 function readAskUserQuestionPrompt(value: unknown): AssistantQuestionPrompt | null {
@@ -941,10 +1021,13 @@ function createTaskStateTraceItem(input: {
 
 function buildToolAttachmentTraceItems(
   sourceID: string,
-  state: Record<string, unknown> | null,
+  call: ToolCallSnapshot,
   debugEntries?: AssistantTraceDebugEntry[],
 ) {
-  const attachments = Array.isArray(state?.attachments) ? state.attachments : []
+  const outcome = toolCallOutcome(call)
+  const attachments = outcome?.kind === "returned" && Array.isArray(outcome.attachments)
+    ? outcome.attachments
+    : []
 
   return attachments
     .map((attachment) => readRecord(attachment))
@@ -1052,10 +1135,9 @@ function clearStreamingItems(items: AssistantTraceItem[]) {
 
 function cancelInterruptedToolTraceItems(items: AssistantTraceItem[], detail: string) {
   return clearStreamingItems(items).map((item) =>
-    item.kind === "tool" && !isTerminalTraceStatus(item.status)
+    item.kind === "tool" && !isToolCallTerminal(item.toolCall)
       ? {
           ...item,
-          status: "cancelled" as const,
           detail: item.detail || detail,
           isStreaming: false,
         }
@@ -1148,18 +1230,25 @@ function upsertTraceItems(items: AssistantTraceItem[], nextItems: AssistantTrace
 }
 
 function mergeTraceItem(existing: AssistantTraceItem, nextItem: AssistantTraceItem): AssistantTraceItem {
-  const keepsTerminalToolState =
+  const keepsNewerToolSnapshot =
     existing.kind === "tool" &&
     nextItem.kind === "tool" &&
-    isTerminalTraceStatus(existing.status) &&
-    !isTerminalTraceStatus(nextItem.status)
-  const keepsCancelledToolState =
+    Boolean(existing.toolCall && nextItem.toolCall) &&
+    existing.toolCall!.revision > nextItem.toolCall!.revision
+  const keepsSettledToolSnapshot =
     existing.kind === "tool" &&
     nextItem.kind === "tool" &&
-    existing.status === "cancelled" &&
-    nextItem.status === "error"
+    isToolCallTerminal(existing.toolCall) &&
+    !isToolCallTerminal(nextItem.toolCall)
+  const keepsFirstToolSettlement =
+    existing.kind === "tool" &&
+    nextItem.kind === "tool" &&
+    Boolean(existing.toolCall && nextItem.toolCall) &&
+    isToolCallTerminal(existing.toolCall) &&
+    isToolCallTerminal(nextItem.toolCall) &&
+    !isSameToolCallSettlement(existing.toolCall!, nextItem.toolCall!)
 
-  if (keepsTerminalToolState || keepsCancelledToolState) {
+  if (keepsNewerToolSnapshot || keepsSettledToolSnapshot || keepsFirstToolSettlement) {
     return {
       ...existing,
       messageID: existing.messageID ?? nextItem.messageID,
@@ -1194,7 +1283,11 @@ function mergeTraceItem(existing: AssistantTraceItem, nextItem: AssistantTraceIt
 
   if (existing.kind === "tool" && nextItem.kind === "tool") {
     const toolName = resolveMergedToolName(existing, nextItem)
-    const draftPatch = settleDraftPatchPreview(nextItem.draftPatch ?? existing.draftPatch, nextItem.status ?? existing.status)
+    const call = nextItem.toolCall ?? existing.toolCall
+    const draftPatch = settleDraftPatchPreview(
+      nextItem.draftPatch ?? existing.draftPatch,
+      call ? toolCallDraftPreviewStatus(call) : nextItem.status ?? existing.status,
+    )
     return {
       ...merged,
       title: toolName,
@@ -1306,78 +1399,6 @@ function appendTraceDelta(
   )
 }
 
-function appendToolInputDelta(
-  items: AssistantTraceItem[],
-  input: {
-    delta: string
-    sourceID: string
-    messageID?: string
-    backendTurnID?: string
-    toolCallID?: string
-    toolName?: string
-    status?: AssistantTraceStatus
-    detail?: string
-    timestamp?: number
-    debugEntries?: AssistantTraceDebugEntry[]
-  },
-) {
-  const nextItems = clearStreamingItems(items)
-  const existing = nextItems.find((item) =>
-    item.kind === "tool" &&
-    (
-      item.sourceID === input.sourceID ||
-      (input.toolCallID ? item.toolCallID === input.toolCallID : false)
-    )
-  )
-  const nextToolInput = appendStreamRenderText(
-    existing?.toolInputText,
-    input.delta,
-    undefined,
-    STREAM_TOOL_INPUT_RENDER_LIMIT,
-  )
-  const nextToolInputText = nextToolInput.text
-  const status = input.status ?? (existing?.kind === "tool" && existing.status && !isTerminalTraceStatus(existing.status)
-    ? existing.status
-    : "pending")
-  const toolName = resolveToolName({
-    candidate: input.toolName,
-    existing,
-  })
-  const isApplyPatchTool = isApplyPatchToolName(toolName)
-  const parsedDraftPatch = isApplyPatchTool && input.toolCallID
-    ? toDraftPatchPreview({
-        rawToolInput: nextToolInputText,
-        status,
-      })
-    : null
-  const draftPatch = parsedDraftPatch ?? existing?.draftPatch
-  const nextItem = createTraceItem({
-    id: existing?.id ?? input.sourceID,
-    sourceID: existing?.sourceID ?? input.sourceID,
-    kind: "tool",
-    label: "Tool",
-    title: toolName,
-    toolName,
-    text: existing?.toolOutputText ?? nextToolInputText,
-    detail: input.detail || existing?.detail || "Preparing tool call.",
-    timestamp: existing?.timestamp ?? input.timestamp,
-    toolInputText: nextToolInputText,
-    toolOutputText: existing?.toolOutputText,
-    status,
-    messageID: input.messageID || existing?.messageID,
-    backendTurnID: input.backendTurnID || existing?.backendTurnID,
-    partID: existing?.partID ?? input.sourceID,
-    toolCallID: input.toolCallID || existing?.toolCallID,
-    ...(draftPatch ? { draftPatch: settleDraftPatchPreview(draftPatch, status) } : {}),
-    section: "tools",
-    visibilityKey: "toolCalls",
-    isStreaming: status === "running" || status === "pending",
-    debugEntries: appendTruncationDebugEntry(input.debugEntries, nextToolInput.truncated),
-  })
-
-  return upsertTraceItem(nextItems, nextItem)
-}
-
 function buildTraceItemFromPart(
   input: unknown,
   options?: {
@@ -1418,9 +1439,25 @@ function buildTraceItemFromPart(
   }
 
   if (type === "tool") {
-    const state = readRecord(part.state)
-    const stateMetadata = readRecord(state?.metadata)
-    const rawToolSource = readRecord(stateMetadata?.toolSource)
+    const toolCall = parseToolCallSnapshot(part)
+    if (!toolCall) {
+      return [createPartTraceItem({
+        id: sourceID,
+        sourceID,
+        kind: "error",
+        label: "Tool protocol",
+        title: "Unsupported tool-call record",
+        detail: "This tool record is not a valid ToolCall v3 snapshot. Legacy status records are intentionally not mapped.",
+        timestamp: timestamp ?? undefined,
+        status: "error",
+        section: "tools",
+        visibilityKey: "toolCalls",
+        debugEntries,
+      })]
+    }
+
+    const metadata = readRecord(toolCallMetadata(toolCall))
+    const rawToolSource = readRecord(metadata?.toolSource)
     const rawToolSourceKind = readString(rawToolSource?.kind)
     const toolSourceKind: "mcp" | "native-module" | "builtin-module" | "custom-module" | "plugin-module" | undefined =
       rawToolSourceKind === "mcp" ||
@@ -1461,28 +1498,13 @@ function buildTraceItemFromPart(
           provider: toolProvider,
         }
       : undefined
-    const rawStatus = readString(state?.status)
-    const status: AssistantTraceStatus =
-      rawStatus === "completed"
-        ? "completed"
-        : rawStatus === "error"
-          ? "error"
-          : rawStatus === "pending"
-            ? "pending"
-            : rawStatus === "waiting-approval"
-              ? "waiting-approval"
-              : rawStatus === "denied"
-                ? "denied"
-                : rawStatus === "cancelled" || rawStatus === "canceled"
-                  ? "cancelled"
-                  : "running"
-    const toolCallID = readString(part.callID)
+    const toolCallID = toolCall.callID
     const toolName = resolveToolName({
-      candidate: part.tool,
+      candidate: toolCall.tool,
     })
     const messageID = ownership.messageID
-    const rawToolInputText = createToolTraceInputText(status, state)
-    const rawToolOutputText = createToolTraceOutputText(status, state)
+    const rawToolInputText = createToolTraceInputText(toolCall)
+    const rawToolOutputText = createToolTraceOutputText(toolCall)
     const toolInput = rawToolInputText
       ? truncateStreamRenderText(rawToolInputText, STREAM_TOOL_INPUT_RENDER_LIMIT)
       : null
@@ -1498,10 +1520,10 @@ function buildTraceItemFromPart(
     const draftPatch = isApplyPatchToolName(toolName) && toolInputText
       ? toDraftPatchPreview({
           rawToolInput: toolInputText,
-          status,
+          status: toolCallDraftPreviewStatus(toolCall),
         })
       : null
-    const questionPrompt = readAskUserQuestionPrompt(state?.metadata)
+    const questionPrompt = readAskUserQuestionPrompt(metadata)
 
     if (questionPrompt) {
       return [createPartTraceItem({
@@ -1513,7 +1535,7 @@ function buildTraceItemFromPart(
         text: questionPrompt.question,
         detail: createAskUserQuestionTraceDetail(questionPrompt),
         timestamp: timestamp ?? undefined,
-        status,
+        status: questionPrompt.answered ? "completed" : "pending",
         section: "response",
         visibilityKey: "response",
         debugEntries: toolDebugEntries,
@@ -1531,10 +1553,10 @@ function buildTraceItemFromPart(
         toolName,
         toolSource,
         text: toolOutputText ?? toolInputText,
-        detail: createToolTraceDetail(status, state),
+        detail: createToolTraceDetail(toolCall),
         toolInputText,
         toolOutputText,
-        status,
+        toolCall,
         messageID,
         backendTurnID: ownership.backendTurnID,
         partID: sourceID,
@@ -1543,10 +1565,10 @@ function buildTraceItemFromPart(
         ...(draftPatch ? { draftPatch } : {}),
         section: "tools",
         visibilityKey: "toolCalls",
-        isStreaming: status === "running" || status === "pending",
+        isStreaming: !isToolCallTerminal(toolCall),
         debugEntries: toolDebugEntries,
       }),
-      ...applyTraceItemsOwnership(buildToolAttachmentTraceItems(sourceID, state, toolDebugEntries), ownership),
+      ...applyTraceItemsOwnership(buildToolAttachmentTraceItems(sourceID, toolCall, toolDebugEntries), ownership),
     ]
   }
 
@@ -2267,7 +2289,7 @@ function resolveRunningAssistantHistoryPhase(
       return "tool_running"
   }
 
-  if (items.some((item) => item.status === "running" || item.status === "pending")) return "tool_running"
+  if (items.some(isActiveToolTrace)) return "tool_running"
   if (items.some((item) => item.kind === "text")) return "responding"
   if (items.some((item) => item.kind === "reasoning")) return "reasoning"
   return "waiting_llm"
@@ -2291,32 +2313,32 @@ function assistantHistoryStateForSettledPhase(phase: AssistantThreadMessagePhase
 }
 
 function resolveAssistantHistoryState(items: AssistantTraceItem[], message: LoadedSessionHistoryMessage) {
-  if (isAssistantHistoryCancelled(message) || items.some((item) => item.status === "cancelled")) return "Backend stream cancelled"
+  if (isAssistantHistoryCancelled(message) || items.some((item) => hasToolTraceOutcome(item, "cancelled"))) return "Backend stream cancelled"
   const failure = readAssistantHistoryFailure(message)
   if (failure) return assistantFailureBaseTitle(failure)
   if (items.some((item) => item.kind === "question")) return "Waiting for your answer"
-  if (items.some((item) => item.status === "waiting-approval")) return "Waiting for permission approval"
-  if (items.some((item) => item.status === "denied")) return "Tool execution denied"
+  if (items.some(isWaitingApprovalToolTrace)) return "Waiting for permission approval"
+  if (items.some((item) => hasToolTraceOutcome(item, "denied"))) return "Tool execution denied"
   const runningState = assistantHistoryStateForRunningPhase(resolveRunningAssistantHistoryPhase(items, message))
   if (runningState) return runningState
   const settledState = assistantHistoryStateForSettledPhase(resolveSettledAssistantHistoryPhase(items, message))
   if (settledState) return settledState
-  if (items.some((item) => item.status === "running" || item.status === "pending")) return "Backend response in progress"
+  if (items.some(isActiveToolTrace)) return "Backend response in progress"
   if (items.some((item) => item.kind === "text")) return "Backend response received"
   if (items.some((item) => item.kind === "tool")) return "Tool history restored"
   return "Session history restored"
 }
 
 function resolveAssistantHistoryPhase(items: AssistantTraceItem[], message: LoadedSessionHistoryMessage): AssistantThreadMessagePhase {
-  if (isAssistantHistoryCancelled(message) || items.some((item) => item.status === "cancelled")) return "cancelled"
+  if (isAssistantHistoryCancelled(message) || items.some((item) => hasToolTraceOutcome(item, "cancelled"))) return "cancelled"
   if (isAssistantHistoryFailed(message)) return "failed"
   if (items.some((item) => item.kind === "question")) return "blocked"
-  if (items.some((item) => item.status === "waiting-approval")) return "waiting_approval"
+  if (items.some(isWaitingApprovalToolTrace)) return "waiting_approval"
   const runningPhase = resolveRunningAssistantHistoryPhase(items, message)
   if (runningPhase) return runningPhase
   const settledPhase = resolveSettledAssistantHistoryPhase(items, message)
   if (settledPhase) return settledPhase
-  if (items.some((item) => item.status === "running" || item.status === "pending")) return "tool_running"
+  if (items.some(isActiveToolTrace)) return "tool_running"
   if (items.some((item) => item.kind === "text")) return "completed"
   return "completed"
 }
@@ -2330,7 +2352,7 @@ function isStreamingAssistantHistoryPhase(phase: AssistantThreadMessagePhase) {
 }
 
 function resolveAssistantHistoryToolName(items: AssistantTraceItem[]) {
-  return items.find((item) => item.kind === "tool" && (item.status === "running" || item.status === "pending" || item.status === "waiting-approval"))
+  return items.find(isActiveToolTrace)
     ?.toolName
 }
 
@@ -2854,7 +2876,7 @@ export function finalizeStreamAssistantThreadMessage(
     )
   }
 
-  const waitingTool = items.find((item) => item.kind === "tool" && item.status === "waiting-approval")
+  const waitingTool = items.find(isWaitingApprovalToolTrace)
   if (waitingTool) {
     const nextItems = upsertTraceItem(
       items,
@@ -3039,7 +3061,8 @@ function inferToolLifecycleFromTraceItem(
     return null
   }
 
-  if (item.status === "waiting-approval") {
+  const phase = item.toolCall?.state.phase
+  if (phase === "waiting-approval") {
     return {
       phase: "waiting_approval" as const,
       state: "Waiting for permission approval",
@@ -3048,7 +3071,7 @@ function inferToolLifecycleFromTraceItem(
     }
   }
 
-  if (item.status === "running" || item.status === "pending") {
+  if (phase === "running" || phase === "pending") {
     return {
       phase: "tool_running" as const,
       state: "Running tools",
@@ -3065,8 +3088,8 @@ function applyRuntimeEventToMessage(
   item: AgentStreamEvent,
   event: AgentRuntimeEvent,
 ): AssistantThreadMessage {
-  const allowCancelledToolInputDelta = assistantMessage.runtime.phase === "cancelled" && event.type === "tool.input.delta"
-  if (isSettledAssistantPhase(assistantMessage.runtime.phase) && !isTerminalRuntimeEventType(event.type) && !allowCancelledToolInputDelta) {
+  const allowCanonicalToolReconciliation = event.type.startsWith("tool.call.")
+  if (isSettledAssistantPhase(assistantMessage.runtime.phase) && !isTerminalRuntimeEventType(event.type) && !allowCanonicalToolReconciliation) {
     return assistantMessage
   }
 
@@ -3217,48 +3240,6 @@ function applyRuntimeEventToMessage(
     )
   }
 
-  if (event.type === "tool.input.delta") {
-    const messageID = resolvePayloadMessageID(payload) || assistantMessage.messageID
-    const toolCallID = readString(payload.toolCallID)
-    const partID = readString(payload.partID)
-    const sourceID = partID || (toolCallID ? `tool-input:${toolCallID}` : "")
-    const delta = readString(payload.delta)
-    if (!sourceID || !delta) return assistantMessage
-    const rawLength = readNumber(payload.rawLength)
-    const isAlreadyCancelled = assistantMessage.runtime.phase === "cancelled"
-    const cancelledDetail = "Prompt cancellation requested."
-
-    return updateRuntimeMessageLifecycle(
-      {
-        ...assistantMessage,
-        messageID,
-        isStreaming: !isAlreadyCancelled,
-      },
-      {
-        phase: isAlreadyCancelled ? "cancelled" : "tool_running",
-        state: isAlreadyCancelled ? assistantMessage.state : "Preparing tool call",
-        toolName: isAlreadyCancelled ? null : readString(payload.toolName) || null,
-      },
-      appendToolInputDelta(preparedItems, {
-        delta,
-        sourceID,
-        messageID,
-        backendTurnID: eventBackendTurnID,
-        toolCallID,
-        toolName: readString(payload.toolName),
-        status: isAlreadyCancelled ? "cancelled" : undefined,
-        detail: isAlreadyCancelled ? cancelledDetail : undefined,
-        timestamp: eventTimestamp,
-        debugEntries: buildRuntimeEventDebugEntries(event, item.id, {
-          "message.id": readString(payload.messageID),
-          "part.id": partID,
-          "tool.call": toolCallID,
-          "tool.raw.length": rawLength > 0 ? rawLength : undefined,
-        }),
-      }),
-    )
-  }
-
   if (event.type === "part.removed") {
     const partID = readString(payload.partID)
     if (!partID) return assistantMessage
@@ -3316,8 +3297,7 @@ function applyRuntimeEventToMessage(
 
     const nextItems = upsertTraceItems(clearStreamingItems(preparedItems), traceItems)
     const primaryItem = traceItems[0]
-    const partState = readRecord(partRecord.state)
-    const approvalRequestID = readString(partState?.approvalID) || null
+    const approvalRequestID = toolTraceApprovalID(primaryItem) ?? null
     const isStreaming = !isSettledAssistantPhase(assistantMessage.runtime.phase)
 
     if (primaryItem?.kind === "tool") {
@@ -3330,7 +3310,7 @@ function applyRuntimeEventToMessage(
           isStreaming,
         },
         inferredLifecycle ?? (
-          primaryItem.status === "waiting-approval" && assistantMessage.runtime.phase === "waiting_approval" && approvalRequestID
+          isWaitingApprovalToolTrace(primaryItem) && assistantMessage.runtime.phase === "waiting_approval" && approvalRequestID
             ? { approvalRequestID }
             : {}
         ),
@@ -3367,18 +3347,20 @@ function applyRuntimeEventToMessage(
     }
 
     const messageID = readString(partRecord?.messageID) || resolvePayloadMessageID(payload) || assistantMessage.messageID
-    const traceItems = buildTraceItemFromPart(part, {
+    const isStreaming = !isSettledAssistantPhase(assistantMessage.runtime.phase)
+    const projectedTraceItems = buildTraceItemFromPart(part, {
       debugEntries,
       messageID,
       backendTurnID: eventBackendTurnID,
     })
+    const traceItems = isStreaming
+      ? projectedTraceItems
+      : projectedTraceItems.map((traceItem) => ({ ...traceItem, isStreaming: false }))
     if (traceItems.length === 0) return assistantMessage
 
     let nextItems = upsertTraceItems(clearStreamingItems(preparedItems), traceItems)
     const primaryItem = traceItems[0]
-    const partState = readRecord(partRecord?.state)
-    const approvalRequestID = readString(partState?.approvalID) || null
-    const isStreaming = !isSettledAssistantPhase(assistantMessage.runtime.phase)
+    const approvalRequestID = toolTraceApprovalID(primaryItem) ?? null
 
     if (primaryItem?.kind === "tool") {
       const inferredLifecycle = inferToolLifecycleFromTraceItem(assistantMessage, primaryItem, approvalRequestID)
@@ -3390,7 +3372,7 @@ function applyRuntimeEventToMessage(
           isStreaming,
         },
         inferredLifecycle ?? (
-          primaryItem.status === "waiting-approval" && assistantMessage.runtime.phase === "waiting_approval" && approvalRequestID
+          isWaitingApprovalToolTrace(primaryItem) && assistantMessage.runtime.phase === "waiting_approval" && approvalRequestID
             ? { approvalRequestID }
             : {}
         ),
@@ -3634,8 +3616,7 @@ export function applyAgentStreamEventToThreadMessage(assistantMessage: Assistant
     if (traceItems.length === 0) return assistantMessage
     const nextItems = upsertTraceItems(clearStreamingItems(preparedItems), traceItems)
     const primaryItem = traceItems[0]
-    const partState = readRecord(partRecord?.state)
-    const approvalRequestID = readString(partState?.approvalID) || null
+    const approvalRequestID = toolTraceApprovalID(primaryItem) ?? null
     const isStreaming = !isSettledAssistantPhase(assistantMessage.runtime.phase)
 
     if (primaryItem?.kind === "tool") {
@@ -3648,7 +3629,7 @@ export function applyAgentStreamEventToThreadMessage(assistantMessage: Assistant
           isStreaming,
         },
         inferredLifecycle ?? (
-          primaryItem.status === "waiting-approval" && assistantMessage.runtime.phase === "waiting_approval" && approvalRequestID
+          isWaitingApprovalToolTrace(primaryItem) && assistantMessage.runtime.phase === "waiting_approval" && approvalRequestID
             ? { approvalRequestID }
             : {}
         ),

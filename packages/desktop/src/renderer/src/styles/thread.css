@@ -4224,14 +4224,23 @@ button.user-message-diff-file-row:focus-visible {
 }
 
 .trace-tool-status-indicator.is-success {
-  --tool-status-color: var(--seg-text-3);
+  --tool-status-color: var(--seg-success-text);
 }
 
-.trace-tool-status-indicator.is-error,
-.trace-tool-status-indicator.is-denied {
+.trace-tool-status-indicator.is-failed {
   --tool-status-color: var(--seg-danger-text, var(--seg-danger));
 }
 
+.trace-tool-status-indicator.is-returned-negative,
+.trace-tool-status-indicator.is-returned-partial,
+.trace-tool-status-indicator.is-timeout {
+  --tool-status-color: var(--seg-warning);
+  --tool-status-halo: var(--seg-warning-surface);
+}
+
+.trace-tool-status-indicator.is-returned,
+.trace-tool-status-indicator.is-blocked,
+.trace-tool-status-indicator.is-denied,
 .trace-tool-status-indicator.is-cancelled {
   --tool-status-color: var(--seg-text-3);
 }
@@ -4503,6 +4512,18 @@ button.trace-log-row {
   color: var(--trace-tool-name-active);
 }
 
+.trace-log-summary.trace-tool-name.is-tone-warning {
+  color: var(--seg-warning);
+}
+
+.trace-log-summary.trace-tool-name.is-tone-success {
+  color: var(--seg-success-text);
+}
+
+.trace-log-summary.trace-tool-name.is-tone-danger {
+  color: var(--seg-danger-text, var(--seg-danger));
+}
+
 .trace-log-meta {
   flex: 0 0 auto;
   min-width: 0;
@@ -4524,14 +4545,29 @@ button.trace-log-row {
   color: var(--seg-text-3);
 }
 
-.trace-log-status-text.is-waiting-approval {
+.trace-log-status-text.is-waiting-approval,
+.trace-log-status-text.is-returned-negative,
+.trace-log-status-text.is-returned-partial,
+.trace-log-status-text.is-timeout,
+.trace-log-status-text.is-tone-warning {
   color: var(--seg-warning);
 }
 
-.trace-log-status-text.is-error,
-.trace-log-status-text.is-denied,
-.trace-log-status-text.is-cancelled {
+.trace-log-status-text.is-failed,
+.trace-log-status-text.is-tone-danger {
   color: var(--seg-danger-text, var(--seg-danger));
+}
+
+.trace-log-status-text.is-returned,
+.trace-log-status-text.is-tone-success {
+  color: var(--seg-success-text);
+}
+
+.trace-log-status-text.is-denied,
+.trace-log-status-text.is-blocked,
+.trace-log-status-text.is-cancelled,
+.trace-log-status-text.is-tone-muted {
+  color: var(--seg-text-3);
 }
 
 .trace-log-chevron {

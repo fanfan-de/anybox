@@ -5,6 +5,7 @@ import type {
   ThreadTurn,
   ThreadTurnStatus,
 } from "../types"
+import { toolCallOutcome, toolCallIsSettled, toolCallIsWaitingApproval } from "../tool-call-view"
 import type { ThreadDisplayRow } from "./thread-display-rows"
 import {
   findLastNonemptyAssistantResponseBlock,
@@ -236,6 +237,7 @@ function isUnresolvedPromptRow(
     return row.item.status === "pending" || row.item.status === "waiting-approval"
   }
   if (row.kind === "assistant-approval-row") {
+    if (row.item.kind === "tool") return toolCallIsWaitingApproval(row.item.toolCall)
     return row.item.status === "pending" || row.item.status === "waiting-approval"
   }
   return false
@@ -244,9 +246,17 @@ function isUnresolvedPromptRow(
 function isFailureOutcomeRow(row: AtomicAssistantDisplayRow) {
   return traceItemsForRow(row).some((item) =>
     item.kind === "error" ||
-    item.status === "error" ||
-    item.status === "cancelled" ||
-    item.status === "denied",
+    (item.kind === "tool"
+      ? (() => {
+          const outcome = toolCallOutcome(item.toolCall)
+          return Boolean(
+            outcome && (
+              outcome.kind !== "returned" ||
+              outcome.result === "negative"
+            )
+          )
+        })()
+      : item.status === "error" || item.status === "cancelled" || item.status === "denied"),
   )
 }
 
@@ -264,7 +274,9 @@ function isTerminalizedTraceOutcomeRow(
   }
 
   return traceItemsForRow(row).some((item) =>
-    item.status === undefined || item.status === "pending" || item.status === "running",
+    item.kind === "tool"
+      ? !toolCallIsSettled(item.toolCall)
+      : item.status === undefined || item.status === "pending" || item.status === "running",
   )
 }
 

@@ -6,6 +6,25 @@ import * as Orchestrator from "#session/runtime/orchestrator.ts"
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
+function toolPart(raw: string, revision: number) {
+  return {
+    id: "tool-part-1",
+    sessionID: "session-test",
+    messageID: "assistant-1",
+    type: "tool" as const,
+    schemaVersion: 3 as const,
+    turnID: "turn-test",
+    callID: "call-1",
+    tool: "write",
+    input: { raw },
+    source: { kind: "model" as const },
+    retry: { attempt: 1 },
+    revision,
+    timestamps: { createdAt: 1 },
+    state: { phase: "pending" as const },
+  }
+}
+
 describe("turn stream events", () => {
   it("queues transient stream events off the emit call stack", async () => {
     const turn = Orchestrator.startTurn({
@@ -73,7 +92,7 @@ describe("turn stream events", () => {
     const observed: Array<{ type: string; delta?: string }> = []
     const unsubscribe = EventStore.subscribe((event) => {
       if (event.turnID !== turn.turnID) return
-      if (event.type === "text.part.delta" || event.type === "reasoning.part.delta" || event.type === "tool.input.delta") {
+      if (event.type === "text.part.delta" || event.type === "reasoning.part.delta" || event.type === "tool.call.input_delta") {
         observed.push({
           type: event.type,
           delta: event.payload.delta,
@@ -100,7 +119,8 @@ describe("turn stream events", () => {
         kind: "reasoning",
         delta: "why",
       })
-      turn.emitStream("tool.input.delta", {
+      turn.emitStream("tool.call.input_delta", {
+        part: toolPart("{\"p", 1),
         messageID: "assistant-1",
         partID: "tool-part-1",
         toolCallID: "call-1",
@@ -108,7 +128,8 @@ describe("turn stream events", () => {
         delta: "{\"p",
         rawLength: 3,
       })
-      turn.emitStream("tool.input.delta", {
+      turn.emitStream("tool.call.input_delta", {
+        part: toolPart("{\"p\":1}", 2),
         messageID: "assistant-1",
         partID: "tool-part-1",
         toolCallID: "call-1",
@@ -122,7 +143,7 @@ describe("turn stream events", () => {
       expect(observed).toEqual([
         { type: "text.part.delta", delta: "hello" },
         { type: "reasoning.part.delta", delta: "why" },
-        { type: "tool.input.delta", delta: "{\"p\":1}" },
+        { type: "tool.call.input_delta", delta: "{\"p\":1}" },
       ])
     } finally {
       unsubscribe()

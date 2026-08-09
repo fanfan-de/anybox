@@ -465,8 +465,8 @@ test("session-scoped runtime events use a nullable turn and monotonic session se
       const first = EventStore.appendSessionEvent(session.id, "retry.scheduled", { attempt: 1 })
       const second = EventStore.appendSessionEvent(session.id, "retry.scheduled", { attempt: 2 })
 
-      expect(first).toMatchObject({ schemaVersion: 2, scope: "session", turnID: null, seq: 1 })
-      expect(second).toMatchObject({ schemaVersion: 2, scope: "session", turnID: null, seq: 2 })
+      expect(first).toMatchObject({ schemaVersion: 3, scope: "session", turnID: null, seq: 1 })
+      expect(second).toMatchObject({ schemaVersion: 3, scope: "session", turnID: null, seq: 2 })
       expect(EventStore.listSessionEvents({ sessionID: session.id }).map((event) => ({
         turnID: event.turnID,
         seq: event.seq,
@@ -696,20 +696,18 @@ test("persisted trace payloads stay below 32 KiB and do not duplicate large tool
           type: "tool",
           callID: "call-large-trace",
           tool: "large-tool",
-          state: {
-            status: "completed",
-            input: {},
-            output: persisted.output,
-            modelOutput: persisted.modelOutput,
-            title: "Large tool",
-            metadata: persisted.metadata,
-            time: { start: 1, end: 2 },
-            attachments: persisted.attachments,
-          },
+          schemaVersion: 3,
+          turnID: "turn-test",
+          input: { raw: JSON.stringify({}), value: {} },
+          source: { kind: "model" },
+          retry: { attempt: 1 },
+          revision: 1,
+          timestamps: { createdAt: 1, settledAt: 2 },
+          state: { phase: "settled", outcome: { kind: "returned", result: "success", completeness: "complete", output: persisted.output, modelOutput: persisted.modelOutput, title: "Large tool", attachments: persisted.attachments, metadata: persisted.metadata, execution: { sideEffect: "unknown", retry: "unknown" } }, control: { mode: "continue-model" } },
         })
         const turnID = Identifier.ascending("turn")
         const event = RuntimeEvent.createRuntimeEventFactory({ sessionID: session.id, turnID })
-          .next("tool.call.completed", { part })
+          .next("tool.call.settled", { part })
         EventStore.appendAndProject(event)
 
         const row = db.db.prepare(`SELECT "payload" FROM "session_events" WHERE "eventID" = ?`).get(event.eventID) as {

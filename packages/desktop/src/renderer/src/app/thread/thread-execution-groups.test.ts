@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import type { ToolCallSnapshot, ToolCallState } from "@anybox/shared"
 import {
   buildThreadDisplayContext,
   buildThreadDisplayRows,
@@ -40,6 +41,105 @@ function traceItem(
     status: "completed",
     timestamp: 10,
     ...extra,
+  }
+}
+
+type TestToolCallState = "pending" | "running" | "waiting-approval" | "returned" | "failed" | "denied"
+
+function toolItem(
+  id: string,
+  fixtureState: TestToolCallState = "returned",
+  extra: Omit<Partial<AssistantTraceItem>, "kind" | "status" | "toolCall"> = {},
+): AssistantTraceItem {
+  const execution = { sideEffect: "unknown", retry: "unknown" } as const
+  let state: ToolCallState
+
+  switch (fixtureState) {
+    case "pending":
+      state = { phase: "pending" }
+      break
+    case "running":
+      state = { phase: "running" }
+      break
+    case "waiting-approval":
+      state = { phase: "waiting-approval", approval: { id: `approval-${id}` } }
+      break
+    case "returned":
+      state = {
+        phase: "settled",
+        outcome: {
+          kind: "returned",
+          result: "success",
+          completeness: "complete",
+          output: extra.toolOutputText ?? "Tool completed",
+          execution,
+        },
+        control: { mode: "continue-model" },
+      }
+      break
+    case "failed":
+      state = {
+        phase: "settled",
+        outcome: {
+          kind: "failed",
+          error: {
+            stage: "execution",
+            source: "tool",
+            code: "TEST_TOOL_FAILURE",
+            message: extra.toolOutputText ?? "Tool failed",
+            handlerExecuted: true,
+            retryable: false,
+            severity: "recoverable",
+          },
+          execution,
+        },
+        control: { mode: "continue-model" },
+      }
+      break
+    case "denied":
+      state = {
+        phase: "settled",
+        outcome: {
+          kind: "denied",
+          approvalID: `approval-${id}`,
+          reason: "Denied by test fixture",
+          execution,
+        },
+        control: { mode: "continue-model" },
+      }
+      break
+  }
+
+  const settled = state.phase === "settled"
+  const toolCall: ToolCallSnapshot = {
+    schemaVersion: 3,
+    callID: id,
+    sessionID: session.id,
+    turnID: `turn-${id}`,
+    messageID: `message-${id}`,
+    executionID: `execution-${id}`,
+    tool: extra.toolName ?? extra.title ?? "test_tool",
+    input: { raw: extra.toolInputText ?? "" },
+    source: { kind: "model", providerID: "test", modelID: "test-model" },
+    retry: { attempt: 1 },
+    revision: fixtureState === "pending" ? 0 : settled ? 2 : 1,
+    timestamps: {
+      createdAt: 1,
+      ...(fixtureState === "running" ? { startedAt: 2 } : {}),
+      ...(fixtureState === "waiting-approval" ? { approvalRequestedAt: 2 } : {}),
+      ...(settled ? { settledAt: 3 } : {}),
+    },
+    state,
+  }
+
+  return {
+    id,
+    kind: "tool",
+    label: "tool",
+    timestamp: 10,
+    ...extra,
+    toolCallID: id,
+    toolCall,
   }
 }
 
@@ -441,10 +541,9 @@ describe("thread execution groups", () => {
     const user = userMessage("user-permission", "Run the approved tool")
     const blocked = assistantMessage("assistant-blocked", [
       reasoningItem("reasoning-before-approval", "A".repeat(161)),
-      traceItem("tool-before-approval", "tool", { title: "activate-window" }),
-      traceItem("permission-approved", "tool", {
+      toolItem("tool-before-approval", "returned", { title: "activate-window" }),
+      toolItem("permission-approved", "returned", {
         section: "approvals",
-        status: "completed",
         title: "activate-window",
       }),
     ], {
@@ -679,7 +778,7 @@ describe("thread execution groups", () => {
     expect(eligibleFor([reasoningItem("text-161", "x".repeat(161))])).toBe(true)
     expect(eligibleFor([reasoningItem("lines-3", "one\ntwo\nthree")])).toBe(false)
     expect(eligibleFor([reasoningItem("lines-4", "one\ntwo\nthree\nfour")])).toBe(true)
-    expect(eligibleFor([traceItem("tool", "tool", {
+    expect(eligibleFor([toolItem("tool", "pending", {
       toolInputText: "{\"path\":\"src/index.ts\"}",
     })])).toBe(true)
   })
@@ -715,8 +814,7 @@ describe("thread execution groups", () => {
   it("folds a recovered tool failure into a completed process when the final response is resolved", () => {
     const message = assistantMessage("assistant-recovered", [
       reasoningItem("reasoning-before-failure", "Inspecting the target file."),
-      traceItem("recovered-tool-failure", "tool", {
-        status: "error",
+      toolItem("recovered-tool-failure", "failed", {
         toolOutputText: "Patch context did not match",
       }),
       reasoningItem("reasoning-after-failure", "Retrying with the current file contents."),
@@ -752,8 +850,7 @@ describe("thread execution groups", () => {
   it("keeps a running failure in the process prefix instead of promoting it to an outcome", () => {
     const message = assistantMessage("assistant-running-failure", [
       reasoningItem("reasoning-running-1", "Trying the first approach."),
-      traceItem("running-tool-failure", "tool", {
-        status: "error",
+      toolItem("running-tool-failure", "failed", {
         toolOutputText: "The first approach failed",
       }),
       reasoningItem("reasoning-running-2", "Recovering with another approach."),
@@ -785,8 +882,7 @@ describe("thread execution groups", () => {
   it("keeps a running process visible after response streaming starts", () => {
     const message = assistantMessage("assistant-streaming-response", [
       reasoningItem("reasoning-streaming-1", "Inspecting the implementation."),
-      traceItem("tool-streaming", "tool", {
-        status: "completed",
+      toolItem("tool-streaming", "returned", {
         toolOutputText: "Loaded the relevant source files",
       }),
       traceItem("response-streaming", "text", {
@@ -820,8 +916,7 @@ describe("thread execution groups", () => {
   it("keeps the last failure outside when a completed turn has no resolved final response", () => {
     const message = assistantMessage("assistant-completed-without-response", [
       reasoningItem("reasoning-no-response-1", "Trying the operation."),
-      traceItem("completed-tool-failure", "tool", {
-        status: "error",
+      toolItem("completed-tool-failure", "failed", {
         toolOutputText: "The operation failed",
       }),
       reasoningItem("reasoning-no-response-2", "No final response was produced."),
@@ -843,8 +938,7 @@ describe("thread execution groups", () => {
   it("keeps an abnormal turn visible even when it contains response text", () => {
     const message = assistantMessage("assistant-failed-with-response", [
       reasoningItem("reasoning-failed-with-response", "Trying the operation."),
-      traceItem("terminal-failure-before-response", "tool", {
-        status: "error",
+      toolItem("terminal-failure-before-response", "failed", {
         toolOutputText: "The operation failed",
       }),
       textItem("failed-turn-final-response", "The task could not be completed."),
@@ -989,10 +1083,10 @@ describe("thread execution groups", () => {
   it("keeps the last failed tool and pending approval outside an abnormal prefix", () => {
     const message = assistantMessage("assistant-1", [
       reasoningItem("reasoning-1", "One"),
-      traceItem("failed-tool-1", "tool", { status: "error", toolOutputText: "First failure" }),
+      toolItem("failed-tool-1", "failed", { toolOutputText: "First failure" }),
       reasoningItem("reasoning-2", "Two"),
-      traceItem("failed-tool-2", "tool", { status: "error", toolOutputText: "Terminal failure" }),
-      traceItem("approval", "tool", { section: "approvals", status: "waiting-approval" }),
+      toolItem("failed-tool-2", "failed", { toolOutputText: "Terminal failure" }),
+      toolItem("approval", "waiting-approval", { section: "approvals" }),
     ], { phase: "failed" })
     const rows = buildRows([message])
     const group = derive([message], [threadTurn("turn-1", [message], { status: "failed" })], rows).groups[0]!
@@ -1008,9 +1102,8 @@ describe("thread execution groups", () => {
     const deniedApprovalMessage = assistantMessage("assistant-denied", [
       reasoningItem("reasoning-1", "One"),
       reasoningItem("reasoning-2", "Two"),
-      traceItem("denied-approval", "tool", {
+      toolItem("denied-approval", "denied", {
         section: "approvals",
-        status: "denied",
       }),
     ], { phase: "failed" })
     const deniedRows = buildRows([deniedApprovalMessage])
@@ -1026,8 +1119,7 @@ describe("thread execution groups", () => {
     const cancelledToolMessage = assistantMessage("assistant-cancelled", [
       reasoningItem("reasoning-3", "Three"),
       reasoningItem("reasoning-4", "Four"),
-      traceItem("pending-tool", "tool", {
-        status: "running",
+      toolItem("pending-tool", "running", {
         toolInputText: "{\"path\":\"src/app.ts\"}",
       }),
     ], { phase: "cancelled" })

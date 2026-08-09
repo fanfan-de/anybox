@@ -1,6 +1,7 @@
-import type * as Message from "#session/core/message.ts"
+import * as Message from "#session/core/message.ts"
 import type * as StoredTrace from "#session/runtime/stored-trace-event.ts"
 import type { SessionRuntimeDebugSnapshot } from "#session/runtime/runtime-debug.ts"
+import type { ToolCallFailure } from "@anybox/shared"
 
 const MAX_SAFE_STRING_LENGTH = 20_000
 export const MAX_SINGLE_TRACE_EVENTS = 5_000
@@ -29,7 +30,7 @@ export interface TraceToolDiagnostic {
 export type TraceToolDiagnosticStatus = "ok" | TraceToolDiagnosticSeverity
 
 export interface AgentSessionTraceExport {
-  schemaVersion: 2
+  schemaVersion: 3
   generatedAt: number
   mode: "safe"
   session: SessionRuntimeDebugSnapshot["session"]
@@ -68,7 +69,13 @@ export interface AgentSessionTraceExport {
   toolCalls: Array<{
     callID: string
     tool: string
-    status: string
+    phase: "pending" | "waiting-approval" | "running" | "settled"
+    outcome?: "returned" | "blocked" | "denied" | "cancelled" | "timeout" | "failed"
+    result?: "success" | "negative"
+    completeness?: "complete" | "partial"
+    turnControl?: "continue-model" | "wait-user" | "restart-loop" | "finish-turn" | "cancel-turn" | "fail-turn"
+    sideEffect?: "none" | "possible" | "confirmed" | "unknown"
+    retry?: "safe" | "unsafe" | "unknown"
     turnID?: string
     messageID?: string
     title?: string
@@ -77,6 +84,7 @@ export interface AgentSessionTraceExport {
     output?: unknown
     modelOutput?: unknown
     error?: string
+    failure?: ToolCallFailure
     diagnosticStatus: TraceToolDiagnosticStatus
     diagnostics: TraceToolDiagnostic[]
     approvalID?: string
@@ -148,9 +156,12 @@ function firstDefined<T>(values: Array<T | undefined>): T | undefined {
 
 function buildTraceToolDiagnostics(input: {
   error?: string
+  failure?: ToolCallFailure
   modelOutput?: unknown
+  outcome?: string
   output?: unknown
-  status?: string
+  result?: "success" | "negative"
+  completeness?: "complete" | "partial"
 }): TraceToolDiagnostic[] {
   const diagnostics: TraceToolDiagnostic[] = []
   const seen = new Set<string>()
@@ -166,55 +177,48 @@ function buildTraceToolDiagnostics(input: {
   const metadataValue = <T>(reader: (value: unknown) => T | undefined, key: string) =>
     firstDefined(metadataRecords.map((record) => reader(record[key])))
 
-  if (input.status === "error") {
+  if (input.outcome === "failed") {
     addDiagnostic({
       severity: "error",
-      code: "tool.lifecycle_error",
-      message: input.error ? `Tool lifecycle error: ${input.error}` : "Tool lifecycle ended with error status.",
+      code: input.failure?.code ?? "tool.lifecycle_error",
+      message: input.failure
+        ? `${input.failure.stage}/${input.failure.source}: ${input.failure.message}`
+        : input.error
+          ? `Tool execution failed: ${input.error}`
+          : "Tool execution failed.",
     })
-  } else if (input.error) {
+  } else if (input.outcome === "timeout") {
     addDiagnostic({
-      severity: "error",
-      code: "tool.error",
-      message: `Tool reported an error: ${input.error}`,
+      severity: "warning",
+      code: "tool.timeout",
+      message: input.error ?? "Tool execution timed out.",
+    })
+  } else if (input.result === "negative") {
+    addDiagnostic({
+      severity: "warning",
+      code: "tool.negative_result",
+      message: "The tool returned a valid negative result.",
+    })
+  }
+
+  if (input.completeness === "partial") {
+    addDiagnostic({
+      severity: "warning",
+      code: "tool.partial_result",
+      message: "The tool returned a partial result.",
     })
   }
 
   const exitCode = metadataValue(readNumber, "exitCode")
-  const status = metadataValue(readOptionalString, "status")
   const stderr = metadataValue(readOptionalString, "stderr")?.trim()
-  const timedOut = metadataValue(readBoolean, "timedOut") ?? status === "timed_out"
-  const aborted = metadataValue(readBoolean, "aborted") ?? status === "aborted"
   const stdoutTruncated = metadataValue(readBoolean, "stdoutTruncated") ?? false
   const stderrTruncated = metadataValue(readBoolean, "stderrTruncated") ?? false
 
-  if (timedOut) {
-    addDiagnostic({
-      severity: "error",
-      code: "shell.timed_out",
-      message: "Shell command timed out.",
-    })
-  }
-
-  if (exitCode !== undefined && exitCode !== 0) {
-    addDiagnostic({
-      severity: "error",
-      code: "shell.exit_nonzero",
-      message: `Shell command exited with code ${exitCode}.`,
-    })
-  } else if (status === "failed") {
-    addDiagnostic({
-      severity: "error",
-      code: "shell.failed",
-      message: "Shell command reported failed status.",
-    })
-  }
-
-  if (aborted) {
+  if (input.result === "negative" && exitCode !== undefined && exitCode !== 0) {
     addDiagnostic({
       severity: "warning",
-      code: "shell.aborted",
-      message: "Shell command was aborted.",
+      code: "shell.exit_nonzero",
+      message: `Shell command exited with code ${exitCode}.`,
     })
   }
 
@@ -400,24 +404,48 @@ function buildToolCalls(input: {
       if (part.type !== "tool") continue
 
       const state = part.state
+      const outcome = Message.toolPartOutcome(part)
+      const returned = Message.toolPartReturnedOutcome(part)
       const runtimeTool = runtimeToolSummaryByCallID.get(part.callID)
-      const time = "time" in state ? state.time : undefined
-      const endedAt = time && "end" in time && typeof time.end === "number" ? time.end : runtimeTool?.endedAt
-      const status = state.status
+      const endedAt = part.timestamps.settledAt ?? runtimeTool?.endedAt
+      const output = returned?.output ?? (
+        outcome?.kind === "blocked"
+          ? outcome.output
+          : outcome?.kind === "timeout"
+            ? outcome.partialOutput
+            : outcome?.kind === "failed"
+              ? outcome.partialOutput
+            : undefined
+      )
       const toolCallWithoutDiagnostics = {
         callID: part.callID,
         tool: part.tool,
-        status,
+        phase: state.phase,
+        outcome: outcome?.kind,
+        result: returned?.result,
+        completeness: returned?.completeness,
+        turnControl: state.phase === "settled" ? state.control.mode : undefined,
+        sideEffect: outcome?.execution.sideEffect,
+        retry: outcome?.execution.retry,
         turnID: message.info.turnID,
         messageID: part.messageID,
-        title: "title" in state ? state.title : runtimeTool?.title,
-        input: state.input,
-        rawInput: "raw" in state ? state.raw : undefined,
-        output: "output" in state ? state.output : undefined,
-        modelOutput: "modelOutput" in state ? state.modelOutput : undefined,
-        error: "error" in state ? state.error : "reason" in state ? state.reason : runtimeTool?.error,
-        approvalID: "approvalID" in state ? state.approvalID : runtimeTool?.approvalID,
-        startedAt: time?.start ?? runtimeTool?.startedAt,
+        title: Message.toolPartTitle(part) ?? runtimeTool?.title,
+        input: Message.toolPartInput(part),
+        rawInput: part.input.raw || undefined,
+        output,
+        modelOutput: returned?.modelOutput,
+        failure: outcome?.kind === "failed" ? outcome.error : undefined,
+        error: outcome?.kind === "failed"
+          ? outcome.error.message
+          : outcome && outcome.kind !== "returned"
+            ? outcome.reason
+            : runtimeTool?.error,
+        approvalID: state.phase === "waiting-approval"
+          ? state.approval.id
+          : outcome?.kind === "denied"
+            ? outcome.approvalID
+            : runtimeTool?.approvalID,
+        startedAt: part.timestamps.startedAt ?? runtimeTool?.startedAt,
         endedAt,
         durationMs: runtimeTool?.durationMs,
         eventIDs: eventIDsByCallID.get(part.callID) ?? [],
@@ -470,7 +498,7 @@ export function buildAgentSessionTraceExport(input: {
   ) as AgentSessionTraceExport["toolCalls"]
 
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     generatedAt,
     mode: "safe",
     session: safeRuntime.session,

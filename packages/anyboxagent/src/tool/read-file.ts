@@ -164,6 +164,10 @@ export const ReadFileTool = Tool.define(
           ].filter(Boolean).join("\n"),
           metadata: data,
           data,
+          result: excerpt.outOfRange ? "negative" : "success",
+          completeness: truncated ? "partial" : "complete",
+          sideEffect: "none",
+          retry: "safe",
         }
       },
       toModelOutput: (result) => ({

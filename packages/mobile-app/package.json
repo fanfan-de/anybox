@@ -45,11 +45,12 @@
     "release:github:prepare": "node ./scripts/prepare-github-mobile-release.mjs",
     "doctor": "node ./scripts/mobile-doctor.mjs",
     "smoke": "node ./scripts/mobile-smoke.mjs",
-    "test:message": "node ./scripts/message-merge-regression.mjs",
+    "test:message": "tsx ./scripts/message-merge-regression.mjs",
     "test:update-tools": "node --test ./scripts/lib/*.test.mjs && tsx --test ./scripts/update-policy.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@anybox/shared": "workspace:*",
     "@expo/metro-runtime": "~56.0.18",
     "@expo/vector-icons": "^15.1.1",
     "expo": "~56.0.18",

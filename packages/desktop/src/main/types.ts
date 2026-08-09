@@ -12,6 +12,14 @@ import type {
 } from "../shared/permission"
 import type {
   ReasoningEffort,
+  ToolCallOutcome,
+  ToolCallFailure,
+  ToolCallPhase,
+  ToolCallResultCompleteness,
+  ToolCallResultPolarity,
+  ToolCallSideEffectCertainty,
+  ToolCallRetrySafety,
+  ToolCallTurnControlMode,
   ToolModuleActivationMode,
   ToolModuleActivationScope,
   ToolModuleDiscoveryMode,
@@ -940,7 +948,12 @@ export interface AgentSessionRuntimeToolSummary {
   callID: string
   tool: string
   title?: string
-  status: string
+  phase: ToolCallPhase
+  outcome?: ToolCallOutcome["kind"]
+  result?: ToolCallResultPolarity
+  completeness?: ToolCallResultCompleteness
+  turnControl?: ToolCallTurnControlMode
+  failure?: ToolCallFailure
   startedAt?: number
   endedAt?: number
   durationMs?: number
@@ -1003,12 +1016,20 @@ export interface AgentSessionRuntimeErrorContext {
   activeTools: Array<{
     callID: string
     tool: string
-    status: string
+    phase: ToolCallPhase
+    outcome?: ToolCallOutcome["kind"]
+    result?: ToolCallResultPolarity
+    completeness?: ToolCallResultCompleteness
+    turnControl?: ToolCallTurnControlMode
   }>
   latestTool?: {
     callID: string
     tool: string
-    status: string
+    phase: ToolCallPhase
+    outcome?: ToolCallOutcome["kind"]
+    result?: ToolCallResultPolarity
+    completeness?: ToolCallResultCompleteness
+    turnControl?: ToolCallTurnControlMode
   }
 }
 
@@ -1127,7 +1148,7 @@ export interface AgentSessionRuntimeDebugSnapshot {
 }
 
 export interface AgentSessionTraceExport {
-  schemaVersion: 2
+  schemaVersion: 3
   generatedAt: number
   mode: "safe"
   session: AgentSessionRuntimeDebugSnapshot["session"]
@@ -1166,7 +1187,13 @@ export interface AgentSessionTraceExport {
   toolCalls: Array<{
     callID: string
     tool: string
-    status: string
+    phase: ToolCallPhase
+    outcome?: ToolCallOutcome["kind"]
+    result?: ToolCallResultPolarity
+    completeness?: ToolCallResultCompleteness
+    turnControl?: ToolCallTurnControlMode
+    sideEffect?: ToolCallSideEffectCertainty
+    retry?: ToolCallRetrySafety
     turnID?: string
     messageID?: string
     title?: string
@@ -1175,6 +1202,7 @@ export interface AgentSessionTraceExport {
     output?: unknown
     modelOutput?: unknown
     error?: string
+    failure?: ToolCallFailure
     approvalID?: string
     startedAt?: number
     endedAt?: number

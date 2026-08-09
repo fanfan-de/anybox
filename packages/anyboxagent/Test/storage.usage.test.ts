@@ -238,7 +238,7 @@ test("the trace v2 migration drops legacy payloads and is idempotent", async () 
     Sqlite.db.prepare(`
       INSERT INTO "session_events" ("eventID", "sessionID", "turnID", "seq", "type", "payload", "timestamp")
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run("legacy-event", "session-legacy", "turn-legacy", 1, "tool.call.completed", JSON.stringify({
+    `).run("legacy-event", "session-legacy", "turn-legacy", 1, "tool.call.settled", JSON.stringify({
       output: "x".repeat(200_000),
       image: `data:image/png;base64,${"a".repeat(100_000)}`,
     }), 1)

@@ -35,7 +35,10 @@ type ParallelCallInput = z.infer<typeof ParallelCall>
 type ParallelChildResult = {
   index: number
   tool: string
-  status: "completed" | "error"
+  phase: "settled"
+  outcome: "returned" | "blocked" | "denied" | "cancelled" | "timeout" | "failed"
+  result?: "success" | "negative"
+  completeness?: "complete" | "partial"
   title?: string
   output?: string
   modelOutput?: Exclude<Tool.ToolModelOutput, string>
@@ -119,7 +122,8 @@ async function runChildCall(input: {
     if (isParallelToolName(requestedTool)) {
       return {
         ...base,
-        status: "error",
+        phase: "settled",
+        outcome: "blocked",
         error: `${PARALLEL_TOOL_ID} cannot call itself.`,
       }
     }
@@ -128,7 +132,8 @@ async function runChildCall(input: {
     if (!item) {
       return {
         ...base,
-        status: "error",
+        phase: "settled",
+        outcome: "blocked",
         error: `Tool "${requestedTool}" is not available.`,
       }
     }
@@ -144,7 +149,8 @@ async function runChildCall(input: {
     if (accessFailure) {
       return {
         ...base,
-        status: "error",
+        phase: "settled",
+        outcome: "blocked",
         error: accessFailure,
       }
     }
@@ -153,7 +159,8 @@ async function runChildCall(input: {
     if (eligibilityFailure) {
       return {
         ...base,
-        status: "error",
+        phase: "settled",
+        outcome: "blocked",
         error: eligibilityFailure,
       }
     }
@@ -175,15 +182,20 @@ async function runChildCall(input: {
     return {
       ...base,
       tool: item.id,
-      status: "completed",
+      phase: "settled",
+      outcome: "returned",
+      result: output.result ?? "success",
+      completeness: output.completeness ?? "complete",
       title: output.title,
       output: output.text,
       modelOutput,
     }
   } catch (error) {
+    const signal = Tool.findToolControlSignal(error)
     return {
       ...base,
-      status: "error",
+      phase: "settled",
+      outcome: signal?.outcome.kind ?? "failed",
       error: normalizeError(error),
     }
   }
@@ -192,8 +204,11 @@ async function runChildCall(input: {
 function formatResults(results: ParallelChildResult[]) {
   return results
     .map((result) => {
-      const header = `[${result.index}] ${result.tool}: ${result.status}${result.title ? ` - ${result.title}` : ""}`
-      if (result.status === "error") {
+      const semantics = result.outcome === "returned"
+        ? `${result.outcome}/${result.result}/${result.completeness}`
+        : result.outcome
+      const header = `[${result.index}] ${result.tool}: ${semantics}${result.title ? ` - ${result.title}` : ""}`
+      if (result.outcome !== "returned") {
         return `${header}\n${result.error ?? "Unknown error."}`
       }
 
@@ -247,14 +262,26 @@ export const ParallelTool = Tool.define(
           kind: "parallel-tool-results",
           results,
         }
-        const completed = results.filter((result) => result.status === "completed").length
-        const failed = results.length - completed
+        const successful = results.filter((item) =>
+          item.outcome === "returned" && item.result === "success"
+        ).length
+        const negative = results.filter((item) =>
+          item.outcome === "returned" && item.result === "negative"
+        ).length
+        const nonReturned = results.length - successful - negative
+        const partial = results.some((item) =>
+          item.outcome !== "returned" || item.completeness === "partial"
+        )
 
         return {
-          title: `Parallel tools: ${completed} completed, ${failed} failed`,
+          title: `Parallel tools: ${successful} successful, ${negative} negative, ${nonReturned} not returned`,
           text: formatResults(results),
           metadata: data,
           data,
+          result: negative > 0 || nonReturned > 0 ? "negative" : "success",
+          completeness: partial ? "partial" : "complete",
+          sideEffect: "none",
+          retry: "safe",
         }
       },
       toModelOutput: (result) => ({
