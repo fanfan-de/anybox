@@ -63,6 +63,9 @@ function configureAgentLogging(args) {
 
 configureAgentLogging(process.argv.slice(2))
 process.env.ANYBOX_DESKTOP_DEVELOPMENT_FEATURES = "1"
+if (!process.env.ANYBOX_PLUGIN_LOCAL_DIR?.trim()) {
+  process.env.ANYBOX_PLUGIN_LOCAL_DIR = path.join(repoRoot, "plugins", "Anybox-Plugins")
+}
 
 function ensureAppIcons() {
   const result = spawnSync(process.execPath, [path.join(scriptDir, "generate-app-icons.mjs")], {
