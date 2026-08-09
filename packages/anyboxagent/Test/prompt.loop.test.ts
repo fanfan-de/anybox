@@ -11,6 +11,8 @@ import * as LLM from "#session/core/llm.ts"
 import type * as MessageTypes from "#session/core/message.ts"
 import * as ImageAssets from "#session/support/image-assets.ts"
 import * as Provider from "#provider/provider.ts"
+import * as Config from "#config/config.ts"
+import * as BuiltinMcp from "#mcp/builtin.ts"
 
 const hasGit = spawnSync("git", ["--version"], { stdio: "ignore" }).status === 0
 const itIfGit = hasGit ? it : it.skip
@@ -859,6 +861,165 @@ describe("prompt loop concurrency", () => {
         await rm(assetPath, { force: true })
         await rm(`${assetPath}.json`, { force: true })
       }
+      await rm(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  it("persists a Node REPL timeout for the original tool call and continues to the next model call", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "anybox-node-repl-timeout-loop-"))
+    let streamCalls = 0
+    let secondProviderMessages: any[] | undefined
+
+    const restoreProvider = Provider.setProviderFunctionOverridesForTesting({
+      getDefaultModelRef: async () => ({
+        providerID: "test-provider",
+        modelID: "test-model",
+      }),
+      getSelection: async () => ({}),
+      getModel: async () => createTestModel(),
+      getLanguage: async (model) => model as never,
+    })
+
+    const restoreLLM = LLM.setRuntimeDependenciesForTesting({
+      getLanguage: async (model) => model as never,
+      streamText: ((input: any) => {
+        streamCalls += 1
+        const call = streamCalls
+        if (call === 2) secondProviderMessages = input.prompt
+
+        return {
+          fullStream: (async function* () {
+            yield { type: "start" }
+            if (call === 1) {
+              const toolCallId = "call-node-repl-timeout"
+              const toolName = Object.keys(input.tools ?? {}).find((name) => name.endsWith("node_repl_js"))
+              const js = toolName ? input.tools?.[toolName] : undefined
+              if (!toolName || !js?.execute) throw new Error("Node REPL js was not exposed to the model")
+              const toolInput = { code: "while (true) {}", timeoutMs: 120 }
+              let toolError: unknown
+              try {
+                await js.execute(toolInput, {
+                  toolCallId,
+                  messages: input.prompt,
+                  abortSignal: input.abortSignal,
+                })
+              } catch (error) {
+                toolError = error
+              }
+              if (!toolError) throw new Error("Expected the Node REPL call to time out")
+
+              yield {
+                type: "tool-call",
+                toolCallId,
+                toolName,
+                input: toolInput,
+              }
+              yield {
+                type: "tool-error",
+                toolCallId,
+                toolName,
+                input: toolInput,
+                error: toolError,
+              }
+              yield { type: "finish", finishReason: "tool-calls", totalUsage: {} }
+              await input.onFinish?.({
+                finishReason: "tool-calls",
+                text: "",
+                totalUsage: {},
+              })
+              return
+            }
+
+            yield { type: "text-start" }
+            yield { type: "text-delta", text: "Recovered after the runtime reset." }
+            yield { type: "text-end" }
+            yield { type: "finish", finishReason: "stop", totalUsage: {} }
+            await input.onFinish?.({
+              finishReason: "stop",
+              text: "Recovered after the runtime reset.",
+              totalUsage: {},
+            })
+          })(),
+        }
+      }) as never,
+    })
+
+    try {
+      const definition = BuiltinMcp.getDefinition(BuiltinMcp.NODE_REPL_DEFINITION_ID)
+      if (!definition) throw new Error("Expected the built-in Node REPL definition")
+      await Config.setManagedMcpServer(
+        Config.GLOBAL_CONFIG_ID,
+        definition.serverID,
+        {
+          ...definition.runtime,
+          toolPolicies: {
+            ...definition.runtime.toolPolicies,
+            js: { policy: "auto" },
+          },
+        },
+        { kind: "anybox", bindingID: definition.id },
+      )
+
+      const Session = await import("#session/core/session.ts")
+      const Prompt = await import("#session/core/prompt.ts")
+      const Message = await import("#session/core/message.ts")
+
+      await Instance.provide({
+        directory: tempDir,
+        async fn() {
+          await Config.setSelectedMcpServerIDs(Instance.project.id, [definition.serverID])
+          const session = await Session.createSession({
+            directory: Instance.directory,
+            projectID: Instance.project.id,
+          })
+
+          const response = await Prompt.prompt({
+            sessionID: session.id,
+            model: {
+              providerID: "test-provider",
+              modelID: "test-model",
+            },
+            parts: [{ type: "text", text: "Run the timeout recovery fixture." }],
+          })
+
+          expect(streamCalls).toBe(2)
+          expect(response.parts.some((part) => part.type === "text" && part.text.includes("Recovered")))
+            .toBe(true)
+          expect(JSON.stringify(secondProviderMessages)).toContain("call-node-repl-timeout")
+          expect(JSON.stringify(secondProviderMessages)).toContain("runtimeReset")
+          expect(JSON.stringify(secondProviderMessages)).toContain("Execution timed out after 120ms")
+
+          const assistants: MessageTypes.WithParts[] = []
+          for await (const item of Message.stream(session.id)) {
+            if (item.info.role === "assistant") assistants.push(item)
+          }
+          const failedTool = assistants[0]?.parts.find(
+            (part): part is MessageTypes.ToolPart => part.type === "tool" && part.callID === "call-node-repl-timeout",
+          )
+          expect(failedTool?.state.status).toBe("error")
+          if (!failedTool || failedTool.state.status !== "error") {
+            throw new Error("Expected a persisted Node REPL tool error")
+          }
+          expect(JSON.parse(failedTool.state.error)).toMatchObject({
+            status: "error",
+            runtimeReset: true,
+            code: "EXECUTION_TIMEOUT",
+          })
+        },
+      })
+    } finally {
+      const definition = BuiltinMcp.getDefinition(BuiltinMcp.NODE_REPL_DEFINITION_ID)
+      if (definition) {
+        await Config.setManagedMcpServer(
+          Config.GLOBAL_CONFIG_ID,
+          definition.serverID,
+          definition.runtime,
+          { kind: "anybox", bindingID: definition.id },
+        )
+      }
+      restoreLLM()
+      restoreProvider()
+      await Instance.disposeAll()
       await rm(tempDir, { recursive: true, force: true })
     }
   })

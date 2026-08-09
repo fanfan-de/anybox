@@ -2,6 +2,7 @@ import { type Stream } from "node:stream"
 import { pathToFileURL } from "node:url"
 import {
   Client,
+  SdkErrorCode,
   StreamableHTTPClientTransport,
   isSpecType,
   type ElicitRequest,
@@ -29,6 +30,14 @@ const MCP_LEGACY_CACHE_TTL_MS = 30_000
 const MCP_SESSION_TERMINATION_TIMEOUT_MS = 2_000
 const MCP_SUBSCRIPTION_RETRY_MAX_MS = 30_000
 const MCP_SUBSCRIPTION_RETRY_MIN_MS = 1_000
+const MCP_FATAL_REQUEST_ERROR_CODES = new Set<string>([
+  SdkErrorCode.RequestTimeout,
+  SdkErrorCode.ConnectionClosed,
+  SdkErrorCode.NotConnected,
+  SdkErrorCode.SendFailed,
+  SdkErrorCode.EraNegotiationFailed,
+  SdkErrorCode.ClientHttpFailedToOpenStream,
+])
 
 export interface McpToolDefinition {
   name: string
@@ -59,6 +68,7 @@ export interface McpClientOptions {
   cwd: string
   onResourcesChanged?: () => void
   onToolsChanged?: () => void
+  onInvalidated?: (error: unknown) => void | Promise<void>
   requestTimeoutMs: number
   server: McpServerSummary
   worktree: string
@@ -76,9 +86,9 @@ export interface McpToolRequestContext {
 export interface McpClientLike {
   dispose(): Promise<void>
   getProtocolEra(): ProtocolEra | undefined
-  listTools(): Promise<McpToolDefinition[]>
-  listResources(): Promise<McpResourceDefinition[]>
-  listResourceTemplates(): Promise<McpResourceTemplateDefinition[]>
+  listTools(abort?: AbortSignal): Promise<McpToolDefinition[]>
+  listResources(abort?: AbortSignal): Promise<McpResourceDefinition[]>
+  listResourceTemplates(abort?: AbortSignal): Promise<McpResourceTemplateDefinition[]>
   readResource(uri: string, abort?: AbortSignal): Promise<McpResourceReadResult>
   callTool(
     toolName: string,
@@ -307,6 +317,33 @@ async function settleWithin(promise: Promise<unknown>, timeoutMs: number) {
   }
 }
 
+function abortReason(signal: AbortSignal) {
+  if (signal.reason instanceof Error) return signal.reason
+  const error = new Error(
+    typeof signal.reason === "string" && signal.reason.trim()
+      ? signal.reason
+      : "MCP request aborted.",
+  )
+  error.name = "AbortError"
+  return error
+}
+
+function isFatalRequestFailure(error: unknown, abort?: AbortSignal) {
+  if (abort?.aborted) return true
+  if (!error || typeof error !== "object") return false
+  const code = (error as { code?: unknown }).code
+  if (typeof code === "string" && MCP_FATAL_REQUEST_ERROR_CODES.has(code)) return true
+  const message = error instanceof Error ? error.message.toLowerCase() : ""
+  return (
+    message.includes("request timed out")
+    || message.includes("connection closed")
+    || message.includes("not connected")
+    || message.includes("transport closed")
+    || message.includes("socket closed")
+    || message.includes("broken pipe")
+  )
+}
+
 function normalizeCallResult(result: unknown): McpToolCallResult {
   if (result && typeof result === "object" && Array.isArray((result as { content?: unknown[] }).content)) {
     return result as McpToolCallResult
@@ -342,6 +379,7 @@ function normalizeCallResult(result: unknown): McpToolCallResult {
 export class McpClient {
   private client?: Client
   private closed = false
+  private closePromise?: Promise<void>
   private initializePromise?: Promise<Client>
   private readonly options: McpClientOptions
   private readonly stderrLines: string[] = []
@@ -354,56 +392,30 @@ export class McpClient {
   }
 
   async dispose() {
-    if (this.closed) return
-    this.closed = true
-    this.clearSubscriptionRetry()
-
-    const client = this.client
-    const transport = this.transport
-    if (transport instanceof StreamableHTTPClientTransport && transport.sessionId) {
-      await settleWithin(
-        transport.terminateSession(),
-        Math.min(
-          Math.max(this.options.requestTimeoutMs, 250),
-          MCP_SESSION_TERMINATION_TIMEOUT_MS,
-        ),
-      )
-    }
-
-    if (client) {
-      await client.close().catch(() => undefined)
-    } else if (transport) {
-      await transport.close().catch(() => undefined)
-    }
-
-    this.stderrStream?.removeAllListeners()
-    this.stderrStream = undefined
-    this.transport = undefined
-    this.client = undefined
-    this.initializePromise = undefined
+    await this.closeConnection()
   }
 
-  async listTools(): Promise<McpToolDefinition[]> {
-    const client = await this.ensureInitialized()
-    const result = await client.listTools(undefined, {
+  async listTools(abort?: AbortSignal): Promise<McpToolDefinition[]> {
+    const result = await this.runRequest(abort, (client) => client.listTools(undefined, {
+      signal: abort,
       timeout: this.options.requestTimeoutMs,
-    })
+    }))
     return result.tools as McpToolDefinition[]
   }
 
-  async listResources(): Promise<Resource[]> {
-    const client = await this.ensureInitialized()
-    const result = await client.listResources(undefined, {
+  async listResources(abort?: AbortSignal): Promise<Resource[]> {
+    const result = await this.runRequest(abort, (client) => client.listResources(undefined, {
+      signal: abort,
       timeout: this.options.requestTimeoutMs,
-    })
+    }))
     return result.resources
   }
 
-  async listResourceTemplates(): Promise<ResourceTemplateType[]> {
-    const client = await this.ensureInitialized()
-    const result = await client.listResourceTemplates(undefined, {
+  async listResourceTemplates(abort?: AbortSignal): Promise<ResourceTemplateType[]> {
+    const result = await this.runRequest(abort, (client) => client.listResourceTemplates(undefined, {
+      signal: abort,
       timeout: this.options.requestTimeoutMs,
-    })
+    }))
     return result.resourceTemplates
   }
 
@@ -412,9 +424,7 @@ export class McpClient {
   }
 
   async readResource(uri: string, abort?: AbortSignal): Promise<ReadResourceResult> {
-    const client = await this.ensureInitialized()
-
-    return await client.readResource(
+    return await this.runRequest(abort, (client) => client.readResource(
       {
         uri,
       },
@@ -422,7 +432,7 @@ export class McpClient {
         signal: abort,
         timeout: this.options.requestTimeoutMs,
       },
-    )
+    ))
   }
 
   async callTool(
@@ -431,13 +441,12 @@ export class McpClient {
     abort?: AbortSignal,
     context?: McpToolRequestContext,
   ): Promise<McpToolCallResult> {
-    const client = await this.ensureInitialized()
     const requestContext = normalizedRequestContext(context)
     const requestMeta = isAnyboxNodeReplServer(this.options.server)
       ? requestContext
       : undefined
 
-    return normalizeCallResult(await client.callTool(
+    return normalizeCallResult(await this.runRequest(abort, (client) => client.callTool(
       {
         name: toolName,
         arguments: args,
@@ -445,11 +454,9 @@ export class McpClient {
       },
       {
         signal: abort,
-        timeout: isAnyboxNodeReplServer(this.options.server)
-          ? Math.max(this.options.requestTimeoutMs, 250_000)
-          : this.options.requestTimeoutMs,
+        timeout: this.options.requestTimeoutMs,
       },
-    ))
+    )))
   }
 
   async notifyLifecycle(input: {
@@ -461,14 +468,81 @@ export class McpClient {
     detail?: Record<string, unknown>
   }) {
     if (!isAnyboxNodeReplServer(this.options.server)) return
-    const client = await this.ensureInitialized()
-    await client.notification({
+    await this.runRequest(undefined, (client) => client.notification({
       method: "notifications/anybox/lifecycle",
       params: input,
-    } as never)
+    } as never))
   }
 
-  private async ensureInitialized() {
+  private async runRequest<T>(
+    abort: AbortSignal | undefined,
+    request: (client: Client) => Promise<T>,
+  ): Promise<T> {
+    try {
+      if (abort?.aborted) throw abortReason(abort)
+      const client = await this.waitForAbort(this.ensureInitialized(abort), abort)
+      return await this.waitForAbort(request(client), abort)
+    } catch (error) {
+      if (isFatalRequestFailure(error, abort)) {
+        await this.invalidate(error)
+      }
+      throw error
+    }
+  }
+
+  private waitForAbort<T>(promise: Promise<T>, abort?: AbortSignal): Promise<T> {
+    if (!abort) return promise
+    if (abort.aborted) return Promise.reject(abortReason(abort))
+    return new Promise<T>((resolve, reject) => {
+      const onAbort = () => reject(abortReason(abort))
+      abort.addEventListener("abort", onAbort, { once: true })
+      promise.then(resolve, reject).finally(() => {
+        abort.removeEventListener("abort", onAbort)
+      })
+    })
+  }
+
+  private async closeConnection() {
+    if (this.closePromise) return this.closePromise
+    this.closed = true
+    this.clearSubscriptionRetry()
+
+    const promise = (async () => {
+      const client = this.client
+      const transport = this.transport
+      if (transport instanceof StreamableHTTPClientTransport && transport.sessionId) {
+        await settleWithin(
+          transport.terminateSession(),
+          Math.min(
+            Math.max(this.options.requestTimeoutMs, 250),
+            MCP_SESSION_TERMINATION_TIMEOUT_MS,
+          ),
+        )
+      }
+
+      if (client) {
+        await client.close().catch(() => undefined)
+      } else if (transport) {
+        await transport.close().catch(() => undefined)
+      }
+
+      this.stderrStream?.removeAllListeners()
+      this.stderrStream = undefined
+      this.transport = undefined
+      this.client = undefined
+      this.initializePromise = undefined
+    })()
+    this.closePromise = promise
+    return promise
+  }
+
+  private async invalidate(error: unknown) {
+    const shouldNotify = !this.closed
+    await this.closeConnection()
+    if (shouldNotify) await this.options.onInvalidated?.(error)
+  }
+
+  private async ensureInitialized(abort?: AbortSignal) {
     if (this.initializePromise) return this.initializePromise
 
     const promise = (async () => {
@@ -554,19 +628,17 @@ export class McpClient {
       }
       client.onclose = () => {
         if (this.closed) return
-        this.clearSubscriptionRetry()
-        this.client = undefined
-        this.transport = undefined
-        this.initializePromise = undefined
         log.warn("mcp client closed", {
           serverID: this.options.server.id,
           detail: this.stderrLines.at(-1),
         })
+        void this.invalidate(new Error(`MCP server '${this.options.server.id}' connection closed.`))
       }
 
       this.transport = transport
       this.client = client
       await client.connect(transport, {
+        signal: abort,
         timeout: this.options.requestTimeoutMs,
       })
       if (this.closed || this.client !== client) {
@@ -577,30 +649,17 @@ export class McpClient {
       return client
     })().catch(async (error) => {
       const detail = this.stderrHint()
-      await this.disposeTransport()
-      this.client = undefined
-      this.transport = undefined
-      this.initializePromise = undefined
-
-      if (error instanceof Error && detail) {
-        throw new Error(`${error.message}${detail}`)
-      }
-
-      throw error
+      const enhanced = error instanceof Error && detail
+        ? Object.assign(new Error(`${error.message}${detail}`), {
+            code: (error as { code?: unknown }).code,
+          })
+        : error
+      await this.invalidate(enhanced)
+      throw enhanced
     })
 
     this.initializePromise = promise
     return await promise
-  }
-
-  private async disposeTransport() {
-    this.stderrStream?.removeAllListeners()
-    this.stderrStream = undefined
-    if (this.client) {
-      await this.client.close().catch(() => undefined)
-      return
-    }
-    await this.transport?.close().catch(() => undefined)
   }
 
   private watchSubscription(client: Client, subscription: McpSubscription | undefined) {

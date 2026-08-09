@@ -71,10 +71,10 @@ try {
       `Packaged Node REPL diagnostic failed: ${JSON.stringify(nodeReplDiagnostic.data)}`,
     )
   }
-  const packagedNodeReplSource = await readFile(
-    path.join(runtimeDir, "mcp", "node-repl", "server.js"),
-    "utf8",
-  )
+  const packagedNodeReplSource = [
+    await readFile(path.join(runtimeDir, "mcp", "node-repl", "server.js"), "utf8"),
+    await readFile(path.join(runtimeDir, "mcp", "node-repl", "kernel.js"), "utf8"),
+  ].join("\n")
   if (!packagedNodeReplSource.includes("requestPermission")) {
     throw new Error("Packaged Node REPL is missing generic in-process permission support.")
   }

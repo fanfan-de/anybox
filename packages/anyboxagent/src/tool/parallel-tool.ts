@@ -217,7 +217,7 @@ export const ParallelTool = Tool.define(
           Config.getToolSelection(Config.GLOBAL_CONFIG_ID),
         ])
         const [registry, builtinRegistry] = await Promise.all([
-          ToolRegistry.tools(),
+          ToolRegistry.tools(ctx.abort),
           ToolRegistry.builtinTools(),
         ])
         const agent = initctx?.agent ?? await defaultAgent()

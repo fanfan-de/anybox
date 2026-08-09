@@ -29,6 +29,27 @@ function asRecord(args: unknown): Record<string, unknown> {
   return {}
 }
 
+function mcpFailureMessage(output: Tool.ToolOutput): string | undefined {
+  const metadata = output.metadata
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return undefined
+  const values = metadata as Record<string, unknown>
+  if (values.mcpIsError !== true) return undefined
+
+  const data = output.data && typeof output.data === "object" && !Array.isArray(output.data)
+    ? output.data as Record<string, unknown>
+    : undefined
+  const structured = values.mcpStructuredContent ?? data?.structuredContent
+  if (structured !== undefined) {
+    try {
+      return JSON.stringify(structured)
+    } catch {
+      // Fall back to the textual MCP error below.
+    }
+  }
+
+  return output.text || "MCP tool execution failed."
+}
+
 export function isToolAllowedForAgent(tool: Tool.ToolInfo, agent: Agent.AgentInfo) {
   const policy = agent.tools
   if (!policy) return true
@@ -244,6 +265,8 @@ export async function createToolExecution(input: {
         ? await runWithFilesystemAuthorization(decision.filesystemAuthorization, execute)
         : await execute()
       const normalizedOutput = Tool.normalizeToolOutput(rawOutput)
+      const reportedFailure = mcpFailureMessage(normalizedOutput)
+      if (reportedFailure) throw new Error(reportedFailure)
       const source = input.item.source
       const output = source && (source.kind === "mcp" || source.kind === "native-module")
         ? {

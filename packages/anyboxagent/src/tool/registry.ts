@@ -164,9 +164,11 @@ export interface ToolInventory {
   all: Tool.ToolInfo[]
 }
 
-export async function inventory(): Promise<ToolInventory> {
+export async function inventory(abort?: AbortSignal): Promise<ToolInventory> {
   const custom = await state().then((x) => x.custom)
-  const mcpTools = await Mcp.tools()
+  if (abort?.aborted) throw abort.reason instanceof Error ? abort.reason : new Error("Tool inventory aborted.")
+  const mcpTools = await Mcp.tools(abort)
+  if (abort?.aborted) throw abort.reason instanceof Error ? abort.reason : new Error("Tool inventory aborted.")
   const builtin = await builtinTools()
   const mcp = mcpTools.map((item) =>
     ToolModule.attachRegisteredToolSource(item, "mcp")
@@ -189,8 +191,8 @@ export async function inventory(): Promise<ToolInventory> {
   }
 }
 
-export async function tools(): Promise<Tool.ToolInfo[]> {
-  return (await inventory()).all
+export async function tools(abort?: AbortSignal): Promise<Tool.ToolInfo[]> {
+  return (await inventory(abort)).all
 }
 
 export async function get(id: string): Promise<Tool.ToolInfo | undefined> {

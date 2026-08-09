@@ -150,6 +150,7 @@ async function copyBundledPlatformRuntimes() {
   }
   if (
     !(await pathExists(path.join(nodeReplMcpSourceDir, "server.js")))
+    || !(await pathExists(path.join(nodeReplMcpSourceDir, "kernel.js")))
     || !(await pathExists(path.join(nodeReplMcpSourceDir, "package.json")))
   ) {
     throw new Error(`Missing built-in Node REPL MCP server at ${nodeReplMcpSourceDir}`)
@@ -160,6 +161,7 @@ async function copyBundledPlatformRuntimes() {
   await fsp.copyFile(path.join(gmailConnectorSourceDir, "server.js"), path.join(gmailConnectorTargetDir, "server.js"))
   await fsp.copyFile(path.join(feishuConnectorSourceDir, "server.js"), path.join(feishuConnectorTargetDir, "server.js"))
   await fsp.copyFile(path.join(nodeReplMcpSourceDir, "server.js"), path.join(nodeReplMcpTargetDir, "server.js"))
+  await fsp.copyFile(path.join(nodeReplMcpSourceDir, "kernel.js"), path.join(nodeReplMcpTargetDir, "kernel.js"))
   await fsp.copyFile(
     path.join(nodeReplMcpSourceDir, "package.json"),
     path.join(nodeReplMcpTargetDir, "package.json"),

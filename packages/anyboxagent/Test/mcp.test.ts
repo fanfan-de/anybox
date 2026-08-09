@@ -37,7 +37,7 @@ async function writeLegacyMockMcpServer(root: string) {
     script,
     [
       "const readline = require('node:readline')",
-      "const { appendFileSync } = require('node:fs')",
+      "const { appendFileSync, existsSync, writeFileSync } = require('node:fs')",
       "const rl = readline.createInterface({ input: process.stdin })",
       "function send(payload) { process.stdout.write(JSON.stringify(payload) + '\\n') }",
       "function trace(method) {",
@@ -99,6 +99,7 @@ async function writeLegacyMockMcpServer(root: string) {
       "    return",
       "  }",
       "  if (message.method === 'tools/list') {",
+      "    if (process.env.ANYBOX_MCP_TEST_HANG_TOOLS_LIST === '1') return",
       "    send({ jsonrpc: '2.0', id: message.id, result: { tools } })",
       "    return",
       "  }",
@@ -132,6 +133,11 @@ async function writeLegacyMockMcpServer(root: string) {
       "    return",
       "  }",
       "  if (message.method === 'tools/call') {",
+      "    const crashMarker = process.env.ANYBOX_MCP_TEST_CRASH_ONCE_MARKER",
+      "    if (crashMarker && !existsSync(crashMarker)) {",
+      "      writeFileSync(crashMarker, 'crashed')",
+      "      process.exit(23)",
+      "    }",
       "    const value = message.params?.arguments?.value ?? ''",
       "    send({",
       "      jsonrpc: '2.0',",
@@ -827,6 +833,176 @@ describe("mcp integration", () => {
               },
             },
           })
+        },
+      })
+    } finally {
+      await Instance.disposeAll()
+      if (projectID) {
+        db.deleteMany("project_configs", [{ column: "projectID", value: projectID }])
+        db.deleteMany("projects", [{ column: "id", value: projectID }])
+      }
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("Mcp manager should cache tool schemas and use them while a failed transport is circuit-broken", async () => {
+    const root = await mkdtemp(join(tmpdir(), "anybox-mcp-cache-recovery-"))
+    const trace = join(root, "mcp-trace.txt")
+    const crashMarker = join(root, "crashed-once.txt")
+    let projectID: string | undefined
+
+    try {
+      await createGitRepo(root, "mcp-cache-recovery")
+      const script = await writeLegacyMockMcpServer(root)
+      const { project } = await Project.fromDirectory(root)
+      projectID = project.id
+      await Config.setMcpServer(project.id, "mock", {
+        name: "Mock",
+        command: process.execPath,
+        args: [script],
+        env: {
+          ANYBOX_MCP_TEST_TRACE: trace,
+          ANYBOX_MCP_TEST_CRASH_ONCE_MARKER: crashMarker,
+        },
+        timeoutMs: 1_000,
+        enabled: true,
+      })
+
+      await Instance.provide({
+        directory: root,
+        fn: async () => {
+          const first = await Mcp.tools()
+          const second = await Mcp.tools()
+          expect(first.some((tool) => tool.id === "mcp__mock__echo")).toBe(true)
+          expect(second.some((tool) => tool.id === "mcp__mock__echo")).toBe(true)
+          expect((await readFile(trace, "utf8")).split(/\r?\n/).filter((line) => line === "tools/list"))
+            .toHaveLength(1)
+
+          const runtime = await first.find((tool) => tool.id === "mcp__mock__echo")!.init()
+          await expect(runtime.execute({ value: "crash" }, {
+            sessionID: "session-cache",
+            messageID: "message-cache",
+          })).rejects.toThrow()
+
+          const started = Date.now()
+          const cachedAfterFailure = await Mcp.tools()
+          expect(Date.now() - started).toBeLessThan(500)
+          expect(cachedAfterFailure.some((tool) => tool.id === "mcp__mock__echo")).toBe(true)
+          expect((await readFile(trace, "utf8")).split(/\r?\n/).filter((line) => line === "tools/list"))
+            .toHaveLength(1)
+
+          await Bun.sleep(2_100)
+          const recovered = Tool.normalizeToolOutput(await runtime.execute({ value: "recovered" }, {
+            sessionID: "session-cache",
+            messageID: "message-cache-recovered",
+          }))
+          expect(recovered.text).toBe("echo:recovered")
+        },
+      })
+    } finally {
+      await Instance.disposeAll()
+      if (projectID) {
+        db.deleteMany("project_configs", [{ column: "projectID", value: projectID }])
+        db.deleteMany("projects", [{ column: "id", value: projectID }])
+      }
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test("a cold unresponsive MCP server does not block tools from healthy servers", async () => {
+    const root = await mkdtemp(join(tmpdir(), "anybox-mcp-partial-discovery-"))
+    const hangingTrace = join(root, "hanging-trace.txt")
+    let projectID: string | undefined
+
+    try {
+      await createGitRepo(root, "mcp-partial-discovery")
+      const script = await writeLegacyMockMcpServer(root)
+      const { project } = await Project.fromDirectory(root)
+      projectID = project.id
+      await Config.setMcpServer(project.id, "fast", {
+        name: "Fast",
+        command: process.execPath,
+        args: [script],
+        timeoutMs: 120_000,
+        enabled: true,
+      })
+      await Config.setMcpServer(project.id, "hanging", {
+        name: "Hanging",
+        command: process.execPath,
+        args: [script],
+        env: {
+          ANYBOX_MCP_TEST_HANG_TOOLS_LIST: "1",
+          ANYBOX_MCP_TEST_TRACE: hangingTrace,
+        },
+        timeoutMs: 120_000,
+        enabled: true,
+      })
+
+      await Instance.provide({
+        directory: root,
+        fn: async () => {
+          const started = Date.now()
+          const discovered = await Mcp.tools()
+          expect(Date.now() - started).toBeLessThan(3_500)
+          expect(discovered.some((tool) => tool.id === "mcp__fast__echo")).toBe(true)
+          expect(discovered.some((tool) => tool.id === "mcp__hanging__echo")).toBe(false)
+
+          const repeatedStarted = Date.now()
+          const repeated = await Mcp.tools()
+          expect(Date.now() - repeatedStarted).toBeLessThan(500)
+          expect(repeated.some((tool) => tool.id === "mcp__fast__echo")).toBe(true)
+          expect((await readFile(hangingTrace, "utf8")).split(/\r?\n/)
+            .filter((line) => line === "tools/list"))
+            .toHaveLength(1)
+        },
+      })
+    } finally {
+      await Instance.disposeAll()
+      if (projectID) {
+        db.deleteMany("project_configs", [{ column: "projectID", value: projectID }])
+        db.deleteMany("projects", [{ column: "id", value: projectID }])
+      }
+      await rm(root, { recursive: true, force: true })
+    }
+  }, 10_000)
+
+  test("turn cancellation aborts MCP tool discovery without waiting for the request timeout", async () => {
+    const root = await mkdtemp(join(tmpdir(), "anybox-mcp-discovery-cancel-"))
+    let projectID: string | undefined
+
+    try {
+      await createGitRepo(root, "mcp-discovery-cancel")
+      const script = await writeLegacyMockMcpServer(root)
+      const { project } = await Project.fromDirectory(root)
+      projectID = project.id
+      await Config.setMcpServer(project.id, "hanging", {
+        name: "Hanging",
+        command: process.execPath,
+        args: [script],
+        env: {
+          ANYBOX_MCP_TEST_HANG_TOOLS_LIST: "1",
+        },
+        timeoutMs: 120_000,
+        enabled: true,
+      })
+
+      await Instance.provide({
+        directory: root,
+        fn: async () => {
+          const agent = await Agent.get("default")
+          if (!agent) throw new Error("Expected default agent")
+          const controller = new AbortController()
+          const started = Date.now()
+          const pending = ResolveTools.resolveToolPlan({
+            agent,
+            sessionID: "session-discovery-cancel",
+            messageID: "message-discovery-cancel",
+            abort: controller.signal,
+          })
+          setTimeout(() => controller.abort(new Error("turn cancelled")), 100)
+
+          await expect(pending).rejects.toThrow("turn cancelled")
+          expect(Date.now() - started).toBeLessThan(3_500)
         },
       })
     } finally {

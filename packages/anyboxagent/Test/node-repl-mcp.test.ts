@@ -17,6 +17,32 @@ function structuredResult(result: Awaited<ReturnType<McpClient["callTool"]>>) {
   return content.result
 }
 
+function structuredContent(result: Awaited<ReturnType<McpClient["callTool"]>>) {
+  const content = result.structuredContent
+  if (!content || typeof content !== "object" || Array.isArray(content)) {
+    throw new Error("Expected object structured content from the Node REPL MCP server.")
+  }
+  return content as Record<string, unknown>
+}
+
+function processIsAlive(pid: number) {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function waitForProcessExit(pid: number, timeoutMs = 2_000) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (!processIsAlive(pid)) return
+    await Bun.sleep(20)
+  }
+  throw new Error(`Process ${pid} was still alive after ${timeoutMs}ms.`)
+}
+
 function nodeReplServer() {
   const definition = BuiltinMcp.getDefinition(BuiltinMcp.NODE_REPL_DEFINITION_ID)
   if (!definition) throw new Error("Expected the built-in Node REPL MCP definition.")
@@ -76,11 +102,16 @@ describe("built-in Node REPL MCP", () => {
 
     const serverPath = configuredRuntime?.args?.[0] ?? ""
     const source = await readFile(serverPath, "utf8")
+    const kernelSource = await readFile(join(dirname(serverPath), "kernel.js"), "utf8")
     const packageBoundary = JSON.parse(
       await readFile(join(dirname(serverPath), "package.json"), "utf8"),
     )
     expect(packageBoundary).toMatchObject({ private: true, type: "commonjs" })
     expect(source).toContain("anybox-node-repl")
+    expect(source).toContain("fork(KERNEL_PATH")
+    expect(source).not.toContain("new AsyncFunction")
+    expect(kernelSource).toContain("new AsyncFunction")
+    expect(kernelSource).toContain("requestPermission")
     expect(source).not.toMatch(
       /Chrome|browser|native-host|requestHost|getCapability/,
     )
@@ -320,6 +351,116 @@ describe("built-in Node REPL MCP", () => {
       )
       expect(result.isError).toBe(false)
       expect(structuredResult(result)).toBe("allow-once")
+    } finally {
+      await client.dispose()
+    }
+  })
+
+  test.each([
+    ["a synchronous loop", "while (true) {}"],
+    ["a loop after a microtask", "await Promise.resolve(); while (true) {}"],
+    ["a loop after a timer", "await new Promise((resolve) => setTimeout(resolve, 20)); while (true) {}"],
+    ["a loop inside a loaded Node module", "require('node:vm').runInThisContext('while (true) {}')"],
+  ])("force-terminates %s at the execution timeout", async (_label, code) => {
+    const client = await createClient()
+    try {
+      const started = Date.now()
+      const result = await client.callTool("js", { code, timeoutMs: 150 })
+      const elapsed = Date.now() - started
+
+      expect(result.isError).toBe(true)
+      expect(structuredContent(result)).toMatchObject({
+        status: "error",
+        error: "Execution timed out after 150ms. The Node REPL runtime was reset.",
+        runtimeReset: true,
+        code: "EXECUTION_TIMEOUT",
+      })
+      expect(elapsed).toBeGreaterThanOrEqual(100)
+      expect(elapsed).toBeLessThan(3_000)
+    } finally {
+      await client.dispose()
+    }
+  })
+
+  test("reaps the timed-out kernel, resets state, and remains immediately usable", async () => {
+    const client = await createClient()
+    try {
+      const seeded = await client.callTool("js", {
+        code: `globalThis.beforeTimeout = "present"
+          return (await import("node:process")).pid`,
+      })
+      const oldKernelPID = structuredResult(seeded) as number
+      expect(processIsAlive(oldKernelPID)).toBe(true)
+
+      const timedOut = await client.callTool("js", {
+        code: "while (true) {}",
+        timeoutMs: 120,
+      })
+      expect(structuredContent(timedOut)).toMatchObject({
+        status: "error",
+        runtimeReset: true,
+      })
+      await waitForProcessExit(oldKernelPID)
+
+      const listStarted = Date.now()
+      expect((await client.listTools()).map((tool) => tool.name)).toContain("js")
+      expect(Date.now() - listStarted).toBeLessThan(1_000)
+
+      const recovered = await client.callTool("js", {
+        code: `return {
+          priorState: typeof globalThis.beforeTimeout,
+          pid: (await import("node:process")).pid,
+          value: 6 * 7
+        }`,
+      })
+      expect(structuredResult(recovered)).toMatchObject({
+        priorState: "undefined",
+        value: 42,
+      })
+      expect((structuredResult(recovered) as { pid: number }).pid).not.toBe(oldKernelPID)
+    } finally {
+      await client.dispose()
+    }
+  })
+
+  test("keeps the MCP supervisor responsive while the kernel is blocked", async () => {
+    const client = await createClient()
+    try {
+      const blocked = client.callTool("js", {
+        code: "while (true) {}",
+        timeoutMs: 300,
+      })
+      await Bun.sleep(50)
+
+      const started = Date.now()
+      const listed = await client.listTools()
+      expect(listed.map((tool) => tool.name)).toContain("js")
+      expect(Date.now() - started).toBeLessThan(500)
+      expect((await blocked).isError).toBe(true)
+    } finally {
+      await client.dispose()
+    }
+  })
+
+  test("cancels an in-flight loop quickly and reaps its kernel", async () => {
+    const client = await createClient()
+    const pidResult = await client.callTool("js", {
+      code: "return (await import('node:process')).pid",
+    })
+    const kernelPID = structuredResult(pidResult) as number
+    const controller = new AbortController()
+    const started = Date.now()
+    const pending = client.callTool(
+      "js",
+      { code: "while (true) {}", timeoutMs: 10_000 },
+      controller.signal,
+    )
+    setTimeout(() => controller.abort(new Error("test cancellation")), 100)
+
+    try {
+      await expect(pending).rejects.toThrow("test cancellation")
+      expect(Date.now() - started).toBeLessThan(3_000)
+      await waitForProcessExit(kernelPID)
     } finally {
       await client.dispose()
     }

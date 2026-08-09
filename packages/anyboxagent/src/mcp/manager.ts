@@ -33,9 +33,19 @@ type ManagedServer = {
   client?: McpClientLike
   config: Config.McpServerSummary
   configKey: string
+  consecutiveFailures?: number
+  circuitOpenUntil?: number
+  lastFailure?: string
+  resourcesCache?: McpResourceDefinition[]
   resourcesPromise?: Promise<McpResourceDefinition[]>
+  resourcesNeedRefresh?: boolean
+  resourceTemplatesCache?: McpResourceTemplateDefinition[]
   resourceTemplatesPromise?: Promise<McpResourceTemplateDefinition[]>
+  resourceTemplatesNeedRefresh?: boolean
+  toolsCache?: McpToolDefinition[]
+  toolsDiscoveryDeferred?: boolean
   toolsPromise?: Promise<McpToolDefinition[]>
+  toolsNeedRefresh?: boolean
 }
 
 export interface McpServerDiagnostic {
@@ -101,9 +111,33 @@ const MCP_IS_ERROR_KEY = "mcpIsError"
 const MCP_SERVER_ID_KEY = "serverID"
 const MCP_TOOL_NAME_KEY = "toolName"
 const GLOBAL_MCP_WORKDIR = os.homedir()
+const MCP_CIRCUIT_BREAKER_BASE_MS = 2_000
+const MCP_CIRCUIT_BREAKER_MAX_MS = 30_000
+const MCP_INITIAL_TOOL_DISCOVERY_WAIT_MS = 2_000
+const MCP_TOOL_DISCOVERY_PENDING = Symbol("mcp-tool-discovery-pending")
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+}
+
+function throwIfAborted(abort?: AbortSignal) {
+  if (!abort?.aborted) return
+  if (abort.reason instanceof Error) throw abort.reason
+  const error = new Error(
+    typeof abort.reason === "string" && abort.reason.trim()
+      ? abort.reason
+      : "MCP request aborted.",
+  )
+  error.name = "AbortError"
+  throw error
+}
+
+function isCancellationError(error: unknown) {
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase()
+    return error.name === "AbortError" || message.includes("abort") || message.includes("cancel")
+  }
+  return false
 }
 
 function normalizeIdentifier(value: string) {
@@ -271,45 +305,57 @@ export class McpManager {
     return true
   }
 
-  async tools(): Promise<Tool.ToolInfo[]> {
+  async tools(abort?: AbortSignal): Promise<Tool.ToolInfo[]> {
+    throwIfAborted(abort)
     const servers = await Config.resolveDiscoverableProjectMcpServers(this.projectID)
+    throwIfAborted(abort)
     await this.reconcile(servers)
+    throwIfAborted(abort)
     const result: Tool.ToolInfo[] = []
     const seen = new Map<string, string>()
 
-    for (const server of servers) {
-      if (!server.enabled) continue
+    const discovered = await Promise.all(servers.map(async (server) => {
+      if (!server.enabled) return undefined
       const handle = this.handles.get(server.id)
-      if (!handle) continue
+      if (!handle) return undefined
 
-      let tools: McpToolDefinition[]
       try {
-        tools = this.filterTools(server, await this.serverTools(handle))
+        return {
+          server,
+          tools: this.filterTools(server, await this.serverTools(handle, abort)),
+        }
       } catch (error) {
+        if (abort?.aborted) throw error
         log.warn("failed to list mcp tools", {
           projectID: this.projectID,
           serverID: server.id,
           error: error instanceof Error ? error.message : String(error),
         })
-        continue
+        return undefined
       }
+    }))
+    throwIfAborted(abort)
 
-      for (const toolDefinition of tools) {
-        const id = canonicalToolID(server.id, toolDefinition.name)
+    for (const entry of discovered) {
+      if (!entry) continue
+      for (const toolDefinition of entry.tools) {
+        const id = canonicalToolID(entry.server.id, toolDefinition.name)
         const existing = seen.get(id)
         if (existing) {
-          throw new Error(`Duplicate MCP tool id '${id}' from '${existing}' and '${server.id}'.`)
+          throw new Error(`Duplicate MCP tool id '${id}' from '${existing}' and '${entry.server.id}'.`)
         }
-        seen.set(id, server.id)
-        result.push(this.createToolInfo(server, toolDefinition, id))
+        seen.set(id, entry.server.id)
+        result.push(this.createToolInfo(entry.server, toolDefinition, id))
       }
     }
 
     return result
   }
 
-  async listResources(serverID?: string): Promise<McpResourceListResult> {
+  async listResources(serverID?: string, abort?: AbortSignal): Promise<McpResourceListResult> {
+    throwIfAborted(abort)
     const scopedServers = await this.activeResourceServers(serverID)
+    throwIfAborted(abort)
     const result: McpResourceListResult = {
       items: [],
       errors: [],
@@ -317,13 +363,14 @@ export class McpManager {
 
     for (const { server, handle } of scopedServers) {
       try {
-        const resources = await this.serverResources(handle)
+        const resources = await this.serverResources(handle, abort)
         result.items.push(...resources.map((resource) => ({
           serverID: server.id,
           serverName: server.name ?? server.id,
           resource,
         })))
       } catch (error) {
+        if (abort?.aborted) throw error
         if (serverID) throw error
         result.errors.push(resourceListError(server, error))
       }
@@ -332,8 +379,10 @@ export class McpManager {
     return result
   }
 
-  async listResourceTemplates(serverID?: string): Promise<McpResourceTemplateListResult> {
+  async listResourceTemplates(serverID?: string, abort?: AbortSignal): Promise<McpResourceTemplateListResult> {
+    throwIfAborted(abort)
     const scopedServers = await this.activeResourceServers(serverID)
+    throwIfAborted(abort)
     const result: McpResourceTemplateListResult = {
       items: [],
       errors: [],
@@ -341,13 +390,14 @@ export class McpManager {
 
     for (const { server, handle } of scopedServers) {
       try {
-        const resourceTemplates = await this.serverResourceTemplates(handle)
+        const resourceTemplates = await this.serverResourceTemplates(handle, abort)
         result.items.push(...resourceTemplates.map((resourceTemplate) => ({
           serverID: server.id,
           serverName: server.name ?? server.id,
           resourceTemplate,
         })))
       } catch (error) {
+        if (abort?.aborted) throw error
         if (serverID) throw error
         result.errors.push(resourceListError(server, error))
       }
@@ -361,14 +411,18 @@ export class McpManager {
     uri: string,
     abort?: AbortSignal,
   ): Promise<McpReadResourceResult> {
+    throwIfAborted(abort)
     const scopedServers = await this.activeResourceServers(serverID)
+    throwIfAborted(abort)
     const entry = scopedServers[0]
     if (!entry) {
       throw new Error(`MCP server '${serverID}' is not available for project '${this.projectID}'.`)
     }
 
+    this.throwIfCircuitOpen(entry.handle)
     const client = await this.clientFor(entry.handle)
     const result = await client.readResource(uri, abort)
+    this.markHealthy(entry.handle)
 
     return {
       serverID: entry.server.id,
@@ -647,24 +701,122 @@ export class McpManager {
       throw new Error(`MCP server '${serverID}' is not configured for project '${this.projectID}'.`)
     }
 
+    throwIfAborted(abort)
+    this.throwIfCircuitOpen(handle)
     const client = await this.clientFor(handle)
-    return await client.callTool(toolName, args, abort, context)
+    const result = await client.callTool(toolName, args, abort, context)
+    this.markHealthy(handle)
+    return result
   }
 
-  private async serverTools(handle: ManagedServer): Promise<McpToolDefinition[]> {
-    const promise = handle.toolsPromise ?? this.clientFor(handle).then((client) => client.listTools())
+  private async serverTools(
+    handle: ManagedServer,
+    abort?: AbortSignal,
+  ): Promise<McpToolDefinition[]> {
+    throwIfAborted(abort)
+    if (handle.toolsCache && !handle.toolsNeedRefresh) return handle.toolsCache
+    if (handle.toolsCache) {
+      if (!this.isCircuitOpen(handle) && !handle.toolsPromise) {
+        void this.refreshTools(handle).catch((error) => {
+          log.warn("failed to refresh stale mcp tool cache", {
+            projectID: this.projectID,
+            serverID: handle.config.id,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        })
+      }
+      return handle.toolsCache
+    }
+    this.throwIfCircuitOpen(handle)
+    if (handle.toolsPromise && handle.toolsDiscoveryDeferred) return []
+
+    const promise = this.refreshTools(handle, abort)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const pending = new Promise<typeof MCP_TOOL_DISCOVERY_PENDING>((resolve) => {
+      timer = setTimeout(
+        () => resolve(MCP_TOOL_DISCOVERY_PENDING),
+        MCP_INITIAL_TOOL_DISCOVERY_WAIT_MS,
+      )
+      timer.unref?.()
+    })
+    let result: McpToolDefinition[] | typeof MCP_TOOL_DISCOVERY_PENDING
+    try {
+      result = await Promise.race([promise, pending])
+    } finally {
+      if (timer) clearTimeout(timer)
+    }
+    if (result !== MCP_TOOL_DISCOVERY_PENDING) return result
+
+    handle.toolsDiscoveryDeferred = true
+    void promise.catch((error) => {
+      log.warn("deferred mcp tool discovery failed", {
+        projectID: this.projectID,
+        serverID: handle.config.id,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    })
+    log.warn("mcp tool discovery exceeded the foreground budget", {
+      projectID: this.projectID,
+      serverID: handle.config.id,
+      waitMs: MCP_INITIAL_TOOL_DISCOVERY_WAIT_MS,
+    })
+    return handle.toolsCache ?? []
+  }
+
+  private async refreshTools(
+    handle: ManagedServer,
+    abort?: AbortSignal,
+  ): Promise<McpToolDefinition[]> {
+    const promise = handle.toolsPromise ?? (async () => {
+      const client = await this.clientFor(handle)
+      try {
+        const result = await client.listTools(abort)
+        handle.toolsCache = result
+        handle.toolsNeedRefresh = false
+        this.markHealthy(handle)
+        return result
+      } catch (error) {
+        if (handle.client === client && !isCancellationError(error)) {
+          this.recordFailure(handle, error)
+        }
+        throw error
+      }
+    })()
     handle.toolsPromise = promise
     try {
       return await promise
     } finally {
       if (handle.toolsPromise === promise) {
         handle.toolsPromise = undefined
+        handle.toolsDiscoveryDeferred = false
       }
     }
   }
 
-  private async serverResources(handle: ManagedServer): Promise<McpResourceDefinition[]> {
-    const promise = handle.resourcesPromise ?? this.clientFor(handle).then((client) => client.listResources())
+  private async serverResources(
+    handle: ManagedServer,
+    abort?: AbortSignal,
+  ): Promise<McpResourceDefinition[]> {
+    throwIfAborted(abort)
+    if (handle.resourcesCache && !handle.resourcesNeedRefresh) return handle.resourcesCache
+    if (handle.resourcesCache && this.isCircuitOpen(handle)) return handle.resourcesCache
+    this.throwIfCircuitOpen(handle)
+    const promise = handle.resourcesPromise ?? (async () => {
+      const client = await this.clientFor(handle)
+      try {
+        const result = await client.listResources(abort)
+        handle.resourcesCache = result
+        handle.resourcesNeedRefresh = false
+        this.markHealthy(handle)
+        return result
+      } catch (error) {
+        if (handle.client === client && !isCancellationError(error)) {
+          this.recordFailure(handle, error)
+        }
+        if (handle.resourcesCache) return handle.resourcesCache
+        throw error
+      }
+    })()
     handle.resourcesPromise = promise
     try {
       return await promise
@@ -675,9 +827,35 @@ export class McpManager {
     }
   }
 
-  private async serverResourceTemplates(handle: ManagedServer): Promise<McpResourceTemplateDefinition[]> {
+  private async serverResourceTemplates(
+    handle: ManagedServer,
+    abort?: AbortSignal,
+  ): Promise<McpResourceTemplateDefinition[]> {
+    throwIfAborted(abort)
+    if (handle.resourceTemplatesCache && !handle.resourceTemplatesNeedRefresh) {
+      return handle.resourceTemplatesCache
+    }
+    if (handle.resourceTemplatesCache && this.isCircuitOpen(handle)) {
+      return handle.resourceTemplatesCache
+    }
+    this.throwIfCircuitOpen(handle)
     const promise = handle.resourceTemplatesPromise
-      ?? this.clientFor(handle).then((client) => client.listResourceTemplates())
+      ?? (async () => {
+        const client = await this.clientFor(handle)
+        try {
+          const result = await client.listResourceTemplates(abort)
+          handle.resourceTemplatesCache = result
+          handle.resourceTemplatesNeedRefresh = false
+          this.markHealthy(handle)
+          return result
+        } catch (error) {
+          if (handle.client === client && !isCancellationError(error)) {
+            this.recordFailure(handle, error)
+          }
+          if (handle.resourceTemplatesCache) return handle.resourceTemplatesCache
+          throw error
+        }
+      })()
     handle.resourceTemplatesPromise = promise
     try {
       return await promise
@@ -688,25 +866,81 @@ export class McpManager {
     }
   }
 
+  private isCircuitOpen(handle: ManagedServer) {
+    return (handle.circuitOpenUntil ?? 0) > Date.now()
+  }
+
+  private throwIfCircuitOpen(handle: ManagedServer) {
+    if (!this.isCircuitOpen(handle)) return
+    const retryAfterMs = Math.max(1, (handle.circuitOpenUntil ?? 0) - Date.now())
+    throw new Error(
+      `MCP server '${handle.config.id}' is temporarily unavailable after repeated failures. `
+      + `Retry after ${retryAfterMs}ms.${handle.lastFailure ? ` Last error: ${handle.lastFailure}` : ""}`,
+    )
+  }
+
+  private markHealthy(handle: ManagedServer) {
+    handle.consecutiveFailures = 0
+    handle.circuitOpenUntil = undefined
+    handle.lastFailure = undefined
+  }
+
+  private recordFailure(handle: ManagedServer, error: unknown) {
+    const failures = (handle.consecutiveFailures ?? 0) + 1
+    const cooldown = Math.min(
+      MCP_CIRCUIT_BREAKER_BASE_MS * 2 ** Math.max(0, failures - 1),
+      MCP_CIRCUIT_BREAKER_MAX_MS,
+    )
+    handle.consecutiveFailures = failures
+    handle.circuitOpenUntil = Date.now() + cooldown
+    handle.lastFailure = error instanceof Error ? error.message : String(error)
+  }
+
+  private handleClientInvalidated(
+    handle: ManagedServer,
+    client: McpClientLike,
+    error: unknown,
+  ) {
+    if (handle.client !== client) return
+    handle.client = undefined
+    handle.toolsPromise = undefined
+    handle.toolsDiscoveryDeferred = false
+    handle.resourcesPromise = undefined
+    handle.resourceTemplatesPromise = undefined
+    handle.toolsNeedRefresh = true
+    handle.resourcesNeedRefresh = true
+    handle.resourceTemplatesNeedRefresh = true
+    if (!isCancellationError(error)) this.recordFailure(handle, error)
+  }
+
   private async clientFor(handle: ManagedServer): Promise<McpClientLike> {
     if (handle.client) return handle.client
 
     const timeout = handle.config.timeoutMs ?? (await Config.get(this.projectID)).experimental?.mcp_timeout ?? 30_000
-    handle.client = new McpClient({
+    const client: McpClientLike = new McpClient({
       cwd: handle.config.transport === "stdio" ? resolveServerCwd(handle.config.cwd) : Instance.directory,
       onToolsChanged: () => {
+        handle.toolsCache = undefined
         handle.toolsPromise = undefined
+        handle.toolsDiscoveryDeferred = false
+        handle.toolsNeedRefresh = true
       },
       onResourcesChanged: () => {
+        handle.resourcesCache = undefined
         handle.resourcesPromise = undefined
+        handle.resourcesNeedRefresh = true
+        handle.resourceTemplatesCache = undefined
         handle.resourceTemplatesPromise = undefined
+        handle.resourceTemplatesNeedRefresh = true
       },
+      onInvalidated: (error) => this.handleClientInvalidated(handle, client, error),
       requestTimeoutMs: timeout,
       server: handle.config,
       worktree: Instance.worktree,
     })
+    handle.client = client
 
-    return handle.client
+    return client
   }
 
   private filterTools(server: Config.McpServerSummary, tools: McpToolDefinition[]) {
@@ -903,8 +1137,8 @@ const managerState = Instance.state(
   },
 )
 
-export async function tools() {
-  return await managerState().tools()
+export async function tools(abort?: AbortSignal) {
+  return await managerState().tools(abort)
 }
 
 export async function notifyNodeReplLifecycleIfConnected(input: {
@@ -922,12 +1156,12 @@ export async function diagnose(serverID: string) {
   return await managerState().diagnose(serverID)
 }
 
-export async function listResources(serverID?: string) {
-  return await managerState().listResources(serverID)
+export async function listResources(serverID?: string, abort?: AbortSignal) {
+  return await managerState().listResources(serverID, abort)
 }
 
-export async function listResourceTemplates(serverID?: string) {
-  return await managerState().listResourceTemplates(serverID)
+export async function listResourceTemplates(serverID?: string, abort?: AbortSignal) {
+  return await managerState().listResourceTemplates(serverID, abort)
 }
 
 export async function readResource(serverID: string, uri: string, abort?: AbortSignal) {

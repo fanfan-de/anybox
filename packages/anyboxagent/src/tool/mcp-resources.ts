@@ -202,8 +202,8 @@ export const ListMcpResourcesTool = Tool.define(
     title: "List MCP Resources",
     description: "List resources exposed by enabled MCP servers for the active project.",
     parameters: ListMcpResourcesParameters,
-    execute: async (parameters) => {
-      const result = await Mcp.listResources(parameters.server_id)
+    execute: async (parameters, ctx) => {
+      const result = await Mcp.listResources(parameters.server_id, ctx.abort)
       const data = {
         kind: "mcp-resources",
         ...(parameters.server_id ? { serverID: parameters.server_id } : {}),
@@ -235,8 +235,8 @@ export const ListMcpResourceTemplatesTool = Tool.define(
     title: "List MCP Resource Templates",
     description: "List parameterized resource templates exposed by enabled MCP servers for the active project.",
     parameters: ListMcpResourcesParameters,
-    execute: async (parameters) => {
-      const result = await Mcp.listResourceTemplates(parameters.server_id)
+    execute: async (parameters, ctx) => {
+      const result = await Mcp.listResourceTemplates(parameters.server_id, ctx.abort)
       const data = {
         kind: "mcp-resource-templates",
         ...(parameters.server_id ? { serverID: parameters.server_id } : {}),

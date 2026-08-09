@@ -216,7 +216,7 @@ export async function resolveToolPlan(input: ResolveToolsInput): Promise<Resolve
     persistentMcpServers,
     toolSearchFeatureEnabled,
   ] = await Promise.all([
-    ToolRegistry.inventory(),
+    ToolRegistry.inventory(input.abort),
     Config.getToolSelection(Config.GLOBAL_CONFIG_ID),
     Config.resolveProjectMcpServers(Instance.project.id),
     isToolSearchEnabled(input),
