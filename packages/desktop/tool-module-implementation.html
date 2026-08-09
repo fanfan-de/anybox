@@ -475,7 +475,7 @@
       <tr><td>交互/工作流</td><td><code>ask-user-question</code>, task tools</td><td>处理用户问题、任务进度和任务状态。注意：<code>enter-plan-mode.ts</code> / <code>exit-plan-mode.ts</code> 文件存在，但当前未在 <code>registry.ts</code> 的 <code>builtinTools()</code> 中注册。</td></tr>
       <tr><td>读/搜索</td><td><code>read-file</code>, <code>glob</code>, <code>grep</code>, <code>list-directory</code>, skill/resource tools</td><td>多数应标记 <code>readOnly=true</code> 和 <code>concurrency=safe</code>。</td></tr>
       <tr><td>写入</td><td><code>replace-text</code>, <code>apply_patch</code></td><td>项目内文本修改，通常 <code>destructive=true</code>、<code>concurrency=exclusive</code>。</td></tr>
-      <tr><td>Shell/Terminal</td><td><code>git_bash_command</code>, <code>powershell_command</code>, <code>cmd_command</code>, <code>wsl_bash_command</code>, terminal tools</td><td>需要 shell 或终端进程，风险和权限提示更高。</td></tr>
+      <tr><td>Shell</td><td><code>git_bash_command</code>, <code>powershell_command</code>, <code>cmd_command</code>, <code>wsl_bash_command</code>, <code>write_stdin</code></td><td>操作独立托管的 shell 与后台进程，不读取或写入用户终端；风险和权限提示更高。</td></tr>
       <tr><td>MCP 资源</td><td><code>list_mcp_resources</code>, <code>list_mcp_resource_templates</code>, <code>read_mcp_resource</code></td><td>作为内置只读工具出现，可在 read-only session 或 agent 中使用。</td></tr>
       <tr><td>并行</td><td><code>multi_tool_use_parallel</code></td><td>只允许批量执行 read/search 且 <code>readOnly=true</code>、<code>concurrency=safe</code> 的子工具。</td></tr>
       <tr><td>媒体/浏览</td><td><code>generate-image</code>, <code>view-image</code>, <code>web-fetch</code></td><td>图片、网页读取或生成能力。</td></tr>

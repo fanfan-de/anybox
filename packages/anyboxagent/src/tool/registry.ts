@@ -28,7 +28,6 @@ import { ReplaceTextTool } from "#tool/replace-text.ts"
 import { RollbackToCheckpointTool } from "#tool/rollback-to-checkpoint.ts"
 import { SpawnSubagentTool } from "#tool/spawn-subagent.ts"
 import { SshShellCommandTool } from "#tool/ssh-shell-command.ts"
-import { TerminalReadTool, TerminalRunCommandTool, TerminalWriteInputTool } from "#tool/terminal-tools.ts"
 import { TaskCreateTool, TaskGetTool, TaskListTool, TaskUpdateTool } from "#tool/task-tools.ts"
 import { ToolSearchTool } from "#tool/tool-search.ts"
 import * as ToolModule from "#tool/module.ts"
@@ -144,9 +143,6 @@ async function rawBuiltinTools(): Promise<Tool.ToolInfo[]> {
   return [
     ...commonTools,
     IpythonTool,
-    TerminalRunCommandTool,
-    TerminalReadTool,
-    TerminalWriteInputTool,
     LspDefinitionTool,
     LspReferencesTool,
     LspHoverTool,

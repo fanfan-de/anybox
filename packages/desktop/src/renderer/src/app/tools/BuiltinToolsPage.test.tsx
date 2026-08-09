@@ -36,7 +36,7 @@ const builtinToolModules: BuiltinToolModuleSummary[] = [
   createModule(
     "workspace.shell",
     "Shell",
-    "Run shell commands and interact with persistent or managed terminal sessions.",
+    "Run commands in explicit managed shells and interact with background shell processes.",
     ["git_bash_command"],
   ),
   createModule(
@@ -533,7 +533,7 @@ describe("BuiltinToolsPage", () => {
       name: "Shell 模块，已启用 1/1 个工具",
     })).toBeInTheDocument()
     expect(screen.getByRole("heading", { name: "Shell" })).toBeInTheDocument()
-    expect(screen.getByText("运行 Shell 命令，并与持久或托管终端会话交互。")).toBeInTheDocument()
+    expect(screen.getByText("在明确的托管 Shell 中运行命令，并与后台 Shell 进程交互。")).toBeInTheDocument()
     expect(screen.getByText("内置 · Anybox")).toBeInTheDocument()
     expect(screen.getByText("激活策略：始终可用")).toBeInTheDocument()
     expect(screen.getByText("全局作用域")).toBeInTheDocument()

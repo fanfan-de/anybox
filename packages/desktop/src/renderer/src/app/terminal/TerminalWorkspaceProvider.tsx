@@ -3,14 +3,11 @@ import {
   useContext,
   useEffect,
   useEffectEvent,
-  useRef,
   useState,
   type ReactNode,
 } from "react"
 import { terminalClient } from "./client"
 import { useTerminalWorkspace } from "./use-terminal-workspace"
-
-export const TERMINAL_DISCOVERY_RETRY_DELAYS_MS = [100, 300, 750] as const
 
 export type TerminalWorkspaceController = ReturnType<typeof useTerminalWorkspace>
 
@@ -18,7 +15,6 @@ interface TerminalWorkspaceProviderProps {
   children: ReactNode
   connectionEnabled: boolean
   currentSessionID: string | null
-  discoveryKey?: string
   storageKey?: string
 }
 
@@ -28,7 +24,6 @@ export function TerminalWorkspaceProvider({
   children,
   connectionEnabled,
   currentSessionID,
-  discoveryKey,
   storageKey,
 }: TerminalWorkspaceProviderProps) {
   const workspace = useTerminalWorkspace({
@@ -38,7 +33,6 @@ export function TerminalWorkspaceProvider({
     storageKey,
   })
   const syncSessionPty = useEffectEvent(workspace.handleSyncSessionPty)
-  const lastDiscoveryKeyRef = useRef<string | undefined>(undefined)
   const [resumeVersion, setResumeVersion] = useState(0)
 
   useEffect(() => {
@@ -64,22 +58,15 @@ export function TerminalWorkspaceProvider({
     if (!sessionID) return
 
     let cancelled = false
-    let retryTimer: number | null = null
-    let attemptIndex = 0
-    const shouldRetry = Boolean(discoveryKey && discoveryKey !== lastDiscoveryKeyRef.current)
-    lastDiscoveryKeyRef.current = discoveryKey
-    const attemptDelays = shouldRetry ? [0, ...TERMINAL_DISCOVERY_RETRY_DELAYS_MS] : [0]
 
-    const discover = async () => {
+    const sync = async () => {
       let info = null
       try {
         info = await terminalClient.getSessionPty({ sessionID })
       } catch (error) {
         if (cancelled) return
-        if (attemptIndex >= attemptDelays.length - 1) {
-          console.error("[desktop] getSessionPty failed:", error)
-          return
-        }
+        console.error("[desktop] getSessionPty failed:", error)
+        return
       }
 
       if (cancelled) return
@@ -94,29 +81,15 @@ export function TerminalWorkspaceProvider({
         return
       }
 
-      if (attemptIndex >= attemptDelays.length - 1) {
-        syncSessionPty(null)
-        return
-      }
-
-      const currentDelay = attemptDelays[attemptIndex] ?? 0
-      attemptIndex += 1
-      const nextDelay = attemptDelays[attemptIndex] ?? currentDelay
-      retryTimer = window.setTimeout(() => {
-        retryTimer = null
-        void discover()
-      }, Math.max(0, nextDelay - currentDelay))
+      syncSessionPty(null)
     }
 
-    void discover()
+    void sync()
 
     return () => {
       cancelled = true
-      if (retryTimer !== null) {
-        window.clearTimeout(retryTimer)
-      }
     }
-  }, [connectionEnabled, currentSessionID, discoveryKey, resumeVersion])
+  }, [connectionEnabled, currentSessionID, resumeVersion])
 
   return (
     <TerminalWorkspaceContext.Provider value={workspace}>

@@ -13,7 +13,7 @@
 | 人机交互 | 常驻 | 1 | 向用户提出结构化问题并等待回复 |
 | 任务 | 常驻 | 4 | 跟踪当前 Agent 执行中的计划、依赖和进度 |
 | 文件读写 | 常驻 | 4 | 读取、编辑、修补和查看工作区文件 |
-| Shell | 常驻 | Windows 本地为 8 | 运行命令并操作持久或托管终端 |
+| Shell | 常驻 | Windows 本地为 5 | 在明确的托管 Shell 中运行命令并操作后台进程 |
 | 多 Agent | 常驻 | 4 | 创建、查看、等待和取消子 Agent |
 | 渐进披露 | 常驻 | 7 | 按需发现工具、Skills、MCP 资源和工作区依赖 |
 | 程序化编排 | 常驻 | 2 | 用 JavaScript 或安全并行调用组合多个工具 |
@@ -60,13 +60,10 @@
 
 ### Shell
 
-`workspace.shell` 用于运行命令以及与持续运行的终端进程交互。Windows 本地工作区通常显示下列 8 个工具。
+`workspace.shell` 用于在明确的托管 Shell 中运行命令，并与持续运行的后台进程交互。它不连接桌面端的用户终端。Windows 本地工作区通常显示下列 5 个工具。
 
 | 工具 | 作用 |
 | --- | --- |
-| 运行终端命令（`terminal_run_command`） | 在当前主会话绑定的持久终端中运行命令。 |
-| 读取终端（`terminal_read`） | 读取持久终端最近的输出缓冲。 |
-| 写入终端输入（`terminal_write_input`） | 向持久终端发送原始输入。 |
 | 写入标准输入（`write_stdin`） | 轮询、继续输入或中断现有的托管 Shell 会话。 |
 | Git Bash（`git_bash_command`） | 在项目边界内运行 Git Bash/MSYS Bash 命令。 |
 | PowerShell（`powershell_command`） | 在项目边界内运行 PowerShell 7 命令。 |
@@ -76,6 +73,8 @@
 PowerShell 7 是可选的本机依赖。Anybox 不会捆绑或自动安装它，也不支持 Windows PowerShell 5.1。缺少 PowerShell 7 时，Anybox 以及命令提示符、Git Bash、WSL 等其他 Shell 仍可正常工作。
 
 在 macOS 本地工作区中，平台 Shell 会替换为 `macos_shell_command`；在 SSH 工作区中则使用 `ssh_shell_command`。因此不同环境中的 Shell 工具数可能不同。
+
+桌面端“终端”是由用户直接操作的交互界面，不作为 Agent 工具暴露。Agent 无法读取其输出缓冲，也无法向其中发送命令或原始输入。
 
 ### 多 Agent
 

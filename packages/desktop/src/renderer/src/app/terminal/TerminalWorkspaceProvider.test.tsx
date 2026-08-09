@@ -30,18 +30,11 @@ function WorkspaceState() {
   return <span data-testid="active-pty">{workspace.activeSession?.ptyID ?? "none"}</span>
 }
 
-function TestProvider({
-  discoveryKey,
-  sessionID = SESSION_ID,
-}: {
-  discoveryKey: string
-  sessionID?: string
-}) {
+function TestProvider({ sessionID = SESSION_ID }: { sessionID?: string }) {
   return (
     <TerminalWorkspaceProvider
       connectionEnabled
       currentSessionID={sessionID}
-      discoveryKey={discoveryKey}
     >
       <WorkspaceState />
     </TerminalWorkspaceProvider>
@@ -84,7 +77,7 @@ describe("TerminalWorkspaceProvider", () => {
   it("adopts the owning interactive PTY and replays it from cursor zero", async () => {
     vi.mocked(window.desktop!.getSessionPty!).mockResolvedValue(ptyInfo)
 
-    const { rerender } = render(<TestProvider discoveryKey="initial" />)
+    render(<TestProvider />)
 
     await waitFor(() => {
       expect(screen.getByTestId("active-pty")).toHaveTextContent("pty-preview")
@@ -95,44 +88,13 @@ describe("TerminalWorkspaceProvider", () => {
     })
     expect(window.desktop?.createPtySession).not.toHaveBeenCalled()
 
-    rerender(<TestProvider discoveryKey="tool:completed" />)
-    await waitFor(() => {
-      expect(window.desktop?.getSessionPty).toHaveBeenCalledTimes(2)
-    })
-    expect(window.desktop?.attachPtySession).toHaveBeenCalledTimes(1)
-
     act(() => {
       window.dispatchEvent(new Event("focus"))
     })
     await waitFor(() => {
-      expect(window.desktop?.getSessionPty).toHaveBeenCalledTimes(3)
+      expect(window.desktop?.getSessionPty).toHaveBeenCalledTimes(2)
     })
     expect(window.desktop?.attachPtySession).toHaveBeenCalledTimes(1)
-  })
-
-  it("uses bounded discovery retries while a terminal tool is creating the PTY", async () => {
-    vi.useFakeTimers()
-    vi.mocked(window.desktop!.getSessionPty!)
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(ptyInfo)
-
-    render(<TestProvider discoveryKey="tool:running" />)
-
-    await act(async () => {
-      await Promise.resolve()
-    })
-    expect(window.desktop?.getSessionPty).toHaveBeenCalledTimes(1)
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(100)
-      await vi.advanceTimersByTimeAsync(200)
-      await vi.advanceTimersByTimeAsync(450)
-    })
-
-    expect(window.desktop?.getSessionPty).toHaveBeenCalledTimes(4)
-    expect(screen.getByTestId("active-pty")).toHaveTextContent("pty-preview")
   })
 
   it("detaches the old PTY and adopts only the newly selected task session", async () => {
@@ -149,12 +111,12 @@ describe("TerminalWorkspaceProvider", () => {
       id === nextInfo.id ? nextInfo : ptyInfo
     ))
 
-    const { rerender } = render(<TestProvider discoveryKey="initial" />)
+    const { rerender } = render(<TestProvider />)
     await waitFor(() => {
       expect(screen.getByTestId("active-pty")).toHaveTextContent("pty-preview")
     })
 
-    rerender(<TestProvider discoveryKey="session-next:terminal_run_command:running" sessionID="session-next" />)
+    rerender(<TestProvider sessionID="session-next" />)
 
     await waitFor(() => {
       expect(screen.getByTestId("active-pty")).toHaveTextContent("pty-next")
@@ -168,7 +130,7 @@ describe("TerminalWorkspaceProvider", () => {
 
   it("drops a disconnected stale preview when the owning session no longer has a PTY", async () => {
     vi.mocked(window.desktop!.getSessionPty!).mockResolvedValue(ptyInfo)
-    const { rerender } = render(<TestProvider discoveryKey="initial" />)
+    render(<TestProvider />)
 
     await waitFor(() => {
       expect(screen.getByTestId("active-pty")).toHaveTextContent("pty-preview")
@@ -183,7 +145,9 @@ describe("TerminalWorkspaceProvider", () => {
     })
 
     vi.mocked(window.desktop!.getSessionPty!).mockResolvedValue(null)
-    rerender(<TestProvider discoveryKey="tool:completed" />)
+    act(() => {
+      window.dispatchEvent(new Event("focus"))
+    })
 
     await waitFor(() => {
       expect(screen.getByTestId("active-pty")).toHaveTextContent("none")

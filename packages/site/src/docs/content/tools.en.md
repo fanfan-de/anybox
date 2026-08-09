@@ -13,7 +13,7 @@ The Tools page organizes tools by capability module. Always-on modules remain in
 | Human Interaction | Always on | 1 | Ask a structured question and wait for the user |
 | Tasks | Always on | 4 | Track plans, dependencies, and progress in the current Agent run |
 | File Read and Write | Always on | 4 | Read, edit, patch, and inspect workspace files |
-| Shell | Always on | 8 in a local Windows workspace | Run commands and operate persistent or managed terminals |
+| Shell | Always on | 5 in a local Windows workspace | Run commands in explicit managed shells and operate background processes |
 | Multi-agent | Always on | 4 | Spawn, inspect, wait for, and cancel child Agents |
 | Progressive Disclosure | Always on | 7 | Discover tools, Skills, MCP resources, and workspace dependencies as needed |
 | Programmatic Orchestration | Always on | 2 | Combine calls with JavaScript or safe parallel execution |
@@ -60,13 +60,10 @@ The Tasks module breaks down work inside the current Agent session. Planner stor
 
 ### Shell
 
-`workspace.shell` runs commands and interacts with continuing terminal processes. A local Windows workspace normally exposes the following eight tools.
+`workspace.shell` runs commands in explicit managed shells and interacts with continuing background processes. It does not connect to the user terminal in the desktop app. A local Windows workspace normally exposes the following five tools.
 
 | Tool | Purpose |
 | --- | --- |
-| Run Terminal Command (`terminal_run_command`) | Run a command in the persistent terminal bound to the main session. |
-| Read Terminal (`terminal_read`) | Read the persistent terminal's recent output buffer. |
-| Write Terminal Input (`terminal_write_input`) | Send raw input to the persistent terminal. |
 | Write Stdin (`write_stdin`) | Poll, send input to, or interrupt an existing managed Shell session. |
 | Git Bash (`git_bash_command`) | Run a Git Bash/MSYS Bash command inside the project boundary. |
 | PowerShell (`powershell_command`) | Run PowerShell 7 commands inside the project boundary. |
@@ -76,6 +73,8 @@ The Tasks module breaks down work inside the current Agent session. Planner stor
 PowerShell 7 is an optional local dependency. Anybox does not bundle or install it, and Windows PowerShell 5.1 is not supported. If PowerShell 7 is missing, Anybox and other shells such as Command Prompt, Git Bash, and WSL continue to work.
 
 A local macOS workspace uses `macos_shell_command` for its platform Shell, while an SSH workspace uses `ssh_shell_command`. The Shell count can therefore vary by environment.
+
+The desktop Terminal is an interactive surface controlled directly by the user and is not exposed as an Agent tool. The Agent cannot read its output buffer or send commands or raw input to it.
 
 ### Multi-agent
 

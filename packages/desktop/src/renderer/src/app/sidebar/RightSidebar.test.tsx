@@ -436,7 +436,6 @@ describe("RightSidebar", () => {
           brandTheme: "terra",
           colorMode: "light",
           currentSessionID: "session-1",
-          discoveryKey: "terminal_run_command:running",
         },
       })
 

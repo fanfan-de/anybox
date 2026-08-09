@@ -118,7 +118,6 @@ interface RightSidebarProps {
     codeFontFamily?: AppearanceCodeFontFamily
     colorMode: ColorMode
     currentSessionID: string | null
-    discoveryKey?: string
     storageKey?: string
   }
   isCompanionCollapsed?: boolean
@@ -734,15 +733,11 @@ export function RightSidebar({
   const terminalConnectionEnabled = !isRegionHidden && (
     isLauncherVisible ? canOpenTerminal : activeTab?.kind === "terminal"
   )
-  const terminalDiscoveryKey = terminalWorkspaceSessionID === terminalWorkspace.currentSessionID
-    ? terminalWorkspace.discoveryKey
-    : undefined
 
   return (
     <TerminalWorkspaceProvider
       connectionEnabled={terminalConnectionEnabled}
       currentSessionID={terminalWorkspaceSessionID}
-      discoveryKey={terminalDiscoveryKey}
       storageKey={terminalWorkspace.storageKey}
     >
       {sidebar}

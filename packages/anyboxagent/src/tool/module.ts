@@ -127,8 +127,8 @@ export const PROGRESSIVE_DISCLOSURE_TOOL_MODULE_ID = "runtime.progressive-disclo
 const BUILTIN_MODULE_METADATA = {
   "workspace.shell": {
     title: "Shell",
-    description: "Run shell commands and interact with persistent or managed terminal sessions.",
-    keywords: ["shell", "terminal", "command", "process", "background"],
+    description: "Run commands in explicit managed shells and interact with background shell processes.",
+    keywords: ["shell", "command", "process", "background", "stdin"],
   },
   "workflow.tasks": {
     title: "Tasks",
@@ -200,9 +200,6 @@ const BUILTIN_MODULE_METADATA = {
 type BuiltinModuleID = keyof typeof BUILTIN_MODULE_METADATA
 
 const SHELL_TOOL_IDS = new Set([
-  "terminal_run_command",
-  "terminal_read",
-  "terminal_write_input",
   "git_bash_command",
   "macos_shell_command",
   "powershell_command",

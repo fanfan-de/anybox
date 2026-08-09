@@ -44,7 +44,6 @@ import { ListDirectoryTool } from "#tool/list-directory.ts"
 import { ReadFileTool } from "#tool/read-file.ts"
 import { ReplaceTextTool } from "#tool/replace-text.ts"
 import { SshShellCommandTool } from "#tool/ssh-shell-command.ts"
-import { TerminalReadTool, TerminalRunCommandTool, TerminalWriteInputTool } from "#tool/terminal-tools.ts"
 import * as Tool from "#tool/tool.ts"
 import { createToolExecution } from "#tool/execution.ts"
 import * as ToolRegistry from "#tool/registry.ts"
@@ -2387,67 +2386,12 @@ describe("tool contract", () => {
     expect(ToolRegistry.builtinShellToolsForPlatform("linux").map((tool) => tool.id)).toEqual([])
   })
 
-  it("exposes session-bound terminal tools without owner override parameters", async () => {
-    const terminalTools = [
-      {
-        tool: TerminalRunCommandTool,
-        id: "terminal_run_command",
-        title: "Run Terminal Command",
-        capabilities: {
-          kind: "exec",
-          concurrency: "exclusive",
-          needsShell: true,
-        },
-        validArgs: {
-          command: "echo ok",
-        },
-        forbiddenArgs: {
-          command: "echo ok",
-          sessionID: "session-other",
-        },
-      },
-      {
-        tool: TerminalReadTool,
-        id: "terminal_read",
-        title: "Read Terminal",
-        capabilities: {
-          kind: "read",
-          readOnly: true,
-          needsShell: true,
-        },
-        validArgs: {},
-        forbiddenArgs: {
-          ptyID: "pty-other",
-        },
-      },
-      {
-        tool: TerminalWriteInputTool,
-        id: "terminal_write_input",
-        title: "Write Terminal Input",
-        capabilities: {
-          kind: "exec",
-          concurrency: "exclusive",
-          needsShell: true,
-        },
-        validArgs: {
-          data: "abc",
-        },
-        forbiddenArgs: {
-          data: "abc",
-          sessionID: "session-other",
-        },
-      },
-    ]
+  it("does not expose the user-owned interactive terminal as Agent tools", async () => {
+    const toolIDs = (await ToolRegistry.builtinTools()).map((tool) => tool.id)
 
-    for (const item of terminalTools) {
-      const runtime = await item.tool.init()
-      expect(item.tool.id).toBe(item.id)
-      expect(item.tool.title).toBe(item.title)
-      expect(item.tool.capabilities).toMatchObject(item.capabilities)
-      expect(runtime.title).toBe(item.title)
-      expect(runtime.parameters.safeParse(item.validArgs).success).toBe(true)
-      expect(runtime.parameters.safeParse(item.forbiddenArgs).success).toBe(false)
-    }
+    expect(toolIDs).not.toContain("terminal_run_command")
+    expect(toolIDs).not.toContain("terminal_read")
+    expect(toolIDs).not.toContain("terminal_write_input")
   })
 
   it("resolves shell executables by shell-specific Windows rules", async () => {

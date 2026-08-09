@@ -130,7 +130,7 @@ Builtin 工具按稳定的能力边界分组：
 
 | Module ID | 能力示例 |
 | --- | --- |
-| `workspace.shell` | 各平台 shell、持久终端、后台 shell 会话交互 |
+| `workspace.shell` | 各平台托管 shell、后台 shell 会话与标准输入交互；不连接用户终端 |
 | `workflow.tasks` | Agent 会话任务创建、查询和进度更新 |
 | `workspace.file-io` | 文件读取、文本替换、patch、图片查看 |
 | `workspace.file-search` | 目录枚举、glob、grep |
