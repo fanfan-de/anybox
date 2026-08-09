@@ -165,6 +165,7 @@ pnpm site:build
 - [桌面端包说明](./packages/desktop/README.md)
 - [第三方插件开发](./docs/anybox-third-party-plugin-development.md)
 - [插件模块实现机制](./docs/plugin-module-implementation.md)
+- [工具模块设计（通俗版）](./docs/tool-module-design.md)
 - [连接器开发指南](./docs/connector-development-guide.md)
 - [本地连接器设计](./docs/plugin-local-connectors-design.md)
 - [自动化功能设计](./docs/automation-feature-design.md)

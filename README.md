@@ -165,6 +165,7 @@ pnpm site:build
 - [Desktop package notes](./packages/desktop/README.md)
 - [Third-party plugin development](./docs/anybox-third-party-plugin-development.md)
 - [Plugin module implementation](./docs/plugin-module-implementation.md)
+- [Tool module design, plain-language guide](./docs/tool-module-design.md)
 - [Connector development guide](./docs/connector-development-guide.md)
 - [Local connector design](./docs/plugin-local-connectors-design.md)
 - [Automation feature design](./docs/automation-feature-design.md)

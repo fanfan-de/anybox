@@ -4,6 +4,25 @@ Tools determine what an agent can read, search, execute, or modify. The desktop 
 
 > Visible tools vary by operating system, workspace type, MCP connections, and active agent policy.
 
+## Understand the Design First
+
+Think of the agent as a worker: a Tool is one concrete instrument, a Tool Module is the toolbox that groups related instruments, a Provider says where that toolbox came from, and Permission is the lock checked for each use.
+
+Anybox does not send every tool to the model at once. Core capabilities such as files and Shell remain in the always-on catalog, while domain capabilities such as Planner load on demand. This keeps unrelated schemas out of context and reduces the chance that the model selects the wrong tool.
+
+A tool call moves through these stages:
+
+```text
+Tool sources and module catalog
+  → decide what this turn should expose
+  → apply global selection, Agent policy, and read-only limits
+  → let the model select a concrete tool
+  → evaluate this call's arguments, paths, and risk for approval
+  → execute and return a structured result to the model and UI
+```
+
+A loaded module therefore means only that the agent can now see its tools. An enabled tool does not mean that every call is automatically approved. Capability discovery and execution authorization remain separate decisions.
+
 ## Tool Module Overview
 
 The Tools page organizes tools by capability module. Always-on modules remain in the runtime catalog and can be enabled or disabled globally. On-demand modules load only when the current task needs them.
@@ -17,6 +36,7 @@ The Tools page organizes tools by capability module. Always-on modules remain in
 | Multi-agent | Always on | 4 | Spawn, inspect, wait for, and cancel child Agents |
 | Progressive Disclosure | Always on | 7 | Discover tools, Skills, MCP resources, and workspace dependencies as needed |
 | Programmatic Orchestration | Always on | 2 | Combine calls with JavaScript or safe parallel execution |
+| Python Runtime | Always-on module; tool disabled by default in local workspaces | 1 | Run code in a persistent IPython environment for the current session |
 | Metacognition | Always on | 2 | Inspect and return to earlier session checkpoints |
 | File Search | Always on | 3 | List directories and search paths or file contents |
 | Visual Generation | Always on | 1 | Generate images with the configured image model |
@@ -25,6 +45,8 @@ The Tools page organizes tools by capability module. Always-on modules remain in
 | Planner | On demand | 12 | Manage persistent todos, schedules, proposals, and Agent runs |
 
 The Tasks module breaks down work inside the current Agent session. Planner stores todos and schedules that persist across sessions; the two modules do not share task data.
+
+Here, **always on** means that the module belongs to the runtime catalog; it does not guarantee that its tools are visible to the model. IPython, for example, is disabled by default and enters the candidate set only after the user explicitly enables it.
 
 ## Always-on Tool Modules
 
@@ -109,6 +131,16 @@ The desktop Terminal is an interactive surface controlled directly by the user a
 | --- | --- |
 | JavaScript Exec (`exec`) | Use isolated JavaScript to orchestrate supported read-only workspace tools. |
 | Parallel Tool Use (`multi_tool_use_parallel`) | Run independent, concurrency-safe read or search calls in parallel. |
+
+### Python Runtime
+
+`runtime.python` provides a session-scoped persistent Python environment in local workspaces.
+
+| Tool | Purpose |
+| --- | --- |
+| IPython (`ipython`) | Execute Python or IPython code; variables, imports, and functions remain available while the current session kernel is alive. |
+
+IPython is disabled by default, does not support SSH workspaces, and is not a security sandbox. Code runs with the current operating-system user's permissions, so each call is treated as a high-risk execution request and still goes through call-level permission evaluation.
 
 ### Metacognition
 

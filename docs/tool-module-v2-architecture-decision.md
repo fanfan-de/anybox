@@ -7,6 +7,8 @@
 | 适用范围 | Anybox Agent 的 builtin、native、MCP、plugin runtime 与 project custom tools |
 | 前置决策 | [原生 Tool Module 的渐进式披露与当前轮激活](./native-tool-module-architecture-decision.md) |
 
+> 第一次了解这套系统，建议先读[《Anybox 工具模块设计说明》](./tool-module-design.md)。本文保留严格的架构决策和兼容约束。
+
 ## 1. 决策摘要
 
 Anybox 将 Tool Module 从 Planner 专用的懒加载机制提升为所有工具统一的能力归属、发现和生命周期目录。
