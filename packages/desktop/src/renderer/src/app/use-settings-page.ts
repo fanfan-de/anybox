@@ -669,6 +669,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
   const [mcpServerDraft, setMcpServerDraft] = useState<McpServerDraftState>(() => toMcpDraft())
   const [pluginCatalog, setPluginCatalog] = useState<PluginCatalogItem[]>([])
   const [installedPlugins, setInstalledPlugins] = useState<InstalledPlugin[]>([])
+  const [installedPluginsLoaded, setInstalledPluginsLoaded] = useState(false)
   const [pluginDiagnostics, setPluginDiagnostics] = useState<Record<string, McpServerDiagnostic>>({})
   const [pluginConnectorStatuses, setPluginConnectorStatuses] = useState<Record<string, PluginConnectorStatus[]>>({})
   const [connectorCatalog, setConnectorCatalog] = useState<ConnectorDefinition[]>([])
@@ -799,6 +800,24 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
 
     void loadMcpServers()
   }, [isMcpServersPageOpen])
+
+  useEffect(() => {
+    const getInstalledPlugins = window.desktop?.getInstalledPlugins
+    if (!getInstalledPlugins) return
+
+    const requestID = ++pluginsRequestIDRef.current
+    void getInstalledPlugins()
+      .then((nextInstalled) => {
+        if (pluginsRequestIDRef.current !== requestID) return
+        setInstalledPlugins(nextInstalled)
+        setInstalledPluginsLoaded(true)
+        setPluginCatalog((current) => mergePluginCatalogWithInstalled(current, nextInstalled))
+      })
+      .catch((error) => {
+        if (pluginsRequestIDRef.current !== requestID) return
+        console.error("[desktop] installed plugin bootstrap failed:", error)
+      })
+  }, [])
 
   useEffect(() => {
     if (!isPluginsPageOpen) return
@@ -1720,6 +1739,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       if (pluginsRequestIDRef.current !== requestID) return
 
       applyPluginSnapshot(nextCatalog, nextInstalled, nextConnectorStatuses)
+      setInstalledPluginsLoaded(true)
     } catch (error) {
       if (pluginsRequestIDRef.current !== requestID) return
       try {
@@ -1731,6 +1751,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
         setPluginCatalog((current) =>
           mergePluginCatalogWithInstalled(current, nextInstalled))
         setInstalledPlugins(nextInstalled)
+        setInstalledPluginsLoaded(true)
         setPluginConnectorStatuses(nextConnectorStatuses)
         setPluginDiagnostics((current) =>
           Object.fromEntries(
@@ -4214,6 +4235,7 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
     importMcpConfigJson,
     installingPluginID,
     installedPlugins,
+    installedPluginsLoaded,
     loadArchivedSessions,
     loadPlugins,
     isCreatingPromptPreset,

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest"
 import { getAgentResponseLanguageInstruction } from "../../../../shared/locale"
 import type { AgentSessionBridgeEvent } from "../agent-session/client"
 import {
+  type InstalledPluginView,
   type RightSidebarState,
   type RightSidebarTab,
   type SessionRuntimeDebugSnapshot,
@@ -78,6 +79,32 @@ function createTerminalTab(): RightSidebarTab {
     targetKey: "terminal:session-1",
     createdAt: 4,
     sessionID: "session-1",
+  }
+}
+
+function createPluginView(overrides: Partial<InstalledPluginView> = {}): InstalledPluginView {
+  return {
+    pluginID: "react-sidebar-proof",
+    pluginVersion: "0.1.0",
+    viewID: "main",
+    title: "React Sidebar Proof",
+    location: "right-sidebar",
+    entry: "./web/index.html",
+    packageRoot: "C:/plugins/react-sidebar-proof/0.1.0",
+    safePreviewUrl: "anybox-preview://preview/token/web/index.html",
+    ...overrides,
+  }
+}
+
+function createPluginViewTab(): RightSidebarTab {
+  return {
+    id: "plugin-view-tab",
+    kind: "plugin-view",
+    pluginID: "react-sidebar-proof",
+    viewID: "main",
+    title: "React Sidebar Proof",
+    targetKey: "plugin-view:react-sidebar-proof:main",
+    createdAt: 5,
   }
 }
 
@@ -259,6 +286,7 @@ type RenderRightSidebarInput = {
   canOpenReview?: boolean
   canOpenTerminal?: boolean
   messageTreeBySession?: Record<string, SessionMessageTree>
+  pluginViews?: ComponentProps<typeof RightSidebar>["pluginViews"]
   rightSidebar: RightSidebarState
   workspaces?: WorkspaceGroup[]
   onActivateTab?: (tabID: string) => void
@@ -267,6 +295,7 @@ type RenderRightSidebarInput = {
   onOpenFilesTab?: () => void
   onOpenReviewTab?: () => void
   onOpenTerminalTab?: () => void
+  onOpenPluginView?: ComponentProps<typeof RightSidebar>["onOpenPluginView"]
   onOpenBranchChat?: ComponentProps<typeof RightSidebar>["onOpenBranchChat"]
   onLocateBranchAnchor?: ComponentProps<typeof RightSidebar>["onLocateBranchAnchor"]
   onUpdateTab?: ComponentProps<typeof RightSidebar>["onUpdateTab"]
@@ -296,6 +325,8 @@ function createRightSidebarUI(input: RenderRightSidebarInput) {
         sessionDiffBySession={{}}
         sessionDiffStateBySession={{}}
         messageTreeBySession={input.messageTreeBySession ?? {}}
+        pluginViews={input.pluginViews ?? []}
+        pluginViewsLoaded={true}
         workspaces={input.workspaces ?? [workspace]}
         onActivateTab={input.onActivateTab ?? vi.fn()}
         onCloseTab={input.onCloseTab ?? vi.fn()}
@@ -308,6 +339,7 @@ function createRightSidebarUI(input: RenderRightSidebarInput) {
         onOpenFilesTab={input.onOpenFilesTab ?? vi.fn()}
         onOpenReviewTab={input.onOpenReviewTab ?? vi.fn()}
         onOpenTerminalTab={input.onOpenTerminalTab ?? vi.fn()}
+        onOpenPluginView={input.onOpenPluginView ?? vi.fn()}
         onOpenBranchChat={input.onOpenBranchChat ?? vi.fn()}
         onLocateBranchAnchor={input.onLocateBranchAnchor}
         onPreviewActiveInteractionChange={vi.fn()}
@@ -384,6 +416,59 @@ describe("RightSidebar", () => {
     expect(screen.queryByRole("button", { name: /^Tree/ })).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: /^Terminal/ })).toBeDisabled()
     expect(onOpenTerminalTab).not.toHaveBeenCalled()
+  })
+
+  it("shows installed plugin Views beside the built-in launcher tools", () => {
+    const onOpenPluginView = vi.fn()
+    const view = createPluginView()
+    const { container } = renderRightSidebar({
+      pluginViews: [view],
+      rightSidebar: { activeTabID: null, tabs: [] },
+      onOpenPluginView,
+    })
+
+    const pluginButton = screen.getByRole("button", { name: "React Sidebar Proof" })
+    expect(pluginButton.closest(".right-sidebar-launcher-tile-grid")).toBe(
+      screen.getByRole("button", { name: /^Files/ }).closest(".right-sidebar-launcher-tile-grid"),
+    )
+    expect(container.querySelectorAll(".right-sidebar-launcher-card")).toHaveLength(6)
+    fireEvent.click(pluginButton)
+    expect(onOpenPluginView).toHaveBeenCalledWith(view)
+  })
+
+  it("renders, retitles, and removes an installed plugin View tab from live snapshots", async () => {
+    const onCloseTab = vi.fn()
+    const onUpdateTab = vi.fn()
+    const tab = createPluginViewTab()
+    const view = createPluginView()
+    const rendered = renderRightSidebar({
+      pluginViews: [view],
+      rightSidebar: { activeTabID: tab.id, tabs: [tab] },
+      onCloseTab,
+      onUpdateTab,
+    })
+
+    expect(rendered.container.querySelector("webview.plugin-sidebar-view-frame")).toHaveAttribute(
+      "src",
+      view.safePreviewUrl,
+    )
+    expect(screen.getByRole("tab", { name: "React Sidebar Proof" })).toBeInTheDocument()
+
+    rendered.rerender(createRightSidebarUI({
+      pluginViews: [{ ...view, title: "Updated Proof" }],
+      rightSidebar: { activeTabID: tab.id, tabs: [tab] },
+      onCloseTab,
+      onUpdateTab,
+    }))
+    await waitFor(() => expect(onUpdateTab).toHaveBeenCalledWith(tab.id, { title: "Updated Proof" }))
+
+    rendered.rerender(createRightSidebarUI({
+      pluginViews: [],
+      rightSidebar: { activeTabID: tab.id, tabs: [tab] },
+      onCloseTab,
+      onUpdateTab,
+    }))
+    await waitFor(() => expect(onCloseTab).toHaveBeenCalledWith(tab.id))
   })
 
   it("turns only the terminal launcher card into a live read-only preview", async () => {

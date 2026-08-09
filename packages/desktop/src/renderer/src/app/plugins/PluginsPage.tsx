@@ -380,6 +380,7 @@ function pluginCapabilityCount(plugin: PluginCatalogItem) {
     + plugin.skills.length
     + plugin.connectorRequirements.length
     + plugin.apps.length
+    + (plugin.views?.length ?? 0)
   )
 }
 
@@ -466,6 +467,7 @@ function pluginSearchText(plugin: PluginCatalogItem, locale: AppLocale) {
     plugin.mcpRequirements.map((requirement) => requirement.mcp).join(" "),
     plugin.connectorRequirements.map((requirement) => requirement.connector).join(" "),
     plugin.apps.map((app) => app.name).join(" "),
+    (plugin.views ?? []).map((view) => view.title).join(" "),
   ].join(" ")
 }
 
@@ -496,6 +498,7 @@ function pluginDetailDescription(plugin: PluginCatalogItem, locale: AppLocale, t
 function pluginFunctionLabel(plugin: PluginCatalogItem) {
   const toolModes = new Set<string>(plugin.tools.map((tool) => (tool.readOnly ? "Read" : "Write")))
   if (plugin.connectorRequirements.length + plugin.apps.length > 0) toolModes.add("Interactive")
+  if ((plugin.views?.length ?? 0) > 0) toolModes.add("Interactive")
   if (plugin.mcpServers.length + plugin.mcpRequirements.length > 0) toolModes.add("MCP")
   if (toolModes.size === 0) toolModes.add(plugin.category)
 

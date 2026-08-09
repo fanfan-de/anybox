@@ -1,0 +1,38 @@
+{
+  "name": "react-sidebar-proof",
+  "version": "0.1.0",
+  "description": "Proves that an Anybox plugin can provide an interactive React view in the right sidebar.",
+  "author": {
+    "name": "Anybox"
+  },
+  "license": "MIT",
+  "keywords": [
+    "react",
+    "right-sidebar",
+    "ui",
+    "proof"
+  ],
+  "interface": {
+    "displayName": "React Sidebar Proof",
+    "shortDescription": "A React UI supplied by an Anybox plugin.",
+    "longDescription": "A self-contained interactive React application that is installed, discovered, and opened entirely through the generic Anybox Right Sidebar View protocol.",
+    "developerName": "Anybox",
+    "category": "Design",
+    "capabilities": [
+      "Right Sidebar View",
+      "React UI",
+      "Local Only"
+    ],
+    "logo": "./assets/icon.svg",
+    "iconUrl": "./assets/icon.svg",
+    "brandColor": "#6D5CE7"
+  },
+  "views": [
+    {
+      "id": "main",
+      "title": "React Sidebar Proof",
+      "location": "right-sidebar",
+      "entry": "./web/index.html"
+    }
+  ]
+}

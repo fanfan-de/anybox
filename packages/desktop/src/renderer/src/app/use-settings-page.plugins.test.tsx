@@ -79,6 +79,38 @@ describe("useSettingsPage plugin state", () => {
     window.desktop = undefined
   })
 
+  it("bootstraps installed plugin Views without opening the plugins settings page", async () => {
+    const installed = {
+      ...createInstalledPlugin("react-sidebar-proof"),
+      views: [{
+        pluginID: "react-sidebar-proof",
+        pluginVersion: "1.0.0",
+        viewID: "main",
+        title: "React Sidebar Proof",
+        location: "right-sidebar" as const,
+        entry: "./web/index.html",
+        packageRoot: "C:/plugins/react-sidebar-proof/1.0.0",
+        safePreviewUrl: "anybox-preview://preview/token/web/index.html",
+      }],
+    }
+    const getInstalledPlugins = vi.fn().mockResolvedValue([installed])
+    const getPluginCatalog = vi.fn().mockResolvedValue([])
+    window.desktop = {
+      getInstalledPlugins,
+      getPluginCatalog,
+    } as unknown as Window["desktop"]
+
+    const { result } = renderHook(
+      () => useSettingsPage({ isPluginsPageOpen: false }),
+      { wrapper },
+    )
+
+    await waitFor(() => expect(result.current.installedPluginsLoaded).toBe(true))
+    expect(result.current.installedPlugins).toEqual([installed])
+    expect(getInstalledPlugins).toHaveBeenCalledTimes(1)
+    expect(getPluginCatalog).not.toHaveBeenCalled()
+  })
+
   it("keeps the selected plugin open as installable after uninstalling it", async () => {
     const catalog = [
       createPlugin("filesystem", "Filesystem"),

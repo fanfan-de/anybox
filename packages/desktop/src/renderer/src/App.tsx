@@ -22,6 +22,7 @@ import { ThreadLinkRoutingProvider } from "./app/thread-link-routing"
 import type {
   BranchChatQuote,
   ConnectionsTab,
+  InstalledPluginView,
   ProjectWorktreeCreateRequest,
   SessionDiffFile,
   SessionDiffScope,
@@ -1593,6 +1594,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     importMcpConfigJson,
     installingPluginID,
     installedPlugins,
+    installedPluginsLoaded,
     isCreatingPromptPreset,
     isImportingMcpConfigJson,
     isLoading,
@@ -1735,6 +1737,15 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     onSkillsUpdated: refreshComposerSkills,
     onProviderModelsUpdated: refreshComposerModels,
   })
+  const installedPluginViews = useMemo(
+    () => installedPlugins.flatMap((plugin) => {
+      if (!plugin.enabled || plugin.missingPackage) return []
+      return (plugin.views ?? []).filter((view) =>
+        view.location === "right-sidebar"
+        && Boolean(view.safePreviewUrl?.startsWith("anybox-preview://preview/")))
+    }),
+    [installedPlugins],
+  )
   const mcpInventoryServers = useMemo(
     () => filterMcpInventoryServers(
       mcpServers,
@@ -2131,6 +2142,15 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
       kind: "terminal",
       sessionID: terminalSessionID,
       title: "Terminal",
+    })
+  }
+
+  function handleOpenRightSidebarPluginView(view: InstalledPluginView) {
+    openOrFocusRightSidebarTab({
+      kind: "plugin-view",
+      pluginID: view.pluginID,
+      viewID: view.viewID,
+      title: view.title,
     })
   }
 
@@ -3275,6 +3295,8 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               sessionDiffBySession={sessionDiffBySession}
               sessionDiffStateBySession={sessionDiffStateBySession}
               messageTreeBySession={messageTreeBySession}
+              pluginViews={installedPluginViews}
+              pluginViewsLoaded={installedPluginsLoaded}
               workspaces={workspaces}
               onActivateTab={handleActivateRightSidebarTab}
               onCloseTab={closeRightSidebarTab}
@@ -3323,6 +3345,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               onOpenFilesTab={handleOpenRightSidebarFilesTab}
               onOpenReviewTab={handleOpenRightSidebarReviewTab}
               onOpenTerminalTab={handleOpenRightSidebarTerminalTab}
+              onOpenPluginView={handleOpenRightSidebarPluginView}
               onOpenBranchChat={handleOpenBranchChat}
               onLocateBranchAnchor={handleLocateBranchAnchor}
               renderTerminalTab={({ onTitleChange, sessionID }) => (

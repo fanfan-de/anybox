@@ -8,6 +8,7 @@ import {
   FileSearchIcon,
   ForkIcon,
   PlusIcon,
+  PluginIcon,
   PreviewIcon,
   InfoIcon,
   TerminalIcon,
@@ -32,6 +33,7 @@ import type {
   AssistantTraceVisibility,
   BrandTheme,
   ColorMode,
+  InstalledPluginView,
   PreviewInteractionCommitInput,
   PreviewInteractionPluginID,
   RightSidebarState,
@@ -45,6 +47,7 @@ import type {
   WorkspaceGroup,
 } from "../types"
 import type { MarkdownArtifactLinkTarget, MarkdownLocalFileLinkTarget } from "../thread-markdown"
+import { PluginSidebarView } from "./PluginSidebarView"
 import { SessionMessageInspectorPanel } from "./SessionMessageInspectorPanel"
 import {
   BranchChatPanel,
@@ -74,6 +77,8 @@ interface RightSidebarProps {
   sessionDiffBySession: Record<string, SessionDiffSummary>
   sessionDiffStateBySession: Record<string, SessionDiffState>
   messageTreeBySession: Record<string, SessionMessageTree>
+  pluginViewsLoaded: boolean
+  pluginViews: InstalledPluginView[]
   workspaces: WorkspaceGroup[]
   onActivateTab: (tabID: string) => void
   onCloseTab: (tabID: string) => void
@@ -87,6 +92,7 @@ interface RightSidebarProps {
   onOpenFilesTab: () => void
   onOpenReviewTab: () => void
   onOpenTerminalTab: () => void
+  onOpenPluginView: (view: InstalledPluginView) => void
   onOpenBranchChat: (input: OpenBranchChatInput) => void
   onLocateBranchAnchor?: (input: {
     messageID: string
@@ -130,7 +136,7 @@ interface RightSidebarProps {
 
 type RightSidebarLauncherTabKind = Exclude<
   RightSidebarTab["kind"],
-  "message-inspector"
+  "message-inspector" | "plugin-view"
 >
 
 interface LauncherCard {
@@ -159,6 +165,29 @@ function LauncherCardButton({ card, onOpen }: LauncherCardButtonProps) {
       </span>
     </button>
   )
+}
+
+function isPluginImageIcon(value: string | undefined) {
+  return Boolean(value && /^(https?:\/\/|data:image\/)/i.test(value))
+}
+
+function PluginViewMark({ view }: { view: InstalledPluginView }) {
+  const candidate = view.iconUrl?.trim() || view.icon?.trim()
+  const [failedImage, setFailedImage] = useState<string | null>(null)
+  const image = isPluginImageIcon(candidate) && candidate !== failedImage ? candidate : null
+  const glyph = candidate && !isPluginImageIcon(candidate) && candidate.length <= 4 ? candidate : null
+
+  return image ? (
+    <img src={image} alt="" onError={() => setFailedImage(image)} />
+  ) : glyph ? (
+    <span className="right-sidebar-plugin-view-glyph">{glyph}</span>
+  ) : (
+    <PluginIcon />
+  )
+}
+
+function pluginViewKey(pluginID: string, viewID: string) {
+  return `${pluginID}:${viewID}`
 }
 
 function TerminalLauncherCard({
@@ -269,8 +298,8 @@ function listRecentBranchesWithRuntimeStatus(
   })
 }
 
-function getTabIcon(kind: RightSidebarTab["kind"]) {
-  switch (kind) {
+function getTabIcon(tab: RightSidebarTab, pluginViewsByKey: Map<string, InstalledPluginView>) {
+  switch (tab.kind) {
     case "files":
       return <FileSearchIcon />
     case "browser":
@@ -279,6 +308,10 @@ function getTabIcon(kind: RightSidebarTab["kind"]) {
       return <ChangesIcon />
     case "terminal":
       return <TerminalIcon />
+    case "plugin-view": {
+      const view = pluginViewsByKey.get(pluginViewKey(tab.pluginID, tab.viewID))
+      return view ? <PluginViewMark view={view} /> : <PluginIcon />
+    }
     case "message-inspector":
       return <InfoIcon />
     case "branch-thread":
@@ -298,6 +331,8 @@ function getViewHostClassName(tab: RightSidebarTab | null, isLauncherVisible: bo
       return "right-sidebar-view-host is-changes"
     case "terminal":
       return "right-sidebar-view-host is-terminal"
+    case "plugin-view":
+      return "right-sidebar-view-host is-plugin-view"
     case "message-inspector":
       return "right-sidebar-view-host is-message-inspector"
     case "branch-thread":
@@ -322,6 +357,8 @@ export function RightSidebar({
   sessionDiffBySession,
   sessionDiffStateBySession,
   messageTreeBySession,
+  pluginViewsLoaded,
+  pluginViews,
   workspaces,
   onActivateTab,
   onCloseTab,
@@ -335,6 +372,7 @@ export function RightSidebar({
   onOpenFilesTab,
   onOpenReviewTab,
   onOpenTerminalTab,
+  onOpenPluginView,
   onOpenBranchChat,
   onLocateBranchAnchor,
   onPreviewActiveInteractionChange,
@@ -374,6 +412,10 @@ export function RightSidebar({
   const branchAnchorOptions = useMemo(
     () => listBranchAnchorOptions(activeMessageTree),
     [activeMessageTree],
+  )
+  const pluginViewsByKey = useMemo(
+    () => new Map(pluginViews.map((view) => [pluginViewKey(view.pluginID, view.viewID), view])),
+    [pluginViews],
   )
   const launcherCards = useMemo<LauncherCard[]>(() => [
     {
@@ -425,6 +467,19 @@ export function RightSidebar({
       setIsLauncherVisible(false)
     }
   }, [activeTab])
+
+  useEffect(() => {
+    if (!pluginViewsLoaded) return
+    for (const tab of rightSidebar.tabs) {
+      if (tab.kind !== "plugin-view") continue
+      const view = pluginViewsByKey.get(pluginViewKey(tab.pluginID, tab.viewID))
+      if (!view) {
+        onCloseTab(tab.id)
+      } else if (tab.title !== view.title) {
+        onUpdateTab(tab.id, { title: view.title })
+      }
+    }
+  }, [onCloseTab, onUpdateTab, pluginViewsByKey, pluginViewsLoaded, rightSidebar.tabs])
 
   function handleActivateTab(tabID: string) {
     setIsLauncherVisible(false)
@@ -491,6 +546,25 @@ export function RightSidebar({
                     onOpen={() => handleOpenLauncherCard(card.key)}
                   />
                 ))}
+            {pluginViews.map((view) => (
+              <button
+                key={`plugin-view:${view.pluginID}:${view.viewID}`}
+                type="button"
+                className="right-sidebar-launcher-card is-plugin-view"
+                title={view.title}
+                onClick={() => {
+                  onOpenPluginView(view)
+                  setIsLauncherVisible(false)
+                }}
+              >
+                <span className="right-sidebar-launcher-card-icon" aria-hidden="true">
+                  <PluginViewMark view={view} />
+                </span>
+                <span className="right-sidebar-launcher-card-copy">
+                  <span className="right-sidebar-launcher-card-title">{view.title}</span>
+                </span>
+              </button>
+            ))}
           </div>
         </div>
       </div>
@@ -567,6 +641,21 @@ export function RightSidebar({
             onUpdateTab(activeTab.id, { title })
           },
         })
+      case "plugin-view": {
+        const view = pluginViewsByKey.get(pluginViewKey(activeTab.pluginID, activeTab.viewID))
+        return view ? (
+          <PluginSidebarView view={view} />
+        ) : !pluginViewsLoaded ? (
+          <div className="plugin-sidebar-view-state is-loading" role="status">
+            <span>Loading plugin view…</span>
+          </div>
+        ) : (
+          <div className="plugin-sidebar-view-state is-error" role="alert">
+            <strong>Plugin view unavailable</strong>
+            <span>The plugin was disabled, removed, or is no longer available.</span>
+          </div>
+        )
+      }
       case "message-inspector": {
         const messageTree = messageTreeBySession[activeTab.sessionID] ?? null
         return (
@@ -654,7 +743,7 @@ export function RightSidebar({
                       onClick={() => handleActivateTab(tab.id)}
                     >
                       <span className="right-sidebar-tab-kind-icon" aria-hidden="true">
-                        {getTabIcon(tab.kind)}
+                        {getTabIcon(tab, pluginViewsByKey)}
                       </span>
                       <span className="right-sidebar-tab-title">{tab.title}</span>
                     </button>

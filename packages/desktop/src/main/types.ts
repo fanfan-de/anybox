@@ -2051,6 +2051,26 @@ export interface AgentPluginAppConnector {
   installReview?: string[]
 }
 
+export interface AgentPluginView {
+  id: string
+  title: string
+  location: "right-sidebar"
+  entry: string
+}
+
+export interface AgentInstalledPluginView {
+  pluginID: string
+  pluginVersion: string
+  viewID: string
+  title: string
+  location: "right-sidebar"
+  entry: string
+  packageRoot: string
+  icon?: string
+  iconUrl?: string
+  safePreviewUrl?: string
+}
+
 export interface AgentPluginCatalogItem {
   id: string
   name: string
@@ -2080,6 +2100,7 @@ export interface AgentPluginCatalogItem {
   connectorRequirements: AgentConnectorRequirement[]
   connectors: AgentPluginAppConnector[]
   apps: AgentPluginAppConnector[]
+  views?: AgentPluginView[]
   installReview?: string[]
   source?: "package" | "registry"
   download?: AgentPluginPackageDownload
@@ -2104,6 +2125,7 @@ export interface AgentInstalledPlugin {
   lastConnectorDiagnostics?: Record<string, AgentMcpServerDiagnostic>
   packageRoot?: string
   missingPackage?: boolean
+  views?: AgentInstalledPluginView[]
 }
 
 export interface AgentPluginInstallInput {

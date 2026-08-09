@@ -546,6 +546,7 @@ export type RightSidebarTabKind =
   | "browser"
   | "review"
   | "terminal"
+  | "plugin-view"
   | "message-inspector"
   | "branch-thread"
 
@@ -581,6 +582,12 @@ export interface RightSidebarTerminalTab extends RightSidebarBaseTab {
   sessionID: string | null
 }
 
+export interface RightSidebarPluginViewTab extends RightSidebarBaseTab {
+  kind: "plugin-view"
+  pluginID: string
+  viewID: string
+}
+
 export interface RightSidebarMessageInspectorTab extends RightSidebarBaseTab {
   kind: "message-inspector"
   messageID: string
@@ -608,6 +615,7 @@ export type RightSidebarTab =
   | RightSidebarBrowserTab
   | RightSidebarReviewTab
   | RightSidebarTerminalTab
+  | RightSidebarPluginViewTab
   | RightSidebarMessageInspectorTab
   | RightSidebarBranchThreadTab
 
@@ -642,6 +650,13 @@ export type RightSidebarOpenTabInput =
   | {
       kind: "terminal"
       sessionID: string | null
+      targetKey?: string
+      title?: string
+    }
+  | {
+      kind: "plugin-view"
+      pluginID: string
+      viewID: string
       targetKey?: string
       title?: string
     }
@@ -2381,6 +2396,26 @@ export interface PluginAppConnector {
   installReview?: string[]
 }
 
+export interface PluginView {
+  id: string
+  title: string
+  location: "right-sidebar"
+  entry: string
+}
+
+export interface InstalledPluginView {
+  pluginID: string
+  pluginVersion: string
+  viewID: string
+  title: string
+  location: "right-sidebar"
+  entry: string
+  packageRoot: string
+  icon?: string
+  iconUrl?: string
+  safePreviewUrl?: string
+}
+
 export interface PluginCatalogItem {
   id: string
   name: string
@@ -2410,6 +2445,7 @@ export interface PluginCatalogItem {
   connectorRequirements: ConnectorRequirement[]
   connectors: PluginAppConnector[]
   apps: PluginAppConnector[]
+  views?: PluginView[]
   installReview?: string[]
   source?: "package" | "registry"
   download?: PluginPackageDownload
@@ -2434,6 +2470,7 @@ export interface InstalledPlugin {
   lastConnectorDiagnostics?: Record<string, McpServerDiagnostic>
   packageRoot?: string
   missingPackage?: boolean
+  views?: InstalledPluginView[]
 }
 
 export interface PluginConnectorStatus {

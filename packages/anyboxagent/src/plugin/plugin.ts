@@ -81,6 +81,7 @@ const MAX_PLUGIN_ARCHIVE_ENTRIES = 10_000
 const PLUGIN_REGISTRY_FETCH_TIMEOUT_MS = 20_000
 const PLUGIN_PACKAGE_DOWNLOAD_TIMEOUT_MS = 120_000
 const GITHUB_COMMIT_SHA_PATTERN = /^[a-f0-9]{40}$/i
+const PLUGIN_VIEW_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 const PLUGIN_DISPLAY_ASSET_MIME_TYPES = new Map([
   [".avif", "image/avif"],
   [".bmp", "image/bmp"],
@@ -614,6 +615,77 @@ const PluginManifestMcpServer = z
   .strict()
 type PluginManifestMcpServer = z.infer<typeof PluginManifestMcpServer>
 
+function normalizePluginViewEntry(value: string) {
+  const segments = value
+    .replace(/\\/g, "/")
+    .split("/")
+    .filter((segment) => segment && segment !== ".")
+  return `./${segments.join("/")}`
+}
+
+const PluginViewEntry = z
+  .string()
+  .trim()
+  .min(1)
+  .max(512)
+  .superRefine((value, ctx) => {
+    if (
+      value.includes("\0")
+      || value.includes("\\")
+      || value.startsWith("/")
+      || isAbsolute(value)
+      || /^(?:[A-Za-z]:[\\/]|[a-z][a-z0-9+.-]*:|\/\/)/i.test(value)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Plugin View entry must be a package-relative URL-style path.",
+      })
+    }
+    if (value.includes("?") || value.includes("#")) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Plugin View entry must not contain query parameters or fragments.",
+      })
+    }
+    if (value.split("/").some((segment) => segment === "..")) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Plugin View entry must not contain parent-directory segments.",
+      })
+    }
+    if (!value.toLowerCase().endsWith(".html")) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Plugin View entry must point to an HTML file.",
+      })
+    }
+  })
+  .transform(normalizePluginViewEntry)
+
+export const PluginManifestView = z
+  .object({
+    id: z.string().trim().min(1).max(128).regex(PLUGIN_VIEW_ID_PATTERN),
+    title: z.string().trim().min(1).max(256),
+    location: z.literal("right-sidebar"),
+    entry: PluginViewEntry,
+  })
+  .strict()
+export type PluginManifestView = z.infer<typeof PluginManifestView>
+
+const PluginManifestViews = z.array(PluginManifestView).max(64).superRefine((views, ctx) => {
+  const seen = new Set<string>()
+  views.forEach((view, index) => {
+    if (seen.has(view.id)) {
+      ctx.addIssue({
+        code: "custom",
+        message: `Duplicate Plugin View id '${view.id}'.`,
+        path: [index, "id"],
+      })
+    }
+    seen.add(view.id)
+  })
+})
+
 export const PluginManifest = z
   .object({
     name: z.string().min(1),
@@ -634,6 +706,7 @@ export const PluginManifest = z
     commands: z.union([z.string(), z.array(z.string())]).optional(),
     agents: z.union([z.string(), z.array(z.string())]).optional(),
     platformArtifacts: z.array(PluginPlatformArtifact).optional(),
+    views: PluginManifestViews.optional(),
   })
   .strict()
 export type PluginManifest = z.infer<typeof PluginManifest>
@@ -905,6 +978,7 @@ export const PluginCatalogItem = z
     connectorRequirements: z.array(Connector.ConnectorRequirement),
     connectors: z.array(PluginAppConnector),
     apps: z.array(PluginAppConnector),
+    views: z.array(PluginManifestView),
     installReview: z.array(z.string()).optional(),
     source: z.enum(["package", "registry"]).optional(),
     download: PluginPackageDownload.optional(),
@@ -912,6 +986,21 @@ export const PluginCatalogItem = z
   })
   .strict()
 export type PluginCatalogItem = z.infer<typeof PluginCatalogItem>
+
+export const InstalledPluginView = z
+  .object({
+    pluginID: z.string().min(1),
+    pluginVersion: z.string().min(1),
+    viewID: z.string().min(1),
+    title: z.string().min(1),
+    location: z.literal("right-sidebar"),
+    entry: PluginViewEntry,
+    packageRoot: z.string().min(1),
+    icon: z.string().min(1).optional(),
+    iconUrl: z.string().min(1).optional(),
+  })
+  .strict()
+export type InstalledPluginView = z.infer<typeof InstalledPluginView>
 
 export const InstalledPlugin = z
   .object({
@@ -935,11 +1024,12 @@ export const InstalledPlugin = z
     ).optional(),
     packageRoot: z.string().min(1).optional(),
     missingPackage: z.boolean().optional(),
+    views: z.array(InstalledPluginView).optional(),
   })
   .strict()
 export type InstalledPlugin = Omit<
   z.infer<typeof InstalledPlugin>,
-  "mcpServerIDs" | "mcpServerEnabled" | "skillIDs" | "connectorIDs" | "mcpRequirementIDs" | "connectorRequirementIDs" | "lastConnectorDiagnostics" | "platformArtifactReceipts"
+  "mcpServerIDs" | "mcpServerEnabled" | "skillIDs" | "connectorIDs" | "mcpRequirementIDs" | "connectorRequirementIDs" | "lastConnectorDiagnostics" | "platformArtifactReceipts" | "views"
 > & {
   mcpServerIDs: string[]
   mcpServerEnabled: Record<string, boolean>
@@ -949,6 +1039,7 @@ export type InstalledPlugin = Omit<
   connectorRequirementIDs: string[]
   lastConnectorDiagnostics?: Record<string, PluginDiagnostic>
   platformArtifactReceipts: PlatformArtifactOwnershipReceipt[]
+  views: InstalledPluginView[]
 }
 
 export const InstallPluginInput = z
@@ -1741,16 +1832,63 @@ function findPluginManifestPath(packageRoot: string) {
     .find((manifestPath) => existsSync(manifestPath))
 }
 
+function assertLocalPluginViews(packageRoot: string, manifest: PluginManifest) {
+  if (!manifest.views?.length) return manifest
+
+  let rootRealPath: string
+  try {
+    rootRealPath = realpathSync(packageRoot)
+  } catch {
+    throw new PluginError("PLUGIN_PACKAGE_INVALID", "Plugin package root is not available.")
+  }
+
+  for (const view of manifest.views) {
+    const filePath = resolvePackageRelativePath(packageRoot, view.entry)
+    if (!filePath) {
+      throw new PluginError(
+        "PLUGIN_PACKAGE_INVALID",
+        `Plugin View '${view.id}' entry must stay inside the plugin package.`,
+      )
+    }
+
+    try {
+      const fileRealPath = realpathSync(filePath)
+      const realRelativePath = relative(rootRealPath, fileRealPath)
+      if (realRelativePath.startsWith("..") || isAbsolute(realRelativePath)) {
+        throw new PluginError(
+          "PLUGIN_PACKAGE_INVALID",
+          `Plugin View '${view.id}' entry must stay inside the plugin package.`,
+        )
+      }
+      if (!lstatSync(fileRealPath).isFile()) {
+        throw new PluginError(
+          "PLUGIN_PACKAGE_INVALID",
+          `Plugin View '${view.id}' entry must point to a local HTML file.`,
+        )
+      }
+    } catch (error) {
+      if (error instanceof PluginError) throw error
+      throw new PluginError(
+        "PLUGIN_PACKAGE_INVALID",
+        `Plugin View '${view.id}' entry '${view.entry}' is not available.`,
+      )
+    }
+  }
+
+  return manifest
+}
+
 function safeReadPluginManifest(packageRoot: string) {
   const manifestPath = findPluginManifestPath(packageRoot)
   if (!manifestPath) return undefined
 
   try {
     const raw = readFileSync(manifestPath, "utf8")
-    const { manifest } = parsePluginManifestDocument(JSON.parse(raw), {
+    const parsed = parsePluginManifestDocument(JSON.parse(raw), {
       kind: "local",
       packageRoot,
     })
+    const manifest = assertLocalPluginViews(packageRoot, parsed.manifest)
     const manifestConnectors = normalizePluginConnectors(manifest)
     const compatApps = safeReadPluginAppCompat(packageRoot)
     if (compatApps.length === 0) {
@@ -2548,6 +2686,7 @@ function normalizeCatalogItem(source: PluginManifestSource): PluginCatalogItem {
     ...mcpRequirements.map((requirement) => BuiltinMcp.getDefinition(requirement.mcp)?.risk ?? "medium"),
     connectorRequirements.length > 0 ? "medium" : undefined,
     skills.length > 0 ? "low" : undefined,
+    (manifest.views?.length ?? 0) > 0 ? "low" : undefined,
   ])
 
   return PluginCatalogItem.parse({
@@ -2590,6 +2729,7 @@ function normalizeCatalogItem(source: PluginManifestSource): PluginCatalogItem {
     connectorRequirements,
     connectors,
     apps: connectors,
+    views: manifest.views ?? [],
     installReview: uniqueStrings([
       ...mcpServers.flatMap((server) => server.installReview ?? []),
       ...connectors.flatMap((app) => app.installReview ?? []),
@@ -2598,6 +2738,23 @@ function normalizeCatalogItem(source: PluginManifestSource): PluginCatalogItem {
     download: source.download,
     installable: Boolean(packageRoot || isInstallableDownload(source.download)),
   })
+}
+
+function installedPluginViewsForSource(source: PluginManifestSource | undefined): InstalledPluginView[] {
+  if (!source?.packageRoot) return []
+
+  const plugin = normalizeCatalogItem(source)
+  return plugin.views.map((view) => InstalledPluginView.parse({
+    pluginID: plugin.id,
+    pluginVersion: plugin.version,
+    viewID: view.id,
+    title: view.title,
+    location: view.location,
+    entry: view.entry,
+    packageRoot: source.packageRoot,
+    icon: plugin.icon,
+    iconUrl: plugin.iconUrl,
+  }))
 }
 
 function dedupeConfigFields(fields: PluginConfigField[]) {
@@ -2782,6 +2939,7 @@ function normalizeInstalledRecord(record: z.infer<typeof InstalledPlugin> | null
   const connectorIDs = uniqueStrings(record.connectorIDs ?? [])
   const mcpRequirementIDs = uniqueStrings(record.mcpRequirementIDs ?? [])
   const connectorRequirementIDs = uniqueStrings(record.connectorRequirementIDs ?? [])
+  const views = installedPluginViewsForSource(packageSource)
 
   return {
     ...record,
@@ -2796,6 +2954,7 @@ function normalizeInstalledRecord(record: z.infer<typeof InstalledPlugin> | null
     platformArtifactReceipts: record.platformArtifactReceipts ?? [],
     packageRoot: packageSource?.packageRoot,
     missingPackage: !packageSource,
+    views,
   }
 }
 
@@ -3167,6 +3326,7 @@ export async function reconcileInstalledRuntimeBindings() {
       mcpRequirementIDs: generatedMcpRequirementIDs(plugin),
       connectorRequirementIDs: generatedConnectorRequirementIDs(plugin),
       platformArtifactReceipts,
+      views: installedPluginViewsForSource(source),
     })
     for (const serverID of reconciled.mcpServerIDs) {
       desiredServerIDs.add(serverID)
@@ -4053,6 +4213,7 @@ export async function install(pluginID: string, input: InstallPluginInput) {
       lastDiagnostic: existing?.lastDiagnostic,
       lastConnectorDiagnostics: existing?.lastConnectorDiagnostics,
       platformArtifactReceipts,
+      views: installedPluginViewsForSource(source),
     }
 
     return writeInstalled(record)
@@ -4096,6 +4257,7 @@ export async function update(pluginID: string, input: UpdateInstalledPluginInput
     config: normalizeConfig(plugin, input.config ?? existing.config),
     updatedAt: now(),
     platformArtifactReceipts,
+    views: installedPluginViewsForSource(source),
   }
 
   return writeInstalled(record)

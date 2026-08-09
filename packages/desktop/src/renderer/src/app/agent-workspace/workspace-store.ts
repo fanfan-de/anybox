@@ -137,6 +137,8 @@ function getRightSidebarTabTargetKey(input: RightSidebarOpenTabInput) {
       return ["review", normalizeRightSidebarTargetSegment(input.sessionID)].join(":")
     case "terminal":
       return ["terminal", normalizeRightSidebarTargetSegment(input.sessionID)].join(":")
+    case "plugin-view":
+      return `plugin-view:${normalizeRightSidebarTargetSegment(input.pluginID)}:${input.viewID.trim()}`
     case "message-inspector":
       return "message-inspector"
     case "branch-thread":
@@ -160,6 +162,8 @@ function getRightSidebarTabTitle(input: RightSidebarOpenTabInput) {
       return "Review"
     case "terminal":
       return "Terminal"
+    case "plugin-view":
+      return "Plugin"
     case "message-inspector":
       return "Conversation"
     case "branch-thread":
@@ -205,6 +209,13 @@ function createRightSidebarTab(input: RightSidebarOpenTabInput): RightSidebarTab
         ...base,
         kind: "terminal",
         sessionID: input.sessionID,
+      }
+    case "plugin-view":
+      return {
+        ...base,
+        kind: "plugin-view",
+        pluginID: input.pluginID,
+        viewID: input.viewID,
       }
     case "message-inspector":
       return {
@@ -269,6 +280,13 @@ function updateRightSidebarTab(
         title,
         targetKey,
         sessionID: update.sessionID ?? tab.sessionID,
+      }
+    case "plugin-view":
+      return {
+        ...tab,
+        kind: "plugin-view",
+        title,
+        targetKey,
       }
     case "message-inspector":
       return {

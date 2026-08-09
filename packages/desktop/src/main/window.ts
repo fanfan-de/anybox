@@ -4,6 +4,7 @@ import path from "node:path"
 import { resolveAppIconPath } from "./app-icon"
 import { attachRendererMemoryDiagnostics } from "./renderer-memory-diagnostics-store"
 import { ensureRendererHttpServer } from "./renderer-http-server"
+import { isPluginViewPreviewUrl } from "./preview-targets"
 import { safeError, safeWarn } from "./safe-console"
 import { recordShutdownDiagnostic } from "./shutdown-diagnostics"
 import { sendWindowState } from "./window-state"
@@ -278,6 +279,31 @@ function installWindowDiagnostics(win: BrowserWindow, input: { label: string; ur
   })
 }
 
+function installPluginViewWebviewSecurity(win: BrowserWindow) {
+  win.webContents.on("will-attach-webview", (event, webPreferences, params) => {
+    if (!isPluginViewPreviewUrl(params.src)) return
+
+    delete webPreferences.preload
+    webPreferences.nodeIntegration = false
+    webPreferences.contextIsolation = true
+    webPreferences.sandbox = true
+    webPreferences.webSecurity = true
+    webPreferences.allowRunningInsecureContent = false
+  })
+
+  win.webContents.on("did-attach-webview", (_event, guest) => {
+    const initialUrl = guest.getURL()
+    if (!isPluginViewPreviewUrl(initialUrl)) return
+
+    guest.setWindowOpenHandler(() => ({ action: "deny" }))
+    guest.session.setPermissionCheckHandler(() => false)
+    guest.session.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
+    guest.on("will-navigate", (event, url) => {
+      if (url !== initialUrl) event.preventDefault()
+    })
+  })
+}
+
 function installCloseToTray(win: BrowserWindow, options?: CloseToTrayOptions) {
   if (!options) return
 
@@ -313,6 +339,7 @@ export async function createWindow(mainDir: string, options: { closeToTray?: Clo
   installWindowZoomShortcuts(win)
   installWindowStateHandlers(win)
   installWindowDiagnostics(win, { label: "main", url: rendererEntryUrl })
+  installPluginViewWebviewSecurity(win)
   installCloseToTray(win, options.closeToTray)
   options.workbenchWindowManager?.registerMainWindow(win)
 

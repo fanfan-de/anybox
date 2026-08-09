@@ -13,6 +13,7 @@ declare global {
         partition?: string
         preload?: string
         src?: string
+        webpreferences?: string
       }
     }
   }

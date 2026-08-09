@@ -1,6 +1,6 @@
 ---
 name: fanfande-plugin-structure
-description: Build, explain, review, or validate current Anybox/Fanfande-derived plugin packages. Use when the user asks how to structure a plugin folder, write the canonical .anybox-plugin/plugin.json manifest, add plugin MCP servers, bundle plugin skills, define app connectors or connector requirements, create plugin registry manifests, migrate away from plugin.meta.json or zip artifacts, or check whether a plugin package matches the current plugin system.
+description: Build, explain, review, or validate current Anybox/Fanfande-derived plugin packages. Use when the user asks how to structure a plugin folder, write the canonical .anybox-plugin/plugin.json manifest, add plugin MCP servers or Right Sidebar Views, bundle plugin skills, define app connectors or connector requirements, create plugin registry manifests, migrate away from plugin.meta.json or zip artifacts, or check whether a plugin package matches the current plugin system.
 ---
 
 # Fanfande / Anybox Plugin Structure
@@ -35,6 +35,7 @@ plugins/Anybox-Plugins/
     scripts/
     docs/
     assets/
+    web/
 ```
 
 Important rules:
@@ -135,6 +136,7 @@ Supported runtime top-level fields:
 - `connectorRequirements`: Optional platform connector requirements, such as Gmail.
 - `connectors`: Preferred plugin-owned connector declarations.
 - `apps`: Legacy alias for plugin-owned connectors.
+- `views`: Optional strict array of plugin-owned UI entry points. The current location is `right-sidebar`.
 - `commands`, `agents`: Reserved fields; accepted but not executed by the plugin runtime.
 
 Repository or remote registry `plugin.json` files may additionally include registry-only fields:
@@ -145,7 +147,32 @@ Repository or remote registry `plugin.json` files may additionally include regis
 
 The runtime strips `id`, `skillPreviews`, and `package` before validating the runtime manifest. For the built-in expanded registry, omit `package` because the package source is already present in the repository.
 
-Include at least one real capability in `mcpServers`, `skills`, `connectorRequirements`, or `connectors` for an installable package. Metadata-only remote registry entries can appear in the catalog, but they are not installable unless they include a valid `package` download or a matching local expanded package exists.
+Include at least one real capability in `mcpServers`, `skills`, `connectorRequirements`, `connectors`, or `views` for an installable package. A view-only local package is valid. Metadata-only remote registry entries can appear in the catalog, but they are not installable unless they include a valid `package` download or a matching local expanded package exists.
+
+## Right Sidebar Views
+
+Use `views` when the plugin ships a self-contained HTML application for the Anybox Right Sidebar:
+
+```json
+{
+  "views": [
+    {
+      "id": "main",
+      "title": "React Sidebar Proof",
+      "location": "right-sidebar",
+      "entry": "./web/index.html"
+    }
+  ]
+}
+```
+
+- `id`, `title`, `location`, and `entry` are required; unknown View fields are rejected.
+- View IDs must be safe stable IDs and unique inside one plugin.
+- Only `right-sidebar` is supported.
+- `entry` must be a package-relative HTML path. Absolute paths, URL schemes, query strings, fragments, backslashes, and `..` segments are rejected.
+- A local package is rejected when its View file is missing or a symlink resolves outside the package root.
+- Commit built HTML, JavaScript, and CSS under the package root (normally `web/`). Do not depend on a development server.
+- Only installed, enabled, locally available packages produce launchable Views; remote catalog metadata alone is never loaded as local UI.
 
 ## Interface Metadata
 
@@ -458,15 +485,16 @@ When building, migrating, or reviewing a plugin package:
 2. Treat root `plugin.json` and `.codex-plugin/plugin.json` as compatibility inputs, not the canonical Anybox output layout.
 3. Do not create `.fanfande-plugin/plugin.json` for current Anybox packages.
 4. Check `plugin.json` is valid JSON and uses only supported schema fields.
-5. Check every declared skill root stays inside the package and contains direct skill subdirectories with `SKILL.md`.
-6. Check every stdio runtime path works from `${PLUGIN_ROOT}` or declares an explicit `cwd`.
-7. Check required `configFields` match every placeholder used by MCP runtimes.
-8. Check connector placeholders match `credential.key` or connector config fields.
-9. Check `connectorRequirements` reference platform connector IDs that exist in the app.
-10. Check risk is not `critical` unless blocked installation is intended.
-11. For `plugins/Anybox-Plugins/index.json`, verify new Anybox entries end with `/.anybox-plugin/plugin.json`.
-12. For the built-in expanded registry, verify there are no `*.zip`, no `plugin.meta.json`, and no root `package` fields unless explicitly intended.
-13. Run a catalog load against the candidate package:
+5. Check every View ID is unique and every View entry resolves to an existing HTML file inside the real package root without symlink escape.
+6. Check every declared skill root stays inside the package and contains direct skill subdirectories with `SKILL.md`.
+7. Check every stdio runtime path works from `${PLUGIN_ROOT}` or declares an explicit `cwd`.
+8. Check required `configFields` match every placeholder used by MCP runtimes.
+9. Check connector placeholders match `credential.key` or connector config fields.
+10. Check `connectorRequirements` reference platform connector IDs that exist in the app.
+11. Check risk is not `critical` unless blocked installation is intended.
+12. For `plugins/Anybox-Plugins/index.json`, verify new Anybox entries end with `/.anybox-plugin/plugin.json`.
+13. For the built-in expanded registry, verify there are no `*.zip`, no `plugin.meta.json`, and no root `package` fields unless explicitly intended.
+14. Run a catalog load against the candidate package:
 
 ```powershell
 cd C:\Projects\Anybox\packages\anyboxagent
@@ -475,7 +503,7 @@ $env:ANYBOX_PLUGIN_REGISTRY_INDEX_URL = "off"
 bun -e "import * as Plugin from './src/plugin/plugin.ts'; console.log(JSON.stringify(await Plugin.listCatalog(), null, 2))"
 ```
 
-14. Run the plugin regression tests after changing plugin-system code:
+15. Run the plugin regression tests after changing plugin-system code:
 
 ```powershell
 cd C:\Projects\Anybox\packages\anyboxagent

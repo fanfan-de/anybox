@@ -100,7 +100,12 @@ import { detectLocalPreviewServices } from "./local-preview-services"
 import { resolveManagedAgentDataDir } from "./managed-agent"
 import { getMobileBridgeStatus, refreshMobilePairingCode, revokeMobileDevice, rotateMobileBridgeToken } from "./mobile-bridge-server"
 import { openMonitorWindow } from "./monitor-window"
-import { readPreviewText, resolvePreviewTarget } from "./preview-targets"
+import {
+  readPreviewText,
+  resolvePluginViewPreviewTarget,
+  resolvePreviewTarget,
+  revokePluginViewPreviewRegistrations,
+} from "./preview-targets"
 import { PtyProxyManager } from "./pty-proxy"
 import {
   deleteRendererMemoryDiagnosticsRecord,
@@ -373,6 +378,57 @@ async function preservePluginAgentErrorCode<T>(operation: () => Promise<T>) {
       throw new Error(`[${error.code}] ${error.message}`)
     }
     throw error
+  }
+}
+
+async function prepareInstalledPluginForRenderer(plugin: AgentInstalledPlugin): Promise<AgentInstalledPlugin> {
+  if (!plugin.enabled || plugin.missingPackage || !plugin.packageRoot || !plugin.views?.length) {
+    revokePluginViewPreviewRegistrations(plugin.pluginID)
+    return { ...plugin, views: [] }
+  }
+
+  const packageRoot = await realpath(plugin.packageRoot).catch(() => null)
+  if (!packageRoot) {
+    revokePluginViewPreviewRegistrations(plugin.pluginID)
+    return { ...plugin, views: [] }
+  }
+
+  const views = await Promise.all(plugin.views.map(async (view) => {
+    if (view.pluginID !== plugin.pluginID || view.location !== "right-sidebar") return null
+
+    const declaredPackageRoot = await realpath(view.packageRoot).catch(() => null)
+    if (!declaredPackageRoot || path.relative(packageRoot, declaredPackageRoot) !== "") return null
+
+    try {
+      const target = await resolvePluginViewPreviewTarget({
+        entry: view.entry,
+        packageRoot,
+        pluginID: plugin.pluginID,
+        viewID: view.viewID,
+      })
+      if (target.renderer !== "html-preview" || !target.safePreviewUrl) return null
+
+      return {
+        ...view,
+        packageRoot,
+        safePreviewUrl: target.safePreviewUrl,
+      }
+    } catch (error) {
+      safeWarn(`[desktop] Plugin View '${view.pluginID}:${view.viewID}' could not be prepared:`, error)
+      return null
+    }
+  }))
+
+  const availableViews = views.filter((view): view is NonNullable<typeof view> => Boolean(view))
+  revokePluginViewPreviewRegistrations(
+    plugin.pluginID,
+    new Set(availableViews.map((view) => view.viewID)),
+  )
+
+  return {
+    ...plugin,
+    packageRoot,
+    views: availableViews,
   }
 }
 
@@ -5881,7 +5937,7 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
   handleDesktopIpc("desktop:get-installed-plugins", async () => {
     const result = await requestAgentJSON<AgentInstalledPlugin[]>("/api/plugins/installed")
 
-    return result.data
+    return Promise.all(result.data.map(prepareInstalledPluginForRenderer))
   })
 
   handleDesktopIpc("desktop:import-plugin-from-url", async (_event, input: { url: string }) => {
@@ -5918,7 +5974,7 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
           },
         ))
 
-      return result.data
+      return prepareInstalledPluginForRenderer(result.data)
     },
   )
 
@@ -5941,7 +5997,7 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
           },
         ))
 
-      return result.data
+      return prepareInstalledPluginForRenderer(result.data)
     },
   )
 
@@ -5964,7 +6020,10 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
         },
       )
 
-      return result.data
+      return {
+        ...result.data,
+        plugin: await prepareInstalledPluginForRenderer(result.data.plugin),
+      }
     },
   )
 
@@ -6005,6 +6064,7 @@ export function registerIpcHandlers(menus: ApplicationMenus, options: IpcHandler
       },
     )
 
+    revokePluginViewPreviewRegistrations(pluginID)
     return result.data
   })
 
@@ -7709,6 +7769,7 @@ export const internal = {
   interruptAgentSessionBackendFirst,
   isSessionStreamSubscriptionKeyForWebContents,
   preservePluginAgentErrorCode,
+  prepareInstalledPluginForRenderer,
   prepareSessionBagSubmission,
   previewDownloadedRegistrySkillUpdate,
   readPreviewText,

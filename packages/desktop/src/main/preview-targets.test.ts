@@ -4,9 +4,13 @@ import path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import {
   inferPreviewRenderer,
+  handleLocalPreviewProtocolRequest,
+  isPluginViewPreviewUrl,
   readPreviewText,
   resolveLocalPreviewProtocolRequest,
+  resolvePluginViewPreviewTarget,
   resolvePreviewTarget,
+  revokePluginViewPreviewRegistrations,
 } from "./preview-targets"
 
 const tempRoots: string[] = []
@@ -101,6 +105,59 @@ describe("preview target resolver", () => {
     await expect(resolveLocalPreviewProtocolRequest(`anybox-preview://preview/${token}/data.bin`)).resolves.toMatchObject({
       ok: false,
       status: 415,
+    })
+  })
+
+  it("serves plugin Views and their package assets with a locked-down policy", async () => {
+    const workspaceRoot = await createTempWorkspace()
+    await mkdir(path.join(workspaceRoot, "web", "assets"), { recursive: true })
+    await writeFile(path.join(workspaceRoot, "web", "index.html"), "<script type=\"module\" src=\"./assets/app.js\"></script>", "utf8")
+    await writeFile(path.join(workspaceRoot, "web", "assets", "app.js"), "document.body.textContent = 'ready'", "utf8")
+
+    const resolved = await resolvePluginViewPreviewTarget({
+      entry: "./web/index.html",
+      packageRoot: workspaceRoot,
+      pluginID: "react-sidebar-proof",
+      viewID: "main",
+    })
+    expect(resolved.renderer).toBe("html-preview")
+    expect(isPluginViewPreviewUrl(resolved.safePreviewUrl!)).toBe(true)
+
+    const parsedUrl = new URL(resolved.safePreviewUrl!)
+    const token = parsedUrl.pathname.split("/").filter(Boolean)[0]
+    await expect(resolveLocalPreviewProtocolRequest(
+      `anybox-preview://preview/${token}/web/assets/app.js`,
+    )).resolves.toMatchObject({
+      ok: true,
+      mimeType: "text/javascript; charset=utf-8",
+      purpose: "plugin-view",
+    })
+    await expect(resolveLocalPreviewProtocolRequest(
+      `anybox-preview://preview/${token}/%2e%2e%2foutside.js`,
+    )).resolves.toMatchObject({ ok: false })
+
+    const response = await handleLocalPreviewProtocolRequest(new Request(resolved.safePreviewUrl!))
+    expect(response.headers.get("content-security-policy")).toContain("connect-src 'none'")
+    expect(response.headers.get("content-security-policy")).toContain("script-src 'self'")
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff")
+
+    const refreshed = await resolvePluginViewPreviewTarget({
+      entry: "./web/index.html",
+      packageRoot: workspaceRoot,
+      pluginID: "react-sidebar-proof",
+      viewID: "main",
+    })
+    expect(refreshed.safePreviewUrl).not.toBe(resolved.safePreviewUrl)
+    await expect(resolveLocalPreviewProtocolRequest(resolved.safePreviewUrl!)).resolves.toMatchObject({
+      ok: false,
+      status: 404,
+    })
+    await expect(resolveLocalPreviewProtocolRequest(refreshed.safePreviewUrl!)).resolves.toMatchObject({ ok: true })
+
+    revokePluginViewPreviewRegistrations("react-sidebar-proof")
+    await expect(resolveLocalPreviewProtocolRequest(refreshed.safePreviewUrl!)).resolves.toMatchObject({
+      ok: false,
+      status: 404,
     })
   })
 

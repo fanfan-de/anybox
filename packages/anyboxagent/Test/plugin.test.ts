@@ -2,7 +2,7 @@ import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test"
 import "./sqlite.cleanup.ts"
 import { createHash } from "node:crypto"
 import { existsSync } from "node:fs"
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
+import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import * as Auth from "#auth/auth.ts"
@@ -183,6 +183,12 @@ type PluginCatalogEnvelope = JsonEnvelope<
       required?: boolean
       reason?: string
     }>
+    views: Array<{
+      id: string
+      title: string
+      location: "right-sidebar"
+      entry: string
+    }>
     icon?: string
     brandColor?: string
   }>
@@ -191,8 +197,9 @@ type PluginCatalogItemEnvelope = JsonEnvelope<NonNullable<PluginCatalogEnvelope[
 
 type InstalledPluginEnvelope = JsonEnvelope<{
   pluginID: string
+  version: string
   enabled: boolean
-  mcpServerID: string
+  mcpServerID?: string
   mcpServerIDs: string[]
   mcpServerEnabled: Record<string, boolean>
   skillIDs: string[]
@@ -202,6 +209,17 @@ type InstalledPluginEnvelope = JsonEnvelope<{
   config: Record<string, string>
   packageRoot?: string
   missingPackage?: boolean
+  views: Array<{
+    pluginID: string
+    pluginVersion: string
+    viewID: string
+    title: string
+    location: "right-sidebar"
+    entry: string
+    packageRoot: string
+    icon?: string
+    iconUrl?: string
+  }>
 }>
 
 type ConnectorCatalogEnvelope = JsonEnvelope<
@@ -422,6 +440,44 @@ function pluginInstallRoot() {
 function pluginLocalRoot() {
   if (!activeRoot) throw new Error("Temp root has not been initialized.")
   return process.env.ANYBOX_PLUGIN_LOCAL_DIR ?? join(activeRoot, "local-plugins")
+}
+
+async function writeSidebarViewPluginPackage(input: {
+  name?: string
+  version?: string
+  views?: unknown[]
+  writeEntry?: boolean
+} = {}) {
+  const name = input.name ?? "react-sidebar-proof"
+  const version = input.version ?? "0.1.0"
+  const packageRoot = join(pluginLocalRoot(), name, version)
+  const manifestRoot = join(packageRoot, ".anybox-plugin")
+  await mkdir(manifestRoot, { recursive: true })
+  await mkdir(join(packageRoot, "web"), { recursive: true })
+  if (input.writeEntry !== false) {
+    await writeFile(join(packageRoot, "web", "index.html"), "<!doctype html><div id=\"root\"></div>", "utf8")
+  }
+  await writeFile(join(manifestRoot, "plugin.json"), JSON.stringify({
+    name,
+    version,
+    description: "A view-only React sidebar proof fixture.",
+    author: { name: "Anybox Tests" },
+    interface: {
+      displayName: "React Sidebar Proof",
+      shortDescription: "A React UI supplied by an Anybox plugin.",
+      developerName: "Anybox Tests",
+      category: "Design",
+    },
+    views: input.views ?? [
+      {
+        id: "main",
+        title: "React Sidebar Proof",
+        location: "right-sidebar",
+        entry: "web/index.html",
+      },
+    ],
+  }, null, 2), "utf8")
+  return packageRoot
 }
 
 function createZipArchive(entries: Array<{ name: string; data: string | Buffer }>) {
@@ -1555,6 +1611,145 @@ afterEach(async () => {
 })
 
 describe("plugin marketplace API", () => {
+  test("strictly validates and normalizes right sidebar View declarations", () => {
+    const baseManifest = {
+      name: "react-sidebar-proof",
+      version: "0.1.0",
+      description: "View schema fixture.",
+    }
+    const valid = Plugin.PluginManifest.parse({
+      ...baseManifest,
+      views: [{
+        id: "main.view-1",
+        title: "React Sidebar Proof",
+        location: "right-sidebar",
+        entry: "./web/./index.html",
+      }],
+    })
+    expect(valid.views).toEqual([{
+      id: "main.view-1",
+      title: "React Sidebar Proof",
+      location: "right-sidebar",
+      entry: "./web/index.html",
+    }])
+
+    for (const entry of ["", "/web/index.html", "C:/web/index.html", "../index.html", "web/../index.html", "https://example.test/index.html", "web/index.js"]) {
+      expect(Plugin.PluginManifest.safeParse({
+        ...baseManifest,
+        views: [{ id: "main", title: "Proof", location: "right-sidebar", entry }],
+      }).success).toBe(false)
+    }
+    expect(Plugin.PluginManifest.safeParse({
+      ...baseManifest,
+      views: [{ id: "", title: "Proof", location: "right-sidebar", entry: "./web/index.html" }],
+    }).success).toBe(false)
+    expect(Plugin.PluginManifest.safeParse({
+      ...baseManifest,
+      views: [{ id: "main", title: " ", location: "right-sidebar", entry: "./web/index.html" }],
+    }).success).toBe(false)
+    expect(Plugin.PluginManifest.safeParse({
+      ...baseManifest,
+      views: [{ id: "main", title: "Proof", location: "workbench", entry: "./web/index.html" }],
+    }).success).toBe(false)
+    expect(Plugin.PluginManifest.safeParse({
+      ...baseManifest,
+      views: [
+        { id: "main", title: "One", location: "right-sidebar", entry: "./web/index.html" },
+        { id: "main", title: "Two", location: "right-sidebar", entry: "./web/other.html" },
+      ],
+    }).success).toBe(false)
+    expect(Plugin.PluginManifest.safeParse({
+      ...baseManifest,
+      views: [{
+        id: "main",
+        title: "Proof",
+        location: "right-sidebar",
+        entry: "./web/index.html",
+        unknown: true,
+      }],
+    }).success).toBe(false)
+  })
+
+  test("installs and restores a view-only plugin as a real local capability", async () => {
+    await useTempDatabase()
+    await writeSidebarViewPluginPackage()
+    const app = createServerApp()
+
+    const catalogResponse = await app.request("/api/plugins/catalog")
+    const catalogBody = (await catalogResponse.json()) as PluginCatalogEnvelope
+    const catalogPlugin = catalogBody.data?.find((plugin) => plugin.id === "react-sidebar-proof")
+    expect(catalogResponse.status).toBe(200)
+    expect(catalogPlugin).toMatchObject({
+      id: "react-sidebar-proof",
+      risk: "low",
+      mcpServers: [],
+      skills: [],
+      connectors: [],
+      views: [{
+        id: "main",
+        title: "React Sidebar Proof",
+        location: "right-sidebar",
+        entry: "./web/index.html",
+      }],
+    })
+
+    const installResponse = await app.request("/api/plugins/installed/react-sidebar-proof", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ enabled: true }),
+    })
+    const installBody = (await installResponse.json()) as InstalledPluginEnvelope
+    const installedRoot = join(pluginInstallRoot(), "react-sidebar-proof", "0.1.0")
+    expect(installResponse.status).toBe(200)
+    expect(installBody.data).toMatchObject({
+      pluginID: "react-sidebar-proof",
+      version: "0.1.0",
+      enabled: true,
+      mcpServerIDs: [],
+      skillIDs: [],
+      connectorIDs: [],
+      packageRoot: installedRoot,
+      views: [{
+        pluginID: "react-sidebar-proof",
+        pluginVersion: "0.1.0",
+        viewID: "main",
+        title: "React Sidebar Proof",
+        location: "right-sidebar",
+        entry: "./web/index.html",
+        packageRoot: installedRoot,
+      }],
+    })
+    expect(existsSync(join(installedRoot, "web", "index.html"))).toBe(true)
+
+    const restartedApp = createServerApp()
+    const restoredResponse = await restartedApp.request("/api/plugins/installed")
+    const restoredBody = (await restoredResponse.json()) as JsonEnvelope<Array<NonNullable<InstalledPluginEnvelope["data"]>>>
+    expect(restoredBody.data?.find((plugin) => plugin.pluginID === "react-sidebar-proof")?.views).toMatchObject([{
+      pluginID: "react-sidebar-proof",
+      viewID: "main",
+      title: "React Sidebar Proof",
+      packageRoot: installedRoot,
+    }])
+  })
+
+  test("rejects missing and symlink-escaped local View entries", async () => {
+    await useTempDatabase()
+    await writeSidebarViewPluginPackage({ name: "missing-view", writeEntry: false })
+
+    const escapedRoot = await writeSidebarViewPluginPackage({ name: "escaped-view", writeEntry: false })
+    const outsideRoot = join(activeRoot!, "outside-view")
+    await mkdir(outsideRoot, { recursive: true })
+    await writeFile(join(outsideRoot, "index.html"), "<!doctype html><title>Outside</title>", "utf8")
+    await rm(join(escapedRoot, "web"), { recursive: true, force: true })
+    await symlink(outsideRoot, join(escapedRoot, "web"), process.platform === "win32" ? "junction" : "dir")
+
+    const response = await createServerApp().request("/api/plugins/catalog")
+    const body = (await response.json()) as PluginCatalogEnvelope
+    expect(response.status).toBe(200)
+    expect(body.data?.some((plugin) => plugin.id === "missing-view")).toBe(false)
+    expect(body.data?.some((plugin) => plugin.id === "escaped-view")).toBe(false)
+  })
+
   test("only scans repository source packages after an explicit opt-in", async () => {
     await useTempDatabase()
     const app = createServerApp()
@@ -1589,7 +1784,8 @@ describe("plugin marketplace API", () => {
         + plugin.mcpRequirements.length
         + plugin.skills.length
         + plugin.connectorRequirements.length
-        + plugin.apps.length > 0
+        + plugin.apps.length
+        + plugin.views.length > 0
     )).toBe(true)
 
     const manifestPlugin = body.data?.find((plugin) => plugin.id === "manifest-lab")

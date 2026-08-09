@@ -59,6 +59,7 @@ vi.mock("./agent-client", () => ({
 }))
 
 import { internal } from "./ipc"
+import { resolveLocalPreviewProtocolRequest } from "./preview-targets"
 
 beforeEach(() => {
   requestAgentJSONMock.mockReset()
@@ -238,6 +239,63 @@ describe("plugin IPC error helpers", () => {
     ).rejects.toThrow(
       "[PLUGIN_PACKAGE_UNAVAILABLE] Plugin package returned HTTP 404.",
     )
+  })
+
+  it("prepares only enabled, available, package-owned local Views for the renderer", async () => {
+    const packageRoot = await mkdtemp(path.join(os.tmpdir(), "anybox-plugin-view-ipc-"))
+    try {
+      await mkdir(path.join(packageRoot, "web"), { recursive: true })
+      await writeFile(path.join(packageRoot, "web", "index.html"), "<!doctype html><title>Proof</title>", "utf8")
+      const plugin = {
+        pluginID: "react-sidebar-proof",
+        version: "0.1.0",
+        enabled: true,
+        mcpServerIDs: [],
+        mcpServerEnabled: {},
+        skillIDs: [],
+        connectorIDs: [],
+        mcpRequirementIDs: [],
+        connectorRequirementIDs: [],
+        config: {},
+        installedAt: 1,
+        updatedAt: 2,
+        packageRoot,
+        views: [{
+          pluginID: "react-sidebar-proof",
+          pluginVersion: "0.1.0",
+          viewID: "main",
+          title: "React Sidebar Proof",
+          location: "right-sidebar" as const,
+          entry: "./web/index.html",
+          packageRoot,
+        }],
+      }
+
+      const prepared = await internal.prepareInstalledPluginForRenderer(plugin)
+      expect(prepared).toMatchObject({
+        views: [{
+          pluginID: "react-sidebar-proof",
+          viewID: "main",
+          safePreviewUrl: expect.stringMatching(/^anybox-preview:\/\/preview\//),
+        }],
+      })
+      await expect(internal.prepareInstalledPluginForRenderer({ ...plugin, enabled: false })).resolves.toMatchObject({
+        views: [],
+      })
+      await expect(resolveLocalPreviewProtocolRequest(prepared.views?.[0]?.safePreviewUrl ?? "")).resolves.toMatchObject({
+        ok: false,
+        status: 404,
+      })
+      await expect(internal.prepareInstalledPluginForRenderer({ ...plugin, missingPackage: true })).resolves.toMatchObject({
+        views: [],
+      })
+      await expect(internal.prepareInstalledPluginForRenderer({
+        ...plugin,
+        views: [{ ...plugin.views[0]!, packageRoot: path.dirname(packageRoot) }],
+      })).resolves.toMatchObject({ views: [] })
+    } finally {
+      await rm(packageRoot, { recursive: true, force: true })
+    }
   })
 })
 

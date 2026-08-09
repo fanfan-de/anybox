@@ -108,6 +108,32 @@ describe("workspace store", () => {
     expect(store.getState().sessions.rightSidebar.activeTabID).toBeNull()
   })
 
+  it("opens only one tab for each plugin View target", () => {
+    const store = createTestStore()
+    const firstTabID = store.getState().sessionsActions.openOrFocusRightSidebarTab({
+      kind: "plugin-view",
+      pluginID: "react-sidebar-proof",
+      viewID: "main",
+      title: "React Sidebar Proof",
+    })
+    const focusedTabID = store.getState().sessionsActions.openOrFocusRightSidebarTab({
+      kind: "plugin-view",
+      pluginID: "react-sidebar-proof",
+      viewID: "main",
+      title: "Updated title is supplied by the catalog sync",
+    })
+
+    expect(focusedTabID).toBe(firstTabID)
+    expect(store.getState().sessions.rightSidebar.tabs).toHaveLength(1)
+    expect(store.getState().sessions.rightSidebar.activeTabID).toBe(firstTabID)
+    expect(store.getState().sessions.rightSidebar.tabs[0]).toMatchObject({
+      kind: "plugin-view",
+      pluginID: "react-sidebar-proof",
+      viewID: "main",
+      targetKey: "plugin-view:react-sidebar-proof:main",
+    })
+  })
+
   it("reuses one contextual message inspector tab and updates its inspected message", () => {
     const store = createTestStore()
 

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto"
 import { readFile, realpath, stat } from "node:fs/promises"
 import path from "node:path"
 import type {
@@ -75,8 +76,11 @@ const WINDOWS_DRIVE_PATH_PATTERN = /^[A-Za-z]:[\\/]/
 const WINDOWS_UNC_PATH_PATTERN = /^(?:\\\\|\/\/)[^\\/]+[\\/][^\\/]+/
 
 type PreviewRegistration = {
+  purpose: "default" | "plugin-view"
   root: string
   workspaceRoot: string
+  pluginID?: string
+  viewID?: string
 }
 
 const previewRegistrations = new Map<string, PreviewRegistration>()
@@ -200,13 +204,52 @@ function normalizeRenderer(value: unknown): DesktopPreviewRenderer | null {
 }
 
 function makePreviewToken() {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+  return randomUUID()
 }
 
-function registerPreviewRoot(root: string, workspaceRoot: string) {
+function registerPreviewRoot(
+  root: string,
+  workspaceRoot: string,
+  purpose: PreviewRegistration["purpose"] = "default",
+  owner?: { pluginID: string; viewID: string },
+) {
+  if (purpose === "plugin-view" && owner) {
+    for (const [existingToken, registration] of previewRegistrations) {
+      if (
+        registration.purpose === "plugin-view"
+        && registration.pluginID === owner.pluginID
+        && registration.viewID === owner.viewID
+      ) {
+        previewRegistrations.delete(existingToken)
+      }
+    }
+  }
   const token = makePreviewToken()
-  previewRegistrations.set(token, { root, workspaceRoot })
+  previewRegistrations.set(token, { purpose, root, workspaceRoot, ...owner })
   return token
+}
+
+export function revokePluginViewPreviewRegistrations(pluginID: string, keepViewIDs: ReadonlySet<string> = new Set()) {
+  for (const [token, registration] of previewRegistrations) {
+    if (
+      registration.purpose === "plugin-view"
+      && registration.pluginID === pluginID
+      && (!registration.viewID || !keepViewIDs.has(registration.viewID))
+    ) {
+      previewRegistrations.delete(token)
+    }
+  }
+}
+
+export function isPluginViewPreviewUrl(value: string) {
+  try {
+    const parsedUrl = new URL(value)
+    if (parsedUrl.protocol !== `${LOCAL_PREVIEW_PROTOCOL}:` || parsedUrl.hostname !== "preview") return false
+    const token = parsedUrl.pathname.split("/").filter(Boolean)[0]
+    return Boolean(token && previewRegistrations.get(token)?.purpose === "plugin-view")
+  } catch {
+    return false
+  }
 }
 
 function toWorkspaceRelativePath(workspaceRoot: string, filePath: string) {
@@ -224,11 +267,13 @@ function buildResolvedFileTarget(input: {
   root: string
   title?: string
   workspaceRoot: string
+  purpose?: PreviewRegistration["purpose"]
+  owner?: { pluginID: string; viewID: string }
 }): DesktopResolvedPreviewTarget {
   const mime = input.mime?.trim() || getPreviewMimeType(input.entry)
   const renderer = input.renderer ?? inferPreviewRenderer(input.entry, mime)
   const token = renderer === "html-preview" || renderer === "svg-preview" || renderer === "image-preview"
-    ? registerPreviewRoot(input.root, input.workspaceRoot)
+    ? registerPreviewRoot(input.root, input.workspaceRoot, input.purpose, input.owner)
     : null
   const safePreviewUrl = token
     ? toLocalPreviewProtocolUrl(token, path.relative(input.root, input.entry).split(path.sep).join("/"))
@@ -437,7 +482,12 @@ async function resolveArtifactPreviewTarget(input: string, workspaceRoot: string
   throw new Error(`Artifact '${artifactID}' was not found in this workspace.`)
 }
 
-async function resolveWorkspaceFilePreviewTarget(input: string, workspaceRoot: string): Promise<DesktopResolvedPreviewTarget> {
+async function resolveWorkspaceFilePreviewTarget(
+  input: string,
+  workspaceRoot: string,
+  purpose: PreviewRegistration["purpose"] = "default",
+  owner?: { pluginID: string; viewID: string },
+): Promise<DesktopResolvedPreviewTarget> {
   const trimmedInput = normalizePreviewInputPath(input.trim())
   const candidatePath = path.resolve(isAbsolutePreviewInputPath(trimmedInput) ? trimmedInput : path.join(workspaceRoot, trimmedInput))
   const resolvedPath = await realpath(candidatePath)
@@ -455,8 +505,10 @@ async function resolveWorkspaceFilePreviewTarget(input: string, workspaceRoot: s
     entry: resolvedPath,
     input,
     kind: isPathInside(path.join(workspaceRoot, "artifacts"), resolvedPath) ? "artifact" : "file",
-    root: path.dirname(resolvedPath),
+    root: purpose === "plugin-view" ? workspaceRoot : path.dirname(resolvedPath),
     workspaceRoot,
+    purpose,
+    owner,
   })
 }
 
@@ -475,6 +527,19 @@ export async function resolvePreviewTarget(input: DesktopResolvePreviewTargetInp
   }
 
   return resolveWorkspaceFilePreviewTarget(value, workspaceRoot)
+}
+
+export async function resolvePluginViewPreviewTarget(input: {
+  entry: string
+  packageRoot: string
+  pluginID: string
+  viewID: string
+}) {
+  const workspaceRoot = await resolveWorkspaceRoot(input.packageRoot)
+  return resolveWorkspaceFilePreviewTarget(input.entry, workspaceRoot, "plugin-view", {
+    pluginID: input.pluginID,
+    viewID: input.viewID,
+  })
 }
 
 export async function readPreviewText(input: DesktopReadPreviewTextInput) {
@@ -550,6 +615,7 @@ export async function resolveLocalPreviewProtocolRequest(requestUrl: string) {
     ok: true as const,
     filePath: resolvedPath,
     mimeType,
+    purpose: registration.purpose,
     size: fileStat.size,
   }
 }
@@ -566,13 +632,32 @@ export async function handleLocalPreviewProtocolRequest(request: Request) {
   }
 
   const body = await readFile(result.filePath)
-  return new Response(body, {
-    headers: {
-      "cache-control": "no-store",
-      "content-length": String(result.size),
-      "content-type": result.mimeType,
-    },
-  })
+  const headers: Record<string, string> = {
+    "cache-control": "no-store",
+    "content-length": String(result.size),
+    "content-type": result.mimeType,
+  }
+  if (result.purpose === "plugin-view") {
+    headers["content-security-policy"] = [
+      "default-src 'none'",
+      "base-uri 'none'",
+      "connect-src 'none'",
+      "font-src 'self' data:",
+      "form-action 'none'",
+      "frame-src 'none'",
+      "img-src 'self' data:",
+      "media-src 'self'",
+      "navigate-to 'self'",
+      "object-src 'none'",
+      "script-src 'self'",
+      "style-src 'self' 'unsafe-inline'",
+      "worker-src 'none'",
+    ].join("; ")
+    headers["cross-origin-resource-policy"] = "same-origin"
+    headers["x-content-type-options"] = "nosniff"
+  }
+
+  return new Response(body, { headers })
 }
 
 export function registerLocalPreviewProtocolScheme(protocolRegistrar: Pick<LocalPreviewProtocolRegistrar, "registerSchemesAsPrivileged">) {

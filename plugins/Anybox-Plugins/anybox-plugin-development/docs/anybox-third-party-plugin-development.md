@@ -137,7 +137,31 @@ Path rules:
 - `hooks` files are parsed and validated as JSON in this version, but hooks are not executed or registered.
 - OpenAI App SDK entries whose only identifier is `asdk_app_*` are accepted as metadata but are not converted into Anybox connectors.
 
-实际插件还应该声明 `interface`、`mcpServers`、`skills`、`connectors` 或 `connectorRequirements`。
+实际插件还应该声明 `interface`，并可通过 `mcpServers`、`skills`、`connectors`、`connectorRequirements` 或 `views` 提供真实能力。只有 `views` 的本地插件也是有效插件。
+
+### Right Sidebar View
+
+`views` 可以声明插件包自带的 HTML/React 页面。当前只支持 Right Sidebar：
+
+```json
+{
+  "views": [
+    {
+      "id": "main",
+      "title": "React Sidebar Proof",
+      "location": "right-sidebar",
+      "entry": "./web/index.html"
+    }
+  ]
+}
+```
+
+- `id` 在插件内必须稳定且唯一，只能使用安全的可序列化 ID。
+- `title`、`location`、`entry` 必填，View 内未知字段会被拒绝。
+- `entry` 只能是包内相对 HTML 路径；绝对路径、URL、反斜杠、查询参数、fragment 和 `..` 都会被拒绝。
+- 本地安装时入口必须存在，真实路径必须留在插件根目录内；符号链接不能逃逸。
+- 将构建后的 HTML、JavaScript 和 CSS 一并提交到插件包（推荐 `web/`），不要依赖开发服务器。
+- 只有已安装、已启用且本地包存在的 View 才会出现在 Right Sidebar；远程 catalog 元数据不会直接作为本地页面加载。
 
 ### MCP Server
 
@@ -896,7 +920,7 @@ API key connector 需要用户保存 API key。OAuth connector 需要用户完�
 
 - 插件目录是版本化结构。
 - `plugin.json` 只使用支持的字段。
-- 至少声明一种真实能力：`mcpServers`、`skills`、`connectors` 或 `connectorRequirements`。
+- 至少声明一种真实能力：`mcpServers`、`skills`、`connectors`、`connectorRequirements` 或 `views`。
 - 所有 `${PLACEHOLDER}` 都有来源：`PLUGIN_ROOT`、安装 config、API key 或 OAuth token。
 - 本地 MCP server 能响应 `initialize`、`tools/list` 和 `tools/call`。
 - `permissions`、`risk`、`readOnly`、`destructive` 写得准确。
