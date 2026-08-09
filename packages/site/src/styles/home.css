@@ -8,6 +8,7 @@
 }
 
 .home-page-shell .site-header.is-home {
+  z-index: 10;
   border-bottom-color: var(--hero-stage-border-soft);
   background: color-mix(in srgb, var(--hero-stage-background) 84%, transparent);
   color: var(--hero-stage-text);
@@ -59,88 +60,58 @@
   isolation: isolate;
 }
 
-.ribbon-background {
+.paper-background {
   position: absolute;
   inset: 0;
   z-index: 0;
   overflow: hidden;
   pointer-events: none;
-  background:
-    radial-gradient(circle at 50% 46%, color-mix(in srgb, var(--hero-ribbon-blue) 7%, transparent), transparent 22rem),
-    radial-gradient(circle at 50% 48%, color-mix(in srgb, var(--hero-ribbon-cyan) 9%, transparent), transparent 34rem),
-    linear-gradient(180deg, color-mix(in srgb, var(--hero-stage-text) 2%, var(--hero-stage-background)) 0%, var(--hero-stage-background) 62%, var(--hero-stage-background) 100%);
+  background: var(--hero-stage-background);
 }
 
-.ribbon-canvas,
-.ribbon-vignette,
-.ribbon-grain,
-.ribbon-scanlines {
+.paper-grid,
+.paper-canvas,
+.paper-frame,
+.paper-fibers {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
 }
 
-.ribbon-canvas {
+.paper-grid {
   z-index: 0;
+  background-image:
+    linear-gradient(var(--hero-paper-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--hero-paper-grid) 1px, transparent 1px);
+  background-position: center top;
+  background-size: 64px 64px;
+  opacity: 0.72;
 }
 
-.ribbon-glass-ring {
-  position: absolute;
-  top: 44%;
-  left: 50%;
+.paper-canvas {
   z-index: 1;
-  width: min(68vmin, 680px);
-  aspect-ratio: 1;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle, color-mix(in srgb, var(--hero-stage-text) 10%, transparent) 0 1px, transparent 2px) 0 0 / 38px 38px,
-    conic-gradient(from 90deg, transparent, color-mix(in srgb, var(--hero-ribbon-cyan) 17%, transparent), transparent 34%, color-mix(in srgb, var(--hero-ribbon-blue) 16%, transparent), transparent 70%, color-mix(in srgb, var(--hero-ribbon-cyan) 10%, transparent), transparent);
-  filter: drop-shadow(0 0 46px color-mix(in srgb, var(--hero-ribbon-cyan) 14%, transparent));
-  mask-image: radial-gradient(circle, transparent 0 31%, black 32% 48%, transparent 49% 57%, black 58% 60%, transparent 61%);
-  opacity: 0.58;
-  -webkit-mask-image: radial-gradient(circle, transparent 0 31%, black 32% 48%, transparent 49% 57%, black 58% 60%, transparent 61%);
-  animation: ribbon-ring-spin 24s linear infinite;
 }
 
-.ribbon-glass-ring::before,
-.ribbon-glass-ring::after {
-  position: absolute;
-  inset: 14%;
-  border: 1px solid var(--hero-stage-border-soft);
-  border-radius: 50%;
-  box-shadow: inset 0 0 32px color-mix(in srgb, var(--hero-ribbon-cyan) 7%, transparent), 0 0 34px color-mix(in srgb, var(--hero-ribbon-blue) 9%, transparent);
-  content: "";
-  transform: rotateX(70deg) rotateZ(22deg);
-}
-
-.ribbon-glass-ring::after {
-  inset: 25%;
-  border-color: color-mix(in srgb, var(--hero-ribbon-blue) 14%, transparent);
-  transform: rotateX(70deg) rotateZ(-36deg);
-}
-
-.ribbon-vignette {
+.paper-frame {
+  top: 0;
+  bottom: 0;
+  left: 50%;
   z-index: 2;
-  background: radial-gradient(circle at 50% 48%, transparent 0 40%, color-mix(in srgb, var(--hero-stage-background) 30%, transparent) 70%, color-mix(in srgb, var(--hero-stage-background) 90%, transparent) 100%);
+  width: min(var(--site-width), calc(100% - 48px));
+  height: auto;
+  border-right: 1px solid var(--hero-stage-border-soft);
+  border-left: 1px solid var(--hero-stage-border-soft);
+  transform: translateX(-50%);
 }
 
-.ribbon-grain {
-  z-index: 4;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.78' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.7'/%3E%3C/svg%3E");
-  opacity: 0.075;
-}
-
-.ribbon-scanlines {
-  z-index: 5;
-  background: repeating-linear-gradient(to bottom, color-mix(in srgb, var(--hero-stage-text) 3%, transparent), color-mix(in srgb, var(--hero-stage-text) 3%, transparent) 1px, transparent 1px, transparent 8px);
-  mix-blend-mode: overlay;
-  opacity: 0.16;
-}
-
-@keyframes ribbon-ring-spin {
-  from { transform: translate(-50%, -50%) rotate(0); }
-  to { transform: translate(-50%, -50%) rotate(360deg); }
+.paper-fibers {
+  z-index: 3;
+  background-image:
+    repeating-linear-gradient(7deg, transparent 0 26px, var(--hero-paper-fiber) 27px, transparent 28px 58px),
+    repeating-linear-gradient(97deg, transparent 0 58px, var(--hero-paper-fiber) 59px, transparent 60px 116px);
+  mix-blend-mode: multiply;
+  opacity: 0.7;
 }
 
 .home-hero-inner {
@@ -169,30 +140,24 @@
   position: absolute;
   inset: -34px -110px -50px;
   z-index: -1;
-  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--hero-stage-background) 86%, transparent) 0 38%, color-mix(in srgb, var(--hero-stage-background) 54%, transparent) 58%, transparent 76%);
+  border-radius: 48%;
+  background: color-mix(in srgb, var(--hero-stage-background) 72%, transparent);
   content: "";
+  filter: blur(36px);
   pointer-events: none;
 }
 
 .home-hero-wordmark {
   margin: 0 0 -0.14em;
   padding-bottom: 0.22em;
-  background: linear-gradient(90deg, var(--hero-stage-text) 0%, var(--hero-ribbon-lime) 28%, var(--hero-ribbon-cyan) 58%, var(--hero-ribbon-pink) 88%);
-  background-clip: text;
-  color: var(--hero-ribbon-lime);
-  filter: drop-shadow(0 12px 22px color-mix(in srgb, var(--hero-stage-background) 72%, transparent));
+  color: var(--hero-paper-ink);
   font-family: var(--font-display);
   font-size: clamp(5.4rem, 14vw, 11rem);
   font-weight: 820;
   line-height: 0.92;
   transform: translateY(-18px);
-  text-shadow:
-    0 0 26px color-mix(in srgb, var(--hero-ribbon-lime) 28%, transparent),
-    0 0 82px color-mix(in srgb, var(--hero-ribbon-cyan) 22%, transparent),
-    0 0 148px color-mix(in srgb, var(--hero-ribbon-pink) 16%, transparent);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  -webkit-text-stroke: clamp(1px, 0.14vw, 2px) color-mix(in srgb, var(--hero-stage-background) 86%, transparent);
+  letter-spacing: -0.075em;
+  text-shadow: 0 1px 0 color-mix(in srgb, var(--surface-primary) 88%, transparent);
 }
 
 .home-eyebrow,
@@ -254,18 +219,17 @@
   left: 0.03em;
   height: 3px;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--hero-ribbon-cyan), var(--hero-ribbon-blue));
-  box-shadow: 0 0 14px color-mix(in srgb, var(--hero-ribbon-cyan) 34%, transparent);
+  background: var(--hero-paper-ink);
   content: "";
 }
 
 .home-hero-title-plus {
   display: inline-block;
   margin: 0 0.2em;
-  color: var(--hero-ribbon-cyan);
+  color: var(--hero-paper-accent);
   font-size: 0.84em;
   font-weight: 560;
-  text-shadow: 0 0 18px color-mix(in srgb, var(--hero-ribbon-cyan) 38%, transparent);
+  text-shadow: none;
 }
 
 .home-hero-actions,
@@ -285,10 +249,9 @@
   margin-top: var(--home-hero-actions-gap);
   padding: 7px;
   border: 1px solid var(--hero-stage-border);
-  border-radius: 14px;
+  border-radius: 12px;
   background: var(--hero-stage-surface);
-  box-shadow: 0 18px 60px color-mix(in srgb, var(--hero-stage-background) 48%, transparent), inset 0 1px 0 color-mix(in srgb, var(--hero-stage-text) 11%, transparent);
-  backdrop-filter: blur(22px) saturate(150%);
+  box-shadow: 0 18px 46px color-mix(in srgb, var(--hero-stage-text) 9%, transparent);
 }
 
 .home-hero .button {
@@ -435,20 +398,19 @@
   min-height: calc(100svh - var(--home-header-height));
   padding: clamp(56px, 7svh, 88px) clamp(24px, 4vw, 72px);
   scroll-margin-top: var(--home-header-height);
-  background:
-    radial-gradient(circle at 14% 16%, color-mix(in srgb, var(--hero-ribbon-blue) 14%, transparent), transparent 30rem),
-    radial-gradient(circle at 86% 78%, color-mix(in srgb, var(--hero-ribbon-pink) 9%, transparent), transparent 34rem),
-    var(--hero-stage-background);
-  color: var(--hero-stage-text);
+  background-color: var(--surface-page);
+  background-image:
+    linear-gradient(var(--hero-paper-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--hero-paper-grid) 1px, transparent 1px);
+  background-position: center top;
+  background-size: 64px 64px;
+  color: var(--text-primary);
   isolation: isolate;
 }
 
 .home-demo-section.is-alternate {
-  border-top: 1px solid var(--hero-stage-border-soft);
-  background:
-    radial-gradient(circle at 82% 18%, color-mix(in srgb, var(--hero-ribbon-cyan) 12%, transparent), transparent 31rem),
-    radial-gradient(circle at 12% 78%, color-mix(in srgb, var(--hero-ribbon-lime) 7%, transparent), transparent 34rem),
-    var(--hero-stage-background);
+  border-top: 1px solid var(--border-subtle);
+  background-color: var(--surface-primary);
 }
 
 .home-demo-inner {
@@ -470,7 +432,7 @@
 }
 
 .home-demo-copy .section-kicker {
-  color: var(--hero-ribbon-lime);
+  color: var(--brand-primary);
 }
 
 .home-demo-copy h2 {
@@ -507,7 +469,7 @@
 
 .home-demo-points li > span {
   padding-top: 2px;
-  color: var(--hero-ribbon-lime);
+  color: var(--brand-primary);
   font-size: 0.74rem;
   font-variant-numeric: tabular-nums;
   font-weight: 760;
@@ -554,9 +516,7 @@
   border: 1px solid var(--hero-stage-border);
   border-radius: 18px;
   background: var(--hero-stage-surface-strong);
-  box-shadow:
-    0 36px 110px color-mix(in srgb, var(--hero-stage-background) 62%, transparent),
-    0 0 72px color-mix(in srgb, var(--hero-ribbon-cyan) 10%, transparent);
+  box-shadow: 0 28px 72px color-mix(in srgb, var(--text-primary) 11%, transparent);
 }
 
 .home-demo-frame::after {
@@ -1004,14 +964,12 @@
     border-radius: 10px;
   }
 
-  .ribbon-glass-ring {
-    top: 34%;
-    width: min(92vw, 520px);
-    opacity: 0.48;
+  .paper-grid {
+    background-size: 48px 48px;
   }
 
-  .ribbon-scanlines {
-    opacity: 0.18;
+  .paper-frame {
+    width: calc(100% - 40px);
   }
 
   .home-hero-wordmark {
@@ -1053,6 +1011,10 @@
   .download-cta.is-expanded {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  :lang(en) .download-cta.is-expanded {
+    grid-template-columns: 1fr;
   }
 
   .download-cta.is-expanded .button {
@@ -1146,8 +1108,6 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .ribbon-glass-ring {
-    animation: none;
-  }
+:root[data-theme="dark"] .home-page-shell .site-header.is-home .brand-lockup img {
+  filter: invert(1) saturate(0) brightness(1.14);
 }

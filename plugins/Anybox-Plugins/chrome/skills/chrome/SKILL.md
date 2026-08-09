@@ -1,6 +1,6 @@
 ---
 name: Chrome
-description: "Control the user's Chrome browser through a persistent Node REPL when tasks depend on existing tabs, signed-in sessions, extensions, visible page state, or UI interaction. Prefer purpose-built connectors, APIs, or CLIs for semantic resource operations."
+description: "Control the user's Chrome browser through a session-scoped persistent Node REPL when tasks depend on existing tabs, signed-in sessions, extensions, visible page state, or UI interaction. Prefer purpose-built connectors, APIs, or CLIs for semantic resource operations."
 ---
 
 # Chrome
@@ -17,7 +17,7 @@ Use this skill for navigating, inspecting visible page state, testing local web 
 
 Control Chrome only through the general-purpose Anybox Node REPL `js` tool. Its full Anybox tool ID normally resembles `mcp__anybox_node_repl__js`. Do not use per-action `browser_*` MCP tools, Computer Use, standalone Playwright, or another browser-control plugin for this Chrome surface.
 
-The `js_reset` tool only clears persistent JavaScript state. The `js_add_node_module_dir` tool only changes CommonJS module resolution. Do not call either helper while trying to expose `js`.
+The `js_reset` tool terminates and replaces the Node kernel, including globals, module cache, timers, and descendants. The kernel is also replaced when the Anybox session changes. The `js_add_node_module_dir` tool only changes CommonJS module resolution. Do not call either helper while trying to expose `js`.
 
 Keep setup details internal. Unless the user asks about implementation, describe progress naturally as connecting to Chrome, inspecting the page, or retrying the connection.
 
@@ -54,7 +54,7 @@ if (globalThis.chrome == null) {
 }
 ```
 
-Reuse `globalThis.chrome` across later calls and user turns while the imported setup function still matches `globalThis.setupBrowserRuntime`. A mismatch means the persistent REPL retained an older plugin version, so reinitialize from the currently loaded package and discard the stale Chrome binding. Do not initialize another browser runtime merely because the user sent a new message.
+Reuse `globalThis.chrome` across later calls and user turns in the same Anybox session while the imported setup function still matches `globalThis.setupBrowserRuntime`. A mismatch means the persistent REPL retained an older plugin version, so reinitialize from the currently loaded package and discard the stale Chrome binding. A new Anybox session or a hard reset has no retained binding and must run this bootstrap again; do not reinitialize merely because the user sent a new message within the same session.
 
 `agent.browsers.readiness()` reports the current connection state without launching Chrome or running the Native Host probe. During an explicit Chrome task, `agent.browsers.ensureReady({ launch: true })` first allows an in-flight extension reconnect to settle, verifies the installed Native Messaging Host through its authenticated local IPC probe, opens Chrome at most once when needed, and waits for a bounded extension handshake. It never scans Chrome profiles or credential stores.
 

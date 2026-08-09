@@ -5,7 +5,6 @@ import { supportEmail, supportMailto } from "./siteLinks"
 import { trackSiteEvent } from "./siteAnalytics"
 
 const brandLogoBlack = "/brand-logo-black.svg"
-const brandLogoWhite = "/brand-logo-white.svg"
 const releasesUrl = `${repositoryUrl}/releases/latest`
 const wechatCommunityQrImage = "/wechat-community-qr-20260702.png"
 const icpRecordNumber = "苏ICP备2026030016号-1"
@@ -78,7 +77,7 @@ export function SiteHeader({ currentPage }: { currentPage: SitePage }) {
         href={currentPage === "home" ? "#top" : "/"}
         aria-label={isChinese ? "Anybox 首页" : "Anybox home"}
       >
-        <img src={currentPage === "home" ? brandLogoWhite : brandLogoBlack} alt="" width="34" height="34" />
+        <img src={brandLogoBlack} alt="" width="34" height="34" />
         <span>Anybox</span>
       </a>
 

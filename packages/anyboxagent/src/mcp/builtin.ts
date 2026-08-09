@@ -89,27 +89,30 @@ function nodeReplDefinition(): BuiltinMcpDefinition {
     id: NODE_REPL_DEFINITION_ID,
     serverID: NODE_REPL_SERVER_ID,
     name: "Node REPL",
-    description: "Run JavaScript in a persistent, general-purpose Node.js environment.",
+    description: "Run JavaScript in a session-scoped, general-purpose Node.js environment.",
     publisher: "Anybox",
     icon: "JS",
     risk: "high",
     permissions: [
-      "Runs JavaScript requested by the agent in a persistent local process.",
-      "JavaScript can load local modules and access the local filesystem and network.",
+      "Runs JavaScript requested by the agent in a session-scoped local process.",
+      "JavaScript has ordinary Node.js access to local modules, child processes, the active project's files, and the network.",
+      "Only a minimal operating-system environment is inherited; configured runtime values are added explicitly.",
       "Imported modules run with ordinary Node.js capabilities; this runtime does not add domain-specific host services.",
     ],
     tools: [
       {
         name: "js",
         title: "Node REPL JavaScript",
-        description: "Run JavaScript in a persistent general-purpose Node.js environment.",
+        description: "Run JavaScript with ordinary Node.js capabilities in the active project.",
         readOnly: false,
+        destructive: true,
       },
       {
         name: "js_reset",
         title: "Reset Node REPL",
-        description: "Reset the persistent Node.js environment.",
+        description: "Hard-reset the session's Node.js process, module search paths, and in-memory state.",
         readOnly: false,
+        destructive: true,
       },
       {
         name: "js_add_node_module_dir",
@@ -121,6 +124,7 @@ function nodeReplDefinition(): BuiltinMcpDefinition {
     installReview: [
       "This MCP runtime belongs to Anybox rather than to a specific plugin.",
       "Its working directory is the active project, not an installed plugin package.",
+      "Persistent state is isolated to one Anybox session and is discarded on session changes or reset.",
       "Plugins can expose capabilities by having the agent import their own modules at runtime.",
     ],
     available,
@@ -142,7 +146,9 @@ function nodeReplDefinition(): BuiltinMcpDefinition {
         },
       },
       enabled: true,
-      timeoutMs: 120_000,
+      // The kernel enforces a 120 second execution ceiling. The MCP request
+      // needs additional time for permission decisions and forced cleanup.
+      timeoutMs: 300_000,
     },
   }
 }

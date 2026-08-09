@@ -184,9 +184,13 @@ Notion 工具的重要约束：
 |---|---|
 | 命名空间 | `mcp__node_repl__` |
 | 目标通道 | `commentary` |
-| 用途 | 在持久 Node.js kernel 中执行 JavaScript，支持 top-level await |
+| 用途 | 在当前 Anybox session 的持久 Node.js kernel 中执行 JavaScript，支持 top-level await |
 | 输入 | `code`, `timeout_ms`, `title` |
-| 特性 | 绑定会在多次调用间保留；可动态 import；可用 `nodeRepl.write` 输出精确文本；可用 `nodeRepl.emitImage` 返回图片 |
+| 特性 | 默认工作目录是活动项目；`globalThis` 在同一 session 的多次调用间保留；可动态 import；可用 `nodeRepl.write` 输出精确文本；可用 `nodeRepl.emitImage` 返回图片 |
+
+代码按 async function body 执行，词法声明不会跨调用保留，需要显式 `return` JSON 结果。
+`js` 具有普通 Node.js 文件、网络与子进程能力；session 切换会硬重置 kernel，完整大结果位于
+`structuredContent`，文本只提供有限预览。`timeoutMs` 只接受 1～120000 的整数。
 
 ### `mcp__node_repl__.js_reset`
 
@@ -194,7 +198,7 @@ Notion 工具的重要约束：
 |---|---|
 | 命名空间 | `mcp__node_repl__` |
 | 目标通道 | `commentary` |
-| 用途 | 重置持久 Node.js kernel，清除已有绑定 |
+| 用途 | 终止并重建 Node.js kernel，清除全局、新增模块搜索路径、模块缓存、timer 与后代进程 |
 
 ## Pencil 设计工具
 

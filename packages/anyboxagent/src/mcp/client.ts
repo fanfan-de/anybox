@@ -30,6 +30,50 @@ const MCP_LEGACY_CACHE_TTL_MS = 30_000
 const MCP_SESSION_TERMINATION_TIMEOUT_MS = 2_000
 const MCP_SUBSCRIPTION_RETRY_MAX_MS = 30_000
 const MCP_SUBSCRIPTION_RETRY_MIN_MS = 1_000
+// Keep process launch and desktop-session plumbing, plus fail-closed product
+// controls. Credentials, tokens, proxy URLs, and arbitrary application env do
+// not cross into the general-purpose Node REPL.
+const NODE_REPL_INHERITED_ENV_KEYS = new Set([
+  "APPDATA",
+  "ANYBOX_BROWSER_HOST",
+  "ANYBOX_BROWSER_NATIVE_INSTALL",
+  "ANYBOX_COMPUTER_USE_DENY_APP_IDS",
+  "ANYBOX_COMPUTER_USE_DISABLED",
+  "ANYBOX_COMPUTER_USE_REQUIRE_SIGNATURE",
+  "COMSPEC",
+  "DBUS_SESSION_BUS_ADDRESS",
+  "DISPLAY",
+  "HOMEDRIVE",
+  "HOMEPATH",
+  "HOME",
+  "LANG",
+  "LC_ALL",
+  "LC_CTYPE",
+  "LOCALAPPDATA",
+  "LOGNAME",
+  "NODE_EXTRA_CA_CERTS",
+  "PATH",
+  "PATHEXT",
+  "SSL_CERT_DIR",
+  "SSL_CERT_FILE",
+  "SYSTEMDRIVE",
+  "SYSTEMROOT",
+  "TEMP",
+  "TERM",
+  "TMP",
+  "TMPDIR",
+  "USER",
+  "USERNAME",
+  "USERPROFILE",
+  "WAYLAND_DISPLAY",
+  "WINDIR",
+  "XAUTHORITY",
+  "XDG_CACHE_HOME",
+  "XDG_CONFIG_HOME",
+  "XDG_DATA_HOME",
+  "XDG_RUNTIME_DIR",
+  "XDG_STATE_HOME",
+])
 const MCP_FATAL_REQUEST_ERROR_CODES = new Set<string>([
   SdkErrorCode.RequestTimeout,
   SdkErrorCode.ConnectionClosed,
@@ -110,11 +154,15 @@ function getToolDisplayName(tool: McpToolDefinition) {
   return tool.title || tool.annotations?.title || tool.name
 }
 
-function mergeProcessEnv(overrides?: Record<string, string>) {
+function mergeProcessEnv(
+  overrides?: Record<string, string>,
+  inheritedKeys?: ReadonlySet<string>,
+) {
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
       (entry): entry is [string, string] =>
-        typeof entry[1] === "string",
+        typeof entry[1] === "string"
+        && (!inheritedKeys || inheritedKeys.has(entry[0].toUpperCase())),
     ),
   )
 
@@ -126,6 +174,16 @@ function mergeProcessEnv(overrides?: Record<string, string>) {
 
 function isAnyboxNodeReplServer(server: McpServerSummary) {
   return BuiltinMcp.isNodeReplServer(server)
+}
+
+function stdioProcessEnv(
+  server: McpServerSummary,
+  overrides?: Record<string, string>,
+) {
+  return mergeProcessEnv(
+    overrides,
+    isAnyboxNodeReplServer(server) ? NODE_REPL_INHERITED_ENV_KEYS : undefined,
+  )
 }
 
 function normalizedRequestContext(
@@ -824,7 +882,7 @@ export class McpClient {
       command: this.options.server.command,
       args: this.options.server.args ?? [],
       cwd: this.options.cwd,
-      env: mergeProcessEnv({
+      env: stdioProcessEnv(this.options.server, {
         ...(this.options.server.env ?? {}),
         ...(isAnyboxNodeReplServer(this.options.server)
           ? getBrowserAuthorizationEnvironment()
@@ -850,7 +908,7 @@ export class McpClient {
       command: runtime.command,
       args: runtime.args ?? [],
       cwd: runtime.cwd ?? this.options.cwd,
-      env: mergeProcessEnv({
+      env: stdioProcessEnv(this.options.server, {
         ...(runtime.env ?? {}),
         ...(isAnyboxNodeReplServer(this.options.server)
           ? getBrowserAuthorizationEnvironment()

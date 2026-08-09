@@ -328,6 +328,18 @@ TikTok Desktop 方言会：
 `{"kind":"anybox","bindingID":"node-repl"}`，transport 是 `stdio`。它不应出现在 Connector
 catalog、Connector 状态或 `connectorRequirements` 中。
 
+### Node REPL 执行契约
+
+- 运行目录默认是当前 Anybox 活动项目；它不是用户主目录，也不是插件安装目录。
+- `js` 拥有普通 Node.js 的文件、网络、模块与子进程能力，属于可产生破坏性副作用的高风险工具。
+- 子进程只继承最小操作系统环境；插件配置或凭据必须通过受控 runtime/Connector 配置显式注入，不得依赖宿主进程的任意环境变量。
+- kernel 状态只在同一 Anybox session 的多次调用和 turn 之间保留。sessionID 改变、收到 `session-end` 或调用 `js_reset` 时会终止并重建 kernel 进程。
+- `js_reset` 是硬重置，会清除 `globalThis`、新增模块搜索路径、模块缓存、timer 和 kernel 创建的后代进程；插件客户端必须能在新 session 或重置后重新初始化。
+- 每段代码按 async function body 执行，`let`、`const`、`var` 不跨调用保留；需要复用的值放在 `globalThis`，需要给模型读取的值显式 `return`。
+- `timeoutMs` 必须是 1～120000 的整数；超出范围会返回 `INVALID_TIMEOUT`，用户权限决策等待不计入该执行预算。
+- `result` 必须能稳定转换为 JSON。BigInt、循环引用、非有限数、过深或过大的结果会返回结构化错误；大结果的完整数据位于 `structuredContent`，文本内容只是有界预览。
+- 为减少模型与 MCP 往返，相关读取、转换和验证应尽量合并到一次 `js` 调用，但不要在一次调用中混合多个需要独立审批的高风险动作。
+
 ## 生成 ID 与密钥处理
 
 ```text

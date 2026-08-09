@@ -1,6 +1,6 @@
 # Computer Use Windows `sky` API
 
-Load the plugin client in Anybox Node REPL, then use the persistent global `sky` object.
+Load the plugin client in Anybox Node REPL, then use the session-scoped persistent global `sky` object. A new Anybox session or `js_reset` replaces the kernel process and requires initialization again.
 
 Node REPL code runs as an async function body, so values are visible only when
 they are explicitly returned or written. Preserve reusable handles on

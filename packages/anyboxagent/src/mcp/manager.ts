@@ -9,6 +9,7 @@ import {
 import z from "zod"
 import * as Config from "#config/config.ts"
 import {
+  isNodeReplServer,
   NODE_REPL_SERVER_ID,
 } from "#mcp/builtin.ts"
 import { Instance } from "#project/instance.ts"
@@ -918,7 +919,7 @@ export class McpManager {
 
     const timeout = handle.config.timeoutMs ?? (await Config.get(this.projectID)).experimental?.mcp_timeout ?? 30_000
     const client: McpClientLike = new McpClient({
-      cwd: handle.config.transport === "stdio" ? resolveServerCwd(handle.config.cwd) : Instance.directory,
+      cwd: handle.config.transport === "stdio" ? resolveServerCwd(handle.config) : Instance.directory,
       onToolsChanged: () => {
         handle.toolsCache = undefined
         handle.toolsPromise = undefined
@@ -956,8 +957,12 @@ function resourceListError(server: Config.McpServerSummary, error: unknown): Mcp
   }
 }
 
-function resolveServerCwd(cwd: string | undefined) {
-  return resolveConfiguredCwd(cwd, GLOBAL_MCP_WORKDIR)
+function resolveServerCwd(server: Config.McpServerSummary) {
+  const fallbackDirectory = isNodeReplServer(server)
+    ? Instance.directory
+    : GLOBAL_MCP_WORKDIR
+  const configuredCwd = server.transport === "stdio" ? server.cwd : undefined
+  return resolveConfiguredCwd(configuredCwd, fallbackDirectory)
 }
 
 function expandHomePath(value: string) {

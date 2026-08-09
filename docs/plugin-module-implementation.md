@@ -448,6 +448,12 @@ REPL 中动态导入插件的 `browser-client.mjs`；Chrome 业务运行时仍�
 后不会生成 `plugin.chrome.node-repl`，项目解析使用
 `anybox.node-repl`；卸载 Chrome 也不会删除这个 Anybox 内置 MCP。
 
+内置 Node REPL 默认从活动项目目录启动，并且只在当前 Anybox session 内保留 kernel 状态。
+插件需要把跨调用对象保存在 `globalThis`，在新 session 或 `js_reset` 后重新执行初始化；
+`js_reset` 会终止并重建进程，而不是只删除 JavaScript 全局变量。`js` 拥有普通 Node.js
+文件、网络与子进程权限，但只继承最小操作系统环境，插件凭据必须通过受控配置显式提供。
+工具结果必须是 JSON；完整大结果从 `structuredContent` 读取，文本仅为有界预览。
+
 ## 10. Skill 集成
 
 插件可以携带 skills：

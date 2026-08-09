@@ -38,6 +38,50 @@ async function waitForPluginActionPermission(sessionID: string, toolCallID: stri
   throw new Error(`Timed out waiting for permission ${toolCallID}.`)
 }
 
+test("starts the built-in Node REPL in the active project directory", async () => {
+  const root = await mkdtemp(join(tmpdir(), "anybox-node-repl-project-cwd-"))
+  temporaryRoots.push(root)
+  await mkdir(root, { recursive: true })
+
+  await Config.removeMcpServer(Config.GLOBAL_CONFIG_ID, BuiltinMcp.NODE_REPL_SERVER_ID)
+  await BuiltinMcp.syncBuiltinMcpRuntimeBindings()
+
+  await Instance.provide({
+    directory: root,
+    async fn() {
+      await Config.setSelectedMcpServerIDs(Instance.project.id, [
+        BuiltinMcp.NODE_REPL_SERVER_ID,
+      ])
+      const manager = new McpManager(Instance.project.id)
+      try {
+        const tools = await manager.tools()
+        const js = tools.find(
+          (tool) => tool.source?.id === BuiltinMcp.NODE_REPL_SERVER_ID
+            && tool.id.endsWith("__js"),
+        )
+        expect(js).toBeDefined()
+        const runtime = await js!.init()
+        const output = Tool.normalizeToolOutput(await runtime.execute({
+          code: "return nodeRepl.cwd",
+        }, {
+          sessionID: "session-node-repl-cwd",
+          turnID: "turn-node-repl-cwd",
+          messageID: "message-node-repl-cwd",
+          toolCallID: "tool-node-repl-cwd",
+          cwd: Instance.directory,
+          worktree: Instance.worktree,
+        }))
+        expect(output.data).toMatchObject({
+          structuredContent: { result: root },
+          isError: false,
+        })
+      } finally {
+        await manager.dispose()
+      }
+    },
+  })
+})
+
 test.skipIf(process.platform !== "win32")(
   "runs the plugin-owned Computer Use runtime directly inside the generic Node REPL",
   async () => {
@@ -161,7 +205,9 @@ test.skipIf(process.platform !== "win32")(
           try {
             const toolCallID = "tool_computer_use_plugin_prompt"
             const pendingAction = runtime.execute({
-              code: `globalThis.computerUseWindows = await sky.list_windows()
+              code: `const { setupComputerUseRuntime } = await import(${JSON.stringify(pluginClientURL)})
+                await setupComputerUseRuntime({ globals: globalThis })
+                globalThis.computerUseWindows = await sky.list_windows()
                 await sky.get_window_state({
                   window: computerUseWindows[0],
                   include_screenshot: false,

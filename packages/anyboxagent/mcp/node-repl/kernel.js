@@ -10,7 +10,13 @@ const Module = require("node:module")
 
 const DEFAULT_TIMEOUT_MS = 30_000
 const MAX_TIMEOUT_MS = 120_000
+const MAX_ERROR_MESSAGE_CHARS = 4_096
+const MAX_RESULT_DEPTH = 256
+const MAX_RESULT_JSON_BYTES = 8 * 1024 * 1024
+const MAX_RESULT_NODES = 250_000
+const MAX_TEXT_OUTPUT_CHARS = 64 * 1024
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor
+const OMIT_JSON_PROPERTY = Symbol("omit-json-property")
 
 let sandbox
 let writes
@@ -36,19 +42,42 @@ function send(payload) {
 }
 
 function serializedError(error) {
-  const message = error instanceof Error ? error.message : String(error)
+  let rawMessage = "Node REPL execution failed."
+  let code
+  let retryable
+  let rawDetails
+  try {
+    rawMessage = error instanceof Error ? error.message : String(error)
+  } catch {
+    // Keep the stable fallback when an exotic thrown value traps inspection.
+  }
+  try {
+    if (error && typeof error === "object") {
+      code = typeof error.code === "string" ? error.code : undefined
+      retryable = typeof error.retryable === "boolean" ? error.retryable : undefined
+      rawDetails = error.details
+    }
+  } catch {
+    // Error metadata is optional and must never break the IPC response.
+  }
+  const message = truncateText(rawMessage, MAX_ERROR_MESSAGE_CHARS)
+  let details
+  if (
+    rawDetails
+    && typeof rawDetails === "object"
+    && !Array.isArray(rawDetails)
+  ) {
+    try {
+      details = normalizeJsonPayload(rawDetails)
+    } catch {
+      details = { omitted: "Error details were not JSON-serializable." }
+    }
+  }
   return {
     message,
-    ...(error && typeof error === "object" && typeof error.code === "string"
-      ? { code: error.code }
-      : {}),
-    ...(error && typeof error === "object" && typeof error.retryable === "boolean"
-      ? { retryable: error.retryable }
-      : {}),
-    ...(error && typeof error === "object" && error.details
-      && typeof error.details === "object" && !Array.isArray(error.details)
-      ? { details: error.details }
-      : {}),
+    ...(code ? { code } : {}),
+    ...(retryable !== undefined ? { retryable } : {}),
+    ...(details ? { details } : {}),
   }
 }
 
@@ -107,12 +136,172 @@ function textResult(text, structuredContent) {
 
 function printable(value) {
   if (value === undefined) return ""
-  if (typeof value === "string") return value
+  if (typeof value === "string") return truncateText(value, MAX_TEXT_OUTPUT_CHARS)
   try {
-    return JSON.stringify(value, null, 2)
+    return truncateText(JSON.stringify(value, null, 2), MAX_TEXT_OUTPUT_CHARS)
   } catch {
-    return String(value)
+    return truncateText(String(value), MAX_TEXT_OUTPUT_CHARS)
   }
+}
+
+function truncateText(value, limit) {
+  const text = String(value)
+  if (text.length <= limit) return text
+  return `${text.slice(0, limit)}\n… [${text.length - limit} characters omitted]`
+}
+
+function jsonPath(pathPrefix, key) {
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(key)
+    ? `${pathPrefix}.${key}`
+    : `${pathPrefix}[${JSON.stringify(key)}]`
+}
+
+function resultSerializationError(message, details, code = "RESULT_NOT_JSON_SERIALIZABLE") {
+  const error = new Error(message)
+  error.code = code
+  error.details = details
+  return error
+}
+
+function assertJsonPayloadSize(value) {
+  const encoded = JSON.stringify(value)
+  const bytes = Buffer.byteLength(encoded, "utf8")
+  if (bytes > MAX_RESULT_JSON_BYTES) {
+    throw resultSerializationError(
+      `Node REPL result is ${bytes} bytes, exceeding the ${MAX_RESULT_JSON_BYTES} byte JSON limit.`,
+      { bytes, limit: MAX_RESULT_JSON_BYTES, kind: "bytes" },
+      "RESULT_LIMIT_EXCEEDED",
+    )
+  }
+}
+
+function normalizeJsonPayload(value) {
+  const seen = new WeakMap()
+  let nodeCount = 0
+
+  const visit = (current, currentPath, depth, location) => {
+    nodeCount += 1
+    if (nodeCount > MAX_RESULT_NODES) {
+      throw resultSerializationError(
+        `Node REPL result exceeded the ${MAX_RESULT_NODES} value limit at ${currentPath}.`,
+        { path: currentPath, limit: MAX_RESULT_NODES, kind: "nodes" },
+        "RESULT_LIMIT_EXCEEDED",
+      )
+    }
+    if (depth > MAX_RESULT_DEPTH) {
+      throw resultSerializationError(
+        `Node REPL result exceeded the maximum JSON depth of ${MAX_RESULT_DEPTH} at ${currentPath}.`,
+        { path: currentPath, limit: MAX_RESULT_DEPTH, kind: "depth" },
+        "RESULT_LIMIT_EXCEEDED",
+      )
+    }
+
+    if (current === null || typeof current === "string" || typeof current === "boolean") {
+      return current
+    }
+    if (typeof current === "number") {
+      if (Number.isFinite(current)) return current
+      throw resultSerializationError(
+        `Node REPL result contains a non-finite number at ${currentPath}.`,
+        { path: currentPath, type: String(current) },
+      )
+    }
+    if (typeof current === "undefined" || typeof current === "function" || typeof current === "symbol") {
+      if (location === "object") return OMIT_JSON_PROPERTY
+      if (location === "array") return null
+      return null
+    }
+    if (typeof current === "bigint") {
+      throw resultSerializationError(
+        `Node REPL result contains a BigInt at ${currentPath}; convert it to a string or number before returning.`,
+        { path: currentPath, type: "bigint" },
+      )
+    }
+
+    const previousPath = seen.get(current)
+    if (previousPath) {
+      throw resultSerializationError(
+        `Node REPL result contains a circular reference at ${currentPath}.`,
+        { path: currentPath, referencePath: previousPath, type: "circular" },
+      )
+    }
+    seen.set(current, currentPath)
+    try {
+      if (current instanceof Map || current instanceof Set || current instanceof WeakMap || current instanceof WeakSet) {
+        throw resultSerializationError(
+          `Node REPL result contains unsupported ${current.constructor.name} data at ${currentPath}; convert it to a JSON object or array before returning.`,
+          { path: currentPath, type: current.constructor.name },
+        )
+      }
+      if (Array.isArray(current)) {
+        return current.map((item, index) => visit(item, `${currentPath}[${index}]`, depth + 1, "array"))
+      }
+      if (ArrayBuffer.isView(current) && !Buffer.isBuffer(current)) {
+        if (current instanceof DataView) {
+          throw resultSerializationError(
+            `Node REPL result contains unsupported DataView data at ${currentPath}.`,
+            { path: currentPath, type: "DataView" },
+          )
+        }
+        return Array.from(current, (item, index) => visit(
+          item,
+          `${currentPath}[${index}]`,
+          depth + 1,
+          "array",
+        ))
+      }
+      if (typeof current.toJSON === "function") {
+        let jsonValue
+        try {
+          jsonValue = current.toJSON()
+        } catch (error) {
+          throw resultSerializationError(
+            `Node REPL result toJSON failed at ${currentPath}: ${error instanceof Error ? error.message : String(error)}`,
+            { path: currentPath, type: current.constructor?.name || "object" },
+          )
+        }
+        return visit(jsonValue, currentPath, depth + 1, location)
+      }
+
+      const normalized = {}
+      for (const key of Object.keys(current)) {
+        const propertyPath = jsonPath(currentPath, key)
+        let propertyValue
+        try {
+          propertyValue = current[key]
+        } catch (error) {
+          throw resultSerializationError(
+            `Node REPL could not read result property ${propertyPath}: ${error instanceof Error ? error.message : String(error)}`,
+            { path: propertyPath, type: "property-access" },
+          )
+        }
+        const property = visit(propertyValue, propertyPath, depth + 1, "object")
+        if (property !== OMIT_JSON_PROPERTY) normalized[key] = property
+      }
+      return normalized
+    } catch (error) {
+      if (
+        error
+        && typeof error === "object"
+        && (
+          error.code === "RESULT_NOT_JSON_SERIALIZABLE"
+          || error.code === "RESULT_LIMIT_EXCEEDED"
+        )
+      ) {
+        throw error
+      }
+      throw resultSerializationError(
+        `Node REPL could not inspect the result at ${currentPath}: ${error instanceof Error ? error.message : String(error)}`,
+        { path: currentPath, type: "object-inspection" },
+      )
+    } finally {
+      seen.delete(current)
+    }
+  }
+
+  const normalized = visit(value, "$", 0, "root")
+  assertJsonPayloadSize(normalized)
+  return normalized
 }
 
 function addNodeModuleDir(dir) {
@@ -399,21 +588,28 @@ async function runJavaScript(code) {
     }))
   }
 
-  const textParts = [...writes]
-  const printed = printable(value)
+  const structuredContent = {
+    result: normalizeJsonPayload(value === undefined ? null : value),
+    writes,
+    imageCount: images.length,
+  }
+  const normalizedResponseMeta = responseMeta
+    ? normalizeJsonPayload(responseMeta)
+    : undefined
+  assertJsonPayloadSize({ structuredContent, responseMeta: normalizedResponseMeta ?? null })
+  const textParts = [...structuredContent.writes]
+  const printed = printable(structuredContent.result)
   if (printed) textParts.push(printed)
-  const content = textParts.length > 0 ? [textBlock(textParts.join("\n"))] : []
+  const content = textParts.length > 0
+    ? [textBlock(truncateText(textParts.join("\n"), MAX_TEXT_OUTPUT_CHARS))]
+    : []
   content.push(...images)
   if (content.length === 0) content.push(textBlock(""))
 
   return {
     content,
-    structuredContent: {
-      result: value === undefined ? null : value,
-      writes,
-      imageCount: images.length,
-    },
-    ...(responseMeta ? { _meta: responseMeta } : {}),
+    structuredContent,
+    ...(normalizedResponseMeta ? { _meta: normalizedResponseMeta } : {}),
     isError: false,
   }
 }

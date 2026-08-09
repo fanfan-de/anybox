@@ -21,6 +21,7 @@ let spawningKernel
 let startingKernel
 let recoveryPromise
 let activeKernelCommand
+let lastToolRequestContext
 let serialTail = Promise.resolve()
 let shuttingDown = false
 let shutdownPromise
@@ -33,7 +34,7 @@ const tools = [
   {
     name: "js",
     title: "Node REPL JavaScript",
-    description: "Run JavaScript in a persistent general-purpose Node.js kernel. Code runs as an async function body; use an explicit return (or nodeRepl.write) to expose values. A timeout or cancellation terminates and resets the kernel.",
+    description: "Run JavaScript with ordinary Node.js filesystem, network, and child-process capabilities in a kernel isolated to the current Anybox session. Code runs as an async function body, so persist values on globalThis and use an explicit return (or nodeRepl.write) to expose results. Batch related operations in one call when practical. A timeout, cancellation, session change, or reset terminates the kernel process.",
     inputSchema: {
       type: "object",
       properties: {
@@ -44,23 +45,46 @@ const tools = [
         timeoutMs: {
           type: "number",
           description: "Execution timeout in milliseconds. Permission decision time is excluded.",
+          minimum: 1,
+          maximum: MAX_TIMEOUT_MS,
+          default: DEFAULT_TIMEOUT_MS,
         },
       },
       required: ["code"],
       additionalProperties: false,
     },
-    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    outputSchema: {
+      type: "object",
+      properties: {
+        result: {},
+        writes: { type: "array", items: { type: "string" } },
+        imageCount: { type: "integer", minimum: 0 },
+      },
+      required: ["result", "writes", "imageCount"],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
   },
   {
     name: "js_reset",
     title: "Reset Node REPL",
-    description: "Reset the persistent Node.js environment.",
+    description: "Terminate and replace the current Node.js kernel process, clearing globals, module cache, added module directories, timers, and descendant processes.",
     inputSchema: {
       type: "object",
       properties: {},
       additionalProperties: false,
     },
-    annotations: { readOnlyHint: false, destructiveHint: false },
+    outputSchema: {
+      type: "object",
+      properties: {
+        reset: { type: "boolean" },
+        hard: { type: "boolean" },
+        lifecycleWarning: { type: "string" },
+      },
+      required: ["reset", "hard"],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true },
   },
   {
     name: "js_add_node_module_dir",
@@ -74,6 +98,12 @@ const tools = [
           description: "Absolute node_modules directory path.",
         },
       },
+      required: ["path"],
+      additionalProperties: false,
+    },
+    outputSchema: {
+      type: "object",
+      properties: { path: { type: "string" } },
       required: ["path"],
       additionalProperties: false,
     },
@@ -133,9 +163,19 @@ function runtimeError(message, options = {}) {
 }
 
 function timeoutMs(value) {
+  if (value === undefined) return DEFAULT_TIMEOUT_MS
   const parsed = Number(value)
-  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_TIMEOUT_MS
-  return Math.min(Math.trunc(parsed), MAX_TIMEOUT_MS)
+  if (!Number.isSafeInteger(parsed) || parsed <= 0 || parsed > MAX_TIMEOUT_MS) {
+    throw runtimeError(
+      `timeoutMs must be an integer between 1 and ${MAX_TIMEOUT_MS}.`,
+      {
+        code: "INVALID_TIMEOUT",
+        retryable: false,
+        details: { provided: value, minimum: 1, maximum: MAX_TIMEOUT_MS },
+      },
+    )
+  }
+  return parsed
 }
 
 function readRequestContext(message) {
@@ -427,6 +467,79 @@ async function replaceKernel(expected) {
   return promise
 }
 
+function normalizedContext(context) {
+  if (!context || typeof context !== "object" || Array.isArray(context)) return undefined
+  const result = {}
+  for (const key of ["sessionID", "turnID", "messageID", "toolCallID"]) {
+    if (typeof context[key] === "string" && context[key].trim()) {
+      result[key] = context[key].trim()
+    }
+  }
+  return Object.keys(result).length > 0 ? result : undefined
+}
+
+async function hardResetKernel(lifecycle, options = {}) {
+  if (options.clearNodeModuleDirs === true) nodeModuleDirs.splice(0)
+  const runtime = await ensureKernel()
+  let lifecycleWarning
+  try {
+    await runKernelCommand({
+      command: "lifecycle",
+      lifecycle,
+      timeoutMs: KERNEL_CONTROL_TIMEOUT_MS,
+      timeoutMessage: `Node REPL lifecycle hook timed out after ${KERNEL_CONTROL_TIMEOUT_MS}ms. The runtime was reset.`,
+      timeoutCode: "LIFECYCLE_TIMEOUT",
+    })
+  } catch (error) {
+    if (error && typeof error === "object" && error.code === "KERNEL_ISOLATION_FAILED") {
+      throw error
+    }
+    lifecycleWarning = error instanceof Error ? error.message : String(error)
+  }
+
+  if (kernel === runtime || (runtime.child.exitCode === null && runtime.child.signalCode === null)) {
+    await replaceKernel(runtime)
+  } else {
+    await ensureKernel()
+  }
+  return lifecycleWarning
+}
+
+async function isolateRequestSession(context) {
+  const nextContext = normalizedContext(context)
+  const previousContext = lastToolRequestContext
+  let runtimeReset = false
+  if (
+    previousContext?.sessionID
+    && nextContext?.sessionID
+    && previousContext.sessionID !== nextContext.sessionID
+  ) {
+    await hardResetKernel({
+      type: "session-end",
+      context: previousContext,
+      detail: { nextSessionID: nextContext.sessionID },
+    }, { clearNodeModuleDirs: true })
+    runtimeReset = true
+  }
+  if (nextContext) lastToolRequestContext = nextContext
+  return runtimeReset
+}
+
+function throwIfToolRequestCancelled(requestID, runtimeReset) {
+  if (!cancelledRequestIDs.has(requestKey(requestID))) return
+  throw runtimeError(
+    runtimeReset
+      ? "Execution cancelled before JavaScript started. The Node REPL runtime was reset."
+      : "Execution cancelled before JavaScript started. The Node REPL runtime was not changed.",
+    {
+      code: "EXECUTION_CANCELLED",
+      status: "cancelled",
+      runtimeReset,
+      retryable: true,
+    },
+  )
+}
+
 function sendKernel(child, message) {
   return new Promise((resolve, reject) => {
     if (!child.connected) {
@@ -571,6 +684,29 @@ async function callTool(name, args, context, requestID) {
   if (normalizedName === "js") {
     const code = args && typeof args.code === "string" ? args.code : ""
     if (!code.trim()) throw new Error("js requires code.")
+    const runtimeReset = await isolateRequestSession(context)
+    throwIfToolRequestCancelled(requestID, runtimeReset)
+  }
+
+  if (normalizedName === "js_reset") {
+    const lifecycleWarning = await hardResetKernel({
+      type: "reset",
+      context: normalizedContext(context) || lastToolRequestContext,
+    }, { clearNodeModuleDirs: true })
+    throwIfToolRequestCancelled(requestID, true)
+    return {
+      content: [textBlock(
+        lifecycleWarning
+          ? `Node REPL hard-reset completed after a lifecycle hook warning: ${lifecycleWarning}`
+          : "Node REPL hard-reset completed.",
+      )],
+      structuredContent: {
+        reset: true,
+        hard: true,
+        ...(lifecycleWarning ? { lifecycleWarning } : {}),
+      },
+      isError: false,
+    }
   }
 
   const executionMs = normalizedName === "js"
@@ -643,17 +779,38 @@ function handleLifecycle(message) {
   const params = message.params && typeof message.params === "object"
     ? message.params
     : {}
-  void enqueue(() => runKernelCommand({
-    command: "lifecycle",
-    lifecycle: {
-      type: typeof params.type === "string" ? params.type : "turn-end",
-      context: params.context && typeof params.context === "object" ? params.context : undefined,
-      detail: params.detail,
-    },
-    timeoutMs: KERNEL_CONTROL_TIMEOUT_MS,
-    timeoutMessage: `Node REPL lifecycle hook timed out after ${KERNEL_CONTROL_TIMEOUT_MS}ms. The runtime was reset.`,
-    timeoutCode: "LIFECYCLE_TIMEOUT",
-  })).catch((error) => {
+  const lifecycle = {
+    type: typeof params.type === "string" ? params.type : "turn-end",
+    context: normalizedContext(params.context),
+    detail: params.detail,
+  }
+  void enqueue(async () => {
+    if (
+      lifecycle.type === "session-end"
+      && lifecycle.context?.sessionID
+      && lifecycle.context.sessionID !== lastToolRequestContext?.sessionID
+    ) {
+      return
+    }
+    if (lifecycle.type === "session-end" || lifecycle.type === "reset") {
+      await hardResetKernel(lifecycle, { clearNodeModuleDirs: true })
+      if (
+        lifecycle.type === "reset"
+        || !lifecycle.context?.sessionID
+        || lifecycle.context.sessionID === lastToolRequestContext?.sessionID
+      ) {
+        lastToolRequestContext = undefined
+      }
+      return
+    }
+    await runKernelCommand({
+      command: "lifecycle",
+      lifecycle,
+      timeoutMs: KERNEL_CONTROL_TIMEOUT_MS,
+      timeoutMessage: `Node REPL lifecycle hook timed out after ${KERNEL_CONTROL_TIMEOUT_MS}ms. The runtime was reset.`,
+      timeoutCode: "LIFECYCLE_TIMEOUT",
+    })
+  }).catch((error) => {
     process.stderr.write(`[anybox-node-repl] lifecycle notification failed: ${error instanceof Error ? error.message : String(error)}\n`)
   })
 }
@@ -700,7 +857,7 @@ rl.on("line", (line) => {
       result: {
         protocolVersion: "2025-06-18",
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: "anybox-node-repl", version: "0.2.0" },
+        serverInfo: { name: "anybox-node-repl", version: "0.3.0" },
       },
     })
     return

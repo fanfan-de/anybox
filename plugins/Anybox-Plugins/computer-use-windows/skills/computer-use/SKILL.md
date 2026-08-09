@@ -7,7 +7,7 @@ description: Control approved Windows app windows through the plugin-owned sky A
 
 Use this skill when the user asks you to operate a Windows desktop application and no safer structured integration is available.
 
-## Initialize once
+## Initialize once per Anybox session
 
 Use the Anybox `js` Node REPL tool. Resolve this installed skill's plugin root from the absolute `SKILL.md` path shown in the skill catalog, then import `scripts/computer-use-client.mjs` by absolute path:
 
@@ -22,6 +22,8 @@ return { ready: Boolean(globalThis.sky), target: globalThis.sky?.target };
 ```
 
 Do not spawn the native helper, open its named pipe, or implement another protocol client. Importing the plugin client is the only supported initialization path; it owns the Computer Use runtime and helper lifecycle.
+
+The Node kernel persists only within the current Anybox session. A new session or `js_reset` terminates the old process, so run this initialization again whenever `globalThis.sky` is absent.
 
 ## Node REPL output contract
 
@@ -38,7 +40,7 @@ Prefer `return` over `nodeRepl.write(...)` for structured results. If a call is 
 
 ## Operating loop
 
-Keep the `sky` object and returned `Window` objects in the persistent REPL.
+Keep the `sky` object and returned `Window` objects in the current session's persistent REPL. Never expect those handles to survive a session change or hard reset.
 
 1. Use `globalThis.computerUseApps = await sky.list_apps(); return globalThis.computerUseApps;` or the equivalent `list_windows()` form, then save the selected `Window` on `globalThis`.
 2. Before every action, save and return fresh state, for example `globalThis.computerUseState = await sky.get_window_state({ window: globalThis.computerUseWindow, include_screenshot: true, include_text: true }); return globalThis.computerUseState;`.

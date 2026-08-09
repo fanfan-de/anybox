@@ -1,6 +1,6 @@
 # Operating guidance
 
-Use Computer Use only when a structured integration cannot complete the task. Select one explicit application/window and preserve its returned `Window` object in the persistent Node REPL.
+Use Computer Use only when a structured integration cannot complete the task. Select one explicit application/window and preserve its returned `Window` object in the current Anybox session's persistent Node REPL. Reinitialize after a session change or hard reset.
 
 Observe immediately before every action. Request text when element indexes would be safer than coordinates. Prefer accessibility actions. Use `observe_after: true` when the next decision depends on the result; the returned receipt includes a fresh `post_state`, avoiding a separate Node REPL round trip. A second action in that same call is still blocked by the plugin runtime.
 

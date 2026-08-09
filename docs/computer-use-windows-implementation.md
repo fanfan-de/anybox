@@ -33,7 +33,7 @@
 | `scripts/lib/*` | 插件 | helper client、frame、policy、窗口/状态注册表 |
 | `helper/win32-x64/*` | 插件 | 随包分发的 Windows helper 与 SHA-256 |
 | `helper/ComputerUse.Helper/*` | 插件 | WGC、UIA、SendInput、Win32 与最终安全校验源码 |
-| `anybox.node-repl` | 核心通用设施 | 持久 JS、通用权限、图片、request metadata、生命周期 hook |
+| `anybox.node-repl` | 核心通用设施 | session 级持久 JS、通用权限、图片、request metadata、生命周期 hook |
 
 ## 3. 模型调用链
 
@@ -79,6 +79,10 @@ const { setupComputerUseRuntime } = await import(
 );
 await setupComputerUseRuntime({ globals: globalThis });
 ```
+
+该初始化只对当前 Anybox session 有效。session 改变或调用 `js_reset` 时，核心会终止并重建
+Node kernel，插件必须在新 kernel 中再次执行初始化；这避免 `sky`、窗口句柄、模块缓存或后台资源
+在不同会话之间泄漏。
 
 公开只暴露安全包装后的对象：
 

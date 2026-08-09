@@ -10,7 +10,7 @@
 ## 核心架构
 
 Chrome 插件不是 Chrome 专用 MCP Server，也不是扩展直接调用 Anybox HTTP API。模型通过 Anybox
-平台提供的通用持久 Node REPL 加载插件 Browser Client；Browser Client 再通过两段相互隔离、分别
+平台提供的通用、session 级持久 Node REPL 加载插件 Browser Client；Browser Client 再通过两段相互隔离、分别
 认证的本地 IPC，将命令传递到 Chrome MV3 扩展。
 
 ```mermaid
@@ -78,8 +78,8 @@ Anybox Registry 指向生成目录中的规范 Manifest，并通过 GitHub Tree 
 
 1. Anybox 加载插件的 Chrome Skill。
 2. Agent 从当前插件包动态导入 `scripts/browser-client.mjs`。
-3. `setupBrowserRuntime({ globals: globalThis })` 安装持久的 `agent.browsers`，并注册 Session/Turn 结束
-   时的清理钩子。
+3. `setupBrowserRuntime({ globals: globalThis })` 在当前 Anybox session 安装持久的 `agent.browsers`，
+   并注册 Session/Turn 结束时的清理钩子；新 session 或 `js_reset` 后必须重新初始化。
 4. Browser Client 读取 Browser Host runtime bootstrap；没有可复用 Host 时，以 detached Node
    进程启动插件内的 `browser-host.mjs`。
 5. `ensureReady({ launch: true })` 先等待可能正在进行的扩展重连，再执行 Native Host 幂等安装和

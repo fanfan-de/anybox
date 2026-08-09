@@ -2,7 +2,7 @@ import { useEffect, useState } from "react"
 import { DownloadCta } from "./DownloadCta"
 import { HomeDemoShowcases } from "./HomeDemoVideo"
 import { ProductMedia } from "./ProductMedia"
-import { RibbonBackground } from "./RibbonBackground"
+import { PaperBackground } from "./PaperBackground"
 import { SiteFooter, SiteHeader } from "./SiteChrome"
 import { siteContent } from "./content"
 import { useSiteLanguage } from "./language"
@@ -115,7 +115,7 @@ export function App() {
       <SiteHeader currentPage="home" />
 
       <section className="home-hero" aria-labelledby="hero-title">
-        <RibbonBackground />
+        <PaperBackground />
         <div className="home-hero-inner">
           <div className="home-hero-stage">
             <div className="home-hero-copy">
