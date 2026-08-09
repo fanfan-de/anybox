@@ -1,19 +1,29 @@
 import { describe, expect, it, vi } from "vitest"
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
+import type { BrowserWindow } from "electron"
+import { LOCAL_PREVIEW_PROTOCOL, toPluginViewPartition } from "../shared/local-preview-protocol"
 
 vi.mock("electron", () => ({
   app: {
     getAppPath: vi.fn(() => ""),
   },
   BrowserWindow: vi.fn(),
+  session: {
+    fromPartition: vi.fn(),
+  },
 }))
 
 import {
+  installPluginViewWebviewSecurity,
   resolveNativeMacWindowButtonPosition,
   resolveNextWindowZoomFactor,
   resolvePopoutWindowOptions,
   resolveWindowBackgroundOptions,
   resolveWindowZoomShortcutAction,
 } from "./window"
+import { resolvePluginViewPreviewTarget, revokePluginViewPreviewRegistrations } from "./preview-targets"
 
 describe("session popout window options", () => {
   it("creates a native Windows window with a hidden title bar for system snap", () => {
@@ -88,5 +98,67 @@ describe("session popout window options", () => {
     expect(resolveNextWindowZoomFactor(0.5, "out")).toBe(0.5)
     expect(resolveNextWindowZoomFactor(1.25, "reset")).toBe(1)
     expect(resolveNextWindowZoomFactor(Number.NaN, "in")).toBe(1)
+  })
+})
+
+describe("Plugin View WebView security", () => {
+  it("registers the local preview handler on the isolated plugin session before loading", async () => {
+    const packageRoot = await mkdtemp(path.join(os.tmpdir(), "anybox-plugin-webview-"))
+    const pluginID = "react-sidebar-proof"
+    try {
+      await mkdir(path.join(packageRoot, "web"), { recursive: true })
+      await writeFile(path.join(packageRoot, "web", "index.html"), "<!doctype html><title>Proof</title>", "utf8")
+      const target = await resolvePluginViewPreviewTarget({
+        entry: "./web/index.html",
+        packageRoot,
+        pluginID,
+        viewID: "main",
+      })
+      const listeners = new Map<string, (...args: any[]) => void>()
+      const win = {
+        webContents: {
+          on: vi.fn((eventName: string, listener: (...args: any[]) => void) => {
+            listeners.set(eventName, listener)
+          }),
+        },
+      } as unknown as BrowserWindow
+      const protocolRegistrar = { handle: vi.fn() }
+      const resolveSession = vi.fn(() => ({ protocol: protocolRegistrar }))
+
+      installPluginViewWebviewSecurity(win, resolveSession)
+      const willAttach = listeners.get("will-attach-webview")
+      expect(willAttach).toBeTypeOf("function")
+
+      const webPreferences = {
+        allowRunningInsecureContent: true,
+        contextIsolation: false,
+        nodeIntegration: true,
+        preload: "C:/unsafe-preload.js",
+        sandbox: false,
+        webSecurity: false,
+      }
+      const event = { preventDefault: vi.fn() }
+      const partition = toPluginViewPartition(pluginID)
+      const params = { partition, src: target.safePreviewUrl! }
+
+      willAttach?.(event, webPreferences, params)
+      willAttach?.(event, webPreferences, params)
+
+      expect(event.preventDefault).not.toHaveBeenCalled()
+      expect(resolveSession).toHaveBeenCalledWith(partition)
+      expect(protocolRegistrar.handle).toHaveBeenCalledTimes(1)
+      expect(protocolRegistrar.handle).toHaveBeenCalledWith(LOCAL_PREVIEW_PROTOCOL, expect.any(Function))
+      expect(webPreferences).toMatchObject({
+        allowRunningInsecureContent: false,
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+        webSecurity: true,
+      })
+      expect(webPreferences).not.toHaveProperty("preload")
+    } finally {
+      revokePluginViewPreviewRegistrations(pluginID)
+      await rm(packageRoot, { force: true, recursive: true })
+    }
   })
 })

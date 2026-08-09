@@ -8,6 +8,7 @@ import {
   isPluginViewPreviewUrl,
   readPreviewText,
   resolveLocalPreviewProtocolRequest,
+  resolvePluginViewPreviewOwner,
   resolvePluginViewPreviewTarget,
   resolvePreviewTarget,
   revokePluginViewPreviewRegistrations,
@@ -122,6 +123,10 @@ describe("preview target resolver", () => {
     })
     expect(resolved.renderer).toBe("html-preview")
     expect(isPluginViewPreviewUrl(resolved.safePreviewUrl!)).toBe(true)
+    expect(resolvePluginViewPreviewOwner(resolved.safePreviewUrl!)).toEqual({
+      pluginID: "react-sidebar-proof",
+      viewID: "main",
+    })
 
     const parsedUrl = new URL(resolved.safePreviewUrl!)
     const token = parsedUrl.pathname.split("/").filter(Boolean)[0]

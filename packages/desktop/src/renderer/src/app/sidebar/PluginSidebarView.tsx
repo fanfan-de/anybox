@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
+import { toPluginViewPartition } from "../../../../shared/local-preview-protocol"
 import type { InstalledPluginView } from "../types"
 
 interface PluginSidebarViewProps {
@@ -13,10 +14,6 @@ type WebviewFailLoadEvent = Event & {
   isMainFrame?: boolean
 }
 
-function pluginViewPartition(pluginID: string) {
-  return `plugin-view:${encodeURIComponent(pluginID)}`
-}
-
 export function PluginSidebarView({ view }: PluginSidebarViewProps) {
   const webviewRef = useRef<PluginWebviewElement | null>(null)
   const safePreviewUrl = view.safePreviewUrl?.trim() ?? ""
@@ -24,7 +21,7 @@ export function PluginSidebarView({ view }: PluginSidebarViewProps) {
   const [error, setError] = useState<string | null>(
     safePreviewUrl ? null : "This plugin view does not have a valid local entry URL.",
   )
-  const partition = useMemo(() => pluginViewPartition(view.pluginID), [view.pluginID])
+  const partition = useMemo(() => toPluginViewPartition(view.pluginID), [view.pluginID])
 
   useEffect(() => {
     setIsLoading(Boolean(safePreviewUrl))

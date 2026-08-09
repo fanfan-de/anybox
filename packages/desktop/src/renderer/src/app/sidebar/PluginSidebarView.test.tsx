@@ -28,7 +28,7 @@ describe("PluginSidebarView", () => {
       "webpreferences",
       "contextIsolation=yes,nodeIntegration=no,sandbox=yes,webSecurity=yes",
     )
-    expect(webview?.getAttribute("partition")).not.toMatch(/^persist:/)
+    expect(webview).toHaveAttribute("partition", "plugin-view:react-sidebar-proof")
     expect(screen.getByRole("status")).toHaveTextContent("Loading React Sidebar Proof")
 
     act(() => {

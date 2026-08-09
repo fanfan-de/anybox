@@ -241,15 +241,30 @@ export function revokePluginViewPreviewRegistrations(pluginID: string, keepViewI
   }
 }
 
-export function isPluginViewPreviewUrl(value: string) {
+export function resolvePluginViewPreviewOwner(value: string) {
   try {
     const parsedUrl = new URL(value)
-    if (parsedUrl.protocol !== `${LOCAL_PREVIEW_PROTOCOL}:` || parsedUrl.hostname !== "preview") return false
+    if (parsedUrl.protocol !== `${LOCAL_PREVIEW_PROTOCOL}:` || parsedUrl.hostname !== "preview") return null
     const token = parsedUrl.pathname.split("/").filter(Boolean)[0]
-    return Boolean(token && previewRegistrations.get(token)?.purpose === "plugin-view")
+    const registration = token ? previewRegistrations.get(token) : null
+    if (
+      registration?.purpose !== "plugin-view"
+      || !registration.pluginID
+      || !registration.viewID
+    ) {
+      return null
+    }
+    return {
+      pluginID: registration.pluginID,
+      viewID: registration.viewID,
+    }
   } catch {
-    return false
+    return null
   }
+}
+
+export function isPluginViewPreviewUrl(value: string) {
+  return resolvePluginViewPreviewOwner(value) !== null
 }
 
 function toWorkspaceRelativePath(workspaceRoot: string, filePath: string) {
