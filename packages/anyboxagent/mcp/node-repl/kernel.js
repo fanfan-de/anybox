@@ -413,7 +413,7 @@ function resetKernel() {
     require: localRequire,
     setInterval,
     setTimeout,
-    process: undefined,
+    process,
   }
   sandbox.global = sandbox
   sandbox.globalThis = sandbox

@@ -1,6 +1,7 @@
 import { act, renderHook } from "@testing-library/react"
 import { useRef, useState, type Dispatch, type SetStateAction } from "react"
 import { describe, expect, it, vi } from "vitest"
+import { getAgentResponseLanguageInstruction, type AppLocale } from "../../../../shared/locale"
 import {
   appendComposerTagToDraftState,
   createComposerDraftStateFromPlainText,
@@ -101,6 +102,7 @@ function useComposerHarness(input?: {
   initialAgentSessions?: Record<string, string>
   initialIsSendingByTabKey?: Record<string, boolean>
   initialPendingPermissionRequestsBySession?: Record<string, PermissionRequest[]>
+  locale?: AppLocale
   sessionModelSelection?: SessionSummary["modelSelection"]
   sessionDraftState?: ComposerDraftState
   sessionDraftText?: string
@@ -189,6 +191,7 @@ function useComposerHarness(input?: {
     loadPendingPermissionRequestsForSession: vi.fn(async () => undefined),
     loadSessionDiffForSession: vi.fn(async () => undefined),
     loadSessionRuntimeDebugForSession: vi.fn(async () => undefined),
+    locale: input?.locale ?? "en-US",
     pendingConversationInputsBySession,
     pendingPermissionRequestsBySession,
     optimisticUserSubmissionsRef,
@@ -340,6 +343,7 @@ describe("composer controller", () => {
           initialAgentSessions: {
             "session-1": "backend-session-1",
           },
+          locale: "zh-CN",
         }),
       )
       let pendingSend: Promise<void> | undefined
@@ -364,6 +368,9 @@ describe("composer controller", () => {
       })
 
       expect(sendTurn).toHaveBeenCalledTimes(1)
+      expect(sendTurn).toHaveBeenCalledWith(expect.objectContaining({
+        system: getAgentResponseLanguageInstruction("zh-CN"),
+      }))
       expect(result.current.messagesRef.current["session-1"]?.[1]).toMatchObject({
         kind: "assistant",
         isStreaming: true,

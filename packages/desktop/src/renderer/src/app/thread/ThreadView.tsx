@@ -133,6 +133,7 @@ export interface ThreadNavigationRequest {
 
 const EMPTY_FILE_CHANGES: AssistantTraceFileChange[] = []
 const ThreadCodeThemeContext = createContext<CodeHighlightTheme>(DEFAULT_LIGHT_CODE_THEME)
+type ThreadTranslate = ReturnType<typeof useI18n>["t"]
 
 const EXECUTION_STATUS_TRANSLATION_KEYS: Record<ThreadTurn["status"], TranslationKey> = {
   blocked: "thread.execution.blocked",
@@ -955,9 +956,9 @@ function UserThreadMessageBubble({ message }: { message: UserThreadMessage }) {
   const bodyText = getUserMessageBodyText(message)
   const steerNote = message.submissionMode === "steer"
     ? (
-        <div className="user-bubble-steer-note" aria-label="Submitted while the agent is running">
-          <span>提交，但不中断模型运行</span>
-          <span>下次模型/工具调用后</span>
+        <div className="user-bubble-steer-note" aria-label={t("thread.userMessage.steerAria")}>
+          <span>{t("thread.userMessage.steerSubmitted")}</span>
+          <span>{t("thread.userMessage.steerTiming")}</span>
         </div>
       )
     : null
@@ -1246,8 +1247,11 @@ function summarizeUserMessageDiffStats(
   }
 }
 
-function formatUserMessageDiffSummaryLabel(fileCount: number) {
-  return `${fileCount} 个文件已更改`
+function formatUserMessageDiffSummaryLabel(fileCount: number, t: ThreadTranslate) {
+  return t(
+    fileCount === 1 ? "thread.fileChange.filesChangedOne" : "thread.fileChange.filesChangedMany",
+    { count: fileCount },
+  )
 }
 
 interface MessageDiffFileRowProps {
@@ -1271,12 +1275,19 @@ const MessageDiffFileRow = memo(function MessageDiffFileRow({
   onFullHeightToggle,
   onToggle,
 }: MessageDiffFileRowProps) {
+  const { t } = useI18n()
   const hasPatch = Boolean(change.patch?.trim())
   const previewID = `user-message-diff-preview-${messageID}-${changeIndex}`
   const rowContent = (
     <>
       <span className="user-message-diff-file-path">{change.file}</span>
-      <span className="user-message-diff-stats" aria-label={`${change.additions} additions, ${change.deletions} deletions`}>
+      <span
+        className="user-message-diff-stats"
+        aria-label={t("thread.fileChange.additionsDeletions", {
+          additions: change.additions,
+          deletions: change.deletions,
+        })}
+      >
         <span className="is-add">+{change.additions}</span>
         <span className="is-remove">-{change.deletions}</span>
       </span>
@@ -1292,7 +1303,10 @@ const MessageDiffFileRow = memo(function MessageDiffFileRow({
         <button
           type="button"
           className="user-message-diff-file-row"
-          aria-label={`${isExpanded ? "收起" : "展开"} ${change.file} 变更`}
+          aria-label={t(
+            isExpanded ? "thread.fileChange.collapseFile" : "thread.fileChange.expandFile",
+            { file: change.file },
+          )}
           aria-expanded={isExpanded}
           aria-controls={previewID}
           title={change.file}
@@ -1304,7 +1318,7 @@ const MessageDiffFileRow = memo(function MessageDiffFileRow({
         <button
           type="button"
           className="user-message-diff-file-row"
-          aria-label={`审核 ${change.file}`}
+          aria-label={t("thread.fileChange.reviewFile", { file: change.file })}
           title={change.file}
           onClick={() => onFileChangeSelect(change.file)}
         >
@@ -1353,6 +1367,7 @@ function MessageDiffCard({
   onMessageDiffReview?: (files: string[]) => void | Promise<void>
   messageID: string
 }) {
+  const { t } = useI18n()
   const normalizedDiffFileChanges = useMemo(
     () => normalizeMessageDiffSummary(diffSummary),
     [diffSummary],
@@ -1436,7 +1451,7 @@ function MessageDiffCard({
   if (fileChanges.length === 0) return null
 
   const listID = `user-message-diff-list-${messageID}`
-  const summaryLabel = formatUserMessageDiffSummaryLabel(stats.files)
+  const summaryLabel = formatUserMessageDiffSummaryLabel(stats.files, t)
 
   const handleReviewClick = async () => {
     if (!onMessageDiffReview) return
@@ -1451,9 +1466,12 @@ function MessageDiffCard({
 
   const handleRestoreClick = async () => {
     if (!onMessageDiffRestore || isRestoring) return
-    const confirmed = window.confirm(
-      `尝试反向应用这 ${stats.files} 个文件的变更？不能自动撤销的文件会提示失败，已成功撤销的文件会保留结果。`,
-    )
+    const confirmed = window.confirm(t(
+      stats.files === 1
+        ? "thread.fileChange.restoreConfirmOne"
+        : "thread.fileChange.restoreConfirmMany",
+      { count: stats.files },
+    ))
     if (!confirmed) return
 
     const operationToken = store.getState().beginOperation(scopeID, interactionRowID)
@@ -1484,19 +1502,31 @@ function MessageDiffCard({
           onClick={handleListToggle}
         >
           <span className="user-message-diff-card-title">{summaryLabel}</span>
-          <span className="user-message-diff-stats" aria-label={`${stats.additions} additions, ${stats.deletions} deletions`}>
+          <span
+            className="user-message-diff-stats"
+            aria-label={t("thread.fileChange.additionsDeletions", {
+              additions: stats.additions,
+              deletions: stats.deletions,
+            })}
+          >
             <span className="is-add">+{stats.additions}</span>
             <span className="is-remove">-{stats.deletions}</span>
           </span>
         </button>
-        <div className="user-message-diff-actions" aria-label="Message file change actions">
+        <div className="user-message-diff-actions" aria-label={t("thread.fileChange.actions")}>
           <button
             type="button"
             className="user-message-diff-action"
             disabled={!onMessageDiffRestore || isRestoring}
             onClick={() => void handleRestoreClick()}
           >
-            <span>{isRestoreSubmitted ? "已撤销" : isRestoring ? "撤销中" : "撤销"}</span>
+            <span>{t(
+              isRestoreSubmitted
+                ? "thread.fileChange.reverted"
+                : isRestoring
+                  ? "thread.fileChange.reverting"
+                  : "thread.fileChange.revert",
+            )}</span>
             <ResetIcon />
           </button>
           <button
@@ -1505,13 +1535,13 @@ function MessageDiffCard({
             disabled={!onMessageDiffReview}
             onClick={() => void handleReviewClick()}
           >
-            <span>审核</span>
+            <span>{t("thread.fileChange.review")}</span>
             <span aria-hidden="true">↗</span>
           </button>
           <button
             type="button"
             className="user-message-diff-expand"
-            aria-label={isListExpanded ? "收起文件变更" : "展开文件变更"}
+            aria-label={t(isListExpanded ? "thread.fileChange.collapse" : "thread.fileChange.expand")}
             aria-expanded={isListExpanded}
             aria-controls={listID}
             onClick={handleListToggle}
@@ -2249,14 +2279,14 @@ function parseProposedPlanBlock(text: string | null | undefined) {
   }
 }
 
-function getProposedPlanStateText(status: ProposedPlanCardStatus) {
+function getProposedPlanStateText(status: ProposedPlanCardStatus, t: ThreadTranslate) {
   switch (status) {
     case "cancelled":
-      return "已取消"
+      return t("thread.plan.cancelled")
     case "confirmed":
-      return "已确认"
+      return t("thread.plan.confirmed")
     case "confirming":
-      return "确认中..."
+      return t("thread.plan.confirming")
     case "idle":
       return null
   }
@@ -2277,6 +2307,7 @@ function ProposedPlanCard({
   isLatestMessage: boolean
   onConfirm?: ProposedPlanConfirmHandler
 }) {
+  const { t } = useI18n()
   const { entry, scopeID, store } = useThreadInteractionEntry(interactionRowID)
   const interactionRevision = useMemo(
     () => buildThreadInteractionRevision(rawPlanMarkdown),
@@ -2293,7 +2324,7 @@ function ProposedPlanCard({
         ? "confirmed"
         : "idle"
   const errorMessage = entry?.operation.status === "failed" ? entry.operation.error : null
-  const stateText = getProposedPlanStateText(status)
+  const stateText = getProposedPlanStateText(status, t)
   const showActions = isLatestMessage && status === "idle"
   const showState = isLatestMessage && Boolean(stateText)
   const isActionDisabled = !isComplete || status !== "idle"
@@ -2322,7 +2353,7 @@ function ProposedPlanCard({
   }
 
   return (
-    <article className="proposed-plan-card" aria-label="Proposed plan">
+    <article className="proposed-plan-card" aria-label={t("thread.plan.aria")}>
       <div className="proposed-plan-card-body">
         <ThreadMarkdown className="proposed-plan-markdown thread-markdown" text={planMarkdown} />
       </div>
@@ -2337,7 +2368,7 @@ function ProposedPlanCard({
               type="button"
               onClick={handleCancel}
             >
-              取消
+              {t("app.cancel")}
             </button>
             <button
               className="primary-button"
@@ -2345,7 +2376,7 @@ function ProposedPlanCard({
               type="button"
               onClick={() => void handleConfirm()}
             >
-              确认实施
+              {t("thread.plan.confirmImplementation")}
             </button>
           </>
         ) : null}
@@ -2761,21 +2792,55 @@ function getDraftPatchActionPhase(status: AssistantTraceItem["status"] | undefin
   return "completed"
 }
 
-function getDraftPatchActionLabel(change: AssistantTraceFileChange, phase: DraftPatchActionPhase) {
-  if (phase === "cancelled") return "已取消"
-  if (phase === "denied") return "已拒绝"
+function getDraftPatchActionLabel(
+  change: AssistantTraceFileChange,
+  phase: DraftPatchActionPhase,
+  t: ThreadTranslate,
+) {
+  if (phase === "cancelled") return t("thread.fileChange.action.cancelled")
+  if (phase === "denied") return t("thread.fileChange.action.denied")
 
   switch (change.operation) {
     case "add":
-      return phase === "live" ? "正在创建" : phase === "error" ? "创建失败" : "已创建"
+      return t(
+        phase === "live"
+          ? "thread.fileChange.action.creating"
+          : phase === "error"
+            ? "thread.fileChange.action.createFailed"
+            : "thread.fileChange.action.created",
+      )
     case "delete":
-      return phase === "live" ? "正在删除" : phase === "error" ? "删除失败" : "已删除"
+      return t(
+        phase === "live"
+          ? "thread.fileChange.action.deleting"
+          : phase === "error"
+            ? "thread.fileChange.action.deleteFailed"
+            : "thread.fileChange.action.deleted",
+      )
     case "move":
-      return phase === "live" ? "正在移动" : phase === "error" ? "移动失败" : "已移动"
+      return t(
+        phase === "live"
+          ? "thread.fileChange.action.moving"
+          : phase === "error"
+            ? "thread.fileChange.action.moveFailed"
+            : "thread.fileChange.action.moved",
+      )
     case "update":
-      return phase === "live" ? "正在修改" : phase === "error" ? "修改失败" : "已修改"
+      return t(
+        phase === "live"
+          ? "thread.fileChange.action.updating"
+          : phase === "error"
+            ? "thread.fileChange.action.updateFailed"
+            : "thread.fileChange.action.updated",
+      )
     default:
-      return phase === "live" ? "正在变更" : phase === "error" ? "变更失败" : "已变更"
+      return t(
+        phase === "live"
+          ? "thread.fileChange.action.changing"
+          : phase === "error"
+            ? "thread.fileChange.action.changeFailed"
+            : "thread.fileChange.action.changed",
+      )
   }
 }
 
@@ -2783,14 +2848,30 @@ function getFileChangeActionLabel(
   change: AssistantTraceFileChange,
   isDraftPatch: boolean,
   phase: DraftPatchActionPhase,
+  t: ThreadTranslate,
 ) {
-  if (!isDraftPatch) return "已编辑"
-  return getDraftPatchActionLabel(change, phase)
+  if (!isDraftPatch) return t("thread.fileChange.action.edited")
+  return getDraftPatchActionLabel(change, phase, t)
+}
+
+function formatFileChangeCount(fileCount: number, t: ThreadTranslate) {
+  return t(
+    fileCount === 1 ? "thread.fileChange.countOne" : "thread.fileChange.countMany",
+    { count: fileCount },
+  )
+}
+
+function formatFileChangeSummary(action: string, fileCount: number, t: ThreadTranslate) {
+  return t(
+    fileCount === 1 ? "thread.fileChange.summaryOne" : "thread.fileChange.summaryMany",
+    { action, count: fileCount },
+  )
 }
 
 function getDraftPatchSummaryLabel(
   fileChanges: AssistantTraceFileChange[],
   phase: DraftPatchActionPhase,
+  t: ThreadTranslate,
 ) {
   const operations = new Set(fileChanges.map((change) => change.operation ?? "update"))
   const summaryChange: AssistantTraceFileChange = operations.size === 1
@@ -2805,12 +2886,16 @@ function getDraftPatchSummaryLabel(
         additions: 0,
         deletions: 0,
       }
-  return `${getDraftPatchActionLabel(summaryChange, phase)} ${fileChanges.length} 个文件`
+  return formatFileChangeSummary(
+    getDraftPatchActionLabel(summaryChange, phase, t),
+    fileChanges.length,
+    t,
+  )
 }
 
-function getFileChangePreviewNote(change: AssistantTraceFileChange) {
-  if (change.previewState === "truncated") return "已截断"
-  if (change.previewState === "invalid") return "解析失败"
+function getFileChangePreviewNote(change: AssistantTraceFileChange, t: ThreadTranslate) {
+  if (change.previewState === "truncated") return t("thread.fileChange.preview.truncated")
+  if (change.previewState === "invalid") return t("thread.fileChange.preview.invalid")
   return ""
 }
 
@@ -2937,8 +3022,13 @@ function FileChangeInlineSummary({
   isLive: boolean
   showLiveDot?: boolean
 }) {
+  const { t } = useI18n()
   const phase = getDraftPatchActionPhase(draftPatchStatus, isLive)
-  const actionLabel = <span className="trace-file-change-action">{getFileChangeActionLabel(change, isDraftPatch, phase)}</span>
+  const actionLabel = (
+    <span className="trace-file-change-action">
+      {getFileChangeActionLabel(change, isDraftPatch, phase, t)}
+    </span>
+  )
 
   return (
     <>
@@ -2946,13 +3036,16 @@ function FileChangeInlineSummary({
       <span className="trace-file-change-file">{change.file}</span>
       <span
         className={joinClassNames("trace-file-change-stats", isLive ? "is-live" : undefined)}
-        aria-label={`${change.additions} additions, ${change.deletions} deletions`}
+        aria-label={t("thread.fileChange.additionsDeletions", {
+          additions: change.additions,
+          deletions: change.deletions,
+        })}
       >
         <span className="is-add">+{change.additions}</span>
         <span className="is-remove">-{change.deletions}</span>
       </span>
       {actionPlacement === "after" ? actionLabel : null}
-      {showLiveDot ? <span className="trace-file-change-live-dot" aria-label="正在更新" /> : null}
+      {showLiveDot ? <span className="trace-file-change-live-dot" aria-label={t("thread.fileChange.updating")} /> : null}
     </>
   )
 }
@@ -2972,10 +3065,13 @@ function ToolDraftPatchSummaryButton({
   onToggle: () => void
   status?: AssistantTraceItem["status"]
 }) {
+  const { t } = useI18n()
   const primaryFileChange = getPrimaryPatchFileChange(fileChanges)
   if (!primaryFileChange) return null
   const phase = getDraftPatchActionPhase(status, isStreaming)
-  const summaryLabel = phase === "completed" ? `${fileChanges.length} 个文件` : getDraftPatchSummaryLabel(fileChanges, phase)
+  const summaryLabel = phase === "completed"
+    ? formatFileChangeCount(fileChanges.length, t)
+    : getDraftPatchSummaryLabel(fileChanges, phase, t)
   const showsSingleFileSummary = fileChanges.length === 1
 
   return (
@@ -3004,7 +3100,7 @@ function ToolDraftPatchSummaryButton({
           "trace-file-change-live-dot",
           isStreaming ? undefined : "is-hidden",
         )}
-        aria-label="正在更新"
+        aria-label={t("thread.fileChange.updating")}
         aria-hidden={isStreaming ? undefined : true}
       />
       <span className="trace-file-change-summary-chevron" aria-hidden="true">
@@ -3039,16 +3135,19 @@ function ToolDraftPatchFileChangeList({
   setFullHeightFile: (updater: (current: string | null) => string | null) => void
   status?: AssistantTraceItem["status"]
 }) {
+  const { t } = useI18n()
   if (fileChanges.length === 1) {
     const change = fileChanges[0]!
     const hasPatch = hasFileChangePreview(change)
     const patchPreview = getPatchPreviewState(change, fullPatchFile === change.file)
-    const previewNote = getFileChangePreviewNote(change)
+    const previewNote = getFileChangePreviewNote(change, t)
     const previewID = `trace-file-change-${id}-0`
 
     return (
       <div id={listID} className="trace-file-change-list is-single-file">
-        {!hasPatch && !previewNote ? <span className="trace-file-change-note">仅摘要</span> : null}
+        {!hasPatch && !previewNote ? (
+          <span className="trace-file-change-note">{t("thread.fileChange.summaryOnly")}</span>
+        ) : null}
         {previewNote ? <span className="trace-file-change-note">{previewNote}</span> : null}
         {hasPatch ? (
           <div id={previewID} className="trace-file-change-preview is-single-file">
@@ -3071,7 +3170,7 @@ function ToolDraftPatchFileChangeList({
                 className="trace-file-change-row is-static"
                 onClick={() => setFullPatchFile(() => change.file)}
               >
-                Show full diff
+                {t("thread.fileChange.showFullDiff")}
               </button>
             ) : null}
           </div>
@@ -3087,7 +3186,7 @@ function ToolDraftPatchFileChangeList({
         const isExpanded = expandedFile === change.file
         const patchPreview = getPatchPreviewState(change, fullPatchFile === change.file)
         const previewID = `trace-file-change-${id}-${changeIndex}`
-        const previewNote = getFileChangePreviewNote(change)
+        const previewNote = getFileChangePreviewNote(change, t)
         const rowContent = (
           <>
             <span className="trace-file-change-toggle-icon" aria-hidden="true">
@@ -3100,7 +3199,9 @@ function ToolDraftPatchFileChangeList({
               isLive={isStreaming}
               showLiveDot={isStreaming}
             />
-            {!hasPatch ? <span className="trace-file-change-note">仅摘要</span> : null}
+            {!hasPatch ? (
+              <span className="trace-file-change-note">{t("thread.fileChange.summaryOnly")}</span>
+            ) : null}
             {previewNote ? <span className="trace-file-change-note">{previewNote}</span> : null}
           </>
         )
@@ -3143,7 +3244,7 @@ function ToolDraftPatchFileChangeList({
                     className="trace-file-change-row is-static"
                     onClick={() => setFullPatchFile(() => change.file)}
                   >
-                    Show full diff
+                    {t("thread.fileChange.showFullDiff")}
                   </button>
                 ) : null}
               </div>
@@ -3172,6 +3273,7 @@ const PatchFileChangeSummaryButton = memo(function PatchFileChangeSummaryButton(
   reserveLiveDot = false,
   showLiveDot = false,
 }: PatchFileChangeSummaryButtonProps) {
+  const { t } = useI18n()
   return (
     <button
       type="button"
@@ -3190,7 +3292,7 @@ const PatchFileChangeSummaryButton = memo(function PatchFileChangeSummaryButton(
             "trace-file-change-live-dot",
             showLiveDot ? undefined : "is-hidden",
           )}
-          aria-label="正在更新"
+          aria-label={t("thread.fileChange.updating")}
           aria-hidden={showLiveDot ? undefined : true}
         />
       ) : null}
@@ -3268,6 +3370,7 @@ function PatchFileChangePreview({
   isStreaming: boolean
   defaultExpanded?: boolean
 }) {
+  const { t } = useI18n()
   const fileChangeSignature = useMemo(
     () => fileChanges
       .map((change) =>
@@ -3308,13 +3411,13 @@ function PatchFileChangePreview({
     [fileChanges],
   )
   const editedFileSummary = useMemo(
-    () => `已编辑 ${fileChanges.length} 个文件`,
-    [fileChanges.length],
+    () => formatFileChangeSummary(t("thread.fileChange.action.edited"), fileChanges.length, t),
+    [fileChanges.length, t],
   )
   const draftPatchPhase = getDraftPatchActionPhase(draftPatchStatus, isStreaming)
   const draftFileSummary = useMemo(
-    () => getDraftPatchSummaryLabel(fileChanges, draftPatchPhase),
-    [draftPatchPhase, fileChanges],
+    () => getDraftPatchSummaryLabel(fileChanges, draftPatchPhase, t),
+    [draftPatchPhase, fileChanges, t],
   )
   const summaryLabel = isDraftPatch && primaryFileChange ? draftFileSummary : editedFileSummary
   const reservesLiveDot = isDraftPatch && Boolean(primaryFileChange)
@@ -3345,7 +3448,7 @@ function PatchFileChangePreview({
             const isExpanded = expandedFile === change.file
             const patchPreview = getPatchPreviewState(change, fullPatchFile === change.file)
             const previewID = `trace-file-change-${id}-${changeIndex}`
-            const previewNote = getFileChangePreviewNote(change)
+            const previewNote = getFileChangePreviewNote(change, t)
             const rowContent = (
               <>
                 <span className="trace-file-change-toggle-icon" aria-hidden="true">
@@ -3358,7 +3461,9 @@ function PatchFileChangePreview({
                   isLive={isDraftPatch && isStreaming}
                   showLiveDot={isDraftPatch && isStreaming}
                 />
-                {!hasPatch ? <span className="trace-file-change-note">仅摘要</span> : null}
+                {!hasPatch ? (
+                  <span className="trace-file-change-note">{t("thread.fileChange.summaryOnly")}</span>
+                ) : null}
                 {previewNote ? <span className="trace-file-change-note">{previewNote}</span> : null}
               </>
             )
@@ -3401,7 +3506,7 @@ function PatchFileChangePreview({
                         className="trace-file-change-row is-static"
                         onClick={() => setFullPatchFile(() => change.file)}
                       >
-                        Show full diff
+                        {t("thread.fileChange.showFullDiff")}
                       </button>
                     ) : null}
                   </div>
@@ -4181,34 +4286,34 @@ type ToolTraceIoPaneKind = "input" | "output"
 
 const TOOL_TRACE_JSON_STRING_PARSE_MAX_DEPTH = 6
 
-function getToolTraceDisplayState(item: AssistantTraceItem): {
+function getToolTraceDisplayState(item: AssistantTraceItem, t: ThreadTranslate): {
   label: string | null
   visual: ReturnType<typeof projectToolCallVisualState>
 } {
   const visual = projectToolCallVisualState(item.toolCall)
   switch (visual.key) {
     case "pending":
-      return { label: "准备中", visual }
+      return { label: t("thread.toolTrace.status.pending"), visual }
     case "running":
-      return { label: "执行中", visual }
+      return { label: t("thread.toolTrace.status.running"), visual }
     case "waiting-approval":
-      return { label: "等待确认", visual }
+      return { label: t("thread.toolTrace.status.waitingApproval"), visual }
     case "returned":
-      return { label: "已完成", visual }
+      return { label: t("thread.toolTrace.status.completed"), visual }
     case "returned-negative":
-      return { label: "未达成", visual }
+      return { label: t("thread.toolTrace.status.notAchieved"), visual }
     case "returned-partial":
-      return { label: "部分完成", visual }
+      return { label: t("thread.toolTrace.status.partiallyCompleted"), visual }
     case "blocked":
-      return { label: "已阻止", visual }
+      return { label: t("thread.toolTrace.status.blocked"), visual }
     case "denied":
-      return { label: "已拒绝", visual }
+      return { label: t("thread.toolTrace.status.denied"), visual }
     case "cancelled":
-      return { label: "已取消", visual }
+      return { label: t("thread.toolTrace.status.cancelled"), visual }
     case "timeout":
-      return { label: "已超时", visual }
+      return { label: t("thread.toolTrace.status.timeout"), visual }
     case "failed":
-      return { label: "执行故障", visual }
+      return { label: t("thread.toolTrace.status.failed"), visual }
   }
 }
 
@@ -4532,7 +4637,7 @@ function ToolTraceItemView({
   const summaryTitle = getToolTraceName(item)
   const inputContentLabel = t("thread.toolTrace.inputContent")
   const outputContentLabel = t("thread.toolTrace.outputContent")
-  const displayState = getToolTraceDisplayState(item)
+  const displayState = getToolTraceDisplayState(item, t)
   const draftPatchFileChanges = normalizeTraceFileChanges(item.draftPatch?.fileChanges)
   const draftPatch = item.draftPatch && typeof item.draftPatch === "object" && draftPatchFileChanges.length > 0
     ? {
@@ -5781,8 +5886,12 @@ function VisibleThreadView({
     if (transaction) cancelProjectionTransactionRef.current(transaction)
   }, [])
   const threadTurnNavigationItems = useMemo(
-    () => buildThreadTurnNavigationItems(activeTurns ?? [], displayRows),
-    [activeTurns, displayRows],
+    () => buildThreadTurnNavigationItems(
+      activeTurns ?? [],
+      displayRows,
+      t("thread.turnNavigator.userRequest"),
+    ),
+    [activeTurns, displayRows, t],
   )
   const {
     currentIndex: currentThreadTurnNavigationIndex,
@@ -6433,7 +6542,11 @@ function VisibleThreadView({
               ref={threadCopyContextMenuRef}
               className="thread-copy-context-menu"
               role="menu"
-              aria-label={threadCopyContextMenu.target === "image" ? "Thread image actions" : "Thread copy actions"}
+              aria-label={t(
+                threadCopyContextMenu.target === "image"
+                  ? "thread.contextMenu.imageActions"
+                  : "thread.contextMenu.copyActions",
+              )}
               style={{ left: threadCopyContextMenu.x, top: threadCopyContextMenu.y }}
               onContextMenu={(event) => event.preventDefault()}
             >
@@ -6444,7 +6557,7 @@ function VisibleThreadView({
                 disabled={threadCopyContextMenu.target === "image" && !canWriteThreadImageClipboard()}
                 title={
                   threadCopyContextMenu.target === "image" && !canWriteThreadImageClipboard()
-                    ? "Image clipboard writes are not available."
+                    ? t("thread.contextMenu.imageClipboardUnavailable")
                     : undefined
                 }
                 onClick={() => void handleThreadCopyContextMenuCopy(threadCopyContextMenu)}
@@ -6453,7 +6566,7 @@ function VisibleThreadView({
                   <CopyIcon />
                 </span>
                 <span className="thread-copy-context-menu-label">
-                  {threadCopyContextMenu.target === "image" ? "复制图片" : "复制"}
+                  {threadCopyContextMenu.target === "image" ? t("thread.contextMenu.copyImage") : t("app.copy")}
                 </span>
               </button>
               {threadCopyContextMenu.target === "image" && canSaveThreadImageToFolder() ? (
@@ -6466,7 +6579,7 @@ function VisibleThreadView({
                   <span className="thread-copy-context-menu-icon" aria-hidden="true">
                     <DownloadIcon />
                   </span>
-                  <span className="thread-copy-context-menu-label">保存图片</span>
+                  <span className="thread-copy-context-menu-label">{t("thread.contextMenu.saveImage")}</span>
                 </button>
               ) : null}
               {threadCopyContextMenu.target === "text" && onAddToComposer ? (
@@ -6479,7 +6592,7 @@ function VisibleThreadView({
                   <span className="thread-copy-context-menu-icon" aria-hidden="true">
                     <PlusIcon />
                   </span>
-                  <span className="thread-copy-context-menu-label">加入 Composer</span>
+                  <span className="thread-copy-context-menu-label">{t("thread.contextMenu.addToComposer")}</span>
                 </button>
               ) : null}
               {threadCopyContextMenu.target === "text" &&
@@ -6510,7 +6623,7 @@ function VisibleThreadView({
                   <span className="thread-copy-context-menu-icon" aria-hidden="true">
                     <FileImageIcon />
                   </span>
-                  <span className="thread-copy-context-menu-label">加入 Composer</span>
+                  <span className="thread-copy-context-menu-label">{t("thread.contextMenu.addToComposer")}</span>
                 </button>
               ) : null}
             </div>,

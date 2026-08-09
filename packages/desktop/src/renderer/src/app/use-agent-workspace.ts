@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
+import { useI18n } from "./i18n/I18nProvider"
 import { useComposerController, type ComposerCommandStatus } from "./agent-workspace/composer-controller"
 import { useComposerDraftState } from "./agent-workspace/composer-draft-state"
 import { useReviewPanelController } from "./agent-workspace/review-panel-controller"
@@ -135,6 +136,7 @@ export function useAgentWorkspace({
   surfaceID = "main",
   workbenchState = null,
 }: UseAgentWorkspaceOptions) {
+  const { locale } = useI18n()
   const toast = useToast()
   const workbenchDockviewCommandsRef = useRef<WorkbenchDockviewCommands | null>(null)
   const dockviewPersistenceTimerRef = useRef<number | null>(null)
@@ -828,6 +830,7 @@ export function useAgentWorkspace({
     loadPendingPermissionRequestsForSession,
     loadSessionDiffForSession,
     loadSessionRuntimeDebugForSession,
+    locale,
     pendingConversationInputsBySession,
     pendingPermissionRequestsBySession,
     optimisticUserSubmissionsRef,

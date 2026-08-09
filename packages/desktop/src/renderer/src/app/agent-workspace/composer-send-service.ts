@@ -1,4 +1,8 @@
 import { startTransition, type MutableRefObject } from "react"
+import {
+  getAgentResponseLanguageInstruction,
+  type AppLocale,
+} from "../../../../shared/locale"
 import { getAgentSessionBridge } from "../agent-session/client"
 import { createEmptyComposerDraftState } from "../composer/draft-state"
 import {
@@ -88,6 +92,7 @@ interface SendPromptToSessionInput {
     freeformText?: string
   }
   reasoningEffort?: ReasoningEffort | null
+  responseLocale: AppLocale
   references?: UserThreadMessage["references"]
   resolveModelBeforeSend?: (() => Promise<{
     providerID: string
@@ -183,6 +188,7 @@ export async function sendPromptToSession(
     preserveComposerState,
     questionAnswer,
     reasoningEffort,
+    responseLocale,
     references = [],
     retryUserMessageID,
     selectedModel,
@@ -206,6 +212,7 @@ export async function sendPromptToSession(
     : null
   const usesOptimisticUserMessage = usesBackendStream && !pendingInputMode
   const normalizedText = text.trim() || normalizeQuestionAnswerText(questionAnswer)
+  const responseLanguageInstruction = getAgentResponseLanguageInstruction(responseLocale)
   const attachmentInputs = attachments.map((attachment) => ({
     path: attachment.path,
     name: attachment.name,
@@ -468,6 +475,7 @@ export async function sendPromptToSession(
         ...(concurrentInputMode ? { concurrentInputMode } : {}),
         ...(reasoningEffort ? { reasoningEffort } : {}),
         ...(model ? { model } : {}),
+        system: responseLanguageInstruction,
         skills: effectiveSelectedSkillIDs,
         turnMcpServerIDs,
         turnToolModuleIDs,
@@ -487,6 +495,7 @@ export async function sendPromptToSession(
       ...(concurrentInputMode ? { concurrentInputMode } : {}),
       ...(reasoningEffort ? { reasoningEffort } : {}),
       ...(model ? { model } : {}),
+      system: responseLanguageInstruction,
       skills: effectiveSelectedSkillIDs,
       turnMcpServerIDs,
       turnToolModuleIDs,

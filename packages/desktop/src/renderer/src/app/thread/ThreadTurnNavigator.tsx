@@ -1,4 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react"
+import { useI18n } from "../i18n/I18nProvider"
 import type { ThreadTurnNavigationItem } from "./use-thread-turn-navigation"
 
 interface ThreadTurnNavigatorProps {
@@ -8,8 +9,19 @@ interface ThreadTurnNavigatorProps {
   visibleIndexes: readonly number[]
 }
 
-function getTurnButtonLabel(item: ThreadTurnNavigationItem, index: number, total: number) {
-  return `跳转到第 ${index + 1} / ${total} 轮：${item.accessibleTitle}`
+type ThreadTurnNavigatorTranslate = ReturnType<typeof useI18n>["t"]
+
+function getTurnButtonLabel(
+  item: ThreadTurnNavigationItem,
+  index: number,
+  total: number,
+  t: ThreadTurnNavigatorTranslate,
+) {
+  return t("thread.turnNavigator.goTo", {
+    current: index + 1,
+    title: item.accessibleTitle,
+    total,
+  })
 }
 
 export function ThreadTurnNavigator({
@@ -18,6 +30,7 @@ export function ThreadTurnNavigator({
   onNavigate,
   visibleIndexes,
 }: ThreadTurnNavigatorProps) {
+  const { t } = useI18n()
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null)
   const [isLabelDismissed, setIsLabelDismissed] = useState(false)
@@ -35,8 +48,12 @@ export function ThreadTurnNavigator({
     if (labelIndex === null) return ""
     const item = items[labelIndex]
     if (!item) return ""
-    return `第 ${labelIndex + 1} / ${items.length} 轮 · ${item.title}`
-  }, [items, labelIndex])
+    return t("thread.turnNavigator.label", {
+      current: labelIndex + 1,
+      title: item.title,
+      total: items.length,
+    })
+  }, [items, labelIndex, t])
 
   function updateLabelPosition(index: number) {
     const root = rootRef.current
@@ -107,7 +124,7 @@ export function ThreadTurnNavigator({
   }
 
   return (
-    <nav ref={rootRef} className="thread-turn-navigator" aria-label="对话轮次导航">
+    <nav ref={rootRef} className="thread-turn-navigator" aria-label={t("thread.turnNavigator.navigationAria")}>
       <div
         ref={markerListRef}
         className="thread-turn-navigator-markers"
@@ -124,7 +141,7 @@ export function ThreadTurnNavigator({
             className="thread-turn-navigator-marker"
             type="button"
             aria-current={index === currentIndex ? "step" : undefined}
-            aria-label={getTurnButtonLabel(item, index, items.length)}
+            aria-label={getTurnButtonLabel(item, index, items.length, t)}
             data-visible={visibleIndexSet.has(index) ? "true" : undefined}
             data-running={item.isRunning ? "true" : undefined}
             onBlur={() => setFocusedIndex((current) => (current === index ? null : current))}
@@ -161,7 +178,10 @@ export function ThreadTurnNavigator({
           type="button"
           aria-expanded={isCompactOpen}
           aria-haspopup="dialog"
-          aria-label={`当前第 ${currentIndex + 1} / ${items.length} 轮，打开对话轮次导航`}
+          aria-label={t("thread.turnNavigator.currentOpen", {
+            current: currentIndex + 1,
+            total: items.length,
+          })}
           onClick={() => setIsCompactOpen((current) => !current)}
           onKeyDown={(event) => {
             if (event.key === "Escape") {
@@ -170,10 +190,17 @@ export function ThreadTurnNavigator({
             }
           }}
         >
-          第 {currentIndex + 1}/{items.length} 轮
+          {t("thread.turnNavigator.compactLabel", {
+            current: currentIndex + 1,
+            total: items.length,
+          })}
         </button>
         {isCompactOpen ? (
-          <div className="thread-turn-navigator-compact-popover" role="dialog" aria-label="选择对话轮次">
+          <div
+            className="thread-turn-navigator-compact-popover"
+            role="dialog"
+            aria-label={t("thread.turnNavigator.selectAria")}
+          >
             {items.map((item, index) => (
               <button
                 key={`compact:${item.turnID}:${item.userMessageID}`}
@@ -183,7 +210,7 @@ export function ThreadTurnNavigator({
                 className="thread-turn-navigator-compact-item"
                 type="button"
                 aria-current={index === currentIndex ? "step" : undefined}
-                aria-label={getTurnButtonLabel(item, index, items.length)}
+                aria-label={getTurnButtonLabel(item, index, items.length, t)}
                 data-current={index === currentIndex ? "true" : undefined}
                 onClick={() => {
                   onNavigate(item)

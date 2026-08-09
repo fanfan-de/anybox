@@ -199,6 +199,10 @@ describe("built-in Node REPL MCP", () => {
           counter: globalThis.counter + 2,
           cwd: nodeRepl.cwd,
           processType: typeof process,
+          processVersion: process.version,
+          processIsGlobal: process === globalThis.process,
+          processIsNodeModule: process === require("node:process"),
+          processCwdMatches: process.cwd() === nodeRepl.cwd,
           agentType: typeof agent,
           capabilityType: typeof nodeRepl.getCapability,
           requestHostType: typeof nodeRepl.requestHost,
@@ -208,7 +212,11 @@ describe("built-in Node REPL MCP", () => {
       })
       expect(structuredResult(result)).toMatchObject({
         counter: 42,
-        processType: "undefined",
+        processType: "object",
+        processVersion: expect.any(String),
+        processIsGlobal: true,
+        processIsNodeModule: true,
+        processCwdMatches: true,
         agentType: "undefined",
         capabilityType: "undefined",
         requestHostType: "undefined",

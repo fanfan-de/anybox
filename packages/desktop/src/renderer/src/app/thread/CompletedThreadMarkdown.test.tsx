@@ -274,7 +274,7 @@ describe("CompletedThreadMarkdown", () => {
     expect(harness.workers).toHaveLength(0)
     expect(document.querySelector('[data-thread-completed-markdown-render-mode="large-preview"]'))
       .toBeInTheDocument()
-    fireEvent.click(screen.getByRole("button", { name: "渲染完整格式" }))
+    fireEvent.click(screen.getByRole("button", { name: "Render full formatting" }))
 
     await waitFor(() => expect(harness.workers).toHaveLength(1))
     expect(parseRequest(harness.workers[0]!).text).toBe(text)
@@ -297,7 +297,7 @@ describe("CompletedThreadMarkdown", () => {
 
     expect(await screen.findByText("Safe oversized preview")).toBeInTheDocument()
     expect(loadBlockRequests(harness.workers[0]!)).toHaveLength(0)
-    fireEvent.click(screen.getByRole("button", { name: "渲染完整格式" }))
+    fireEvent.click(screen.getByRole("button", { name: "Render full formatting" }))
     await waitFor(() => {
       expect(loadBlockRequests(harness.workers[0]!).map((request) => request.blockIndex)).toEqual([0])
     })
@@ -322,12 +322,12 @@ describe("CompletedThreadMarkdown", () => {
       })
     })
 
-    expect(await screen.findByText("完整格式排版失败，当前保留轻量预览。")).toBeInTheDocument()
+    expect(await screen.findByText("Full formatting failed. A lightweight preview is shown instead.")).toBeInTheDocument()
     expect(document.querySelector('[data-thread-completed-markdown-render-mode="error-preview"]'))
       .toBeInTheDocument()
     expect(legacyThreadMarkdownSpy).not.toHaveBeenCalled()
 
-    fireEvent.click(screen.getByRole("button", { name: "重试排版" }))
+    fireEvent.click(screen.getByRole("button", { name: "Retry formatting" }))
     await waitFor(() => expect(harness.workers).toHaveLength(2))
     expect(parseRequest(harness.workers[1]!).type).toBe("parse")
     expect(legacyThreadMarkdownSpy).not.toHaveBeenCalled()

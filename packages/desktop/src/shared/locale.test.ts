@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   APP_LOCALES,
   createDefaultLocaleConfigDocument,
+  getAgentResponseLanguageInstruction,
   normalizeAppLocale,
   normalizeLocaleConfigDocument,
 } from "./locale"
@@ -39,5 +40,16 @@ describe("locale settings", () => {
       locale: "zh-CN",
       updatedAt: 0,
     })
+  })
+
+  it("builds a response-language instruction for every supported locale", () => {
+    for (const locale of APP_LOCALES) {
+      const instruction = getAgentResponseLanguageInstruction(locale)
+      expect(instruction).toContain("progress updates and final answers")
+      expect(instruction).toContain("explicitly requests a different response language")
+    }
+
+    expect(getAgentResponseLanguageInstruction("en-US")).toContain("Use English")
+    expect(getAgentResponseLanguageInstruction("zh-CN")).toContain("Use Simplified Chinese")
   })
 })

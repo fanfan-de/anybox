@@ -33,7 +33,7 @@ function getThreadTurnUserMessage(turn: ThreadTurn) {
   ) ?? null
 }
 
-function getThreadTurnUserMessageTitle(message: UserThreadMessage) {
+function getThreadTurnUserMessageTitle(message: UserThreadMessage, fallbackTitle: string) {
   const preferredText = normalizeThreadTurnTitle(message.displayText ?? "")
   if (preferredText) return preferredText
 
@@ -46,12 +46,13 @@ function getThreadTurnUserMessageTitle(message: UserThreadMessage) {
       .filter(Boolean)
       .join(" · "),
   )
-  return referenceText || "用户请求"
+  return referenceText || fallbackTitle
 }
 
 export function buildThreadTurnNavigationItems(
   turns: ThreadTurn[],
   displayRows: ThreadDisplayRow[],
+  fallbackTitle: string,
 ) {
   const userRowIndexByMessageID = new Map<string, number>()
   const executionSummaryRowIndexByTurnID = new Map<string, number>()
@@ -72,7 +73,7 @@ export function buildThreadTurnNavigationItems(
     const rowIndex = executionSummaryRowIndexByTurnID.get(turn.turnID) ?? userRowIndexByMessageID.get(userMessage.id)
     if (rowIndex === undefined) continue
 
-    const accessibleTitle = getThreadTurnUserMessageTitle(userMessage)
+    const accessibleTitle = getThreadTurnUserMessageTitle(userMessage, fallbackTitle)
     seenUserMessageIDs.add(userMessage.id)
     items.push({
       accessibleTitle,

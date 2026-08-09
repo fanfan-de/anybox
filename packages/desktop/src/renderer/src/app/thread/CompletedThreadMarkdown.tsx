@@ -11,6 +11,7 @@ import {
   createThreadMarkdownComponents,
   type ThreadMarkdownRenderContext,
 } from "../thread-markdown"
+import { useI18n } from "../i18n/I18nProvider"
 import { buildBoundedMarkdownPreview } from "../thread-markdown-preview"
 import {
   THREAD_COMPLETED_MARKDOWN_AUTO_CHARACTER_LIMIT,
@@ -114,6 +115,7 @@ function OversizedMarkdownBlock({
   block: MarkdownBlockManifest
   onRender: () => void
 }) {
+  const { t } = useI18n()
   return (
     <section
       className="thread-markdown-deferred-block"
@@ -121,14 +123,14 @@ function OversizedMarkdownBlock({
       data-thread-markdown-block-mode="oversized-preview"
     >
       <div className="thread-markdown-plain-preview">
-        {block.previewText || "这个 Markdown 内容块过大，已暂缓格式化。"}
+        {block.previewText || t("thread.markdown.oversizedFallback")}
       </div>
       <div className="thread-markdown-deferred-footer">
         <span className="thread-markdown-deferred-status">
-          这个内容块较大，完整格式化可能暂时占用更多资源。
+          {t("thread.markdown.oversizedStatus")}
         </span>
         <button className="thread-markdown-deferred-button" type="button" onClick={onRender}>
-          渲染完整格式
+          {t("thread.markdown.renderFull")}
         </button>
       </div>
     </section>
@@ -159,6 +161,7 @@ function ThreadMarkdownDocumentResourceView({
 }: Omit<CompletedThreadMarkdownProps, "documentID" | "workerClient"> & {
   resource: ThreadMarkdownDocumentResource
 }) {
+  const { t } = useI18n()
   const snapshot = useMarkdownResourceSnapshot(resource)
   const [forcedBlockIndices, setForcedBlockIndices] = useState<ReadonlySet<number>>(() => new Set())
   const components = useMemo(() => createThreadMarkdownComponents({
@@ -202,11 +205,11 @@ function ThreadMarkdownDocumentResourceView({
   if (snapshot.status === "error") {
     return (
       <CompletedMarkdownPreview
-        actionLabel="重试排版"
+        actionLabel={t("thread.markdown.retry")}
         className={className}
         mode="error-preview"
         onAction={resource.retry}
-        status="完整格式排版失败，当前保留轻量预览。"
+        status={t("thread.markdown.failed")}
         text={text}
       />
     )
@@ -224,7 +227,7 @@ function ThreadMarkdownDocumentResourceView({
         busy
         className={className}
         mode="preparing-preview"
-        status="正在排版完整回复…"
+        status={t("thread.markdown.formatting")}
         text={text}
       />
     )
@@ -242,7 +245,7 @@ function ThreadMarkdownDocumentResourceView({
     >
       {pendingAutomaticBlockCount > 0 ? (
         <span className="thread-markdown-progress-status" role="status">
-          正在排版完整回复…
+          {t("thread.markdown.formatting")}
         </span>
       ) : null}
       {snapshot.manifest.blocks.map((block) => {
@@ -276,6 +279,7 @@ function WorkerCompletedThreadMarkdown({
   text,
   workerClient = defaultThreadMarkdownWorkerClient,
 }: CompletedThreadMarkdownProps) {
+  const { t } = useI18n()
   const generationRef = useRef(0)
   const [acquiredResource, setAcquiredResource] = useState<AcquiredMarkdownResource | null>(null)
 
@@ -298,7 +302,7 @@ function WorkerCompletedThreadMarkdown({
         busy
         className={className}
         mode="preparing-preview"
-        status="正在准备完整回复…"
+        status={t("thread.markdown.preparing")}
         text={text}
       />
     )
@@ -321,6 +325,7 @@ function WorkerCompletedThreadMarkdown({
 const LargeCompletedThreadMarkdown = memo(function LargeCompletedThreadMarkdown(
   props: CompletedThreadMarkdownProps,
 ) {
+  const { t } = useI18n()
   const [explicitRequest, setExplicitRequest] = useState<{
     documentID: string
     text: string
@@ -334,11 +339,11 @@ const LargeCompletedThreadMarkdown = memo(function LargeCompletedThreadMarkdown(
   ) {
     return (
       <CompletedMarkdownPreview
-        actionLabel="渲染完整格式"
+        actionLabel={t("thread.markdown.renderFull")}
         className={props.className}
         mode="large-preview"
         onAction={() => setExplicitRequest({ documentID: props.documentID, text: props.text })}
-        status="这条回复很长，当前使用轻量预览以保持界面流畅。"
+        status={t("thread.markdown.largePreview")}
         text={props.text}
       />
     )

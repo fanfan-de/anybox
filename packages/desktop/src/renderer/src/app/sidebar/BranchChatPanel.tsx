@@ -9,6 +9,7 @@ import {
   type KeyboardEvent,
 } from "react"
 import { createPortal } from "react-dom"
+import { getAgentResponseLanguageInstruction } from "../../../../shared/locale"
 import type { PermissionDecision } from "../../../../shared/permission"
 import {
   getAgentSessionBridge,
@@ -463,7 +464,7 @@ export function BranchChatPanel({
   onLocateAnchor,
   onUpdateTab,
 }: BranchChatPanelProps) {
-  const { t } = useI18n()
+  const { locale, t } = useI18n()
   const bridge = useMemo(() => getAgentSessionBridge(), [])
   const threadColumnRef = useRef<HTMLDivElement | null>(null)
   const recentTriggerRef = useRef<HTMLButtonElement | null>(null)
@@ -1146,6 +1147,7 @@ export function BranchChatPanel({
       backendSessionID: target.sessionID,
       text: compiled.transportText || undefined,
       displayText: compiled.displayText || undefined,
+      system: getAgentResponseLanguageInstruction(locale),
       attachments: submittedAttachments.map((attachment) => ({ ...attachment })),
       quotes: submittedQuotes.map((quote) => ({ ...quote })),
       threadTarget: {

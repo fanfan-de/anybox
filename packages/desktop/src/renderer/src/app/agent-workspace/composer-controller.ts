@@ -1,4 +1,5 @@
 import { useEffect, useRef, type MutableRefObject } from "react"
+import type { AppLocale } from "../../../../shared/locale"
 import { buildComposerAttachment, isComposerAttachmentSupported } from "../composer/attachment-utils"
 import {
   compileComposerSubmission,
@@ -109,6 +110,7 @@ interface UseComposerControllerOptions {
   ) => Promise<PermissionRequest[] | undefined>
   loadSessionDiffForSession: (sessionID: string, backendSessionID?: string) => Promise<void>
   loadSessionRuntimeDebugForSession: (sessionID: string, backendSessionID?: string) => Promise<void>
+  locale: AppLocale
   pendingConversationInputsBySession: Record<string, PendingConversationInput[]>
   pendingPermissionRequestsBySession: Record<string, PermissionRequest[]>
   optimisticUserSubmissionsRef: MutableRefObject<Record<string, OptimisticUserSubmission>>
@@ -175,6 +177,7 @@ export function useComposerController({
   loadPendingPermissionRequestsForSession,
   loadSessionDiffForSession,
   loadSessionRuntimeDebugForSession,
+  locale,
   pendingConversationInputsBySession,
   pendingPermissionRequestsBySession,
   optimisticUserSubmissionsRef,
@@ -282,7 +285,7 @@ export function useComposerController({
     waitForPendingModelSelection?: (() => Promise<void>) | null
     workspace: WorkspaceGroup
   }) {
-    await sendPromptToSessionService(input, {
+    await sendPromptToSessionService({ ...input, responseLocale: locale }, {
       agentConnected,
       agentDefaultDirectory,
       agentSessions,

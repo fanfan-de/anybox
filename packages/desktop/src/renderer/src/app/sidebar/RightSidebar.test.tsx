@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import type { ComponentProps } from "react"
 import { describe, expect, it, vi } from "vitest"
+import { getAgentResponseLanguageInstruction } from "../../../../shared/locale"
 import type { AgentSessionBridgeEvent } from "../agent-session/client"
 import {
   type RightSidebarState,
@@ -1168,6 +1169,7 @@ describe("RightSidebar", () => {
       await waitFor(() => {
         expect(sendTurn).toHaveBeenCalledWith(expect.objectContaining({
           text: "Use the latest response",
+          system: getAgentResponseLanguageInstruction("en-US"),
           threadTarget: {
             kind: "detached-branch",
             parentMessageID: "assistant-main",

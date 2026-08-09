@@ -820,14 +820,14 @@ describe("ThreadView trace item renderers", () => {
     expect(screen.getByRole("button", { name: /Tool pending/ })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /Tool running/ })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /Tool waiting-approval/ })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /^Tool returned 已完成$/ })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /Tool returned-negative 未达成/ })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /Tool returned-partial 部分完成/ })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /Tool blocked 已阻止/ })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /^Tool returned Done$/ })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Tool returned-negative Not achieved/ })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Tool returned-partial Partially completed/ })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Tool blocked Blocked/ })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /Tool denied/ })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /Tool cancelled/ })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /Tool timeout 已超时/ })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /Tool failed 执行故障/ })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Tool timeout Timed out/ })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Tool failed Failed/ })).toBeInTheDocument()
     expect(container.querySelector(".trace-kind-tool .trace-tool-status-indicator")).toBeNull()
     expect(container.querySelector(".trace-kind-tool .trace-log-label")).toBeNull()
 
@@ -1929,7 +1929,7 @@ describe("ThreadView image trace items", () => {
 
     expect(getByAltText("First preview")).toHaveAttribute("src", "https://example.com/first.png")
     expect(getByAltText("Second preview")).toHaveAttribute("src", "https://example.com/second.png")
-    expect(getByRole("button", { name: "已编辑 1 个文件" })).toBeInTheDocument()
+    expect(getByRole("button", { name: "Edited 1 file" })).toBeInTheDocument()
 
     fireEvent.click(getByRole("button", { name: "Preview First preview" }))
 
@@ -2027,8 +2027,8 @@ describe("ThreadView image trace items", () => {
       onFileChangeSelect,
     })
 
-    fireEvent.click(getByRole("button", { name: "已编辑 1 个文件" }))
-    fireEvent.click(getByRole("button", { name: /已编辑\s*src\/app\.tsx/ }))
+    fireEvent.click(getByRole("button", { name: "Edited 1 file" }))
+    fireEvent.click(getByRole("button", { name: /Edited\s*src\/app\.tsx/ }))
 
     expect(onFileChangeSelect).not.toHaveBeenCalled()
     expect(queryByRole("region", { name: "Diff preview for src/app.tsx" })).toBeInTheDocument()
@@ -2064,24 +2064,24 @@ describe("ThreadView image trace items", () => {
       assistantTraceMessage("assistant-patch-static", [patchItem], false),
     ])
 
-    expect(getByRole("button", { name: "已编辑 1 个文件" })).toHaveAttribute("aria-expanded", "false")
-    expect(getByRole("button", { name: "已编辑 1 个文件" })).toBeInTheDocument()
+    expect(getByRole("button", { name: "Edited 1 file" })).toHaveAttribute("aria-expanded", "false")
+    expect(getByRole("button", { name: "Edited 1 file" })).toBeInTheDocument()
     expect(screen.queryByText("src/app.tsx")).not.toBeInTheDocument()
     expect(screen.queryByRole("region", { name: "Diff preview for src/app.tsx" })).not.toBeInTheDocument()
 
-    fireEvent.click(getByRole("button", { name: "已编辑 1 个文件" }))
-    expect(getByRole("button", { name: "已编辑 1 个文件" })).toHaveAttribute("aria-expanded", "true")
+    fireEvent.click(getByRole("button", { name: "Edited 1 file" }))
+    expect(getByRole("button", { name: "Edited 1 file" })).toHaveAttribute("aria-expanded", "true")
     expect(getByText("src/app.tsx")).toBeInTheDocument()
     expect(screen.queryByRole("region", { name: "Diff preview for src/app.tsx" })).not.toBeInTheDocument()
 
-    fireEvent.click(getByRole("button", { name: /已编辑\s*src\/app\.tsx/ }))
+    fireEvent.click(getByRole("button", { name: /Edited\s*src\/app\.tsx/ }))
     expect(getByRole("region", { name: "Diff preview for src/app.tsx" })).toBeInTheDocument()
     expect(getByText('const label = "old"')).toBeInTheDocument()
     expect(getByText('const label = "new"')).toBeInTheDocument()
     expect(container.querySelectorAll(".right-sidebar-diff-row.is-remove")).toHaveLength(1)
     expect(container.querySelectorAll(".right-sidebar-diff-row.is-add")).toHaveLength(1)
 
-    fireEvent.click(getByRole("button", { name: /已编辑\s*src\/app\.tsx/ }))
+    fireEvent.click(getByRole("button", { name: /Edited\s*src\/app\.tsx/ }))
     expect(screen.queryByRole("region", { name: "Diff preview for src/app.tsx" })).not.toBeInTheDocument()
   })
 
@@ -2116,8 +2116,8 @@ describe("ThreadView image trace items", () => {
       assistantTraceMessage("assistant-patch-large", [patchItem], false),
     ])
 
-    fireEvent.click(getByRole("button", { name: "已编辑 1 个文件" }))
-    fireEvent.click(getByRole("button", { name: /已编辑\s*src\/large\.ts/ }))
+    fireEvent.click(getByRole("button", { name: "Edited 1 file" }))
+    fireEvent.click(getByRole("button", { name: /Edited\s*src\/large\.ts/ }))
 
     expect(getByRole("region", { name: "Diff preview for src/large.ts" })).toBeInTheDocument()
     expect(container.textContent).not.toContain(hiddenTail)
@@ -2185,7 +2185,7 @@ describe("ThreadView image trace items", () => {
     expect(inlineSummary?.textContent).toContain("src/app.ts")
     expect(inlineSummary?.textContent).toContain("+1-1")
     expect(inlineSummary?.textContent).toMatch(/src\/app\.ts\s*\+1-1/)
-    expect(inlineSummary?.textContent).not.toContain("正在创建")
+    expect(inlineSummary?.textContent).not.toContain("Creating")
     expect(getAllByText("src/app.ts").length).toBeGreaterThan(0)
     expect(container.querySelector(".trace-tool-draft-patch")).toBeNull()
 
@@ -2315,9 +2315,9 @@ describe("ThreadView image trace items", () => {
     expect(inlineSummary?.textContent).toContain("src/app.ts")
     expect(inlineSummary?.textContent).toContain("+1-0")
     expect(inlineSummary?.textContent).toMatch(/src\/app\.ts\s*\+1-0/)
-    expect(inlineSummary?.textContent).not.toContain("已创建")
-    expect(queryByText("正在创建")).toBeNull()
-    expect(queryByText("已创建")).toBeNull()
+    expect(inlineSummary?.textContent).not.toContain("Created")
+    expect(queryByText("Creating")).toBeNull()
+    expect(queryByText("Created")).toBeNull()
     expect(container.querySelector(".trace-tool-draft-patch")).toBeNull()
     fireEvent.click(inlineSummary!)
     expect(getByRole("button", { name: /src\/app\.ts\s*1 additions,\s*0 deletions/ })).toBeInTheDocument()
@@ -2511,13 +2511,13 @@ describe("ThreadView image trace items", () => {
       assistantTraceMessage("assistant-patch-ordinary", [patchItem], false),
     ])
 
-    expect(getByRole("button", { name: "已编辑 1 个文件" })).toBeInTheDocument()
+    expect(getByRole("button", { name: "Edited 1 file" })).toBeInTheDocument()
     expect(queryByText("src/ordinary.ts")).not.toBeInTheDocument()
 
-    fireEvent.click(getByRole("button", { name: "已编辑 1 个文件" }))
+    fireEvent.click(getByRole("button", { name: "Edited 1 file" }))
 
     expect(getByText("src/ordinary.ts")).toBeInTheDocument()
-    expect(getByText("仅摘要")).toBeInTheDocument()
+    expect(getByText("Summary only")).toBeInTheDocument()
   })
 
   it("closes the lightbox with Escape and restores focus to the thumbnail trigger", () => {
@@ -5117,8 +5117,8 @@ describe("ThreadView assistant response markdown", () => {
     expect(getByRole("article", { name: "Proposed plan" })).toBeInTheDocument()
     expect(getByRole("heading", { name: "Plan Title" })).toBeInTheDocument()
     expect(queryByText("<proposed_plan>")).not.toBeInTheDocument()
-    expect(getByRole("button", { name: "取消" })).toBeEnabled()
-    expect(getByRole("button", { name: "确认实施" })).toBeEnabled()
+    expect(getByRole("button", { name: "Cancel" })).toBeEnabled()
+    expect(getByRole("button", { name: "Confirm implementation" })).toBeEnabled()
   })
 
   it("renders proposed plan blocks even when the model adds a preface", () => {
@@ -5144,8 +5144,8 @@ describe("ThreadView assistant response markdown", () => {
     expect(getByRole("heading", { name: "Prefaced Plan" })).toBeInTheDocument()
     expect(queryByText("<proposed_plan>")).not.toBeInTheDocument()
     expect(queryByText("I will draft the plan now.")).not.toBeInTheDocument()
-    expect(getByRole("button", { name: "取消" })).toBeEnabled()
-    expect(getByRole("button", { name: "确认实施" })).toBeEnabled()
+    expect(getByRole("button", { name: "Cancel" })).toBeEnabled()
+    expect(getByRole("button", { name: "Confirm implementation" })).toBeEnabled()
   })
 
   it("removes proposed plan actions and shows cancelled state after cancel", () => {
@@ -5167,11 +5167,11 @@ describe("ThreadView assistant response markdown", () => {
       onProposedPlanConfirm,
     })
 
-    fireEvent.click(getByRole("button", { name: "取消" }))
+    fireEvent.click(getByRole("button", { name: "Cancel" }))
 
-    expect(getByText("已取消")).toBeInTheDocument()
-    expect(queryByRole("button", { name: "取消" })).not.toBeInTheDocument()
-    expect(queryByRole("button", { name: "确认实施" })).not.toBeInTheDocument()
+    expect(getByText("Cancelled")).toBeInTheDocument()
+    expect(queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument()
+    expect(queryByRole("button", { name: "Confirm implementation" })).not.toBeInTheDocument()
     expect(onProposedPlanConfirm).not.toHaveBeenCalled()
   })
 
@@ -5194,12 +5194,12 @@ describe("ThreadView assistant response markdown", () => {
       onProposedPlanConfirm,
     })
 
-    fireEvent.click(getByRole("button", { name: "确认实施" }))
+    fireEvent.click(getByRole("button", { name: "Confirm implementation" }))
 
     expect(onProposedPlanConfirm).toHaveBeenCalledWith({ planMarkdown: proposedPlan })
-    await waitFor(() => expect(getByText("已确认")).toBeInTheDocument())
-    expect(queryByRole("button", { name: "取消" })).not.toBeInTheDocument()
-    expect(queryByRole("button", { name: "确认实施" })).not.toBeInTheDocument()
+    await waitFor(() => expect(getByText("Confirmed")).toBeInTheDocument())
+    expect(queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument()
+    expect(queryByRole("button", { name: "Confirm implementation" })).not.toBeInTheDocument()
   })
 
   it("keeps proposed plan actions available and shows an error when confirm fails", async () => {
@@ -5221,11 +5221,11 @@ describe("ThreadView assistant response markdown", () => {
       onProposedPlanConfirm,
     })
 
-    fireEvent.click(getByRole("button", { name: "确认实施" }))
+    fireEvent.click(getByRole("button", { name: "Confirm implementation" }))
 
     await waitFor(() => expect(getByText("Approval failed")).toBeInTheDocument())
-    expect(getByRole("button", { name: "取消" })).toBeEnabled()
-    expect(getByRole("button", { name: "确认实施" })).toBeEnabled()
+    expect(getByRole("button", { name: "Cancel" })).toBeEnabled()
+    expect(getByRole("button", { name: "Confirm implementation" })).toBeEnabled()
   })
 
   it("renders historical complete proposed plans without actions", () => {
@@ -5247,8 +5247,8 @@ describe("ThreadView assistant response markdown", () => {
 
     expect(getByRole("heading", { name: "Historical Plan" })).toBeInTheDocument()
     expect(queryByText("已过期")).not.toBeInTheDocument()
-    expect(queryByRole("button", { name: "取消" })).not.toBeInTheDocument()
-    expect(queryByRole("button", { name: "确认实施" })).not.toBeInTheDocument()
+    expect(queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument()
+    expect(queryByRole("button", { name: "Confirm implementation" })).not.toBeInTheDocument()
   })
 
   it("hides proposed plan actions once a newer message appears", () => {
@@ -5269,15 +5269,15 @@ describe("ThreadView assistant response markdown", () => {
       onProposedPlanConfirm,
     })
 
-    expect(getByRole("button", { name: "取消" })).toBeEnabled()
-    expect(getByRole("button", { name: "确认实施" })).toBeEnabled()
+    expect(getByRole("button", { name: "Cancel" })).toBeEnabled()
+    expect(getByRole("button", { name: "Confirm implementation" })).toBeEnabled()
 
     rerender(<ThreadView {...props} activeMessages={[planMessage, userMessage("user-1", "Continue")]} />)
 
     expect(getByRole("heading", { name: "Fresh Plan" })).toBeInTheDocument()
     expect(queryByText("已过期")).not.toBeInTheDocument()
-    expect(queryByRole("button", { name: "取消" })).not.toBeInTheDocument()
-    expect(queryByRole("button", { name: "确认实施" })).not.toBeInTheDocument()
+    expect(queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument()
+    expect(queryByRole("button", { name: "Confirm implementation" })).not.toBeInTheDocument()
   })
 
   it("renders streaming proposed plan responses immediately with disabled actions", () => {
@@ -5313,10 +5313,10 @@ describe("ThreadView assistant response markdown", () => {
     expect(getByRole("article", { name: "Proposed plan" })).toBeInTheDocument()
     expect(getByRole("heading", { name: "Streaming Plan" })).toBeInTheDocument()
     expect(queryByText("<proposed_plan>")).not.toBeInTheDocument()
-    expect(getByRole("button", { name: "取消" })).toBeDisabled()
-    expect(getByRole("button", { name: "确认实施" })).toBeDisabled()
+    expect(getByRole("button", { name: "Cancel" })).toBeDisabled()
+    expect(getByRole("button", { name: "Confirm implementation" })).toBeDisabled()
 
-    fireEvent.click(getByRole("button", { name: "确认实施" }))
+    fireEvent.click(getByRole("button", { name: "Confirm implementation" }))
     expect(onProposedPlanConfirm).not.toHaveBeenCalled()
   })
 
@@ -5352,14 +5352,14 @@ describe("ThreadView assistant response markdown", () => {
       onProposedPlanConfirm,
     })
 
-    expect(getByRole("button", { name: "确认实施" })).toBeDisabled()
+    expect(getByRole("button", { name: "Confirm implementation" })).toBeDisabled()
 
     rerender(<ThreadView {...props} activeMessages={[assistantTraceMessage("assistant-1", [buildResponseItem(completePlan)], true)]} />)
 
-    expect(getByRole("button", { name: "取消" })).toBeEnabled()
-    expect(getByRole("button", { name: "确认实施" })).toBeEnabled()
+    expect(getByRole("button", { name: "Cancel" })).toBeEnabled()
+    expect(getByRole("button", { name: "Confirm implementation" })).toBeEnabled()
 
-    fireEvent.click(getByRole("button", { name: "确认实施" }))
+    fireEvent.click(getByRole("button", { name: "Confirm implementation" }))
     expect(onProposedPlanConfirm).toHaveBeenCalledWith({ planMarkdown: completePlan })
   })
 
@@ -5714,8 +5714,8 @@ describe("ThreadView message actions", () => {
       insertedMessage,
     ])
 
-    expect(screen.getByText("提交，但不中断模型运行")).toBeInTheDocument()
-    expect(screen.getByText("下次模型/工具调用后")).toBeInTheDocument()
+    expect(screen.getByText("Submitted without interrupting the model")).toBeInTheDocument()
+    expect(screen.getByText("After the next model or tool call")).toBeInTheDocument()
   })
 
   it("renders active steer-marked user messages without insertion metadata as committed messages", () => {
@@ -5935,43 +5935,43 @@ describe("ThreadView message actions", () => {
       { onFileChangeSelect, onMessageDiffRestore, onMessageDiffReview },
     )
 
-    const summaryButton = getByRole("button", { name: /2 个文件已更改/i })
+    const summaryButton = getByRole("button", { name: /2 files changed/i })
     const finalAssistantOutput = getByText("Final answer after file updates.")
 
     expect(summaryButton).toBeInTheDocument()
     expect(summaryButton).toHaveAttribute("aria-expanded", "false")
     expect(finalAssistantOutput.compareDocumentPosition(summaryButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(getByRole("button", { name: "审核" })).toBeInTheDocument()
-    expect(getByRole("button", { name: "撤销" })).toBeInTheDocument()
-    expect(queryByRole("button", { name: /审核\s+src\/App\.tsx/i })).toBeNull()
-    expect(queryByRole("button", { name: /展开\s+src\/App\.tsx\s+变更/i })).toBeNull()
+    expect(getByRole("button", { name: "Review" })).toBeInTheDocument()
+    expect(getByRole("button", { name: "Revert" })).toBeInTheDocument()
+    expect(queryByRole("button", { name: /Review\s+src\/App\.tsx/i })).toBeNull()
+    expect(queryByRole("button", { name: /Expand changes for src\/App\.tsx/i })).toBeNull()
 
     fireEvent.click(summaryButton)
     expect(summaryButton).toHaveAttribute("aria-expanded", "true")
-    expect(getByRole("button", { name: /展开\s+src\/App\.tsx\s+变更/i })).toBeInTheDocument()
+    expect(getByRole("button", { name: /Expand changes for src\/App\.tsx/i })).toBeInTheDocument()
     expect(queryByRole("region", { name: "Diff preview for src/App.tsx" })).not.toBeInTheDocument()
 
-    fireEvent.click(getByRole("button", { name: "审核" }))
-    fireEvent.click(getByRole("button", { name: /展开\s+src\/App\.tsx\s+变更/i }))
+    fireEvent.click(getByRole("button", { name: "Review" }))
+    fireEvent.click(getByRole("button", { name: /Expand changes for src\/App\.tsx/i }))
     expect(getByRole("region", { name: "Diff preview for src/App.tsx" })).toBeInTheDocument()
     expect(getByText("old app")).toBeInTheDocument()
     expect(getByText("new app")).toBeInTheDocument()
     expect(onFileChangeSelect).not.toHaveBeenCalled()
-    fireEvent.click(getByRole("button", { name: /审核\s+src\/styles\.css/i }))
-    fireEvent.click(getByRole("button", { name: "收起文件变更" }))
-    expect(queryByRole("button", { name: /审核\s+src\/App\.tsx/i })).toBeNull()
-    fireEvent.click(getByRole("button", { name: "展开文件变更" }))
-    fireEvent.click(getByRole("button", { name: /撤销/i }))
+    fireEvent.click(getByRole("button", { name: /Review\s+src\/styles\.css/i }))
+    fireEvent.click(getByRole("button", { name: "Collapse file changes" }))
+    expect(queryByRole("button", { name: /Review\s+src\/App\.tsx/i })).toBeNull()
+    fireEvent.click(getByRole("button", { name: "Expand file changes" }))
+    fireEvent.click(getByRole("button", { name: /Revert/i }))
 
     expect(onFileChangeSelect).toHaveBeenCalledWith("src/styles.css")
     expect(onMessageDiffReview).toHaveBeenCalledWith(["src/App.tsx", "src/styles.css"])
     expect(confirmRestore).toHaveBeenCalledTimes(1)
     expect(confirmRestore).toHaveBeenCalledWith(
-      "尝试反向应用这 2 个文件的变更？不能自动撤销的文件会提示失败，已成功撤销的文件会保留结果。",
+      "Try to reverse changes to 2 files? Files that cannot be reverted automatically will report errors; successfully reverted files will keep their results.",
     )
     expect(onMessageDiffRestore).not.toHaveBeenCalled()
 
-    fireEvent.click(getByRole("button", { name: /撤销/i }))
+    fireEvent.click(getByRole("button", { name: /Revert/i }))
 
     await waitFor(() => {
       expect(onMessageDiffRestore).toHaveBeenCalledWith([
@@ -6039,8 +6039,8 @@ describe("ThreadView message actions", () => {
       },
     )
 
-    fireEvent.click(screen.getByRole("button", { name: /1 个文件已更改/i }))
-    fireEvent.click(screen.getByRole("button", { name: "展开 tetris.html 变更" }))
+    fireEvent.click(screen.getByRole("button", { name: /1 file changed/i }))
+    fireEvent.click(screen.getByRole("button", { name: "Expand changes for tetris.html" }))
 
     expect(screen.getByRole("region", { name: "Diff preview for tetris.html" })).toBeInTheDocument()
     expect(screen.getByText("<canvas id=\"board\"></canvas>")).toBeInTheDocument()
@@ -6097,17 +6097,17 @@ describe("ThreadView message actions", () => {
       buildPatchAssistantMessage("assistant-second-diff", "first message", "second message"),
     ])
 
-    screen.getAllByRole("button", { name: /1 个文件已更改/i }).forEach((button) => {
+    screen.getAllByRole("button", { name: /1 file changed/i }).forEach((button) => {
       fireEvent.click(button)
     })
-    const sharedFileButtons = screen.getAllByRole("button", { name: "展开 src/shared.ts 变更" })
+    const sharedFileButtons = screen.getAllByRole("button", { name: "Expand changes for src/shared.ts" })
     fireEvent.click(sharedFileButtons[0]!)
 
     expect(screen.getByText('const value = "old"')).toBeInTheDocument()
     expect(screen.getByText('const value = "first message"')).toBeInTheDocument()
     expect(screen.queryByText('const value = "second message"')).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole("button", { name: "展开 src/shared.ts 变更" }))
+    fireEvent.click(screen.getByRole("button", { name: "Expand changes for src/shared.ts" }))
 
     expect(screen.getByText('const value = "second message"')).toBeInTheDocument()
   })
@@ -6173,10 +6173,10 @@ describe("ThreadView message actions", () => {
       },
     )
 
-    screen.getAllByRole("button", { name: /1 个文件已更改/i }).forEach((button) => {
+    screen.getAllByRole("button", { name: /1 file changed/i }).forEach((button) => {
       fireEvent.click(button)
     })
-    const latestSharedPatchButtons = screen.getAllByRole("button", { name: "展开 src/shared.ts 变更" })
+    const latestSharedPatchButtons = screen.getAllByRole("button", { name: "Expand changes for src/shared.ts" })
     expect(latestSharedPatchButtons).toHaveLength(1)
     fireEvent.click(latestSharedPatchButtons[0]!)
 
@@ -6219,7 +6219,7 @@ describe("ThreadView message actions", () => {
       },
     ], { onMessageDiffRestore })
 
-    const restoreButton = screen.getByRole("button", { name: /撤销/i })
+    const restoreButton = screen.getByRole("button", { name: /Revert/i })
     fireEvent.click(restoreButton)
 
     await waitFor(() => {
@@ -6245,7 +6245,7 @@ describe("ThreadView message actions", () => {
       },
     ])
 
-    expect(screen.queryByRole("button", { name: /个文件已更改/i })).toBeNull()
+    expect(screen.queryByRole("button", { name: /files? changed/i })).toBeNull()
   })
 
   it("uses the latest action callback without rebuilding the memoized viewport", () => {
@@ -6632,7 +6632,7 @@ describe("ThreadView message actions", () => {
     fireEvent.contextMenu(getByText(responseText), { clientX: 120, clientY: 80 })
 
     const menu = screen.getByRole("menu", { name: "Thread copy actions" })
-    fireEvent.click(within(menu).getByRole("menuitem", { name: "复制" }))
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Copy" }))
 
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith(responseText)
@@ -6651,7 +6651,7 @@ describe("ThreadView message actions", () => {
     fireEvent.contextMenu(getByText(promptText), { clientX: 80, clientY: 40 })
 
     const menu = screen.getByRole("menu", { name: "Thread copy actions" })
-    fireEvent.click(within(menu).getByRole("menuitem", { name: "复制" }))
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Copy" }))
 
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith(promptText)
@@ -6691,7 +6691,7 @@ describe("ThreadView message actions", () => {
     fireEvent.contextMenu(responseElement, { clientX: 60, clientY: 30 })
 
     const menu = screen.getByRole("menu", { name: "Thread copy actions" })
-    fireEvent.click(within(menu).getByRole("menuitem", { name: "复制" }))
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Copy" }))
 
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith(responseText)
@@ -6840,8 +6840,8 @@ describe("ThreadView message actions", () => {
     fireEvent.contextMenu(getByText(responseText), { clientX: 90, clientY: 50 })
 
     const menu = screen.getByRole("menu", { name: "Thread copy actions" })
-    expect(within(menu).getByRole("menuitem", { name: "复制" })).toBeInTheDocument()
-    fireEvent.click(within(menu).getByRole("menuitem", { name: "加入 Composer" }))
+    expect(within(menu).getByRole("menuitem", { name: "Copy" })).toBeInTheDocument()
+    fireEvent.click(within(menu).getByRole("menuitem", { name: "Add to Composer" }))
 
     await waitFor(() => {
       expect(onAddToComposer).toHaveBeenCalledWith(responseText)
@@ -6898,8 +6898,8 @@ describe("ThreadView message actions", () => {
       fireEvent.contextMenu(getByAltText("Local preview"), { clientX: 120, clientY: 80 })
 
       const menu = screen.getByRole("menu", { name: "Thread image actions" })
-      expect(within(menu).queryByRole("menuitem", { name: "复制" })).not.toBeInTheDocument()
-      fireEvent.click(within(menu).getByRole("menuitem", { name: "复制图片" }))
+      expect(within(menu).queryByRole("menuitem", { name: "Copy" })).not.toBeInTheDocument()
+      fireEvent.click(within(menu).getByRole("menuitem", { name: "Copy image" }))
 
       await waitFor(() => {
         expect(write).toHaveBeenCalledTimes(1)
@@ -7058,7 +7058,7 @@ describe("ThreadView message actions", () => {
 
       const menu = screen.getByRole("menu", { name: "Thread image actions" })
       expect(within(menu).getAllByRole("menuitem")).toHaveLength(2)
-      fireEvent.click(within(menu).getByRole("menuitem", { name: "保存图片" }))
+      fireEvent.click(within(menu).getByRole("menuitem", { name: "Save image" }))
 
       await waitFor(() => {
         expect(saveImageToFolder).toHaveBeenCalledWith({
@@ -7119,7 +7119,7 @@ describe("ThreadView message actions", () => {
       fireEvent.contextMenu(getByAltText("Local preview"), { clientX: 90, clientY: 50 })
 
       const menu = screen.getByRole("menu", { name: "Thread image actions" })
-      fireEvent.click(within(menu).getByRole("menuitem", { name: "加入 Composer" }))
+      fireEvent.click(within(menu).getByRole("menuitem", { name: "Add to Composer" }))
 
       await waitFor(() => {
         expect(onAddImageToComposer).toHaveBeenCalledWith([
@@ -7338,14 +7338,14 @@ describe("ThreadView turn navigator", () => {
 
     renderThread(activeMessages, { activeTurns })
 
-    const navigator = screen.getByRole("navigation", { name: "对话轮次导航" })
-    const turnButtons = within(navigator).getAllByRole("button", { name: /跳转到第/ })
+    const navigator = screen.getByRole("navigation", { name: "Conversation turn navigation" })
+    const turnButtons = within(navigator).getAllByRole("button", { name: /Go to turn/ })
     expect(turnButtons).toHaveLength(2)
-    expect(turnButtons[0]).toHaveAccessibleName("跳转到第 1 / 2 轮：按照文档， 推进完成 edit 界面的开发")
-    expect(turnButtons[1]).toHaveAccessibleName("跳转到第 2 / 2 轮：Ship the final result")
+    expect(turnButtons[0]).toHaveAccessibleName("Go to turn 1 of 2: 按照文档， 推进完成 edit 界面的开发")
+    expect(turnButtons[1]).toHaveAccessibleName("Go to turn 2 of 2: Ship the final result")
 
     fireEvent.mouseEnter(turnButtons[0]!)
-    expect(screen.getByRole("tooltip")).toHaveTextContent("第 1 / 2 轮 · 按照文档， 推进完成 edit 界面的开发")
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Turn 1 of 2 · 按照文档， 推进完成 edit 界面的开发")
   })
 
   it("uses virtual row offsets for unmounted turns and records a detached scroll snapshot", async () => {
@@ -7364,7 +7364,7 @@ describe("ThreadView turn navigator", () => {
     })
 
     expect(screen.queryByText("Prompt 99")).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole("button", { name: "跳转到第 100 / 120 轮：Prompt 99" }))
+    fireEvent.click(screen.getByRole("button", { name: "Go to turn 100 of 120: Prompt 99" }))
     // jsdom does not emit the native scroll event that browsers produce for
     // the virtualizer's scrollTop assignment.
     fireEvent.scroll(threadColumn)
@@ -7376,7 +7376,7 @@ describe("ThreadView turn navigator", () => {
       expect.objectContaining({ pinnedToBottom: false }),
     )
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "跳转到第 100 / 120 轮：Prompt 99" })).toHaveAttribute("aria-current", "step")
+      expect(screen.getByRole("button", { name: "Go to turn 100 of 120: Prompt 99" })).toHaveAttribute("aria-current", "step")
     })
   })
 
@@ -7424,8 +7424,8 @@ describe("ThreadView turn navigator", () => {
       scrollTop: 0,
     })
 
-    const first = screen.getByRole("button", { name: "跳转到第 1 / 20 轮：Prompt 0" })
-    const navigator = screen.getByRole("navigation", { name: "对话轮次导航" })
+    const first = screen.getByRole("button", { name: "Go to turn 1 of 20: Prompt 0" })
+    const navigator = screen.getByRole("navigation", { name: "Conversation turn navigation" })
     fireEvent.scroll(threadColumn)
     expect(first).toHaveAttribute("aria-current", "step")
     await waitFor(() => {
@@ -7443,7 +7443,7 @@ describe("ThreadView turn navigator", () => {
     expect(first).not.toHaveAttribute("data-visible")
     expect(navigator.querySelectorAll('[data-visible="true"]').length).toBeGreaterThan(0)
     expect(
-      screen.getAllByRole("button", { name: /跳转到第/ }).some((button) => button.getAttribute("aria-current") === "step"),
+      screen.getAllByRole("button", { name: /Go to turn/ }).some((button) => button.getAttribute("aria-current") === "step"),
     ).toBe(true)
   })
 
@@ -7460,9 +7460,9 @@ describe("ThreadView turn navigator", () => {
     })
     setScrollMetrics(threadColumn, { clientHeight: 200, scrollHeight: 1_000, scrollTop: 0 })
 
-    const first = screen.getByRole("button", { name: "跳转到第 1 / 3 轮：First" })
-    const second = screen.getByRole("button", { name: "跳转到第 2 / 3 轮：Second" })
-    const third = screen.getByRole("button", { name: "跳转到第 3 / 3 轮：Third" })
+    const first = screen.getByRole("button", { name: "Go to turn 1 of 3: First" })
+    const second = screen.getByRole("button", { name: "Go to turn 2 of 3: Second" })
+    const third = screen.getByRole("button", { name: "Go to turn 3 of 3: Third" })
     first.focus()
     fireEvent.keyDown(first, { key: "ArrowDown" })
     expect(second).toHaveFocus()
@@ -7488,7 +7488,7 @@ describe("ThreadView turn navigator", () => {
     })
     setScrollMetrics(threadColumn, { clientHeight: 300, scrollHeight: 5_000, scrollTop: 0 })
 
-    fireEvent.click(screen.getByRole("button", { name: "跳转到第 6 / 20 轮：Prompt 5" }))
+    fireEvent.click(screen.getByRole("button", { name: "Go to turn 6 of 20: Prompt 5" }))
     const navigatedScrollTop = threadColumn.scrollTop
     expect(navigatedScrollTop).toBeGreaterThan(0)
 
@@ -7510,14 +7510,14 @@ describe("ThreadView turn navigator", () => {
     const activeTurns = users.map((message, index) => threadTurn(`turn-${index}`, message))
     renderThread(users, { activeTurns })
 
-    const first = screen.getByRole("button", { name: `跳转到第 1 / 28 轮：${longWord}` })
+    const first = screen.getByRole("button", { name: `Go to turn 1 of 28: ${longWord}` })
     fireEvent.mouseEnter(first)
     expect(screen.getByRole("tooltip").textContent?.endsWith("…")).toBe(true)
 
-    fireEvent.click(screen.getByRole("button", { name: "当前第 1 / 28 轮，打开对话轮次导航" }))
-    const compactDialog = screen.getByRole("dialog", { name: "选择对话轮次" })
+    fireEvent.click(screen.getByRole("button", { name: "Currently on turn 1 of 28; open conversation turn navigation" }))
+    const compactDialog = screen.getByRole("dialog", { name: "Choose a conversation turn" })
     expect(within(compactDialog).getAllByRole("button")).toHaveLength(28)
-    expect(within(compactDialog).getByRole("button", { name: "跳转到第 28 / 28 轮：Prompt 27" })).toBeInTheDocument()
+    expect(within(compactDialog).getByRole("button", { name: "Go to turn 28 of 28: Prompt 27" })).toBeInTheDocument()
   })
 })
 

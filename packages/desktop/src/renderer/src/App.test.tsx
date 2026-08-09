@@ -6162,7 +6162,7 @@ describe("App", () => {
 
     const getSessionDiff = window.desktop!.getSessionDiff as ReturnType<typeof vi.fn>
     const diffCallsBeforeTurnRestore = getSessionDiff.mock.calls.length
-    fireEvent.click(screen.getByRole("button", { name: /撤销/i }))
+    fireEvent.click(screen.getByRole("button", { name: /Revert/i }))
 
     await waitFor(() => {
       expect(window.desktop!.reverseApplyWorkspaceDiffPatches).toHaveBeenCalledWith({
@@ -6351,20 +6351,20 @@ describe("App", () => {
     expect(within(traceRegions[0] as HTMLElement).getByText("Inspecting workspace.")).toBeInTheDocument()
     expect(within(traceRegions[0] as HTMLElement).queryByRole("button", { name: /npm test/i })).not.toBeInTheDocument()
 
-    expect(within(traceRegions[1] as HTMLElement).getByRole("button", { name: /^npm test 已完成$/i })).toBeInTheDocument()
+    expect(within(traceRegions[1] as HTMLElement).getByRole("button", { name: /^npm test Done$/i })).toBeInTheDocument()
     expect(within(traceRegions[1] as HTMLElement).queryByText("Inspecting workspace.")).not.toBeInTheDocument()
 
     expect(within(traceRegions[2] as HTMLElement).getByText("Evaluating test output.")).toBeInTheDocument()
     expect(within(traceRegions[2] as HTMLElement).queryByRole("button", { name: /replace-text/i })).not.toBeInTheDocument()
 
-    expect(within(traceRegions[3] as HTMLElement).getByRole("button", { name: /^replace-text 已完成$/i })).toBeInTheDocument()
+    expect(within(traceRegions[3] as HTMLElement).getByRole("button", { name: /^replace-text Done$/i })).toBeInTheDocument()
     expect(within(traceRegions[3] as HTMLElement).queryByText("Evaluating test output.")).not.toBeInTheDocument()
 
-    const firstFileChangeSummary = within(traceRegions[4] as HTMLElement).getByRole("button", { name: "已编辑 1 个文件" })
+    const firstFileChangeSummary = within(traceRegions[4] as HTMLElement).getByRole("button", { name: "Edited 1 file" })
     expect(firstFileChangeSummary).toHaveAttribute("aria-expanded", "false")
     expect(within(traceRegions[4] as HTMLElement).queryByText("src/App.tsx")).not.toBeInTheDocument()
 
-    const secondFileChangeSummary = within(traceRegions[5] as HTMLElement).getByRole("button", { name: "已编辑 2 个文件" })
+    const secondFileChangeSummary = within(traceRegions[5] as HTMLElement).getByRole("button", { name: "Edited 2 files" })
     expect(secondFileChangeSummary).toHaveAttribute("aria-expanded", "false")
     expect(within(traceRegions[5] as HTMLElement).queryByText("1 file change (+2 -1)")).not.toBeInTheDocument()
     expect(within(traceRegions[5] as HTMLElement).queryByText("src/App.tsx")).not.toBeInTheDocument()
@@ -6591,7 +6591,7 @@ describe("App", () => {
     expect(fileChangeSections).toHaveLength(2)
 
     const firstFileChangeSection = fileChangeSections[0] as HTMLElement
-    const firstFileChangeSummary = within(firstFileChangeSection).getByRole("button", { name: "已编辑 1 个文件" })
+    const firstFileChangeSummary = within(firstFileChangeSection).getByRole("button", { name: "Edited 1 file" })
     expect(firstFileChangeSummary).toHaveAttribute("aria-expanded", "false")
     expect(within(firstFileChangeSection).queryByText("docs/release-notes.md")).not.toBeInTheDocument()
     fireEvent.click(firstFileChangeSummary)
@@ -6600,7 +6600,7 @@ describe("App", () => {
     expect(within(firstFileChangeSection).queryByText("docs/release-checklist.md")).not.toBeInTheDocument()
 
     const finalFileChangeSection = fileChangeSections[1] as HTMLElement
-    const finalFileChangeSummary = within(finalFileChangeSection).getByRole("button", { name: "已编辑 1 个文件" })
+    const finalFileChangeSummary = within(finalFileChangeSection).getByRole("button", { name: "Edited 1 file" })
     expect(finalFileChangeSummary).toHaveAttribute("aria-expanded", "false")
     expect(within(finalFileChangeSection).queryByText("docs/release-checklist.md")).not.toBeInTheDocument()
     fireEvent.click(finalFileChangeSummary)
@@ -6834,7 +6834,7 @@ describe("App", () => {
       })
     })
 
-    await screen.findByRole("button", { name: /read-file.*等待确认/i })
+    await screen.findByRole("button", { name: /read-file.*Waiting for confirmation/i })
   })
 
   it("subscribes to child sessions in the background when subagents are created", async () => {
@@ -7153,11 +7153,11 @@ describe("App", () => {
     ) as HTMLElement[]
     expect(fileChangeSections).toHaveLength(2)
 
-    const firstFileChangeSummary = within(fileChangeSections[0] as HTMLElement).getByRole("button", { name: "已编辑 1 个文件" })
+    const firstFileChangeSummary = within(fileChangeSections[0] as HTMLElement).getByRole("button", { name: "Edited 1 file" })
     expect(firstFileChangeSummary).toHaveAttribute("aria-expanded", "false")
 
     const secondFileChangeSection = fileChangeSections[1] as HTMLElement
-    const secondFileChangeSummary = within(secondFileChangeSection).getByRole("button", { name: "已编辑 2 个文件" })
+    const secondFileChangeSummary = within(secondFileChangeSection).getByRole("button", { name: "Edited 2 files" })
     expect(secondFileChangeSummary).toHaveAttribute("aria-expanded", "false")
     expect(within(secondFileChangeSection).queryByText("1 file change (+2 -1)")).not.toBeInTheDocument()
     expect(within(secondFileChangeSection).queryByText("src/App.tsx")).not.toBeInTheDocument()
@@ -7829,7 +7829,7 @@ describe("App", () => {
 
     render(<App />)
 
-    const toolTraceToggle = await screen.findByRole("button", { name: /read-file.*等待确认/i })
+    const toolTraceToggle = await screen.findByRole("button", { name: /read-file.*Waiting for confirmation/i })
     expect(toolTraceToggle).toHaveAttribute("aria-expanded", "false")
     expect(screen.queryByText("Waiting for permission approval before the tool can continue.")).not.toBeInTheDocument()
 
