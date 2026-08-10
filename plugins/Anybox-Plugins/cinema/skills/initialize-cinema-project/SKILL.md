@@ -1,258 +1,39 @@
 ---
 name: Initialize Cinema Project
-description: Initialize, inspect, or repair an anybox for cinema local film project using only generic shell and file editing tools. Use when the user asks to create, prepare, open, initialize, or repair a local folder as an anybox for cinema project. Do not use cinema-specific runtime APIs or custom project tools.
+description: Initialize or continue an anybox for cinema 1.0 project through the Cinema Web Runtime, then inspect it or seed a storyboard with the bundled Cinema MCP tools.
 ---
 
 # Initialize Cinema Project
 
-This skill turns an ordinary local folder into an `anybox for cinema` project. The project folder is the source of truth. AnyBox remains the controller; external browser or canvas UIs are only presentation and interaction surfaces over this local project.
+Use this skill when the user wants to create, open, inspect, or begin planning a local anybox for cinema project.
 
-## Hard Rules
+## Runtime ownership
 
-- Use only generic shell commands and normal file creation/editing tools.
-- Do not call any custom `cinema_*`, `video_workspace_*`, or provider-specific project initialization tools.
-- Do not require model deployment. This product assumes users bring their own provider API keys later.
-- Do not store API keys inside the project folder during initialization.
-- Canvas nodes must use exactly four types: `text`, `image`, `video`, and `audio`.
-- Do not add aliases, migrations, or compatibility branches for removed node types.
-- Do not overwrite existing user files. If a file already exists, inspect it and repair only clearly missing Cinema metadata when it is safe.
-- Keep the process idempotent: running this skill again should not duplicate folders, duplicate manifest sections, or destroy project data.
+- Treat the Cinema Web Runtime as the only owner of project initialization, repair, and migration.
+- Do not create or rewrite `.anybox-cinema` files with shell commands or generic file-editing tools.
+- Do not place provider credentials in the project. Configure them in the Cinema App; the Runtime stores supported secrets in the operating-system keychain or uses an explicit session-only fallback.
+- Use only the canonical canvas node types: `text`, `image`, `video`, and `audio`.
 
-## Project Root
+## Workflow
 
-Use the user-specified folder as the project root. If no folder is specified, use the current working directory.
+1. Resolve the requested project folder to an absolute local path and confirm that it exists.
+2. Ask the user to open **anybox for cinema** from the Anybox right sidebar.
+3. In the Cinema project launcher, choose the folder and use the initialize/open action. The Runtime creates the current project structure and performs any required migration.
+4. After initialization, call `cinema_get_project_summary` with the absolute `projectRoot` to verify the project and report its current canvas state.
+5. If the user supplied a shot list, call `cinema_create_storyboard` with:
+   - the absolute `projectRoot`;
+   - a stable, task-specific `idempotencyKey`;
+   - one `shots` item per shot, each with a title and optional text or image prompt;
+   - `includeImageNodes: true` unless the user asks for text-only planning.
+6. Leave provider generation, media editing, migration, and delivery to the Cinema App Runtime.
 
-Before writing anything, run generic inspection commands:
+## Error handling
 
-```bash
-pwd
-ls -la
-test -e .anybox-cinema/project.json && echo "cinema-project: exists" || echo "cinema-project: missing"
-```
+- `PROJECT_INITIALIZATION_REQUIRED`: initialize the selected folder from the Cinema project launcher, then retry the summary.
+- `PROJECT_MIGRATION_REQUIRED`: complete the migration in the Cinema App; do not patch project metadata manually.
+- `PROJECT_ID_CONFLICT`: use the Cinema App's migration/clone-ID flow.
+- Canvas revision conflict: read the latest project state before retrying a write; do not reuse a command with a stale base revision.
 
-If the current folder is obviously the wrong location, stop and ask the user for the intended project folder. Otherwise continue.
+## Completion
 
-## Target Structure
-
-Create this structure for a new project, leaving placeholders where product details are not final:
-
-```text
-<project-root>/
-  .anybox-cinema/
-    project.json
-    providers.json
-    canvas.json
-    tasks/
-    events.jsonl
-    README.md
-  scripts/
-    README.md
-  assets/
-    README.md
-  references/
-    README.md
-  prompts/
-    README.md
-  generated/
-    README.md
-  renders/
-    README.md
-  exports/
-    README.md
-```
-
-Directory intent:
-
-- `.anybox-cinema/`: project metadata owned by anybox for cinema.
-- `.anybox-cinema/providers.json`: non-secret provider preferences only; credentials live in AnyBox, not the project.
-- `.anybox-cinema/tasks/`: current generation task snapshots, created lazily by the AnyBox Agent Cinema Provider Runtime.
-- `assets/`: user-owned source media such as images, clips, audio, and fonts.
-- `references/`: mood boards, reference shots, style frames, and research notes.
-- `prompts/`: reusable prompt drafts and prompt experiments.
-- `generated/`: raw AI generation outputs before editorial selection.
-- `renders/`: assembled previews, cuts, and intermediate renders.
-- `exports/`: final deliverables.
-- `scripts/`: optional local helper scripts. Leave empty unless the user asks for automation.
-
-## New Project Workflow
-
-1. Confirm the project root with `pwd` and inspect existing files with `ls -la`.
-2. If `.anybox-cinema/project.json` exists, treat the folder as an existing Cinema project and follow the repair workflow.
-3. Create the target directories with `mkdir -p`.
-4. Create missing metadata files using normal file creation/editing tools. If only shell is available, use shell heredocs carefully and only for files that do not already exist.
-5. Add exactly one initialization event to `.anybox-cinema/events.jsonl` when creating a new project.
-6. Report the created files and the next useful action.
-
-Recommended generic shell setup:
-
-```bash
-mkdir -p .anybox-cinema/tasks scripts assets references prompts generated renders exports
-PROJECT_ID="$(uuidgen 2>/dev/null | tr '[:upper:]' '[:lower:]' || date -u +cinema-%Y%m%d%H%M%S)"
-NOW="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-PROJECT_NAME="$(basename "$PWD")"
-```
-
-## Metadata Templates
-
-Use these templates for missing files. Replace placeholder values such as `<project-id>`, `<project-name>`, and `<iso-time>` with real values.
-
-### `.anybox-cinema/project.json`
-
-```json
-{
-  "schemaVersion": 1,
-  "projectType": "anybox-for-cinema",
-  "id": "<project-id>",
-  "name": "<project-name>",
-  "createdAt": "<iso-time>",
-  "updatedAt": "<iso-time>",
-  "status": "draft",
-  "description": "",
-  "language": "",
-  "format": {
-    "aspectRatio": "16:9",
-    "durationSeconds": null,
-    "fps": 24,
-    "resolution": ""
-  },
-  "paths": {
-    "assets": "assets",
-    "references": "references",
-    "prompts": "prompts",
-    "generated": "generated",
-    "renders": "renders",
-    "exports": "exports"
-  },
-  "ui": {
-    "preferredSurface": "external-browser",
-    "canvasStyle": "node-canvas",
-    "controller": "anybox"
-  },
-  "placeholders": {
-    "story": "",
-    "visualStyle": "",
-    "targetProviders": []
-  }
-}
-```
-
-### `.anybox-cinema/providers.json`
-
-This file records provider slots only. Do not write secrets here.
-
-```json
-{
-  "schemaVersion": 1,
-  "policy": "bring-your-own-key",
-  "secretStorage": "anybox-managed",
-  "providers": [],
-  "notes": [
-    "Provider credentials are configured in the AnyBox credential store, not in this project file.",
-    "Cinema v1 uses the cinema-fal credential provider id for fal.ai.",
-    "This file may later store non-secret routing preferences, model labels, or project-level provider presets."
-  ]
-}
-```
-
-### `.anybox-cinema/canvas.json`
-
-The canvas is node-first and should be compatible with an Updream-like workspace: dark infinite canvas, draggable cards, connection lines, context menu, minimap, and floating toolbar.
-
-```json
-{
-  "schemaVersion": 1,
-  "canvasType": "node-canvas",
-  "viewport": {
-    "x": 0,
-    "y": 0,
-    "zoom": 1
-  },
-  "nodes": [
-    {
-      "id": "node-story-brief",
-      "type": "text",
-      "title": "Story Brief",
-      "position": {
-        "x": 80,
-        "y": 80
-      },
-      "size": {
-        "width": 360,
-        "height": 220
-      },
-      "data": {
-        "text": "",
-        "placeholder": "Write the film idea, theme, references, and constraints here."
-      }
-    }
-  ],
-  "edges": [],
-  "nodeTypes": [
-    "text"
-  ]
-}
-```
-
-### `.anybox-cinema/events.jsonl`
-
-For a new project, create the file and append one JSON line:
-
-```json
-{"time":"<iso-time>","type":"project.initialized","actor":"anybox","message":"Initialized anybox for cinema project."}
-```
-
-For an existing project, append repair events only when a repair actually changed files.
-
-### README Files
-
-Each directory may contain a short `README.md` explaining its purpose. Keep these files minimal and do not add marketing copy.
-
-Suggested `.anybox-cinema/README.md`:
-
-```markdown
-# anybox for cinema
-
-This folder stores local metadata for an anybox for cinema project.
-
-AnyBox is the controller. Browser or canvas interfaces should treat this folder as project state and should not store provider secrets here.
-```
-
-Suggested media directory README pattern:
-
-```markdown
-# <Directory Name>
-
-Placeholder for project files. This directory is managed by the user and AnyBox.
-```
-
-## Existing Project Repair Workflow
-
-If `.anybox-cinema/project.json` exists:
-
-1. Read `.anybox-cinema/project.json`, `.anybox-cinema/providers.json`, and `.anybox-cinema/canvas.json` if present.
-2. Validate JSON with a generic parser if one is available, for example:
-
-   ```bash
-   node -e "JSON.parse(require('fs').readFileSync('.anybox-cinema/project.json', 'utf8')); console.log('project.json: ok')"
-   ```
-
-3. If JSON is invalid, do not overwrite it automatically. Report the invalid file and ask before replacing or rewriting it.
-4. Treat any canvas node type outside `text`, `image`, `video`, and `audio` as invalid. Do not migrate or preserve it automatically; report that the canvas must be rebuilt.
-5. If metadata files are missing, recreate only the missing files.
-6. If directories are missing, recreate them with `mkdir -p`.
-7. Append a `project.repaired` event only when files or directories changed.
-
-## Completion Response
-
-After initialization or repair, tell the user:
-
-- The project root.
-- Whether it was newly initialized or repaired.
-- The important files created or changed.
-- The next recommended step, usually one of:
-  - write a project brief in `.anybox-cinema/project.json` or the Story Brief canvas node;
-  - add reference materials to `references/`;
-  - add source media to `assets/`;
-  - open the Cinema Web Canvas through AnyBox;
-  - configure the `cinema-fal` API key in AnyBox when real fal.ai generation is needed;
-  - create an Image or Video node and test generation with the Mock provider first.
+Report the project root, whether the Runtime opened or initialized it, the summary returned by Cinema, and any storyboard nodes created. Recommend the next action in the Create, Edit, or Deliver workspace without claiming that MCP tools performed provider generation or rendering.

@@ -190,7 +190,7 @@
   "skillPreviews": [
     {
       "name": "Initialize Cinema Project",
-      "description": "Initialize or repair an anybox for cinema project with the canonical four-node canvas model.",
+      "description": "Initialize a project through the Cinema Runtime, inspect it, and seed a storyboard with the bundled MCP tools.",
       "directory": "initialize-cinema-project"
     }
   ]
