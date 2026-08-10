@@ -8,6 +8,7 @@ import path from "node:path"
 import type { Readable } from "node:stream"
 import { setTimeout as delay } from "node:timers/promises"
 import { readTrimmedDesktopEnv } from "./env-compat"
+import { APP_RUNTIME_GATEWAY_SECRET_ENV, getAppRuntimeGatewaySecret } from "./app-runtime-gateway-secret"
 import { AGENT_WORKDIR_ENV, resolveDefaultAgentWorkdir } from "./agent-workdir"
 import { safeError, safeLog } from "./safe-console"
 import { createSourceRuntimeSnapshot, shouldRestartForSourceRuntimeChange, type SourceRuntimeSnapshot } from "./source-runtime-watch"
@@ -374,6 +375,7 @@ function buildManagedAgentStartEnv(
     ANYBOX_NODE_RUN_AS_NODE: "1",
     ANYBOX_SERVER_HOST: "127.0.0.1",
     ANYBOX_SERVER_PORT: String(port),
+    [APP_RUNTIME_GATEWAY_SECRET_ENV]: getAppRuntimeGatewaySecret(),
     [MANAGED_AGENT_DESKTOP_PROCESS_ID_ENV]: String(process.pid),
     [MANAGED_AGENT_PROTECTED_PROCESS_NAMES_ENV]: resolveManagedAgentProtectedProcessNames(),
   }
@@ -746,6 +748,7 @@ export async function stopManagedAgent() {
 export const managedAgentInternals = {
   createManagedAgentRestartController,
   env: {
+    appRuntimeGatewaySecret: APP_RUNTIME_GATEWAY_SECRET_ENV,
     agentDataDir: MANAGED_AGENT_DATA_DIR_ENV,
     desktopProcessID: MANAGED_AGENT_DESKTOP_PROCESS_ID_ENV,
     protectedProcessNames: MANAGED_AGENT_PROTECTED_PROCESS_NAMES_ENV,

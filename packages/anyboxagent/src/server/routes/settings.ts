@@ -1,4 +1,8 @@
 import { Hono } from "hono"
+import { timingSafeEqual } from "node:crypto"
+import { getProcessEnvValue } from "#env/compat.ts"
+import * as AppRuntime from "#plugin/app-runtime.ts"
+import { ApiError } from "#server/error.ts"
 import { ok, parseJsonBody, parseQuery } from "#server/http.ts"
 import type { AppEnv } from "#server/types.ts"
 import * as SettingsUseCase from "#server/usecases/settings.ts"
@@ -6,6 +10,29 @@ import * as SettingsUseCase from "#server/usecases/settings.ts"
 function resolveServerBaseURL(url: string) {
   const requestURL = new URL(url)
   return `${requestURL.protocol}//${requestURL.host}`
+}
+
+function assertAppRuntimeGatewayRequest(value: string | undefined) {
+  const expected = getProcessEnvValue("ANYBOX_APP_GATEWAY_SECRET")?.trim()
+  const received = value?.trim()
+  if (!expected || !received) {
+    throw new ApiError(403, "APP_RUNTIME_GATEWAY_FORBIDDEN", "App Runtime Gateway access was denied.")
+  }
+  const expectedBuffer = Buffer.from(expected)
+  const receivedBuffer = Buffer.from(received)
+  if (expectedBuffer.length !== receivedBuffer.length || !timingSafeEqual(expectedBuffer, receivedBuffer)) {
+    throw new ApiError(403, "APP_RUNTIME_GATEWAY_FORBIDDEN", "App Runtime Gateway access was denied.")
+  }
+}
+
+function appRuntimeApiError(error: unknown): never {
+  if (!(error instanceof AppRuntime.AppRuntimeError)) throw error
+  const status = error.code === "APP_RUNTIME_NOT_AVAILABLE"
+    ? 404
+    : error.code === "APP_RUNTIME_REQUEST_INVALID"
+      ? 400
+      : 502
+  throw new ApiError(status, error.code, error.message)
 }
 
 export function SettingsRoutes() {
@@ -160,6 +187,25 @@ export function SettingsRoutes() {
   })
 
   app.get("/plugins/installed", async (c) => ok(c, SettingsUseCase.listInstalledPlugins()))
+
+  app.all("/plugins/installed/:pluginID/app-runtime/*", async (c) => {
+    assertAppRuntimeGatewayRequest(c.req.header("x-anybox-app-gateway-secret"))
+    const requestURL = new URL(c.req.url)
+    const runtimeMarker = "/app-runtime/"
+    const markerIndex = requestURL.pathname.indexOf(runtimeMarker)
+    const suffix = markerIndex >= 0
+      ? requestURL.pathname.slice(markerIndex + runtimeMarker.length)
+      : ""
+    try {
+      return await AppRuntime.proxyRequest(
+        c.req.param("pluginID"),
+        `/${suffix}${requestURL.search}`,
+        c.req.raw,
+      )
+    } catch (error) {
+      return appRuntimeApiError(error)
+    }
+  })
 
   app.post("/plugins/import-url", async (c) => {
     const payload = await parseJsonBody(

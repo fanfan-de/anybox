@@ -160,6 +160,7 @@ describe("managed agent workspace dependencies", () => {
         expect(env[managedAgentInternals.env.workspaceDependenciesDir]).toBe(dependenciesDir)
         expect(env[managedAgentInternals.env.workspaceDependenciesVersion]).toBe("bundle-test-version")
         expect(env[managedAgentInternals.env.agentDataDir]).toBe(agentDataDir)
+        expect(env[managedAgentInternals.env.appRuntimeGatewaySecret]).toMatch(/^[A-Za-z0-9_-]{40,}$/)
         expect(env[managedAgentInternals.env.desktopProcessID]).toBe(String(process.pid))
         expect(String(env[managedAgentInternals.env.protectedProcessNames])).toContain("anybox.exe")
         expect(env[managedAgentInternals.env.pluginSourcePackages]).toBe("0")

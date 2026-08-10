@@ -2403,6 +2403,22 @@ export interface PluginView {
   entry: string
 }
 
+export interface PluginAppRuntime {
+  type: "local-http"
+  command: string
+  args?: string[]
+  cwd?: string
+  healthcheckPath: string
+  startupTimeoutMs: number
+  idleTimeoutMs: number
+}
+
+export interface PluginAppPermissions {
+  workspace: "none" | "request"
+  network: string[]
+  system: Array<"file-picker" | "notifications" | "open-external" | "clipboard">
+}
+
 export interface InstalledPluginView {
   pluginID: string
   pluginVersion: string
@@ -2413,6 +2429,7 @@ export interface InstalledPluginView {
   packageRoot: string
   icon?: string
   iconUrl?: string
+  workspaceAccess?: boolean
   safePreviewUrl?: string
 }
 
@@ -2446,6 +2463,8 @@ export interface PluginCatalogItem {
   connectors: PluginAppConnector[]
   apps: PluginAppConnector[]
   views?: PluginView[]
+  appRuntime?: PluginAppRuntime
+  appPermissions?: PluginAppPermissions
   installReview?: string[]
   source?: "package" | "registry"
   download?: PluginPackageDownload

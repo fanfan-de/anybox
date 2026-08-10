@@ -2,6 +2,7 @@ import { BrowserWindow, app, session, type BrowserWindowConstructorOptions } fro
 import fs from "node:fs"
 import path from "node:path"
 import { toPluginViewPartition } from "../shared/local-preview-protocol"
+import { requestAgentAppRuntime } from "./agent-client"
 import { resolveAppIconPath } from "./app-icon"
 import { attachRendererMemoryDiagnostics } from "./renderer-memory-diagnostics-store"
 import { ensureRendererHttpServer } from "./renderer-http-server"
@@ -299,7 +300,10 @@ export function ensurePluginViewPreviewProtocolHandler(
   const pluginViewSession = resolveSession(partition)
   const protocolRegistrar = pluginViewSession.protocol
   if (!registeredPluginViewProtocolPartitions.has(partition)) {
-    registerLocalPreviewProtocolHandler(protocolRegistrar)
+    registerLocalPreviewProtocolHandler(protocolRegistrar, {
+      proxyPluginRuntimeRequest: ({ pluginID, request, requestPath }) =>
+        requestAgentAppRuntime(pluginID, requestPath, request),
+    })
     registeredPluginViewProtocolPartitions.add(partition)
   }
   return pluginViewSession

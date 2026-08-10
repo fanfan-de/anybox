@@ -6,6 +6,7 @@ import {
   type CinemaAssetRef,
   type CinemaAssetScope,
 } from "@anybox/shared/cinema"
+import { resolveCinemaRuntimeURL } from "../../runtimeUrl"
 
 export const CINEMA_ASSET_DRAG_MIME = "application/x-anybox-cinema-asset"
 
@@ -43,7 +44,7 @@ export function cinemaAssetURL(
   variant: "content" | "thumbnail" | "preview" = "content",
 ) {
   const path = `${cinemaAssetLibraryBasePath(locator.scope)}/assets/${encodeURIComponent(locator.assetID)}/${variant}`
-  const url = new URL(path, `${agentBaseURL.replace(/\/$/, "")}/`)
+  const url = new URL(resolveCinemaRuntimeURL(agentBaseURL, path))
   const contentRevision = "contentRevision" in locator
     ? (locator as CinemaAssetRef).contentRevision
     : undefined

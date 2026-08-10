@@ -2,6 +2,7 @@ import { ApiEnvelopeSchema, SessionEventSchema, type ApiEnvelope, type SessionEv
 import { readTrimmedDesktopEnv } from "./env-compat"
 import { resolveDefaultAgentWorkdir } from "./agent-workdir"
 import type { AgentConfig } from "./types"
+import { getAppRuntimeGatewaySecret } from "./app-runtime-gateway-secret"
 
 const DEFAULT_AGENT_BASE_URL = "http://127.0.0.1:4096"
 
@@ -27,9 +28,46 @@ export function getAgentConfig(): AgentConfig {
 }
 
 export function resolveAgentURL(pathname: string) {
-  const { baseURL } = getAgentConfig()
+  const baseURL = readTrimmedDesktopEnv("ANYBOX_AGENT_BASE_URL") || DEFAULT_AGENT_BASE_URL
   const normalizedBase = baseURL.endsWith("/") ? baseURL : `${baseURL}/`
   return new URL(pathname, normalizedBase).toString()
+}
+
+export async function requestAgentAppRuntime(
+  pluginID: string,
+  pathname: string,
+  request: Request,
+) {
+  const normalizedPath = pathname.startsWith("/") ? pathname : `/${pathname}`
+  const targetPath = `/api/plugins/installed/${encodeURIComponent(pluginID)}/app-runtime${normalizedPath}`
+  const headers = new Headers(request.headers)
+  headers.delete("host")
+  headers.delete("origin")
+  headers.delete("referer")
+  headers.delete("content-length")
+  headers.set("x-anybox-app-gateway-secret", getAppRuntimeGatewaySecret())
+  const method = request.method.toUpperCase()
+  const init: RequestInit & { duplex?: "half" } = {
+    method,
+    headers,
+    redirect: "manual",
+    signal: request.signal,
+  }
+  if (method !== "GET" && method !== "HEAD" && request.body) {
+    init.body = request.body
+    init.duplex = "half"
+  }
+  const response = await fetch(resolveAgentURL(targetPath), init)
+  const responseHeaders = new Headers(response.headers)
+  responseHeaders.delete("access-control-allow-origin")
+  responseHeaders.delete("access-control-allow-credentials")
+  responseHeaders.delete("set-cookie")
+  responseHeaders.delete("set-cookie2")
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: responseHeaders,
+  })
 }
 
 export function resolveAgentWebSocketURL(

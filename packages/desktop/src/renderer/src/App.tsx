@@ -1742,7 +1742,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
       if (!plugin.enabled || plugin.missingPackage) return []
       return (plugin.views ?? []).filter((view) =>
         view.location === "right-sidebar"
-        && Boolean(view.safePreviewUrl?.startsWith("anybox-preview://preview/")))
+        && Boolean(view.safePreviewUrl?.startsWith("anybox-preview://")))
     }),
     [installedPlugins],
   )
@@ -1911,26 +1911,25 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     }
   }
 
-  async function handleProjectOpenCinema(workspace: WorkspaceGroup) {
+  function handleProjectOpenCinema(workspace: WorkspaceGroup) {
     const projectID = workspace.project.id.trim()
     if (!projectID) {
       toast.error("Cinema 需要有效的项目 ID。")
       return
     }
 
-    const openCinemaProject = window.desktop?.openCinemaProject
-    if (!openCinemaProject) {
-      toast.error("Cinema 入口不可用。")
+    const view = installedPluginViews.find(
+      (candidate) => candidate.pluginID === "cinema" && candidate.viewID === "main",
+    )
+    if (!view) {
+      toast.error(installedPluginsLoaded
+        ? "请先安装并启用 Cinema 插件。"
+        : "Cinema 插件仍在加载，请稍后重试。")
       return
     }
 
-    try {
-      const result = await openCinemaProject({ projectID })
-      handlePreviewOpenUrl(result.url, workspace.id)
-    } catch (error) {
-      console.error("[desktop] open cinema project failed:", error)
-      toast.error(`打开 Cinema 失败：${getErrorMessage(error)}`)
-    }
+    workspaceStore.getState().sessionsActions.setSelectedFolderID(workspace.id)
+    handleOpenRightSidebarPluginView(view)
   }
 
   async function refreshAppUpdateState() {
@@ -3283,6 +3282,7 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               activeSessionRuntimeDebug={activeSessionRuntimeDebug}
               activeWorkspaceFileScopeDirectory={activeWorkspaceFileScopeDirectory}
               activeWorkspaceFileScopeName={activeWorkspaceFileScopeName}
+              activeWorkspaceProjectID={selectedWorkspace?.project.id ?? null}
               activeSessionDirectory={activeSessionDirectory}
               activeSession={activeSession}
               canOpenReview={Boolean(activeSession)}

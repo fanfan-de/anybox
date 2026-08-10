@@ -1,7 +1,7 @@
 {
   "name": "cinema",
-  "version": "0.2.0",
-  "description": "Folder-based AI film workflows built around Text, Image, Video, and Audio nodes.",
+  "version": "0.3.0",
+  "description": "A complete local AI filmmaking Web App packaged with its own Cinema runtime.",
   "author": {
     "name": "Anybox"
   },
@@ -22,12 +22,12 @@
       "zh-CN": "anybox for cinema"
     },
     "shortDescription": {
-      "en-US": "Local AI film workflows with four canonical node types.",
-      "zh-CN": "仅使用文本、图片、视频、音频四类节点的本地 AI 影视工作流。"
+      "en-US": "A complete local AI filmmaking App with Canvas, Edit, and Deliver workspaces.",
+      "zh-CN": "包含画布、剪辑与交付工作台的完整本地 AI 影视应用。"
     },
     "longDescription": {
-      "en-US": "Initialize and operate local folder-based film projects for anybox for cinema. The plugin includes a project initialization skill and local MCP helpers that only read and write Text, Image, Video, and Audio canvas nodes. Provider generation runtime lives in AnyBox Agent.",
-      "zh-CN": "初始化并操作基于本地文件夹的 anybox for cinema 影视项目。插件包含项目初始化技能与本地 MCP 工具，画布只读写文本、图片、视频和音频四类节点；Provider 生成运行时由 AnyBox Agent 提供。"
+      "en-US": "Install and run the complete anybox for cinema Web App from the Right Sidebar. The plugin carries its sandboxed Web build, local HTTP App Runtime, project initialization skill, and optional MCP helpers.",
+      "zh-CN": "从右侧栏安装并运行完整的 anybox for cinema Web App。插件自带沙箱化 Web 构建、本地 HTTP App Runtime、项目初始化 Skill 与可选 MCP 工具。"
     },
     "developerName": "Anybox",
     "category": "Design",
@@ -46,11 +46,41 @@
       "Create a storyboard with Text and Image nodes"
     ]
   },
+  "views": [
+    {
+      "id": "main",
+      "title": "Cinema",
+      "location": "right-sidebar",
+      "entry": "./web/index.html"
+    }
+  ],
+  "appRuntime": {
+    "type": "local-http",
+    "command": "bun",
+    "args": [
+      "${PLUGIN_ROOT}/runtime/server.js"
+    ],
+    "cwd": "${PLUGIN_ROOT}",
+    "healthcheckPath": "/health",
+    "startupTimeoutMs": 30000,
+    "idleTimeoutMs": 300000
+  },
+  "appPermissions": {
+    "workspace": "request",
+    "network": [
+      "https://api-beijing.klingai.com",
+      "https://api-singapore.klingai.com",
+      "https://generativelanguage.googleapis.com",
+      "http://127.0.0.1:8188",
+      "http://localhost:8188"
+    ],
+    "system": []
+  },
   "mcpServers": [
     {
       "id": "cinema",
       "name": "anybox for cinema",
-      "description": "Read and update local anybox for cinema projects using only Text, Image, Video, and Audio canvas nodes. Provider generation runs through the AnyBox Agent Cinema Runtime API.",
+      "description": "Read and update local anybox for cinema projects using only Text, Image, Video, and Audio canvas nodes. Interactive generation runs through the plugin App Runtime.",
       "risk": "medium",
       "permissions": [
         "Reads Cinema project metadata, canvas state, and recent events from local project folders.",
@@ -105,7 +135,7 @@
         "Runs a local Node.js MCP server bundled with the Cinema plugin.",
         "Reads and writes the selected local project's .anybox-cinema planning files directly.",
         "Accepts only Text, Image, Video, and Audio canvas node types.",
-        "Does not provide Cinema video provider runtime; generation tasks are handled by AnyBox Agent.",
+        "The plugin also carries a separate local App Runtime for its interactive Web product.",
         "Canvas write actions are configured to ask before execution."
       ]
     }

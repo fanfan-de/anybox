@@ -2058,6 +2058,22 @@ export interface AgentPluginView {
   entry: string
 }
 
+export interface AgentPluginAppRuntime {
+  type: "local-http"
+  command: string
+  args?: string[]
+  cwd?: string
+  healthcheckPath: string
+  startupTimeoutMs: number
+  idleTimeoutMs: number
+}
+
+export interface AgentPluginAppPermissions {
+  workspace: "none" | "request"
+  network: string[]
+  system: Array<"file-picker" | "notifications" | "open-external" | "clipboard">
+}
+
 export interface AgentInstalledPluginView {
   pluginID: string
   pluginVersion: string
@@ -2068,6 +2084,7 @@ export interface AgentInstalledPluginView {
   packageRoot: string
   icon?: string
   iconUrl?: string
+  workspaceAccess?: boolean
   safePreviewUrl?: string
 }
 
@@ -2101,6 +2118,8 @@ export interface AgentPluginCatalogItem {
   connectors: AgentPluginAppConnector[]
   apps: AgentPluginAppConnector[]
   views?: AgentPluginView[]
+  appRuntime?: AgentPluginAppRuntime
+  appPermissions?: AgentPluginAppPermissions
   installReview?: string[]
   source?: "package" | "registry"
   download?: AgentPluginPackageDownload

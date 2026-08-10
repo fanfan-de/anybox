@@ -276,7 +276,7 @@ describe("plugin IPC error helpers", () => {
         views: [{
           pluginID: "react-sidebar-proof",
           viewID: "main",
-          safePreviewUrl: expect.stringMatching(/^anybox-preview:\/\/preview\//),
+          safePreviewUrl: expect.stringMatching(/^anybox-preview:\/\/[a-z0-9-]+\//),
         }],
       })
       await expect(internal.prepareInstalledPluginForRenderer({ ...plugin, enabled: false })).resolves.toMatchObject({

@@ -22,6 +22,7 @@ import {
   type CinemaRenderRetentionRequest,
   type CinemaRenderRetentionResult,
 } from "../model/renderRetention"
+import { resolveCinemaRuntimeURL } from "../../../runtimeUrl"
 
 type ApiEnvelope = {
   success?: boolean
@@ -57,7 +58,7 @@ async function requestData(
   init?: RequestInit,
   signal?: AbortSignal,
 ) {
-  const response = await fetch(new URL(pathname, agentBaseURL), { ...init, signal: init?.signal ?? signal })
+  const response = await fetch(new URL(resolveCinemaRuntimeURL(agentBaseURL, pathname)), { ...init, signal: init?.signal ?? signal })
   const body = await response.json().catch(() => ({})) as ApiEnvelope
   if (!response.ok || body.success === false) {
     throw new CinemaRenderApiError(

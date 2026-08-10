@@ -19,3 +19,17 @@ export function toLocalPreviewProtocolUrl(token: string, relativePath: string) {
 
   return `${LOCAL_PREVIEW_PROTOCOL}://preview/${encodeURIComponent(token)}${encodedPath ? `/${encodedPath}` : ""}`
 }
+
+export function toPluginViewProtocolUrl(token: string, relativePath: string) {
+  const normalizedToken = token.trim().toLowerCase()
+  if (!/^[a-z0-9-]+$/.test(normalizedToken)) {
+    throw new Error("Plugin View preview token is not hostname-safe.")
+  }
+  const normalizedPath = relativePath.replace(/\\/g, "/").replace(/^\/+/, "")
+  const encodedPath = normalizedPath
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/")
+  return `${LOCAL_PREVIEW_PROTOCOL}://${normalizedToken}/${encodedPath}`
+}

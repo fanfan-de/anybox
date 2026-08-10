@@ -25,9 +25,11 @@ import {
   type RetainedRenderOperation,
 } from "../model/renderPresets"
 import { isRenderActive } from "../model/renderStatus"
+import { isCinemaPluginRuntimeBaseURL } from "../../../runtimeUrl"
 import "../deliver.css"
 
 function retentionExecutionAuthorizedFor(agentBaseURL: string) {
+  if (isCinemaPluginRuntimeBaseURL(agentBaseURL)) return true
   try {
     const url = new URL(agentBaseURL)
     const hostname = url.hostname.trim().toLowerCase()

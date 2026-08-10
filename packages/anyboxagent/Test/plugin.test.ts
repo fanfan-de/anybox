@@ -11,6 +11,7 @@ import * as Config from "#config/config.ts"
 import * as Connector from "#connector/connector.ts"
 import * as Sqlite from "#database/Sqlite.ts"
 import * as BuiltinMcp from "#mcp/builtin.ts"
+import * as AppRuntime from "#plugin/app-runtime.ts"
 import * as Plugin from "#plugin/plugin.ts"
 import { createServerApp } from "#server/server.ts"
 import * as Skill from "#skill/skill.ts"
@@ -189,6 +190,20 @@ type PluginCatalogEnvelope = JsonEnvelope<
       location: "right-sidebar"
       entry: string
     }>
+    appRuntime?: {
+      type: "local-http"
+      command: string
+      args?: string[]
+      cwd?: string
+      healthcheckPath: string
+      startupTimeoutMs: number
+      idleTimeoutMs: number
+    }
+    appPermissions?: {
+      workspace: "none" | "request"
+      network: string[]
+      system: string[]
+    }
     icon?: string
     brandColor?: string
   }>
@@ -219,6 +234,7 @@ type InstalledPluginEnvelope = JsonEnvelope<{
     packageRoot: string
     icon?: string
     iconUrl?: string
+    workspaceAccess?: boolean
   }>
 }>
 
@@ -447,6 +463,10 @@ async function writeSidebarViewPluginPackage(input: {
   version?: string
   views?: unknown[]
   writeEntry?: boolean
+  appRuntime?: unknown
+  appPermissions?: unknown
+  writeRuntime?: boolean
+  runtimeSource?: string
 } = {}) {
   const name = input.name ?? "react-sidebar-proof"
   const version = input.version ?? "0.1.0"
@@ -456,6 +476,14 @@ async function writeSidebarViewPluginPackage(input: {
   await mkdir(join(packageRoot, "web"), { recursive: true })
   if (input.writeEntry !== false) {
     await writeFile(join(packageRoot, "web", "index.html"), "<!doctype html><div id=\"root\"></div>", "utf8")
+  }
+  if (input.writeRuntime) {
+    await mkdir(join(packageRoot, "runtime"), { recursive: true })
+    await writeFile(
+      join(packageRoot, "runtime", "server.js"),
+      input.runtimeSource ?? "console.log('runtime fixture')\n",
+      "utf8",
+    )
   }
   await writeFile(join(manifestRoot, "plugin.json"), JSON.stringify({
     name,
@@ -476,6 +504,8 @@ async function writeSidebarViewPluginPackage(input: {
         entry: "web/index.html",
       },
     ],
+    ...(input.appRuntime === undefined ? {} : { appRuntime: input.appRuntime }),
+    ...(input.appPermissions === undefined ? {} : { appPermissions: input.appPermissions }),
   }, null, 2), "utf8")
   return packageRoot
 }
@@ -1500,6 +1530,7 @@ async function writeVersionedPluginPackage() {
 }
 
 afterEach(async () => {
+  await AppRuntime.stopAll("test-cleanup")
   await Auth.clearProvider("plugin-app:manifest-lab:docs")
   await Auth.clearProvider("plugin-app:oauth-lab:mail")
   await Auth.clearProvider("plugin-connector:manifest-lab:docs")
@@ -1668,6 +1699,204 @@ describe("plugin marketplace API", () => {
         unknown: true,
       }],
     }).success).toBe(false)
+  })
+
+  test("strictly validates App Runtime and App permission declarations", () => {
+    const baseManifest = {
+      name: "app-runtime-proof",
+      version: "0.1.0",
+      description: "App Runtime schema fixture.",
+    }
+    const valid = Plugin.PluginManifest.parse({
+      ...baseManifest,
+      appRuntime: {
+        type: "local-http",
+        command: "bun",
+        args: ["${PLUGIN_ROOT}/runtime/server.js"],
+      },
+      appPermissions: {
+        workspace: "request",
+        network: ["https://api.example.test", "http://127.0.0.1:8181"],
+        system: ["file-picker"],
+      },
+    })
+
+    expect(valid.appRuntime).toMatchObject({
+      type: "local-http",
+      healthcheckPath: "/health",
+      startupTimeoutMs: 15_000,
+      idleTimeoutMs: 300_000,
+    })
+    expect(valid.appPermissions).toEqual({
+      workspace: "request",
+      network: ["https://api.example.test", "http://127.0.0.1:8181"],
+      system: ["file-picker"],
+    })
+
+    for (const appRuntime of [
+      { type: "local-http", command: "bun", healthcheckPath: "health" },
+      { type: "local-http", command: "bun", healthcheckPath: "/health?full=1" },
+      { type: "local-http", command: "bun", unknown: true },
+      { type: "remote-http", command: "bun" },
+    ]) {
+      expect(Plugin.PluginManifest.safeParse({ ...baseManifest, appRuntime }).success).toBe(false)
+    }
+    for (const network of [
+      ["http://example.test"],
+      ["https://api.example.test/v1"],
+      ["file:///tmp/runtime"],
+    ]) {
+      expect(Plugin.PluginManifest.safeParse({
+        ...baseManifest,
+        appPermissions: { workspace: "request", network, system: [] },
+      }).success).toBe(false)
+    }
+  })
+
+  test("loads only package-contained App Runtimes and exposes workspace access to installed Views", async () => {
+    await useTempDatabase()
+    const appRuntime = {
+      type: "local-http",
+      command: "bun",
+      args: ["${PLUGIN_ROOT}/runtime/server.js"],
+      cwd: "${PLUGIN_ROOT}",
+    }
+    await writeSidebarViewPluginPackage({
+      name: "app-runtime-proof",
+      appRuntime,
+      appPermissions: { workspace: "request", network: ["https://api.example.test"], system: [] },
+      writeRuntime: true,
+      runtimeSource: `
+const token = process.env.ANYBOX_APP_TOKEN ?? ""
+const server = Bun.serve({
+  hostname: "127.0.0.1",
+  port: Number(process.env.ANYBOX_APP_PORT),
+  fetch(request) {
+    if (request.headers.get("x-anybox-app-runtime-token") !== token) {
+      return new Response("unauthorized", { status: 401 })
+    }
+    const url = new URL(request.url)
+    if (url.pathname === "/health") return Response.json({ ready: true })
+    return Response.json({
+      appID: process.env.ANYBOX_APP_ID,
+      method: request.method,
+      path: url.pathname,
+      value: url.searchParams.get("value"),
+    })
+  },
+})
+process.on("SIGTERM", () => {
+  server.stop(true)
+  process.exit(0)
+})
+await new Promise(() => undefined)
+`,
+    })
+    await writeSidebarViewPluginPackage({
+      name: "missing-app-runtime",
+      appRuntime,
+      writeRuntime: false,
+    })
+
+    const app = createServerApp()
+    const catalogResponse = await app.request("/api/plugins/catalog")
+    const catalogBody = (await catalogResponse.json()) as PluginCatalogEnvelope
+    const catalogPlugin = catalogBody.data?.find((plugin) => plugin.id === "app-runtime-proof")
+    expect(catalogResponse.status).toBe(200)
+    expect(catalogPlugin).toMatchObject({
+      id: "app-runtime-proof",
+      risk: "high",
+      appRuntime: {
+        type: "local-http",
+        command: "bun",
+        args: ["${PLUGIN_ROOT}/runtime/server.js"],
+      },
+      appPermissions: {
+        workspace: "request",
+        network: ["https://api.example.test"],
+        system: [],
+      },
+    })
+    expect(catalogBody.data?.some((plugin) => plugin.id === "missing-app-runtime")).toBe(false)
+
+    const installResponse = await app.request("/api/plugins/installed/app-runtime-proof", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ enabled: true }),
+    })
+    const installBody = (await installResponse.json()) as InstalledPluginEnvelope
+    expect(installResponse.status).toBe(200)
+    expect(installBody.data?.views[0]).toMatchObject({ workspaceAccess: true })
+    expect(Plugin.getInstalledAppRuntimeDefinition("app-runtime-proof")).toMatchObject({
+      pluginID: "app-runtime-proof",
+      pluginVersion: "0.1.0",
+      runtime: { type: "local-http" },
+      permissions: { workspace: "request" },
+    })
+
+    const [runtimeResponse, concurrentRuntimeResponse] = await Promise.all([
+      AppRuntime.proxyRequest(
+        "app-runtime-proof",
+        "/echo?value=ready",
+        new Request("http://plugin-view.invalid/echo", { method: "POST" }),
+      ),
+      AppRuntime.proxyRequest(
+        "app-runtime-proof",
+        "/echo?value=concurrent",
+        new Request("http://plugin-view.invalid/echo"),
+      ),
+    ])
+    expect(runtimeResponse.status).toBe(200)
+    expect(await runtimeResponse.json()).toEqual({
+      appID: "app-runtime-proof",
+      method: "POST",
+      path: "/echo",
+      value: "ready",
+    })
+    expect(await concurrentRuntimeResponse.json()).toMatchObject({
+      appID: "app-runtime-proof",
+      method: "GET",
+      value: "concurrent",
+    })
+
+    const forbiddenGatewayResponse = await app.request(
+      "/api/plugins/installed/app-runtime-proof/app-runtime/echo?value=blocked",
+    )
+    expect(forbiddenGatewayResponse.status).toBe(403)
+
+    const previousGatewaySecret = process.env.ANYBOX_APP_GATEWAY_SECRET
+    process.env.ANYBOX_APP_GATEWAY_SECRET = "test-gateway-secret"
+    try {
+      const gatewayResponse = await app.request(
+        "/api/plugins/installed/app-runtime-proof/app-runtime/echo?value=gateway",
+        { headers: { "x-anybox-app-gateway-secret": "test-gateway-secret" } },
+      )
+      expect(gatewayResponse.status).toBe(200)
+      expect(await gatewayResponse.json()).toEqual({
+        appID: "app-runtime-proof",
+        method: "GET",
+        path: "/echo",
+        value: "gateway",
+      })
+    } finally {
+      if (previousGatewaySecret === undefined) {
+        delete process.env.ANYBOX_APP_GATEWAY_SECRET
+      } else {
+        process.env.ANYBOX_APP_GATEWAY_SECRET = previousGatewaySecret
+      }
+    }
+
+    const disableResponse = await app.request("/api/plugins/installed/app-runtime-proof", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ enabled: false }),
+    })
+    expect(disableResponse.status).toBe(200)
+    await expect(AppRuntime.proxyRequest(
+      "app-runtime-proof",
+      "/echo",
+      new Request("http://plugin-view.invalid/echo"),
+    )).rejects.toMatchObject({ code: "APP_RUNTIME_NOT_AVAILABLE" })
   })
 
   test("installs and restores a view-only plugin as a real local capability", async () => {

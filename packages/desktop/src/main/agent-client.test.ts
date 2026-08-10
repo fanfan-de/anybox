@@ -1,5 +1,45 @@
-import { describe, expect, it } from "vitest"
-import { consumeSSEBuffer, parseSSE, readAgentSSEStream } from "./agent-client"
+import { describe, expect, it, vi } from "vitest"
+import { consumeSSEBuffer, parseSSE, readAgentSSEStream, requestAgentAppRuntime } from "./agent-client"
+
+describe("App Runtime Gateway client", () => {
+  it("keeps the gateway secret in main and strips browser origin and cookies", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response("proxied", {
+      status: 206,
+      headers: {
+        "content-range": "bytes 0-6/7",
+        "set-cookie": "runtime-session=secret",
+      },
+    }))
+
+    try {
+      const response = await requestAgentAppRuntime(
+        "cinema app",
+        "/api/cinema/assets?preview=1",
+        new Request("anybox-preview://token/__anybox_runtime__/api/cinema/assets", {
+          headers: {
+            origin: "anybox-preview://token",
+            referer: "anybox-preview://token/",
+            range: "bytes=0-6",
+          },
+        }),
+      )
+
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      const [url, init] = fetchMock.mock.calls[0]!
+      expect(String(url)).toContain("/api/plugins/installed/cinema%20app/app-runtime/api/cinema/assets?preview=1")
+      const headers = new Headers(init?.headers)
+      expect(headers.get("origin")).toBeNull()
+      expect(headers.get("referer")).toBeNull()
+      expect(headers.get("range")).toBe("bytes=0-6")
+      expect(headers.get("x-anybox-app-gateway-secret")).toMatch(/^[A-Za-z0-9_-]{40,}$/)
+      expect(response.status).toBe(206)
+      expect(response.headers.get("content-range")).toBe("bytes 0-6/7")
+      expect(response.headers.get("set-cookie")).toBeNull()
+    } finally {
+      fetchMock.mockRestore()
+    }
+  })
+})
 
 describe("agent SSE parsing", () => {
   it("ignores keepalive comment blocks in completed responses", () => {

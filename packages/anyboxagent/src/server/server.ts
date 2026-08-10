@@ -14,7 +14,6 @@ import { RemoteRoutes } from "#server/routes/remote.ts"
 import { WorkspaceFilesRoutes } from "#server/routes/workspace-files.ts"
 import { CinemaRoutes } from "#server/routes/cinema.ts"
 import { CinemaAssetLibraryRoutes } from "#server/routes/cinema-assets.ts"
-import { CinemaWebRoutes } from "#server/routes/cinema-web.ts"
 import { DebugRoutes } from "#server/routes/debug.ts"
 import { EnvironmentRoutes } from "#server/routes/environments.ts"
 import { SettingsRoutes } from "#server/routes/settings.ts"
@@ -173,7 +172,6 @@ export function createServerRuntime(options: ServerRuntimeOptions = {}) {
   app.route("/api/sessions", SessionRoutes({ ptyRegistry, shellTaskRegistry }))
   app.route("/api/storage", StorageRoutes())
   app.route("/api/skill-registry", SkillRegistryRoutes())
-  app.route("/", CinemaWebRoutes())
 
   app.notFound((c) => jsonError(c, 404, "NOT_FOUND", "Route not found"))
 

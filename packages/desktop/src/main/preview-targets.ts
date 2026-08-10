@@ -7,7 +7,11 @@ import type {
   DesktopResolvedPreviewTarget,
   DesktopResolvePreviewTargetInput,
 } from "../shared/desktop-ipc-contract"
-import { LOCAL_PREVIEW_PROTOCOL, toLocalPreviewProtocolUrl } from "../shared/local-preview-protocol"
+import {
+  LOCAL_PREVIEW_PROTOCOL,
+  toLocalPreviewProtocolUrl,
+  toPluginViewProtocolUrl,
+} from "../shared/local-preview-protocol"
 
 const MAX_PREVIEW_BYTES = 50 * 1024 * 1024
 const MAX_TEXT_PREVIEW_BYTES = 2 * 1024 * 1024
@@ -244,8 +248,10 @@ export function revokePluginViewPreviewRegistrations(pluginID: string, keepViewI
 export function resolvePluginViewPreviewOwner(value: string) {
   try {
     const parsedUrl = new URL(value)
-    if (parsedUrl.protocol !== `${LOCAL_PREVIEW_PROTOCOL}:` || parsedUrl.hostname !== "preview") return null
-    const token = parsedUrl.pathname.split("/").filter(Boolean)[0]
+    if (parsedUrl.protocol !== `${LOCAL_PREVIEW_PROTOCOL}:`) return null
+    const token = parsedUrl.hostname === "preview"
+      ? parsedUrl.pathname.split("/").filter(Boolean)[0]
+      : parsedUrl.hostname
     const registration = token ? previewRegistrations.get(token) : null
     if (
       registration?.purpose !== "plugin-view"
@@ -291,7 +297,9 @@ function buildResolvedFileTarget(input: {
     ? registerPreviewRoot(input.root, input.workspaceRoot, input.purpose, input.owner)
     : null
   const safePreviewUrl = token
-    ? toLocalPreviewProtocolUrl(token, path.relative(input.root, input.entry).split(path.sep).join("/"))
+    ? (input.purpose === "plugin-view"
+        ? toPluginViewProtocolUrl(token, path.relative(input.root, input.entry).split(path.sep).join("/"))
+        : toLocalPreviewProtocolUrl(token, path.relative(input.root, input.entry).split(path.sep).join("/")))
     : undefined
 
   return {
@@ -588,12 +596,12 @@ export async function resolveLocalPreviewProtocolRequest(requestUrl: string) {
     return { ok: false as const, status: 400, error: "Invalid preview URL." }
   }
 
-  if (parsedUrl.protocol !== `${LOCAL_PREVIEW_PROTOCOL}:` || parsedUrl.hostname !== "preview") {
+  if (parsedUrl.protocol !== `${LOCAL_PREVIEW_PROTOCOL}:`) {
     return { ok: false as const, status: 400, error: "Invalid preview protocol." }
   }
 
   const segments = parsedUrl.pathname.split("/").filter(Boolean).map((segment) => decodeURIComponent(segment))
-  const token = segments.shift()
+  const token = parsedUrl.hostname === "preview" ? segments.shift() : parsedUrl.hostname
   if (!token) {
     return { ok: false as const, status: 400, error: "Missing preview token." }
   }
@@ -601,6 +609,24 @@ export async function resolveLocalPreviewProtocolRequest(requestUrl: string) {
   const registration = previewRegistrations.get(token)
   if (!registration) {
     return { ok: false as const, status: 404, error: "Preview token was not found or has expired." }
+  }
+
+  if (parsedUrl.hostname !== "preview" && registration.purpose !== "plugin-view") {
+    return { ok: false as const, status: 403, error: "Preview token is not registered for a Plugin View." }
+  }
+
+  if (registration.purpose === "plugin-view" && segments[0] === "__anybox_runtime__") {
+    if (!registration.pluginID || !registration.viewID) {
+      return { ok: false as const, status: 403, error: "Plugin View owner is unavailable." }
+    }
+    const runtimePath = `/${segments.slice(1).map((segment) => encodeURIComponent(segment)).join("/")}${parsedUrl.search}`
+    return {
+      ok: true as const,
+      purpose: "plugin-runtime" as const,
+      pluginID: registration.pluginID,
+      requestPath: runtimePath,
+      viewID: registration.viewID,
+    }
   }
 
   const relativePath = segments.join("/")
@@ -635,7 +661,17 @@ export async function resolveLocalPreviewProtocolRequest(requestUrl: string) {
   }
 }
 
-export async function handleLocalPreviewProtocolRequest(request: Request) {
+export type PluginRuntimeRequestProxy = (input: {
+  pluginID: string
+  request: Request
+  requestPath: string
+  viewID: string
+}) => Promise<Response>
+
+export async function handleLocalPreviewProtocolRequest(
+  request: Request,
+  options: { proxyPluginRuntimeRequest?: PluginRuntimeRequestProxy } = {},
+) {
   const result = await resolveLocalPreviewProtocolRequest(request.url)
   if (!result.ok) {
     return new Response(result.error, {
@@ -643,6 +679,21 @@ export async function handleLocalPreviewProtocolRequest(request: Request) {
       headers: {
         "content-type": "text/plain; charset=utf-8",
       },
+    })
+  }
+
+  if (result.purpose === "plugin-runtime") {
+    if (!options.proxyPluginRuntimeRequest) {
+      return new Response("App Runtime Gateway is unavailable.", {
+        status: 503,
+        headers: { "content-type": "text/plain; charset=utf-8" },
+      })
+    }
+    return options.proxyPluginRuntimeRequest({
+      pluginID: result.pluginID,
+      request,
+      requestPath: result.requestPath,
+      viewID: result.viewID,
     })
   }
 
@@ -656,7 +707,7 @@ export async function handleLocalPreviewProtocolRequest(request: Request) {
     headers["content-security-policy"] = [
       "default-src 'none'",
       "base-uri 'none'",
-      "connect-src 'none'",
+      "connect-src 'self'",
       "font-src 'self' data:",
       "form-action 'none'",
       "frame-src 'none'",
@@ -688,6 +739,12 @@ export function registerLocalPreviewProtocolScheme(protocolRegistrar: Pick<Local
   ])
 }
 
-export function registerLocalPreviewProtocolHandler(protocolRegistrar: Pick<LocalPreviewProtocolRegistrar, "handle">) {
-  protocolRegistrar.handle(LOCAL_PREVIEW_PROTOCOL, handleLocalPreviewProtocolRequest)
+export function registerLocalPreviewProtocolHandler(
+  protocolRegistrar: Pick<LocalPreviewProtocolRegistrar, "handle">,
+  options: { proxyPluginRuntimeRequest?: PluginRuntimeRequestProxy } = {},
+) {
+  protocolRegistrar.handle(
+    LOCAL_PREVIEW_PROTOCOL,
+    (request) => handleLocalPreviewProtocolRequest(request, options),
+  )
 }

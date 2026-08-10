@@ -66,6 +66,7 @@ interface RightSidebarProps {
   activeSessionDirectory: string | null
   activeWorkspaceFileScopeDirectory: string | null
   activeWorkspaceFileScopeName: string | null
+  activeWorkspaceProjectID?: string | null
   canInsertWorkspaceFileCommentsIntoDraft: boolean
   canOpenReview: boolean
   canOpenTerminal: boolean
@@ -347,6 +348,7 @@ export function RightSidebar({
   activeSessionDirectory,
   activeWorkspaceFileScopeDirectory,
   activeWorkspaceFileScopeName,
+  activeWorkspaceProjectID,
   canInsertWorkspaceFileCommentsIntoDraft,
   canOpenReview,
   canOpenTerminal,
@@ -644,7 +646,7 @@ export function RightSidebar({
       case "plugin-view": {
         const view = pluginViewsByKey.get(pluginViewKey(activeTab.pluginID, activeTab.viewID))
         return view ? (
-          <PluginSidebarView view={view} />
+          <PluginSidebarView activeProjectID={activeWorkspaceProjectID} view={view} />
         ) : !pluginViewsLoaded ? (
           <div className="plugin-sidebar-view-state is-loading" role="status">
             <span>Loading plugin view…</span>

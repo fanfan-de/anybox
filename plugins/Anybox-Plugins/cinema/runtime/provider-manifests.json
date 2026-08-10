@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "includes": [
+    "./provider-manifests/comfyui-local/provider.json",
+    "./provider-manifests/google-ai-sdk/provider.json",
+    "./provider-manifests/klingai-cn/provider.json"
+  ]
+}

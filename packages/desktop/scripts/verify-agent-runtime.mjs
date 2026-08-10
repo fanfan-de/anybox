@@ -125,7 +125,6 @@ const requiredFiles = [
   path.join(runtimeDir, "agent-server.js"),
   path.join(runtimeDir, "node-pty-worker.mjs"),
   ...bundledCinemaProviderManifests,
-  path.join(runtimeDir, "cinema-web", "index.html"),
   path.join(runtimeDir, "connectors", "gmail", "server.js"),
   path.join(runtimeDir, "connectors", "feishu", "server.js"),
   path.join(runtimeDir, "mcp", "node-repl", "server.js"),

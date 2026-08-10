@@ -22,10 +22,12 @@
     assets/
     connectors/
     docs/
+    runtime/
     scripts/
     skills/
       <skill-directory>/
         SKILL.md
+    web/
 ```
 
 只有需要同时保存多个版本时才使用版本目录：
@@ -83,6 +85,10 @@
 | `apps` | 数组或包内相对 JSON 路径 | 旧版 Connector 别名 |
 | `commands` | 字符串或字符串数组 | 保留字段；接受但不执行 |
 | `agents` | 字符串或字符串数组 | 保留字段；接受但不执行 |
+| `platformArtifacts` | 数组 | 需要宿主安装的平台运行时 Artifact |
+| `views` | 数组 | 插件包内 HTML App 入口；当前位置只支持 `right-sidebar` |
+| `appRuntime` | 对象 | 可选的包内 Local HTTP App Runtime；独立于 MCP Runtime |
+| `appPermissions` | 对象 | App 的 Workspace、网络与系统能力声明和安装审查元数据 |
 
 本地包、仓库和远程 manifest 文档还可以包含：
 
@@ -167,6 +173,57 @@ Code, Browser, Git, Database, Docs, Automation, Design
 目录会把 `engineering` 和 `coding` 映射为 `Code`，把 `productivity` 和 `documentation` 映射为 `Docs`。未知分类字符串目前会在目录规范化时回退；为了得到可预测的 UI，应使用上面的精确值。
 
 展示资源可以使用 HTTPS URL、`data:image/` URL 或包内相对路径。受支持的本地资源会转换为可显示的 data URL。远程相对资源从 manifest URL 所代表的插件包根目录解析。
+
+## Plugin View 与 Local App Runtime
+
+完整 Web App 继续使用 `views` 作为用户入口。构建后的 HTML、JavaScript 和 CSS 必须随插件包发布，并使用包内相对资源路径：
+
+```json
+{
+  "views": [
+    {
+      "id": "main",
+      "title": "Example App",
+      "location": "right-sidebar",
+      "entry": "./web/index.html"
+    }
+  ]
+}
+```
+
+`entry` 必须是包内相对 HTML 路径；本地扫描与安装会检查真实文件，并拒绝绝对路径、URL、路径穿越和符号链接逃逸。每个插件内的 View ID 必须唯一。
+
+只有需要 Anybox 启动本地 HTTP 后端的 App 才声明 `appRuntime`：
+
+```json
+{
+  "appRuntime": {
+    "type": "local-http",
+    "command": "bun",
+    "args": ["${PLUGIN_ROOT}/runtime/server.js"],
+    "cwd": "${PLUGIN_ROOT}",
+    "healthcheckPath": "/health",
+    "startupTimeoutMs": 15000,
+    "idleTimeoutMs": 300000
+  },
+  "appPermissions": {
+    "workspace": "request",
+    "network": ["https://api.example.com", "http://127.0.0.1:8181"],
+    "system": ["file-picker"]
+  }
+}
+```
+
+规则：
+
+- `type` 当前只能为 `local-http`；Runtime 必须在 `127.0.0.1` 上监听宿主注入的 `ANYBOX_APP_PORT`。
+- Runtime 必须用 `ANYBOX_APP_TOKEN` 验证 `x-anybox-app-runtime-token`；App Web 不会得到端口或 Token，而是请求同源 `/__anybox_runtime__/...`。
+- `healthcheckPath` 必须是无 query、fragment 和父目录段的绝对 URL path。
+- `${PLUGIN_ROOT}` 是 `appRuntime` 唯一支持的 placeholder；被引用的本地文件或目录必须存在且留在包内。普通命令名如 `bun` 可由宿主解析。
+- `startupTimeoutMs` 范围是 100–120000；`idleTimeoutMs` 范围是 0–86400000，0 表示不按空闲超时停止。
+- `appPermissions.workspace` 当前是 `none` 或 `request`；网络条目必须是 HTTPS origin，只有显式 loopback origin 可使用 HTTP；系统能力只接受 `file-picker`、`notifications`、`open-external`、`clipboard`。
+- 当前 Web 容器只为同源 Runtime Gateway 开放 `connect-src 'self'`；声明的 Remote Origin 和系统能力尚未形成完整授权执行层。Local Runtime 也尚无 OS 级进程 Sandbox，因此这些字段首先是严格声明和安装风险审查，不是强隔离承诺。
+- 安装、更新、禁用、卸载和 Agent 退出会停止对应 Runtime；stdout/stderr 写入 App 隔离日志目录。当前 Gateway 支持普通 HTTP、流式响应与 Range headers，不支持 WebSocket。
 
 ## Skills
 

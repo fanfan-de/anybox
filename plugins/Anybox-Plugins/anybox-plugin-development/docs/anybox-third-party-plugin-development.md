@@ -6,7 +6,7 @@
 
 ## 插件是什么
 
-Anybox 插件是一个能力包，不是新的执行引擎。
+Anybox 插件既可以是给 Agent 增加能力的能力包，也可以是带完整 Web 产品界面的 App Plugin。插件不会替换 Anybox Agent；Local App Runtime 是由宿主按严格清单启动的独立 HTTP 进程。
 
 插件负责声明：
 
@@ -15,8 +15,9 @@ Anybox 插件是一个能力包，不是新的执行引擎。
 - 插件是否携带 Agent skill。
 - 插件是否需要 API key 或 OAuth。
 - 插件运行时是远程 MCP 服务，还是插件包内的本地 `stdio` MCP wrapper。
+- 插件是否提供 Right Sidebar Web App，以及是否携带独立的 Local HTTP App Runtime。
 
-真正执行时，Anybox 仍使用现有的 MCP、Skill、Connector、Auth、权限和项目选择系统。
+MCP、Skill 与 Connector 仍使用 Anybox 现有的 Agent、Auth 和权限系统。App Plugin 的 Web 产品则直接调用自己的远程后端，或通过同源 Gateway 调用插件自带的 Local App Runtime；不需要把每个业务操作改写成 MCP Tool。
 
 ## 什么时候需要写插件
 
@@ -26,6 +27,7 @@ Anybox 插件是一个能力包，不是新的执行引擎。
 - 你想把一组 MCP 工具、skill 和认证流程打包给用户安装。
 - 你希望每个插件有自己的连接状态、诊断按钮和凭据生命周期。
 - 你希望插件随项目显式启用，而不是默认暴露给所有对话。
+- 你要把一个完整 Web App 安装到 Anybox，并让它出现在 Right Sidebar。
 
 不适合写插件的情况：
 
@@ -54,9 +56,11 @@ my-anybox-plugins/
       plugin.json
     skills/
     connectors/
+    runtime/
     scripts/
     docs/
     assets/
+    web/
 ```
 
 `my-anybox-plugins` 是插件来源根目录。Anybox 会扫描它下面的每个 `<plugin-id>`。如果需要在同一个插件目录里保留多个版本，也可以使用 `<plugin-id>/<version>/.anybox-plugin/plugin.json`，Anybox 会选择最高版本。根目录 `plugin.json` 只用于向后兼容，不是新包的输出规范。
@@ -162,6 +166,54 @@ Path rules:
 - 本地安装时入口必须存在，真实路径必须留在插件根目录内；符号链接不能逃逸。
 - 将构建后的 HTML、JavaScript 和 CSS 一并提交到插件包（推荐 `web/`），不要依赖开发服务器。
 - 只有已安装、已启用且本地包存在的 View 才会出现在 Right Sidebar；远程 catalog 元数据不会直接作为本地页面加载。
+
+### Local App Runtime
+
+完整 App 仍以 `views` 作为用户入口。只有 Web App 需要宿主启动本地 HTTP 后端时，才增加独立于 MCP 的 `appRuntime`：
+
+```json
+{
+  "views": [
+    {
+      "id": "main",
+      "title": "Example App",
+      "location": "right-sidebar",
+      "entry": "./web/index.html"
+    }
+  ],
+  "appRuntime": {
+    "type": "local-http",
+    "command": "bun",
+    "args": ["${PLUGIN_ROOT}/runtime/server.js"],
+    "cwd": "${PLUGIN_ROOT}",
+    "healthcheckPath": "/health",
+    "startupTimeoutMs": 15000,
+    "idleTimeoutMs": 300000
+  },
+  "appPermissions": {
+    "workspace": "request",
+    "network": ["https://api.example.com"],
+    "system": []
+  }
+}
+```
+
+运行约定：
+
+- Runtime 从 `ANYBOX_APP_PORT` 读取 loopback 端口，并监听 `127.0.0.1`。
+- Runtime 从 `ANYBOX_APP_TOKEN` 读取随机 Token，并验证每个请求的 `x-anybox-app-runtime-token`。不要把 Token 返回给 App Web。
+- App Web 在插件模式下请求同源 `/__anybox_runtime__/...`；Anybox 根据当前 View 的真实归属转发请求，页面不能自报其他 `pluginID`。
+- 宿主还会提供 `ANYBOX_APP_ID`、`ANYBOX_APP_VERSION`、`ANYBOX_APP_DATA_DIR`、`ANYBOX_APP_CACHE_DIR`、`ANYBOX_APP_LOG_DIR` 和 `ANYBOX_APP_LOCALE`。
+- `${PLUGIN_ROOT}` 是 App Runtime 唯一支持的 placeholder。带该 placeholder 的 command、arg 和 cwd 会在本地扫描时验证，必须指向真实的包内文件或目录。
+- `healthcheckPath` 必须是本地绝对 path，不能含 query、fragment 或 `..`；宿主在首次请求时启动 Runtime，健康检查成功后才转发。
+- 更新、禁用、卸载与 Agent 退出会停止 Runtime；多个 View 共享同一插件 Runtime，空闲停止由 `idleTimeoutMs` 控制。
+
+安全边界：
+
+- App Web 仍在独立 partition 中运行，保持 sandbox、无 Node Integration、无插件自定义 preload，并只允许同源 Runtime Gateway 网络连接。
+- `appRuntime` 会把插件风险提升为 high。当前没有 OS 级进程 Sandbox，`appPermissions.network` 与 `system` 首先用于严格声明和安装审查，不能当作已经强制执行的本机隔离。
+- `workspace: "request"` 当前只让宿主向 View 传递所选项目 ID，尚不是可移植的目录授权句柄；Runtime 不应假定它已经获得任意 Workspace 文件访问权。
+- Gateway 目前支持普通 HTTP、上传/下载流和 Range headers，不支持 WebSocket；需要 WebSocket 的 App 暂不应依赖此路径。
 
 ### MCP Server
 
@@ -912,6 +964,9 @@ API key connector 需要用户保存 API key。OAuth connector 需要用户完�
 - `commands` 和 `agents` 是保留字段，v1 不执行。
 - 生产级系统凭据存储仍在演进中，当前 agent 侧 JSON auth store 主要作为开发回退。
 - 插件签名、信任链和安装时命令审计 UI 仍未完整落地。
+- App Runtime 尚无 OS 级进程 Sandbox、后台 Lease、崩溃退避 UI 和 WebSocket Gateway。
+- `appPermissions` 的 Remote Origin 与系统能力授权执行层尚未完整落地；当前 Plugin View 只开放同源 Runtime Gateway。
+- `workspace: "request"` 目前传递所选项目 ID，不等同于稳定的 Workspace Grant 或目录句柄。
 - 新插件应使用 `connectors`，不要依赖旧的 `apps` 字段。
 
 ## 开发检查清单
@@ -920,8 +975,9 @@ API key connector 需要用户保存 API key。OAuth connector 需要用户完�
 
 - 插件目录是版本化结构。
 - `plugin.json` 只使用支持的字段。
-- 至少声明一种真实能力：`mcpServers`、`skills`、`connectors`、`connectorRequirements` 或 `views`。
+- 至少声明一种真实能力：`mcpServers`、`skills`、`connectors`、`connectorRequirements` 或 `views`；完整 App 必须有 `views`。
 - 所有 `${PLACEHOLDER}` 都有来源：`PLUGIN_ROOT`、安装 config、API key 或 OAuth token。
+- App Web 资源路径是包内相对路径；Local Runtime 通过真实安装包扫描、健康检查和 Gateway 请求验证。
 - 本地 MCP server 能响应 `initialize`、`tools/list` 和 `tools/call`。
 - `permissions`、`risk`、`readOnly`、`destructive` 写得准确。
 - GitHub 仓库不包含任何真实凭据。

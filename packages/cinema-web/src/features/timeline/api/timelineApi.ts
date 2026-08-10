@@ -9,6 +9,7 @@ import {
   type CinemaTimelineDocument,
   type CreateCinemaTimelineBody,
 } from "@anybox/shared/cinema-timeline"
+import { resolveCinemaRuntimeURL } from "../../../runtimeUrl"
 
 type ApiEnvelope = {
   success?: boolean
@@ -35,7 +36,7 @@ export class CinemaTimelineApiError extends Error {
 }
 
 async function requestData(agentBaseURL: string, pathname: string, init?: RequestInit) {
-  const response = await fetch(new URL(pathname, agentBaseURL), init)
+  const response = await fetch(new URL(resolveCinemaRuntimeURL(agentBaseURL, pathname)), init)
   const body = await response.json().catch(() => ({})) as ApiEnvelope
   if (!response.ok || body.success === false) {
     throw new CinemaTimelineApiError(

@@ -1,0 +1,97 @@
+{
+  "id": "gemini-3-pro-image",
+  "label": "Nano Banana Pro",
+  "offeringID": "google-ai-sdk/nano-banana-pro",
+  "providerModelID": "gemini-3-pro-image",
+  "catalogID": "google/gemini-3-pro-image",
+  "family": "Nano Banana",
+  "lab": "google",
+  "baseModel": "google/gemini-3-pro-image",
+  "endpointType": "google_interactions_image",
+  "modalities": {
+    "input": ["text", "image"],
+    "output": ["image", "text"]
+  },
+  "modes": ["omni-image"],
+  "aspectRatios": ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"],
+  "resolutions": ["1K", "2K", "4K"],
+  "maxReferenceImages": 14,
+  "requiresPublicInputURL": false,
+  "inputCombinations": [
+    {
+      "mode": "omni-image",
+      "label": "Generate or edit image",
+      "requiredModalities": ["text"],
+      "optionalModalities": ["image"],
+      "inputs": [
+        {
+          "role": "prompt",
+          "modality": "text",
+          "required": true,
+          "minCount": 1,
+          "maxCount": 1,
+          "maxLength": 32000,
+          "note": "Premium model for complex visual tasks, advanced localization, brand consistency, and precise creative control."
+        },
+        {
+          "role": "image_list",
+          "modality": "image",
+          "required": false,
+          "minCount": 0,
+          "maxCount": 14,
+          "apiField": "images",
+          "maxFileSizeMB": 10,
+          "supportedFormats": ["jpg", "jpeg", "png", "webp"],
+          "note": "Optional source or reference images. Google documents up to 6 object references, 5 character references, and 3 style references for Gemini 3 Pro Image."
+        },
+        {
+          "role": "aspect_ratio",
+          "modality": "parameter",
+          "required": false,
+          "minCount": 0,
+          "maxCount": 1,
+          "default": "1:1",
+          "options": ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"],
+          "apiField": "aspect_ratio"
+        },
+        {
+          "role": "image_size",
+          "modality": "parameter",
+          "required": false,
+          "minCount": 0,
+          "maxCount": 1,
+          "default": "1K",
+          "options": ["1K", "2K", "4K"],
+          "apiField": "image_size"
+        }
+      ]
+    }
+  ],
+  "pricing": [
+    {
+      "unit": "unknown",
+      "note": "Pricing should be checked against current Google Gemini API pricing before charging users."
+    }
+  ],
+  "sourceURL": "https://ai.google.dev/gemini-api/docs/models/gemini-3-pro-image?hl=zh-cn",
+  "sourceCheckedAt": "2026-07-09",
+  "parameterSchema": {
+    "runtime": {
+      "adapter": "google-interactions-image",
+      "candidateAdapters": ["ai-sdk-language-image"],
+      "sdkPackage": "@ai-sdk/google",
+      "nativeSdkPackage": "@google/genai",
+      "invoke": "interactions.create",
+      "resultFiles": true,
+      "modelID": "gemini-3-pro-image",
+      "providerModelRef": "google/gemini-3-pro-image"
+    },
+    "responseFormat": {
+      "type": "image"
+    },
+    "references": [
+      "https://ai.google.dev/gemini-api/docs/image-generation?hl=zh-cn",
+      "https://ai.google.dev/gemini-api/docs/models/gemini-3-pro-image?hl=zh-cn"
+    ]
+  }
+}

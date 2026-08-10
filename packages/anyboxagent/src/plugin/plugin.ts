@@ -672,6 +672,80 @@ export const PluginManifestView = z
   .strict()
 export type PluginManifestView = z.infer<typeof PluginManifestView>
 
+const PluginAppRuntimePath = z
+  .string()
+  .trim()
+  .min(1)
+  .max(2048)
+
+const PluginAppRuntimeHealthcheckPath = z
+  .string()
+  .trim()
+  .min(1)
+  .max(512)
+  .superRefine((value, ctx) => {
+    if (!value.startsWith("/") || value.startsWith("//") || value.includes("?") || value.includes("#")) {
+      ctx.addIssue({
+        code: "custom",
+        message: "App Runtime healthcheckPath must be an absolute URL path without a query or fragment.",
+      })
+    }
+    if (value.split("/").some((segment) => segment === "..")) {
+      ctx.addIssue({
+        code: "custom",
+        message: "App Runtime healthcheckPath must not contain parent-directory segments.",
+      })
+    }
+  })
+
+export const PluginAppRuntime = z
+  .object({
+    type: z.literal("local-http"),
+    command: PluginAppRuntimePath,
+    args: z.array(z.string().max(4096)).max(128).optional(),
+    cwd: PluginAppRuntimePath.optional(),
+    healthcheckPath: PluginAppRuntimeHealthcheckPath.default("/health"),
+    startupTimeoutMs: z.number().int().min(100).max(120_000).default(15_000),
+    idleTimeoutMs: z.number().int().min(0).max(86_400_000).default(300_000),
+  })
+  .strict()
+export type PluginAppRuntime = z.infer<typeof PluginAppRuntime>
+
+const PluginAppNetworkOrigin = z
+  .string()
+  .trim()
+  .min(1)
+  .max(2048)
+  .superRefine((value, ctx) => {
+    let parsed: URL
+    try {
+      parsed = new URL(value)
+    } catch {
+      ctx.addIssue({ code: "custom", message: "App network permissions must contain valid origins." })
+      return
+    }
+    const loopbackHTTP = parsed.protocol === "http:"
+      && (parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost" || parsed.hostname === "[::1]")
+    if (parsed.protocol !== "https:" && !loopbackHTTP) {
+      ctx.addIssue({
+        code: "custom",
+        message: "App network permissions must use HTTPS, except for explicit loopback origins.",
+      })
+    }
+    if (parsed.username || parsed.password || parsed.pathname !== "/" || parsed.search || parsed.hash) {
+      ctx.addIssue({ code: "custom", message: "App network permissions must be origins, not full URLs." })
+    }
+  })
+
+export const PluginAppPermissions = z
+  .object({
+    workspace: z.enum(["none", "request"]).default("none"),
+    network: z.array(PluginAppNetworkOrigin).max(128).default([]),
+    system: z.array(z.enum(["file-picker", "notifications", "open-external", "clipboard"])).max(32).default([]),
+  })
+  .strict()
+export type PluginAppPermissions = z.infer<typeof PluginAppPermissions>
+
 const PluginManifestViews = z.array(PluginManifestView).max(64).superRefine((views, ctx) => {
   const seen = new Set<string>()
   views.forEach((view, index) => {
@@ -707,6 +781,8 @@ export const PluginManifest = z
     agents: z.union([z.string(), z.array(z.string())]).optional(),
     platformArtifacts: z.array(PluginPlatformArtifact).optional(),
     views: PluginManifestViews.optional(),
+    appRuntime: PluginAppRuntime.optional(),
+    appPermissions: PluginAppPermissions.optional(),
   })
   .strict()
 export type PluginManifest = z.infer<typeof PluginManifest>
@@ -979,6 +1055,8 @@ export const PluginCatalogItem = z
     connectors: z.array(PluginAppConnector),
     apps: z.array(PluginAppConnector),
     views: z.array(PluginManifestView),
+    appRuntime: PluginAppRuntime.optional(),
+    appPermissions: PluginAppPermissions.optional(),
     installReview: z.array(z.string()).optional(),
     source: z.enum(["package", "registry"]).optional(),
     download: PluginPackageDownload.optional(),
@@ -998,6 +1076,7 @@ export const InstalledPluginView = z
     packageRoot: z.string().min(1),
     icon: z.string().min(1).optional(),
     iconUrl: z.string().min(1).optional(),
+    workspaceAccess: z.boolean().optional(),
   })
   .strict()
 export type InstalledPluginView = z.infer<typeof InstalledPluginView>
@@ -1878,6 +1957,84 @@ function assertLocalPluginViews(packageRoot: string, manifest: PluginManifest) {
   return manifest
 }
 
+function resolveLocalAppRuntimePath(packageRoot: string, value: string, label: string) {
+  const placeholders = [...value.matchAll(/\$\{([A-Z][A-Z0-9_]*)\}/g)].map((match) => match[1])
+  if (placeholders.some((placeholder) => placeholder !== "PLUGIN_ROOT")) {
+    throw new PluginError(
+      "PLUGIN_PACKAGE_INVALID",
+      `${label} contains an unsupported App Runtime placeholder.`,
+    )
+  }
+
+  if (!value.includes("${PLUGIN_ROOT}")) return undefined
+  if (!value.startsWith("${PLUGIN_ROOT}")) {
+    throw new PluginError(
+      "PLUGIN_PACKAGE_INVALID",
+      `${label} must use PLUGIN_ROOT as a complete path prefix.`,
+    )
+  }
+
+  const candidate = resolve(value.replace("${PLUGIN_ROOT}", packageRoot))
+  const relativePath = relative(resolve(packageRoot), candidate)
+  if (relativePath.startsWith("..") || isAbsolute(relativePath)) {
+    throw new PluginError("PLUGIN_PACKAGE_INVALID", `${label} must stay inside the plugin package.`)
+  }
+  return candidate
+}
+
+function assertLocalPluginAppRuntime(packageRoot: string, manifest: PluginManifest) {
+  const runtime = manifest.appRuntime
+  if (!runtime) return manifest
+
+  let rootRealPath: string
+  try {
+    rootRealPath = realpathSync(packageRoot)
+  } catch {
+    throw new PluginError("PLUGIN_PACKAGE_INVALID", "Plugin package root is not available.")
+  }
+
+  const pathEntries: Array<{ label: string; path: string; kind: "file" | "directory" }> = []
+  const commandPath = resolveLocalAppRuntimePath(packageRoot, runtime.command, "App Runtime command")
+  if (commandPath) pathEntries.push({ label: "App Runtime command", path: commandPath, kind: "file" })
+
+  runtime.args?.forEach((arg, index) => {
+    const argPath = resolveLocalAppRuntimePath(packageRoot, arg, `App Runtime arg ${index + 1}`)
+    if (argPath) pathEntries.push({ label: `App Runtime arg ${index + 1}`, path: argPath, kind: "file" })
+  })
+
+  if (runtime.cwd) {
+    const cwdPath = runtime.cwd.includes("${PLUGIN_ROOT}")
+      ? resolveLocalAppRuntimePath(packageRoot, runtime.cwd, "App Runtime cwd")
+      : resolvePackageRelativePath(packageRoot, runtime.cwd)
+    if (!cwdPath) {
+      throw new PluginError("PLUGIN_PACKAGE_INVALID", "App Runtime cwd must stay inside the plugin package.")
+    }
+    pathEntries.push({ label: "App Runtime cwd", path: cwdPath, kind: "directory" })
+  }
+
+  for (const entry of pathEntries) {
+    try {
+      const realPath = realpathSync(entry.path)
+      const realRelativePath = relative(rootRealPath, realPath)
+      if (realRelativePath.startsWith("..") || isAbsolute(realRelativePath)) {
+        throw new PluginError("PLUGIN_PACKAGE_INVALID", `${entry.label} must stay inside the plugin package.`)
+      }
+      const info = lstatSync(realPath)
+      if ((entry.kind === "file" && !info.isFile()) || (entry.kind === "directory" && !info.isDirectory())) {
+        throw new PluginError(
+          "PLUGIN_PACKAGE_INVALID",
+          `${entry.label} must point to a local ${entry.kind}.`,
+        )
+      }
+    } catch (error) {
+      if (error instanceof PluginError) throw error
+      throw new PluginError("PLUGIN_PACKAGE_INVALID", `${entry.label} is not available.`)
+    }
+  }
+
+  return manifest
+}
+
 function safeReadPluginManifest(packageRoot: string) {
   const manifestPath = findPluginManifestPath(packageRoot)
   if (!manifestPath) return undefined
@@ -1888,7 +2045,10 @@ function safeReadPluginManifest(packageRoot: string) {
       kind: "local",
       packageRoot,
     })
-    const manifest = assertLocalPluginViews(packageRoot, parsed.manifest)
+    const manifest = assertLocalPluginAppRuntime(
+      packageRoot,
+      assertLocalPluginViews(packageRoot, parsed.manifest),
+    )
     const manifestConnectors = normalizePluginConnectors(manifest)
     const compatApps = safeReadPluginAppCompat(packageRoot)
     if (compatApps.length === 0) {
@@ -2645,6 +2805,26 @@ function isInstallableDownload(download: PluginPackageDownload | undefined) {
   return Boolean(download.url && parseGitHubPackageURL(download.url))
 }
 
+function appRuntimePermissions(manifest: PluginManifest) {
+  const permissions = manifest.appPermissions
+  if (!permissions) return []
+  return uniqueStrings([
+    permissions.workspace === "request" ? "Requests access to an Anybox workspace selected by the user." : undefined,
+    ...permissions.network.map((origin) => `Connects to ${origin}.`),
+    ...permissions.system.map((capability) => `Uses the '${capability}' desktop capability.`),
+  ])
+}
+
+function appRuntimeInstallReview(manifest: PluginManifest) {
+  const runtime = manifest.appRuntime
+  if (!runtime) return []
+  return [
+    `Runs a local App Runtime command: ${runtime.command} ${(runtime.args ?? []).join(" ")}`.trim(),
+    `Checks App Runtime readiness at ${runtime.healthcheckPath}.`,
+    "Local App Runtime code executes on this computer and is reviewed separately from the sandboxed Web View.",
+  ]
+}
+
 function normalizeCatalogItem(source: PluginManifestSource): PluginCatalogItem {
   const { manifest, packageRoot } = source
   const pluginID = normalizeManifestID(manifest.name)
@@ -2687,6 +2867,10 @@ function normalizeCatalogItem(source: PluginManifestSource): PluginCatalogItem {
     connectorRequirements.length > 0 ? "medium" : undefined,
     skills.length > 0 ? "low" : undefined,
     (manifest.views?.length ?? 0) > 0 ? "low" : undefined,
+    (manifest.appPermissions?.network.length ?? 0) > 0 ? "medium" : undefined,
+    (manifest.appPermissions?.system.length ?? 0) > 0 ? "medium" : undefined,
+    manifest.appPermissions?.workspace === "request" ? "medium" : undefined,
+    manifest.appRuntime ? "high" : undefined,
   ])
 
   return PluginCatalogItem.parse({
@@ -2713,6 +2897,7 @@ function normalizeCatalogItem(source: PluginManifestSource): PluginCatalogItem {
       ...mcpRequirements.flatMap((requirement) => requirement.permissions ?? []),
       ...connectorRequirements.flatMap((requirement) => requirement.permissions ?? []),
       ...connectors.flatMap((app) => app.permissions ?? []),
+      ...appRuntimePermissions(manifest),
     ]),
     tools: [
       ...mcpServers.flatMap((server) => server.tools),
@@ -2730,9 +2915,12 @@ function normalizeCatalogItem(source: PluginManifestSource): PluginCatalogItem {
     connectors,
     apps: connectors,
     views: manifest.views ?? [],
+    appRuntime: manifest.appRuntime,
+    appPermissions: manifest.appPermissions,
     installReview: uniqueStrings([
       ...mcpServers.flatMap((server) => server.installReview ?? []),
       ...connectors.flatMap((app) => app.installReview ?? []),
+      ...appRuntimeInstallReview(manifest),
     ]),
     source: source.source,
     download: source.download,
@@ -2754,6 +2942,7 @@ function installedPluginViewsForSource(source: PluginManifestSource | undefined)
     packageRoot: source.packageRoot,
     icon: plugin.icon,
     iconUrl: plugin.iconUrl,
+    ...(plugin.appPermissions?.workspace === "request" ? { workspaceAccess: true } : {}),
   }))
 }
 
@@ -3408,6 +3597,30 @@ export function listInstalled() {
 
 export function listEnabledInstalled() {
   return listInstalled().filter((plugin) => plugin.enabled && !plugin.missingPackage)
+}
+
+export type InstalledPluginAppRuntimeDefinition = {
+  pluginID: string
+  pluginVersion: string
+  packageRoot: string
+  runtime: PluginAppRuntime
+  permissions: PluginAppPermissions
+}
+
+export function getInstalledAppRuntimeDefinition(pluginID: string): InstalledPluginAppRuntimeDefinition | undefined {
+  const normalizedPluginID = normalizePluginID(pluginID)
+  const installed = readInstalled(normalizedPluginID)
+  if (!installed?.enabled || installed.missingPackage) return undefined
+  const source = getPackageManifestSource(normalizedPluginID, { managedInstallOnly: true })
+    ?? getPackageManifestSource(normalizedPluginID)
+  if (!source?.packageRoot || !source.manifest.appRuntime) return undefined
+  return {
+    pluginID: normalizedPluginID,
+    pluginVersion: source.manifest.version,
+    packageRoot: source.packageRoot,
+    runtime: source.manifest.appRuntime,
+    permissions: source.manifest.appPermissions ?? PluginAppPermissions.parse({}),
+  }
 }
 
 export function resolveEnabledInstalledPluginIDs(pluginIDs: string[]) {
@@ -4180,7 +4393,15 @@ async function syncPluginPlatformArtifacts(
   }
 }
 
+async function stopInstalledAppRuntime(pluginID: string, reason: string) {
+  // Load lazily because the generic App Runtime supervisor resolves installed
+  // definitions from this module.
+  const AppRuntime = await import("./app-runtime.ts")
+  await AppRuntime.stop(normalizePluginID(pluginID), reason)
+}
+
 export async function install(pluginID: string, input: InstallPluginInput) {
+  await stopInstalledAppRuntime(pluginID, "plugin-install")
   const previousManagedPackageRoots = managedPluginPackageRoots(pluginID)
   try {
     const source = await ensurePluginPackageAvailable(pluginID)
@@ -4224,6 +4445,7 @@ export async function install(pluginID: string, input: InstallPluginInput) {
 }
 
 export async function update(pluginID: string, input: UpdateInstalledPluginInput) {
+  await stopInstalledAppRuntime(pluginID, "plugin-update")
   const plugin = assertPackagePlugin(pluginID)
   const existingRecord = readInstalled(plugin.id)
   if (!existingRecord) {
@@ -4363,6 +4585,7 @@ export async function updateMcpControls(
 
 export async function remove(pluginID: string) {
   const normalizedPluginID = normalizePluginID(pluginID)
+  await stopInstalledAppRuntime(normalizedPluginID, "plugin-remove")
   const existing = readInstalled(normalizedPluginID)
   const source = getPackageManifestSource(normalizedPluginID)
   const plugin = source ? normalizeCatalogItem(source) : getCatalogItem(normalizedPluginID)

@@ -172,6 +172,7 @@ import {
   CinemaWorkbenchShell,
   type CinemaWorkspaceID,
 } from "./features/workbench/CinemaWorkbenchShell"
+import { resolveCinemaRuntimeBaseURL, resolveCinemaRuntimeURL } from "./runtimeUrl"
 import "./features/media/mediaNodes.css"
 
 const AssetLibraryPanel = lazy(async () => {
@@ -462,13 +463,16 @@ const NODE_META: Record<CinemaNodeType, {
 function readSearchParams() {
   const params = new URLSearchParams(window.location.search)
   return {
-    projectID: params.get("projectID")?.trim() || "",
-    agentBaseURL: params.get("agentBaseURL")?.trim().replace(/\/$/, "") || window.location.origin,
+    projectID: params.get("projectID")?.trim() || params.get("anyboxProjectID")?.trim() || "",
+    agentBaseURL: resolveCinemaRuntimeBaseURL({
+      explicitBaseURL: params.get("agentBaseURL"),
+      location: window.location,
+    }),
   }
 }
 
 async function requestJson<T>(baseURL: string, pathname: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(new URL(pathname, baseURL), init)
+  const response = await fetch(new URL(resolveCinemaRuntimeURL(baseURL, pathname)), init)
   const envelope = await response.json().catch(() => null) as
     | { success: true; data: T }
     | { success: false; error?: { code?: string; message?: string; data?: unknown } }
@@ -1684,7 +1688,10 @@ function projectAssetPreviewURL(agentBaseURL: string, projectID: string, assetPa
     .filter(Boolean)
     .map((segment) => encodeURIComponent(segment))
     .join("/")
-  return new URL(`/api/cinema/projects/${encodeURIComponent(projectID)}/assets/${encodedPath}`, agentBaseURL).toString()
+  return resolveCinemaRuntimeURL(
+    agentBaseURL,
+    `/api/cinema/projects/${encodeURIComponent(projectID)}/assets/${encodedPath}`,
+  )
 }
 
 function projectFilesPath(projectID: string, directoryPath: string) {

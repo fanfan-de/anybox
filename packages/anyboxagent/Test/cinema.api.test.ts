@@ -4667,21 +4667,15 @@ describe("cinema api", () => {
     }
   })
 
-  test("returns open link and serves cinema static assets", async () => {
+  test("keeps the legacy open-link response without mounting Cinema Web in the Agent", async () => {
     const app = createServerApp()
     const root = await createTempProjectRoot()
-    const dist = await mkdtemp(join(tmpdir(), "anybox-cinema-web-dist-"))
-    const previousDist = process.env.ANYBOX_CINEMA_WEB_DIST
     const previousDevURL = process.env.ANYBOX_CINEMA_WEB_DEV_URL
 
-    process.env.ANYBOX_CINEMA_WEB_DIST = dist
     process.env.ANYBOX_CINEMA_WEB_DEV_URL = "http://127.0.0.1:4175/cinema/"
 
     try {
       const project = await createProject(app, root)
-      await mkdir(join(dist, "assets"), { recursive: true })
-      await writeFile(join(dist, "index.html"), "<!doctype html><div id=\"root\"></div>", "utf8")
-      await writeFile(join(dist, "assets", "app.js"), "console.log('cinema')", "utf8")
 
       const linkResponse = await app.request(`http://localhost/api/cinema/projects/${encodeURIComponent(project.id)}/open-link`, {
         method: "POST",
@@ -4694,28 +4688,14 @@ describe("cinema api", () => {
       expect(linkBody.data?.url).toContain("agentBaseURL=")
 
       const assetResponse = await app.request("http://localhost/cinema/assets/app.js")
-      expect(assetResponse.status).toBe(200)
-      expect(await assetResponse.text()).toContain("cinema")
-
-      const fallbackResponse = await app.request("http://localhost/cinema/projects/example")
-      expect(fallbackResponse.status).toBe(200)
-      expect(await fallbackResponse.text()).toContain("root")
-
-      const traversalResponse = await app.request("http://localhost/cinema/%2e%2e%2fsecret.txt")
-      expect(traversalResponse.status).toBe(403)
+      expect(assetResponse.status).toBe(404)
     } finally {
-      if (previousDist === undefined) {
-        delete process.env.ANYBOX_CINEMA_WEB_DIST
-      } else {
-        process.env.ANYBOX_CINEMA_WEB_DIST = previousDist
-      }
       if (previousDevURL === undefined) {
         delete process.env.ANYBOX_CINEMA_WEB_DEV_URL
       } else {
         process.env.ANYBOX_CINEMA_WEB_DEV_URL = previousDevURL
       }
       await rm(root, { recursive: true, force: true })
-      await rm(dist, { recursive: true, force: true })
     }
   })
 })

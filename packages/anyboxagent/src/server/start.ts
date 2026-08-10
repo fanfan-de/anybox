@@ -4,6 +4,7 @@ import * as Log from "#util/log.ts"
 import { getProcessEnvValue } from "#env/compat.ts"
 import * as Connector from "#connector/connector.ts"
 import * as BuiltinMcp from "#mcp/builtin.ts"
+import * as AppRuntime from "#plugin/app-runtime.ts"
 import * as Plugin from "#plugin/plugin.ts"
 import * as Prompt from "#session/core/prompt.ts"
 import { ensureLegacySessionCleanup } from "#database/legacy-session-cleanup.ts"
@@ -73,6 +74,7 @@ const shutdown = async (signal: "SIGINT" | "SIGTERM") => {
   shutdownStarted = true
   log.info("server-shutdown", { signal })
   await stopServer()
+  await AppRuntime.stopAll("agent-shutdown")
   await cinemaRenderQueue.shutdown()
   process.exit(0)
 }

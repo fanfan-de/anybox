@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:plugin": "tsc --noEmit && vite build --outDir ../../plugins/Anybox-Plugins/cinema/web --emptyOutDir",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

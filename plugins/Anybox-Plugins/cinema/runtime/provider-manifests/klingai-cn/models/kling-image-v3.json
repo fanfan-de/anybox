@@ -1,0 +1,234 @@
+{
+  "id": "kling-image-v3",
+  "label": "Kling Image 3.0 Omni",
+  "offeringID": "klingai-cn/kling-image-3.0-omni",
+  "providerModelID": "kling-v3-omni",
+  "catalogID": "klingai-cn/kling-image-3.0-omni",
+  "family": "Kling Image",
+  "lab": "kuaishou",
+  "baseModel": "kuaishou/kling-image-3.0-omni",
+  "endpointType": "async_polling",
+  "modalities": {
+    "input": ["text", "image"],
+    "output": ["image"]
+  },
+  "modes": ["omni-image"],
+  "maxReferenceImages": 10,
+  "requiresPublicInputURL": false,
+  "inputCombinations": [
+    {
+      "mode": "omni-image",
+      "label": "Omni image",
+      "requiredModalities": ["text"],
+      "optionalModalities": ["image", "element"],
+      "endpoint": {
+        "method": "POST",
+        "path": "/v1/images/omni-image",
+        "taskQuery": {
+          "method": "GET",
+          "path": "/v1/images/omni-image/{taskID}"
+        }
+      },
+      "inputs": [
+        {
+          "role": "prompt",
+          "modality": "text",
+          "required": true,
+          "minCount": 1,
+          "maxCount": 1,
+          "maxLength": 2500
+        },
+        {
+          "role": "image_list",
+          "modality": "image",
+          "required": false,
+          "minCount": 0,
+          "maxCount": 10,
+          "apiField": "image_list",
+          "maxFileSizeMB": 10,
+          "supportedFormats": ["jpg", "jpeg", "png"],
+          "minDimensionPx": 300,
+          "minAspectRatio": "1:2.5",
+          "maxAspectRatio": "2.5:1",
+          "note": "Reference image list. Official payload shape is image_list: [{ image: image_url_or_base64 }]. The sum of image_list and element_list must not exceed 10."
+        },
+        {
+          "role": "element_list",
+          "modality": "object",
+          "required": false,
+          "minCount": 0,
+          "maxCount": 10,
+          "apiField": "element_list",
+          "note": "Reference element list. Official payload shape is element_list: [{ element_id: long }]. The sum of image_list and element_list must not exceed 10."
+        },
+        {
+          "role": "resolution",
+          "modality": "parameter",
+          "required": false,
+          "minCount": 0,
+          "maxCount": 1,
+          "default": "1k",
+          "options": ["1k", "2k", "4k"],
+          "labels": {
+            "1k": "1K",
+            "2k": "2K",
+            "4k": "4K"
+          },
+          "apiField": "resolution"
+        },
+        {
+          "role": "result_type",
+          "modality": "parameter",
+          "required": false,
+          "minCount": 0,
+          "maxCount": 1,
+          "default": "single",
+          "options": ["single", "series"],
+          "apiField": "result_type"
+        },
+        {
+          "role": "count",
+          "modality": "parameter",
+          "required": false,
+          "minCount": 0,
+          "maxCount": 1,
+          "default": 1,
+          "min": 1,
+          "max": 9,
+          "apiField": "count",
+          "providerField": "n",
+          "note": "Maps to provider field n. Ignored when result_type is series."
+        },
+        {
+          "role": "series_amount",
+          "modality": "parameter",
+          "required": false,
+          "minCount": 0,
+          "maxCount": 1,
+          "default": 4,
+          "options": [2, 3, 4, 5, 6, 7, 8, 9, "auto"],
+          "apiField": "series_amount",
+          "note": "Used when result_type is series."
+        },
+        {
+          "role": "aspect_ratio",
+          "modality": "parameter",
+          "required": false,
+          "minCount": 0,
+          "maxCount": 1,
+          "default": "auto",
+          "options": ["16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3", "21:9", "auto"],
+          "apiField": "aspect_ratio"
+        },
+        {
+          "role": "watermark_info",
+          "modality": "object",
+          "required": false,
+          "minCount": 0,
+          "maxCount": 1,
+          "apiField": "watermark_info"
+        }
+      ]
+    }
+  ],
+  "pricing": [
+    {
+      "unit": "unknown",
+      "note": "Pricing should be checked against current Kling Image docs before charging users."
+    }
+  ],
+  "sourceURL": "https://kling.ai/document-api/api/image/3-0-omni/image-omni",
+  "sourceCheckedAt": "2026-07-08",
+  "parameterSchema": {
+    "omniImage": {
+      "endpoint": {
+        "method": "POST",
+        "path": "/v1/images/omni-image"
+      },
+      "taskQueryEndpoint": {
+        "method": "GET",
+        "path": "/v1/images/omni-image/{taskID}"
+      },
+      "modelName": "kling-v3-omni",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "required": true,
+          "maxLength": 2500
+        },
+        "image_list": {
+          "type": "array",
+          "required": false,
+          "maxItems": 10,
+          "items": {
+            "type": "object",
+            "required": ["image"],
+            "properties": {
+              "image": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "element_list": {
+          "type": "array",
+          "required": false,
+          "maxItems": 10,
+          "items": {
+            "type": "object",
+            "required": ["element_id"],
+            "properties": {
+              "element_id": {
+                "type": "long"
+              }
+            }
+          }
+        },
+        "resolution": {
+          "type": "string",
+          "default": "1k",
+          "enum": ["1k", "2k", "4k"]
+        },
+        "result_type": {
+          "type": "string",
+          "default": "single",
+          "enum": ["single", "series"]
+        },
+        "n": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 1,
+          "maximum": 9,
+          "note": "Invalid when result_type is series."
+        },
+        "series_amount": {
+          "type": ["integer", "string"],
+          "default": 4,
+          "enum": [2, 3, 4, 5, 6, 7, 8, 9, "auto"],
+          "note": "Invalid when result_type is single."
+        },
+        "aspect_ratio": {
+          "type": "string",
+          "default": "auto",
+          "enum": ["16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3", "21:9", "auto"]
+        },
+        "watermark_info": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "elementManagement": {
+      "endpoint": {
+        "method": "POST",
+        "path": "/v1/general/advanced-custom-elements"
+      },
+      "note": "Element creation/query/delete APIs are asset-management endpoints and are not generation input combinations.",
+      "referenceTypes": ["image_refer", "video_refer"]
+    }
+  }
+}

@@ -1,11 +1,14 @@
 # Anybox App Plugin 设计框架
 
-> 状态：目标设计草案 v0.2
+> 状态：目标设计草案 v0.3；Local App Runtime 纵向切片已落地
 > 日期：2026-08-10  
 > 范围：定义“完整 Web App 安装到 Anybox，安装后出现在 Right Sidebar，并在 Tools Surface 中进入业务界面”的产品与技术边界。
 
 > [!IMPORTANT]
-> 本文描述的是 App Plugin 的目标架构，不是当前已经全部实现的 Manifest 格式。当前解析器只支持严格的 `views`、`mcpServers`、`skills`、`connectors` 等字段；本文出现的 `appRuntime`、`appPermissions` 等字段均为待实现的目标契约，在 Schema 落地前不能直接写入正式插件 Manifest。
+> `views`、`appRuntime` 与 `appPermissions` 已进入实时严格 Schema；宿主已经具备按需启动的 Local HTTP Runtime、健康检查、同源 Gateway、隔离日志以及更新/禁用/卸载停止能力。本文其余内容仍是目标架构，不能据此假设 Remote Origin 授权、完整 Workspace Grant、Host SDK、OS 级进程 Sandbox、后台 Lease 或 WebSocket Gateway 已经实现。
+
+> [!WARNING]
+> Cinema 0.3.0 是验证该方向的过渡实现：插件已经携带 `web/` 与可启动的 `runtime/`，桌面和 Agent 不再构建或挂载 Cinema 静态站点；但 Runtime 构建时仍复用 `packages/anyboxagent/src/cinema` 的领域源码，并兼容读取现有 Agent 数据目录。Cinema 专用 Route、Use Case、Provider 和持久化源码尚未从 Anybox Core 物理迁出，因此还不满足“删除插件后核心不含 Cinema 业务知识”的最终验收标准。
 
 ## 1. 核心结论
 
@@ -429,7 +432,7 @@ SDK 必须由 Anybox 自有 Preload 注入，插件不能声明或替换 Preload
 4. App 是否使用远程后端，属于 App 自己的产品架构；
 5. App 不声明 MCP、Skill 或 Connector 也可以成立。
 
-纯前端 Static Web App 可以沿用当前能力直接运行。调用 Remote Backend 的 Web App 还需要 Phase 2 的精确网络授权；在该能力实现前，当前 `connect-src 'none'` 会阻止远程请求。
+纯前端 Static Web App 可以沿用当前能力直接运行。调用 Remote Backend 的 Web App 还需要 Phase 2 的精确网络授权；当前 `connect-src 'self'` 只开放包内资源和同源 Runtime Gateway，仍会阻止声明的远程 Origin。
 
 ### 9.2 可选 Local Runtime Manifest
 
@@ -496,7 +499,7 @@ SDK 必须由 Anybox 自有 Preload 注入，插件不能声明或替换 Preload
 9. CSP 根据 App 类型和已授予权限生成；Static App 默认只允许包内资源。
 10. App Web 永远不能直接读取 Runtime Token、系统凭据或任意本地绝对路径。
 
-当前 Plugin View 使用 `connect-src 'none'`。目标实现不能简单地把它改成 `connect-src *`，而应只增加当前 App 的内部 Runtime Origin 和明确授权的网络 Origin。
+当前 Plugin View 使用 `connect-src 'self'`，内部 Runtime Gateway 与页面保持同源；实现没有开放 `connect-src *`。`appPermissions.network` 已严格校验并进入安装审查，但把声明的 HTTPS Origin 精确加入页面策略仍属于后续工作。
 
 Web 权限与本机代码风险必须分开表达：
 
@@ -574,17 +577,24 @@ stateDiagram-v2
 
 ## 13. Cinema Web 的目标映射
 
-### 13.1 当前状态
+### 13.1 当前过渡状态
 
-当前 Cinema 尚未形成独立 App Plugin：
+Cinema 已形成可安装、可扫描、带真实 Web 与 Local Runtime 的 App Plugin 纵向切片：
 
-- UI 位于 `packages/cinema-web`。
-- 业务 Runtime 大量位于 `packages/anyboxagent/src/cinema`。
-- HTTP 路由位于 `packages/anyboxagent/src/server/routes/cinema.ts`。
-- Use Case 位于 `packages/anyboxagent/src/server/usecases/cinema.ts`。
-- 当前 `plugins/Anybox-Plugins/cinema` 主要提供 Skill 和 MCP helper，Manifest 明确说明 Provider Runtime 仍在 AnyBox Agent。
+- `plugins/Anybox-Plugins/cinema/.anybox-plugin/plugin.json` 0.3.0 声明 `right-sidebar` View、`appRuntime`、`appPermissions`、Skill 与可选 MCP helper。
+- `packages/cinema-web` 的同一套前端既保留独立模式，也能构建到插件 `web/`；插件构建使用相对资源路径。
+- 插件模式下 Web 通过 `/__anybox_runtime__/api/cinema/*` 调用同源 Gateway，不再依赖宿主公开的 Cinema 静态站点。
+- `plugins/Anybox-Plugins/cinema/runtime/server.js` 随包分发并可由通用 Supervisor 启动；宿主 Gateway 不解析 Cinema URL 或 JSON。
+- 桌面项目菜单直接打开已安装的 Cinema View；只有声明 Workspace 请求的 View 才会得到过渡性的所选项目 ID 参数。
 
-这意味着当前 Anybox 宿主仍然理解大量 Cinema 业务知识。
+仍未完成的核心抽离：
+
+- Runtime bundle 在构建时仍引用 `packages/anyboxagent/src/cinema`、Cinema Route 与 Use Case 源码，并兼容现有 Agent 数据目录。
+- Anybox Agent 仍挂载 Cinema 专用 API 作为兼容路径；Provider、Render、Storage 与数据迁移源码尚未移动到插件源码树。
+- 当前项目 ID query 只是过渡上下文，不是通用 Workspace Grant。
+- 大媒体和普通 HTTP 流可经过 Gateway，但 WebSocket、后台 Lease、崩溃退避与权限变更 UI 尚未完成。
+
+因此当前已经验证“插件拥有分发产物与运行进程、宿主提供通用容器/监督/代理”的方向，但 Anybox Core 仍然理解大量 Cinema 业务知识。
 
 ### 13.2 完全插件化后的结构
 
@@ -666,19 +676,21 @@ Anybox 保留：
 | Tools Surface 居中 | 已支持 | 保留，App 无需声明第二种 View |
 | 完整 Web App 独立运行 | 各 App 自行实现 | 形成开发、构建和验收规范 |
 | Webview Sandbox | 已支持 | 保留并扩展 |
-| App Web 网络访问 | `connect-src 'none'` | 按内部 Runtime 和权限精确开放 |
-| App Runtime Manifest | 未支持 | 新增独立于 MCP 的严格 Schema |
-| App Runtime Supervisor | 未支持 | 新增通用生命周期管理 |
-| App Runtime Gateway | 未支持 | 新增同源透明代理 |
-| App Data/Cache 目录 | 未作为 App 契约提供 | 增加稳定目录和升级语义 |
-| 大文件/媒体 Range | 仅包内 Preview 资源 | Gateway 支持 Runtime 动态媒体 |
+| App Web 网络访问 | 已开放同源 Runtime；Remote Origin 仍阻止 | 按内部 Runtime 和权限精确开放 |
+| App Runtime Manifest | 已支持严格 `local-http` Schema | 补签名、审计和权限变更确认 |
+| App Runtime Supervisor | 已支持按需单例、健康检查、空闲停止和日志 | 补崩溃退避、后台 Lease 和用户状态 UI |
+| App Runtime Gateway | 已支持基于 View 归属的同源 HTTP 透明代理 | 补 WebSocket 与完整压力/异常验证 |
+| App Data/Cache 目录 | 已向 Runtime 注入稳定 Data/Cache/Log 路径 | 补卸载数据选择和升级语义 UI |
+| 大文件/媒体 Range | Gateway 透传 Range 与流式 body | 完成大文件、断点和并发回归 |
 | SSE/WebSocket | App View 未支持 | Gateway 支持长任务事件 |
 | 最小宿主 SDK | 未支持 | 只提供通用桌面能力 |
-| Cinema 独立 Runtime | 仍在 Anybox Agent | 移入 Cinema 插件 |
+| Cinema 独立 Runtime | 插件已携带进程产物，但构建源码仍在 Agent | 将领域源码和数据所有权完全移入插件 |
 
-另有一处文档漂移：实时解析器和第三方开发指南已经支持 `views`，但 `.agents/skills/anybox-plugin/references/manifest-format.md` 的字段表尚未列出 `views`。实现 App Plugin Schema 时应一并修正。
+实时 Parser、测试、第三方开发指南与 `anybox-plugin` Skill 已同步 `views`、`appRuntime` 和 `appPermissions`；后续扩展这些字段时仍须在同一变更中同步四者。
 
 ## 15. 推荐实现顺序
+
+截至 2026-08-10：Phase 1 的安装、入口与正式包运行链路已具备；Phase 2 只完成 View 隔离和同源内部网络，Remote Origin/Host SDK/签名仍未完成；Phase 3 已完成 Schema、按需进程、Token、Healthcheck、日志和 HTTP Gateway 的首个纵向切片；Phase 4 已完成 Web 产物、Gateway Base URL 与插件 Runtime 包装，领域源码和数据所有权迁移仍待继续。
 
 ### Phase 1：完成 App Plugin 产品闭环
 

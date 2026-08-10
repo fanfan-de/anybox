@@ -3,6 +3,7 @@ import { toPluginViewPartition } from "../../../../shared/local-preview-protocol
 import type { InstalledPluginView } from "../types"
 
 interface PluginSidebarViewProps {
+  activeProjectID?: string | null
   view: InstalledPluginView
 }
 
@@ -14,9 +15,20 @@ type WebviewFailLoadEvent = Event & {
   isMainFrame?: boolean
 }
 
-export function PluginSidebarView({ view }: PluginSidebarViewProps) {
+export function PluginSidebarView({ activeProjectID, view }: PluginSidebarViewProps) {
   const webviewRef = useRef<PluginWebviewElement | null>(null)
-  const safePreviewUrl = view.safePreviewUrl?.trim() ?? ""
+  const safePreviewUrl = useMemo(() => {
+    const rawURL = view.safePreviewUrl?.trim() ?? ""
+    if (!rawURL || !view.workspaceAccess || !activeProjectID?.trim()) return rawURL
+    try {
+      const url = new URL(rawURL)
+      url.searchParams.set("anyboxProjectID", activeProjectID.trim())
+      url.searchParams.set("anyboxAppMode", "plugin")
+      return url.toString()
+    } catch {
+      return ""
+    }
+  }, [activeProjectID, view.safePreviewUrl, view.workspaceAccess])
   const [isLoading, setIsLoading] = useState(Boolean(safePreviewUrl))
   const [error, setError] = useState<string | null>(
     safePreviewUrl ? null : "This plugin view does not have a valid local entry URL.",

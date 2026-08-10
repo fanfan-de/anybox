@@ -10,7 +10,6 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const desktopDir = path.resolve(scriptDir, "..")
 const repoRoot = path.resolve(desktopDir, "..", "..")
 const agentDir = path.join(repoRoot, "packages", "anyboxagent")
-const cinemaWebDistDir = path.join(repoRoot, "packages", "cinema-web", "dist")
 const runtimeBuildDir = path.join(desktopDir, "build")
 const runtimeDir = resolveRuntimeOutputDirectory()
 const cinemaProviderCatalogSource = path.join(agentDir, "src", "cinema", "provider-manifests.json")
@@ -168,17 +167,6 @@ async function copyBundledPlatformRuntimes() {
   )
 }
 
-async function copyCinemaWebDist() {
-  const sourceIndex = path.join(cinemaWebDistDir, "index.html")
-  if (!(await pathExists(sourceIndex))) {
-    throw new Error(`Missing Cinema Web build at ${sourceIndex}. Run \`pnpm --filter anybox-cinema-web build\` first.`)
-  }
-
-  const targetDir = path.join(runtimeDir, "cinema-web")
-  await fsp.rm(targetDir, { recursive: true, force: true })
-  await fsp.cp(cinemaWebDistDir, targetDir, { recursive: true })
-}
-
 async function copyCinemaProviderManifests() {
   if (!(await pathExists(cinemaProviderCatalogSource))) {
     throw new Error(`Missing Cinema provider catalog at ${cinemaProviderCatalogSource}`)
@@ -238,7 +226,6 @@ async function main() {
   await copyNodePtyRuntime(runtimeNodeModulesDir)
   await fixNodePtySpawnHelperPermissions(runtimeNodeModulesDir)
   await copyCinemaProviderManifests()
-  await copyCinemaWebDist()
   await copyBundledPlatformRuntimes()
   await writeConnectorBuildConfig()
   await prepareWorkspaceDependencies({

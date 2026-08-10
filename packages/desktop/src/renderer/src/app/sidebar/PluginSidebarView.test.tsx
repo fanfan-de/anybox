@@ -37,6 +37,26 @@ describe("PluginSidebarView", () => {
     expect(screen.queryByRole("status")).toBeNull()
   })
 
+  it("passes project context only to views that request workspace access", () => {
+    const { container, rerender } = render(
+      <PluginSidebarView
+        activeProjectID="project with spaces"
+        view={createView({ workspaceAccess: true })}
+      />,
+    )
+
+    expect(container.querySelector("webview")).toHaveAttribute(
+      "src",
+      "anybox-preview://preview/token/web/index.html?anyboxProjectID=project+with+spaces&anyboxAppMode=plugin",
+    )
+
+    rerender(<PluginSidebarView activeProjectID="hidden" view={createView()} />)
+    expect(container.querySelector("webview")).toHaveAttribute(
+      "src",
+      "anybox-preview://preview/token/web/index.html",
+    )
+  })
+
   it("reports load failures and blocks navigation away from the entry", () => {
     const { container } = render(<PluginSidebarView view={createView()} />)
     const webview = container.querySelector("webview")!

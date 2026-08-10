@@ -21,6 +21,7 @@ import {
   assetLibraryScopeKey,
   sortAssetLibraryEntries,
 } from "./assetLibraryModel"
+import { resolveCinemaRuntimeURL } from "../../runtimeUrl"
 
 export interface AssetLibraryState {
   scope: CinemaAssetScope
@@ -139,7 +140,7 @@ function errorFromEnvelope(response: Response, body: unknown): AssetLibraryApiEr
 }
 
 async function requestData<T>(baseURL: string, pathname: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(new URL(pathname, baseURL), init)
+  const response = await fetch(new URL(resolveCinemaRuntimeURL(baseURL, pathname)), init)
   const body = await response.json().catch(() => null) as unknown
   if (!response.ok) throw errorFromEnvelope(response, body)
   if (isRecord(body) && body.success === false) throw errorFromEnvelope(response, body)
@@ -361,7 +362,7 @@ export function createAssetLibraryApi(
   const prefix = scope.type === "personal"
     ? "/api/cinema/personal-library"
     : `/api/cinema/projects/${encodeURIComponent(scopedProjectID)}/library`
-  const url = (pathname: string) => new URL(`${prefix}${pathname}`, agentBaseURL).toString()
+  const url = (pathname: string) => resolveCinemaRuntimeURL(agentBaseURL, `${prefix}${pathname}`)
   const data = <T>(pathname: string, init?: RequestInit) => requestData<T>(agentBaseURL, `${prefix}${pathname}`, init)
 
   return {

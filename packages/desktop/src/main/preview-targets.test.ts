@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   inferPreviewRenderer,
   handleLocalPreviewProtocolRequest,
@@ -129,22 +129,36 @@ describe("preview target resolver", () => {
     })
 
     const parsedUrl = new URL(resolved.safePreviewUrl!)
-    const token = parsedUrl.pathname.split("/").filter(Boolean)[0]
+    const token = parsedUrl.hostname
     await expect(resolveLocalPreviewProtocolRequest(
-      `anybox-preview://preview/${token}/web/assets/app.js`,
+      `anybox-preview://${token}/web/assets/app.js`,
     )).resolves.toMatchObject({
       ok: true,
       mimeType: "text/javascript; charset=utf-8",
       purpose: "plugin-view",
     })
     await expect(resolveLocalPreviewProtocolRequest(
-      `anybox-preview://preview/${token}/%2e%2e%2foutside.js`,
+      `anybox-preview://${token}/%2e%2e%2foutside.js`,
     )).resolves.toMatchObject({ ok: false })
 
     const response = await handleLocalPreviewProtocolRequest(new Request(resolved.safePreviewUrl!))
-    expect(response.headers.get("content-security-policy")).toContain("connect-src 'none'")
+    expect(response.headers.get("content-security-policy")).toContain("connect-src 'self'")
     expect(response.headers.get("content-security-policy")).toContain("script-src 'self'")
     expect(response.headers.get("x-content-type-options")).toBe("nosniff")
+
+    const proxyPluginRuntimeRequest = vi.fn(async () => new Response("runtime-ready", { status: 202 }))
+    const runtimeUrl = new URL("/__anybox_runtime__/api/cinema/projects?limit=2", resolved.safePreviewUrl!).toString()
+    const runtimeResponse = await handleLocalPreviewProtocolRequest(
+      new Request(runtimeUrl, { method: "POST", body: "{}" }),
+      { proxyPluginRuntimeRequest },
+    )
+    expect(runtimeResponse.status).toBe(202)
+    expect(await runtimeResponse.text()).toBe("runtime-ready")
+    expect(proxyPluginRuntimeRequest).toHaveBeenCalledWith(expect.objectContaining({
+      pluginID: "react-sidebar-proof",
+      requestPath: "/api/cinema/projects?limit=2",
+      viewID: "main",
+    }))
 
     const refreshed = await resolvePluginViewPreviewTarget({
       entry: "./web/index.html",

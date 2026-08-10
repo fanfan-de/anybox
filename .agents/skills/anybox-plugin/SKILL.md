@@ -1,6 +1,6 @@
 ---
 name: anybox-plugin
-description: 构建、说明、迁移、评审或验证 Anybox 插件包及其 .anybox-plugin/plugin.json 清单。适用于 Codex 需要创建或更新插件目录、MCP Server、内置 Skill、插件自有 API Key 或 OAuth Connector、平台 Connector 依赖、外部组件 JSON、Registry 条目、ZIP 或 GitHub Tree 分发、生成 ID，或诊断 Anybox 插件目录与安装问题。
+description: 构建、说明、迁移、评审或验证 Anybox 插件包及其 .anybox-plugin/plugin.json 清单。适用于 Codex 需要创建或更新插件目录、Plugin View、App Runtime、MCP Server、内置 Skill、插件自有 API Key 或 OAuth Connector、平台 Connector 依赖、外部组件 JSON、Registry 条目、ZIP 或 GitHub Tree 分发、生成 ID，或诊断 Anybox 插件目录与安装问题。
 ---
 
 # Anybox 插件规范
@@ -52,6 +52,10 @@ description: 构建、说明、迁移、评审或验证 Anybox 插件包及其 .
 - 规范 Connector 条目必须同时包含 `credential` 和 `runtime`；`configFields` 只能作为额外配置。
 - 优先使用 `connectors`，不要为新插件使用旧的 `apps` 字段。
 - 把 `commands` 和 `agents` 视为保留兼容字段，不要声称当前运行时会执行它们。
+- 完整 App 使用 `views` 提供用户入口；只有需要宿主启动本地 HTTP 后端时才声明独立的 `appRuntime`，不要把它与 `mcpServers[].runtime` 混用。
+- App Web 构建产物应放在插件包内并使用相对资源路径。`appRuntime` 中带 `${PLUGIN_ROOT}` 的 command、arg 和 cwd 必须解析到真实的包内文件或目录，不能使用其他 Runtime placeholder。
+- `appPermissions` 当前会进入高风险安装审查；`workspace: "request"` 只提供过渡性的项目上下文，`network` 和 `system` 不能被描述成已经具有 OS 级强制隔离或完整 Host SDK 授权。
+- Local App Runtime 是真实本机代码。未实现 OS 级进程 Sandbox、签名与信任链前，必须明确告知风险，不得把声明式网络或文件权限宣传为安全边界。
 - 桌面开发版与正式版默认共享仓库内稳定的 `.catalog/anybox-plugin-registry.json`，且默认不扫描本地仓库源码包；只有显式设置 `ANYBOX_PLUGIN_INCLUDE_SOURCE_PACKAGES=1` 才进入源码插件开发模式。插件目录不跟随桌面版本，所有 Registry 和版本化 ZIP 都在本地生成、验证后作为普通 Git 文件提交；不得依赖 GitHub Actions、Release 或 API。
 - 除非确实希望阻止安装，否则不要把风险标记为 `critical`。
 - 迁移或验证期间保留用户文件和工作区中的无关改动。
