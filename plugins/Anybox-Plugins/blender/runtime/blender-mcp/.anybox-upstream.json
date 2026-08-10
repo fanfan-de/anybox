@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "upstreamProject": "https://projects.blender.org/lab/blender_mcp",
+  "upstreamVersion": "1.0.0",
+  "releaseURL": "https://projects.blender.org/lab/blender_mcp/releases/tag/v1.0.0",
+  "bundleURL": "https://projects.blender.org/lab/blender_mcp/releases/download/v1.0.0/blender-1.0.0.mcpb",
+  "bundleSha256": "93b070b1df82f57b1e7678b88b6bae28d06f105cd23ff6a4e0cc5f538bee2450",
+  "bundleSize": 5553447,
+  "entryCount": 4445,
+  "uncompressedSize": 15797990
+}

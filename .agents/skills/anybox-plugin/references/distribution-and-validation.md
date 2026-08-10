@@ -222,7 +222,7 @@ pnpm plugins:catalog:prepare
 pnpm plugins:catalog:verify
 ```
 
-命令从已提交的插件源码和当前 Git HEAD 生成恰好 65 个 `anybox-plugin-<id>-<version>.zip`，写入 `plugins/Anybox-Plugins/.catalog/packages/`，同时更新 `anybox-plugin-registry.json` 与 `anybox-plugin-catalog-manifest.json`。同名 ZIP 已存在时必须逐字节一致，否则命令失败并要求插件升版；旧版本 ZIP 不自动删除。命令不会调用 GitHub API、Actions、Release，也不会自动执行 `git add`、commit 或 push。
+命令从已提交的插件源码和当前 Git HEAD 生成恰好 66 个 `anybox-plugin-<id>-<version>.zip`，写入 `plugins/Anybox-Plugins/.catalog/packages/`，同时更新 `anybox-plugin-registry.json` 与 `anybox-plugin-catalog-manifest.json`。同名 ZIP 已存在时必须逐字节一致，否则命令失败并要求插件升版；旧版本 ZIP 不自动删除。命令不会调用 GitHub API、Actions、Release，也不会自动执行 `git add`、commit 或 push。
 
 `plugins:catalog:prepare` 会用同目录中的文件安装一个代表性 ZIP；也可以单独复验：
 

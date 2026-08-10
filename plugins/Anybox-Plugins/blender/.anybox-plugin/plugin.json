@@ -1,0 +1,354 @@
+{
+  "name": "blender",
+  "version": "0.1.0",
+  "description": "Inspect, navigate, render, and automate Blender through the official Blender Lab MCP server.",
+  "author": {
+    "name": "Anybox · Blender Lab",
+    "url": "https://www.blender.org/lab/"
+  },
+  "homepage": "https://www.blender.org/lab/mcp-server/",
+  "repository": "https://projects.blender.org/lab/blender_mcp",
+  "license": "GPL-3.0-or-later",
+  "keywords": [
+    "blender",
+    "3d",
+    "rendering",
+    "python",
+    "mcp"
+  ],
+  "interface": {
+    "displayName": {
+      "en-US": "Blender MCP",
+      "zh-CN": "Blender 官方 MCP"
+    },
+    "shortDescription": {
+      "en-US": "Inspect and control Blender through its official MCP server.",
+      "zh-CN": "通过 Blender 官方 MCP 检查和控制场景。"
+    },
+    "longDescription": {
+      "en-US": "Use Blender Lab's official MCP server to inspect scenes, search bundled Blender documentation, capture the interface, navigate workspaces, render images, and execute approved Python code inside Blender.",
+      "zh-CN": "使用 Blender Lab 官方 MCP 检查场景、搜索内置 Blender 文档、截取界面、切换工作区、渲染图像，并在批准后于 Blender 内执行 Python 代码。"
+    },
+    "developerName": "Anybox · Blender Lab",
+    "category": "Design",
+    "capabilities": [
+      "Inspect",
+      "Navigate",
+      "Render",
+      "Automation",
+      "Documentation"
+    ],
+    "websiteURL": "https://www.blender.org/lab/mcp-server/",
+    "defaultPrompt": [
+      "总结当前 Blender 场景的对象、集合和渲染设置",
+      "在 Blender Python API 文档中查找我需要的接口",
+      "检查当前场景并在修改前给出操作计划"
+    ],
+    "logo": "./runtime/blender-mcp/blender_icon.png",
+    "iconUrl": "./runtime/blender-mcp/blender_icon.png",
+    "screenshots": [],
+    "brandColor": "#E87D0D"
+  },
+  "mcpServers": [
+    {
+      "id": "official",
+      "name": "Blender MCP",
+      "description": "Official Blender Lab MCP server pinned to the reviewed v1.0.0 MCP Bundle.",
+      "risk": "high",
+      "permissions": [
+        "Requires Blender 5.1 or newer with the official Blender MCP extension enabled",
+        "Starts a local Python MCP process through uv and may download Python plus locked dependencies on first launch",
+        "Connects only to the configured Blender extension port on localhost",
+        "Can inspect the active scene, object hierarchy, local blend-file metadata, missing file paths, and Blender window state",
+        "Approved command-line tools can open an explicitly supplied local .blend file in a background Blender process and may create then remove a temporary synchronized copy beside that file",
+        "Can capture Blender screenshots, navigate workspaces and viewports, and write render output to user-selected paths",
+        "Approved arbitrary Python runs inside Blender with the same local files, network, and process privileges as Blender"
+      ],
+      "tools": [
+        {
+          "name": "execute_blender_code",
+          "title": "Execute Blender Python",
+          "description": "Execute arbitrary Python code in the connected Blender instance.",
+          "readOnly": false,
+          "destructive": true
+        },
+        {
+          "name": "execute_blender_code_for_cli",
+          "title": "Execute Blender Python for Command-Line",
+          "description": "Open a selected blend file in background Blender and execute arbitrary Python code.",
+          "readOnly": false,
+          "destructive": true
+        },
+        {
+          "name": "get_blendfile_summary_datablocks",
+          "title": "Summarize Blend Data",
+          "description": "Read data-block counts, the active workspace, and render engine.",
+          "readOnly": true,
+          "destructive": false
+        },
+        {
+          "name": "get_blendfile_summary_datablocks_for_cli",
+          "title": "Summarize Blend Data for Command-Line",
+          "description": "Open a selected blend file in background Blender and read its data-block summary.",
+          "readOnly": true,
+          "destructive": false
+        },
+        {
+          "name": "get_blendfile_summary_missing_files",
+          "title": "Find Missing Files",
+          "description": "Read missing external file references from the active blend file.",
+          "readOnly": true,
+          "destructive": false
+        },
+        {
+          "name": "get_blendfile_summary_missing_files_for_cli",
+          "title": "Find Missing Files for Command-Line",
+          "description": "Open a selected blend file in background Blender and read its missing file references.",
+          "readOnly": true,
+          "destructive": false
+        },
+        {
+          "name": "get_blendfile_summary_of_linked_libraries",
+          "title": "Inspect Linked Libraries",
+          "description": "Read directly and indirectly linked Blender library files.",
+          "readOnly": true,
+          "destructive": false
+        },
+        {
+          "name": "get_blendfile_summary_of_linked_libraries_for_cli",
+          "title": "Inspect Linked Libraries for Command-Line",
+          "description": "Open a selected blend file in background Blender and read its linked libraries.",
+          "readOnly": true,
+          "destructive": false
+        },
+        {
+          "name": "get_blendfile_summary_path_info",
+          "title": "Inspect Blend Path",
+          "description": "Read the active blend file path, save status, age, and backups.",
+          "readOnly": true,
+          "destructive": false
+        },
+        {
+          "name": "get_blendfile_summary_path_info_for_cli",
+          "title": "Inspect Blend Path for Command-Line",
+          "description": "Open a selected blend file in background Blender and read its path information.",
+          "readOnly": true,
+          "destructive": false
+        },
+        {
+          "name": "get_blendfile_summary_usage_guess",
+          "title": "Guess Blend Usage",
+          "description": "Estimate the primary use cases of the active blend file.",
+          "readOnly": true,
+          "destructive": false
+        },
+        {
+          "name": "get_blendfile_summary_usage_guess_for_cli",
+          "title": "Guess Blend Usage for Command-Line",
+          "description": "Open a selected blend file in background Blender and estimate its primary use cases.",
+          "readOnly": true,
+          "destructive": false
+        },
+        {
+          "name": "get_object_detail_summary",
+          "title": "Inspect Blender Object",
+          "description": "Read a structured summary of one named Blender object.",
+          "readOnly": true,
+          "destructive": false
+        },
+        {
+          "name": "get_objects_summary",
+          "title": "Inspect Scene Objects",
+          "description": "Read the current collection hierarchy and its objects.",
+          "readOnly": true,
+          "destructive": false
+        },
+        {
+          "name": "get_python_api_docs",
+          "title": "Read Blender API Docs",
+          "description": "Read bundled Blender Python API documentation for an identifier.",
+          "readOnly": true,
+          "destructive": false
+        },
+        {
+          "name": "get_screenshot_of_area_as_image",
+          "title": "Capture Blender Area",
+          "description": "Capture one Blender interface area as a PNG image.",
+          "readOnly": true,
+          "destructive": false
+        },
+        {
+          "name": "get_screenshot_of_window_as_image",
+          "title": "Capture Blender Window",
+          "description": "Capture the complete Blender window as a PNG image.",
+          "readOnly": true,
+          "destructive": false
+        },
+        {
+          "name": "get_screenshot_of_window_as_json",
+          "title": "Inspect Blender Window",
+          "description": "Read the Blender window layout, active object, and selection as JSON.",
+          "readOnly": true,
+          "destructive": false
+        },
+        {
+          "name": "jump_to_tab_by_name",
+          "title": "Open Workspace Tab",
+          "description": "Switch the active Blender workspace tab by name.",
+          "readOnly": false,
+          "destructive": false
+        },
+        {
+          "name": "jump_to_tab_by_space_type",
+          "title": "Open Workspace Type",
+          "description": "Switch to a workspace whose main area matches a Blender space type.",
+          "readOnly": false,
+          "destructive": false
+        },
+        {
+          "name": "jump_to_view3d_object_by_name",
+          "title": "Focus Blender Object",
+          "description": "Move the 3D viewport to focus on a named object.",
+          "readOnly": false,
+          "destructive": false
+        },
+        {
+          "name": "jump_to_view3d_object_data_by_name",
+          "title": "Focus Blender Data",
+          "description": "Focus the object whose data block has the supplied name.",
+          "readOnly": false,
+          "destructive": false
+        },
+        {
+          "name": "render_thumbnail_to_path",
+          "title": "Render Thumbnail",
+          "description": "Write a small low-quality scene thumbnail to a selected path.",
+          "readOnly": false,
+          "destructive": true
+        },
+        {
+          "name": "render_viewport_to_path",
+          "title": "Render Viewport",
+          "description": "Render the current scene to a selected local path.",
+          "readOnly": false,
+          "destructive": true
+        },
+        {
+          "name": "search_api_docs",
+          "title": "Search Blender API",
+          "description": "Search the bundled Blender Python API reference.",
+          "readOnly": true,
+          "destructive": false
+        },
+        {
+          "name": "search_manual_docs",
+          "title": "Search Blender Manual",
+          "description": "Search the bundled Blender user manual.",
+          "readOnly": true,
+          "destructive": false
+        }
+      ],
+      "configFields": [
+        {
+          "key": "BLENDER_UV_PATH",
+          "label": "uv executable path",
+          "type": "path",
+          "required": true,
+          "defaultValue": "uv",
+          "placeholder": "C:\\Users\\you\\.local\\bin\\uv.exe",
+          "description": "Use uv from PATH or enter its absolute executable path if the Anybox desktop process cannot find it."
+        },
+        {
+          "key": "BLENDER_MCP_PORT",
+          "label": "Blender MCP port",
+          "type": "text",
+          "required": true,
+          "defaultValue": "9876",
+          "placeholder": "9876",
+          "description": "Must match the port configured in the Blender MCP extension. The host is intentionally fixed to localhost."
+        },
+        {
+          "key": "BLENDER_PATH",
+          "label": "Blender executable path",
+          "type": "path",
+          "required": false,
+          "placeholder": "C:\\Program Files\\Blender Foundation\\Blender 5.1\\blender.exe",
+          "description": "Optional executable path used only by approved *_for_cli tools. Leave empty to resolve the blender command from PATH."
+        }
+      ],
+      "runtime": {
+        "transport": "stdio",
+        "command": "${BLENDER_UV_PATH}",
+        "args": [
+          "run",
+          "--no-project",
+          "--python",
+          "3.11",
+          "${PLUGIN_ROOT}/scripts/launch_blender_mcp.py"
+        ],
+        "cwd": "${PLUGIN_ROOT}",
+        "env": {
+          "BLENDER_MCP_HOST": "localhost",
+          "BLENDER_MCP_PORT": "${BLENDER_MCP_PORT}",
+          "BLENDER_MCP_PROJECT": "${PLUGIN_ROOT}/runtime/blender-mcp",
+          "BLENDER_PATH": "${BLENDER_PATH}",
+          "BLENDER_UV_PATH": "${BLENDER_UV_PATH}",
+          "UV_PROJECT_ENVIRONMENT": "${PLUGIN_APP_CACHE_DIR}/blender-mcp/1.0.0",
+          "UV_CACHE_DIR": "${PLUGIN_APP_CACHE_DIR}/uv-cache",
+          "UV_PYTHON_INSTALL_DIR": "${PLUGIN_APP_CACHE_DIR}/uv-python",
+          "UV_NO_PROGRESS": "1",
+          "PYTHONUNBUFFERED": "1",
+          "PYTHONDONTWRITEBYTECODE": "1"
+        },
+        "timeoutMs": 120000,
+        "toolPolicies": {
+          "get_blendfile_summary_datablocks": {
+            "policy": "auto"
+          },
+          "get_blendfile_summary_missing_files": {
+            "policy": "auto"
+          },
+          "get_blendfile_summary_of_linked_libraries": {
+            "policy": "auto"
+          },
+          "get_blendfile_summary_path_info": {
+            "policy": "auto"
+          },
+          "get_blendfile_summary_usage_guess": {
+            "policy": "auto"
+          },
+          "get_object_detail_summary": {
+            "policy": "auto"
+          },
+          "get_objects_summary": {
+            "policy": "auto"
+          },
+          "get_python_api_docs": {
+            "policy": "auto"
+          },
+          "search_api_docs": {
+            "policy": "auto"
+          },
+          "search_manual_docs": {
+            "policy": "auto"
+          },
+          "execute_blender_code": {
+            "policy": "ask"
+          },
+          "execute_blender_code_for_cli": {
+            "policy": "ask"
+          }
+        }
+      },
+      "installReview": [
+        "Install uv before first use. If the desktop app cannot find uv on PATH, configure its absolute executable path.",
+        "The first launch may download a compatible Python runtime and dependencies exactly described by the bundled uv.lock file.",
+        "Install and enable the official Blender MCP extension separately in Blender 5.1 or newer, then keep its host on localhost and make its port match this plugin.",
+        "Only reviewed documentation and scene-inspection tools are auto-allowed. Screenshots, navigation, rendering, and other unspecified tools require approval by default.",
+        "The *_for_cli tools require an explicit local blend-file path, can launch background Blender, and may create then remove a temporary synchronized copy beside a dirty open file; they require approval by default.",
+        "execute_blender_code requires approval but can still read, modify, delete, or transmit any data available to the Blender process; approval is not an operating-system sandbox."
+      ]
+    }
+  ],
+  "skills": "skills"
+}
