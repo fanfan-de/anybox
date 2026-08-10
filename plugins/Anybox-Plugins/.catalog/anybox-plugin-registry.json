@@ -1,12 +1,12 @@
 {
   "schemaVersion": 3,
   "catalogID": "anybox-plugins",
-  "sourceCommit": "832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d",
-  "pluginCount": 64,
+  "sourceCommit": "f909db34b37a4883d52703f1c1a8dd8694d68f3c",
+  "pluginCount": 65,
   "plugins": [
     {
       "name": "anybox-plugin-development",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "description": "Anybox 插件开发指南，帮助创建、审查和验证第三方插件包。",
       "author": {
         "name": "Anybox"
@@ -59,9 +59,9 @@
       "id": "anybox-plugin-development",
       "package": {
         "type": "zip",
-        "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/.catalog/packages/anybox-plugin-anybox-plugin-development-0.1.2.zip",
-        "sha256": "c52c1a23ed1eca6e36536ba60e41c0322fa7df6f64513787556ee1039410321a",
-        "size": 16576
+        "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/.catalog/packages/anybox-plugin-anybox-plugin-development-0.1.3.zip",
+        "sha256": "0eb563fada53fa500ddbcde58cdd21badacba69a387209055bdbe3c7907463c4",
+        "size": 18542
       }
     },
     {
@@ -105,8 +105,8 @@
         ],
         "screenshots": [],
         "brandColor": "#0052CC",
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/atlassian-rovo/assets/app-icon.png",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/atlassian-rovo/assets/app-icon.png"
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/atlassian-rovo/assets/app-icon.png",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/atlassian-rovo/assets/app-icon.png"
       },
       "skills": "./skills/",
       "skillPreviews": [
@@ -480,8 +480,8 @@
         "defaultPrompt": [
           "Find a Box file and summarize the key points"
         ],
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/box/assets/app-icon.png",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/box/assets/app-icon.png",
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/box/assets/app-icon.png",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/box/assets/app-icon.png",
         "screenshots": []
       },
       "skills": "./skills/",
@@ -552,8 +552,8 @@
           "Build or debug an iOS app with SwiftUI, App Intents, and Simulator."
         ],
         "brandColor": "#0A84FF",
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/build-ios-apps/assets/build-ios-apps-small.svg",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/build-ios-apps/assets/app-icon.png",
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/build-ios-apps/assets/build-ios-apps-small.svg",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/build-ios-apps/assets/app-icon.png",
         "screenshots": []
       },
       "skills": "./skills/",
@@ -665,8 +665,8 @@
         ],
         "screenshots": [],
         "brandColor": "#1F6FEB",
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/build-macos-apps/assets/build-macos-apps-small.svg",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/build-macos-apps/assets/app-icon.png"
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/build-macos-apps/assets/build-macos-apps-small.svg",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/build-macos-apps/assets/app-icon.png"
       },
       "skills": "./skills/",
       "skillPreviews": [
@@ -787,8 +787,8 @@
           "Design a new landing page for my new SaaS product."
         ],
         "brandColor": "#111111",
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/build-web-apps/assets/build-web-apps-small.svg",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/build-web-apps/assets/app-icon.png",
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/build-web-apps/assets/build-web-apps-small.svg",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/build-web-apps/assets/app-icon.png",
         "screenshots": [],
         "iconUrl": "data:image/png;base64,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",
         "thumbnailUrl": "data:image/png;base64,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",
@@ -871,8 +871,8 @@
           "Create or adapt a Canva design for presentations, resized social variants, or translated versions"
         ],
         "screenshots": [],
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/canva/assets/app-icon.png",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/canva/assets/app-icon.png"
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/canva/assets/app-icon.png",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/canva/assets/app-icon.png"
       },
       "skills": "./skills/",
       "skillPreviews": [
@@ -902,7 +902,7 @@
     },
     {
       "name": "chrome",
-      "version": "0.15.1",
+      "version": "0.15.2",
       "description": "Control Chrome by importing the plugin Browser Client into Anybox's general-purpose Node REPL.",
       "author": {
         "name": "Anybox"
@@ -938,9 +938,9 @@
           "node-repl",
           "mcp"
         ],
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/chrome/assets/chrome.svg",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/chrome/assets/chrome.svg",
         "brandColor": "#4285F4",
-        "iconUrl": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/chrome/assets/chrome.svg"
+        "iconUrl": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/chrome/assets/chrome.svg"
       },
       "skills": "skills",
       "platformArtifacts": [
@@ -1004,15 +1004,15 @@
       "id": "chrome",
       "package": {
         "type": "zip",
-        "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/.catalog/packages/anybox-plugin-chrome-0.15.1.zip",
-        "sha256": "c10ea6345854bf5e0881d5eb75165ccc3333d4fc16ae5fa0bd1ac79f7e6bdb27",
-        "size": 863047
+        "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/.catalog/packages/anybox-plugin-chrome-0.15.2.zip",
+        "sha256": "16bb9c576619afb49b0af50788cb0d07baf41d4a59d0148361716464d6de8894",
+        "size": 863147
       }
     },
     {
       "name": "cinema",
-      "version": "0.2.0",
-      "description": "Folder-based AI film workflows built around Text, Image, Video, and Audio nodes.",
+      "version": "0.3.0",
+      "description": "A complete local AI filmmaking Web App packaged with its own Cinema runtime.",
       "author": {
         "name": "Anybox"
       },
@@ -1033,12 +1033,12 @@
           "zh-CN": "anybox for cinema"
         },
         "shortDescription": {
-          "en-US": "Local AI film workflows with four canonical node types.",
-          "zh-CN": "仅使用文本、图片、视频、音频四类节点的本地 AI 影视工作流。"
+          "en-US": "A complete local AI filmmaking App with Canvas, Edit, and Deliver workspaces.",
+          "zh-CN": "包含画布、剪辑与交付工作台的完整本地 AI 影视应用。"
         },
         "longDescription": {
-          "en-US": "Initialize and operate local folder-based film projects for anybox for cinema. The plugin includes a project initialization skill and local MCP helpers that only read and write Text, Image, Video, and Audio canvas nodes. Provider generation runtime lives in AnyBox Agent.",
-          "zh-CN": "初始化并操作基于本地文件夹的 anybox for cinema 影视项目。插件包含项目初始化技能与本地 MCP 工具，画布只读写文本、图片、视频和音频四类节点；Provider 生成运行时由 AnyBox Agent 提供。"
+          "en-US": "Install and run the complete anybox for cinema Web App from the Right Sidebar. The plugin carries its sandboxed Web build, local HTTP App Runtime, project initialization skill, and optional MCP helpers.",
+          "zh-CN": "从右侧栏安装并运行完整的 anybox for cinema Web App。插件自带沙箱化 Web 构建、本地 HTTP App Runtime、项目初始化 Skill 与可选 MCP 工具。"
         },
         "developerName": "Anybox",
         "category": "Design",
@@ -1057,11 +1057,41 @@
           "Create a storyboard with Text and Image nodes"
         ]
       },
+      "views": [
+        {
+          "id": "main",
+          "title": "Cinema",
+          "location": "right-sidebar",
+          "entry": "./web/index.html"
+        }
+      ],
+      "appRuntime": {
+        "type": "local-http",
+        "command": "bun",
+        "args": [
+          "${PLUGIN_ROOT}/runtime/server.js"
+        ],
+        "cwd": "${PLUGIN_ROOT}",
+        "healthcheckPath": "/health",
+        "startupTimeoutMs": 30000,
+        "idleTimeoutMs": 300000
+      },
+      "appPermissions": {
+        "workspace": "request",
+        "network": [
+          "https://api-beijing.klingai.com",
+          "https://api-singapore.klingai.com",
+          "https://generativelanguage.googleapis.com",
+          "http://127.0.0.1:8188",
+          "http://localhost:8188"
+        ],
+        "system": []
+      },
       "mcpServers": [
         {
           "id": "cinema",
           "name": "anybox for cinema",
-          "description": "Read and update local anybox for cinema projects using only Text, Image, Video, and Audio canvas nodes. Provider generation runs through the AnyBox Agent Cinema Runtime API.",
+          "description": "Read and update local anybox for cinema projects using only Text, Image, Video, and Audio canvas nodes. Interactive generation runs through the plugin App Runtime.",
           "risk": "medium",
           "permissions": [
             "Reads Cinema project metadata, canvas state, and recent events from local project folders.",
@@ -1116,7 +1146,7 @@
             "Runs a local Node.js MCP server bundled with the Cinema plugin.",
             "Reads and writes the selected local project's .anybox-cinema planning files directly.",
             "Accepts only Text, Image, Video, and Audio canvas node types.",
-            "Does not provide Cinema video provider runtime; generation tasks are handled by AnyBox Agent.",
+            "The plugin also carries a separate local App Runtime for its interactive Web product.",
             "Canvas write actions are configured to ask before execution."
           ]
         }
@@ -1132,9 +1162,9 @@
       "id": "cinema",
       "package": {
         "type": "zip",
-        "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/.catalog/packages/anybox-plugin-cinema-0.2.0.zip",
-        "sha256": "0396896fb46dfb8387cb7549c487e7292c531670ac99f66521d821788adffd28",
-        "size": 15258
+        "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/.catalog/packages/anybox-plugin-cinema-0.3.0.zip",
+        "sha256": "9dfc131340c57a1a075020f6ee01814267587e8a2953e6a318d7fc4f25d78a91",
+        "size": 1285578
       }
     },
     {
@@ -1182,8 +1212,8 @@
           "Setup CircleCI Smarter Testing for running tests in this project"
         ],
         "brandColor": "#049B4A",
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/circleci/assets/logo.svg",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/circleci/assets/logo.svg",
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/circleci/assets/logo.svg",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/circleci/assets/logo.svg",
         "screenshots": []
       },
       "skills": "./skills/",
@@ -1275,8 +1305,8 @@
         "defaultPrompt": [
           "Help me choose the right Cloudflare product, configure Wrangler, and use Cloudflare MCP to inspect or deploy this project"
         ],
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/cloudflare/assets/cloudflare-small.svg",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/cloudflare/assets/cloudflare.png",
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/cloudflare/assets/cloudflare-small.svg",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/cloudflare/assets/cloudflare.png",
         "screenshots": [],
         "brandColor": "#F48120"
       },
@@ -1445,8 +1475,8 @@
         "privacyPolicyURL": "https://www.coderabbit.ai/privacy-policy",
         "termsOfServiceURL": "https://www.coderabbit.ai/terms-of-service",
         "brandColor": "#FF570A",
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/coderabbit/assets/coderabbit-small.png",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/coderabbit/assets/coderabbit.png",
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/coderabbit/assets/coderabbit-small.png",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/coderabbit/assets/coderabbit.png",
         "defaultPrompt": [
           "Review my current changes and provide feedback"
         ],
@@ -1470,7 +1500,7 @@
     },
     {
       "name": "computer-use-windows",
-      "version": "0.3.6",
+      "version": "0.3.7",
       "description": "Guarded Windows desktop observation and input automation using short-lived, one-action window state.",
       "author": {
         "name": "Anybox"
@@ -1534,9 +1564,9 @@
       "id": "computer-use-windows",
       "package": {
         "type": "zip",
-        "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/.catalog/packages/anybox-plugin-computer-use-windows-0.3.6.zip",
-        "sha256": "f573cb320d4fb67f85d2b36364809d8db8cca4db11cab852c8ff9eea1cc103d2",
-        "size": 51347130
+        "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/.catalog/packages/anybox-plugin-computer-use-windows-0.3.7.zip",
+        "sha256": "b3697617b04a2c9b16ba84a398c81acdf0674c8c70bce094e92f4ca32b784ac0",
+        "size": 51347334
       }
     },
     {
@@ -1658,8 +1688,8 @@
           "Write"
         ],
         "websiteURL": "https://github.com/fanfan-de/Anybox-Plugins",
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/documents/assets/icon.png",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/documents/assets/logo.png",
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/documents/assets/icon.png",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/documents/assets/logo.png",
         "defaultPrompt": [
           "Draft a project memo as a document",
           "Create a document from this outline",
@@ -1743,8 +1773,8 @@
           "Upgrade to the latest Expo SDK and fix breaking changes",
           "Deploy this Expo app with EAS"
         ],
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/expo/assets/expo.png",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/expo/assets/expo.png",
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/expo/assets/expo.png",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/expo/assets/expo.png",
         "screenshots": [],
         "brandColor": "#000020"
       },
@@ -2346,8 +2376,8 @@
           "Design a browser game and plan the core loop"
         ],
         "brandColor": "#0F766E",
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/game-studio/assets/game-studio.svg",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/game-studio/assets/app-icon.png",
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/game-studio/assets/game-studio.svg",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/game-studio/assets/app-icon.png",
         "screenshots": [],
         "iconUrl": "data:image/png;base64,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",
         "thumbnailUrl": "data:image/png;base64,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",
@@ -2572,8 +2602,8 @@
           "Summarize inbox, draft replies, or process email threads"
         ],
         "brandColor": "#EA4335",
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/gmail/assets/gmail-small.svg",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/gmail/assets/logo.png",
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/gmail/assets/gmail-small.svg",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/gmail/assets/logo.png",
         "screenshots": []
       },
       "skills": "./skills/",
@@ -2657,8 +2687,8 @@
           "检查已打开的 Godot 场景",
           "使用 Godot CLI 安全修改当前场景"
         ],
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/godot-cli/assets/icon.svg",
-        "iconUrl": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/godot-cli/assets/icon.svg",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/godot-cli/assets/icon.svg",
+        "iconUrl": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/godot-cli/assets/icon.svg",
         "brandColor": "#478CBF"
       },
       "skillPreviews": [
@@ -2727,8 +2757,8 @@
           "Summarize my calendar, compare availability, prep meetings, or draft event details"
         ],
         "brandColor": "#4285F4",
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/google-calendar/assets/icon.png",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/google-calendar/assets/logo.png",
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/google-calendar/assets/icon.png",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/google-calendar/assets/logo.png",
         "screenshots": []
       },
       "skills": "./skills/",
@@ -2805,8 +2835,8 @@
           "Interactive",
           "Write"
         ],
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/google-drive/assets/logo.png",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/google-drive/assets/logo.png",
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/google-drive/assets/logo.png",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/google-drive/assets/logo.png",
         "websiteURL": "https://workspace.google.com/products/drive/",
         "privacyPolicyURL": "https://policies.google.com/privacy",
         "termsOfServiceURL": "https://policies.google.com/terms",
@@ -2908,8 +2938,8 @@
           "Translate this video into Spanish, Japanese, and German"
         ],
         "brandColor": "#0a0a0a",
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/heygen/assets/icon.png",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/heygen/assets/logo.png"
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/heygen/assets/icon.png",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/heygen/assets/logo.png"
       },
       "skills": "./skills/",
       "skillPreviews": [
@@ -2984,8 +3014,8 @@
           "Find CRM records with stale or missing data"
         ],
         "screenshots": [],
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/hubspot/assets/logo.png",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/hubspot/assets/logo.png"
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/hubspot/assets/logo.png",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/hubspot/assets/logo.png"
       },
       "skills": "./skills/",
       "skillPreviews": [
@@ -3064,8 +3094,8 @@
         ],
         "brandColor": "#FFD21E",
         "screenshots": [],
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/hugging-face/assets/logo.png",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/hugging-face/assets/logo.png"
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/hugging-face/assets/logo.png",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/hugging-face/assets/logo.png"
       },
       "skills": "./skills/",
       "skillPreviews": [
@@ -3188,8 +3218,8 @@
           "Add synced captions to this voiceover"
         ],
         "brandColor": "#0a0a0a",
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/hyperframes/assets/icon.png",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/hyperframes/assets/logo.png"
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/hyperframes/assets/icon.png",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/hyperframes/assets/logo.png"
       },
       "skills": "./skills/",
       "skillPreviews": [
@@ -3344,8 +3374,8 @@
           "检查当前 Keynote 的版式并修复文字裁切和重叠",
           "把当前 Keynote 导出为 PDF"
         ],
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/keynote/assets/keynote.svg",
-        "iconUrl": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/keynote/assets/keynote.svg",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/keynote/assets/keynote.svg",
+        "iconUrl": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/keynote/assets/keynote.svg",
         "screenshots": [],
         "brandColor": "#6C5CE7"
       },
@@ -3754,7 +3784,7 @@
           "Use texlive-runtime-installer to install managed full TeX Live only if no existing TeX Live is detected."
         ],
         "brandColor": "#2563EB",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/latex/assets/latex-logo.svg",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/latex/assets/latex-logo.svg",
         "screenshots": []
       },
       "skills": "./skills/",
@@ -3818,8 +3848,8 @@
         "defaultPrompt": [
           "Triage or update relevant issues for this task with clear next actions"
         ],
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/linear/assets/linear-icon.svg",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/linear/assets/app-icon.png",
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/linear/assets/linear-icon.svg",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/linear/assets/app-icon.png",
         "screenshots": []
       },
       "skills": "./skills/",
@@ -3884,8 +3914,8 @@
           "Use Neon to create a new Serverless Postgres database for my project and help me connect to it."
         ],
         "brandColor": "#37C38F",
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/neon-postgres/assets/neon-small.svg",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/neon-postgres/assets/logo.png",
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/neon-postgres/assets/neon-small.svg",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/neon-postgres/assets/logo.png",
         "screenshots": [],
         "logoDark": "./assets/logo-dark.png"
       },
@@ -3955,8 +3985,8 @@
           "Deploy this project to Netlify and return the preview URL plus any required fixes"
         ],
         "screenshots": [],
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/netlify/assets/app-icon.png",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/netlify/assets/app-icon.png"
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/netlify/assets/app-icon.png",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/netlify/assets/app-icon.png"
       },
       "skills": "./skills/",
       "skillPreviews": [
@@ -4074,8 +4104,8 @@
         "termsOfServiceURL": "https://www.notion.so/legal/terms-of-use",
         "defaultPrompt": "Search Notion workspace content, update pages, or turn specs, notes, and meeting context into structured outputs",
         "brandColor": "#111111",
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/notion/assets/notion-small.svg",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/notion/assets/notion.png",
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/notion/assets/notion-small.svg",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/notion/assets/notion.png",
         "screenshots": []
       },
       "skills": "./skills/",
@@ -4158,8 +4188,8 @@
           "Use Obsidian CLI to reload the plugin I am developing"
         ],
         "brandColor": "#7C3AED",
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/obsidian-cli/assets/icon.png",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/obsidian-cli/assets/logo.png",
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/obsidian-cli/assets/icon.png",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/obsidian-cli/assets/logo.png",
         "screenshots": []
       },
       "skills": "./skills/",
@@ -4243,8 +4273,8 @@
         "termsOfServiceURL": "https://www.microsoft.com/en-us/servicesagreement/",
         "defaultPrompt": "Summarize my day, compare availability, explain Outlook status, and draft the right event update",
         "brandColor": "#0078D4",
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/outlook-calendar/assets/logo.png",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/outlook-calendar/assets/logo.png",
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/outlook-calendar/assets/logo.png",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/outlook-calendar/assets/logo.png",
         "screenshots": []
       },
       "skills": "./skills/",
@@ -4331,8 +4361,8 @@
           "Triage inbox, summarize thread, or draft reply or forward"
         ],
         "brandColor": "#0078D4",
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/outlook-email/assets/logo.png",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/outlook-email/assets/logo.png",
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/outlook-email/assets/logo.png",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/outlook-email/assets/logo.png",
         "screenshots": []
       },
       "skills": "./skills/",
@@ -4581,8 +4611,8 @@
           "Why did this score that way?"
         ],
         "brandColor": "#0F766E",
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/plugin-eval/assets/plugin-eval.svg",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/plugin-eval/assets/plugin-eval.svg",
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/plugin-eval/assets/plugin-eval.svg",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/plugin-eval/assets/plugin-eval.svg",
         "screenshots": []
       },
       "skills": "./skills/",
@@ -4777,6 +4807,51 @@
       }
     },
     {
+      "name": "react-sidebar-proof",
+      "version": "0.1.0",
+      "description": "Proves that an Anybox plugin can provide an interactive React view in the right sidebar.",
+      "author": {
+        "name": "Anybox"
+      },
+      "license": "MIT",
+      "keywords": [
+        "react",
+        "right-sidebar",
+        "ui",
+        "proof"
+      ],
+      "interface": {
+        "displayName": "React Sidebar Proof",
+        "shortDescription": "A React UI supplied by an Anybox plugin.",
+        "longDescription": "A self-contained interactive React application that is installed, discovered, and opened entirely through the generic Anybox Right Sidebar View protocol.",
+        "developerName": "Anybox",
+        "category": "Design",
+        "capabilities": [
+          "Right Sidebar View",
+          "React UI",
+          "Local Only"
+        ],
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/react-sidebar-proof/assets/icon.svg",
+        "iconUrl": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/react-sidebar-proof/assets/icon.svg",
+        "brandColor": "#6D5CE7"
+      },
+      "views": [
+        {
+          "id": "main",
+          "title": "React Sidebar Proof",
+          "location": "right-sidebar",
+          "entry": "./web/index.html"
+        }
+      ],
+      "id": "react-sidebar-proof",
+      "package": {
+        "type": "zip",
+        "url": "https://raw.githubusercontent.com/fanfan-de/anybox/master/plugins/Anybox-Plugins/.catalog/packages/anybox-plugin-react-sidebar-proof-0.1.0.zip",
+        "sha256": "3d637da4190ed8215a853684b5fe3be891921433a57275594c4dc59f8725b342",
+        "size": 67553
+      }
+    },
+    {
       "name": "remotion",
       "version": "1.0.6",
       "description": "Remotion video creation skills — best practices, animations, audio, captions, 3D, and more for building programmatic videos with React.",
@@ -4827,8 +4902,8 @@
           "Use Remotion to add captions and audio to a video composition."
         ],
         "brandColor": "#0B84F3",
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/remotion/assets/composer-icon.svg",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/remotion/assets/logo.png"
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/remotion/assets/composer-icon.svg",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/remotion/assets/logo.png"
       },
       "skills": "./skills/",
       "skillPreviews": [
@@ -4944,9 +5019,9 @@
           "Help me validate my render.yaml for Render.",
           "Debug a failed Render deployment."
         ],
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/render/assets/logo.svg",
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/render/assets/logo.svg",
         "screenshots": [],
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/render/assets/logo.svg"
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/render/assets/logo.svg"
       },
       "skills": "./skills/",
       "skillPreviews": [
@@ -5106,8 +5181,8 @@
         "defaultPrompt": [
           "Inspect recent Sentry issues and summarize the top production errors"
         ],
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/sentry/assets/sentry-small.svg",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/sentry/assets/sentry.png",
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/sentry/assets/sentry-small.svg",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/sentry/assets/sentry.png",
         "screenshots": [],
         "brandColor": "#362D59"
       },
@@ -5170,8 +5245,8 @@
           "Summarize a SharePoint site or file, identify owners and status, or plan a safe update across documents, spreadsheets, or decks"
         ],
         "brandColor": "#038387",
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/sharepoint/assets/logo.png",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/sharepoint/assets/logo.png",
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/sharepoint/assets/logo.png",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/sharepoint/assets/logo.png",
         "screenshots": []
       },
       "skills": "./skills/",
@@ -5263,8 +5338,8 @@
           "Summarize unread activity, draft replies, or prepare updates"
         ],
         "brandColor": "#611F69",
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/slack/assets/app-icon.png",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/slack/assets/app-icon.png",
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/slack/assets/app-icon.png",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/slack/assets/app-icon.png",
         "screenshots": []
       },
       "skills": "./skills/",
@@ -5525,8 +5600,8 @@
           "Write"
         ],
         "websiteURL": "https://github.com/fanfan-de/Anybox-Plugins",
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/spreadsheets/assets/icon.png",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/spreadsheets/assets/logo.png",
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/spreadsheets/assets/icon.png",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/spreadsheets/assets/logo.png",
         "defaultPrompt": [
           "Create a spreadsheet to analyze this company's financials",
           "Create a corporate expense report template for my company",
@@ -5587,8 +5662,8 @@
           "Use Stripe to help with this task"
         ],
         "screenshots": [],
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/stripe/assets/app-icon.png",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/stripe/assets/app-icon.png"
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/stripe/assets/app-icon.png",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/stripe/assets/app-icon.png"
       },
       "skills": "./skills/",
       "skillPreviews": [
@@ -5658,7 +5733,7 @@
           "Optimize my Postgres queries and indexes using Supabase best practices."
         ],
         "brandColor": "#3ECF8E",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/supabase/assets/logo.svg"
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/supabase/assets/logo.svg"
       },
       "skills": "./skills/",
       "skillPreviews": [
@@ -5731,8 +5806,8 @@
         "privacyPolicyURL": "https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement",
         "termsOfServiceURL": "https://docs.github.com/en/site-policy/github-terms/github-terms-of-service",
         "brandColor": "#F59E0B",
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/superpowers/assets/superpowers-small.svg",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/superpowers/assets/app-icon.png",
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/superpowers/assets/superpowers-small.svg",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/superpowers/assets/app-icon.png",
         "screenshots": []
       },
       "skills": "./skills/",
@@ -5859,8 +5934,8 @@
           "Summarize chat, pull out action items, or draft follow-up"
         ],
         "brandColor": "#5B5FC7",
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/teams/assets/logo.png",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/teams/assets/logo.png",
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/teams/assets/logo.png",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/teams/assets/logo.png",
         "screenshots": []
       },
       "skills": "./skills/",
@@ -5954,8 +6029,8 @@
         "defaultPrompt": [
           "Create a workflow using Temporal."
         ],
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/temporal/assets/temporal-logo.svg",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/temporal/assets/temporal-logo.svg",
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/temporal/assets/temporal-logo.svg",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/temporal/assets/temporal-logo.svg",
         "screenshots": []
       },
       "skills": "./skills/",
@@ -6026,8 +6101,8 @@
           "Use Test Android Apps to reproduce an emulator issue, then capture screenshots, logs, UI state, and performance evidence."
         ],
         "brandColor": "#3DDC84",
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/test-android-apps/assets/test-android-apps-small.svg",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/test-android-apps/assets/app-icon.png",
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/test-android-apps/assets/test-android-apps-small.svg",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/test-android-apps/assets/app-icon.png",
         "screenshots": []
       },
       "skills": "./skills/",
@@ -6374,7 +6449,7 @@
           "Build me an AI voice agent with Twilio"
         ],
         "brandColor": "#F22F46",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/twilio-developer-kit/assets/logo.svg"
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/twilio-developer-kit/assets/logo.svg"
       },
       "skills": "./skills/",
       "skillPreviews": [
@@ -6716,8 +6791,8 @@
           "Which Vercel tools fit this app best",
           "Help wire the Vercel app into this workflow"
         ],
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/vercel/assets/vercel.svg",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/vercel/assets/vercel.svg",
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/vercel/assets/vercel.svg",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/vercel/assets/vercel.svg",
         "screenshots": [],
         "brandColor": "#000000"
       },
@@ -7142,8 +7217,8 @@
         "websiteURL": "https://openai.com/",
         "privacyPolicyURL": "https://openai.com/policies/privacy-policy/",
         "termsOfServiceURL": "https://openai.com/policies/terms-of-use/",
-        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/zotero/assets/icon.png",
-        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d/plugins/Anybox-Plugins/zotero/assets/icon.png",
+        "composerIcon": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/zotero/assets/icon.png",
+        "logo": "https://raw.githubusercontent.com/fanfan-de/anybox/f909db34b37a4883d52703f1c1a8dd8694d68f3c/plugins/Anybox-Plugins/zotero/assets/icon.png",
         "defaultPrompt": [
           "@Zotero find papers in my library about transformers and add citations to my draft",
           "@Zotero export my Zotero library to references.bib",

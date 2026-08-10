@@ -3,20 +3,20 @@
   "catalogID": "anybox-plugins",
   "repositoryRef": "master",
   "catalogPath": "plugins/Anybox-Plugins/.catalog",
-  "sourceCommit": "832b7ad5755f2f6e9be321e0d5c8058a9c0d8d2d",
-  "pluginCount": 64,
+  "sourceCommit": "f909db34b37a4883d52703f1c1a8dd8694d68f3c",
+  "pluginCount": 65,
   "registry": {
     "name": "anybox-plugin-registry.json",
-    "sha256": "04dadcdcde671bc74ff3fd0b69efc47438a9285f9905d0a14312215a0b1cdb70",
-    "size": 435068
+    "sha256": "74e141930e105da6973ed86f7fcdb1ff6cc14805b2093b9e561eb412bf7f3fc3",
+    "size": 437521
   },
   "assets": [
     {
       "pluginID": "anybox-plugin-development",
-      "pluginVersion": "0.1.2",
-      "name": "anybox-plugin-anybox-plugin-development-0.1.2.zip",
-      "sha256": "c52c1a23ed1eca6e36536ba60e41c0322fa7df6f64513787556ee1039410321a",
-      "size": 16576
+      "pluginVersion": "0.1.3",
+      "name": "anybox-plugin-anybox-plugin-development-0.1.3.zip",
+      "sha256": "0eb563fada53fa500ddbcde58cdd21badacba69a387209055bdbe3c7907463c4",
+      "size": 18542
     },
     {
       "pluginID": "atlassian-rovo",
@@ -69,17 +69,17 @@
     },
     {
       "pluginID": "chrome",
-      "pluginVersion": "0.15.1",
-      "name": "anybox-plugin-chrome-0.15.1.zip",
-      "sha256": "c10ea6345854bf5e0881d5eb75165ccc3333d4fc16ae5fa0bd1ac79f7e6bdb27",
-      "size": 863047
+      "pluginVersion": "0.15.2",
+      "name": "anybox-plugin-chrome-0.15.2.zip",
+      "sha256": "16bb9c576619afb49b0af50788cb0d07baf41d4a59d0148361716464d6de8894",
+      "size": 863147
     },
     {
       "pluginID": "cinema",
-      "pluginVersion": "0.2.0",
-      "name": "anybox-plugin-cinema-0.2.0.zip",
-      "sha256": "0396896fb46dfb8387cb7549c487e7292c531670ac99f66521d821788adffd28",
-      "size": 15258
+      "pluginVersion": "0.3.0",
+      "name": "anybox-plugin-cinema-0.3.0.zip",
+      "sha256": "9dfc131340c57a1a075020f6ee01814267587e8a2953e6a318d7fc4f25d78a91",
+      "size": 1285578
     },
     {
       "pluginID": "circleci",
@@ -104,10 +104,10 @@
     },
     {
       "pluginID": "computer-use-windows",
-      "pluginVersion": "0.3.6",
-      "name": "anybox-plugin-computer-use-windows-0.3.6.zip",
-      "sha256": "f573cb320d4fb67f85d2b36364809d8db8cca4db11cab852c8ff9eea1cc103d2",
-      "size": 51347130
+      "pluginVersion": "0.3.7",
+      "name": "anybox-plugin-computer-use-windows-0.3.7.zip",
+      "sha256": "b3697617b04a2c9b16ba84a398c81acdf0674c8c70bce094e92f4ca32b784ac0",
+      "size": 51347334
     },
     {
       "pluginID": "context7",
@@ -325,6 +325,13 @@
       "name": "anybox-plugin-presentations-0.1.1.zip",
       "sha256": "cf6c0faadf0cd848acf29d8a15ba976ea108f12a2d554fb28f934eddfbd3deed",
       "size": 38080
+    },
+    {
+      "pluginID": "react-sidebar-proof",
+      "pluginVersion": "0.1.0",
+      "name": "anybox-plugin-react-sidebar-proof-0.1.0.zip",
+      "sha256": "3d637da4190ed8215a853684b5fe3be891921433a57275594c4dc59f8725b342",
+      "size": 67553
     },
     {
       "pluginID": "remotion",
