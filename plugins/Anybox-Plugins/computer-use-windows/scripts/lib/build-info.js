@@ -1,6 +1,6 @@
 "use strict"
 
-const PLUGIN_VERSION = "0.3.6"
+const PLUGIN_VERSION = "0.3.7"
 const HELPER_VERSION = "0.2.3"
 const PROTOCOL_VERSION = 1
 const MAX_FRAME_BYTES = 8 * 1024 * 1024

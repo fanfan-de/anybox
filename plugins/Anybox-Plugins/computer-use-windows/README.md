@@ -5,7 +5,7 @@ discovers applications and windows, captures one selected window with Windows
 Graphics Capture, inspects a bounded UI Automation tree, and sends guarded
 mouse or keyboard input from a fresh one-action state.
 
-The current plugin version is `0.3.6`. The bundled native helper component is
+The current plugin version is `0.3.7`. The bundled native helper component is
 version `0.2.3`. The supported release target is Windows
 11 x64.
 
