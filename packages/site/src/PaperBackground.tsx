@@ -300,7 +300,6 @@ export function PaperBackground() {
   return (
     <div className="paper-background" aria-hidden="true">
       <canvas className="paper-dot-canvas" ref={canvasRef} />
-      <span className="paper-frame" />
       <span className="paper-fibers" />
     </div>
   )

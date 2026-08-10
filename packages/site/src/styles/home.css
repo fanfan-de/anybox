@@ -70,7 +70,6 @@
 }
 
 .paper-dot-canvas,
-.paper-frame,
 .paper-fibers {
   position: absolute;
   inset: 0;
@@ -80,18 +79,6 @@
 
 .paper-dot-canvas {
   z-index: 0;
-}
-
-.paper-frame {
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  z-index: 1;
-  width: min(var(--site-width), calc(100% - 48px));
-  height: auto;
-  border-right: 1px solid var(--hero-stage-border-soft);
-  border-left: 1px solid var(--hero-stage-border-soft);
-  transform: translateX(-50%);
 }
 
 .paper-fibers {
@@ -951,10 +938,6 @@
 
   .home-demo-frame {
     border-radius: 10px;
-  }
-
-  .paper-frame {
-    width: calc(100% - 40px);
   }
 
   .home-hero-wordmark {
