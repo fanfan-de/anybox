@@ -39,8 +39,8 @@
   --hero-stage-border: rgba(30, 48, 39, 0.18);
   --hero-stage-border-soft: rgba(30, 48, 39, 0.1);
   --hero-paper-grid: rgba(47, 111, 104, 0.055);
-  --hero-paper-dot: rgba(47, 111, 104, 0.18);
-  --hero-paper-dot-active: rgba(47, 111, 104, 0.76);
+  --hero-paper-dot: rgba(47, 111, 104, 0.24);
+  --hero-paper-dot-active: rgba(47, 111, 104, 0.6);
   --hero-paper-ink: #2b625b;
   --hero-paper-accent: #c76e2f;
   --hero-paper-fiber: rgba(83, 77, 64, 0.045);
@@ -122,8 +122,8 @@
   --hero-stage-border: rgba(238, 234, 221, 0.18);
   --hero-stage-border-soft: rgba(238, 234, 221, 0.1);
   --hero-paper-grid: rgba(118, 184, 173, 0.06);
-  --hero-paper-dot: rgba(118, 184, 173, 0.2);
-  --hero-paper-dot-active: rgba(118, 184, 173, 0.8);
+  --hero-paper-dot: rgba(118, 184, 173, 0.26);
+  --hero-paper-dot-active: rgba(118, 184, 173, 0.64);
   --hero-paper-ink: #91c5bc;
   --hero-paper-accent: #d58b58;
   --hero-paper-fiber: rgba(235, 228, 208, 0.035);

@@ -100,7 +100,7 @@
     repeating-linear-gradient(7deg, transparent 0 26px, var(--hero-paper-fiber) 27px, transparent 28px 58px),
     repeating-linear-gradient(97deg, transparent 0 58px, var(--hero-paper-fiber) 59px, transparent 60px 116px);
   mix-blend-mode: multiply;
-  opacity: 0.7;
+  opacity: 0.32;
 }
 
 .home-hero-inner {

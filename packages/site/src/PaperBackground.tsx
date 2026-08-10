@@ -57,7 +57,7 @@ function drawDotMatrix(
 ) {
   const spacing = width <= 640 ? 28 : 34
   const baseRadius = width <= 640 ? 0.85 : 1
-  const hoverRadius = clamp(Math.min(width, height) * 0.3, 140, 220)
+  const hoverRadius = clamp(Math.min(width, height) * 0.38, 170, 300)
   const startX = (width % spacing) / 2
   const startY = (height % spacing) / 2
   const reactiveDots: ReactiveDot[] = []
@@ -82,13 +82,13 @@ function drawDotMatrix(
           influence = smoothstep(1 - distance / hoverRadius) * pointer.strength
 
           if (distance > 0.01) {
-            const displacement = influence * 14
+            const displacement = influence * 20
             dotX += (deltaX / distance) * displacement
             dotY += (deltaY / distance) * displacement
           } else {
             const angle = column * 1.7 + row * 2.3
-            dotX += Math.cos(angle) * influence * 14
-            dotY += Math.sin(angle) * influence * 14
+            dotX += Math.cos(angle) * influence * 20
+            dotY += Math.sin(angle) * influence * 20
           }
         }
       }
@@ -106,12 +106,12 @@ function drawDotMatrix(
   context.fillStyle = colors.active
 
   for (const dot of reactiveDots) {
-    const wave = 0.72 + Math.sin(time * 0.006 - dot.distance * 0.07) * 0.28
-    const response = clamp(dot.influence * wave, 0, 1)
+    const wave = 0.88 + Math.sin(time * 0.005 - dot.distance * 0.055) * 0.12
+    const response = clamp(dot.influence * wave * 0.58, 0, 0.58)
 
     context.globalAlpha = response
     context.beginPath()
-    context.arc(dot.x, dot.y, baseRadius + response * 1.8, 0, Math.PI * 2)
+    context.arc(dot.x, dot.y, baseRadius + response * 1.35, 0, Math.PI * 2)
     context.fill()
   }
 
