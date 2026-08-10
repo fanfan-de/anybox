@@ -590,6 +590,14 @@ const ProjectConfigRecord = z.object({
 })
 type ProjectConfigRecord = z.infer<typeof ProjectConfigRecord>
 
+const PersistedProjectConfigRecord = z.object({
+  projectID: z.string(),
+  config: z.record(z.string(), z.unknown()),
+})
+type PersistedProjectConfigRecord = z.infer<typeof PersistedProjectConfigRecord>
+
+const supportedConfigKeys = new Set(Object.keys(Info.shape))
+
 export const ProjectProviderConfig = z
   .object(ProviderConfigFields)
   .strict()
@@ -814,8 +822,46 @@ function normalizeCustomPromptPresets(presets: Record<string, CustomPromptPreset
 
 function readConfig(configID: string): Info {
   ensureProjectConfigTable()
-  const row = db.findById("project_configs", ProjectConfigRecord, configID, "projectID")
-  return row?.config ?? {}
+  const row = db.findById("project_configs", PersistedProjectConfigRecord, configID, "projectID")
+  return row ? normalizePersistedConfig(row) : {}
+}
+
+function readProjectConfigs(): ProjectConfigRecord[] {
+  ensureProjectConfigTable()
+  return db.findMany("project_configs", PersistedProjectConfigRecord).map(normalizePersistedConfigRecord)
+}
+
+function normalizePersistedConfig(row: PersistedProjectConfigRecord): Info {
+  return normalizePersistedConfigRecord(row).config
+}
+
+function normalizePersistedConfigRecord(row: PersistedProjectConfigRecord): ProjectConfigRecord {
+  const retiredKeys = Object.keys(row.config).filter((key) => !supportedConfigKeys.has(key))
+  if (retiredKeys.length === 0) {
+    return {
+      projectID: row.projectID,
+      config: Info.parse(row.config),
+    }
+  }
+
+  const supportedEntries = Object.entries(row.config).filter(([key]) => supportedConfigKeys.has(key))
+  const config = Info.parse(Object.fromEntries(supportedEntries))
+  db.upsert(
+    "project_configs",
+    {
+      projectID: row.projectID,
+      config,
+    },
+    ["projectID"],
+  )
+  log.info("retired-config-fields-removed", {
+    configID: row.projectID,
+    keys: retiredKeys.toSorted(),
+  })
+  return {
+    projectID: row.projectID,
+    config,
+  }
 }
 
 function writeConfig(configID: string, config: Info) {
@@ -977,7 +1023,7 @@ export function removeSelectedMcpServerIDFromAllProjectsInCurrentTransaction(ser
   if (!normalizedServerID) return { affectedProjectIDs: [], affectedCount: 0 }
 
   ensureProjectConfigTable()
-  const rows = db.findMany("project_configs", ProjectConfigRecord)
+  const rows = readProjectConfigs()
   const affected = rows.flatMap((row) => {
     const current = normalizeMcpServerIDs(row.config.selected_mcp_servers ?? [])
     if (!current.includes(normalizedServerID)) return []
@@ -1032,7 +1078,7 @@ export function replaceSelectedMcpServerIDInAllProjectsInCurrentTransaction(
   }
 
   ensureProjectConfigTable()
-  const rows = db.findMany("project_configs", ProjectConfigRecord)
+  const rows = readProjectConfigs()
   const affected = rows.flatMap((row) => {
     const current = normalizeMcpServerIDs(row.config.selected_mcp_servers ?? [])
     if (!current.includes(normalizedPreviousServerID)) return []
@@ -1094,7 +1140,7 @@ export function removeSelectedSkillIDFromAllProjectsInCurrentTransaction(skillID
   if (!normalizedSkillID) return { affectedProjectIDs: [], affectedCount: 0 }
 
   ensureProjectConfigTable()
-  const rows = db.findMany("project_configs", ProjectConfigRecord)
+  const rows = readProjectConfigs()
   const affected = rows.flatMap((row) => {
     const current = normalizeSkillIDs(row.config.selected_skills ?? [])
     if (!current.includes(normalizedSkillID)) return []

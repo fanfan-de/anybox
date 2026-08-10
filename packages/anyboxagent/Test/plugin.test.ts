@@ -3758,6 +3758,47 @@ await new Promise(() => undefined)
     expect(requestedURLs.some((url) => url.startsWith("https://api.github.com/"))).toBe(false)
   })
 
+  test("installs a plugin after upgrading retired persisted config fields", async () => {
+    await useTempDatabase()
+    await writeManifestPluginPackage()
+    await Config.set(Config.GLOBAL_CONFIG_ID, {
+      username: "kept-user",
+      permission_mode: "full_access",
+    })
+    Sqlite.db.prepare(`
+      UPDATE "project_configs"
+      SET "config" = ?
+      WHERE "projectID" = ?
+    `).run(JSON.stringify({
+      username: "kept-user",
+      permission_mode: "full_access",
+      cinema_video_providers: {
+        "legacy-provider": { apiKey: "retired-secret" },
+      },
+      selected_cinema_text_generation_prompt_preset: "legacy-preset",
+    }), Config.GLOBAL_CONFIG_ID)
+
+    const response = await createServerApp().request("/api/plugins/installed/manifest-lab", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ enabled: true }),
+    })
+
+    expect(response.status).toBe(200)
+    expect((await response.json() as InstalledPluginEnvelope).success).toBe(true)
+    expect(await Config.get(Config.GLOBAL_CONFIG_ID)).toMatchObject({
+      username: "kept-user",
+      permission_mode: "full_access",
+    })
+
+    const row = Sqlite.db
+      .prepare(`SELECT "config" FROM "project_configs" WHERE "projectID" = ?`)
+      .get(Config.GLOBAL_CONFIG_ID) as { config: string }
+    const stored = JSON.parse(row.config) as Record<string, unknown>
+    expect(stored.cinema_video_providers).toBeUndefined()
+    expect(stored.selected_cinema_text_generation_prompt_preset).toBeUndefined()
+  })
+
   test("installs, disables, diagnoses, and removes a plugin-backed MCP server", async () => {
     await useTempDatabase()
     const packageSourceRoot = await writeManifestPluginPackage()
