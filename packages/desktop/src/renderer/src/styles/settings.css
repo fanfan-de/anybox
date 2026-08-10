@@ -2838,6 +2838,12 @@ body.is-dragging-settings-page {
   line-height: 1.42;
 }
 
+.mcp-overview-copy p.is-error {
+  color: var(--semantic-error-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .mcp-config-card {
   padding: 0;
   border: 0;

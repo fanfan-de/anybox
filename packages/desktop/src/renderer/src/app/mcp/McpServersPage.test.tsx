@@ -177,6 +177,27 @@ describe("McpServersPage tool policies", () => {
     expect(screen.queryByText("Reachable - 2 tools")).not.toBeInTheDocument()
   })
 
+  it("shows the diagnostic failure detail and uvx recovery guidance", () => {
+    render(
+      <McpServersPage
+        {...createProps({
+          activeMcpServerDiagnostic: createDiagnostic({
+            ok: false,
+            toolCount: 0,
+            toolNames: [],
+            tools: [],
+            error: "ModuleNotFoundError: No module named 'mcp.server.fastmcp'",
+          }),
+        })}
+      />,
+    )
+
+    const failure = screen.getByText(/Tool discovery failed: ModuleNotFoundError/)
+    expect(failure).toHaveClass("is-error")
+    expect(failure).toHaveTextContent("add '--with' and 'mcp<2' as separate arguments")
+    expect(settingsStyles).toMatch(/\.mcp-overview-copy p\.is-error\s*\{[^}]*var\(--semantic-error-text\)/s)
+  })
+
   it("keeps plugin-owned MCP servers out of the MCP inventory", () => {
     render(
       <McpServersPage

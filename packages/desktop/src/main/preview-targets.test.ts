@@ -11,6 +11,7 @@ import {
   resolvePluginViewPreviewOwner,
   resolvePluginViewPreviewTarget,
   resolvePreviewTarget,
+  registerLocalPreviewProtocolScheme,
   revokePluginViewPreviewRegistrations,
 } from "./preview-targets"
 
@@ -28,6 +29,24 @@ afterEach(async () => {
 })
 
 describe("preview target resolver", () => {
+  it("registers plugin previews for streaming audio and video", () => {
+    const registerSchemesAsPrivileged = vi.fn()
+
+    registerLocalPreviewProtocolScheme({ registerSchemesAsPrivileged })
+
+    expect(registerSchemesAsPrivileged).toHaveBeenCalledWith([
+      {
+        scheme: "anybox-preview",
+        privileges: {
+          standard: true,
+          secure: true,
+          supportFetchAPI: true,
+          stream: true,
+        },
+      },
+    ])
+  })
+
   it("resolves explicit and implicit URLs without a workspace", async () => {
     await expect(resolvePreviewTarget({ value: "https://example.com/docs" })).resolves.toMatchObject({
       kind: "url",

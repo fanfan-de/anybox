@@ -185,7 +185,16 @@ function getMcpPurposeText(
   }
 
   if (diagnostic && !diagnostic.ok) {
-    return "Tool discovery failed, so the available capabilities are unknown."
+    const detail = diagnostic.error?.trim()
+    if (!detail) {
+      return "Tool discovery failed, so the available capabilities are unknown."
+    }
+
+    const uvxRecovery = /No module named ['\"]mcp\.server\.fastmcp['\"]/.test(detail)
+      ? " This server expects the MCP Python SDK 1.x. With uvx, add '--with' and 'mcp<2' as separate arguments before the executable name."
+      : ""
+
+    return `Tool discovery failed: ${detail}${uvxRecovery}`
   }
 
   if (activeMcpServer.transport === "stdio") {
@@ -336,6 +345,7 @@ function McpServerOverviewCard({
   if (!activeMcpServer) return null
 
   const visualProfile = getMcpServerVisualProfile(activeMcpServer, source ?? undefined)
+  const hasDiagnosticFailure = Boolean(diagnostic && !diagnostic.ok)
 
   return (
     <section className="mcp-overview-card" aria-labelledby="mcp-overview-title">
@@ -354,7 +364,12 @@ function McpServerOverviewCard({
               ) : null}
             </div>
             <h3 id="mcp-overview-title">{visualProfile.displayName}</h3>
-            <p>{getMcpPurposeText(activeMcpServer, diagnostic)}</p>
+            <p
+              aria-live={hasDiagnosticFailure ? "polite" : undefined}
+              className={hasDiagnosticFailure ? "is-error" : undefined}
+            >
+              {getMcpPurposeText(activeMcpServer, diagnostic)}
+            </p>
           </div>
         </div>
       </div>

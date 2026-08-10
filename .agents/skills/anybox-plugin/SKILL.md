@@ -59,6 +59,7 @@ description: 构建、说明、迁移、评审或验证 Anybox 插件包及其 .
 - 自定义 Provider 地址使用 `appPermissions.network[].kind = "user-configured-origin"`；仅声明权限不等于网络隔离，Runtime 必须验证 HTTPS/loopback、DNS 结果与同源重定向。
 - 系统钥匙串或原生选择器使用通用 `platformArtifacts.type = "app-runtime-helper"`。每个平台文件必须绑定 SHA-256，Runtime 只从 `ANYBOX_APP_ARTIFACTS_JSON` 读取安装后的路径，不得在 Core 添加插件 ID 分支。
 - App Runtime 只能依赖通用 `ANYBOX_APP_*` 启动环境与最小 OS 环境，不得依赖 `ANYBOX_AGENT_*`、插件专用兼容变量或宿主共享工具路径。
+- Plugin View 通过宿主同源 Gateway 播放 Runtime 音视频时，桌面端自定义协议必须启用 `stream: true`，并用测试同时覆盖协议权限、Range 请求和 `206 Partial Content` 响应。
 - Local App Runtime 是真实本机代码。未实现 OS 级进程 Sandbox、签名与信任链前，必须明确告知风险，不得把声明式网络或文件权限宣传为安全边界。
 - 桌面开发版与正式版默认共享仓库内稳定的 `.catalog/anybox-plugin-registry.json`，且默认不扫描本地仓库源码包；只有显式设置 `ANYBOX_PLUGIN_INCLUDE_SOURCE_PACKAGES=1` 才进入源码插件开发模式。插件目录不跟随桌面版本，所有 Registry 和版本化 ZIP 都在本地生成、验证后作为普通 Git 文件提交；不得依赖 GitHub Actions、Release 或 API。
 - 除非确实希望阻止安装，否则不要把风险标记为 `critical`。

@@ -15,7 +15,12 @@ import {
   MIN_SIDEBAR_WIDTH,
   RIGHT_SIDEBAR_MIN_LEFT_EDGE_RATIO,
 } from "./app/constants"
-import type { LoadedFolderWorkspace, ProviderModel, SessionRuntimeDebugSnapshot } from "./app/types"
+import type {
+  LoadedFolderWorkspace,
+  McpServerDiagnostic,
+  ProviderModel,
+  SessionRuntimeDebugSnapshot,
+} from "./app/types"
 
 function readBundledStyles() {
   const stylesRoot = resolve(process.cwd(), "src/renderer/src")
@@ -10249,6 +10254,7 @@ describe("App", () => {
   })
 
   it("edits global MCP servers from the activity rail and runs global diagnostics", async () => {
+    const diagnostic = createDeferred<McpServerDiagnostic>()
     window.desktop!.getGlobalProviderCatalog = vi.fn().mockResolvedValue([])
     window.desktop!.getGlobalModels = vi.fn().mockResolvedValue({
       items: [],
@@ -10272,13 +10278,7 @@ describe("App", () => {
       args: ["-y", "@modelcontextprotocol/server-filesystem"],
       enabled: true,
     })
-    window.desktop!.getGlobalMcpServerDiagnostic = vi.fn().mockResolvedValue({
-      serverID: "filesystem",
-      enabled: true,
-      ok: true,
-      toolCount: 1,
-      toolNames: ["read_file"],
-    })
+    window.desktop!.getGlobalMcpServerDiagnostic = vi.fn(() => diagnostic.promise)
 
     render(<App />)
 
@@ -10319,10 +10319,24 @@ describe("App", () => {
       })
     })
 
+    expect(await screen.findByText("MCP server saved.")).toBeInTheDocument()
+
     await waitFor(() => {
       expect(window.desktop!.getGlobalMcpServerDiagnostic).toHaveBeenCalledWith({
         serverID: "filesystem",
       })
+    })
+
+    await act(async () => {
+      diagnostic.resolve({
+        serverID: "filesystem",
+        enabled: true,
+        ok: true,
+        toolCount: 1,
+        toolNames: ["read_file"],
+        tools: [],
+      })
+      await diagnostic.promise
     })
   })
 

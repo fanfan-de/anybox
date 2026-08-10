@@ -59,6 +59,7 @@ interface LocalImageProtocolRegistrar {
       standard: boolean
       secure: boolean
       supportFetchAPI: boolean
+      stream?: boolean
     }
   }>): void
   handle(scheme: string, handler: (request: Request) => Response | Promise<Response>): void
@@ -279,6 +280,7 @@ export function registerLocalImageProtocolScheme(protocolRegistrar: Pick<LocalIm
         standard: true,
         secure: true,
         supportFetchAPI: true,
+        stream: true,
       },
     },
   ])

@@ -10,6 +10,7 @@ import {
   resolveLocalImageProtocolRequest,
   resolveLocalVideoProtocolRequest,
   handleLocalVideoProtocolRequest,
+  registerLocalImageProtocolScheme,
 } from "./local-image-protocol"
 
 const tempDirectories: string[] = []
@@ -37,6 +38,37 @@ afterEach(async () => {
 })
 
 describe("local image protocol", () => {
+  it("registers only the video scheme for streaming media", () => {
+    const registered: Array<{
+      scheme: string
+      privileges: { standard: boolean; secure: boolean; supportFetchAPI: boolean; stream?: boolean }
+    }> = []
+
+    registerLocalImageProtocolScheme({
+      registerSchemesAsPrivileged: (schemes) => registered.push(...schemes),
+    })
+
+    expect(registered).toEqual([
+      {
+        scheme: "anybox-local-image",
+        privileges: {
+          standard: true,
+          secure: true,
+          supportFetchAPI: true,
+        },
+      },
+      {
+        scheme: "anybox-local-video",
+        privileges: {
+          standard: true,
+          secure: true,
+          supportFetchAPI: true,
+          stream: true,
+        },
+      },
+    ])
+  })
+
   it("decodes URL-encoded absolute Windows paths before creating protocol URLs", () => {
     expect(toLocalImageProtocolUrl("C:/新建文件夹%20(12)/verify-start.png")).toBe(
       `anybox-local-image://image?source=${encodeURIComponent("C:/新建文件夹 (12)/verify-start.png")}`,

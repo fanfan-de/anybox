@@ -223,7 +223,7 @@ Path rules:
 - App Web 仍在独立 partition 中运行，保持 sandbox、无 Node Integration、无插件自定义 preload，并只允许同源 Runtime Gateway 网络连接。
 - `appRuntime` 会把插件风险提升为 high。当前没有 OS 级进程 Sandbox，`appPermissions.network` 与 `system` 首先用于严格声明和安装审查，不能当作已经强制执行的本机隔离。
 - `workspace: "request"` 当前只让宿主向 View 传递所选项目 ID，尚不是可移植的目录授权句柄；Runtime 不应假定它已经获得任意 Workspace 文件访问权。
-- Gateway 目前支持普通 HTTP、上传/下载流和 Range headers，不支持 WebSocket；需要 WebSocket 的 App 暂不应依赖此路径。
+- Gateway 目前支持普通 HTTP、上传/下载流、音视频流和 Range headers；宿主会把 Plugin View 的同源协议注册为流媒体协议，使 `<video>` 与 `<audio>` 可以消费 Runtime 的流式响应。Gateway 不支持 WebSocket，需要 WebSocket 的 App 暂不应依赖此路径。
 
 动态 Provider 地址必须声明为 `user-configured-origin`。Manifest 只负责披露风险；Runtime 仍须拒绝远程 HTTP、私网/链路本地/metadata 地址、DNS 重绑定和跨源重定向，并禁止凭据跨源转发。
 

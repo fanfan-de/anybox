@@ -3317,10 +3317,18 @@ export function useSettingsPage(options: UseSettingsPageOptions) {
       await loadMcpServers({ silent: true })
       await notifyMcpUpdated()
       setActiveMcpServerID(serverID)
-      const diagnostic = await loadMcpServerDiagnostic(serverID)
-      showMessage(diagnostic ? formatMcpDiagnosticMessage(diagnostic) : {
+      setMcpDiagnostics((current) => {
+        const next = { ...current }
+        delete next[serverID]
+        return next
+      })
+      showMessage({
         tone: "success",
         text: "MCP server saved.",
+      })
+      setDiagnosingMcpServerID(serverID)
+      void loadMcpServerDiagnostic(serverID).finally(() => {
+        setDiagnosingMcpServerID((current) => (current === serverID ? null : current))
       })
       return true
     } catch (error) {

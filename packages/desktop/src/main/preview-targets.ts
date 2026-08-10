@@ -96,6 +96,7 @@ interface LocalPreviewProtocolRegistrar {
       standard: boolean
       secure: boolean
       supportFetchAPI: boolean
+      stream?: boolean
     }
   }>): void
   handle(scheme: string, handler: (request: Request) => Response | Promise<Response>): void
@@ -734,6 +735,7 @@ export function registerLocalPreviewProtocolScheme(protocolRegistrar: Pick<Local
         standard: true,
         secure: true,
         supportFetchAPI: true,
+        stream: true,
       },
     },
   ])
