@@ -3,20 +3,20 @@
   "catalogID": "anybox-plugins",
   "repositoryRef": "master",
   "catalogPath": "plugins/Anybox-Plugins/.catalog",
-  "sourceCommit": "f909db34b37a4883d52703f1c1a8dd8694d68f3c",
+  "sourceCommit": "edb4f8558338b287dea7aaa035d446e6584f0c50",
   "pluginCount": 65,
   "registry": {
     "name": "anybox-plugin-registry.json",
-    "sha256": "74e141930e105da6973ed86f7fcdb1ff6cc14805b2093b9e561eb412bf7f3fc3",
-    "size": 437521
+    "sha256": "2911f90436ff878d25a9784c6402539d0741772d3e97998842e37f028e50041c",
+    "size": 439950
   },
   "assets": [
     {
       "pluginID": "anybox-plugin-development",
-      "pluginVersion": "0.1.3",
-      "name": "anybox-plugin-anybox-plugin-development-0.1.3.zip",
-      "sha256": "0eb563fada53fa500ddbcde58cdd21badacba69a387209055bdbe3c7907463c4",
-      "size": 18542
+      "pluginVersion": "0.1.4",
+      "name": "anybox-plugin-anybox-plugin-development-0.1.4.zip",
+      "sha256": "1c06ed0823e0b64edca5049f89ab0aff2293c0e4ad659d3fbeabbab39360c7a5",
+      "size": 19287
     },
     {
       "pluginID": "atlassian-rovo",
@@ -76,10 +76,10 @@
     },
     {
       "pluginID": "cinema",
-      "pluginVersion": "0.3.0",
-      "name": "anybox-plugin-cinema-0.3.0.zip",
-      "sha256": "9dfc131340c57a1a075020f6ee01814267587e8a2953e6a318d7fc4f25d78a91",
-      "size": 1285578
+      "pluginVersion": "1.0.0",
+      "name": "anybox-plugin-cinema-1.0.0.zip",
+      "sha256": "ae053e2364e88dc2e044771d989b3d3b981fd35254f412a0f38f95f94a2f3d13",
+      "size": 3019380
     },
     {
       "pluginID": "circleci",
