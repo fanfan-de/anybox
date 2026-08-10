@@ -1,11 +1,8 @@
 import { useEffect, useRef } from "react"
 
-type RoutePoint = readonly [number, number]
-
-type PaperRoute = {
-  accent: boolean
-  offset: number
-  points: readonly RoutePoint[]
+type DotColors = {
+  active: string
+  base: string
 }
 
 type PointerField = {
@@ -17,39 +14,22 @@ type PointerField = {
   y: number
 }
 
+type ReactiveDot = {
+  distance: number
+  influence: number
+  x: number
+  y: number
+}
+
 const reduceMotionQuery = "(prefers-reduced-motion: reduce)"
 const precisePointerQuery = "(hover: hover) and (pointer: fine)"
 
-const routes: readonly PaperRoute[] = [
-  {
-    accent: false,
-    offset: 0.08,
-    points: [[0.02, 0.18], [0.18, 0.18], [0.18, 0.31], [0.33, 0.31]],
-  },
-  {
-    accent: true,
-    offset: 0.56,
-    points: [[0.06, 0.68], [0.23, 0.68], [0.23, 0.8], [0.39, 0.8]],
-  },
-  {
-    accent: false,
-    offset: 0.34,
-    points: [[0.67, 0.22], [0.83, 0.22], [0.83, 0.37], [0.98, 0.37]],
-  },
-  {
-    accent: true,
-    offset: 0.8,
-    points: [[0.72, 0.76], [0.88, 0.76], [0.88, 0.59], [0.98, 0.59]],
-  },
-]
-
-function readPaperColors(element: HTMLElement) {
+function readDotColors(element: HTMLElement): DotColors {
   const styles = window.getComputedStyle(element)
 
   return {
-    accent: styles.getPropertyValue("--hero-paper-accent").trim() || "rgba(199, 110, 47, 0.78)",
-    line: styles.getPropertyValue("--hero-paper-line").trim() || "rgba(47, 111, 104, 0.18)",
-    node: styles.getPropertyValue("--hero-paper-node").trim() || "rgba(47, 111, 104, 0.72)",
+    active: styles.getPropertyValue("--hero-paper-dot-active").trim(),
+    base: styles.getPropertyValue("--hero-paper-dot").trim(),
   }
 }
 
@@ -62,75 +42,99 @@ function easeToward(current: number, target: number, delta: number, duration: nu
   return current + (target - current) * (1 - Math.exp(-delta / duration))
 }
 
-function routeLengths(points: readonly RoutePoint[], width: number, height: number) {
-  const lengths: number[] = []
-  let total = 0
-
-  for (let index = 1; index < points.length; index += 1) {
-    const previous = points[index - 1]
-    const current = points[index]
-    const segment = Math.hypot(
-      (current[0] - previous[0]) * width,
-      (current[1] - previous[1]) * height,
-    )
-
-    lengths.push(segment)
-    total += segment
-  }
-
-  return { lengths, total }
+function smoothstep(value: number) {
+  return value * value * (3 - 2 * value)
 }
 
-function pointOnRoute(
-  points: readonly RoutePoint[],
-  progress: number,
+function drawDotMatrix(
+  context: CanvasRenderingContext2D,
+  colors: DotColors,
+  pointer: PointerField,
   width: number,
   height: number,
+  time: number,
+  isReducedMotion: boolean,
 ) {
-  const { lengths, total } = routeLengths(points, width, height)
-  let remaining = progress * total
+  const spacing = width <= 640 ? 28 : 34
+  const baseRadius = width <= 640 ? 0.85 : 1
+  const hoverRadius = clamp(Math.min(width, height) * 0.3, 140, 220)
+  const startX = (width % spacing) / 2
+  const startY = (height % spacing) / 2
+  const reactiveDots: ReactiveDot[] = []
 
-  for (let index = 0; index < lengths.length; index += 1) {
-    const segment = lengths[index]
+  context.globalAlpha = 1
+  context.fillStyle = colors.base
+  context.beginPath()
 
-    if (remaining <= segment || index === lengths.length - 1) {
-      const start = points[index]
-      const end = points[index + 1]
-      const ratio = segment === 0 ? 0 : Math.min(1, remaining / segment)
+  for (let y = startY, row = 0; y <= height; y += spacing, row += 1) {
+    for (let x = startX, column = 0; x <= width; x += spacing, column += 1) {
+      let dotX = x
+      let dotY = y
+      let distance = Number.POSITIVE_INFINITY
+      let influence = 0
 
-      return {
-        x: (start[0] + (end[0] - start[0]) * ratio) * width,
-        y: (start[1] + (end[1] - start[1]) * ratio) * height,
+      if (!isReducedMotion && pointer.strength > 0) {
+        const deltaX = x - pointer.x
+        const deltaY = y - pointer.y
+        distance = Math.hypot(deltaX, deltaY)
+
+        if (distance < hoverRadius) {
+          influence = smoothstep(1 - distance / hoverRadius) * pointer.strength
+
+          if (distance > 0.01) {
+            const displacement = influence * 14
+            dotX += (deltaX / distance) * displacement
+            dotY += (deltaY / distance) * displacement
+          } else {
+            const angle = column * 1.7 + row * 2.3
+            dotX += Math.cos(angle) * influence * 14
+            dotY += Math.sin(angle) * influence * 14
+          }
+        }
+      }
+
+      context.moveTo(dotX + baseRadius, dotY)
+      context.arc(dotX, dotY, baseRadius, 0, Math.PI * 2)
+
+      if (influence > 0.001) {
+        reactiveDots.push({ distance, influence, x: dotX, y: dotY })
       }
     }
-
-    remaining -= segment
   }
 
-  const fallback = points[points.length - 1]
-  return { x: fallback[0] * width, y: fallback[1] * height }
+  context.fill()
+  context.fillStyle = colors.active
+
+  for (const dot of reactiveDots) {
+    const wave = 0.72 + Math.sin(time * 0.006 - dot.distance * 0.07) * 0.28
+    const response = clamp(dot.influence * wave, 0, 1)
+
+    context.globalAlpha = response
+    context.beginPath()
+    context.arc(dot.x, dot.y, baseRadius + response * 1.8, 0, Math.PI * 2)
+    context.fill()
+  }
+
+  context.globalAlpha = 1
 }
 
 export function PaperBackground() {
-  const backgroundRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
-    const backgroundElement = backgroundRef.current
     const canvasElement = canvasRef.current
     const containerElement = canvasElement?.closest<HTMLElement>(".home-hero")
     const canvasContext = canvasElement?.getContext("2d", { alpha: true })
 
-    if (!backgroundElement || !canvasElement || !containerElement || !canvasContext) return
+    if (!canvasElement || !containerElement || !canvasContext) return
 
-    const background = backgroundElement
     const canvas = canvasElement
     const container = containerElement
     const context = canvasContext
     const motionQuery = window.matchMedia(reduceMotionQuery)
     const pointerQuery = window.matchMedia(precisePointerQuery)
     let animationFrame = 0
-    let colors = readPaperColors(container)
+    let colors = readDotColors(container)
     let height = 1
     let lastDraw = 0
     const pointer: PointerField = {
@@ -156,7 +160,7 @@ export function PaperBackground() {
       canvas.style.width = `${width}px`
       canvas.style.height = `${height}px`
       context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
-      colors = readPaperColors(container)
+      colors = readDotColors(container)
 
       if (previousWidth <= 1 && previousHeight <= 1) {
         pointer.x = width / 2
@@ -172,107 +176,36 @@ export function PaperBackground() {
     }
 
     function updatePointer(delta: number) {
-      pointer.x = easeToward(pointer.x, pointer.targetX, delta, 90)
-      pointer.y = easeToward(pointer.y, pointer.targetY, delta, 90)
-      pointer.strength = easeToward(pointer.strength, pointer.targetStrength, delta, 170)
+      pointer.x = easeToward(pointer.x, pointer.targetX, delta, 75)
+      pointer.y = easeToward(pointer.y, pointer.targetY, delta, 75)
+      pointer.strength = easeToward(pointer.strength, pointer.targetStrength, delta, 140)
 
-      const offsetX = -(pointer.x / width - 0.5) * 16 * pointer.strength
-      const offsetY = -(pointer.y / height - 0.5) * 12 * pointer.strength
-
-      background.style.setProperty("--paper-pointer-x", `${pointer.x.toFixed(1)}px`)
-      background.style.setProperty("--paper-pointer-y", `${pointer.y.toFixed(1)}px`)
-      background.style.setProperty("--paper-hover-opacity", pointer.strength.toFixed(3))
-      background.style.setProperty("--paper-grid-x", `${(offsetX * 0.32).toFixed(2)}px`)
-      background.style.setProperty("--paper-grid-y", `${(offsetY * 0.32).toFixed(2)}px`)
-
-      return { offsetX, offsetY }
+      if (pointer.targetStrength === 0 && pointer.strength < 0.002) {
+        pointer.strength = 0
+      }
     }
 
     function draw(time: number, delta: number) {
       const isReducedMotion = motionQuery.matches
-      const { offsetX, offsetY } = isReducedMotion
-        ? { offsetX: 0, offsetY: 0 }
-        : updatePointer(delta)
-      const hoverRadius = clamp(Math.min(width, height) * 0.28, 150, 260)
+
+      if (!isReducedMotion) updatePointer(delta)
 
       context.clearRect(0, 0, width, height)
-      context.lineCap = "square"
-      context.lineJoin = "round"
-
-      routes.forEach((route, routeIndex) => {
-        const depth = 0.68 + routeIndex * 0.12
-        const routeOffsetX = offsetX * depth
-        const routeOffsetY = offsetY * depth
-
-        context.save()
-        context.translate(routeOffsetX, routeOffsetY)
-        context.beginPath()
-        route.points.forEach(([x, y], index) => {
-          if (index === 0) context.moveTo(x * width, y * height)
-          else context.lineTo(x * width, y * height)
-        })
-        context.globalAlpha = 1
-        context.lineWidth = 1
-        context.strokeStyle = colors.line
-        context.stroke()
-
-        route.points.forEach(([x, y], index) => {
-          const isAccentNode = index === route.points.length - 1 && route.accent
-          const nodeColor = isAccentNode
-            ? colors.accent
-            : colors.node
-          const distanceFromPointer = Math.hypot(
-            x * width + routeOffsetX - pointer.x,
-            y * height + routeOffsetY - pointer.y,
-          )
-          const proximity = isReducedMotion
-            ? 0
-            : Math.max(0, 1 - distanceFromPointer / hoverRadius) * pointer.strength
-
-          if (proximity > 0) {
-            context.fillStyle = nodeColor
-            context.globalAlpha = proximity * 0.12
-            context.beginPath()
-            context.arc(x * width, y * height, 8 + proximity * 12, 0, Math.PI * 2)
-            context.fill()
-          }
-
-          context.fillStyle = nodeColor
-          context.globalAlpha = index === 0 || index === route.points.length - 1 ? 0.78 : 0.42
-          context.fillRect(x * width - 2, y * height - 2, 4, 4)
-        })
-
-        if (!isReducedMotion) {
-          const travel = (time / 12000 + route.offset) % 1
-          const point = pointOnRoute(route.points, travel, width, height)
-
-          context.fillStyle = route.accent ? colors.accent : colors.node
-          context.globalAlpha = 0.16
-          context.beginPath()
-          context.arc(point.x, point.y, 9, 0, Math.PI * 2)
-          context.fill()
-          context.globalAlpha = 0.86
-          context.beginPath()
-          context.arc(point.x, point.y, 2.4, 0, Math.PI * 2)
-          context.fill()
-        }
-
-        context.restore()
-      })
-
-      context.globalAlpha = 1
+      drawDotMatrix(context, colors, pointer, width, height, time, isReducedMotion)
     }
 
     function queueFrame() {
-      if (animationFrame || motionQuery.matches || document.hidden) return
+      const isInteracting = pointer.targetStrength > 0 || pointer.strength > 0
+
+      if (animationFrame || motionQuery.matches || document.hidden || !isInteracting) return
       animationFrame = window.requestAnimationFrame(tick)
     }
 
     function tick(time: number) {
       animationFrame = 0
 
-      if (time - lastDraw >= 32) {
-        draw(time, Math.min(time - lastDraw || 16, 80))
+      if (time - lastDraw >= 24) {
+        draw(time, Math.min(time - lastDraw || 16, 64))
         lastDraw = time
       }
 
@@ -313,23 +246,18 @@ export function PaperBackground() {
       if (!canTrackPointer(event)) return
       updatePointerTarget(event)
       pointer.targetStrength = 1
+      queueFrame()
     }
 
     function handlePointerLeave(event: PointerEvent) {
       if (event.pointerType !== "mouse") return
       pointer.targetStrength = 0
+      queueFrame()
     }
 
     function handleInteractionPreferenceChange() {
+      pointer.strength = 0
       pointer.targetStrength = 0
-
-      if (motionQuery.matches || !pointerQuery.matches) {
-        pointer.strength = 0
-        background.style.setProperty("--paper-hover-opacity", "0")
-        background.style.setProperty("--paper-grid-x", "0px")
-        background.style.setProperty("--paper-grid-y", "0px")
-      }
-
       renderCurrentState()
     }
 
@@ -337,8 +265,16 @@ export function PaperBackground() {
       resizeCanvas()
       renderCurrentState()
     })
+    const themeObserver = new MutationObserver(() => {
+      colors = readDotColors(container)
+      renderCurrentState()
+    })
 
     resizeObserver.observe(container)
+    themeObserver.observe(document.documentElement, {
+      attributeFilter: ["data-theme"],
+      attributes: true,
+    })
     document.addEventListener("visibilitychange", renderCurrentState)
     container.addEventListener("pointerenter", handlePointerEnter)
     container.addEventListener("pointermove", handlePointerMove)
@@ -351,6 +287,7 @@ export function PaperBackground() {
     return () => {
       if (animationFrame) window.cancelAnimationFrame(animationFrame)
       resizeObserver.disconnect()
+      themeObserver.disconnect()
       document.removeEventListener("visibilitychange", renderCurrentState)
       container.removeEventListener("pointerenter", handlePointerEnter)
       container.removeEventListener("pointermove", handlePointerMove)
@@ -361,10 +298,8 @@ export function PaperBackground() {
   }, [])
 
   return (
-    <div className="paper-background" aria-hidden="true" ref={backgroundRef}>
-      <span className="paper-grid" />
-      <span className="paper-hover" />
-      <canvas className="paper-canvas" ref={canvasRef} />
+    <div className="paper-background" aria-hidden="true">
+      <canvas className="paper-dot-canvas" ref={canvasRef} />
       <span className="paper-frame" />
       <span className="paper-fibers" />
     </div>
