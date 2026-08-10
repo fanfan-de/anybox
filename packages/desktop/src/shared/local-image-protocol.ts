@@ -4,8 +4,13 @@ export const LOCAL_VIDEO_PROTOCOL = "anybox-local-video"
 export const LOCAL_VIDEO_PROTOCOL_HOST = "video"
 
 const WINDOWS_ABSOLUTE_PATH_PATTERN = /^[a-z]:[\\/]/i
+const WINDOWS_ABSOLUTE_PATH_WITH_LEADING_SLASH_PATTERN = /^[\\/]+([a-z]:[\\/].*)$/i
 const WINDOWS_UNC_PATH_PATTERN = /^\\\\[^\\/]+[\\/][^\\/]+[\\/]/
 const POSIX_ABSOLUTE_PATH_PATTERN = /^\//
+
+function normalizeAbsolutePathPrefix(value: string) {
+  return value.replace(WINDOWS_ABSOLUTE_PATH_WITH_LEADING_SLASH_PATTERN, "$1")
+}
 
 function isLocalImageSourceValue(value: string) {
   const source = value.trim()
@@ -23,13 +28,14 @@ export function normalizeLocalImageSource(value: string) {
   if (source.toLowerCase().startsWith("file://")) return source
 
   try {
-    const decodedSource = decodeURIComponent(source)
+    const decodedSource = normalizeAbsolutePathPrefix(decodeURIComponent(source))
     if (isLocalImageSourceValue(decodedSource)) return decodedSource
   } catch {
     // Keep checking the literal source so valid paths containing a bare percent sign still work.
   }
 
-  return isLocalImageSourceValue(source) ? source : null
+  const normalizedSource = normalizeAbsolutePathPrefix(source)
+  return isLocalImageSourceValue(normalizedSource) ? normalizedSource : null
 }
 
 export function isLocalImageSource(value: string) {

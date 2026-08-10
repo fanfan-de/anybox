@@ -2,8 +2,9 @@ import { app, BrowserWindow, Menu, protocol, session } from "electron"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { registerIpcHandlers } from "./ipc"
-import { registerLocalImageProtocolHandler, registerLocalImageProtocolScheme } from "./local-image-protocol"
-import { registerLocalPreviewProtocolHandler, registerLocalPreviewProtocolScheme } from "./preview-targets"
+import { registerLocalImageProtocolHandler } from "./local-image-protocol"
+import { registerLocalPreviewProtocolHandler } from "./preview-targets"
+import { registerDesktopProtocolSchemes } from "./protocol-schemes"
 import { readLocaleConfigSnapshot } from "./locale-config"
 import { ensureManagedAgentRunning, stopManagedAgent } from "./managed-agent"
 import { createApplicationMenus, type ApplicationMenuOptions } from "./menu"
@@ -35,8 +36,7 @@ if (!app.isPackaged && remoteDebuggingPort && /^\d+$/.test(remoteDebuggingPort))
   app.commandLine.appendSwitch("remote-debugging-port", remoteDebuggingPort)
 }
 
-registerLocalImageProtocolScheme(protocol)
-registerLocalPreviewProtocolScheme(protocol)
+registerDesktopProtocolSchemes(protocol)
 const windowsAppUserModelId = resolveWindowsAppUserModelId(app.isPackaged)
 if (windowsAppUserModelId) app.setAppUserModelId(windowsAppUserModelId)
 installProcessCrashDiagnostics()

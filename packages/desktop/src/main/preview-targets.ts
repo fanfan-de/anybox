@@ -90,17 +90,20 @@ type PreviewRegistration = {
 const previewRegistrations = new Map<string, PreviewRegistration>()
 
 interface LocalPreviewProtocolRegistrar {
-  registerSchemesAsPrivileged(schemes: Array<{
-    scheme: string
-    privileges: {
-      standard: boolean
-      secure: boolean
-      supportFetchAPI: boolean
-      stream?: boolean
-    }
-  }>): void
   handle(scheme: string, handler: (request: Request) => Response | Promise<Response>): void
 }
+
+export const LOCAL_PREVIEW_PROTOCOL_SCHEMES = [
+  {
+    scheme: LOCAL_PREVIEW_PROTOCOL,
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      stream: true,
+    },
+  },
+]
 
 function isPathInside(parent: string, candidate: string) {
   const relativePath = path.relative(parent, candidate)
@@ -725,20 +728,6 @@ export async function handleLocalPreviewProtocolRequest(
   }
 
   return new Response(body, { headers })
-}
-
-export function registerLocalPreviewProtocolScheme(protocolRegistrar: Pick<LocalPreviewProtocolRegistrar, "registerSchemesAsPrivileged">) {
-  protocolRegistrar.registerSchemesAsPrivileged([
-    {
-      scheme: LOCAL_PREVIEW_PROTOCOL,
-      privileges: {
-        standard: true,
-        secure: true,
-        supportFetchAPI: true,
-        stream: true,
-      },
-    },
-  ])
 }
 
 export function registerLocalPreviewProtocolHandler(

@@ -7,10 +7,10 @@ import { toLocalImageProtocolUrl, toLocalVideoProtocolUrl } from "../shared/loca
 import {
   getLocalImageMimeType,
   getLocalVideoMimeType,
+  LOCAL_IMAGE_PROTOCOL_SCHEMES,
   resolveLocalImageProtocolRequest,
   resolveLocalVideoProtocolRequest,
   handleLocalVideoProtocolRequest,
-  registerLocalImageProtocolScheme,
 } from "./local-image-protocol"
 
 const tempDirectories: string[] = []
@@ -39,16 +39,7 @@ afterEach(async () => {
 
 describe("local image protocol", () => {
   it("registers only the video scheme for streaming media", () => {
-    const registered: Array<{
-      scheme: string
-      privileges: { standard: boolean; secure: boolean; supportFetchAPI: boolean; stream?: boolean }
-    }> = []
-
-    registerLocalImageProtocolScheme({
-      registerSchemesAsPrivileged: (schemes) => registered.push(...schemes),
-    })
-
-    expect(registered).toEqual([
+    expect(LOCAL_IMAGE_PROTOCOL_SCHEMES).toEqual([
       {
         scheme: "anybox-local-image",
         privileges: {
@@ -74,6 +65,29 @@ describe("local image protocol", () => {
       `anybox-local-image://image?source=${encodeURIComponent("C:/新建文件夹 (12)/verify-start.png")}`,
     )
   })
+
+  it("normalizes URL-style slash-prefixed Windows paths before creating protocol URLs", () => {
+    expect(toLocalImageProtocolUrl("/C:/新建文件夹 (12)/verify-start.png")).toBe(
+      `anybox-local-image://image?source=${encodeURIComponent("C:/新建文件夹 (12)/verify-start.png")}`,
+    )
+  })
+
+  it.runIf(process.platform === "win32")(
+    "loads a slash-prefixed Windows image path through the protocol resolver",
+    async () => {
+      const directory = await createFixtureDirectory()
+      const imagePath = join(directory, "slash-prefixed.png")
+      await writeFile(imagePath, Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+      const slashPrefixedPath = `/${imagePath.replace(/\\/g, "/")}`
+
+      await expect(resolveLocalImageProtocolRequest(requestUrlForSource(slashPrefixedPath))).resolves.toEqual({
+        ok: true,
+        filePath: path.resolve(imagePath),
+        mimeType: "image/png",
+        size: 4,
+      })
+    },
+  )
 
   it("resolves a valid raster image absolute path", async () => {
     const directory = await createFixtureDirectory()

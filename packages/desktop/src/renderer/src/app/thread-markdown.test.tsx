@@ -244,6 +244,16 @@ describe("ThreadMarkdown", () => {
     )
   })
 
+  it("normalizes slash-prefixed Windows image paths emitted in loose Markdown", () => {
+    const imagePath = "/C:/新建文件夹 (12)/verify-start.png"
+    render(<ThreadMarkdown text={`![开始画面](${imagePath})`} />)
+
+    expect(screen.getByRole("img", { name: "开始画面" })).toHaveAttribute(
+      "src",
+      `anybox-local-image://image?source=${encodeURIComponent("C:/新建文件夹 (12)/verify-start.png")}`,
+    )
+  })
+
   it("resolves relative image paths against a local workspace directory", () => {
     expect(resolveWorkspaceMarkdownImageSrc(
       "./screenshots/start screen.png",

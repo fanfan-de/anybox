@@ -6,12 +6,12 @@ import {
   inferPreviewRenderer,
   handleLocalPreviewProtocolRequest,
   isPluginViewPreviewUrl,
+  LOCAL_PREVIEW_PROTOCOL_SCHEMES,
   readPreviewText,
   resolveLocalPreviewProtocolRequest,
   resolvePluginViewPreviewOwner,
   resolvePluginViewPreviewTarget,
   resolvePreviewTarget,
-  registerLocalPreviewProtocolScheme,
   revokePluginViewPreviewRegistrations,
 } from "./preview-targets"
 
@@ -30,11 +30,7 @@ afterEach(async () => {
 
 describe("preview target resolver", () => {
   it("registers plugin previews for streaming audio and video", () => {
-    const registerSchemesAsPrivileged = vi.fn()
-
-    registerLocalPreviewProtocolScheme({ registerSchemesAsPrivileged })
-
-    expect(registerSchemesAsPrivileged).toHaveBeenCalledWith([
+    expect(LOCAL_PREVIEW_PROTOCOL_SCHEMES).toEqual([
       {
         scheme: "anybox-preview",
         privileges: {

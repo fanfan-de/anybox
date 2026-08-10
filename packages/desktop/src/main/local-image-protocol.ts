@@ -53,17 +53,28 @@ interface LocalImageProtocolOptions {
 }
 
 interface LocalImageProtocolRegistrar {
-  registerSchemesAsPrivileged(schemes: Array<{
-    scheme: string
-    privileges: {
-      standard: boolean
-      secure: boolean
-      supportFetchAPI: boolean
-      stream?: boolean
-    }
-  }>): void
   handle(scheme: string, handler: (request: Request) => Response | Promise<Response>): void
 }
+
+export const LOCAL_IMAGE_PROTOCOL_SCHEMES = [
+  {
+    scheme: LOCAL_IMAGE_PROTOCOL,
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+    },
+  },
+  {
+    scheme: LOCAL_VIDEO_PROTOCOL,
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      stream: true,
+    },
+  },
+]
 
 function localImageError(status: number, error: string): LocalImageProtocolResult {
   return { ok: false, status, error }
@@ -262,28 +273,6 @@ export async function handleLocalVideoProtocolRequest(request: Request) {
       "content-length": String(result.size),
     },
   })
-}
-
-export function registerLocalImageProtocolScheme(protocolRegistrar: Pick<LocalImageProtocolRegistrar, "registerSchemesAsPrivileged">) {
-  protocolRegistrar.registerSchemesAsPrivileged([
-    {
-      scheme: LOCAL_IMAGE_PROTOCOL,
-      privileges: {
-        standard: true,
-        secure: true,
-        supportFetchAPI: true,
-      },
-    },
-    {
-      scheme: LOCAL_VIDEO_PROTOCOL,
-      privileges: {
-        standard: true,
-        secure: true,
-        supportFetchAPI: true,
-        stream: true,
-      },
-    },
-  ])
 }
 
 export function registerLocalImageProtocolHandler(protocolRegistrar: Pick<LocalImageProtocolRegistrar, "handle">) {
