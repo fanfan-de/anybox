@@ -23,7 +23,7 @@ export const PLUGIN_CATALOG_MANIFEST_FILENAME = "anybox-plugin-catalog-manifest.
 export const PLUGIN_CATALOG_RAW_BASE_URL =
   `https://raw.githubusercontent.com/fanfan-de/anybox/${PLUGIN_CATALOG_REPOSITORY_REF}/${PLUGIN_CATALOG_REPOSITORY_PATH}`
 export const MAX_PLUGIN_PACKAGE_BYTES = 100 * 1024 * 1024
-export const CURRENT_PLUGIN_COUNT = 64
+export const CURRENT_PLUGIN_COUNT = 65
 
 const PLUGIN_MANIFEST_PATH = ".anybox-plugin/plugin.json"
 const RELEASE_OWNER = "fanfan-de"

@@ -17,7 +17,7 @@ const catalogDir = path.resolve(
 const bunName = process.platform === "win32" ? "bun.exe" : "bun"
 const dataDir = await mkdtemp(path.join(tmpdir(), "anybox-plugin-runtime-catalog-"))
 const cacheDir = path.join(dataDir, "registry-cache")
-const EXPECTED_PLUGIN_COUNT = 61
+const EXPECTED_PLUGIN_COUNT = 65
 
 async function unusedLoopbackPort() {
   const server = createTCPServer()
