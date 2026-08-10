@@ -1,8 +1,11 @@
 import type { SiteLanguage } from "./language"
 
-export type ProductMediaVariant = "workspace" | "execution" | "mobile"
-
 export type SiteContent = {
+  faq: {
+    eyebrow: string
+    items: Array<{ answer: string; question: string }>
+    title: string
+  }
   finalCta: {
     description: string
     docsLabel: string
@@ -15,17 +18,26 @@ export type SiteContent = {
     note: string
     title: string
   }
-  capabilities: {
+  overview: {
     description: string
     eyebrow: string
-    items: Array<{
-      description: string
-      eyebrow: string
-      mediaAlt: string
-      mediaCaption: string
-      mediaVariant: ProductMediaVariant
-      title: string
-    }>
+    steps: Array<{ description: string; title: string }>
+    title: string
+  }
+  plugins: {
+    description: string
+    docsLabel: string
+    eyebrow: string
+    examples: Array<{ description: string; href: string; name: string }>
+    stages: Array<{ description: string; title: string }>
+    title: string
+  }
+  safety: {
+    description: string
+    docsLabel: string
+    eyebrow: string
+    items: Array<{ description: string; title: string }>
+    privacyLabel: string
     title: string
   }
   signals: string[]
@@ -42,13 +54,15 @@ export type SiteContent = {
   useCases: {
     description: string
     eyebrow: string
-    items: Array<{ description: string; title: string }>
-    title: string
-  }
-  workflow: {
-    description: string
-    eyebrow: string
-    steps: Array<{ description: string; title: string }>
+    items: Array<{
+      description: string
+      detailItems: string[]
+      imageAlt: string
+      imageSrc: string
+      outcome: string
+      prompt: string
+      title: string
+    }>
     title: string
   }
 }
@@ -58,61 +72,95 @@ export const siteContent = {
     hero: {
       title: "通用 Agent + 领域化插件架构，让 Anybox 可以适用于任何任务场景。",
       description:
-        "Anybox 是开源的本地 AI Agent 工作台。让 Agent 读取项目、调用工具、执行命令，并把每一步留在你可检查的工作空间里。",
+        "把本地项目、模型、工具和插件放进同一个可检查的工作台，让 Agent 从理解任务一直参与到结果交付。",
       githubLabel: "查看 GitHub",
       note: "支持 Windows x64、macOS Apple Silicon、Linux x64 与 Android。",
     },
     signals: ["开源", "本地项目", "多模型", "权限确认", "可审计工具调用"],
-    workflow: {
-      eyebrow: "三步开始",
-      title: "从项目目录到可交付结果",
-      description: "不需要把工作拆散到多个聊天窗口。Anybox 围绕真实项目组织 Agent 的上下文与执行。",
+    overview: {
+      eyebrow: "产品总览",
+      title: "你的智能本地 Agent 工作台",
+      description: "直接连接项目目录，按任务选择模型，调用工具与插件，并把执行过程留在同一个工作线程里。",
       steps: [
-        { title: "打开本地项目", description: "把目录、文件和当前任务放进同一个可持续的工作区。" },
-        { title: "选择模型与权限", description: "按任务切换供应商，并明确 Agent 可以读取、执行或修改什么。" },
-        { title: "检查并交付", description: "查看工具调用和变更过程，确认结果后继续迭代或交付。" },
+        { title: "打开真实项目", description: "目录、文件、会话和任务历史持续保留。" },
+        { title: "配置模型与权限", description: "按任务切换供应商，明确 Agent 可以做什么。" },
+        { title: "检查并交付", description: "查看调用与变更，再继续迭代或交付结果。" },
       ],
     },
-    capabilities: {
-      eyebrow: "核心能力",
-      title: "让 Agent 真正理解并参与工作",
-      description: "Anybox 把上下文、执行边界和结果检查放在同一套工作流里。",
-      items: [
+    plugins: {
+      eyebrow: "插件架构",
+      title: "同一个 Agent，用插件进入不同工作现场",
+      description: "Anybox 保留统一的会话、模型、权限和工具调用；领域插件负责补充技能、MCP 服务、专属界面与工作流。",
+      stages: [
+        { title: "通用 Agent", description: "统一承接会话、模型、权限和工具调用。" },
+        { title: "领域插件", description: "按任务加载技能、MCP 服务和专属工作界面。" },
+        { title: "可交付结果", description: "把过程落到代码、文档、网页、媒体和可运行项目。" },
+      ],
+      examples: [
         {
-          eyebrow: "01 · 本地上下文",
-          title: "围绕项目，而不是一段孤立对话",
-          description: "项目树、会话和任务历史保持在一起。Agent 可以从当前目录出发理解代码、文档与工作状态。",
-          mediaAlt: "Anybox 左侧项目树与会话列表",
-          mediaCaption: "项目与会话持续保留，切换任务时不必重新解释上下文。",
-          mediaVariant: "workspace",
+          name: "Build Web Apps",
+          description: "从需求到可运行网页，把实现、预览与迭代放在同一条工作流里。",
+          href: "/docs/?doc=build-web-apps",
         },
         {
-          eyebrow: "02 · 可控执行",
-          title: "工具调用和权限边界始终可见",
-          description: "在 Agent 读取文件、运行命令或修改内容时保留可检查的过程，让自动化能力不以失去控制为代价。",
-          mediaAlt: "Anybox Agent 对话和执行工作区",
-          mediaCaption: "从请求到执行结果都留在同一个线程中。",
-          mediaVariant: "execution",
+          name: "Chrome 与 Computer Use",
+          description: "在浏览器和桌面应用中执行可见、可检查的多步操作。",
+          href: "/docs/?doc=chrome",
         },
         {
-          eyebrow: "03 · 多端与多模型",
-          title: "按任务选择模型，在桌面与移动端继续工作",
-          description: "连接不同模型供应商，按成本和能力切换；需要离开桌面时，也能从移动端查看和继续会话。",
-          mediaAlt: "Anybox Android 端的项目与会话列表",
-          mediaCaption: "移动端用于查看、继续和管理已有工作。",
-          mediaVariant: "mobile",
+          name: "Cinema",
+          description: "组织素材、生成内容，并把创作过程带入可继续编辑的工作台。",
+          href: "/docs/?doc=cinema",
         },
       ],
+      docsLabel: "阅读插件开发文档",
     },
     useCases: {
-      eyebrow: "真实用例",
-      title: "一个工作台，覆盖不同类型的交付",
-      description: "能力保持一致，变化的是项目上下文和最终成果。",
+      eyebrow: "真实工作场景",
+      title: "从一句任务，到可以交付的结果",
+      description: "每个场景都从真实项目开始：给出目标，观察 Agent 工作，检查成果，再决定下一步。",
       items: [
-        { title: "代码", description: "修复问题、补测试、重构模块，梳理架构并准备提交或 PR 摘要。" },
-        { title: "研究与办公", description: "整理会议和调研资料，分析数据，形成方案与后续行动。" },
-        { title: "创造", description: "从想法到文案、脚本、页面草稿和可执行项目计划。" },
+        {
+          title: "从问题描述，到可提交的代码变更",
+          description: "让 Agent 在真实仓库里定位问题、修改代码、运行测试，并整理可复用的交付摘要。",
+          prompt: "修复登录状态偶发失效的问题，补齐测试，并整理这次改动。",
+          outcome: "代码变更 · 测试结果 · 提交摘要",
+          detailItems: ["读取真实仓库上下文", "修改和命令过程可检查", "测试结果保留在同一线程"],
+          imageSrc: "/scenario-code-workflow.webp",
+          imageAlt: "用于代码任务的 Anybox Agent 工作场景",
+        },
+        {
+          title: "把散落资料，整理成下一步行动",
+          description: "汇总会议、调研和数据材料，让 Agent 提炼结论、标记风险，并形成可以继续协作的文档。",
+          prompt: "读取项目资料，整理关键结论、待确认风险和下周行动清单。",
+          outcome: "研究摘要 · 数据整理 · 行动清单",
+          detailItems: ["项目资料集中处理", "结论与来源保持关联", "结果可继续编辑和复核"],
+          imageSrc: "/scenario-office-workflow.webp",
+          imageAlt: "用于研究与办公任务的 Anybox Agent 工作场景",
+        },
+        {
+          title: "从一个想法，到可预览的作品",
+          description: "把需求、生成、运行预览和后续修改放在一起，发现问题后直接回到对话继续迭代。",
+          prompt: "做一个可以立即试玩的赛车小游戏，并根据试玩反馈继续修改。",
+          outcome: "页面与脚本 · 运行预览 · 迭代记录",
+          detailItems: ["自然语言描述目标", "生成结果立即预览", "问题直接转成下一轮修改"],
+          imageSrc: "/scenario-creative-workflow.webp",
+          imageAlt: "用于创作任务的 Anybox Agent 工作场景",
+        },
       ],
+    },
+    safety: {
+      eyebrow: "本地与权限",
+      title: "项目和执行边界，始终由你掌控",
+      description: "自动化不应该以失去控制为代价。Anybox 把权限策略、工具调用与结果检查放在工作线程中。",
+      items: [
+        { title: "项目边界可见", description: "围绕当前项目目录组织上下文，工作范围始终明确。" },
+        { title: "执行前确认", description: "文件修改和命令执行遵循你选择的权限策略。" },
+        { title: "过程可追溯", description: "重要工具调用、执行结果和后续修改保留在线程里。" },
+        { title: "模型连接自主", description: "按任务在已连接的模型供应商之间选择与切换。" },
+      ],
+      docsLabel: "查看权限说明",
+      privacyLabel: "阅读隐私政策",
     },
     trust: {
       eyebrow: "开源与持续发布",
@@ -130,66 +178,130 @@ export const siteContent = {
       description: "下载适合当前设备的版本，打开一个真实项目开始工作。",
       docsLabel: "阅读安装文档",
     },
+    faq: {
+      eyebrow: "常见问题",
+      title: "开始之前，你可能还想确认这些",
+      items: [
+        {
+          question: "Anybox 与普通 AI 聊天工具有什么不同？",
+          answer: "Anybox 围绕真实项目组织会话、文件、工具调用和任务历史。它不只回答问题，也让 Agent 在你设定的权限范围内参与执行与交付。",
+        },
+        {
+          question: "本地文件会被上传吗？",
+          answer: "Anybox 围绕你选择的本地项目组织上下文。当任务需要模型读取文件内容时，实际发送范围取决于你连接的模型供应商与当前任务，请同时查看权限说明和供应商条款。",
+        },
+        {
+          question: "Agent 修改文件或运行命令时如何控制？",
+          answer: "你可以为任务选择权限策略。需要确认的文件修改、命令和工具调用会在工作线程中显示，便于检查后继续或停止。",
+        },
+        {
+          question: "支持哪些模型，费用如何计算？",
+          answer: "Anybox 支持连接不同模型供应商并按任务切换。模型用量与费用通常由对应供应商计算，Anybox 的产品计划请查看定价页面。",
+        },
+        {
+          question: "插件可以自行开发吗？",
+          answer: "可以。插件可以组合专属界面、技能和 MCP 服务，把通用 Agent 扩展到特定领域；开发结构与清单要求可在插件文档中查看。",
+        },
+        {
+          question: "桌面端和 Android 如何配合？",
+          answer: "桌面端适合连接项目并执行主要工作，Android 端可用于查看、继续和管理已有项目与会话。",
+        },
+      ],
+    },
   },
   en: {
     hero: {
-      title: "Bring AI agents into your local workflow",
+      title: "A general agent and domain plugins for work of every kind",
       description:
-        "Anybox is an open-source workspace for local AI agents. Let agents read projects, call tools, run commands, and keep every step visible in a workspace you control.",
+        "Bring local projects, models, tools, and plugins into one inspectable workspace, from first request to final delivery.",
       githubLabel: "View on GitHub",
       note: "Available for Windows x64, macOS Apple Silicon, Linux x64, and Android.",
     },
     signals: ["Open source", "Local projects", "Multiple models", "Permission control", "Auditable tool calls"],
-    workflow: {
-      eyebrow: "Three steps",
-      title: "From a project folder to a result you can ship",
-      description: "Keep the work together instead of scattering it across disconnected chat windows.",
+    overview: {
+      eyebrow: "Product overview",
+      title: "Your intelligent local agent workspace",
+      description: "Connect a project folder, choose the right model, call tools and plugins, and keep execution visible in one working thread.",
       steps: [
-        { title: "Open a local project", description: "Keep folders, files, and the current task in one persistent workspace." },
-        { title: "Choose models and permissions", description: "Switch providers by task and decide what the agent may read, run, or change." },
-        { title: "Review and deliver", description: "Inspect tool calls and changes, then keep iterating or ship the result." },
+        { title: "Open a real project", description: "Keep folders, files, sessions, and task history together." },
+        { title: "Set models and permissions", description: "Switch providers and decide what the agent may do." },
+        { title: "Review and deliver", description: "Inspect calls and changes, then iterate or ship the result." },
       ],
     },
-    capabilities: {
-      eyebrow: "Core capabilities",
-      title: "Give agents the context and boundaries to do real work",
-      description: "Anybox brings project context, execution control, and review into one workflow.",
-      items: [
+    plugins: {
+      eyebrow: "Plugin architecture",
+      title: "One agent, extended for different fields of work",
+      description: "Anybox keeps conversations, models, permissions, and tool calls consistent. Domain plugins add skills, MCP services, dedicated UI, and workflows.",
+      stages: [
+        { title: "General agent", description: "A shared layer for conversations, models, permissions, and tools." },
+        { title: "Domain plugins", description: "Load skills, MCP services, and dedicated work surfaces by task." },
+        { title: "Deliverable results", description: "Turn the work into code, documents, websites, media, and runnable projects." },
+      ],
+      examples: [
         {
-          eyebrow: "01 · Local context",
-          title: "Work around a project, not an isolated chat",
-          description: "Project trees, sessions, and task history stay together so agents can understand code, documents, and current work from the right directory.",
-          mediaAlt: "The project tree and session list in Anybox",
-          mediaCaption: "Persistent projects and sessions reduce repeated context setup.",
-          mediaVariant: "workspace",
+          name: "Build Web Apps",
+          description: "Move from a request to a running website with implementation, preview, and iteration in one flow.",
+          href: "/docs/?doc=build-web-apps",
         },
         {
-          eyebrow: "02 · Controlled execution",
-          title: "Keep tool calls and permission boundaries visible",
-          description: "Follow the path when an agent reads files, runs commands, or changes content. Automation stays useful without becoming opaque.",
-          mediaAlt: "An agent conversation and execution workspace in Anybox",
-          mediaCaption: "Requests, execution, and results remain in the same thread.",
-          mediaVariant: "execution",
+          name: "Chrome and Computer Use",
+          description: "Carry out visible, inspectable multi-step work in browsers and desktop applications.",
+          href: "/docs/?doc=chrome",
         },
         {
-          eyebrow: "03 · Models and devices",
-          title: "Choose the right model and continue away from your desk",
-          description: "Connect different providers and switch by cost or capability. Use the mobile app to review and continue existing sessions.",
-          mediaAlt: "Projects and sessions in Anybox for Android",
-          mediaCaption: "Review, continue, and manage existing work on mobile.",
-          mediaVariant: "mobile",
+          name: "Cinema",
+          description: "Organize assets, generate content, and continue the creative process in an editable workbench.",
+          href: "/docs/?doc=cinema",
         },
       ],
+      docsLabel: "Read the plugin development guide",
     },
     useCases: {
-      eyebrow: "Practical use cases",
-      title: "One workspace for different kinds of delivery",
-      description: "The workflow stays consistent while the project context and output change.",
+      eyebrow: "Real work scenarios",
+      title: "From one request to a result you can deliver",
+      description: "Each scenario starts with a real project: set a goal, watch the agent work, inspect the result, and decide what happens next.",
       items: [
-        { title: "Code", description: "Fix issues, add tests, refactor modules, map architecture, and prepare commit or PR summaries." },
-        { title: "Research and operations", description: "Organize meetings and research, analyze data, and turn findings into action." },
-        { title: "Create", description: "Move from an idea to copy, scripts, page drafts, and an executable project plan." },
+        {
+          title: "From an issue report to a code change ready to submit",
+          description: "Let the agent investigate a real repository, edit code, run tests, and prepare a reusable delivery summary.",
+          prompt: "Fix the intermittent sign-in state issue, add regression tests, and summarize the change.",
+          outcome: "Code changes · Test results · Commit summary",
+          detailItems: ["Read real repository context", "Inspect edits and commands", "Keep test results in the same thread"],
+          imageSrc: "/scenario-code-workflow.webp",
+          imageAlt: "An Anybox agent workflow for a coding task",
+        },
+        {
+          title: "Turn scattered material into clear next actions",
+          description: "Combine meetings, research, and data so the agent can extract findings, flag risks, and create a document ready for collaboration.",
+          prompt: "Review the project material and prepare key findings, open risks, and next week's action list.",
+          outcome: "Research brief · Organized data · Action list",
+          detailItems: ["Process project material together", "Keep findings tied to source context", "Continue editing and reviewing the result"],
+          imageSrc: "/scenario-office-workflow.webp",
+          imageAlt: "An Anybox agent workflow for research and operations",
+        },
+        {
+          title: "Move from an idea to something you can preview",
+          description: "Keep the request, generation, running preview, and revisions together, then turn feedback directly into the next iteration.",
+          prompt: "Build a playable racing game and keep improving it from hands-on feedback.",
+          outcome: "Pages and scripts · Running preview · Iteration history",
+          detailItems: ["Describe the goal in plain language", "Preview the result immediately", "Turn issues into the next edit"],
+          imageSrc: "/scenario-creative-workflow.webp",
+          imageAlt: "An Anybox agent workflow for a creative task",
+        },
       ],
+    },
+    safety: {
+      eyebrow: "Local work and permissions",
+      title: "Keep project and execution boundaries under your control",
+      description: "Automation should not make work opaque. Anybox keeps permission policies, tool calls, and review in the working thread.",
+      items: [
+        { title: "Visible project scope", description: "Organize context around the current project folder so the boundary stays clear." },
+        { title: "Confirm before acting", description: "File changes and commands follow the permission policy you choose." },
+        { title: "Traceable execution", description: "Important tool calls, results, and later changes remain in the thread." },
+        { title: "Your model connections", description: "Choose and switch between the providers you have connected." },
+      ],
+      docsLabel: "Read the permission guide",
+      privacyLabel: "Read the privacy policy",
     },
     trust: {
       eyebrow: "Open source and actively released",
@@ -206,6 +318,36 @@ export const siteContent = {
       title: "Bring your next task into Anybox",
       description: "Download the right build for this device and start with a real project.",
       docsLabel: "Read the installation guide",
+    },
+    faq: {
+      eyebrow: "FAQ",
+      title: "A few things you may want to confirm first",
+      items: [
+        {
+          question: "How is Anybox different from a regular AI chat app?",
+          answer: "Anybox organizes conversations, files, tool calls, and task history around real projects. It can help an agent participate in execution and delivery within the permissions you set, not only answer questions.",
+        },
+        {
+          question: "Are local files uploaded?",
+          answer: "Anybox organizes context around the local project you choose. When a task requires a model to read file contents, what is sent depends on the connected model provider and the task, so review both the permission guide and provider terms.",
+        },
+        {
+          question: "How do I control file changes and commands?",
+          answer: "Choose a permission policy for the task. File edits, commands, and tool calls that require confirmation appear in the working thread so you can inspect, continue, or stop.",
+        },
+        {
+          question: "Which models are supported, and how is usage billed?",
+          answer: "Anybox can connect to different model providers and switch between them by task. Model usage and billing are generally handled by each provider; see the pricing page for Anybox plans.",
+        },
+        {
+          question: "Can I build my own plugin?",
+          answer: "Yes. Plugins can combine dedicated UI, skills, and MCP services to extend the general agent into a specific field. The plugin guide covers package structure and manifest requirements.",
+        },
+        {
+          question: "How do desktop and Android work together?",
+          answer: "Use desktop to connect projects and do the main work, then use Android to review, continue, and manage existing projects and sessions.",
+        },
+      ],
     },
   },
 } satisfies Record<SiteLanguage, SiteContent>

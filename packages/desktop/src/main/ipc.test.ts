@@ -778,7 +778,6 @@ describe("ipc prompt helpers", () => {
       systemPromptPresetID: "system-codex",
       planModePromptPresetID: "plan-mode",
       gitCommitPromptPresetID: "git-commit-message",
-      cinemaTextGenerationPromptPresetID: "cinema-text-generation",
     }
     requestAgentJSONMock.mockResolvedValueOnce({
       data: selection,

@@ -24,7 +24,6 @@ import type { AppearanceContrastWarning } from "../../../../shared/appearance-co
 import { getAppearanceTokenGroupCopy, getAppearanceTokenRowCopy } from "../../../../shared/appearance-token-copy"
 import type { AppearanceTheme } from "../../../../shared/appearance-themes"
 import type {
-  AgentProviderConnectionTestResult,
   DesktopAppUpdateState,
   DesktopProviderAuthPrompt,
   DesktopStoragePaths,
@@ -63,9 +62,6 @@ import type {
   AssistantTraceVisibility,
   AssistantTraceVisibilityKey,
   ColorMode,
-  CinemaProviderWorkflowCatalog,
-  CinemaVideoProvider,
-  CinemaVideoProviderDraftState,
   CustomProviderDraftState,
   InstalledPlugin,
   McpServerDiagnostic,
@@ -426,99 +422,6 @@ function getProviderHeaderSummary(provider: ProviderCatalogItem, t: SettingsTran
   return `${getProviderStatusText(provider, t)} · ${t("settings.provider.sharedAcrossApp")} · ${getProviderSourceText(provider, t)}`
 }
 
-function getCinemaVideoProviderStatusText(provider: CinemaVideoProvider, t: SettingsTranslate) {
-  if (!provider.auth.requiresCredential) return t("settings.videoProviders.noAuthentication")
-  switch (provider.auth.status) {
-    case "connected":
-      return t("app.connected")
-    case "pending":
-      return t("settings.provider.statusPending")
-    case "expired":
-      return t("settings.provider.statusExpired")
-    case "error":
-      return t("settings.provider.statusError")
-    case "not_connected":
-      return t("app.notConnected")
-  }
-}
-
-function getCinemaVideoProviderModelSummary(provider: CinemaVideoProvider) {
-  const models = provider.manifest.models
-  return `${models.length} ${models.length === 1 ? "model" : "models"}`
-}
-
-function getCinemaVideoProviderKindLabel(kind?: string) {
-  if (!kind) return "Catalog"
-  return kind
-    .split(/[-_]/)
-    .map((part) => part.slice(0, 1).toUpperCase() + part.slice(1))
-    .join(" ")
-}
-
-function getCinemaVideoProviderSourceText(provider: CinemaVideoProvider, t: SettingsTranslate) {
-  if (!provider.auth.requiresCredential) return t("settings.videoProviders.noAuthentication")
-  if (provider.auth.credentialSource === "credential_store") return t("settings.provider.sourceSavedKey")
-  if (provider.auth.credentialSource === "environment") return t("settings.provider.sourceFromEnvironment")
-  return provider.auth.connected ? t("settings.provider.sourceFromSavedConfig") : t("settings.provider.sourceNoCredential")
-}
-
-function getCinemaVideoProviderEndpointSourceText(provider: CinemaVideoProvider, t: SettingsTranslate) {
-  switch (provider.runtime?.baseURLSource) {
-    case "settings":
-      return t("settings.videoProviders.endpointSourceSettings")
-    case "environment":
-      return t("settings.videoProviders.endpointSourceEnvironment")
-    case "default":
-      return t("settings.videoProviders.endpointSourceDefault")
-    default:
-      return ""
-  }
-}
-
-function getCinemaVideoProviderHeaderSummary(provider: CinemaVideoProvider, t: SettingsTranslate) {
-  return [
-    getCinemaVideoProviderStatusText(provider, t),
-    getCinemaVideoProviderModelSummary(provider),
-    getCinemaVideoProviderKindLabel(provider.manifest.kind),
-    ...(provider.auth.requiresCredential ? [getCinemaVideoProviderSourceText(provider, t)] : []),
-  ].join(" · ")
-}
-
-function doesCinemaVideoProviderMatchSearch(provider: CinemaVideoProvider, rawQuery: string) {
-  const query = rawQuery.trim().toLowerCase()
-  if (!query) return true
-
-  const modelText = provider.manifest.models
-    .flatMap((model) => [
-      model.id,
-      model.label,
-      model.catalogID ?? "",
-      model.family ?? "",
-      model.lab ?? "",
-      model.baseModel ?? "",
-      model.modes.join(" "),
-    ])
-    .join(" ")
-  const haystack = [
-    provider.manifest.id,
-    provider.manifest.name,
-    provider.manifest.kind ?? "",
-    provider.manifest.authType ?? "",
-    provider.manifest.website ?? "",
-    provider.manifest.doc ?? "",
-    provider.manifest.regions?.join(" ") ?? "",
-    modelText,
-  ]
-    .join(" ")
-    .toLowerCase()
-
-  return haystack.includes(query)
-}
-
-function getVisibleCinemaVideoProvidersForSettings(providers: CinemaVideoProvider[], query: string) {
-  return providers.filter((provider) => doesCinemaVideoProviderMatchSearch(provider, query))
-}
-
 function emptyProviderCapabilities(): ProviderCapabilitySummary {
   return {
     text: false,
@@ -533,19 +436,6 @@ function getModelCatalogProviderCapabilities(models: ModelCatalogItem[]): Provid
     image: result.image || Boolean(model.capabilities.output.image),
     video: result.video || Boolean(model.capabilities.output.video),
   }), emptyProviderCapabilities())
-}
-
-function getCinemaProviderCapabilities(provider: CinemaVideoProvider): ProviderCapabilitySummary {
-  return provider.manifest.models.reduce<ProviderCapabilitySummary>((result, model) => {
-    const output = model.modalities?.output ?? []
-    const modeText = model.modes.join(" ")
-
-    return {
-      text: result.text || output.includes("text") || (/\btext\b/.test(modeText) && !/\bvideo\b|\bimage\b/.test(modeText)),
-      image: result.image || output.includes("image") || (/\bimage\b/.test(modeText) && !/\bvideo\b/.test(modeText)),
-      video: result.video || output.includes("video") || /\bvideo\b/.test(modeText),
-    }
-  }, emptyProviderCapabilities())
 }
 
 function doesProviderCapabilityMatchFilter(item: ProviderSettingsListItem, filter: ProviderCapabilityFilterKey) {
@@ -569,171 +459,6 @@ function getProviderCapabilityTags(capabilities: ProviderCapabilitySummary, t: S
     capabilities.image ? t("settings.provider.filterImage") : null,
     capabilities.video ? t("settings.provider.filterVideo") : null,
   ].filter((tag): tag is string => typeof tag === "string")
-}
-
-function formatCinemaVideoModelLimit(model: CinemaVideoProvider["manifest"]["models"][number]) {
-  const values = [
-    model.maxDurationSeconds ? `${model.maxDurationSeconds}s max` : null,
-    model.durations?.length ? `${model.durations.join("/")}s` : null,
-    model.resolutions?.length ? model.resolutions.join("/") : null,
-    model.aspectRatios?.length ? model.aspectRatios.join(", ") : null,
-  ].filter(Boolean)
-  return values.join(" · ")
-}
-
-function formatCinemaVideoPricing(model: CinemaVideoProvider["manifest"]["models"][number]) {
-  const first = model.pricing?.[0]
-  if (!first) return null
-  const amount = typeof first.amount === "number" ? first.amount : null
-  const currency = typeof first.currency === "string" ? first.currency : null
-  const unit = typeof first.unit === "string" ? first.unit : null
-  const note = typeof first.note === "string" ? first.note : null
-  if (amount !== null && currency && unit) return `${currency} ${amount} / ${unit}`
-  return note ?? unit
-}
-
-function CinemaVideoModelListView({ provider, t }: { provider: CinemaVideoProvider; t: SettingsTranslate }) {
-  if (provider.manifest.models.length === 0) {
-    return (
-      <article className="settings-empty-state">
-        <span className="label">{t("settings.videoProviders.noModelsLabel")}</span>
-        <h3>{t("settings.videoProviders.noModelsTitle")}</h3>
-        <p>{t("settings.videoProviders.noModelsCopy")}</p>
-      </article>
-    )
-  }
-
-  return (
-    <div className="model-list cinema-video-model-list">
-      {provider.manifest.models.map((model) => {
-        const modalities = [
-          model.modalities?.input.length ? `${t("settings.videoProviders.inputPrefix")}: ${model.modalities.input.join("/")}` : null,
-          model.modalities?.output.length ? `${t("settings.videoProviders.outputPrefix")}: ${model.modalities.output.join("/")}` : null,
-        ].filter(Boolean)
-        const limit = formatCinemaVideoModelLimit(model)
-        const pricing = formatCinemaVideoPricing(model)
-
-        return (
-          <article key={model.id} className="model-row cinema-video-model-row">
-            <div className="model-row-main">
-              <div className="model-row-heading">
-                <div>
-                  <h4>{model.label}</h4>
-                  <p className="model-row-copy">
-                    <strong>{provider.manifest.name}</strong>
-                    {model.baseModel ? ` / ${model.baseModel}` : model.family ? ` / ${model.family}` : ""}
-                  </p>
-                </div>
-
-                <div className="model-row-statuses">
-                  {model.endpointType ? <span className="settings-badge">{model.endpointType}</span> : null}
-                  {model.supportsAudio ? <span className="settings-badge">{t("settings.videoProviders.audioBadge")}</span> : null}
-                  {model.sourceCheckedAt ? <span className="settings-badge">{model.sourceCheckedAt}</span> : null}
-                </div>
-              </div>
-
-              <div className="model-row-tags">
-                {model.modes.map((mode) => (
-                  <span key={`${model.id}-${mode}`} className="settings-badge">
-                    {mode}
-                  </span>
-                ))}
-                {modalities.map((item) => (
-                  <span key={`${model.id}-${item}`} className="settings-badge">
-                    {item}
-                  </span>
-                ))}
-                {limit ? <span className="settings-badge">{limit}</span> : null}
-                {pricing ? <span className="settings-badge">{pricing}</span> : null}
-              </div>
-            </div>
-          </article>
-        )
-      })}
-    </div>
-  )
-}
-
-function CinemaWorkflowListView({
-  catalog,
-  error,
-  t,
-}: {
-  catalog: CinemaProviderWorkflowCatalog | null
-  error?: string | null
-  t: SettingsTranslate
-}) {
-  if (!catalog) {
-    return (
-      <article className="settings-empty-state">
-        <span className="label">{t("settings.videoProviders.workflowsUnavailableLabel")}</span>
-        <h3>{t("settings.videoProviders.workflowsUnavailableTitle")}</h3>
-        <p>{error || t("settings.videoProviders.workflowsUnavailableCopy")}</p>
-      </article>
-    )
-  }
-  if (catalog.workflows.length === 0) {
-    return (
-      <article className="settings-empty-state">
-        <span className="label">{catalog.status}</span>
-        <h3>{t("settings.videoProviders.noWorkflowsTitle")}</h3>
-        <p>{catalog.issues[0]?.message ?? t("settings.videoProviders.noWorkflowsCopy")}</p>
-      </article>
-    )
-  }
-  return (
-    <div className="model-list cinema-workflow-list">
-      {catalog.workflows.map((workflow) => {
-        const missingDependencies = workflow.dependencies.filter((dependency) => !dependency.available)
-        return (
-          <article
-            key={workflow.workflowID}
-            className={`model-row cinema-workflow-row ${workflow.status === "ready" ? "is-ready" : "is-disabled"}`}
-          >
-            <div className="model-row-main">
-              <div className="model-row-heading">
-                <div>
-                  <h4>
-                    <span
-                      className={`provider-detail-status-dot ${workflow.status === "ready" ? "is-connected" : ""}`}
-                      aria-hidden="true"
-                    />
-                    {workflow.name}
-                  </h4>
-                  <p className="model-row-copy" title={workflow.source.path}>
-                    <strong>{workflow.status === "ready"
-                      ? t("settings.videoProviders.workflowReady")
-                      : t("settings.videoProviders.workflowDisabled")}</strong>
-                    {` / ${workflow.source.path}`}
-                  </p>
-                </div>
-                <div className="model-row-statuses">
-                  {workflow.output?.kind ? <span className="settings-badge">{workflow.output.kind}</span> : null}
-                  <span className="settings-badge">{workflow.source.workflowFormat}</span>
-                  <span className="settings-badge">{workflow.source.converter}</span>
-                </div>
-              </div>
-              <div className="model-row-tags">
-                <span className="settings-badge" title={workflow.revision}>
-                  {`rev ${workflow.revision.replace(/^sha256:/, "").slice(0, 10)}`}
-                </span>
-                {missingDependencies.map((dependency) => (
-                  <span key={`${dependency.kind}:${dependency.name}`} className="settings-badge is-warning">
-                    {`${dependency.kind}: ${dependency.name}`}
-                  </span>
-                ))}
-              </div>
-              {workflow.issues.length > 0 ? (
-                <p className="cinema-workflow-issues">
-                  {workflow.issues.map((issue) => issue.message).join(" · ")}
-                </p>
-              ) : null}
-            </div>
-          </article>
-        )
-      })}
-    </div>
-  )
 }
 
 function getProviderAuthMethodOptionLabel(provider: ProviderCatalogItem, capability: ProviderAuthCapability, t: SettingsTranslate) {
@@ -2401,7 +2126,7 @@ type SettingsSectionKey =
   | "archive"
 type AccountSettingsView = "overview" | "subscription" | "recharge"
 type ProviderCapabilityFilterKey = "all" | "text" | "image" | "video" | "connected"
-type ProviderDetailKind = "model" | "cinema"
+type ProviderDetailKind = "model"
 
 interface ProviderCapabilitySummary {
   text: boolean
@@ -2409,23 +2134,14 @@ interface ProviderCapabilitySummary {
   video: boolean
 }
 
-type ProviderSettingsListItem =
-  | {
-      key: string
-      kind: "model"
-      id: string
-      provider: ProviderCatalogItem
-      connected: boolean
-      capabilities: ProviderCapabilitySummary
-    }
-  | {
-      key: string
-      kind: "cinema"
-      id: string
-      provider: CinemaVideoProvider
-      connected: boolean
-      capabilities: ProviderCapabilitySummary
-    }
+interface ProviderSettingsListItem {
+  key: string
+  kind: "model"
+  id: string
+  provider: ProviderCatalogItem
+  connected: boolean
+  capabilities: ProviderCapabilitySummary
+}
 
 function doesArchivedSessionMatchSearch(session: ArchivedSessionSummary, query: string) {
   if (!query) return true
@@ -2632,7 +2348,6 @@ interface SettingsPageProps {
   storageUsageError: string | null
   storageOptimizeMessage: { tone: "success" | "error"; text: string } | null
   catalog: ProviderCatalogItem[]
-  cinemaVideoProviders: CinemaVideoProvider[]
   deletingArchivedSessionID: string | null
   deletingMcpServerID: string | null
   deletingProviderID: string | null
@@ -2656,7 +2371,6 @@ interface SettingsPageProps {
   isCheckingAppUpdate: boolean
   isSavingAutomaticUpdates: boolean
   isRefreshingProviderCatalog: boolean
-  isRefreshingCinemaVideoProviderCatalog: boolean
   loadError: string | null
   installedPlugins?: InstalledPlugin[]
   mcpServerDraft: McpServerDraftState
@@ -2665,17 +2379,10 @@ interface SettingsPageProps {
   models: ProviderModel[]
   pluginCatalog?: PluginCatalogItem[]
   providerDrafts: Record<string, ProviderDraftState>
-  cinemaVideoProviderDrafts: Record<string, CinemaVideoProviderDraftState>
-  cinemaVideoProviderConnectionResults?: Record<string, AgentProviderConnectionTestResult>
-  cinemaProviderWorkflowCatalogs?: Record<string, CinemaProviderWorkflowCatalog>
-  cinemaWorkflowCatalogError?: string | null
-  initialCinemaVideoProviderID?: string | null
   customProviderDraft: CustomProviderDraftState
   restoringArchivedSessionID: string | null
   savingMcpServerID: string | null
   savingProviderID: string | null
-  savingCinemaVideoProviderID: string | null
-  refreshingCinemaWorkflowProviderID?: string | null
   testingProviderID: string | null
   selectionDraft: ProjectModelSelection
   onColorModeChange: (mode: ColorMode) => void
@@ -2715,19 +2422,12 @@ interface SettingsPageProps {
     field: "apiKey" | "baseURL",
     value: string,
   ) => void
-  onCinemaVideoProviderDraftChange: (
-    providerID: string,
-    field: "apiKey" | "baseURL" | "userID",
-    value: string,
-  ) => void
   onCustomProviderDraftChange: <K extends keyof CustomProviderDraftState>(
     field: K,
     value: CustomProviderDraftState[K],
   ) => void
   onCustomProviderDraftReset: (draft?: CustomProviderDraftState) => void
   onRefreshProviderCatalog: () => boolean | Promise<boolean>
-  onRefreshCinemaVideoProviderCatalog: () => boolean | Promise<boolean>
-  onRefreshCinemaProviderWorkflows?: (providerID: string) => boolean | Promise<boolean>
   onLoadArchivedSessions: () => void | Promise<void>
   onLoadStorageUsage: () => void | Promise<void>
   onOptimizeStorage: () => boolean | Promise<boolean>
@@ -2735,7 +2435,6 @@ interface SettingsPageProps {
   onRestoreArchivedSession: (sessionID: string) => boolean | Promise<boolean>
   onSaveMcpServer: () => boolean | Promise<boolean>
   onSaveProviderApiKey: (providerID: string, apiKey?: string | null) => boolean | Promise<boolean>
-  onSaveCinemaVideoProviderApiKey: (providerID: string, apiKey?: string | null) => boolean | Promise<boolean>
   onSaveProvider: (providerID: string) => boolean | Promise<boolean>
   onSaveCustomProvider: (providerID?: string) => boolean | Promise<boolean>
   onSelectionChange: <K extends keyof ProjectModelSelection>(field: K, value: ProjectModelSelection[K]) => void
@@ -2748,7 +2447,6 @@ interface SettingsPageProps {
       baseURL?: string | null
     },
   ) => boolean | Promise<boolean>
-  onTestCinemaVideoProviderConnection: (providerID: string) => boolean | Promise<boolean>
   onTestCustomProviderConnection: (providerID?: string) => boolean | Promise<boolean>
   onStartProviderAuthFlow: (
     providerID: string,
@@ -2779,7 +2477,6 @@ export function SettingsPage({
   storageUsageError,
   storageOptimizeMessage,
   catalog,
-  cinemaVideoProviders,
   deletingArchivedSessionID,
   deletingMcpServerID,
   deletingProviderID,
@@ -2802,7 +2499,6 @@ export function SettingsPage({
   isCheckingAppUpdate,
   isSavingAutomaticUpdates,
   isRefreshingProviderCatalog,
-  isRefreshingCinemaVideoProviderCatalog,
   loadError,
   installedPlugins = [],
   mcpServerDraft,
@@ -2811,17 +2507,10 @@ export function SettingsPage({
   models,
   pluginCatalog = [],
   providerDrafts,
-  cinemaVideoProviderDrafts,
-  cinemaVideoProviderConnectionResults = {},
-  cinemaProviderWorkflowCatalogs = {},
-  cinemaWorkflowCatalogError = null,
-  initialCinemaVideoProviderID,
   customProviderDraft,
   restoringArchivedSessionID,
   savingMcpServerID,
   savingProviderID,
-  savingCinemaVideoProviderID,
-  refreshingCinemaWorkflowProviderID = null,
   testingProviderID,
   selectionDraft,
   onColorModeChange,
@@ -2857,12 +2546,9 @@ export function SettingsPage({
   onMcpServerSelect,
   onProviderAuthMethodChange,
   onProviderDraftChange,
-  onCinemaVideoProviderDraftChange,
   onCustomProviderDraftChange,
   onCustomProviderDraftReset,
   onRefreshProviderCatalog,
-  onRefreshCinemaVideoProviderCatalog,
-  onRefreshCinemaProviderWorkflows,
   onLoadArchivedSessions,
   onLoadStorageUsage,
   onOptimizeStorage,
@@ -2870,11 +2556,9 @@ export function SettingsPage({
   onRestoreArchivedSession,
   onSaveMcpServer,
   onSaveProviderApiKey,
-  onSaveCinemaVideoProviderApiKey,
   onSaveProvider,
   onSaveCustomProvider,
   onSelectionChange,
-  onTestCinemaVideoProviderConnection,
   onTestProviderConnection,
   onTestCustomProviderConnection,
   onStartProviderAuthFlow,
@@ -2884,7 +2568,6 @@ export function SettingsPage({
   {
     const { error: localeError, locale, setLocale, t } = useI18n()
     const [activeSection, setActiveSection] = useState<SettingsSectionKey>(() => {
-      if (initialCinemaVideoProviderID) return "services"
       if (window.sessionStorage.getItem(ENVIRONMENT_SETTINGS_SECTION_STORAGE_KEY) === "true") {
         window.sessionStorage.removeItem(ENVIRONMENT_SETTINGS_SECTION_STORAGE_KEY)
         return "environments"
@@ -2899,16 +2582,11 @@ export function SettingsPage({
     const [archivedSessionSearchQuery, setArchivedSessionSearchQuery] = useState("")
     const [providerSearch, setProviderSearch] = useState("")
     const [providerCapabilityFilter, setProviderCapabilityFilter] = useState<ProviderCapabilityFilterKey>("all")
-    const [selectedProviderKind, setSelectedProviderKind] = useState<ProviderDetailKind | null>(
-      initialCinemaVideoProviderID ? "cinema" : null,
-    )
+    const [selectedProviderKind, setSelectedProviderKind] = useState<ProviderDetailKind | null>(null)
     const [modelCatalogFilter, setModelCatalogFilter] = useState<ModelCatalogFilterKey>("all")
     const [isCustomProviderDialogOpen, setIsCustomProviderDialogOpen] = useState(false)
     const [editingCustomProviderID, setEditingCustomProviderID] = useState<string | null>(null)
     const [mcpServerSearchQuery, setMcpServerSearchQuery] = useState("")
-    const [selectedVideoProviderID, setSelectedVideoProviderID] = useState<string | null>(
-      initialCinemaVideoProviderID ?? null,
-    )
     const [providerApiKeyModes, setProviderApiKeyModes] = useState<Record<string, ProviderApiKeyMode>>({})
     const [visibleProviderApiKeys, setVisibleProviderApiKeys] = useState<Record<string, boolean>>({})
     const settingsOverlayRef = useRef<HTMLElement | null>(null)
@@ -2950,33 +2628,22 @@ export function SettingsPage({
       [catalog, modelCatalog, visibleModels],
     )
     const catalogModelGroups = useMemo(() => effectiveModelCatalog.reduce<Record<string, ModelCatalogItem[]>>((result, model) => {
-      if (model.source !== "provider") return result
       result[model.providerID] = [...(result[model.providerID] ?? []), model]
       return result
     }, {}), [effectiveModelCatalog])
     const filteredProviderItems = useMemo<ProviderSettingsListItem[]>(() => {
       const filteredCatalog = getVisibleProvidersForSettings(catalog, providerSearch)
-      const filteredCinemaVideoProviders = getVisibleCinemaVideoProvidersForSettings(cinemaVideoProviders, providerSearch)
 
-      return [
-        ...filteredCatalog.map((provider): ProviderSettingsListItem => ({
+      return filteredCatalog.map((provider): ProviderSettingsListItem => ({
           key: `model:${provider.id}`,
           kind: "model",
           id: provider.id,
           provider,
           connected: isProviderConnected(provider),
           capabilities: getModelCatalogProviderCapabilities(catalogModelGroups[provider.id] ?? []),
-        })),
-        ...filteredCinemaVideoProviders.map((provider): ProviderSettingsListItem => ({
-          key: `cinema:${provider.manifest.id}`,
-          kind: "cinema",
-          id: provider.manifest.id,
-          provider,
-          connected: provider.auth.connected || !provider.auth.requiresCredential,
-          capabilities: getCinemaProviderCapabilities(provider),
-        })),
-      ].filter((item) => doesProviderCapabilityMatchFilter(item, providerCapabilityFilter))
-    }, [catalog, catalogModelGroups, cinemaVideoProviders, providerCapabilityFilter, providerSearch])
+        }))
+        .filter((item) => doesProviderCapabilityMatchFilter(item, providerCapabilityFilter))
+    }, [catalog, catalogModelGroups, providerCapabilityFilter, providerSearch])
     const mcpServerPluginSourceMap = useMemo(
       () => buildMcpServerPluginSourceMap(installedPlugins, pluginCatalog),
       [installedPlugins, pluginCatalog],
@@ -3058,9 +2725,6 @@ export function SettingsPage({
     const activeProvider = selectedProviderKind === "model" && selectedProviderID
       ? catalog.find((item) => item.id === selectedProviderID) ?? null
       : null
-    const activeCinemaVideoProvider = selectedProviderKind === "cinema" && selectedVideoProviderID
-      ? cinemaVideoProviders.find((item) => item.manifest.id === selectedVideoProviderID) ?? null
-      : null
     const isEditingCustomProvider = editingCustomProviderID !== null
     const customProviderBusy = savingProviderID === "custom" || testingProviderID === "custom"
     const customProviderCanSubmit =
@@ -3094,69 +2758,6 @@ export function SettingsPage({
     const anyboxAccountPlanLabel = formatProviderPlanLabel(anyboxAccountView.account ?? undefined)
     const activeProviderModels = activeProvider ? catalogModelGroups[activeProvider.id] ?? [] : []
     const activeProviderBusy = activeProvider ? savingProviderID === activeProvider.id || deletingProviderID === activeProvider.id : false
-    const activeCinemaVideoProviderID = activeCinemaVideoProvider?.manifest.id ?? null
-    const activeCinemaVideoProviderDraft = activeCinemaVideoProviderID
-      ? (cinemaVideoProviderDrafts[activeCinemaVideoProviderID] ?? { apiKey: "", baseURL: "", userID: "" })
-      : null
-    const activeCinemaWorkflowCatalog = activeCinemaVideoProviderID
-      ? cinemaProviderWorkflowCatalogs[activeCinemaVideoProviderID] ?? null
-      : null
-    const activeCinemaWorkflowRefreshing =
-      refreshingCinemaWorkflowProviderID === activeCinemaVideoProviderID
-    const activeCinemaVideoProviderBusy = activeCinemaVideoProviderID
-      ? savingCinemaVideoProviderID === activeCinemaVideoProviderID
-      : false
-    const activeCinemaVideoProviderIsTesting = activeCinemaVideoProviderID
-      ? testingProviderID === `cinema-video:${activeCinemaVideoProviderID}`
-      : false
-    const activeCinemaVideoProviderCanTest = Boolean(activeCinemaVideoProvider?.manifest.connectionTest)
-    const activeCinemaVideoProviderConnectionResult = activeCinemaVideoProviderID
-      ? cinemaVideoProviderConnectionResults[activeCinemaVideoProviderID] ?? null
-      : null
-    const activeCinemaVideoProviderDiagnostics = activeCinemaVideoProviderConnectionResult?.diagnostics
-    const activeCinemaVideoProviderMissingNodes = Array.isArray(activeCinemaVideoProviderDiagnostics?.missingNodes)
-      ? activeCinemaVideoProviderDiagnostics.missingNodes.filter((value): value is string => typeof value === "string")
-      : []
-    const activeCinemaVideoProviderMissingModels =
-      activeCinemaVideoProviderDiagnostics?.missingModels
-      && typeof activeCinemaVideoProviderDiagnostics.missingModels === "object"
-      && !Array.isArray(activeCinemaVideoProviderDiagnostics.missingModels)
-        ? Object.values(activeCinemaVideoProviderDiagnostics.missingModels)
-            .flatMap((value) => Array.isArray(value) ? value : [])
-            .filter((value): value is string => typeof value === "string")
-        : []
-    const cinemaVideoProviderDiagnosticStatusText = (value: unknown) => {
-      if (value === "reachable") return t("app.available")
-      if (value === "unreachable") return t("app.notConnected")
-      if (value === "ready") return t("settings.videoProviders.readinessReady")
-      if (value === "missing") return t("settings.videoProviders.readinessNeedsAttention")
-      if (value === "selection_required") return t("settings.videoProviders.selectComfyUser")
-      if (value === "unchecked") return t("settings.storage.unknown")
-      return t("settings.storage.unknown")
-    }
-    const cinemaVideoProviderReadinessText = activeCinemaVideoProviderConnectionResult?.ok
-      ? t("settings.videoProviders.readinessReady")
-      : activeCinemaVideoProviderConnectionResult?.status === "offline"
-        ? t("app.notConnected")
-        : activeCinemaVideoProviderConnectionResult?.status === "missing_models"
-          ? t("settings.videoProviders.missingModels")
-          : activeCinemaVideoProviderConnectionResult?.errorCode === "COMFYUI_NODES_MISSING"
-            ? t("settings.videoProviders.missingNodes")
-            : t("settings.videoProviders.readinessNeedsAttention")
-    const activeCinemaVideoProviderConfiguredBaseURL = activeCinemaVideoProvider?.runtime?.configuredBaseURL ?? ""
-    const activeCinemaVideoProviderEndpoint = activeCinemaVideoProvider?.runtime?.baseURL ?? ""
-    const activeCinemaVideoProviderEndpointSource = activeCinemaVideoProvider
-      ? getCinemaVideoProviderEndpointSourceText(activeCinemaVideoProvider, t)
-      : ""
-    const activeCinemaVideoProviderApiKeyDirty = (activeCinemaVideoProviderDraft?.apiKey.trim().length ?? 0) > 0
-    const activeCinemaVideoProviderBaseURLDirty =
-      (activeCinemaVideoProviderDraft?.baseURL.trim() ?? "") !== activeCinemaVideoProviderConfiguredBaseURL
-    const activeCinemaVideoProviderUserIDDirty =
-      (activeCinemaVideoProviderDraft?.userID?.trim() ?? "") !== (activeCinemaVideoProvider?.runtime?.userID ?? "")
-    const activeCinemaVideoProviderCanSave =
-      activeCinemaVideoProviderApiKeyDirty
-      || activeCinemaVideoProviderBaseURLDirty
-      || activeCinemaVideoProviderUserIDDirty
     const activeProviderSelectedMethod =
       activeProviderDraft?.selectedAuthMethod ?? activeProvider?.authState.activeMethod ?? activeProvider?.authCapabilities[0]?.method ?? null
     const activeProviderSelectedCapability = activeProvider
@@ -3274,7 +2875,6 @@ export function SettingsPage({
       if (!isOpen) {
         setActiveSection("general")
         setSelectedProviderID(null)
-        setSelectedVideoProviderID(null)
         setSelectedProviderKind(null)
         setArchivedSessionSearchQuery("")
         setProviderSearch("")
@@ -3342,50 +2942,25 @@ export function SettingsPage({
     }, [activeSection, isOpen, storagePaths])
 
     useEffect(() => {
-      if (initialCinemaVideoProviderID) setActiveSection("services")
-    }, [initialCinemaVideoProviderID])
-
-    useEffect(() => {
       if (activeSection !== "services") return
 
       if (filteredProviderItems.length === 0) {
-        if (selectedProviderKind !== null || selectedProviderID !== null || selectedVideoProviderID !== null) {
+        if (selectedProviderKind !== null || selectedProviderID !== null) {
           setSelectedProviderKind(null)
           setSelectedProviderID(null)
-          setSelectedVideoProviderID(null)
         }
         return
       }
 
       const hasSelection = filteredProviderItems.some((item) =>
-        item.kind === selectedProviderKind &&
-        (item.kind === "model" ? item.id === selectedProviderID : item.id === selectedVideoProviderID),
+        item.kind === selectedProviderKind && item.id === selectedProviderID,
       )
       if (hasSelection) return
 
       const nextProvider = filteredProviderItems[0]
       setSelectedProviderKind(nextProvider.kind)
-      if (nextProvider.kind === "model") {
-        setSelectedProviderID(nextProvider.id)
-        setSelectedVideoProviderID(null)
-      } else {
-        setSelectedVideoProviderID(nextProvider.id)
-        setSelectedProviderID(null)
-      }
-    }, [activeSection, filteredProviderItems, selectedProviderID, selectedProviderKind, selectedVideoProviderID])
-
-    useEffect(() => {
-      if (
-        activeSection !== "services"
-        || !initialCinemaVideoProviderID
-        || !filteredProviderItems.some((item) =>
-          item.kind === "cinema" && item.id === initialCinemaVideoProviderID
-        )
-      ) return
-      setSelectedProviderKind("cinema")
-      setSelectedProviderID(null)
-      setSelectedVideoProviderID(initialCinemaVideoProviderID)
-    }, [activeSection, filteredProviderItems, initialCinemaVideoProviderID])
+      setSelectedProviderID(nextProvider.id)
+    }, [activeSection, filteredProviderItems, selectedProviderID, selectedProviderKind])
 
     useEffect(() => {
       if (activeSection !== "services") return
@@ -3396,7 +2971,7 @@ export function SettingsPage({
       } else {
         serviceDetailPanelRef.current.scrollTop = 0
       }
-    }, [activeSection, selectedProviderID, selectedProviderKind, selectedVideoProviderID])
+    }, [activeSection, selectedProviderID, selectedProviderKind])
 
     useEffect(() => {
       if (isOpen) return
@@ -4848,13 +4423,10 @@ export function SettingsPage({
                           className="secondary-button settings-provider-refresh-button"
                           aria-label="Refresh provider catalog"
                           type="button"
-                          disabled={isRefreshingProviderCatalog || isRefreshingCinemaVideoProviderCatalog}
-                          onClick={() => {
-                            void onRefreshProviderCatalog()
-                            void onRefreshCinemaVideoProviderCatalog()
-                          }}
+                          disabled={isRefreshingProviderCatalog}
+                          onClick={() => void onRefreshProviderCatalog()}
                         >
-                          {isRefreshingProviderCatalog || isRefreshingCinemaVideoProviderCatalog
+                          {isRefreshingProviderCatalog
                             ? t("settings.provider.refreshingCatalog")
                             : t("app.refresh")}
                         </button>
@@ -4864,69 +4436,11 @@ export function SettingsPage({
                         {filteredProviderItems.length > 0 ? (
                           <div className="settings-service-list" role="list" aria-label={t("settings.provider.providerList")}>
                             {filteredProviderItems.map((item) => {
-                              const isActive =
-                                item.kind === selectedProviderKind &&
-                                (item.kind === "model"
-                                  ? item.id === selectedProviderID
-                                  : item.id === selectedVideoProviderID)
+                              const isActive = item.kind === selectedProviderKind && item.id === selectedProviderID
                               const capabilityTags = getProviderCapabilityTags(item.capabilities, t)
-
-                              if (item.kind === "model") {
-                                const provider = item.provider
-                                const connectionLabel = getProviderConnectionLabel(provider, t)
-                                const sourceLabel = getProviderInventorySourceLabel(provider, t)
-
-                                return (
-                                  <button
-                                    key={item.key}
-                                    className={
-                                      isActive
-                                        ? "settings-service-item settings-provider-item is-active"
-                                        : "settings-service-item settings-provider-item"
-                                    }
-                                    aria-label={`${provider.name} ${connectionLabel}`}
-                                    aria-pressed={isActive}
-                                    onClick={() => {
-                                      setSelectedProviderKind("model")
-                                      setSelectedProviderID(provider.id)
-                                      setSelectedVideoProviderID(null)
-                                    }}
-                                  >
-                                    <div className="settings-service-item-header">
-                                      <span className="settings-service-item-title">
-                                        <ProviderLogo provider={provider} />
-                                        <strong>{provider.name}</strong>
-                                      </span>
-                                      <span
-                                        className={
-                                          item.connected
-                                            ? "settings-status-indicator is-connected"
-                                            : "settings-status-indicator is-disconnected"
-                                        }
-                                        aria-hidden="true"
-                                        title={connectionLabel}
-                                      >
-                                        {item.connected ? <ConnectedStatusIcon /> : <DisconnectedStatusIcon />}
-                                      </span>
-                                    </div>
-                                    {sourceLabel || capabilityTags.length > 0 ? (
-                                      <span className="settings-provider-item-meta" aria-hidden="true">
-                                        {sourceLabel ? (
-                                          <span className="settings-service-item-copy" title={sourceLabel}>{sourceLabel}</span>
-                                        ) : null}
-                                        {capabilityTags.map((tag) => (
-                                          <span key={`${item.key}-${tag}`} className="settings-badge">{tag}</span>
-                                        ))}
-                                      </span>
-                                    ) : null}
-                                  </button>
-                                )
-                              }
-
                               const provider = item.provider
-                              const connectionLabel = getCinemaVideoProviderStatusText(provider, t)
-                              const modelSummary = getCinemaVideoProviderModelSummary(provider)
-                              const cinemaMetaLabel = `${getCinemaVideoProviderKindLabel(provider.manifest.kind)} · ${modelSummary}`
+                              const connectionLabel = getProviderConnectionLabel(provider, t)
+                              const sourceLabel = getProviderInventorySourceLabel(provider, t)
 
                               return (
                                 <button
@@ -4936,20 +4450,17 @@ export function SettingsPage({
                                       ? "settings-service-item settings-provider-item is-active"
                                       : "settings-service-item settings-provider-item"
                                   }
-                                  aria-label={`${provider.manifest.name} ${connectionLabel}`}
+                                  aria-label={`${provider.name} ${connectionLabel}`}
                                   aria-pressed={isActive}
                                   onClick={() => {
-                                    setSelectedProviderKind("cinema")
-                                    setSelectedVideoProviderID(provider.manifest.id)
-                                    setSelectedProviderID(null)
+                                    setSelectedProviderKind("model")
+                                    setSelectedProviderID(provider.id)
                                   }}
                                 >
                                   <div className="settings-service-item-header">
                                     <span className="settings-service-item-title">
-                                      <span className="provider-logo" aria-hidden="true">
-                                        <span className="provider-logo-fallback">{provider.manifest.name.slice(0, 1).toUpperCase()}</span>
-                                      </span>
-                                      <strong>{provider.manifest.name}</strong>
+                                      <ProviderLogo provider={provider} />
+                                      <strong>{provider.name}</strong>
                                     </span>
                                     <span
                                       className={
@@ -4963,11 +4474,11 @@ export function SettingsPage({
                                       {item.connected ? <ConnectedStatusIcon /> : <DisconnectedStatusIcon />}
                                     </span>
                                   </div>
-                                  {cinemaMetaLabel || capabilityTags.length > 0 ? (
+                                  {sourceLabel || capabilityTags.length > 0 ? (
                                     <span className="settings-provider-item-meta" aria-hidden="true">
-                                      <span className="settings-service-item-copy" title={cinemaMetaLabel}>
-                                        {cinemaMetaLabel}
-                                      </span>
+                                      {sourceLabel ? (
+                                        <span className="settings-service-item-copy" title={sourceLabel}>{sourceLabel}</span>
+                                      ) : null}
                                       {capabilityTags.map((tag) => (
                                         <span key={`${item.key}-${tag}`} className="settings-badge">{tag}</span>
                                       ))}
@@ -4979,7 +4490,7 @@ export function SettingsPage({
                           </div>
                         ) : (
                           <article className="settings-empty-state settings-service-list-empty-state">
-                            <span className="label">{t("settings.videoProviders.noMatchLabel")}</span>
+                            <span className="label">{t("settings.provider.providerList")}</span>
                             <h3>{t("settings.provider.noSearchMatchTitle")}</h3>
                             <p>{t("settings.provider.noSearchMatchCopy")}</p>
                           </article>
@@ -5389,348 +4900,11 @@ export function SettingsPage({
                             )}
                           </div>
                         </>
-                      ) : activeCinemaVideoProvider && activeCinemaVideoProviderDraft ? (
-                        <>
-                          <div className="settings-panel provider-detail-card">
-                            <div className="provider-detail-header">
-                              <span className="provider-logo is-large" aria-hidden="true">
-                                <span className="provider-logo-fallback">{activeCinemaVideoProvider.manifest.name.slice(0, 1).toUpperCase()}</span>
-                              </span>
-                              <div className="provider-detail-heading">
-                                <h3>{activeCinemaVideoProvider.manifest.name}</h3>
-                                <p>
-                                  <span
-                                    className={
-                                      activeCinemaVideoProviderConnectionResult?.ok
-                                      || (
-                                        activeCinemaVideoProvider.auth.requiresCredential
-                                        && activeCinemaVideoProvider.auth.connected
-                                      )
-                                        ? "provider-detail-status-dot is-connected"
-                                        : "provider-detail-status-dot"
-                                    }
-                                    aria-hidden="true"
-                                  />
-                                  {getCinemaVideoProviderHeaderSummary(activeCinemaVideoProvider, t)}
-                                </p>
-                              </div>
-                            </div>
-
-                            <div className="provider-detail-divider" />
-
-                            <div className="provider-detail-body">
-                              <div className="provider-account-summary" aria-label={`${activeCinemaVideoProvider.manifest.name} catalog summary`}>
-                                <div className="provider-account-summary-row">
-                                  <span>{t("settings.videoProviders.providerIdLabel")}</span>
-                                  <strong>{activeCinemaVideoProvider.manifest.id}</strong>
-                                </div>
-                                <div className="provider-account-summary-row">
-                                  <span>{t("settings.videoProviders.authTypeLabel")}</span>
-                                  <strong>{activeCinemaVideoProvider.manifest.authType ?? "unknown"}</strong>
-                                </div>
-                                {activeCinemaVideoProvider.manifest.regions?.length ? (
-                                  <div className="provider-account-summary-row">
-                                    <span>{t("settings.videoProviders.regionsLabel")}</span>
-                                    <strong>{activeCinemaVideoProvider.manifest.regions.join(", ")}</strong>
-                                  </div>
-                                ) : null}
-                              </div>
-
-                              {activeCinemaVideoProvider.auth.requiresCredential ? (
-                                <div className="provider-detail-row">
-                                  <div className="provider-detail-row-copy">
-                                    <span className="settings-field-label">{t("settings.provider.apiKeyLabel")}</span>
-                                    <p className="provider-detail-helper">
-                                      {activeCinemaVideoProvider.auth.connected
-                                        ? t("settings.videoProviders.storedCredentialPlaceholder")
-                                        : t("settings.videoProviders.credentialPlaceholder")}
-                                    </p>
-                                  </div>
-
-                                  <label className="provider-key-field provider-detail-row-control">
-                                    <span className="provider-key-input-wrap provider-key-input-wrap-plain">
-                                      <input
-                                        aria-label={`Credential for ${activeCinemaVideoProvider.manifest.name}`}
-                                        type="password"
-                                        value={activeCinemaVideoProviderDraft.apiKey}
-                                        placeholder={
-                                          activeCinemaVideoProvider.auth.connected
-                                            ? t("settings.videoProviders.storedCredentialPlaceholder")
-                                            : t("settings.videoProviders.credentialPlaceholder")
-                                        }
-                                        onChange={(event) =>
-                                          onCinemaVideoProviderDraftChange(activeCinemaVideoProvider.manifest.id, "apiKey", event.target.value)
-                                        }
-                                      />
-                                    </span>
-                                  </label>
-                                </div>
-                              ) : null}
-
-                              <div className="provider-detail-row">
-                                <div className="provider-detail-row-copy">
-                                  <span className="settings-field-label">{t("settings.videoProviders.endpointLabel")}</span>
-                                  <p className="provider-detail-helper">{t("settings.videoProviders.endpointInputHelper")}</p>
-                                </div>
-
-                                <div className="provider-detail-row-control provider-endpoint-control">
-                                  <div
-                                    className="provider-endpoint-current"
-                                    aria-label={`Current endpoint for ${activeCinemaVideoProvider.manifest.name}`}
-                                  >
-                                    <span>{t("settings.videoProviders.endpointCurrentLabel")}</span>
-                                    <code title={activeCinemaVideoProviderEndpoint}>
-                                      {activeCinemaVideoProviderEndpoint || t("settings.videoProviders.endpointUnavailable")}
-                                    </code>
-                                    {activeCinemaVideoProviderEndpointSource ? <small>{activeCinemaVideoProviderEndpointSource}</small> : null}
-                                  </div>
-
-                                  <label className="provider-key-field">
-                                    <span className="provider-key-input-wrap provider-key-input-wrap-plain">
-                                      <input
-                                        aria-label={`Endpoint for ${activeCinemaVideoProvider.manifest.name}`}
-                                        type="url"
-                                        value={activeCinemaVideoProviderDraft.baseURL}
-                                        placeholder={t("settings.videoProviders.endpointPlaceholder")}
-                                        onChange={(event) =>
-                                          onCinemaVideoProviderDraftChange(activeCinemaVideoProvider.manifest.id, "baseURL", event.target.value)
-                                        }
-                                      />
-                                    </span>
-                                  </label>
-                                </div>
-                              </div>
-
-                              {activeCinemaVideoProvider.manifest.capabilities?.workflowDiscovery
-                                && (activeCinemaWorkflowCatalog?.users.length ?? 0) > 1 ? (
-                                <div className="provider-detail-row">
-                                  <div className="provider-detail-row-copy">
-                                    <span className="settings-field-label">
-                                      {t("settings.videoProviders.comfyUserLabel")}
-                                    </span>
-                                    <p className="provider-detail-helper">
-                                      {t("settings.videoProviders.comfyUserHelper")}
-                                    </p>
-                                  </div>
-                                  <label className="provider-key-field provider-detail-row-control">
-                                    <span className="provider-key-input-wrap provider-key-input-wrap-plain">
-                                      <select
-                                        aria-label={t("settings.videoProviders.comfyUserLabel")}
-                                        value={activeCinemaVideoProviderDraft.userID || activeCinemaWorkflowCatalog?.userID || ""}
-                                        onChange={(event) =>
-                                          onCinemaVideoProviderDraftChange(
-                                            activeCinemaVideoProvider.manifest.id,
-                                            "userID",
-                                            event.target.value,
-                                          )}
-                                      >
-                                        <option value="">{t("settings.videoProviders.selectComfyUser")}</option>
-                                        {activeCinemaWorkflowCatalog?.users.map((user) => (
-                                          <option key={user.id} value={user.id}>{user.name}</option>
-                                        ))}
-                                      </select>
-                                    </span>
-                                  </label>
-                                </div>
-                              ) : null}
-
-                              {activeCinemaVideoProviderConnectionResult ? (
-                                <div
-                                  className="provider-account-summary"
-                                  role="status"
-                                  aria-live="polite"
-                                  aria-label={t("settings.videoProviders.readinessLabel")}
-                                >
-                                  <div className="provider-account-summary-row">
-                                    <span>{t("settings.videoProviders.readinessLabel")}</span>
-                                    <strong>{cinemaVideoProviderReadinessText}</strong>
-                                  </div>
-                                  <div className="provider-account-summary-row">
-                                    <span>{t("settings.videoProviders.serviceStatus")}</span>
-                                    <strong>
-                                      {cinemaVideoProviderDiagnosticStatusText(
-                                        activeCinemaVideoProviderDiagnostics?.service,
-                                      )}
-                                    </strong>
-                                  </div>
-                                  {activeCinemaVideoProvider.manifest.capabilities?.workflowDiscovery ? (
-                                    <>
-                                      <div className="provider-account-summary-row">
-                                        <span>{t("settings.videoProviders.userDataStatus")}</span>
-                                        <strong>
-                                          {cinemaVideoProviderDiagnosticStatusText(
-                                            activeCinemaVideoProviderDiagnostics?.userData,
-                                          )}
-                                        </strong>
-                                      </div>
-                                      <div className="provider-account-summary-row">
-                                        <span>{t("settings.videoProviders.nodesStatus")}</span>
-                                        <strong>
-                                          {cinemaVideoProviderDiagnosticStatusText(
-                                            activeCinemaVideoProviderDiagnostics?.nodes,
-                                          )}
-                                        </strong>
-                                      </div>
-                                      <div className="provider-account-summary-row">
-                                        <span>{t("settings.videoProviders.workflowDiscoveryStatus")}</span>
-                                        <strong>
-                                          {cinemaVideoProviderDiagnosticStatusText(
-                                            activeCinemaVideoProviderDiagnostics?.workflowDiscovery,
-                                          )}
-                                        </strong>
-                                      </div>
-                                    </>
-                                  ) : (
-                                    <div className="provider-account-summary-row">
-                                      <span>{t("settings.videoProviders.modelsStatus")}</span>
-                                      <strong>
-                                        {cinemaVideoProviderDiagnosticStatusText(
-                                          activeCinemaVideoProviderDiagnostics?.models,
-                                        )}
-                                      </strong>
-                                    </div>
-                                  )}
-                                  <div className="provider-account-summary-row">
-                                    <span>{t("settings.videoProviders.readinessDetail")}</span>
-                                    <strong>{activeCinemaVideoProviderConnectionResult.message}</strong>
-                                  </div>
-                                  {activeCinemaVideoProviderMissingNodes.length > 0 ? (
-                                    <div className="provider-account-summary-row">
-                                      <span>{t("settings.videoProviders.missingNodes")}</span>
-                                      <strong>{activeCinemaVideoProviderMissingNodes.join(", ")}</strong>
-                                    </div>
-                                  ) : null}
-                                  {activeCinemaVideoProviderMissingModels.length > 0 ? (
-                                    <div className="provider-account-summary-row">
-                                      <span>{t("settings.videoProviders.missingModels")}</span>
-                                      <strong>{activeCinemaVideoProviderMissingModels.join(", ")}</strong>
-                                    </div>
-                                  ) : null}
-                                </div>
-                              ) : null}
-
-                              {activeCinemaVideoProvider.manifest.website || activeCinemaVideoProvider.manifest.doc ? (
-                                <div className="settings-inline-actions">
-                                  {activeCinemaVideoProvider.manifest.website ? (
-                                    <button
-                                      className="secondary-button"
-                                      type="button"
-                                      onClick={() => void openExternalUrl(activeCinemaVideoProvider.manifest.website!)}
-                                    >
-                                      {t("settings.videoProviders.websiteAction")}
-                                    </button>
-                                  ) : null}
-                                  {activeCinemaVideoProvider.manifest.doc ? (
-                                    <button
-                                      className="secondary-button"
-                                      type="button"
-                                      onClick={() => void openExternalUrl(activeCinemaVideoProvider.manifest.doc!)}
-                                    >
-                                      {t("settings.videoProviders.docsAction")}
-                                    </button>
-                                  ) : null}
-                                </div>
-                              ) : null}
-                            </div>
-
-                            <div className="provider-detail-footer">
-                              <div className="settings-inline-actions">
-                                <button
-                                  className="secondary-button"
-                                  type="button"
-                                  disabled={
-                                    activeCinemaVideoProviderBusy ||
-                                    activeCinemaVideoProviderIsTesting ||
-                                    !activeCinemaVideoProviderCanTest
-                                  }
-                                  title={
-                                    activeCinemaVideoProviderCanTest
-                                      ? undefined
-                                      : t("settings.videoProviders.testUnavailable")
-                                  }
-                                  onClick={() =>
-                                    void onTestCinemaVideoProviderConnection(activeCinemaVideoProvider.manifest.id)
-                                  }
-                                >
-                                  {activeCinemaVideoProviderIsTesting
-                                    ? t("settings.provider.testingConnection")
-                                    : t("settings.provider.testConnection")}
-                                </button>
-                                {activeCinemaVideoProvider.auth.requiresCredential && activeCinemaVideoProvider.auth.connected ? (
-                                  <button
-                                    className="secondary-button"
-                                    type="button"
-                                    disabled={activeCinemaVideoProviderBusy || activeCinemaVideoProviderIsTesting}
-                                    onClick={() => void onSaveCinemaVideoProviderApiKey(activeCinemaVideoProvider.manifest.id, null)}
-                                  >
-                                    {t("app.clear")}
-                                  </button>
-                                ) : null}
-                                <button
-                                  className="primary-button"
-                                  aria-label={`Save ${activeCinemaVideoProvider.manifest.name} settings`}
-                                  type="button"
-                                  disabled={
-                                    activeCinemaVideoProviderBusy ||
-                                    activeCinemaVideoProviderIsTesting ||
-                                    !activeCinemaVideoProviderCanSave
-                                  }
-                                  onClick={() => void onSaveCinemaVideoProviderApiKey(activeCinemaVideoProvider.manifest.id)}
-                                >
-                                  {activeCinemaVideoProviderBusy ? t("app.saving") : t("app.save")}
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="settings-panel">
-                            <div className="settings-section-header">
-                              <div>
-                                <h3>
-                                  {activeCinemaVideoProvider.manifest.capabilities?.workflowDiscovery
-                                    ? t("settings.videoProviders.discoveredWorkflows")
-                                    : t("settings.videoProviders.providerModels")}
-                                </h3>
-                                {activeCinemaWorkflowCatalog ? (
-                                  <p>
-                                    {t("settings.videoProviders.workflowSummary", {
-                                      count: activeCinemaWorkflowCatalog.workflows.length,
-                                      ready: activeCinemaWorkflowCatalog.workflows.filter((workflow) => workflow.status === "ready").length,
-                                    })}
-                                    {` · ${formatTime(new Date(activeCinemaWorkflowCatalog.refreshedAt).getTime())}`}
-                                  </p>
-                                ) : null}
-                              </div>
-                              {activeCinemaVideoProvider.manifest.capabilities?.workflowDiscovery ? (
-                                <button
-                                  className="secondary-button"
-                                  type="button"
-                                  disabled={activeCinemaWorkflowRefreshing || !onRefreshCinemaProviderWorkflows}
-                                  onClick={() => void onRefreshCinemaProviderWorkflows?.(activeCinemaVideoProvider.manifest.id)}
-                                >
-                                  {activeCinemaWorkflowRefreshing
-                                    ? t("settings.videoProviders.refreshingWorkflows")
-                                    : t("settings.videoProviders.refreshWorkflows")}
-                                </button>
-                              ) : null}
-                            </div>
-
-                            {activeCinemaVideoProvider.manifest.capabilities?.workflowDiscovery ? (
-                              <CinemaWorkflowListView
-                                catalog={activeCinemaWorkflowCatalog}
-                                error={cinemaWorkflowCatalogError}
-                                t={t}
-                              />
-                            ) : (
-                              <CinemaVideoModelListView provider={activeCinemaVideoProvider} t={t} />
-                            )}
-                          </div>
-                        </>
                       ) : (
                         <article className="settings-empty-state settings-detail-empty-state">
-                          <span className="label">{t("settings.videoProviders.noProviderLabel")}</span>
-                          <h3>{t("settings.videoProviders.emptyTitle")}</h3>
-                          <p>{t("settings.videoProviders.emptyCopy")}</p>
+                          <span className="label">{t("settings.provider.noProviderLabel")}</span>
+                          <h3>{t("settings.provider.selectProviderTitle")}</h3>
+                          <p>{t("settings.provider.selectProviderCopy")}</p>
                         </article>
                       )}
                     </div>

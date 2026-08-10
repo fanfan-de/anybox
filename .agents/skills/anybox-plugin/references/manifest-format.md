@@ -89,6 +89,7 @@
 | `views` | 数组 | 插件包内 HTML App 入口；当前位置只支持 `right-sidebar` |
 | `appRuntime` | 对象 | 可选的包内 Local HTTP App Runtime；独立于 MCP Runtime |
 | `appPermissions` | 对象 | App 的 Workspace、网络与系统能力声明和安装审查元数据 |
+| `installReview` | 字符串数组 | 安装前必须展示的进程、凭据、网络、原生助手和下载风险说明 |
 
 本地包、仓库和远程 manifest 文档还可以包含：
 
@@ -207,10 +208,20 @@ Code, Browser, Git, Database, Docs, Automation, Design
     "idleTimeoutMs": 300000
   },
   "appPermissions": {
-    "workspace": "request",
-    "network": ["https://api.example.com", "http://127.0.0.1:8181"],
-    "system": ["file-picker"]
-  }
+    "workspace": "none",
+    "network": [
+      "https://api.example.com",
+      {
+        "kind": "user-configured-origin",
+        "id": "custom-provider",
+        "description": "User-configured provider endpoint.",
+        "schemes": ["https"],
+        "allowLoopbackHttp": true
+      }
+    ],
+    "system": []
+  },
+  "installReview": ["Runs a local HTTP Runtime and connects to the reviewed origins above."]
 }
 ```
 
@@ -218,12 +229,42 @@ Code, Browser, Git, Database, Docs, Automation, Design
 
 - `type` 当前只能为 `local-http`；Runtime 必须在 `127.0.0.1` 上监听宿主注入的 `ANYBOX_APP_PORT`。
 - Runtime 必须用 `ANYBOX_APP_TOKEN` 验证 `x-anybox-app-runtime-token`；App Web 不会得到端口或 Token，而是请求同源 `/__anybox_runtime__/...`。
+- 宿主只注入 `ANYBOX_APP_ID/VERSION/PORT/TOKEN/DATA_DIR/CACHE_DIR/LOG_DIR/LOCALE/ARTIFACTS_JSON` 和最小操作系统进程环境。不要依赖 `ANYBOX_AGENT_*`、插件专用兼容变量或宿主私有媒体工具变量。
 - `healthcheckPath` 必须是无 query、fragment 和父目录段的绝对 URL path。
 - `${PLUGIN_ROOT}` 是 `appRuntime` 唯一支持的 placeholder；被引用的本地文件或目录必须存在且留在包内。普通命令名如 `bun` 可由宿主解析。
 - `startupTimeoutMs` 范围是 100–120000；`idleTimeoutMs` 范围是 0–86400000，0 表示不按空闲超时停止。
-- `appPermissions.workspace` 当前是 `none` 或 `request`；网络条目必须是 HTTPS origin，只有显式 loopback origin 可使用 HTTP；系统能力只接受 `file-picker`、`notifications`、`open-external`、`clipboard`。
+- `appPermissions.workspace` 当前是 `none` 或 `request`。固定网络条目必须是 HTTPS origin，只有显式 loopback origin 可使用 HTTP。动态 Provider 地址使用严格对象 `{kind:"user-configured-origin", id, description, schemes:["https"], allowLoopbackHttp}`；Runtime 仍必须自行实现 SSRF、DNS 重绑定和重定向防护。系统能力只接受 `file-picker`、`notifications`、`open-external`、`clipboard`。
 - 当前 Web 容器只为同源 Runtime Gateway 开放 `connect-src 'self'`；声明的 Remote Origin 和系统能力尚未形成完整授权执行层。Local Runtime 也尚无 OS 级进程 Sandbox，因此这些字段首先是严格声明和安装风险审查，不是强隔离承诺。
 - 安装、更新、禁用、卸载和 Agent 退出会停止对应 Runtime；stdout/stderr 写入 App 隔离日志目录。当前 Gateway 支持普通 HTTP、流式响应与 Range headers，不支持 WebSocket。
+
+### App Runtime 原生助手
+
+需要系统钥匙串或原生选择器时，使用通用 `platformArtifacts.type = "app-runtime-helper"`，不要在 Core 增加插件专用 IPC：
+
+```json
+{
+  "platformArtifacts": [
+    {
+      "id": "example-helper",
+      "type": "app-runtime-helper",
+      "description": "OS-keychain and user-initiated picker helper.",
+      "executables": [
+        {
+          "platform": "win32",
+          "architecture": "x64",
+          "path": "native/win32-x64/example-helper.exe",
+          "sha256": "<64-character-lowercase-hex>"
+        }
+      ]
+    }
+  ]
+}
+```
+
+- 每个 executable 的 `platform`、`architecture`、包内 `path` 和 SHA-256 必填；路径不能越界或经过符号链接。
+- 安装器只选择当前平台/架构，校验摘要后原子复制到受管目录，并把 ownership receipt 用于升级和卸载清理。
+- Runtime 从 `ANYBOX_APP_ARTIFACTS_JSON` 按 Artifact ID 读取解析后的受管 `path` 与 `sha256`，不要猜测宿主目录。
+- 原生助手仍是高风险本机代码。生产发布必须在各目标平台完成签名/校验，并在顶层 `installReview` 披露用途、数据边界与失败回退。
 
 ## Skills
 

@@ -131,9 +131,6 @@ function createSettingsPageProps(
     storageOptimizeMessage: null,
     assistantTraceVisibility: DEFAULT_ASSISTANT_TRACE_VISIBILITY,
     catalog: [],
-    cinemaVideoProviders: [],
-    cinemaProviderWorkflowCatalogs: {},
-    cinemaWorkflowCatalogError: null,
     colorMode: "system",
     fontFamily: "default",
     codeFontFamily: "default",
@@ -156,8 +153,6 @@ function createSettingsPageProps(
     isCheckingAppUpdate: false,
     isSavingAutomaticUpdates: false,
     isRefreshingProviderCatalog: false,
-    isRefreshingCinemaVideoProviderCatalog: false,
-    refreshingCinemaWorkflowProviderID: null,
     loadError: null,
     mcpServerDraft: createMcpDraft(),
     mcpServers: [],
@@ -195,7 +190,6 @@ function createSettingsPageProps(
     onDeleteMcpServer: vi.fn(),
     onDeleteProvider: vi.fn(),
     onDeleteProviderAuthSession: vi.fn(),
-    onCinemaVideoProviderDraftChange: vi.fn(),
     onMcpServerDraftChange: vi.fn(),
     onMcpToolPolicyChange: vi.fn(),
     onMcpServerSelect: vi.fn(),
@@ -204,26 +198,20 @@ function createSettingsPageProps(
     onOptimizeStorage: vi.fn(),
     onOpenUpdateCenter: vi.fn(),
     onRefreshProviderCatalog: vi.fn(),
-    onRefreshCinemaVideoProviderCatalog: vi.fn(),
-    onRefreshCinemaProviderWorkflows: vi.fn(),
     onRestoreArchivedSession: vi.fn(),
     onSaveMcpServer: vi.fn(),
     onSaveCustomProvider: vi.fn(),
-    onSaveCinemaVideoProviderApiKey: vi.fn(),
     onSaveProvider: vi.fn(),
     onSaveProviderApiKey: vi.fn(),
     onSelectionChange: vi.fn(),
     onStartNewMcpServer: vi.fn(),
     onStartProviderAuthFlow: vi.fn(),
-    onTestCinemaVideoProviderConnection: vi.fn(),
     onTestCustomProviderConnection: vi.fn(),
     onTestProviderConnection: vi.fn(),
     providerDrafts: {},
-    cinemaVideoProviderDrafts: {},
     restoringArchivedSessionID: null,
     savingMcpServerID: null,
     savingProviderID: null,
-    savingCinemaVideoProviderID: null,
     selectionDraft: {
       model: null,
       smallModel: null,
@@ -254,78 +242,6 @@ function createProvider(id: string, name: string): ComponentProps<typeof Setting
       status: "connected",
       capabilities: [],
       credentials: [],
-    },
-  }
-}
-
-function createCinemaVideoProvider(
-  id: string,
-  name: string,
-  connected = false,
-): ComponentProps<typeof SettingsPage>["cinemaVideoProviders"][number] {
-  return {
-    manifest: {
-      id,
-      name,
-      description: `${name} video provider`,
-      credentialProviderID: `cinema-${id}`,
-      requiresCredential: true,
-      regions: [],
-      connectionTest: {
-        method: "GET",
-        path: "/v1/models",
-        auth: "bearer",
-        headers: {},
-        expectedStatus: [200],
-        timeoutMs: 10000,
-      },
-      models: [
-        {
-          id: `${id}-model`,
-          label: `${name} Model`,
-          modes: ["text-to-video"],
-          inputCombinations: [
-            {
-              mode: "text-to-video",
-              label: "Text to video",
-              requiredModalities: ["text"],
-              optionalModalities: [],
-              requirements: [],
-              endpoint: {
-                method: "POST",
-                path: "/text-to-video/test",
-              },
-              inputs: [
-                {
-                  role: "prompt",
-                  modality: "text",
-                  required: true,
-                  minCount: 1,
-                  maxCount: 1,
-                },
-              ],
-            },
-          ],
-          durations: [],
-          aspectRatios: [],
-          resolutions: [],
-          pricing: [],
-          formSpecs: [],
-          parameterSchema: {},
-        },
-      ],
-    },
-    auth: {
-      providerID: id,
-      credentialProviderID: `cinema-${id}`,
-      requiresCredential: true,
-      connected,
-      status: connected ? "connected" : "not_connected",
-    },
-    runtime: {
-      baseURL: "https://api-singapore.klingai.com",
-      baseURLSource: "default",
-      adapterAvailable: true,
     },
   }
 }
@@ -761,225 +677,6 @@ describe("SettingsPage built-in tools", () => {
     fireEvent.click(screen.getByRole("radio", { name: "Text" }))
     expect(screen.getByRole("button", { name: /AnyAPI.*Not connected/ })).toBeInTheDocument()
     expect(screen.getByRole("heading", { name: "AnyAPI Chat" })).toBeInTheDocument()
-  })
-
-  it("saves cinema video provider API keys from the video provider filter", async () => {
-    const onCinemaVideoProviderDraftChange = vi.fn()
-    const onSaveCinemaVideoProviderApiKey = vi.fn()
-    const onTestCinemaVideoProviderConnection = vi.fn()
-    render(
-      <SettingsPage
-        {...createSettingsPageProps({
-          catalog: [createProvider("deepseek", "DeepSeek")],
-          cinemaVideoProviders: [createCinemaVideoProvider("kling", "Kling AI")],
-          cinemaVideoProviderDrafts: {
-            kling: { apiKey: "kling-test-key", baseURL: "" },
-          },
-          onCinemaVideoProviderDraftChange,
-          onSaveCinemaVideoProviderApiKey,
-          onTestCinemaVideoProviderConnection,
-        })}
-      />,
-    )
-
-    fireEvent.click(screen.getByRole("button", { name: "Provider" }))
-    fireEvent.click(screen.getByRole("radio", { name: "Video" }))
-
-    expect(screen.getByRole("list", { name: "Provider list" })).toBeInTheDocument()
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Kling AI" })).toBeInTheDocument())
-    expect(screen.getByText("Current endpoint")).toBeInTheDocument()
-    expect(screen.getByText("https://api-singapore.klingai.com")).toBeInTheDocument()
-    expect(screen.getByText("Default endpoint")).toBeInTheDocument()
-
-    fireEvent.change(screen.getByLabelText("Endpoint for Kling AI"), {
-      target: { value: "https://kling-proxy.example.com" },
-    })
-    fireEvent.change(screen.getByLabelText("Credential for Kling AI"), {
-      target: { value: "kling-updated-key" },
-    })
-    fireEvent.click(screen.getByRole("button", { name: "Test connection" }))
-    fireEvent.click(screen.getByRole("button", { name: "Save Kling AI settings" }))
-
-    expect(onCinemaVideoProviderDraftChange).toHaveBeenCalledWith("kling", "baseURL", "https://kling-proxy.example.com")
-    expect(onCinemaVideoProviderDraftChange).toHaveBeenCalledWith("kling", "apiKey", "kling-updated-key")
-    expect(onTestCinemaVideoProviderConnection).toHaveBeenCalledWith("kling")
-    expect(onSaveCinemaVideoProviderApiKey).toHaveBeenCalledWith("kling")
-  })
-
-  it("discovers Local ComfyUI APP workflows and supports user selection and refresh", async () => {
-    const onCinemaVideoProviderDraftChange = vi.fn()
-    const onSaveCinemaVideoProviderApiKey = vi.fn()
-    const onTestCinemaVideoProviderConnection = vi.fn()
-    const onRefreshCinemaProviderWorkflows = vi.fn()
-    const comfyUIProvider = createCinemaVideoProvider("comfyui-local", "Local ComfyUI", true)
-    comfyUIProvider.manifest.authType = "none"
-    comfyUIProvider.manifest.requiresCredential = false
-    comfyUIProvider.manifest.capabilities = {
-      workflowDiscovery: true,
-      appMode: true,
-    }
-    comfyUIProvider.manifest.models = []
-    comfyUIProvider.manifest.connectionTest = {
-      ...comfyUIProvider.manifest.connectionTest!,
-      path: "/system_stats",
-      auth: "none",
-    }
-    comfyUIProvider.auth = {
-      ...comfyUIProvider.auth,
-      requiresCredential: false,
-      connected: true,
-      status: "connected",
-    }
-    comfyUIProvider.runtime = {
-      ...comfyUIProvider.runtime,
-      adapterAvailable: true,
-      baseURL: "http://127.0.0.1:8188",
-      baseURLSource: "default",
-      userID: "alice",
-    }
-
-    render(
-      <SettingsPage
-        {...createSettingsPageProps({
-          cinemaVideoProviders: [comfyUIProvider],
-          cinemaVideoProviderDrafts: {
-            "comfyui-local": { apiKey: "", baseURL: "http://localhost:8188", userID: "alice" },
-          },
-          cinemaVideoProviderConnectionResults: {
-            "comfyui-local": {
-              providerID: "comfyui-local",
-              ok: true,
-              status: "ready",
-              checkedAt: Date.now(),
-              message: "Local ComfyUI is reachable; discovered 2 workflows, 1 ready.",
-              diagnostics: {
-                service: "reachable",
-                userData: "ready",
-                nodes: "ready",
-                workflowDiscovery: "ready",
-              },
-            },
-          },
-          cinemaProviderWorkflowCatalogs: {
-            "comfyui-local": {
-              providerID: "comfyui-local",
-              status: "ready",
-              userID: "alice",
-              users: [
-                { id: "alice", name: "Alice" },
-                { id: "bob", name: "Bob" },
-              ],
-              workflows: [
-                {
-                  workflowID: "workflow-image",
-                  revision: "sha256:0123456789abcdef",
-                  name: "Product image",
-                  status: "ready",
-                  issues: [],
-                  dependencies: [],
-                  output: { kind: "image", nodeIDs: ["9"] },
-                  formSpec: {
-                    providerID: "comfyui-local",
-                    target: {
-                      kind: "workflow",
-                      workflowID: "workflow-image",
-                      revision: "sha256:0123456789abcdef",
-                    },
-                    mode: "text-to-image",
-                    output: "image",
-                    controls: [],
-                  },
-                  source: {
-                    userID: "alice",
-                    path: "workflows/products/image.json",
-                    sizeBytes: 2048,
-                    workflowFormat: "1.0",
-                    converter: "builtin",
-                  },
-                  discoveredAt: "2026-07-24T08:00:00.000Z",
-                },
-                {
-                  workflowID: "workflow-video",
-                  revision: "sha256:fedcba9876543210",
-                  name: "Campaign video",
-                  status: "disabled",
-                  issues: [{
-                    code: "COMFYUI_MODEL_MISSING",
-                    message: "Missing model: campaign-video.safetensors",
-                    dependency: "campaign-video.safetensors",
-                    severity: "error",
-                  }],
-                  dependencies: [{
-                    kind: "model",
-                    name: "campaign-video.safetensors",
-                    available: false,
-                    folder: "checkpoints",
-                  }],
-                  output: { kind: "video", nodeIDs: ["17"] },
-                  source: {
-                    userID: "alice",
-                    path: "workflows/campaign/video.json",
-                    sizeBytes: 4096,
-                    workflowFormat: "0.4",
-                    converter: "builtin",
-                  },
-                  discoveredAt: "2026-07-24T08:00:00.000Z",
-                },
-              ],
-              issues: [],
-              refreshedAt: "2026-07-24T08:00:00.000Z",
-              lastSuccessfulRefreshAt: "2026-07-24T08:00:00.000Z",
-              limits: {
-                maxWorkflows: 500,
-                maxFileBytes: 8 * 1024 * 1024,
-                maxTotalBytes: 64 * 1024 * 1024,
-                readConcurrency: 4,
-              },
-            },
-          },
-          initialCinemaVideoProviderID: "comfyui-local",
-          onCinemaVideoProviderDraftChange,
-          onRefreshCinemaProviderWorkflows,
-          onSaveCinemaVideoProviderApiKey,
-          onTestCinemaVideoProviderConnection,
-        })}
-      />,
-    )
-
-    await waitFor(() => expect(screen.getByRole("heading", { name: "Local ComfyUI" })).toBeInTheDocument())
-    expect(screen.getAllByText(/No authentication required/).length).toBeGreaterThan(0)
-    expect(screen.queryByLabelText("Credential for Local ComfyUI")).toBeNull()
-    expect(screen.queryByRole("button", { name: "Clear" })).toBeNull()
-    expect(screen.getByText("Service")).toBeInTheDocument()
-    expect(screen.getByText("User data")).toBeInTheDocument()
-    expect(screen.getByText("Nodes")).toBeInTheDocument()
-    expect(screen.getByText("Workflow discovery")).toBeInTheDocument()
-    expect(screen.getByText("Discovered workflows")).toBeInTheDocument()
-    expect(screen.getByText("Product image")).toBeInTheDocument()
-    expect(screen.getByText("Campaign video")).toBeInTheDocument()
-    expect(screen.getByText(/workflows\/products\/image\.json/)).toBeInTheDocument()
-    expect(screen.getByText("Missing model: campaign-video.safetensors")).toBeInTheDocument()
-
-    fireEvent.change(screen.getByRole("combobox", { name: "ComfyUI user" }), {
-      target: { value: "bob" },
-    })
-    fireEvent.click(screen.getByRole("button", { name: "Refresh workflows" }))
-
-    fireEvent.change(screen.getByLabelText("Endpoint for Local ComfyUI"), {
-      target: { value: "http://localhost:8288" },
-    })
-    fireEvent.click(screen.getByRole("button", { name: "Test connection" }))
-    fireEvent.click(screen.getByRole("button", { name: "Save Local ComfyUI settings" }))
-
-    expect(onCinemaVideoProviderDraftChange).toHaveBeenCalledWith(
-      "comfyui-local",
-      "baseURL",
-      "http://localhost:8288",
-    )
-    expect(onCinemaVideoProviderDraftChange).toHaveBeenCalledWith("comfyui-local", "userID", "bob")
-    expect(onRefreshCinemaProviderWorkflows).toHaveBeenCalledWith("comfyui-local")
-    expect(onTestCinemaVideoProviderConnection).toHaveBeenCalledWith("comfyui-local")
-    expect(onSaveCinemaVideoProviderApiKey).toHaveBeenCalledWith("comfyui-local")
   })
 
   it("uses the Anybox account page as the browser OAuth login entry", () => {

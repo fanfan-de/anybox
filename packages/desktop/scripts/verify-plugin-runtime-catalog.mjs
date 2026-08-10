@@ -177,7 +177,7 @@ try {
   if (
     ids.length !== EXPECTED_PLUGIN_COUNT
     || uniqueIDs.size !== EXPECTED_PLUGIN_COUNT
-    || !["chrome", "computer-use-windows", "cinema"].every((id) => uniqueIDs.has(id))
+    || !["chrome", "computer-use-windows"].every((id) => uniqueIDs.has(id))
   ) {
     throw new Error(
       `Remote repository catalog must contain exactly ${EXPECTED_PLUGIN_COUNT} plugins, got ${ids.length}: ${ids.join(", ")}`,

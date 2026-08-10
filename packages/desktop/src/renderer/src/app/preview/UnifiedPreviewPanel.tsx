@@ -25,7 +25,6 @@ interface UnifiedPreviewPanelProps {
   onOpen: () => void
   onOpenExternal: () => void | Promise<void>
   onOpenUrl: (url: string) => void
-  onOpenCinemaProviderSettings?: (providerID: string) => void
   onReload: () => void
   onActiveInteractionChange: (pluginID: PreviewInteractionPluginID | null) => void
   onCommitInteraction: (input: PreviewInteractionCommitInput) => void
@@ -40,11 +39,6 @@ type WebviewFailLoadEvent = Event & {
   errorCode?: number
   errorDescription?: string
   isMainFrame?: boolean
-}
-
-type WebviewIpcMessageEvent = Event & {
-  channel?: string
-  args?: unknown[]
 }
 
 type FrameLoadError = ReturnType<typeof getPreviewFailure>
@@ -254,7 +248,6 @@ export function UnifiedPreviewPanel({
   onOpen,
   onOpenExternal,
   onOpenUrl,
-  onOpenCinemaProviderSettings,
   onReload,
   onActiveInteractionChange,
   onCommitInteraction,
@@ -429,48 +422,6 @@ export function UnifiedPreviewPanel({
       readyWebview.removeEventListener("new-window", handleWillNavigate as EventListener)
     }
   }, [shouldUseWebview, state.reloadToken, target?.safePreviewUrl])
-
-  useEffect(() => {
-    const activeWebview = webviewRef.current
-    if (!shouldUseWebview || !activeWebview || !onOpenCinemaProviderSettings) return
-    const openCinemaProviderSettings = onOpenCinemaProviderSettings
-
-    function handleIpcMessage(rawEvent: Event) {
-      const event = rawEvent as WebviewIpcMessageEvent
-      if (event.channel !== "preview:open-cinema-provider-settings") return
-      const payload = event.args?.[0]
-      if (
-        !payload
-        || typeof payload !== "object"
-        || !("providerID" in payload)
-        || payload.providerID !== "comfyui-local"
-      ) return
-      openCinemaProviderSettings("comfyui-local")
-    }
-
-    activeWebview.addEventListener("ipc-message", handleIpcMessage as EventListener)
-    return () => activeWebview.removeEventListener("ipc-message", handleIpcMessage as EventListener)
-  }, [onOpenCinemaProviderSettings, shouldUseWebview, state.reloadToken, target?.safePreviewUrl])
-
-  useEffect(() => {
-    if (shouldUseWebview || !onOpenCinemaProviderSettings) return
-    const openCinemaProviderSettings = onOpenCinemaProviderSettings
-
-    function handleFrameMessage(event: MessageEvent) {
-      if (event.source !== iframeRef.current?.contentWindow) return
-      const payload = event.data
-      if (
-        !payload
-        || typeof payload !== "object"
-        || payload.type !== "anybox:open-cinema-provider-settings"
-        || payload.providerID !== "comfyui-local"
-      ) return
-      openCinemaProviderSettings("comfyui-local")
-    }
-
-    window.addEventListener("message", handleFrameMessage)
-    return () => window.removeEventListener("message", handleFrameMessage)
-  }, [onOpenCinemaProviderSettings, shouldUseWebview, state.reloadToken, target?.safePreviewUrl])
 
   useEffect(() => {
     if (!shouldUseWebview || !target?.safePreviewUrl || !frameIsLoading) return

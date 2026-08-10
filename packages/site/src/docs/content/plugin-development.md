@@ -161,6 +161,67 @@ Server 至少实现 `initialize`、`tools/list` 和 `tools/call`。stdio 的 std
 
 凭据 ID 为 `plugin-connector:hello-anybox:weather`，真实值不会写入生成的 MCP 配置。若只需复用 Gmail、GitHub 等平台连接，使用 `connectorRequirements`。
 
+## 添加 Local App Runtime
+
+完整 Web App 使用 `views` 提供入口，并可用独立于 MCP 的 `appRuntime` 启动本地 HTTP 后端：
+
+```json
+{
+  "views": [{
+    "id": "main",
+    "title": "Example App",
+    "location": "right-sidebar",
+    "entry": "./web/index.html"
+  }],
+  "appRuntime": {
+    "type": "local-http",
+    "command": "bun",
+    "args": ["${PLUGIN_ROOT}/runtime/server.js"],
+    "cwd": "${PLUGIN_ROOT}",
+    "healthcheckPath": "/health"
+  },
+  "appPermissions": {
+    "workspace": "none",
+    "network": [
+      "https://api.example.com",
+      {
+        "kind": "user-configured-origin",
+        "id": "custom-provider",
+        "description": "用户配置的 Provider 地址。",
+        "schemes": ["https"],
+        "allowLoopbackHttp": true
+      }
+    ],
+    "system": []
+  },
+  "installReview": ["运行本地 HTTP Runtime，并连接到上面披露的网络来源。"]
+}
+```
+
+Runtime 必须监听宿主注入的 `127.0.0.1:ANYBOX_APP_PORT`，并用 `ANYBOX_APP_TOKEN` 验证 `x-anybox-app-runtime-token`。Web 页面只请求同源 `/__anybox_runtime__/...`，不会得到真实端口或 Token。宿主仅注入通用 `ANYBOX_APP_ID/VERSION/PORT/TOKEN/DATA_DIR/CACHE_DIR/LOG_DIR/LOCALE/ARTIFACTS_JSON` 和最小 OS 环境；不要依赖 Agent 私有变量或宿主共享工具路径。
+
+动态 Provider 地址使用 `user-configured-origin`。权限声明用于安装审查，不是 OS 网络沙箱；Runtime 仍须实现 HTTPS/loopback、SSRF、DNS 重绑定、同源重定向与 Secret 不跨源防护。
+
+需要系统钥匙串或原生选择器时，声明平台助手：
+
+```json
+{
+  "platformArtifacts": [{
+    "id": "example-helper",
+    "type": "app-runtime-helper",
+    "description": "系统钥匙串与用户主动选择文件的原生助手。",
+    "executables": [{
+      "platform": "win32",
+      "architecture": "x64",
+      "path": "native/win32-x64/example-helper.exe",
+      "sha256": "<64-character-lowercase-hex>"
+    }]
+  }]
+}
+```
+
+安装器只选择当前平台/架构，校验 SHA-256 后原子安装，并用 ownership receipt 安全升级和卸载。Runtime 从 `ANYBOX_APP_ARTIFACTS_JSON` 读取受管路径。生产发布还必须完成各平台签名/校验，并在 `installReview` 中明确披露原生代码、凭据和下载行为。
+
 ## 本地开发
 
 让运行时扫描独立插件源码目录：

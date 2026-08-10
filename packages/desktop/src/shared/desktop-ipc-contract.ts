@@ -104,8 +104,6 @@ import type {
   WindowAction,
 } from "../main/types"
 import type {
-  DesktopOpenCinemaProjectInput,
-  DesktopOpenCinemaProjectResult,
   DesktopOpenPathInput,
   DesktopOpenPathResult,
   DeletedRegistrySkillResult,
@@ -128,11 +126,6 @@ import type {
   ReasoningEffort,
 } from "@anybox/shared"
 
-import type {
-  CinemaProviderAuthState,
-  CinemaProviderWorkflowCatalog,
-  CinemaVideoProvider,
-} from "@anybox/shared/cinema"
 import type { AppearanceConfigDocument, AppearanceConfigSnapshot, AppearanceRuntimeState } from "./appearance"
 import type {
   AppearanceThemeDuplicateInput,
@@ -1160,13 +1153,6 @@ export interface DesktopProviderConnectionTestInput {
   baseURL?: string | null
 }
 
-export interface DesktopCinemaVideoProviderConnectionTestInput {
-  providerID: string
-  apiKey?: string | null
-  baseURL?: string | null
-  userID?: string | null
-}
-
 export interface DesktopCustomProviderInput {
   providerID?: string
   apiBaseURL: string
@@ -1452,10 +1438,6 @@ export interface DesktopIpcContract {
   "desktop:open-path": {
     input: DesktopOpenPathInput
     output: DesktopOpenPathResult
-  }
-  "desktop:open-cinema-project": {
-    input: DesktopOpenCinemaProjectInput
-    output: DesktopOpenCinemaProjectResult
   }
   "desktop:open-monitor-window": {
     input: void
@@ -1969,34 +1951,6 @@ export interface DesktopIpcContract {
   "desktop:save-global-provider-api-key": {
     input: { providerID: string; apiKey?: string | null }
     output: AgentProviderAuthState
-  }
-  "desktop:get-cinema-video-providers": {
-    input: void
-    output: CinemaVideoProvider[]
-  }
-  "desktop:refresh-cinema-video-provider-catalog": {
-    input: void
-    output: CinemaVideoProvider[]
-  }
-  "desktop:get-cinema-provider-workflows": {
-    input: { providerID: string }
-    output: CinemaProviderWorkflowCatalog
-  }
-  "desktop:refresh-cinema-provider-workflows": {
-    input: { providerID: string }
-    output: CinemaProviderWorkflowCatalog
-  }
-  "desktop:save-cinema-video-provider-api-key": {
-    input: { providerID: string; apiKey?: string | null }
-    output: CinemaProviderAuthState
-  }
-  "desktop:save-cinema-video-provider-settings": {
-    input: { providerID: string; baseURL?: string | null; userID?: string | null }
-    output: CinemaVideoProvider
-  }
-  "desktop:test-cinema-video-provider-connection": {
-    input: DesktopCinemaVideoProviderConnectionTestInput
-    output: AgentProviderConnectionTestResult
   }
   "desktop:delete-global-provider-auth-session": {
     input: { providerID: string }
@@ -2665,7 +2619,6 @@ export interface DesktopApiMethods {
   openInExternalEditor(input: DesktopIpcInput<"desktop:open-in-external-editor">): Promise<DesktopIpcOutput<"desktop:open-in-external-editor">>
   openExternalUrl(input: DesktopIpcInput<"desktop:open-external-url">): Promise<DesktopIpcOutput<"desktop:open-external-url">>
   openPath(input: DesktopIpcInput<"desktop:open-path">): Promise<DesktopIpcOutput<"desktop:open-path">>
-  openCinemaProject(input: DesktopIpcInput<"desktop:open-cinema-project">): Promise<DesktopIpcOutput<"desktop:open-cinema-project">>
   openMonitorWindow(): Promise<DesktopIpcOutput<"desktop:open-monitor-window">>
   openAppearanceWindow(): Promise<DesktopIpcOutput<"desktop:open-appearance-window">>
   windowAction(action: DesktopIpcInput<"desktop:window-action">): Promise<DesktopIpcOutput<"desktop:window-action">>
@@ -2783,13 +2736,6 @@ export interface DesktopApiMethods {
   getGlobalProviderAuthFlow(input: DesktopIpcInput<"desktop:get-global-provider-auth-flow">): Promise<DesktopIpcOutput<"desktop:get-global-provider-auth-flow">>
   cancelGlobalProviderAuthFlow(input: DesktopIpcInput<"desktop:cancel-global-provider-auth-flow">): Promise<DesktopIpcOutput<"desktop:cancel-global-provider-auth-flow">>
   saveGlobalProviderApiKey(input: DesktopIpcInput<"desktop:save-global-provider-api-key">): Promise<DesktopIpcOutput<"desktop:save-global-provider-api-key">>
-  getCinemaVideoProviders(): Promise<DesktopIpcOutput<"desktop:get-cinema-video-providers">>
-  refreshCinemaVideoProviderCatalog(): Promise<DesktopIpcOutput<"desktop:refresh-cinema-video-provider-catalog">>
-  getCinemaProviderWorkflows(input: DesktopIpcInput<"desktop:get-cinema-provider-workflows">): Promise<DesktopIpcOutput<"desktop:get-cinema-provider-workflows">>
-  refreshCinemaProviderWorkflows(input: DesktopIpcInput<"desktop:refresh-cinema-provider-workflows">): Promise<DesktopIpcOutput<"desktop:refresh-cinema-provider-workflows">>
-  saveCinemaVideoProviderApiKey(input: DesktopIpcInput<"desktop:save-cinema-video-provider-api-key">): Promise<DesktopIpcOutput<"desktop:save-cinema-video-provider-api-key">>
-  saveCinemaVideoProviderSettings(input: DesktopIpcInput<"desktop:save-cinema-video-provider-settings">): Promise<DesktopIpcOutput<"desktop:save-cinema-video-provider-settings">>
-  testCinemaVideoProviderConnection(input: DesktopIpcInput<"desktop:test-cinema-video-provider-connection">): Promise<DesktopIpcOutput<"desktop:test-cinema-video-provider-connection">>
   deleteGlobalProviderAuthSession(input: DesktopIpcInput<"desktop:delete-global-provider-auth-session">): Promise<DesktopIpcOutput<"desktop:delete-global-provider-auth-session">>
   testGlobalProviderConnection(input: DesktopIpcInput<"desktop:test-global-provider-connection">): Promise<DesktopIpcOutput<"desktop:test-global-provider-connection">>
   upsertCustomProvider(input: DesktopIpcInput<"desktop:upsert-custom-provider">): Promise<DesktopIpcOutput<"desktop:upsert-custom-provider">>

@@ -48,7 +48,6 @@ function createProps(overrides: Partial<PromptPresetsPageProps> = {}): PromptPre
       systemPromptPresetID: selectedPromptPreset.id,
       planModePromptPresetID: selectedPromptPreset.id,
       gitCommitPromptPresetID: selectedPromptPreset.id,
-      cinemaTextGenerationPromptPresetID: selectedPromptPreset.id,
     },
     promptUrlInstallMessage: null,
     promptUrlInstallPreview: null,
@@ -164,7 +163,6 @@ describe("PromptPresetsPage", () => {
         systemPromptPresetID: bundledPrompt.id,
         planModePromptPresetID: bundledPrompt.id,
         gitCommitPromptPresetID: bundledPrompt.id,
-        cinemaTextGenerationPromptPresetID: bundledPrompt.id,
       },
       selectedPromptPreset: bundledPrompt,
     })} />)
@@ -217,8 +215,6 @@ describe("PromptPresetsPage", () => {
     expect(titleField).toHaveAttribute("rows", "1")
     expect(titleField).toHaveValue(LONG_PROMPT_LABEL)
     expect(screen.getByText("Git commit")).toBeInTheDocument()
-    expect(screen.getByRole("combobox", { name: "Cinema text generation prompt preset" })).toBeInTheDocument()
-    expect(screen.getByText("Cinema text generation")).toBeInTheDocument()
   })
 
   it("keeps custom prompt titles single-line in state", () => {

@@ -1,57 +1,76 @@
-import { spawnSync } from "node:child_process"
-import fs from "node:fs"
-import fsp from "node:fs/promises"
+import { build as viteBuild } from "vite"
+import fs from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
 const pluginRoot = path.dirname(fileURLToPath(import.meta.url))
-const repositoryRoot = path.resolve(pluginRoot, "..", "..", "..")
-const agentRoot = path.join(repositoryRoot, "packages", "anyboxagent")
 const runtimeRoot = path.join(pluginRoot, "runtime")
-const runtimeEntry = path.join(pluginRoot, "runtime-src", "server.ts")
-const providerCatalog = path.join(agentRoot, "src", "cinema", "provider-manifests.json")
-const providerManifests = path.join(agentRoot, "src", "cinema", "provider-manifests")
+const webRoot = path.join(pluginRoot, "web")
+const mcpRoot = path.join(pluginRoot, "mcp")
 
-function run(command, args, options = {}) {
-  const result = spawnSync(command, args, {
-    cwd: repositoryRoot,
-    stdio: "inherit",
-    windowsHide: true,
-    ...options,
+await Promise.all([
+  fs.rm(webRoot, { recursive: true, force: true }),
+  fs.rm(runtimeRoot, { recursive: true, force: true }),
+  fs.rm(mcpRoot, { recursive: true, force: true }),
+])
+await Promise.all([
+  fs.mkdir(runtimeRoot, { recursive: true }),
+  fs.mkdir(mcpRoot, { recursive: true }),
+])
+
+await viteBuild({
+  configFile: path.join(pluginRoot, "vite.config.ts"),
+  root: pluginRoot,
+})
+
+for (const target of [
+  { entrypoint: path.join(pluginRoot, "src", "server.ts"), outdir: runtimeRoot, label: "Runtime" },
+  { entrypoint: path.join(pluginRoot, "src", "mcp", "server.ts"), outdir: mcpRoot, label: "MCP" },
+]) {
+  const result = await Bun.build({
+    entrypoints: [target.entrypoint],
+    outdir: target.outdir,
+    target: "bun",
+    naming: "server.js",
+    minify: false,
+    sourcemap: "none",
   })
-  if (result.status !== 0) {
-    throw new Error(`Command failed: ${command} ${args.join(" ")}`, { cause: result.error })
+  if (!result.success) {
+    for (const log of result.logs) console.error(log)
+    throw new Error(`Cinema ${target.label} build failed.`)
   }
 }
 
-await fsp.rm(runtimeRoot, { recursive: true, force: true })
-await fsp.mkdir(runtimeRoot, { recursive: true })
+await Promise.all([
+  fs.copyFile(
+    path.join(pluginRoot, "src", "domain", "provider-manifests.json"),
+    path.join(runtimeRoot, "provider-manifests.json"),
+  ),
+  fs.cp(
+    path.join(pluginRoot, "src", "domain", "provider-manifests"),
+    path.join(runtimeRoot, "provider-manifests"),
+    { recursive: true },
+  ),
+  fs.copyFile(path.join(pluginRoot, "toolchain.lock.json"), path.join(runtimeRoot, "toolchain.lock.json")),
+])
 
-const packageManagerEntry = process.env.npm_execpath?.trim()
-if (packageManagerEntry && fs.existsSync(packageManagerEntry)) {
-  run(process.execPath, [packageManagerEntry, "--filter", "anybox-cinema-web", "build:plugin"])
-} else {
-  run("corepack", ["pnpm", "--filter", "anybox-cinema-web", "build:plugin"], {
-    shell: process.platform === "win32",
-  })
+const bundles = await Promise.all([
+  fs.readFile(path.join(runtimeRoot, "server.js"), "utf8"),
+  fs.readFile(path.join(mcpRoot, "server.js"), "utf8"),
+])
+const forbidden = [
+  "packages/anyboxagent",
+  "packages\\\\anyboxagent",
+  "@anybox/shared/cinema",
+  "ANYBOX_AGENT_DATA_DIR",
+  "ANYBOX_FFMPEG_BINARY",
+  "ANYBOX_FFPROBE_BINARY",
+  "ANYBOX_CINEMA_",
+]
+for (const value of forbidden) {
+  if (bundles.some((bundle) => bundle.includes(value))) {
+    throw new Error(`Cinema build contains forbidden dependency marker: ${value}`)
+  }
 }
 
-const npmBunBinary = process.env.APPDATA
-  ? path.join(process.env.APPDATA, "npm", "node_modules", "bun", "bin", process.platform === "win32" ? "bun.exe" : "bun")
-  : undefined
-const bun = process.env.ANYBOX_BUN_BINARY?.trim()
-  || (npmBunBinary && fs.existsSync(npmBunBinary) ? npmBunBinary : "bun")
-run(bun, [
-  "build",
-  runtimeEntry,
-  "--target=bun",
-  "--outdir",
-  runtimeRoot,
-  "--entry-naming",
-  "server.js",
-], { cwd: agentRoot })
-
-await fsp.copyFile(providerCatalog, path.join(runtimeRoot, "provider-manifests.json"))
-await fsp.cp(providerManifests, path.join(runtimeRoot, "provider-manifests"), { recursive: true })
-
-console.log(`[cinema-plugin] built Web and Runtime into ${pluginRoot}`)
+console.log(`[cinema-plugin] built self-contained Web, Runtime, and MCP into ${pluginRoot}`)

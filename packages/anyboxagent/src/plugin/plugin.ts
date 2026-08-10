@@ -24,6 +24,7 @@ import {
   installPlatformArtifacts,
   removePlatformArtifacts,
 } from "./platform-artifacts.ts"
+import { appRuntimeDirectories } from "./app-runtime-paths.ts"
 
 const log = Log.create({ service: "plugin" })
 const INSTALLED_PLUGINS_TABLE = "installed_plugins"
@@ -711,7 +712,7 @@ export const PluginAppRuntime = z
   .strict()
 export type PluginAppRuntime = z.infer<typeof PluginAppRuntime>
 
-const PluginAppNetworkOrigin = z
+const PluginAppFixedNetworkOrigin = z
   .string()
   .trim()
   .min(1)
@@ -736,6 +737,20 @@ const PluginAppNetworkOrigin = z
       ctx.addIssue({ code: "custom", message: "App network permissions must be origins, not full URLs." })
     }
   })
+
+const PluginAppUserConfiguredNetworkOrigin = z.object({
+  kind: z.literal("user-configured-origin"),
+  id: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/u),
+  description: z.string().trim().min(1).max(256),
+  schemes: z.tuple([z.literal("https")]),
+  allowLoopbackHttp: z.boolean().default(false),
+}).strict()
+
+export const PluginAppNetworkOrigin = z.union([
+  PluginAppFixedNetworkOrigin,
+  PluginAppUserConfiguredNetworkOrigin,
+])
+export type PluginAppNetworkOrigin = z.infer<typeof PluginAppNetworkOrigin>
 
 export const PluginAppPermissions = z
   .object({
@@ -783,6 +798,7 @@ export const PluginManifest = z
     views: PluginManifestViews.optional(),
     appRuntime: PluginAppRuntime.optional(),
     appPermissions: PluginAppPermissions.optional(),
+    installReview: z.array(z.string().trim().min(1).max(512)).max(64).optional(),
   })
   .strict()
 export type PluginManifest = z.infer<typeof PluginManifest>
@@ -2810,7 +2826,9 @@ function appRuntimePermissions(manifest: PluginManifest) {
   if (!permissions) return []
   return uniqueStrings([
     permissions.workspace === "request" ? "Requests access to an Anybox workspace selected by the user." : undefined,
-    ...permissions.network.map((origin) => `Connects to ${origin}.`),
+    ...permissions.network.map((origin) => typeof origin === "string"
+      ? `Connects to ${origin}.`
+      : `Connects to a user-configured '${origin.id}' origin (${origin.description}; HTTPS${origin.allowLoopbackHttp ? " or loopback HTTP" : ""}).`),
     ...permissions.system.map((capability) => `Uses the '${capability}' desktop capability.`),
   ])
 }
@@ -2918,6 +2936,7 @@ function normalizeCatalogItem(source: PluginManifestSource): PluginCatalogItem {
     appRuntime: manifest.appRuntime,
     appPermissions: manifest.appPermissions,
     installReview: uniqueStrings([
+      ...(manifest.installReview ?? []),
       ...mcpServers.flatMap((server) => server.installReview ?? []),
       ...connectors.flatMap((app) => app.installReview ?? []),
       ...appRuntimeInstallReview(manifest),
@@ -3232,9 +3251,13 @@ function replaceUnknownRecordPlaceholders(record: Record<string, unknown> | unde
 }
 
 function runtimeConfigForPlugin(plugin: PluginCatalogItem, installed: InstalledPlugin) {
+  const appDirectories = appRuntimeDirectories(plugin.id)
   return {
     ...normalizeConfig(plugin, installed.config),
     PLUGIN_ROOT: installed.packageRoot ?? "",
+    PLUGIN_APP_DATA_DIR: appDirectories.data,
+    PLUGIN_APP_CACHE_DIR: appDirectories.cache,
+    PLUGIN_APP_LOG_DIR: appDirectories.log,
   }
 }
 
@@ -3605,6 +3628,11 @@ export type InstalledPluginAppRuntimeDefinition = {
   packageRoot: string
   runtime: PluginAppRuntime
   permissions: PluginAppPermissions
+  artifacts: Record<string, {
+    type: "app-runtime-helper"
+    path: string
+    sha256: string
+  }>
 }
 
 export function getInstalledAppRuntimeDefinition(pluginID: string): InstalledPluginAppRuntimeDefinition | undefined {
@@ -3620,6 +3648,13 @@ export function getInstalledAppRuntimeDefinition(pluginID: string): InstalledPlu
     packageRoot: source.packageRoot,
     runtime: source.manifest.appRuntime,
     permissions: source.manifest.appPermissions ?? PluginAppPermissions.parse({}),
+    artifacts: Object.fromEntries((installed.platformArtifactReceipts ?? [])
+      .filter((receipt) => receipt.type === "app-runtime-helper")
+      .map((receipt) => [receipt.artifactID, {
+        type: "app-runtime-helper" as const,
+        path: receipt.executablePath,
+        sha256: receipt.executableSha256,
+      }])),
   }
 }
 

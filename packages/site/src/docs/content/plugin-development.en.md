@@ -161,6 +161,67 @@ Use `connectors` for plugin-owned credentials; never place a real key in `mcpSer
 
 The credential ID is `plugin-connector:hello-anybox:weather`; the real value is not written to generated MCP configuration. Use `connectorRequirements` when the plugin only needs an existing Gmail, GitHub, or other platform connection.
 
+## Add a Local App Runtime
+
+A complete Web App uses `views` as its entry point and may declare an `appRuntime`, separate from MCP, for its local HTTP backend:
+
+```json
+{
+  "views": [{
+    "id": "main",
+    "title": "Example App",
+    "location": "right-sidebar",
+    "entry": "./web/index.html"
+  }],
+  "appRuntime": {
+    "type": "local-http",
+    "command": "bun",
+    "args": ["${PLUGIN_ROOT}/runtime/server.js"],
+    "cwd": "${PLUGIN_ROOT}",
+    "healthcheckPath": "/health"
+  },
+  "appPermissions": {
+    "workspace": "none",
+    "network": [
+      "https://api.example.com",
+      {
+        "kind": "user-configured-origin",
+        "id": "custom-provider",
+        "description": "User-configured provider origin.",
+        "schemes": ["https"],
+        "allowLoopbackHttp": true
+      }
+    ],
+    "system": []
+  },
+  "installReview": ["Runs a local HTTP Runtime and connects to the origins disclosed above."]
+}
+```
+
+The Runtime must bind the injected `127.0.0.1:ANYBOX_APP_PORT` and authenticate `x-anybox-app-runtime-token` with `ANYBOX_APP_TOKEN`. The Web page calls same-origin `/__anybox_runtime__/...` and never receives the real port or token. The host injects only generic `ANYBOX_APP_ID/VERSION/PORT/TOKEN/DATA_DIR/CACHE_DIR/LOG_DIR/LOCALE/ARTIFACTS_JSON` values and a minimal OS environment; do not depend on Agent-private variables or host-shared tool paths.
+
+Use `user-configured-origin` for dynamic provider addresses. Permission declarations inform installation review; they are not an OS network sandbox. The Runtime must still enforce HTTPS/loopback policy, SSRF and DNS-rebinding checks, same-origin redirects, and no cross-origin secret forwarding.
+
+Declare a platform helper when the Runtime needs an OS keychain or native picker:
+
+```json
+{
+  "platformArtifacts": [{
+    "id": "example-helper",
+    "type": "app-runtime-helper",
+    "description": "Native OS-keychain and user-initiated picker helper.",
+    "executables": [{
+      "platform": "win32",
+      "architecture": "x64",
+      "path": "native/win32-x64/example-helper.exe",
+      "sha256": "<64-character-lowercase-hex>"
+    }]
+  }]
+}
+```
+
+The installer selects only the current platform and architecture, verifies SHA-256, installs atomically, and uses an ownership receipt for safe upgrades and removal. The Runtime reads the managed path from `ANYBOX_APP_ARTIFACTS_JSON`. Production releases must also sign and verify every platform helper and disclose native code, credentials, and downloads in `installReview`.
+
 ## Local Development
 
 Point the runtime at a separate plugin source root:

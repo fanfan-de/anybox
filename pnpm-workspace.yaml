@@ -1,6 +1,7 @@
 packages:
   - 'packages/*'
   - 'packages/chrome-plugin/*'
+  - 'plugins/Anybox-Plugins/cinema'
 allowBuilds:
   '@parcel/watcher': set this to true or false
   cpu-features: true

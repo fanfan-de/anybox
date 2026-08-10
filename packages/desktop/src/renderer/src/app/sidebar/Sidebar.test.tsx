@@ -630,7 +630,6 @@ describe("Sidebar", () => {
       clientX: 120,
       clientY: 140,
     })
-    expect(screen.queryByRole("menuitem", { name: "Open Cinema" })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole("menuitem", { name: "创建自动化" }))
     expect(onProjectCreateAutomation).toHaveBeenCalledWith(expect.objectContaining({ id: "workspace-1" }))
 

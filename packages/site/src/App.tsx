@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react"
 import { DownloadCta } from "./DownloadCta"
 import { HomeDemoShowcases } from "./HomeDemoVideo"
-import { ProductMedia } from "./ProductMedia"
 import { PaperBackground } from "./PaperBackground"
 import { SiteFooter, SiteHeader } from "./SiteChrome"
 import { siteContent } from "./content"
@@ -13,6 +12,11 @@ type RepositorySummary = {
   latestRelease?: string
   publishedAt?: string
   stars?: number
+}
+
+type FaqItem = {
+  answer: string
+  question: string
 }
 
 function formatStars(stars: number | undefined) {
@@ -98,6 +102,37 @@ function useHomeMetadata(language: "zh" | "en") {
   }, [content.hero.description, language])
 }
 
+function FaqList({ items }: { items: FaqItem[] }) {
+  const [openItems, setOpenItems] = useState<Set<number>>(() => new Set([0]))
+
+  return (
+    <div className="faq-list">
+      {items.map((item, index) => (
+        <details
+          className="faq-item"
+          key={item.question}
+          open={openItems.has(index)}
+          onToggle={(event) => {
+            const isOpen = event.currentTarget.open
+
+            setOpenItems((current) => {
+              if (current.has(index) === isOpen) return current
+
+              const next = new Set(current)
+              if (isOpen) next.add(index)
+              else next.delete(index)
+              return next
+            })
+          }}
+        >
+          <summary>{item.question}</summary>
+          <p>{item.answer}</p>
+        </details>
+      ))}
+    </div>
+  )
+}
+
 export function App() {
   const { language } = useSiteLanguage()
   const content = siteContent[language]
@@ -134,6 +169,7 @@ export function App() {
                   </>
                 ) : content.hero.title}
               </h1>
+              <p className="home-hero-summary">{content.hero.description}</p>
               <div className="home-hero-actions">
                 <DownloadCta placement="hero" />
               </div>
@@ -143,65 +179,147 @@ export function App() {
         </div>
       </section>
 
-      <HomeDemoShowcases language={language} />
+      <section className="home-overview-section" id="product" aria-labelledby="overview-title">
+        <div className="home-overview-inner">
+          <div className="home-overview-heading">
+            <p className="section-kicker">{content.overview.eyebrow}</p>
+            <h2 id="overview-title">{content.overview.title}</h2>
+            <p>{content.overview.description}</p>
+          </div>
 
-      <section className="signal-section" aria-label={language === "zh" ? "产品关键信号" : "Product highlights"}>
-        <ul>
-          {content.signals.map((signal) => <li key={signal}>{signal}</li>)}
-        </ul>
+          <figure className="home-overview-media">
+            <div className="home-overview-frame">
+              <img
+                alt={language === "zh" ? "Anybox 桌面端本地 Agent 工作台" : "The Anybox local agent desktop workspace"}
+                decoding="async"
+                height="1389"
+                loading="eager"
+                src="/product-preview.png"
+                width="2558"
+              />
+            </div>
+            <figcaption>
+              {language === "zh"
+                ? "项目、会话、模型、权限与执行结果保持在同一个工作空间。"
+                : "Projects, sessions, models, permissions, and execution results stay in one workspace."}
+            </figcaption>
+          </figure>
+
+          <ul className="overview-signals" aria-label={language === "zh" ? "产品关键信号" : "Product highlights"}>
+            {content.signals.map((signal) => <li key={signal}>{signal}</li>)}
+          </ul>
+
+          <ol className="overview-steps">
+            {content.overview.steps.map((step, index) => (
+              <li key={step.title}>
+                <span>{String(index + 1).padStart(2, "0")}</span>
+                <div>
+                  <h3>{step.title}</h3>
+                  <p>{step.description}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
       </section>
 
-      <section className="home-section workflow-section-new" id="workflow" aria-labelledby="workflow-title">
+      <HomeDemoShowcases language={language} />
+
+      <section className="home-section plugin-section" id="plugins" aria-labelledby="plugin-title">
         <div className="home-section-heading">
-          <p className="section-kicker">{content.workflow.eyebrow}</p>
-          <h2 id="workflow-title">{content.workflow.title}</h2>
-          <p>{content.workflow.description}</p>
+          <p className="section-kicker">{content.plugins.eyebrow}</p>
+          <h2 id="plugin-title">{content.plugins.title}</h2>
+          <p>{content.plugins.description}</p>
         </div>
-        <ol className="workflow-list">
-          {content.workflow.steps.map((step, index) => (
-            <li key={step.title}>
+
+        <ol className="plugin-stages">
+          {content.plugins.stages.map((stage, index) => (
+            <li key={stage.title}>
               <span>{String(index + 1).padStart(2, "0")}</span>
-              <div><h3>{step.title}</h3><p>{step.description}</p></div>
+              <h3>{stage.title}</h3>
+              <p>{stage.description}</p>
             </li>
           ))}
         </ol>
+
+        <div className="plugin-examples">
+          {content.plugins.examples.map((example) => (
+            <a href={example.href} key={example.name}>
+              <strong>{example.name}</strong>
+              <span>{example.description}</span>
+            </a>
+          ))}
+        </div>
+
+        <a className="plugin-docs-link" href="/docs/?doc=plugin-development">
+          {content.plugins.docsLabel}
+        </a>
       </section>
 
-      <section className="home-section capability-section" aria-labelledby="capability-title">
-        <div className="home-section-heading capability-heading">
-          <p className="section-kicker">{content.capabilities.eyebrow}</p>
-          <h2 id="capability-title">{content.capabilities.title}</h2>
-          <p>{content.capabilities.description}</p>
+      <section className="scenario-story-section" id="scenarios" aria-labelledby="scenario-title">
+        <div className="scenario-story-inner">
+          <div className="scenario-story-heading">
+            <p className="section-kicker">{content.useCases.eyebrow}</p>
+            <h2 id="scenario-title">{content.useCases.title}</h2>
+            <p>{content.useCases.description}</p>
+          </div>
+
+          <div className="scenario-story-list">
+            {content.useCases.items.map((item, index) => (
+              <article className={index % 2 === 1 ? "scenario-story is-reversed" : "scenario-story"} key={item.title}>
+                <div className="scenario-story-copy">
+                  <p className="scenario-story-number">{String(index + 1).padStart(2, "0")}</p>
+                  <h3>{item.title}</h3>
+                  <p className="scenario-story-description">{item.description}</p>
+                  <blockquote>
+                    <span>{language === "zh" ? "任务" : "Task"}</span>
+                    <p>{item.prompt}</p>
+                  </blockquote>
+                  <ul>
+                    {item.detailItems.map((detail) => <li key={detail}>{detail}</li>)}
+                  </ul>
+                  <p className="scenario-story-outcome">
+                    <span>{language === "zh" ? "交付" : "Output"}</span>
+                    {item.outcome}
+                  </p>
+                </div>
+                <figure className="scenario-story-media">
+                  <img
+                    alt={item.imageAlt}
+                    decoding="async"
+                    height="540"
+                    loading="lazy"
+                    src={item.imageSrc}
+                    width="960"
+                  />
+                </figure>
+              </article>
+            ))}
+          </div>
         </div>
-        <div className="capability-list">
-          {content.capabilities.items.map((item, index) => (
-            <article className={index % 2 === 1 ? "capability-story is-reversed" : "capability-story"} key={item.title}>
-              <div className="capability-copy">
-                <p className="home-eyebrow">{item.eyebrow}</p>
+      </section>
+
+      <section className="home-section safety-section" aria-labelledby="safety-title">
+        <div className="safety-copy">
+          <p className="section-kicker">{content.safety.eyebrow}</p>
+          <h2 id="safety-title">{content.safety.title}</h2>
+          <p>{content.safety.description}</p>
+          <div className="safety-links">
+            <a href="/docs/?doc=permissions">{content.safety.docsLabel}</a>
+            <a href="/privacy/">{content.safety.privacyLabel}</a>
+          </div>
+        </div>
+        <ol className="safety-list">
+          {content.safety.items.map((item, index) => (
+            <li key={item.title}>
+              <span>{String(index + 1).padStart(2, "0")}</span>
+              <div>
                 <h3>{item.title}</h3>
                 <p>{item.description}</p>
               </div>
-              <ProductMedia
-                alt={item.mediaAlt}
-                caption={item.mediaCaption}
-                variant={item.mediaVariant}
-              />
-            </article>
+            </li>
           ))}
-        </div>
-      </section>
-
-      <section className="home-section use-case-section" aria-labelledby="use-case-title">
-        <div className="home-section-heading">
-          <p className="section-kicker">{content.useCases.eyebrow}</p>
-          <h2 id="use-case-title">{content.useCases.title}</h2>
-          <p>{content.useCases.description}</p>
-        </div>
-        <div className="use-case-list">
-          {content.useCases.items.map((item) => (
-            <article key={item.title}><h3>{item.title}</h3><p>{item.description}</p></article>
-          ))}
-        </div>
+        </ol>
       </section>
 
       <section className="home-section trust-section" aria-labelledby="trust-title">
@@ -264,6 +382,14 @@ export function App() {
             {content.finalCta.docsLabel}
           </a>
         </div>
+      </section>
+
+      <section className="home-section faq-section" aria-labelledby="faq-title">
+        <div className="faq-heading">
+          <p className="section-kicker">{content.faq.eyebrow}</p>
+          <h2 id="faq-title">{content.faq.title}</h2>
+        </div>
+        <FaqList items={content.faq.items} />
       </section>
 
       <SiteFooter showCommunity />

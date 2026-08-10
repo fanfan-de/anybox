@@ -1,7 +1,5 @@
-import * as CinemaProviderRuntime from "#cinema/provider-runtime.ts"
 import * as Config from "#config/config.ts"
 import * as Provider from "#provider/provider.ts"
-import * as Log from "#util/log.ts"
 import type {
   Model,
   ModelCatalogItem,
@@ -10,22 +8,12 @@ import type {
   PublicModel,
 } from "#model/types.ts"
 
-const log = Log.create({ service: "model-registry" })
-
 export type ModelCapabilityFilter = {
   runtimeKind?: ModelCatalogRuntimeKind
   selectable?: boolean
   input?: keyof ModelModalities
   output?: keyof ModelModalities
   taskMode?: string
-}
-
-const EMPTY_MODALITIES: ModelModalities = {
-  text: false,
-  audio: false,
-  image: false,
-  video: false,
-  pdf: false,
 }
 
 function referenceValue(providerID: string, modelID: string) {
@@ -102,106 +90,12 @@ export async function listAISDKModelCatalog(
   return filterModelCatalogItems((await Provider.listProviderCatalogSourceModels(configID)).map(aiSDKCatalogItem), filter)
 }
 
-function modalityListToFlags(values: string[] | undefined): ModelModalities {
-  const result = { ...EMPTY_MODALITIES }
-  for (const value of values ?? []) {
-    if (value === "text" || value === "audio" || value === "image" || value === "video" || value === "pdf") {
-      result[value] = true
-    }
-  }
-  return result
-}
-
-function inferTaskInputModalities(modes: string[]) {
-  const result = { ...EMPTY_MODALITIES }
-  if (modes.some((mode) => mode.startsWith("text-to-"))) result.text = true
-  if (modes.some((mode) => mode.startsWith("image-to-") || mode === "reference-to-video" || mode === "frames-to-video")) {
-    result.image = true
-  }
-  if (modes.some((mode) => mode.startsWith("video-to-") || mode === "edit" || mode === "extend" || mode === "motion-control")) {
-    result.video = true
-  }
-  return result
-}
-
-function inferTaskOutputModalities(modes: string[], supportsAudio: boolean | undefined) {
-  const result = { ...EMPTY_MODALITIES }
-  if (modes.some((mode) => mode.endsWith("-image") || mode === "image-edit")) result.image = true
-  if (modes.some((mode) => mode.endsWith("-video") || mode === "edit" || mode === "extend" || mode === "motion-control")) {
-    result.video = true
-  }
-  if (supportsAudio) result.audio = true
-  return result
-}
-
-export async function listCinemaTaskModelCatalog(filter: ModelCapabilityFilter = {}) {
-  let providers: Awaited<ReturnType<typeof CinemaProviderRuntime.listCinemaVideoProviders>>
-  try {
-    providers = await CinemaProviderRuntime.listCinemaVideoProviders()
-  } catch (error) {
-    log.warn("cinema-task-model-source-failed", {
-      error: error instanceof Error ? error.message : String(error),
-    })
-    return []
-  }
-
-  const items = providers.flatMap<ModelCatalogItem>((provider) => {
-    const providerAvailable = provider.auth.connected && provider.runtime?.adapterAvailable === true
-    return provider.manifest.models.map((model) => {
-      const modes = [...model.modes]
-      const input = model.modalities?.input?.length
-        ? modalityListToFlags(model.modalities.input)
-        : inferTaskInputModalities(modes)
-      const output = model.modalities?.output?.length
-        ? modalityListToFlags(model.modalities.output)
-        : inferTaskOutputModalities(modes, model.supportsAudio)
-
-      return {
-        registryID: `cinema-task:${referenceValue(provider.manifest.id, model.id)}`,
-        providerID: provider.manifest.id,
-        modelID: model.id,
-        name: model.label,
-        providerName: provider.manifest.name,
-        ...(model.family ? { family: model.family } : {}),
-        runtimeKind: "cinema-task",
-        selectable: false,
-        available: providerAvailable,
-        capabilities: {
-          input,
-          output,
-          taskModes: modes,
-        },
-        status: "active",
-        source: "cinema",
-        metadata: {
-          modes,
-          ...(model.durations.length > 0 ? { durations: model.durations } : {}),
-          ...(model.aspectRatios.length > 0 ? { aspectRatios: model.aspectRatios } : {}),
-          ...(model.resolutions.length > 0 ? { resolutions: model.resolutions } : {}),
-          ...(model.maxDurationSeconds ? { maxDurationSeconds: model.maxDurationSeconds } : {}),
-          ...(model.endpointType ? { endpointType: model.endpointType } : {}),
-          ...(provider.runtime?.adapterAvailable !== undefined
-            ? { adapterAvailable: provider.runtime.adapterAvailable }
-            : {}),
-          requiresCredential: provider.auth.requiresCredential,
-          connected: provider.auth.connected,
-        },
-      }
-    })
-  })
-
-  return filterModelCatalogItems(items, filter)
-}
-
 export async function listModelCatalog(
   configID = Config.GLOBAL_CONFIG_ID,
   filter: ModelCapabilityFilter = {},
 ) {
-  const [aiModels, taskModels] = await Promise.all([
-    listAISDKModelCatalog(configID),
-    listCinemaTaskModelCatalog(),
-  ])
-  return sortCatalogItems(filterModelCatalogItems([...aiModels, ...taskModels], filter))
+  const aiModels = await listAISDKModelCatalog(configID)
+  return sortCatalogItems(filterModelCatalogItems(aiModels, filter))
 }
 
 export async function getModelCatalogItem(

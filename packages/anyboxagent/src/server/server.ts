@@ -12,8 +12,6 @@ import { PermissionsRoutes } from "#server/routes/permissions.ts"
 import { PtyRoutes } from "#server/routes/pty.ts"
 import { RemoteRoutes } from "#server/routes/remote.ts"
 import { WorkspaceFilesRoutes } from "#server/routes/workspace-files.ts"
-import { CinemaRoutes } from "#server/routes/cinema.ts"
-import { CinemaAssetLibraryRoutes } from "#server/routes/cinema-assets.ts"
 import { DebugRoutes } from "#server/routes/debug.ts"
 import { EnvironmentRoutes } from "#server/routes/environments.ts"
 import { SettingsRoutes } from "#server/routes/settings.ts"
@@ -166,8 +164,6 @@ export function createServerRuntime(options: ServerRuntimeOptions = {}) {
   app.route("/api/automation-runs", AutomationRunRoutes())
   app.route("/api/calendar", CalendarRoutes())
   app.route("/api/planner", PlannerRoutes())
-  app.route("/api/cinema", CinemaRoutes())
-  app.route("/api/cinema", CinemaAssetLibraryRoutes())
   app.route("/api/projects", ProjectRoutes({ ptyRegistry }))
   app.route("/api/sessions", SessionRoutes({ ptyRegistry, shellTaskRegistry }))
   app.route("/api/storage", StorageRoutes())

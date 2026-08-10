@@ -1716,9 +1716,20 @@ describe("plugin marketplace API", () => {
       },
       appPermissions: {
         workspace: "request",
-        network: ["https://api.example.test", "http://127.0.0.1:8181"],
+        network: [
+          "https://api.example.test",
+          "http://127.0.0.1:8181",
+          {
+            kind: "user-configured-origin",
+            id: "custom-provider",
+            description: "A provider origin configured by the user.",
+            schemes: ["https"],
+            allowLoopbackHttp: true,
+          },
+        ],
         system: ["file-picker"],
       },
+      installReview: ["Runs a reviewed native helper."],
     })
 
     expect(valid.appRuntime).toMatchObject({
@@ -1729,9 +1740,20 @@ describe("plugin marketplace API", () => {
     })
     expect(valid.appPermissions).toEqual({
       workspace: "request",
-      network: ["https://api.example.test", "http://127.0.0.1:8181"],
+      network: [
+        "https://api.example.test",
+        "http://127.0.0.1:8181",
+        {
+          kind: "user-configured-origin",
+          id: "custom-provider",
+          description: "A provider origin configured by the user.",
+          schemes: ["https"],
+          allowLoopbackHttp: true,
+        },
+      ],
       system: ["file-picker"],
     })
+    expect(valid.installReview).toEqual(["Runs a reviewed native helper."])
 
     for (const appRuntime of [
       { type: "local-http", command: "bun", healthcheckPath: "health" },
@@ -1745,6 +1767,13 @@ describe("plugin marketplace API", () => {
       ["http://example.test"],
       ["https://api.example.test/v1"],
       ["file:///tmp/runtime"],
+      [{
+        kind: "user-configured-origin",
+        id: "custom-provider",
+        description: "Invalid schemes.",
+        schemes: ["http"],
+        allowLoopbackHttp: true,
+      }],
     ]) {
       expect(Plugin.PluginManifest.safeParse({
         ...baseManifest,
@@ -1777,6 +1806,10 @@ const server = Bun.serve({
     }
     const url = new URL(request.url)
     if (url.pathname === "/health") return Response.json({ ready: true })
+    if (url.pathname === "/environment") return Response.json({
+      appEnvironment: Object.fromEntries(Object.entries(process.env).filter(([key]) => key.startsWith("ANYBOX_APP_"))),
+      leaked: Object.keys(process.env).filter((key) => key.startsWith("ANYBOX_AGENT_") || key.startsWith("ANYBOX_CINEMA_") || key.startsWith("ANYBOX_FFMPEG_")),
+    })
     return Response.json({
       appID: process.env.ANYBOX_APP_ID,
       method: request.method,
@@ -1834,7 +1867,10 @@ await new Promise(() => undefined)
       permissions: { workspace: "request" },
     })
 
-    const [runtimeResponse, concurrentRuntimeResponse] = await Promise.all([
+    process.env.ANYBOX_AGENT_PRIVATE_TEST = "must-not-leak"
+    process.env.ANYBOX_CINEMA_LEGACY_TEST = "must-not-leak"
+    process.env.ANYBOX_FFMPEG_BINARY = "must-not-leak"
+    const [runtimeResponse, concurrentRuntimeResponse, environmentResponse] = await Promise.all([
       AppRuntime.proxyRequest(
         "app-runtime-proof",
         "/echo?value=ready",
@@ -1845,7 +1881,16 @@ await new Promise(() => undefined)
         "/echo?value=concurrent",
         new Request("http://plugin-view.invalid/echo"),
       ),
-    ])
+      AppRuntime.proxyRequest(
+        "app-runtime-proof",
+        "/environment",
+        new Request("http://plugin-view.invalid/environment"),
+      ),
+    ]).finally(() => {
+      delete process.env.ANYBOX_AGENT_PRIVATE_TEST
+      delete process.env.ANYBOX_CINEMA_LEGACY_TEST
+      delete process.env.ANYBOX_FFMPEG_BINARY
+    })
     expect(runtimeResponse.status).toBe(200)
     expect(await runtimeResponse.json()).toEqual({
       appID: "app-runtime-proof",
@@ -1858,6 +1903,22 @@ await new Promise(() => undefined)
       method: "GET",
       value: "concurrent",
     })
+    const environment = await environmentResponse.json() as {
+      appEnvironment: Record<string, string>
+      leaked: string[]
+    }
+    expect(environment.leaked).toEqual([])
+    expect(Object.keys(environment.appEnvironment).sort()).toEqual([
+      "ANYBOX_APP_ARTIFACTS_JSON",
+      "ANYBOX_APP_CACHE_DIR",
+      "ANYBOX_APP_DATA_DIR",
+      "ANYBOX_APP_ID",
+      "ANYBOX_APP_LOCALE",
+      "ANYBOX_APP_LOG_DIR",
+      "ANYBOX_APP_PORT",
+      "ANYBOX_APP_TOKEN",
+      "ANYBOX_APP_VERSION",
+    ])
 
     const forbiddenGatewayResponse = await app.request(
       "/api/plugins/installed/app-runtime-proof/app-runtime/echo?value=blocked",

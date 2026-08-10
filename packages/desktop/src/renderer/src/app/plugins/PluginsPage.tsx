@@ -1151,6 +1151,9 @@ export function PluginsPage({
   const [pluginImportURL, setPluginImportURL] = useState("")
   const [pluginImportError, setPluginImportError] = useState<string | null>(null)
   const [isImportingPluginURL, setIsImportingPluginURL] = useState(false)
+  const [pendingInstallPluginID, setPendingInstallPluginID] = useState<string | null>(null)
+  const [isConfirmingInstall, setIsConfirmingInstall] = useState(false)
+  const [installReviewError, setInstallReviewError] = useState<string | null>(null)
   const [skillContextMenu, setSkillContextMenu] = useState<PluginSkillContextMenuState>(null)
   const [skillBrowser, setSkillBrowser] = useState<PluginSkillBrowserState>(null)
   const effectiveSearchQuery = searchQuery ?? ""
@@ -1185,6 +1188,9 @@ export function PluginsPage({
   }, [categoryFilter, pluginCatalog, effectiveSearchQuery, locale])
 
   const activePlugin = activePluginID ? pluginCatalog.find((plugin) => plugin.id === activePluginID) ?? null : null
+  const pendingInstallPlugin = pendingInstallPluginID
+    ? pluginCatalog.find((plugin) => plugin.id === pendingInstallPluginID) ?? null
+    : null
   const activePluginName = activePlugin ? pluginDisplayName(activePlugin, locale) : ""
   const activePluginDescription = activePlugin ? pluginDisplayDescription(activePlugin, locale) : ""
   const activeInstalledPlugin = activePlugin ? installedByPluginID.get(activePlugin.id) ?? null : null
@@ -1322,6 +1328,32 @@ export function PluginsPage({
       setIsImportingPluginURL(false)
     }
   }
+  const requestPluginInstall = (pluginID: string) => {
+    const plugin = pluginCatalog.find((item) => item.id === pluginID)
+    if (!plugin || (plugin.installReview ?? []).length === 0) return onInstallPlugin(pluginID)
+    setInstallReviewError(null)
+    setPendingInstallPluginID(pluginID)
+    return false
+  }
+  const closeInstallReview = () => {
+    if (isConfirmingInstall) return
+    setPendingInstallPluginID(null)
+    setInstallReviewError(null)
+  }
+  const confirmPluginInstall = async () => {
+    if (!pendingInstallPlugin) return
+    setIsConfirmingInstall(true)
+    setInstallReviewError(null)
+    try {
+      const installed = await onInstallPlugin(pendingInstallPlugin.id)
+      if (installed !== false) setPendingInstallPluginID(null)
+      else setInstallReviewError("The plugin could not be installed. Review its requirements and try again.")
+    } catch (error) {
+      setInstallReviewError(error instanceof Error ? error.message : "The plugin could not be installed.")
+    } finally {
+      setIsConfirmingInstall(false)
+    }
+  }
   const importURLDialog = isImportURLDialogOpen
     ? createPortal(
       <section
@@ -1390,6 +1422,76 @@ export function PluginsPage({
             </button>
           </footer>
         </form>
+      </section>,
+      document.body,
+    )
+    : null
+  const installReviewDialog = pendingInstallPlugin
+    ? createPortal(
+      <section
+        className="plugins-import-url-overlay"
+        role="presentation"
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) closeInstallReview()
+        }}
+      >
+        <section
+          className="plugins-import-url-dialog plugins-install-review-dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="plugins-install-review-title"
+        >
+          <header className="plugins-import-url-header">
+            <div>
+              <span>INSTALLATION REVIEW</span>
+              <h2 id="plugins-install-review-title">Review {pluginDisplayName(pendingInstallPlugin, locale)}</h2>
+              <p>Confirm the local code, data, credential, network, and download behavior before installation.</p>
+            </div>
+            <button
+              className="plugins-import-url-close"
+              type="button"
+              aria-label="Close installation review"
+              disabled={isConfirmingInstall}
+              onClick={closeInstallReview}
+            >
+              <CloseIcon />
+            </button>
+          </header>
+          <div className="plugins-install-review-summary">
+            <span>Risk</span>
+            <strong>{pendingInstallPlugin.risk}</strong>
+          </div>
+          <ul className="plugins-install-review-list">
+            {(pendingInstallPlugin.installReview ?? []).map((item) => <li key={item}>{item}</li>)}
+          </ul>
+          {pendingInstallPlugin.permissions.length > 0 ? (
+            <div className="plugins-install-review-permissions">
+              <strong>Declared permissions</strong>
+              <p>{pendingInstallPlugin.permissions.join(" · ")}</p>
+            </div>
+          ) : null}
+          {installReviewError ? <p className="plugins-import-url-error" role="alert">{installReviewError}</p> : null}
+          <footer className="plugins-import-url-actions">
+            <button
+              className="plugins-import-url-secondary-button"
+              type="button"
+              disabled={isConfirmingInstall}
+              onClick={closeInstallReview}
+            >
+              {t("app.cancel")}
+            </button>
+            <button
+              className="plugins-import-url-primary-button"
+              type="button"
+              autoFocus
+              aria-label={`Confirm install ${pluginDisplayName(pendingInstallPlugin, locale)}`}
+              disabled={isConfirmingInstall}
+              onClick={() => void confirmPluginInstall()}
+            >
+              {isConfirmingInstall ? t("plugins.installing") : "Install plugin"}
+            </button>
+          </footer>
+        </section>
       </section>,
       document.body,
     )
@@ -1496,7 +1598,7 @@ export function PluginsPage({
                           selectedPluginID={selectedPluginID}
                           t={t}
                           title={t("plugins.featured")}
-                          onInstallPlugin={onInstallPlugin}
+                          onInstallPlugin={requestPluginInstall}
                           onPluginSelect={onPluginSelect}
                         />
                       ) : null}
@@ -1512,7 +1614,7 @@ export function PluginsPage({
                           selectedPluginID={selectedPluginID}
                           t={t}
                           title={pluginCategoryLabel(category, t)}
-                          onInstallPlugin={onInstallPlugin}
+                          onInstallPlugin={requestPluginInstall}
                           onPluginSelect={onPluginSelect}
                         />
                       ))}
@@ -1823,7 +1925,7 @@ export function PluginsPage({
                                   onDiagnose={onDiagnoseMcpServer}
                                   onEnabledChange={onSetInstalledPluginMcpEnabled}
                                   onPolicyChange={onSetInstalledPluginMcpToolPolicy}
-                                  onRepair={() => onInstallPlugin(activePlugin.id)}
+                                  onRepair={() => requestPluginInstall(activePlugin.id)}
                                 />
                               </div>
                             ) : null}
@@ -1952,7 +2054,7 @@ export function PluginsPage({
                                   onDiagnose={onDiagnoseMcpServer}
                                   onEnabledChange={onSetInstalledPluginMcpEnabled}
                                   onPolicyChange={onSetInstalledPluginMcpToolPolicy}
-                                  onRepair={() => onInstallPlugin(activePlugin.id)}
+                                  onRepair={() => requestPluginInstall(activePlugin.id)}
                                 />
                                 {activeInstalledPlugin ? (
                                   <div className="plugins-connector-actions">
@@ -2354,7 +2456,7 @@ export function PluginsPage({
                           type="button"
                           aria-label={`Install ${activePluginName}`}
                           disabled={!canInstallActivePlugin}
-                          onClick={() => onInstallPlugin(activePlugin.id)}
+                          onClick={() => requestPluginInstall(activePlugin.id)}
                         >
                           <PlusIcon />
                           <span>{activePluginInstallLabel}</span>
@@ -2370,6 +2472,7 @@ export function PluginsPage({
         )}
       </div>
       {importURLDialog}
+      {installReviewDialog}
       {skillContextMenu ? (
         <PluginSkillContextMenu
           menu={skillContextMenu}

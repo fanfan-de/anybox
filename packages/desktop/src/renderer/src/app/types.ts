@@ -23,11 +23,6 @@ import type {
   ToolModuleProviderKind,
 } from "@anybox/shared"
 import type {
-  CinemaProviderAuthState as SharedCinemaProviderAuthState,
-  CinemaProviderWorkflowCatalog as SharedCinemaProviderWorkflowCatalog,
-  CinemaVideoProvider as SharedCinemaVideoProvider,
-} from "@anybox/shared/cinema"
-import type {
   DesktopPreviewRenderer,
   DesktopResolvedPreviewTarget,
   MobileBridgeDesktopEvent as DesktopMobileBridgeEvent,
@@ -1364,17 +1359,6 @@ export interface ProviderCatalogItem {
   lastAuthError?: string
 }
 
-export type CinemaProviderAuthState = SharedCinemaProviderAuthState
-export type CinemaProviderWorkflowCatalog = SharedCinemaProviderWorkflowCatalog
-export type CinemaVideoProvider = SharedCinemaVideoProvider
-export type CinemaVideoProviderModel = CinemaVideoProvider["manifest"]["models"][number]
-
-export interface CinemaVideoProviderDraftState {
-  apiKey: string
-  baseURL: string
-  userID?: string
-}
-
 export interface ProviderAuthCapability {
   method: string
   label: string
@@ -1519,12 +1503,12 @@ export interface ModelCatalogItem {
   name: string
   providerName: string
   family?: string
-  runtimeKind: "ai-sdk" | "cinema-task"
+  runtimeKind: "ai-sdk"
   selectable: boolean
   available: boolean
   capabilities: ModelCatalogItemCapabilities
   status: "alpha" | "beta" | "deprecated" | "active"
-  source: "provider" | "cinema"
+  source: "provider"
   metadata?: Record<string, unknown>
 }
 
@@ -1555,7 +1539,6 @@ export interface PromptPresetSelection {
   systemPromptPresetID: string
   planModePromptPresetID: string
   gitCommitPromptPresetID: string
-  cinemaTextGenerationPromptPresetID: string
 }
 
 export interface PromptPresetSummary {

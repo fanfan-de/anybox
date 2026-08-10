@@ -17,7 +17,7 @@ type DemoCopy = {
 const demos = {
   streaming: {
     descriptionId: "home-demo-description",
-    id: "product",
+    id: "live-agent",
     image: "/media/anybox-streaming-ui-poster.webp",
     titleId: "home-demo-title",
     copy: {

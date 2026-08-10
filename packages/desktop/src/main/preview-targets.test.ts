@@ -147,7 +147,7 @@ describe("preview target resolver", () => {
     expect(response.headers.get("x-content-type-options")).toBe("nosniff")
 
     const proxyPluginRuntimeRequest = vi.fn(async () => new Response("runtime-ready", { status: 202 }))
-    const runtimeUrl = new URL("/__anybox_runtime__/api/cinema/projects?limit=2", resolved.safePreviewUrl!).toString()
+    const runtimeUrl = new URL("/__anybox_runtime__/api/projects?limit=2", resolved.safePreviewUrl!).toString()
     const runtimeResponse = await handleLocalPreviewProtocolRequest(
       new Request(runtimeUrl, { method: "POST", body: "{}" }),
       { proxyPluginRuntimeRequest },
@@ -156,7 +156,7 @@ describe("preview target resolver", () => {
     expect(await runtimeResponse.text()).toBe("runtime-ready")
     expect(proxyPluginRuntimeRequest).toHaveBeenCalledWith(expect.objectContaining({
       pluginID: "react-sidebar-proof",
-      requestPath: "/api/cinema/projects?limit=2",
+      requestPath: "/api/projects?limit=2",
       viewID: "main",
     }))
 

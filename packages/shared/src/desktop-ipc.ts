@@ -105,16 +105,6 @@ export const DesktopIpcSchemas = {
       targetPath: z.string().min(1),
     }),
   },
-  openCinemaProject: {
-    input: z.object({
-      projectID: z.string().min(1),
-    }),
-    output: z.object({
-      ok: z.literal(true),
-      projectID: z.string().min(1),
-      url: z.string().url(),
-    }),
-  },
   getInfo: {
     output: z.object({
       platform: z.string(),
@@ -144,7 +134,5 @@ export const DesktopIpcSchemas = {
 
 export type DesktopOpenPathInput = z.infer<typeof DesktopIpcSchemas.openPath.input>
 export type DesktopOpenPathResult = z.infer<typeof DesktopIpcSchemas.openPath.output>
-export type DesktopOpenCinemaProjectInput = z.infer<typeof DesktopIpcSchemas.openCinemaProject.input>
-export type DesktopOpenCinemaProjectResult = z.infer<typeof DesktopIpcSchemas.openCinemaProject.output>
 export type DesktopStorageUsageSnapshot = z.infer<typeof DesktopStorageUsageSnapshotSchema>
 export type DesktopStorageOptimizeResult = z.infer<typeof DesktopStorageOptimizeResultSchema>

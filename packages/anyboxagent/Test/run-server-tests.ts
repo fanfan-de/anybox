@@ -12,14 +12,6 @@ try {
     "Test/server.lifecycle.test.ts",
     "Test/server.api.test.ts",
     "Test/plugin.test.ts",
-    "Test/cinema.api.test.ts",
-    "Test/cinema.asset-library.api.test.ts",
-    "Test/cinema.asset-library-reconcile.test.ts",
-    "Test/cinema.asset-library-migration.test.ts",
-    "Test/cinema.media-runtime.test.ts",
-    "Test/cinema.timeline-storage.test.ts",
-    "Test/cinema.timeline-api.test.ts",
-    "Test/cinema.timeline-commands.test.ts",
   ]
 
   for (const testFile of testFiles) {

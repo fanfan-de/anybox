@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
+import { createHash } from "node:crypto"
 import {
   access,
   mkdir,
@@ -58,6 +59,20 @@ function artifact() {
   })
 }
 
+function appRuntimeHelper(sha256: string) {
+  return PluginPlatformArtifact.parse({
+    id: "cinema-platform-helper",
+    type: "app-runtime-helper",
+    description: "Cinema keychain and file picker helper.",
+    executables: [{
+      platform: "linux",
+      architecture: "x64",
+      path: "bin/extension-host",
+      sha256,
+    }],
+  })
+}
+
 afterEach(async () => {
   await Promise.all(
     roots.splice(0).map((root) =>
@@ -67,6 +82,51 @@ afterEach(async () => {
 })
 
 describe("declarative plugin platform artifacts", () => {
+  test("verifies, atomically installs, exposes, and removes an App Runtime helper", async () => {
+    const input = await fixture()
+    const digest = createHash("sha256").update("native-host-v1").digest("hex")
+    const [receipt] = await installPlatformArtifacts({
+      pluginID: "cinema",
+      pluginVersion: "1.0.0",
+      packageRoot: input.packageRoot,
+      artifacts: [appRuntimeHelper(digest)],
+      platform: "linux",
+      architecture: "x64",
+      homeDir: input.homeDir,
+      dataDir: input.dataDir,
+      stateDir: input.stateDir,
+      env: input.env,
+    })
+
+    expect(receipt).toMatchObject({
+      type: "app-runtime-helper",
+      artifactID: "cinema-platform-helper",
+      executableSha256: digest,
+      manifestPaths: [],
+      registryKeys: [],
+    })
+    expect(await readFile(receipt!.executablePath, "utf8")).toBe("native-host-v1")
+    await expect(removePlatformArtifacts({
+      pluginID: "cinema",
+      receipts: [receipt!],
+      dataDir: input.dataDir,
+    })).resolves.toEqual({ removed: ["cinema-platform-helper"], skipped: [], pending: [] })
+    await expect(access(receipt!.managedRoot)).rejects.toBeDefined()
+
+    await expect(installPlatformArtifacts({
+      pluginID: "cinema",
+      pluginVersion: "1.0.0",
+      packageRoot: input.packageRoot,
+      artifacts: [appRuntimeHelper("0".repeat(64))],
+      platform: "linux",
+      architecture: "x64",
+      homeDir: input.homeDir,
+      dataDir: input.dataDir,
+      stateDir: input.stateDir,
+      env: input.env,
+    })).rejects.toMatchObject({ code: "PLATFORM_ARTIFACT_INVALID" })
+  })
+
   test("strictly validates native-host declarations", () => {
     expect(PluginManifest.safeParse({
       name: "native-test",

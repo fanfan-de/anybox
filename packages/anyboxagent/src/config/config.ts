@@ -106,22 +106,6 @@ export const ImageGenerationSettings = z
   })
 export type ImageGenerationSettings = z.infer<typeof ImageGenerationSettings>
 
-export const CinemaVideoProviderSettings = z
-  .object({
-    baseURL: z.string().optional(),
-    userID: z.string().optional(),
-  })
-  .strict()
-  .meta({
-    ref: "CinemaVideoProviderSettings",
-  })
-export type CinemaVideoProviderSettings = z.infer<typeof CinemaVideoProviderSettings>
-
-const CinemaVideoProviderSettingsField = z
-  .record(z.string(), CinemaVideoProviderSettings)
-  .optional()
-  .describe("Cinema video provider runtime settings such as endpoint overrides")
-
 const EnabledProvidersField = z
   .array(z.string())
   .optional()
@@ -197,11 +181,6 @@ const SelectedGitCommitPromptPresetField = z
   .string()
   .optional()
   .describe("Selected preset id for the Git commit message prompt")
-
-const SelectedCinemaTextGenerationPromptPresetField = z
-  .string()
-  .optional()
-  .describe("Selected preset id for the Cinema text generation prompt")
 
 export const McpServerTransport = z.enum(["stdio", "remote", "connector"]).meta({
   ref: "McpServerTransport",
@@ -505,7 +484,6 @@ export const Info = z
       ),
     ...ProviderConfigFields,
     image_generation: ImageGenerationSettings.optional(),
-    cinema_video_providers: CinemaVideoProviderSettingsField,
     reasoning_effort: ReasoningEffortSchema.optional(),
     default_agent: z
       .string()
@@ -540,7 +518,6 @@ export const Info = z
     selected_system_prompt_preset: SelectedSystemPromptPresetField,
     selected_plan_mode_prompt_preset: SelectedPlanModePromptPresetField,
     selected_git_commit_prompt_preset: SelectedGitCommitPromptPresetField,
-    selected_cinema_text_generation_prompt_preset: SelectedCinemaTextGenerationPromptPresetField,
     enterprise: z
       .object({
         url: z.string().optional().describe("Enterprise URL"),
@@ -958,39 +935,6 @@ export async function setImageGenerationSettings(configID: string, input: ImageG
   return writeConfig(normalizedConfigID, Info.parse(next))
 }
 
-export async function getCinemaVideoProviderSettings(
-  providerID: string,
-  configID = GLOBAL_CONFIG_ID,
-): Promise<CinemaVideoProviderSettings> {
-  const config = readConfig(normalizeConfigID(configID))
-  return CinemaVideoProviderSettings.parse(config.cinema_video_providers?.[providerID] ?? {})
-}
-
-export async function setCinemaVideoProviderSettings(
-  configID: string,
-  providerID: string,
-  input: CinemaVideoProviderSettings,
-) {
-  const normalizedConfigID = normalizeConfigID(configID)
-  const current = readConfig(normalizedConfigID)
-  const parsed = CinemaVideoProviderSettings.parse(input)
-  const nextProviders = {
-    ...(current.cinema_video_providers ?? {}),
-  }
-
-  if (Object.keys(parsed).length > 0) {
-    nextProviders[providerID] = parsed
-  } else {
-    delete nextProviders[providerID]
-  }
-
-  const next: Info = {
-    ...current,
-    cinema_video_providers: Object.keys(nextProviders).length > 0 ? nextProviders : undefined,
-  }
-  return writeConfig(normalizedConfigID, Info.parse(next))
-}
-
 export async function listMcpServers(configID = GLOBAL_CONFIG_ID): Promise<McpServerSummary[]> {
   const config = readConfig(normalizeConfigID(configID))
   const servers = Object.values(config.mcp?.servers ?? {}).map((server) => normalizeMcpServer(server))
@@ -1359,17 +1303,12 @@ export async function getSelectedGitCommitPromptPresetID(configID = GLOBAL_CONFI
   return normalizePromptPresetID(readConfig(normalizeConfigID(configID)).selected_git_commit_prompt_preset)
 }
 
-export async function getSelectedCinemaTextGenerationPromptPresetID(configID = GLOBAL_CONFIG_ID) {
-  return normalizePromptPresetID(readConfig(normalizeConfigID(configID)).selected_cinema_text_generation_prompt_preset)
-}
-
 export async function setSelectedPromptPresetIDs(
   configID: string,
   selection: {
     systemPromptPresetID?: string | null
     planModePromptPresetID?: string | null
     gitCommitPromptPresetID?: string | null
-    cinemaTextGenerationPromptPresetID?: string | null
   },
 ) {
   const normalizedConfigID = normalizeConfigID(configID)
@@ -1377,13 +1316,11 @@ export async function setSelectedPromptPresetIDs(
   const systemPromptPresetID = normalizePromptPresetID(selection.systemPromptPresetID)
   const planModePromptPresetID = normalizePromptPresetID(selection.planModePromptPresetID)
   const gitCommitPromptPresetID = normalizePromptPresetID(selection.gitCommitPromptPresetID)
-  const cinemaTextGenerationPromptPresetID = normalizePromptPresetID(selection.cinemaTextGenerationPromptPresetID)
   const next: Info = {
     ...current,
     selected_system_prompt_preset: systemPromptPresetID,
     selected_plan_mode_prompt_preset: planModePromptPresetID,
     selected_git_commit_prompt_preset: gitCommitPromptPresetID,
-    selected_cinema_text_generation_prompt_preset: cinemaTextGenerationPromptPresetID,
   }
 
   return writeConfig(normalizedConfigID, Info.parse(next))

@@ -3,8 +3,6 @@ import "./sqlite.cleanup.ts"
 import { mkdtemp, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { CinemaVideoProviderManifestSchema } from "@anybox/shared/cinema"
-import * as CinemaProviderRuntime from "#cinema/provider-runtime.ts"
 import * as Provider from "#provider/provider.ts"
 import { createServerApp } from "#server/server.ts"
 
@@ -32,10 +30,10 @@ interface ModelCatalogResponse {
     registryID: string
     providerID: string
     modelID: string
-    runtimeKind: "ai-sdk" | "cinema-task"
+    runtimeKind: "ai-sdk"
     selectable: boolean
     available: boolean
-    source: "provider" | "cinema"
+    source: "provider"
     capabilities: {
       output: {
         text: boolean
@@ -74,7 +72,7 @@ async function readJson<T>(response: Response) {
   return (await response.json()) as JsonEnvelope<T>
 }
 
-test("model catalog API keeps legacy models selectable and exposes read-only cinema task models", async () => {
+test("model catalog API keeps provider models selectable", async () => {
   const restoreProvider = Provider.setProviderRuntimeDependenciesForTesting({
     getModelsDev: async () => ({
       mockai: {
@@ -111,31 +109,6 @@ test("model catalog API keeps legacy models selectable and exposes read-only cin
       throw new Error("Model catalog API tests should not import SDK packages")
     },
   })
-  const restoreVideoCatalog = CinemaProviderRuntime.setCinemaVideoProviderCatalogForTest({
-    "mock-video": {
-      id: "mock-video",
-      name: "Mock Video",
-      kind: "native",
-      regions: [],
-      models: {
-        "task-video": {
-          id: "task-video",
-          name: "Task Video",
-          modes: ["text-to-video"],
-          pricing: [],
-          modalities: {
-            input: ["text"],
-            output: ["video"],
-          },
-        },
-      },
-    },
-  })
-  const restoreVideoAdapter = CinemaProviderRuntime.setCinemaVideoProviderAdapterForTest("mock-video", {
-    manifest: {} as never,
-    createTask: async ({ task }) => task,
-    refreshTask: async ({ task }) => task,
-  })
   const tempRoot = await realpath(await mkdtemp(join(tmpdir(), "anybox-model-catalog-api-")))
 
   try {
@@ -155,7 +128,6 @@ test("model catalog API keeps legacy models selectable and exposes read-only cin
     const catalogBody = await readJson<ModelCatalogResponse>(catalogResponse)
     const aiModel = catalogBody.data?.items.find((item) => item.registryID === "mockai/mock-text")
     const unconfiguredModel = catalogBody.data?.items.find((item) => item.registryID === "mock-unconfigured/unconfigured-text")
-    const taskModel = catalogBody.data?.items.find((item) => item.registryID === "cinema-task:mock-video/task-video")
 
     expect(catalogResponse.status).toBe(200)
     expect(catalogBody.success).toBe(true)
@@ -173,20 +145,6 @@ test("model catalog API keeps legacy models selectable and exposes read-only cin
       selectable: false,
       available: false,
       source: "provider",
-    })
-    expect(taskModel).toMatchObject({
-      providerID: "mock-video",
-      modelID: "task-video",
-      runtimeKind: "cinema-task",
-      selectable: false,
-      available: true,
-      source: "cinema",
-      capabilities: {
-        output: {
-          video: true,
-        },
-        taskModes: ["text-to-video"],
-      },
     })
 
     const projectCreateResponse = await app.request("http://localhost/api/projects", {
@@ -206,129 +164,8 @@ test("model catalog API keeps legacy models selectable and exposes read-only cin
     expect(projectCatalogResponse.status).toBe(200)
     expect(projectCatalogBody.success).toBe(true)
     expect(projectCatalogBody.data?.items.some((item) => item.registryID === "mockai/mock-text")).toBe(true)
-    expect(projectCatalogBody.data?.items.some((item) => item.registryID === "cinema-task:mock-video/task-video")).toBe(true)
   } finally {
     await rm(tempRoot, { recursive: true, force: true })
-    restoreVideoAdapter()
-    restoreVideoCatalog()
     restoreProvider()
   }
-})
-
-test("normalizes generation form specs from provider manifest inputs", () => {
-  const provider = CinemaVideoProviderManifestSchema.parse({
-    id: "klingai-cn",
-    name: "KlingAI CN",
-    requiresCredential: false,
-    regions: [],
-    models: [
-      {
-        id: "kling-image-v3",
-        label: "Kling Image 3.0 Omni",
-        offeringID: "klingai-cn/kling-image-3.0-omni",
-        providerModelID: "kling-v3-omni",
-        modalities: {
-          input: ["text", "image"],
-          output: ["image"],
-        },
-        modes: ["omni-image"],
-        inputCombinations: [
-          {
-            mode: "omni-image",
-            label: "Omni image",
-            requiredModalities: ["text"],
-            optionalModalities: ["image"],
-            inputs: [
-              {
-                role: "prompt",
-                modality: "text",
-                required: true,
-                minCount: 1,
-                maxCount: 1,
-                maxLength: 2500,
-              },
-              {
-                role: "image_list",
-                apiField: "image_list",
-                modality: "image",
-                required: false,
-                minCount: 0,
-                maxCount: 10,
-              },
-              {
-                role: "result_type",
-                apiField: "result_type",
-                modality: "parameter",
-                required: false,
-                minCount: 0,
-                maxCount: 1,
-                default: "single",
-                options: ["single", "series"],
-              },
-              {
-                role: "count",
-                apiField: "count",
-                modality: "parameter",
-                required: false,
-                minCount: 0,
-                maxCount: 1,
-                default: 1,
-                min: 1,
-                max: 9,
-                visibleWhen: {
-                  result_type: "single",
-                },
-              },
-              {
-                role: "series_amount",
-                apiField: "series_amount",
-                modality: "parameter",
-                required: false,
-                minCount: 0,
-                maxCount: 1,
-                default: 4,
-                options: [2, 3, 4, "auto"],
-                visibleWhen: {
-                  result_type: "series",
-                },
-              },
-            ],
-          },
-        ],
-        pricing: [],
-        formSpecs: [],
-        parameterSchema: {},
-      },
-    ],
-  })
-  const model = provider.models[0]!
-  const combination = model.inputCombinations[0]!
-  const formSpec = CinemaProviderRuntime.normalizeGenerationFormSpec(provider, model, combination)
-
-  expect(formSpec).toMatchObject({
-    providerID: "klingai-cn",
-    target: {
-      kind: "model",
-      modelID: "klingai-cn/kling-image-3.0-omni",
-    },
-    mode: "omni-image",
-    output: "image",
-  })
-  expect(formSpec.controls.find((control) => control.key === "image_list")).toMatchObject({
-    type: "image-list",
-    maxCount: 10,
-  })
-  expect(formSpec.controls.find((control) => control.key === "count")).toMatchObject({
-    type: "number",
-    max: 9,
-    visibleWhen: {
-      result_type: "single",
-    },
-  })
-  expect(formSpec.controls.find((control) => control.key === "series_amount")).toMatchObject({
-    type: "select",
-    visibleWhen: {
-      result_type: "series",
-    },
-  })
 })

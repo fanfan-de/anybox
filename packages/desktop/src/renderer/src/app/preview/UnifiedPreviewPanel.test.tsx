@@ -190,56 +190,6 @@ describe("UnifiedPreviewPanel", () => {
     expect(commentButton.textContent).toBe("")
   })
 
-  it("opens Local ComfyUI settings only for a message from the active preview frame", async () => {
-    const onOpenCinemaProviderSettings = vi.fn()
-    renderUnifiedPreviewPanel({
-      onOpenCinemaProviderSettings,
-      state: createPreviewState({
-        activeTargetInput: "agent://artifact/html-1",
-        draftTarget: "agent://artifact/html-1",
-        resolvedTarget: {
-          artifactID: "html-1",
-          entry: `${workspaceRoot}\\artifacts\\html-1\\index.html`,
-          externalOpenTarget: {
-            kind: "path",
-            value: `${workspaceRoot}\\artifacts\\html-1\\index.html`,
-          },
-          input: "agent://artifact/html-1",
-          kind: "artifact",
-          mime: "text/html; charset=utf-8",
-          normalizedInput: "agent://artifact/html-1",
-          path: `${workspaceRoot}\\artifacts\\html-1\\index.html`,
-          renderer: "html-preview",
-          safePreviewUrl: "anybox-preview://preview/token/index.html",
-          textReadable: false,
-          title: "index.html",
-          workspaceRoot,
-        },
-        status: "ready",
-      }),
-    })
-
-    const frame = await screen.findByTitle<HTMLIFrameElement>("Preview of index.html")
-    const unrelatedMessage = new MessageEvent("message", {
-      data: {
-        type: "anybox:open-cinema-provider-settings",
-        providerID: "comfyui-local",
-      },
-    })
-    window.dispatchEvent(unrelatedMessage)
-    expect(onOpenCinemaProviderSettings).not.toHaveBeenCalled()
-
-    const previewMessage = new MessageEvent("message", {
-      data: {
-        type: "anybox:open-cinema-provider-settings",
-        providerID: "comfyui-local",
-      },
-    })
-    Object.defineProperty(previewMessage, "source", { value: frame.contentWindow })
-    window.dispatchEvent(previewMessage)
-    expect(onOpenCinemaProviderSettings).toHaveBeenCalledWith("comfyui-local")
-  })
-
   it("renders browser navigation controls and delegates clicks", () => {
     const onBack = vi.fn()
     const onForward = vi.fn()

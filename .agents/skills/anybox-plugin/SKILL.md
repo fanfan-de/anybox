@@ -1,6 +1,6 @@
 ---
 name: anybox-plugin
-description: 构建、说明、迁移、评审或验证 Anybox 插件包及其 .anybox-plugin/plugin.json 清单。适用于 Codex 需要创建或更新插件目录、Plugin View、App Runtime、MCP Server、内置 Skill、插件自有 API Key 或 OAuth Connector、平台 Connector 依赖、外部组件 JSON、Registry 条目、ZIP 或 GitHub Tree 分发、生成 ID，或诊断 Anybox 插件目录与安装问题。
+description: 构建、说明、迁移、评审或验证 Anybox 插件包及其 .anybox-plugin/plugin.json 清单。适用于 Codex 需要创建或更新插件目录、Plugin View、App Runtime、App Runtime Helper、动态 Provider Origin、MCP Server、内置 Skill、插件自有 API Key 或 OAuth Connector、平台 Connector 依赖、外部组件 JSON、Registry 条目、ZIP 或 GitHub Tree 分发、生成 ID，或诊断 Anybox 插件目录与安装问题。
 ---
 
 # Anybox 插件规范
@@ -14,10 +14,11 @@ description: 构建、说明、迁移、评审或验证 Anybox 插件包及其 .
 1. `packages/anyboxagent/src/plugin/plugin.ts`
 2. `packages/anyboxagent/Test/plugin.test.ts`
 3. `packages/anyboxagent/src/connector/connector.ts`
-4. `plugins/Anybox-Plugins/index.json`
-5. 当前内置插件的 `.anybox-plugin/plugin.json` 示例
-6. `plugins/Anybox-Plugins/anybox-plugin-development/docs/anybox-third-party-plugin-development.md`
-7. 本 Skill 的参考文档
+4. `packages/anyboxagent/src/plugin/platform-artifacts.ts`
+5. `plugins/Anybox-Plugins/index.json`
+6. 当前内置插件的 `.anybox-plugin/plugin.json` 示例
+7. `plugins/Anybox-Plugins/anybox-plugin-development/docs/anybox-third-party-plugin-development.md`
+8. 本 Skill 的参考文档
 
 运行代码优先于测试，测试优先于说明文档，目标仓库优先于既有假设。如果实时解析器与本 Skill 不一致，遵循解析器并报告规范漂移。除非用户明确要求修改插件格式本身，否则不要为了让某个插件通过而修改解析器。
 
@@ -55,6 +56,9 @@ description: 构建、说明、迁移、评审或验证 Anybox 插件包及其 .
 - 完整 App 使用 `views` 提供用户入口；只有需要宿主启动本地 HTTP 后端时才声明独立的 `appRuntime`，不要把它与 `mcpServers[].runtime` 混用。
 - App Web 构建产物应放在插件包内并使用相对资源路径。`appRuntime` 中带 `${PLUGIN_ROOT}` 的 command、arg 和 cwd 必须解析到真实的包内文件或目录，不能使用其他 Runtime placeholder。
 - `appPermissions` 当前会进入高风险安装审查；`workspace: "request"` 只提供过渡性的项目上下文，`network` 和 `system` 不能被描述成已经具有 OS 级强制隔离或完整 Host SDK 授权。
+- 自定义 Provider 地址使用 `appPermissions.network[].kind = "user-configured-origin"`；仅声明权限不等于网络隔离，Runtime 必须验证 HTTPS/loopback、DNS 结果与同源重定向。
+- 系统钥匙串或原生选择器使用通用 `platformArtifacts.type = "app-runtime-helper"`。每个平台文件必须绑定 SHA-256，Runtime 只从 `ANYBOX_APP_ARTIFACTS_JSON` 读取安装后的路径，不得在 Core 添加插件 ID 分支。
+- App Runtime 只能依赖通用 `ANYBOX_APP_*` 启动环境与最小 OS 环境，不得依赖 `ANYBOX_AGENT_*`、插件专用兼容变量或宿主共享工具路径。
 - Local App Runtime 是真实本机代码。未实现 OS 级进程 Sandbox、签名与信任链前，必须明确告知风险，不得把声明式网络或文件权限宣传为安全边界。
 - 桌面开发版与正式版默认共享仓库内稳定的 `.catalog/anybox-plugin-registry.json`，且默认不扫描本地仓库源码包；只有显式设置 `ANYBOX_PLUGIN_INCLUDE_SOURCE_PACKAGES=1` 才进入源码插件开发模式。插件目录不跟随桌面版本，所有 Registry 和版本化 ZIP 都在本地生成、验证后作为普通 Git 文件提交；不得依赖 GitHub Actions、Release 或 API。
 - 除非确实希望阻止安装，否则不要把风险标记为 `critical`。

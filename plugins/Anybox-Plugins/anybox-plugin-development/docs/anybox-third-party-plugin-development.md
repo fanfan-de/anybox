@@ -191,10 +191,20 @@ Path rules:
     "idleTimeoutMs": 300000
   },
   "appPermissions": {
-    "workspace": "request",
-    "network": ["https://api.example.com"],
+    "workspace": "none",
+    "network": [
+      "https://api.example.com",
+      {
+        "kind": "user-configured-origin",
+        "id": "custom-provider",
+        "description": "User-configured provider endpoint.",
+        "schemes": ["https"],
+        "allowLoopbackHttp": true
+      }
+    ],
     "system": []
-  }
+  },
+  "installReview": ["Runs a local Runtime and connects to the disclosed origins."]
 }
 ```
 
@@ -203,7 +213,7 @@ Path rules:
 - Runtime 从 `ANYBOX_APP_PORT` 读取 loopback 端口，并监听 `127.0.0.1`。
 - Runtime 从 `ANYBOX_APP_TOKEN` 读取随机 Token，并验证每个请求的 `x-anybox-app-runtime-token`。不要把 Token 返回给 App Web。
 - App Web 在插件模式下请求同源 `/__anybox_runtime__/...`；Anybox 根据当前 View 的真实归属转发请求，页面不能自报其他 `pluginID`。
-- 宿主还会提供 `ANYBOX_APP_ID`、`ANYBOX_APP_VERSION`、`ANYBOX_APP_DATA_DIR`、`ANYBOX_APP_CACHE_DIR`、`ANYBOX_APP_LOG_DIR` 和 `ANYBOX_APP_LOCALE`。
+- 宿主还会提供 `ANYBOX_APP_ID`、`ANYBOX_APP_VERSION`、`ANYBOX_APP_DATA_DIR`、`ANYBOX_APP_CACHE_DIR`、`ANYBOX_APP_LOG_DIR`、`ANYBOX_APP_LOCALE` 和 `ANYBOX_APP_ARTIFACTS_JSON`。子进程只继承这些通用变量与最小 OS 环境，不会继承 `ANYBOX_AGENT_*`、插件专用旧变量或宿主媒体工具路径。
 - `${PLUGIN_ROOT}` 是 App Runtime 唯一支持的 placeholder。带该 placeholder 的 command、arg 和 cwd 会在本地扫描时验证，必须指向真实的包内文件或目录。
 - `healthcheckPath` 必须是本地绝对 path，不能含 query、fragment 或 `..`；宿主在首次请求时启动 Runtime，健康检查成功后才转发。
 - 更新、禁用、卸载与 Agent 退出会停止 Runtime；多个 View 共享同一插件 Runtime，空闲停止由 `idleTimeoutMs` 控制。
@@ -214,6 +224,34 @@ Path rules:
 - `appRuntime` 会把插件风险提升为 high。当前没有 OS 级进程 Sandbox，`appPermissions.network` 与 `system` 首先用于严格声明和安装审查，不能当作已经强制执行的本机隔离。
 - `workspace: "request"` 当前只让宿主向 View 传递所选项目 ID，尚不是可移植的目录授权句柄；Runtime 不应假定它已经获得任意 Workspace 文件访问权。
 - Gateway 目前支持普通 HTTP、上传/下载流和 Range headers，不支持 WebSocket；需要 WebSocket 的 App 暂不应依赖此路径。
+
+动态 Provider 地址必须声明为 `user-configured-origin`。Manifest 只负责披露风险；Runtime 仍须拒绝远程 HTTP、私网/链路本地/metadata 地址、DNS 重绑定和跨源重定向，并禁止凭据跨源转发。
+
+### App Runtime 原生助手
+
+插件需要系统钥匙串或用户主动触发的原生目录/文件选择时，声明通用 App Runtime Helper，不要要求宿主增加插件专用 IPC：
+
+```json
+{
+  "platformArtifacts": [
+    {
+      "id": "example-platform-helper",
+      "type": "app-runtime-helper",
+      "description": "OS-keychain and native picker helper.",
+      "executables": [
+        {
+          "platform": "win32",
+          "architecture": "x64",
+          "path": "native/win32-x64/example-platform-helper.exe",
+          "sha256": "<64-character-lowercase-hex>"
+        }
+      ]
+    }
+  ]
+}
+```
+
+安装器只复制当前平台/架构文件，在复制前验证 SHA-256，使用版本化路径原子升级，并保留 ownership receipt 供卸载清理。Runtime 从 `ANYBOX_APP_ARTIFACTS_JSON` 按 Artifact ID 读取受管路径。发布者仍必须完成平台签名/校验，并在顶层 `installReview` 披露原生代码、钥匙串、选择器与失败回退。
 
 ### MCP Server
 

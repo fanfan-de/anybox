@@ -31,7 +31,7 @@ const RelativeArtifactPath = z.string().trim().min(1).refine((value) => (
   && !/[\0\r\n]/u.test(value)
 ), "Platform artifact paths must remain inside the plugin package.")
 
-export const PluginPlatformArtifact = z.object({
+const PluginChromeNativeMessagingArtifact = z.object({
   id: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/u),
   type: z.literal("chrome-native-messaging-host"),
   hostName: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,127}$/u),
@@ -48,28 +48,61 @@ export const PluginPlatformArtifact = z.object({
     kind: z.literal("anybox-browser-ipc"),
   }).strict().optional(),
 }).strict()
+
+const PluginAppRuntimeHelperArtifact = z.object({
+  id: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,63}$/u),
+  type: z.literal("app-runtime-helper"),
+  description: z.string().trim().min(1).max(256),
+  executables: z.array(z.object({
+    platform: z.enum(["win32", "darwin", "linux"]),
+    architecture: z.enum(["x64", "arm64"]),
+    path: RelativeArtifactPath,
+    sha256: z.string().regex(/^[a-f0-9]{64}$/u),
+  }).strict()).min(1),
+}).strict()
+
+export const PluginPlatformArtifact = z.discriminatedUnion("type", [
+  PluginChromeNativeMessagingArtifact,
+  PluginAppRuntimeHelperArtifact,
+])
 export type PluginPlatformArtifact = z.infer<typeof PluginPlatformArtifact>
 
-export const PlatformArtifactOwnershipReceipt = z.object({
+const PlatformArtifactOwnershipReceiptBase = z.object({
   schemaVersion: z.literal(1),
   artifactID: z.string().min(1),
-  type: z.literal("chrome-native-messaging-host"),
   pluginID: z.string().min(1),
   pluginVersion: z.string().min(1),
   ownershipID: z.string().uuid(),
-  hostName: z.string().min(1),
   platform: z.enum(["win32", "darwin", "linux"]),
   architecture: z.enum(["x64", "arm64"]),
   managedRoot: z.string().min(1),
   executablePath: z.string().min(1),
   executableSha256: z.string().regex(/^[a-f0-9]{64}$/u),
   currentPointerPath: z.string().min(1),
-  manifestPaths: z.array(z.string().min(1)).min(1),
+  hostName: z.string().min(1).optional(),
+  manifestPaths: z.array(z.string().min(1)).default([]),
   runtimeConfigPath: z.string().min(1).optional(),
+  registryKeys: z.array(z.string().min(1)).default([]),
   ownershipPath: z.string().min(1),
-  registryKeys: z.array(z.string().min(1)),
   installedAt: z.number().int().positive(),
 }).strict()
+
+const ChromeNativeMessagingOwnershipReceipt = PlatformArtifactOwnershipReceiptBase.extend({
+  type: z.literal("chrome-native-messaging-host"),
+  hostName: z.string().min(1),
+  manifestPaths: z.array(z.string().min(1)).min(1),
+  runtimeConfigPath: z.string().min(1).optional(),
+  registryKeys: z.array(z.string().min(1)),
+}).strict()
+
+const AppRuntimeHelperOwnershipReceipt = PlatformArtifactOwnershipReceiptBase.extend({
+  type: z.literal("app-runtime-helper"),
+}).strict()
+
+export const PlatformArtifactOwnershipReceipt = z.discriminatedUnion("type", [
+  ChromeNativeMessagingOwnershipReceipt,
+  AppRuntimeHelperOwnershipReceipt,
+])
 export type PlatformArtifactOwnershipReceipt = z.infer<
   typeof PlatformArtifactOwnershipReceipt
 >
@@ -686,6 +719,15 @@ export async function installPlatformArtifacts(
     const ownershipID = existing?.ownershipID ?? diskOwner?.ownershipID
       ?? randomUUID()
     const sourceSha256 = await sha256(source)
+    if (
+      artifact.type === "app-runtime-helper"
+      && (!("sha256" in target) || sourceSha256 !== target.sha256)
+    ) {
+      throw new PlatformArtifactError(
+        "PLATFORM_ARTIFACT_INVALID",
+        `Artifact '${artifact.id}' does not match its declared SHA-256 digest.`,
+      )
+    }
     const versionDirectory = path.join(
       managedRoot,
       "versions",
@@ -693,9 +735,9 @@ export async function installPlatformArtifacts(
       `${supportedPlatform}-${supportedArchitecture}`,
     )
     await mkdir(versionDirectory, { recursive: true })
-    const executableName = supportedPlatform === "win32"
-      ? "extension-host.exe"
-      : "extension-host"
+    const executableName = artifact.type === "app-runtime-helper"
+      ? supportedPlatform === "win32" ? "runtime-helper.exe" : "runtime-helper"
+      : supportedPlatform === "win32" ? "extension-host.exe" : "extension-host"
     const versionExecutable = path.join(versionDirectory, executableName)
     const installedSha256 = await sha256(versionExecutable).catch(
       () => undefined,
@@ -712,6 +754,70 @@ export async function installPlatformArtifacts(
       managedRoot,
       CURRENT_POINTER_FILENAME,
     )
+    if (artifact.type === "app-runtime-helper") {
+      const previousFiles = new Map(
+        await Promise.all([currentPointerPath, ownershipPath].map(async (filePath) => [
+          filePath,
+          await optionalText(filePath),
+        ] as const)),
+      )
+      let currentSwap: Awaited<ReturnType<typeof atomicCurrentExecutable>> | undefined
+      try {
+        currentSwap = await atomicCurrentExecutable({
+          source: versionExecutable,
+          managedRoot,
+          executableName,
+          platform: supportedPlatform,
+          removeReplacedCurrent: rawOptions.removeReplacedCurrent,
+        })
+        await atomicJson(currentPointerPath, {
+          schemaVersion: 1,
+          ownershipID,
+          pluginVersion: rawOptions.pluginVersion,
+          target: path.relative(managedRoot, versionExecutable),
+        })
+        const installedAt = rawOptions.now?.() ?? Date.now()
+        const receipt = PlatformArtifactOwnershipReceipt.parse({
+          schemaVersion: 1,
+          artifactID: artifact.id,
+          type: artifact.type,
+          pluginID: rawOptions.pluginID,
+          pluginVersion: rawOptions.pluginVersion,
+          ownershipID,
+          platform: supportedPlatform,
+          architecture: supportedArchitecture,
+          managedRoot,
+          executablePath: currentSwap.executablePath,
+          executableSha256: await sha256(currentSwap.executablePath),
+          currentPointerPath,
+          ownershipPath,
+          installedAt,
+        })
+        await atomicJson(ownershipPath, receipt)
+        await currentSwap.commit(async (replacedRoot) => {
+          const managedBase = path.join(dataDir, "platform-artifacts")
+          await writePendingRemoval(managedBase, { ...receipt, managedRoot: replacedRoot })
+          schedulePendingPlatformArtifactCleanup(dataDir)
+        })
+        installed.push(receipt)
+      } catch (cause) {
+        const rollbackResults = await Promise.allSettled([
+          ...(currentSwap ? [currentSwap.rollback()] : []),
+          ...[...previousFiles].map(([filePath, text]) => restoreText(filePath, text)),
+        ])
+        const rollbackFailures = rollbackResults
+          .filter((result) => result.status === "rejected")
+          .map((result) => result.reason)
+        throw new PlatformArtifactError(
+          "PLATFORM_ARTIFACT_INSTALL_FAILED",
+          rollbackFailures.length > 0
+            ? `Failed to install app runtime helper '${artifact.id}' and fully roll it back.`
+            : `Failed to install app runtime helper '${artifact.id}'; the previous installation was restored.`,
+          rollbackFailures.length > 0 ? { cause, rollbackFailures } : cause,
+        )
+      }
+      continue
+    }
     const paths = nativeMessagingPaths({
       platform: supportedPlatform,
       homeDir,
@@ -913,45 +1019,47 @@ export async function removePlatformArtifacts(rawOptions: RemoveOptions) {
       continue
     }
 
-    if (receipt.platform === "win32") {
-      for (const key of receipt.registryKeys) {
-        const current = await registryValue(run, key)
-        if (
-          current
-          && path.resolve(current).toLowerCase()
-            === path.resolve(receipt.manifestPaths[0]!).toLowerCase()
-        ) {
-          await run("reg", ["delete", key, "/f"])
+    if (receipt.type === "chrome-native-messaging-host") {
+      if (receipt.platform === "win32") {
+        for (const key of receipt.registryKeys) {
+          const current = await registryValue(run, key)
+          if (
+            current
+            && path.resolve(current).toLowerCase()
+              === path.resolve(receipt.manifestPaths[0]!).toLowerCase()
+          ) {
+            await run("reg", ["delete", key, "/f"])
+          }
         }
       }
-    }
-    for (const manifestPath of receipt.manifestPaths) {
-      try {
-        const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
-          name?: unknown
-          path?: unknown
+      for (const manifestPath of receipt.manifestPaths) {
+        try {
+          const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as {
+            name?: unknown
+            path?: unknown
+          }
+          if (
+            manifest.name === receipt.hostName
+            && typeof manifest.path === "string"
+            && path.resolve(manifest.path) === path.resolve(receipt.executablePath)
+          ) {
+            await rm(manifestPath, { force: true })
+          }
+        } catch {
+          // Missing or replaced manifests are not owned anymore.
         }
-        if (
-          manifest.name === receipt.hostName
-          && typeof manifest.path === "string"
-          && path.resolve(manifest.path) === path.resolve(receipt.executablePath)
-        ) {
-          await rm(manifestPath, { force: true })
-        }
-      } catch {
-        // Missing or replaced manifests are not owned anymore.
       }
-    }
-    if (receipt.runtimeConfigPath) {
-      try {
-        const config = JSON.parse(
-          await readFile(receipt.runtimeConfigPath, "utf8"),
-        ) as { ownershipID?: unknown }
-        if (config.ownershipID === receipt.ownershipID) {
-          await rm(receipt.runtimeConfigPath, { force: true })
+      if (receipt.runtimeConfigPath) {
+        try {
+          const config = JSON.parse(
+            await readFile(receipt.runtimeConfigPath, "utf8"),
+          ) as { ownershipID?: unknown }
+          if (config.ownershipID === receipt.ownershipID) {
+            await rm(receipt.runtimeConfigPath, { force: true })
+          }
+        } catch {
+          // Missing or replaced runtime config is left untouched.
         }
-      } catch {
-        // Missing or replaced runtime config is left untouched.
       }
     }
     const deferred = await writePendingRemoval(managedBase, receipt)

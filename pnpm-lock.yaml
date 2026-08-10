@@ -263,76 +263,6 @@ importers:
         specifier: ^4.1.2
         version: 4.1.4(@opentelemetry/api@1.9.0)(@types/node@25.6.0)(jsdom@27.4.0)(vite@7.3.1(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.32.0)(sass@1.101.0)(terser@5.48.0)(tsx@4.23.1)(yaml@2.8.3))
 
-  packages/cinema-web:
-    dependencies:
-      '@anybox/shared':
-        specifier: workspace:*
-        version: link:../shared
-      '@tanstack/react-query':
-        specifier: ^5.90.12
-        version: 5.101.2(react@19.2.3)
-      '@tanstack/react-virtual':
-        specifier: 3.14.5
-        version: 3.14.5(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      '@xyflow/react':
-        specifier: ^12.9.3
-        version: 12.11.1(@types/react-dom@19.2.3(@types/react@19.2.16))(@types/react@19.2.16)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      lucide-react:
-        specifier: ^1.8.0
-        version: 1.8.0(react@19.2.3)
-      react:
-        specifier: ^19.2.0
-        version: 19.2.3
-      react-dom:
-        specifier: ^19.2.0
-        version: 19.2.3(react@19.2.3)
-      react-markdown:
-        specifier: 10.1.0
-        version: 10.1.0(@types/react@19.2.16)(react@19.2.3)
-      remark-breaks:
-        specifier: 4.0.0
-        version: 4.0.0
-      zustand:
-        specifier: ^5.0.12
-        version: 5.0.12(@types/react@19.2.16)(react@19.2.3)(use-sync-external-store@1.6.0(react@19.2.3))
-    devDependencies:
-      '@axe-core/playwright':
-        specifier: ^4.12.1
-        version: 4.12.1(playwright-core@1.61.1)
-      '@playwright/test':
-        specifier: ^1.61.1
-        version: 1.61.1
-      '@testing-library/jest-dom':
-        specifier: ^6.9.1
-        version: 6.9.1
-      '@testing-library/react':
-        specifier: ^16.3.0
-        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.16))(@types/react@19.2.16)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      '@types/react':
-        specifier: ^19.2.2
-        version: 19.2.16
-      '@types/react-dom':
-        specifier: ^19.2.2
-        version: 19.2.3(@types/react@19.2.16)
-      '@vitejs/plugin-react':
-        specifier: ^5.1.2
-        version: 5.1.2(vite@7.3.1(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.32.0)(sass@1.101.0)(terser@5.48.0)(tsx@4.23.1)(yaml@2.8.3))
-      axe-core:
-        specifier: ^4.12.1
-        version: 4.12.1
-      jsdom:
-        specifier: ^27.0.0
-        version: 27.4.0
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vite:
-        specifier: ^7.3.1
-        version: 7.3.1(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.32.0)(sass@1.101.0)(terser@5.48.0)(tsx@4.23.1)(yaml@2.8.3)
-      vitest:
-        specifier: ^4.1.2
-        version: 4.1.4(@opentelemetry/api@1.9.0)(@types/node@25.6.0)(jsdom@27.4.0)(vite@7.3.1(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.32.0)(sass@1.101.0)(terser@5.48.0)(tsx@4.23.1)(yaml@2.8.3))
-
   packages/desktop:
     dependencies:
       '@anybox/platform':
@@ -720,6 +650,97 @@ importers:
         specifier: ^4.1.4
         version: 4.1.4(@opentelemetry/api@1.9.0)(@types/node@25.6.0)(jsdom@27.4.0)(vite@7.3.1(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.32.0)(sass@1.101.0)(terser@5.48.0)(tsx@4.23.1)(yaml@2.8.3))
 
+  plugins/Anybox-Plugins/cinema:
+    dependencies:
+      '@ai-sdk/openai-compatible':
+        specifier: 3.0.18
+        version: 3.0.18(zod@4.3.6)
+      '@tanstack/react-query':
+        specifier: ^5.90.12
+        version: 5.101.2(react@19.2.3)
+      '@tanstack/react-virtual':
+        specifier: 3.14.5
+        version: 3.14.5(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      '@xyflow/react':
+        specifier: ^12.9.3
+        version: 12.11.1(@types/react-dom@19.2.3(@types/react@19.2.16))(@types/react@19.2.16)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      ai:
+        specifier: ^7.0.44
+        version: 7.0.44(zod@4.3.6)
+      fuzzysort:
+        specifier: ^3.1.0
+        version: 3.1.0
+      hono:
+        specifier: ^4.12.8
+        version: 4.12.32
+      lucide-react:
+        specifier: ^1.8.0
+        version: 1.8.0(react@19.2.3)
+      react:
+        specifier: ^19.2.0
+        version: 19.2.3
+      react-dom:
+        specifier: ^19.2.0
+        version: 19.2.3(react@19.2.3)
+      react-markdown:
+        specifier: 10.1.0
+        version: 10.1.0(@types/react@19.2.16)(react@19.2.3)
+      remark-breaks:
+        specifier: 4.0.0
+        version: 4.0.0
+      tar:
+        specifier: ^7.5.2
+        version: 7.5.13
+      zod:
+        specifier: ^4.1.13
+        version: 4.3.6
+      zustand:
+        specifier: ^5.0.12
+        version: 5.0.12(@types/react@19.2.16)(react@19.2.3)(use-sync-external-store@1.6.0(react@19.2.3))
+    devDependencies:
+      '@axe-core/playwright':
+        specifier: ^4.12.1
+        version: 4.12.1(playwright-core@1.61.1)
+      '@playwright/test':
+        specifier: ^1.61.1
+        version: 1.61.1
+      '@testing-library/jest-dom':
+        specifier: ^6.9.1
+        version: 6.9.1
+      '@testing-library/react':
+        specifier: ^16.3.0
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.16))(@types/react@19.2.16)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      '@types/bun':
+        specifier: ^1.3.9
+        version: 1.3.11
+      '@types/react':
+        specifier: ^19.2.2
+        version: 19.2.16
+      '@types/react-dom':
+        specifier: ^19.2.2
+        version: 19.2.3(@types/react@19.2.16)
+      '@vitejs/plugin-react':
+        specifier: ^5.1.2
+        version: 5.1.2(vite@7.3.1(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.32.0)(sass@1.101.0)(terser@5.48.0)(tsx@4.23.1)(yaml@2.8.3))
+      axe-core:
+        specifier: ^4.12.1
+        version: 4.12.1
+      fflate:
+        specifier: ^0.8.2
+        version: 0.8.3
+      jsdom:
+        specifier: ^27.0.0
+        version: 27.4.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite:
+        specifier: ^7.3.1
+        version: 7.3.1(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.32.0)(sass@1.101.0)(terser@5.48.0)(tsx@4.23.1)(yaml@2.8.3)
+      vitest:
+        specifier: ^4.1.2
+        version: 4.1.4(@opentelemetry/api@1.9.0)(@types/node@25.6.0)(jsdom@27.4.0)(vite@7.3.1(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.32.0)(sass@1.101.0)(terser@5.48.0)(tsx@4.23.1)(yaml@2.8.3))
+
 packages:
 
   7zip-bin@5.2.0:
@@ -733,6 +754,12 @@ packages:
 
   '@ai-sdk/gateway@4.0.33':
     resolution: {integrity: sha512-YFkZhWH1ksIoSO2b0S/nAboiYBYRhkrmbC/6vOBsKZz6Y0FfBBaIjWBu3lW2n2x7cXEH776RUKGOiEzJYmu+Pw==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/openai-compatible@3.0.18':
+    resolution: {integrity: sha512-IKoElyW52LakNTmqiwM2yXZYTvOnA8XCzP+yUoV5Pf+pudqOL8rsXToXiuLlJapMcWpTpXH0EoWK42zNJd9Dew==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -4615,6 +4642,9 @@ packages:
   fetch-nodeshim@0.4.10:
     resolution: {integrity: sha512-m6I8ALe4L4XpdETy7MJZWs6L1IVMbjs99bwbpIKphxX+0CTns4IKDWJY0LWfr4YsFjfg+z1TjzTMU8lKl8rG0w==}
 
+  fflate@0.8.3:
+    resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
+
   file-type@16.5.4:
     resolution: {integrity: sha512-/yFHK0aGjFEgDJjEKP0pWCplsPFPhwyfwevf/pVxiN0tmE4L9LmwWxWukdJSHdoCli4VgQLehjJtwQBnqmsKcw==}
     engines: {node: '>=10'}
@@ -7640,6 +7670,12 @@ snapshots:
       '@vercel/oidc': 3.2.0
       zod: 4.3.6
 
+  '@ai-sdk/openai-compatible@3.0.18(zod@4.3.6)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.4
+      '@ai-sdk/provider-utils': 5.0.16(zod@4.3.6)
+      zod: 4.3.6
+
   '@ai-sdk/provider-utils@5.0.16(zod@4.3.6)':
     dependencies:
       '@ai-sdk/provider': 4.0.4
@@ -10118,9 +10154,7 @@ snapshots:
       metro-runtime: 0.84.4
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/normalize-colors@0.85.3': {}
 
@@ -12213,6 +12247,8 @@ snapshots:
       picomatch: 4.0.3
 
   fetch-nodeshim@0.4.10: {}
+
+  fflate@0.8.3: {}
 
   file-type@16.5.4:
     dependencies:

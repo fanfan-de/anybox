@@ -270,6 +270,10 @@ describe("PluginsPage", () => {
     expect(screen.queryByRole("navigation", { name: "Plugin detail breadcrumb" })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole("button", { name: "Install Filesystem" }))
+    expect(screen.getByRole("dialog", { name: "Review Filesystem" })).toBeInTheDocument()
+    expect(screen.getByText("Prefer a narrow project folder.")).toBeInTheDocument()
+    expect(onInstallPlugin).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole("button", { name: "Confirm install Filesystem" }))
     expect(onInstallPlugin).toHaveBeenCalledWith("filesystem")
   })
 
@@ -768,6 +772,7 @@ describe("PluginsPage", () => {
     const installButton = screen.getByRole("button", { name: "Install Filesystem" })
     expect(installButton.closest(".plugins-detail-actions")).not.toBeNull()
     fireEvent.click(installButton)
+    fireEvent.click(screen.getByRole("button", { name: "Confirm install Filesystem" }))
     expect(onInstallPlugin).toHaveBeenCalledWith("filesystem")
 
     fireEvent.click(within(breadcrumb).getByRole("button", { name: "Plugins" }))

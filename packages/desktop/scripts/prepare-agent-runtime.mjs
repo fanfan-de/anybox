@@ -4,7 +4,6 @@ import fsp from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { prepareWorkspaceDependencies } from "./prepare-workspace-dependencies.mjs"
-import { prepareMediaTools } from "./prepare-media-tools.mjs"
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
 const desktopDir = path.resolve(scriptDir, "..")
@@ -12,8 +11,6 @@ const repoRoot = path.resolve(desktopDir, "..", "..")
 const agentDir = path.join(repoRoot, "packages", "anyboxagent")
 const runtimeBuildDir = path.join(desktopDir, "build")
 const runtimeDir = resolveRuntimeOutputDirectory()
-const cinemaProviderCatalogSource = path.join(agentDir, "src", "cinema", "provider-manifests.json")
-const cinemaProviderManifestsSourceDir = path.join(agentDir, "src", "cinema", "provider-manifests")
 const gmailConnectorSourceDir = path.join(agentDir, "plugins", "builtin", "gmail", "0.1.0", "connectors", "gmail")
 const feishuConnectorSourceDir = path.join(agentDir, "plugins", "builtin", "feishu", "0.1.0", "connectors", "feishu")
 const nodeReplMcpSourceDir = path.join(agentDir, "mcp", "node-repl")
@@ -167,21 +164,6 @@ async function copyBundledPlatformRuntimes() {
   )
 }
 
-async function copyCinemaProviderManifests() {
-  if (!(await pathExists(cinemaProviderCatalogSource))) {
-    throw new Error(`Missing Cinema provider catalog at ${cinemaProviderCatalogSource}`)
-  }
-  if (!(await pathExists(cinemaProviderManifestsSourceDir))) {
-    throw new Error(`Missing Cinema provider manifests at ${cinemaProviderManifestsSourceDir}`)
-  }
-
-  const targetCatalog = path.join(runtimeDir, "provider-manifests.json")
-  const targetManifestsDir = path.join(runtimeDir, "provider-manifests")
-  await fsp.copyFile(cinemaProviderCatalogSource, targetCatalog)
-  await fsp.rm(targetManifestsDir, { recursive: true, force: true })
-  await fsp.cp(cinemaProviderManifestsSourceDir, targetManifestsDir, { recursive: true })
-}
-
 async function writeConnectorBuildConfig() {
   const gmailOAuthClientID = readEnv("ANYBOX_GMAIL_OAUTH_CLIENT_ID")
   const gmailOAuthClientSecret = readEnv("ANYBOX_GMAIL_OAUTH_CLIENT_SECRET")
@@ -225,14 +207,12 @@ async function main() {
   await fsp.copyFile(path.join(agentDir, "src", "pty", "node-pty-worker.mjs"), path.join(runtimeDir, "node-pty-worker.mjs"))
   await copyNodePtyRuntime(runtimeNodeModulesDir)
   await fixNodePtySpawnHelperPermissions(runtimeNodeModulesDir)
-  await copyCinemaProviderManifests()
   await copyBundledPlatformRuntimes()
   await writeConnectorBuildConfig()
   await prepareWorkspaceDependencies({
     bunBinary,
     dependenciesDir: path.join(runtimeDir, "dependencies"),
   })
-  await prepareMediaTools({ runtimeDir })
   console.log(`[desktop][build] prepared managed agent runtime at ${runtimeDir}`)
 }
 

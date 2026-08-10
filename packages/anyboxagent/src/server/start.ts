@@ -1,5 +1,4 @@
 import { startServer, stopServer, url } from "#server/server.ts"
-import { cinemaRenderQueue } from "#cinema/render-queue.ts"
 import * as Log from "#util/log.ts"
 import { getProcessEnvValue } from "#env/compat.ts"
 import * as Connector from "#connector/connector.ts"
@@ -75,7 +74,6 @@ const shutdown = async (signal: "SIGINT" | "SIGTERM") => {
   log.info("server-shutdown", { signal })
   await stopServer()
   await AppRuntime.stopAll("agent-shutdown")
-  await cinemaRenderQueue.shutdown()
   process.exit(0)
 }
 

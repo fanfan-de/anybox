@@ -605,15 +605,6 @@ const PROMPT_PRESET_FIXTURES: PromptPresetFixture[] = [
     sourcePath: "src/session/prompt/git-commit-message.md",
   },
   {
-    id: "cinema-text-generation",
-    label: "Cinema text generation prompt",
-    description: "System instructions used when generating content for Cinema text nodes.",
-    source: "bundled" as const,
-    hasOverride: false,
-    editable: false,
-    sourcePath: "src/session/prompt/cinema-text-generation.md",
-  },
-  {
     id: "provider-gpt",
     label: "GPT Provider Prompt",
     description: "Reserved provider-specific prompt for GPT-family models.",
@@ -628,7 +619,6 @@ const PROMPT_PRESET_SELECTION_FIXTURE = {
   systemPromptPresetID: "system-default",
   planModePromptPresetID: "plan-mode",
   gitCommitPromptPresetID: "git-commit-message",
-  cinemaTextGenerationPromptPresetID: "cinema-text-generation",
 }
 
 function createPromptPresetSummary(
@@ -9384,7 +9374,6 @@ describe("App", () => {
         filePath: "C:\\Users\\demo\\.anybox\\prompts\\bundled\\plan-mode.md",
       }),
       createPromptPresetDocument("git-commit-message"),
-      createPromptPresetDocument("cinema-text-generation"),
       createPromptPresetDocument("provider-gpt"),
     ]
 
@@ -9471,10 +9460,6 @@ describe("App", () => {
           promptPresetSelection.gitCommitPromptPresetID === presetID
             ? "git-commit-message"
             : promptPresetSelection.gitCommitPromptPresetID,
-        cinemaTextGenerationPromptPresetID:
-          promptPresetSelection.cinemaTextGenerationPromptPresetID === presetID
-            ? "cinema-text-generation"
-            : promptPresetSelection.cinemaTextGenerationPromptPresetID,
       }
       return Promise.resolve(promptPresetSelection)
     })
@@ -9535,14 +9520,12 @@ describe("App", () => {
       "System prompt",
       "Plan mode prompt",
       "Git commit message prompt",
-      "Cinema text generation prompt",
     ])
     expect(screen.queryByText("Every execution")).not.toBeInTheDocument()
     expect(screen.queryByText("Plan only")).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "System prompt" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Plan mode prompt" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Git commit message prompt" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Cinema text generation prompt" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "GPT Provider Prompt" })).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Open prompts folder" })).not.toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Install prompt" })).not.toBeInTheDocument()
@@ -9589,7 +9572,6 @@ describe("App", () => {
         systemPromptPresetID: "provider-gpt",
         planModePromptPresetID: "plan-mode",
         gitCommitPromptPresetID: "git-commit-message",
-        cinemaTextGenerationPromptPresetID: "cinema-text-generation",
       })
     })
 
@@ -9626,7 +9608,6 @@ describe("App", () => {
         systemPromptPresetID: "custom-untitled-preset",
         planModePromptPresetID: "plan-mode",
         gitCommitPromptPresetID: "git-commit-message",
-        cinemaTextGenerationPromptPresetID: "cinema-text-generation",
       })
     })
 
@@ -9637,7 +9618,6 @@ describe("App", () => {
         systemPromptPresetID: "custom-untitled-preset",
         planModePromptPresetID: "plan-mode",
         gitCommitPromptPresetID: "custom-untitled-preset",
-        cinemaTextGenerationPromptPresetID: "cinema-text-generation",
       })
     })
 
@@ -9678,7 +9658,6 @@ describe("App", () => {
         systemPromptPresetID: "custom-gpt-provider-prompt-custom",
         planModePromptPresetID: "plan-mode",
         gitCommitPromptPresetID: "git-commit-message",
-        cinemaTextGenerationPromptPresetID: "cinema-text-generation",
       })
     })
 
@@ -9715,7 +9694,6 @@ describe("App", () => {
       createPromptPresetDocument("system-default"),
       createPromptPresetDocument("plan-mode"),
       createPromptPresetDocument("git-commit-message"),
-      createPromptPresetDocument("cinema-text-generation"),
       createPromptPresetDocument("provider-gpt"),
     ]
 
@@ -11244,64 +11222,6 @@ describe("App", () => {
     expect(rechargeTab).toHaveAttribute("aria-selected", "true")
     expect(await screen.findByRole("heading", { name: "Add prepaid balance" })).toBeInTheDocument()
     expect(screen.queryByRole("heading", { name: "Plans" })).not.toBeInTheDocument()
-  })
-
-  it("keeps the Anybox account available when the Cinema provider catalog fails", async () => {
-    window.desktop!.getGlobalProviderCatalog = vi.fn().mockResolvedValue([
-      {
-        id: "anybox",
-        name: "Anybox",
-        source: "api",
-        env: [],
-        configured: false,
-        available: false,
-        apiKeyConfigured: false,
-        baseURL: "https://anybox.test/v1",
-        modelCount: 0,
-        authCapabilities: [
-          {
-            method: "anybox-browser",
-            label: "Anybox 账号（浏览器登录）",
-            kind: "browser_oauth",
-            supportsPolling: true,
-          },
-        ],
-        authState: {
-          providerID: "anybox",
-          scope: "global",
-          status: "not_connected",
-          capabilities: [],
-          credentials: [],
-        },
-      },
-    ])
-    window.desktop!.getGlobalModels = vi.fn().mockResolvedValue({
-      items: [],
-      selection: {},
-    })
-    window.desktop!.getCinemaVideoProviders = vi.fn().mockRejectedValue(
-      new Error("Missing provider-manifests.json"),
-    )
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
-
-    try {
-      render(<App />)
-
-      fireEvent.click(screen.getByRole("button", { name: "Open settings" }))
-      await screen.findByRole("dialog", { name: "Settings" })
-      fireEvent.click(screen.getByRole("button", { name: "Account" }))
-
-      const signInButton = await screen.findByRole("button", { name: "Log in to Anybox" })
-      expect(signInButton).toBeEnabled()
-      expect(screen.getByText("Not logged in")).toBeInTheDocument()
-      expect(screen.queryByText("Anybox unavailable")).not.toBeInTheDocument()
-      expect(consoleError).toHaveBeenCalledWith(
-        "[desktop] loading Cinema video provider catalog failed:",
-        expect.any(Error),
-      )
-    } finally {
-      consoleError.mockRestore()
-    }
   })
 
   it("tests provider connection from the provider detail page", async () => {

@@ -1,5 +1,4 @@
 import { expect, test } from "bun:test"
-import * as CinemaProviderRuntime from "#cinema/provider-runtime.ts"
 import * as ModelRegistry from "#model/registry.ts"
 import * as ModelSelection from "#model/selection.ts"
 import * as Provider from "#provider/provider.ts"
@@ -27,7 +26,7 @@ function createProviderModel(overrides: Record<string, unknown> = {}) {
   }
 }
 
-test("model registry merges selectable AI SDK models and read-only cinema task models", async () => {
+test("model registry exposes selectable AI SDK models", async () => {
   const restoreProvider = Provider.setProviderRuntimeDependenciesForTesting({
     getModelsDev: async () => ({
       mockai: {
@@ -72,60 +71,11 @@ test("model registry merges selectable AI SDK models and read-only cinema task m
       throw new Error("Registry catalog tests should not import SDK packages")
     },
   })
-  const restoreVideoCatalog = CinemaProviderRuntime.setCinemaVideoProviderCatalogForTest({
-    "mock-video": {
-      id: "mock-video",
-      name: "Mock Video",
-      kind: "native",
-      regions: [],
-      models: {
-        "task-video": {
-          id: "task-video",
-          name: "Task Video",
-          family: "Task",
-          modes: ["text-to-video", "image-to-video"],
-          pricing: [],
-          modalities: {
-            input: ["text", "image"],
-            output: ["video"],
-          },
-          limit: {
-            durations: [5],
-            resolutions: ["720p"],
-            aspect_ratios: ["16:9"],
-          },
-        },
-      },
-    },
-    "mock-disconnected": {
-      id: "mock-disconnected",
-      name: "Mock Disconnected",
-      kind: "native",
-      auth_type: "api_key",
-      regions: [],
-      models: {
-        "task-video": {
-          id: "task-video",
-          name: "Disconnected Task Video",
-          modes: ["text-to-video"],
-          pricing: [],
-        },
-      },
-    },
-  })
-  const restoreVideoAdapter = CinemaProviderRuntime.setCinemaVideoProviderAdapterForTest("mock-video", {
-    manifest: {} as never,
-    createTask: async ({ task }) => task,
-    refreshTask: async ({ task }) => task,
-  })
-
   try {
     const catalog = await ModelRegistry.listModelCatalog()
     const textModel = catalog.find((item) => item.registryID === "mockai/mock-text")
     const imageModel = catalog.find((item) => item.registryID === "mockai/mock-image")
     const unconfiguredModel = catalog.find((item) => item.registryID === "mock-unconfigured/unconfigured-text")
-    const taskModel = catalog.find((item) => item.registryID === "cinema-task:mock-video/task-video")
-    const disconnectedTaskModel = catalog.find((item) => item.registryID === "cinema-task:mock-disconnected/task-video")
 
     expect(textModel).toMatchObject({
       providerID: "mockai",
@@ -156,39 +106,14 @@ test("model registry merges selectable AI SDK models and read-only cinema task m
         },
       },
     })
-    expect(taskModel).toMatchObject({
-      providerID: "mock-video",
-      modelID: "task-video",
-      runtimeKind: "cinema-task",
-      selectable: false,
-      available: true,
-      source: "cinema",
-      capabilities: {
-        output: {
-          video: true,
-        },
-        taskModes: ["text-to-video", "image-to-video"],
-      },
-    })
-    expect(disconnectedTaskModel).toMatchObject({
-      runtimeKind: "cinema-task",
-      selectable: false,
-      available: false,
-    })
-
     expect(await ModelRegistry.listModelCatalog(undefined, { output: "image", selectable: true }))
       .toHaveLength(1)
     expect(await ModelRegistry.listModelCatalog(undefined, { output: "video" }))
-      .toHaveLength(2)
+      .toHaveLength(0)
     await expect(ModelSelection.resolveImageSelectableModel("mockai/mock-text"))
       .rejects
       .toThrow("does not support image output")
-    await expect(ModelSelection.resolveImageSelectableModel("mock-video/task-video"))
-      .rejects
-      .toThrow()
   } finally {
-    restoreVideoAdapter()
-    restoreVideoCatalog()
     restoreProvider()
   }
 })

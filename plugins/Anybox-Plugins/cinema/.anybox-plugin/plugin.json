@@ -1,6 +1,6 @@
 {
   "name": "cinema",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "description": "A complete local AI filmmaking Web App packaged with its own Cinema runtime.",
   "author": {
     "name": "Anybox"
@@ -26,8 +26,8 @@
       "zh-CN": "包含画布、剪辑与交付工作台的完整本地 AI 影视应用。"
     },
     "longDescription": {
-      "en-US": "Install and run the complete anybox for cinema Web App from the Right Sidebar. The plugin carries its sandboxed Web build, local HTTP App Runtime, project initialization skill, and optional MCP helpers.",
-      "zh-CN": "从右侧栏安装并运行完整的 anybox for cinema Web App。插件自带沙箱化 Web 构建、本地 HTTP App Runtime、项目初始化 Skill 与可选 MCP 工具。"
+      "en-US": "Install and run the complete anybox for cinema Web App from the Right Sidebar. The plugin owns its Web build, local HTTP Runtime, project data, providers, credentials, media toolchain, migrations, and MCP tools.",
+      "zh-CN": "从右侧栏安装并运行完整的 anybox for cinema Web App。插件独立拥有 Web、HTTP Runtime、项目数据、Provider、凭据、媒体工具链、迁移与 MCP 工具。"
     },
     "developerName": "Anybox",
     "category": "Design",
@@ -65,17 +65,56 @@
     "startupTimeoutMs": 30000,
     "idleTimeoutMs": 300000
   },
+  "platformArtifacts": [
+    {
+      "id": "cinema-platform-helper",
+      "type": "app-runtime-helper",
+      "description": "Cinema native helper for the operating-system keychain and user-initiated file or directory selection.",
+      "executables": [
+        {
+          "platform": "win32",
+          "architecture": "x64",
+          "path": "native/artifacts/win32-x64/cinema-platform-helper.exe",
+          "sha256": "b03eb6610927e07e72c413bede249dac7cac4d95159688dff921474209e1d33f"
+        }
+      ]
+    }
+  ],
   "appPermissions": {
-    "workspace": "request",
+    "workspace": "none",
     "network": [
       "https://api-beijing.klingai.com",
       "https://api-singapore.klingai.com",
       "https://generativelanguage.googleapis.com",
-      "http://127.0.0.1:8188",
-      "http://localhost:8188"
+      "https://github.com",
+      {
+        "kind": "user-configured-origin",
+        "id": "openai-compatible",
+        "description": "User-configured OpenAI-compatible text generation endpoint.",
+        "schemes": [
+          "https"
+        ],
+        "allowLoopbackHttp": true
+      },
+      {
+        "kind": "user-configured-origin",
+        "id": "comfyui-local",
+        "description": "User-configured ComfyUI image and video generation endpoint.",
+        "schemes": [
+          "https"
+        ],
+        "allowLoopbackHttp": true
+      }
     ],
     "system": []
   },
+  "installReview": [
+    "Runs the Cinema Web/API Runtime locally and stores only Cinema-owned state beneath the App Runtime data, cache, and log directories.",
+    "Installs a platform-specific native helper after SHA-256 verification for system-keychain access and user-initiated file or directory selection.",
+    "Stores provider secrets only in the operating-system keychain; when unavailable, credentials may be used for this Runtime process only and are never written to disk.",
+    "Connects to the disclosed Kling, Google, FFmpeg release, and user-configured OpenAI-compatible or ComfyUI origins.",
+    "Downloads the pinned FFmpeg toolchain only after the user starts installation; verifies archive and internal file SHA-256 values before atomic activation. FFmpeg is not included in the plugin ZIP."
+  ],
   "mcpServers": [
     {
       "id": "cinema",
@@ -86,7 +125,7 @@
         "Reads Cinema project metadata, canvas state, and recent events from local project folders.",
         "Creates and updates Text, Image, Video, and Audio canvas nodes, valid edges, and viewport state after approval.",
         "Writes Cinema canvas state to .anybox-cinema/canvas.json and command events to .anybox-cinema/events.jsonl.",
-        "Does not store provider credentials and does not run video provider adapters."
+        "Uses the same Cinema contracts, revision checks, idempotency records, and project lease locks as the Web Runtime."
       ],
       "tools": [
         {
@@ -113,11 +152,18 @@
       ],
       "runtime": {
         "transport": "stdio",
-        "command": "node",
+        "command": "bun",
         "args": [
-          "${PLUGIN_ROOT}/scripts/server.js"
+          "${PLUGIN_ROOT}/mcp/server.js"
         ],
         "cwd": "${PLUGIN_ROOT}",
+        "env": {
+          "ANYBOX_APP_ID": "cinema",
+          "ANYBOX_APP_VERSION": "1.0.0",
+          "ANYBOX_APP_DATA_DIR": "${PLUGIN_APP_DATA_DIR}",
+          "ANYBOX_APP_CACHE_DIR": "${PLUGIN_APP_CACHE_DIR}",
+          "ANYBOX_APP_LOG_DIR": "${PLUGIN_APP_LOG_DIR}"
+        },
         "timeoutMs": 30000,
         "toolPolicies": {
           "cinema_get_project_summary": {
@@ -132,10 +178,10 @@
         }
       },
       "installReview": [
-        "Runs a local Node.js MCP server bundled with the Cinema plugin.",
-        "Reads and writes the selected local project's .anybox-cinema planning files directly.",
+        "Runs the local Bun MCP server bundled and built with the Cinema plugin.",
+        "Reads and writes an explicitly supplied initialized Cinema project through the plugin's shared storage layer.",
         "Accepts only Text, Image, Video, and Audio canvas node types.",
-        "The plugin also carries a separate local App Runtime for its interactive Web product.",
+        "The MCP and interactive App Runtime share the same contracts, revisions, idempotency records, and cross-process lease locks.",
         "Canvas write actions are configured to ask before execution."
       ]
     }

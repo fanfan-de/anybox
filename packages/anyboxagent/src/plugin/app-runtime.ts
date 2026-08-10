@@ -7,9 +7,9 @@ import path from "node:path"
 import type { Readable } from "node:stream"
 import { setTimeout as delay } from "node:timers/promises"
 import { getProcessEnvValue } from "#env/compat.ts"
-import * as Global from "#global/global.ts"
 import * as Log from "#util/log.ts"
 import * as Plugin from "./plugin.ts"
+import { appRuntimeDirectories } from "./app-runtime-paths.ts"
 
 const log = Log.create({ service: "plugin-app-runtime" })
 const RUNTIME_TOKEN_HEADER = "x-anybox-app-runtime-token"
@@ -18,13 +18,6 @@ const RUNTIME_STOP_TIMEOUT_MS = 5_000
 const INHERITED_ENV_KEYS = new Set([
   "ALL_PROXY",
   "APPDATA",
-  "ANYBOX_AGENT_DATA_DIR",
-  "ANYBOX_CINEMA_TIMELINE_DELIVERY",
-  "ANYBOX_FFMPEG_BINARY",
-  "ANYBOX_FFPROBE_BINARY",
-  "ANYBOX_MEDIA_RUNTIME_ID",
-  "ANYBOX_WORKSPACE_DEPENDENCIES_DIR",
-  "ANYBOX_WORKSPACE_DEPENDENCIES_VERSION",
   "COMSPEC",
   "DBUS_SESSION_BUS_ADDRESS",
   "DISPLAY",
@@ -148,25 +141,8 @@ function runtimeDefinitionKey(definition: Plugin.InstalledPluginAppRuntimeDefini
     packageRoot: definition.packageRoot,
     pluginVersion: definition.pluginVersion,
     runtime: definition.runtime,
+    artifacts: definition.artifacts,
   })
-}
-
-function runtimeDirectories(pluginID: string) {
-  const testHome = getProcessEnvValue("ANYBOX_TEST_HOME")?.trim()
-  if (testHome) {
-    const runtimeRoot = path.join(testHome, "plugin-app-runtimes", pluginID)
-    return {
-      cache: path.join(runtimeRoot, "cache"),
-      data: path.join(runtimeRoot, "data"),
-      log: path.join(runtimeRoot, "log"),
-    }
-  }
-  const runtimeRoot = path.join(Global.Path.data, "plugins", "app-runtimes", pluginID)
-  return {
-    cache: path.join(Global.Path.cache, "plugins", "app-runtimes", pluginID),
-    data: path.join(runtimeRoot, "data"),
-    log: path.join(Global.Path.log, "plugins", "app-runtimes", pluginID),
-  }
 }
 
 async function allocateLoopbackPort() {
@@ -193,7 +169,7 @@ function resolveRuntimeCommand(command: string) {
 
 function createRuntimeEnvironment(
   definition: Plugin.InstalledPluginAppRuntimeDefinition,
-  input: { port: number; token: string; directories: ReturnType<typeof runtimeDirectories> },
+  input: { port: number; token: string; directories: ReturnType<typeof appRuntimeDirectories> },
 ) {
   return {
     ...inheritedEnvironment(),
@@ -205,7 +181,7 @@ function createRuntimeEnvironment(
     ANYBOX_APP_CACHE_DIR: input.directories.cache,
     ANYBOX_APP_LOG_DIR: input.directories.log,
     ANYBOX_APP_LOCALE: getProcessEnvValue("LANG")?.trim() || "en-US",
-    NODE_ENV: process.env.NODE_ENV ?? "production",
+    ANYBOX_APP_ARTIFACTS_JSON: JSON.stringify(definition.artifacts),
   }
 }
 
@@ -274,7 +250,7 @@ async function waitForRuntimeReady(state: RuntimeState, definition: Plugin.Insta
 }
 
 async function launch(definition: Plugin.InstalledPluginAppRuntimeDefinition) {
-  const directories = runtimeDirectories(definition.pluginID)
+  const directories = appRuntimeDirectories(definition.pluginID)
   await Promise.all(Object.values(directories).map((directory) => mkdir(directory, { recursive: true })))
   const port = await allocateLoopbackPort()
   const token = randomBytes(32).toString("base64url")

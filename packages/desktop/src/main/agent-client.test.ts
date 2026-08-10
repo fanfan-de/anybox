@@ -13,9 +13,9 @@ describe("App Runtime Gateway client", () => {
 
     try {
       const response = await requestAgentAppRuntime(
-        "cinema app",
-        "/api/cinema/assets?preview=1",
-        new Request("anybox-preview://token/__anybox_runtime__/api/cinema/assets", {
+        "media app",
+        "/api/assets?preview=1",
+        new Request("anybox-preview://token/__anybox_runtime__/api/assets", {
           headers: {
             origin: "anybox-preview://token",
             referer: "anybox-preview://token/",
@@ -26,7 +26,7 @@ describe("App Runtime Gateway client", () => {
 
       expect(fetchMock).toHaveBeenCalledTimes(1)
       const [url, init] = fetchMock.mock.calls[0]!
-      expect(String(url)).toContain("/api/plugins/installed/cinema%20app/app-runtime/api/cinema/assets?preview=1")
+      expect(String(url)).toContain("/api/plugins/installed/media%20app/app-runtime/api/assets?preview=1")
       const headers = new Headers(init?.headers)
       expect(headers.get("origin")).toBeNull()
       expect(headers.get("referer")).toBeNull()

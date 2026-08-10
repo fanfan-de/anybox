@@ -36,20 +36,6 @@ let fitResizeObserver: ResizeObserver | null = null
 const fitTimeoutIDs = new Set<number>()
 let currentMarkers: PreviewMarker[] = []
 
-window.addEventListener("message", (event) => {
-  if (event.source !== window) return
-  const payload = event.data
-  if (
-    !payload
-    || typeof payload !== "object"
-    || payload.type !== "anybox:open-cinema-provider-settings"
-    || payload.providerID !== "comfyui-local"
-  ) return
-  ipcRenderer.sendToHost("preview:open-cinema-provider-settings", {
-    providerID: "comfyui-local",
-  })
-})
-
 function clamp(value: number, minimum: number, maximum: number) {
   return Math.min(Math.max(value, minimum), maximum)
 }

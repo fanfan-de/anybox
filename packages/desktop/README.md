@@ -75,7 +75,7 @@ bun test Test/server.api.test.ts
 3. 点击 `Open folder` 可以新增工作区，点击 `Create session` 可以在当前文件夹下新增会话。
 4. 删除会话后，侧栏和本地 conversation 状态都能同步更新。
 5. 发送消息时，在线模式优先显示流式 trace；离线模式仍能看到本地 fallback 回复。
-6. 使用 `Ctrl/Cmd+Shift+L` 切换两种工作区布局；Workbench 与 Cinema/浏览器等工具状态不应因换位而重置，重新启动后应恢复上次选择。
+6. 使用 `Ctrl/Cmd+Shift+L` 切换两种工作区布局；Workbench 与浏览器等工具状态不应因换位而重置，重新启动后应恢复上次选择。
 
 ## 文档索引
 

@@ -14251,6 +14251,63 @@ body.is-dragging-settings-page {
   grid-column: 3;
 }
 
+.plugins-install-review-dialog {
+  width: min(580px, 100%);
+}
+
+.plugins-install-review-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--seg-border);
+  border-radius: 8px;
+  background: var(--seg-surface-2);
+  color: var(--seg-text-2);
+  font-size: 13px;
+}
+
+.plugins-install-review-summary strong {
+  color: var(--seg-text-1);
+  text-transform: capitalize;
+}
+
+.plugins-install-review-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0 0 0 20px;
+  color: var(--seg-text-1);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.plugins-install-review-list li::marker {
+  color: var(--seg-text-3);
+}
+
+.plugins-install-review-permissions {
+  display: grid;
+  gap: 5px;
+  padding: 11px 12px;
+  border: 1px solid var(--seg-border);
+  border-radius: 8px;
+  background: var(--seg-surface-1);
+}
+
+.plugins-install-review-permissions strong {
+  color: var(--seg-text-1);
+  font-size: 13px;
+}
+
+.plugins-install-review-permissions p {
+  margin: 0;
+  color: var(--seg-text-2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .global-skills-page.is-embedded .settings-page-main.is-services.global-skills-page-main {
   padding: 0;
 }
@@ -14701,41 +14758,6 @@ body.is-dragging-settings-page {
   border-color: var(--semantic-field-border-focus);
   background: var(--semantic-field-surface-focus);
   outline: none;
-}
-
-.cinema-workflow-row.is-disabled {
-  background: var(--seg-panel-muted);
-}
-
-.cinema-workflow-row h4 {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.cinema-workflow-row .provider-detail-status-dot {
-  display: inline-block;
-  flex: 0 0 auto;
-}
-
-.cinema-workflow-row .model-row-copy {
-  max-width: 680px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.cinema-workflow-issues {
-  margin: 0;
-  color: var(--seg-danger-text);
-  font-size: 12px;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
-}
-
-.cinema-workflow-row .settings-badge.is-warning {
-  color: var(--seg-danger-text);
-  border-color: var(--semantic-error-border);
 }
 
 .provider-endpoint-control {

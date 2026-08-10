@@ -1,0 +1,544 @@
+{
+  "schemaVersion": 1,
+  "subtitleRuntimeSources": {
+    "libass": {
+      "version": "0.17.5",
+      "url": "https://github.com/libass/libass/releases/download/0.17.5/libass-0.17.5.tar.xz",
+      "sha256": "2dca25c0e0c837ddf00b52011b3f82cac1e4ddd3ad018227806b0c2288864acc"
+    },
+    "freetype": {
+      "version": "2.14.3",
+      "url": "https://download.savannah.gnu.org/releases/freetype/freetype-2.14.3.tar.xz",
+      "sha256": "36bc4f1cc413335368ee656c42afca65c5a3987e8768cc28cf11ba775e785a5f"
+    },
+    "fribidi": {
+      "version": "1.0.16",
+      "url": "https://github.com/fribidi/fribidi/releases/download/v1.0.16/fribidi-1.0.16.tar.xz",
+      "sha256": "1b1cde5b235d40479e91be2f0e88a309e3214c8ab470ec8a2744d82a5a9ea05c"
+    },
+    "harfbuzz": {
+      "version": "14.2.1",
+      "url": "https://github.com/harfbuzz/harfbuzz/releases/download/14.2.1/harfbuzz-14.2.1.tar.xz",
+      "sha256": "a54a5d8e9380a41fbb762ce367bcbf7704792dfca0d93f1bbca86c5a57902e0e"
+    },
+    "font": {
+      "familyID": "anybox-subtitle-sans-v1",
+      "name": "Noto Sans CJK SC Regular",
+      "version": "2.004",
+      "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+      "license": "OFL-1.1"
+    }
+  },
+  "mediaRuntimeSources": {
+    "zlib": {
+      "version": "1.3.1",
+      "url": "https://zlib.net/fossils/zlib-1.3.1.tar.gz",
+      "sha256": "9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23"
+    }
+  },
+  "platforms": {
+    "win32": {
+      "status": "supported",
+      "targets": {
+        "x64": {
+          "runtimeID": "ffmpeg-anybox-8ad6288553-win32-x64-lgpl-r2",
+          "manifestSchemaVersion": 1,
+          "origin": "anybox-controlled-lgpl",
+          "releaseReadiness": {
+            "status": "approved",
+            "releaseKind": "initial"
+          },
+          "licensePolicy": {
+            "spdxExpression": "LGPL-3.0-or-later",
+            "licenseFile": "LICENSE.txt",
+            "noticesFile": "THIRD-PARTY-NOTICES.txt",
+            "reviewStatus": "approved"
+          },
+          "distribution": {
+            "releaseTag": "media-runtime-ffmpeg-8ad6288553-win32-x64-r2",
+            "ffmpegRevision": "8ad6288553",
+            "fileName": "ffmpeg-anybox-8ad6288553-win32-x64-lgpl.tar.gz",
+            "sha256": "b073f24a43f03ef2c180b64f7d223cf0b581be7122bc741669f959ceea431038",
+            "sizeBytes": 45731402,
+            "url": "https://github.com/fanfan-de/anybox/releases/download/media-runtime-ffmpeg-8ad6288553-win32-x64-r2/ffmpeg-anybox-8ad6288553-win32-x64-lgpl.tar.gz",
+            "sourceURL": "https://github.com/fanfan-de/anybox/releases/download/media-runtime-ffmpeg-8ad6288553-win32-x64-r2/ffmpeg-source-8ad6288553.tar.gz",
+            "buildSourceURL": "https://github.com/fanfan-de/anybox/releases/download/media-runtime-ffmpeg-8ad6288553-win32-x64-r2/build-media-runtime.sh",
+            "source": {
+              "fileName": "ffmpeg-source-8ad6288553.tar.gz",
+              "sizeBytes": 17382583,
+              "sha256": "b1c34a3697e7459de7536dbb208c9e8de19431c5d4b14b09cdfcc30d266e0b7d"
+            },
+            "buildSource": {
+              "fileName": "build-media-runtime.sh",
+              "sizeBytes": 8826,
+              "sha256": "503dd205ceb1368d56399d3be1beafa5789652cd4dd61b5567e3a3350e3260c3"
+            }
+          },
+          "approvalEvidence": {
+            "approver": "Anybox project owner (GitHub: fanfan-de)",
+            "approvedAt": "2026-07-12T15:57:46+08:00",
+            "references": [
+              "plugins/Anybox-Plugins/cinema/docs/cinema-media-runtime-owner-risk-acceptance.win32-x64.md",
+              "https://github.com/fanfan-de/anybox/releases/tag/media-runtime-ffmpeg-8ad6288553-win32-x64-r2"
+            ],
+            "immutableMirror": {
+              "reference": "https://github.com/fanfan-de/anybox/releases/tag/media-runtime-ffmpeg-8ad6288553-win32-x64-r2",
+              "sha256": "b073f24a43f03ef2c180b64f7d223cf0b581be7122bc741669f959ceea431038"
+            },
+            "rollbackPlan": {
+              "strategy": "disable-deliver",
+              "capability": "timelineDelivery",
+              "reference": "plugins/Anybox-Plugins/cinema/docs/cinema-media-runtime-owner-risk-acceptance.win32-x64.md#rollback"
+            }
+          },
+          "executables": {
+            "ffmpeg": "ffmpeg.exe",
+            "ffprobe": "ffprobe.exe"
+          },
+          "binaries": {
+            "ffmpeg.exe": {
+              "sha256": "629ba84a0f28b619d117831ce04439f8a306243a326ac59499379235d1bc1470"
+            },
+            "ffprobe.exe": {
+              "sha256": "dd31110eadadea6afb0bc8df161b73e47c2d9660511513fc8241efd53c454722"
+            }
+          },
+          "buildConfigurationPolicy": {
+            "requiredFlags": [
+              "--arch=x86_64",
+              "--target-os=mingw32",
+              "--enable-version3",
+              "--enable-mediafoundation",
+              "--pkg-config-flags=--static",
+              "--extra-ldflags=-static",
+              "--enable-libass",
+              "--disable-libopenh264",
+              "--disable-libx264",
+              "--disable-libx265",
+              "--disable-libfdk-aac",
+              "--disable-gpl",
+              "--disable-nonfree"
+            ],
+            "forbiddenFlags": [
+              "--enable-gpl",
+              "--enable-nonfree",
+              "--enable-libopenh264",
+              "--enable-libx264",
+              "--enable-libx265",
+              "--enable-libfdk-aac"
+            ]
+          },
+          "requiredEncoders": [
+            "h264_mf",
+            "aac"
+          ],
+          "requiredFilters": [
+            "ass"
+          ],
+          "requiredFonts": [
+            {
+              "fileName": "fonts/NotoSansCJKsc-Regular.otf",
+              "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b"
+            }
+          ],
+          "smokeTest": {
+            "durationSeconds": 1,
+            "videoEncoder": "h264_mf",
+            "audioEncoder": "aac",
+            "expectedVideoCodec": "h264",
+            "expectedAudioCodec": "aac"
+          },
+          "buildEvidence": {
+            "candidateSmoke": {
+              "render": {
+                "durationSeconds": 1,
+                "videoCodec": "h264",
+                "audioCodec": "aac",
+                "output": {
+                  "fileName": "evidence/smoke.mp4",
+                  "sizeBytes": 59008,
+                  "sha256": "22b9401f90de3ea6f17b01ae608e9fdd2344f06c61921583ee4f58a75d2fc96e"
+                },
+                "probe": {
+                  "fileName": "evidence/smoke.ffprobe.json",
+                  "sizeBytes": 4471,
+                  "sha256": "825174a3ca84a89824e28d126365974b55593d4b9c0803f4900d9f6109fb6544"
+                }
+              },
+              "subtitle": {
+                "durationSeconds": 1,
+                "videoCodec": "h264",
+                "renderer": "libass",
+                "fontSha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+                "output": {
+                  "fileName": "evidence/subtitle-smoke.mp4",
+                  "sizeBytes": 3894,
+                  "sha256": "617a8dde9aa3a01158a6dc7989243dcae2420331167669b4cf96c2668c9d98b7"
+                },
+                "probe": {
+                  "fileName": "evidence/subtitle-smoke.ffprobe.json",
+                  "sizeBytes": 2740,
+                  "sha256": "c364479d4369f324d90b9ee1a014d1ebcdc7f91d31806fcf11f76dc3862958e9"
+                },
+                "script": {
+                  "fileName": "evidence/subtitle-smoke.ass",
+                  "sizeBytes": 589,
+                  "sha256": "593d4d8281db979aaaeba6ef32a02e9e8058649be21424149b090d501aebb5b5"
+                },
+                "frame": {
+                  "fileName": "evidence/subtitle-smoke.png",
+                  "sizeBytes": 4726,
+                  "sha256": "f0de5d632f9a7c78162f2bc03d2a29d20431c4e5e00f53e362d1519863774c95"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "darwin": {
+      "status": "supported",
+      "targets": {
+        "arm64": {
+          "runtimeID": "ffmpeg-anybox-8ad6288553-darwin-arm64-lgpl-r1",
+          "manifestSchemaVersion": 1,
+          "origin": "anybox-controlled-lgpl",
+          "releaseReadiness": {
+            "status": "approved",
+            "releaseKind": "initial"
+          },
+          "licensePolicy": {
+            "spdxExpression": "LGPL-3.0-or-later",
+            "licenseFile": "LICENSE.txt",
+            "noticesFile": "THIRD-PARTY-NOTICES.txt",
+            "reviewStatus": "approved"
+          },
+          "distribution": {
+            "releaseTag": "media-runtime-ffmpeg-8ad6288553-darwin-arm64-r1",
+            "ffmpegRevision": "8ad6288553",
+            "fileName": "ffmpeg-anybox-8ad6288553-darwin-arm64-lgpl.tar.gz",
+            "sha256": "6270ee2960a0ad720377dd403525cd2e62b3a159cada3a7f9366550f830a3524",
+            "sizeBytes": 36359665,
+            "url": "https://github.com/fanfan-de/anybox/releases/download/media-runtime-ffmpeg-8ad6288553-darwin-arm64-r1/ffmpeg-anybox-8ad6288553-darwin-arm64-lgpl.tar.gz",
+            "sourceURL": "https://github.com/fanfan-de/anybox/releases/download/media-runtime-ffmpeg-8ad6288553-darwin-arm64-r1/ffmpeg-source-8ad6288553.tar.gz",
+            "buildSourceURL": "https://github.com/fanfan-de/anybox/releases/download/media-runtime-ffmpeg-8ad6288553-darwin-arm64-r1/build-media-runtime.sh",
+            "source": {
+              "fileName": "ffmpeg-source-8ad6288553.tar.gz",
+              "sizeBytes": 17382583,
+              "sha256": "b1c34a3697e7459de7536dbb208c9e8de19431c5d4b14b09cdfcc30d266e0b7d"
+            },
+            "buildSource": {
+              "fileName": "build-media-runtime.sh",
+              "sizeBytes": 8826,
+              "sha256": "503dd205ceb1368d56399d3be1beafa5789652cd4dd61b5567e3a3350e3260c3"
+            }
+          },
+          "approvalEvidence": {
+            "approver": "Anybox project owner (GitHub: fanfan-de)",
+            "approvedAt": "2026-07-13T16:00:13-07:00",
+            "references": [
+              "plugins/Anybox-Plugins/cinema/docs/cinema-media-runtime-owner-risk-acceptance.darwin-arm64.md",
+              "https://github.com/fanfan-de/anybox/releases/tag/media-runtime-ffmpeg-8ad6288553-darwin-arm64-r1"
+            ],
+            "immutableMirror": {
+              "reference": "https://github.com/fanfan-de/anybox/releases/tag/media-runtime-ffmpeg-8ad6288553-darwin-arm64-r1",
+              "sha256": "6270ee2960a0ad720377dd403525cd2e62b3a159cada3a7f9366550f830a3524"
+            },
+            "rollbackPlan": {
+              "strategy": "disable-deliver",
+              "capability": "timelineDelivery",
+              "reference": "plugins/Anybox-Plugins/cinema/docs/cinema-media-runtime-owner-risk-acceptance.darwin-arm64.md#rollback"
+            }
+          },
+          "executables": {
+            "ffmpeg": "ffmpeg",
+            "ffprobe": "ffprobe"
+          },
+          "binaries": {
+            "ffmpeg": {
+              "sha256": "fb85bf3524b5f39919a9a4d9f59cf3cd88015278298e9acfb1aeb51cd3cd703c"
+            },
+            "ffprobe": {
+              "sha256": "2155a636e8ec1182614658cac73958d3c02a2bfa313f0c3fae0e678740c28de1"
+            }
+          },
+          "buildConfigurationPolicy": {
+            "requiredFlags": [
+              "--arch=arm64",
+              "--target-os=darwin",
+              "--enable-version3",
+              "--enable-videotoolbox",
+              "--enable-libass",
+              "--disable-libopenh264",
+              "--disable-libx264",
+              "--disable-libx265",
+              "--disable-libfdk-aac",
+              "--disable-gpl",
+              "--disable-nonfree"
+            ],
+            "forbiddenFlags": [
+              "--enable-gpl",
+              "--enable-nonfree",
+              "--enable-libopenh264",
+              "--enable-libx264",
+              "--enable-libx265",
+              "--enable-libfdk-aac"
+            ]
+          },
+          "requiredEncoders": [
+            "h264_videotoolbox",
+            "aac"
+          ],
+          "requiredFilters": [
+            "ass"
+          ],
+          "requiredFonts": [
+            {
+              "fileName": "fonts/NotoSansCJKsc-Regular.otf",
+              "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b"
+            }
+          ],
+          "smokeTest": {
+            "durationSeconds": 1,
+            "videoEncoder": "h264_videotoolbox",
+            "audioEncoder": "aac",
+            "expectedVideoCodec": "h264",
+            "expectedAudioCodec": "aac"
+          },
+          "buildEvidence": {
+            "candidateSmoke": {
+              "render": {
+                "durationSeconds": 1,
+                "videoCodec": "h264",
+                "audioCodec": "aac",
+                "output": {
+                  "fileName": "evidence/smoke.mp4",
+                  "sizeBytes": 66287,
+                  "sha256": "2a766ecd11201d9e7b6d1260aa2bf63747a5f73fd3fd4ac8e062b2d491f1fdca"
+                },
+                "probe": {
+                  "fileName": "evidence/smoke.ffprobe.json",
+                  "sizeBytes": 4290,
+                  "sha256": "d075d1ede6f7e219a8a43a56663ddf4fac8226cd13bd22aed333e19fb04a308a"
+                }
+              },
+              "subtitle": {
+                "durationSeconds": 1,
+                "videoCodec": "h264",
+                "renderer": "libass",
+                "fontSha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+                "output": {
+                  "fileName": "evidence/subtitle-smoke.mp4",
+                  "sizeBytes": 4187,
+                  "sha256": "91f935189147fc827da9a57dcd559b2fd3d3cfcb5df69e39beafb77cf3e7fce8"
+                },
+                "probe": {
+                  "fileName": "evidence/subtitle-smoke.ffprobe.json",
+                  "sizeBytes": 2611,
+                  "sha256": "5490385ac30586ccec49e4811a4e931bdec8161a81f77235217004810b323c15"
+                },
+                "script": {
+                  "fileName": "evidence/subtitle-smoke.ass",
+                  "sizeBytes": 589,
+                  "sha256": "593d4d8281db979aaaeba6ef32a02e9e8058649be21424149b090d501aebb5b5"
+                },
+                "frame": {
+                  "fileName": "evidence/subtitle-smoke.png",
+                  "sizeBytes": 4765,
+                  "sha256": "937d21a4c9e796dbbcf5c0754a15be96505a2232123eed5a80e425ce88594c50"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "linux": {
+      "status": "supported",
+      "targets": {
+        "x64": {
+          "runtimeID": "ffmpeg-anybox-8ad6288553-linux-x64-gpl-r1",
+          "manifestSchemaVersion": 1,
+          "origin": "anybox-controlled-gpl",
+          "releaseReadiness": {
+            "status": "approved",
+            "releaseKind": "initial"
+          },
+          "licensePolicy": {
+            "spdxExpression": "GPL-3.0-or-later",
+            "licenseFile": "LICENSE.txt",
+            "noticesFile": "THIRD-PARTY-NOTICES.txt",
+            "componentLicenseFiles": {
+              "x264": {
+                "fileName": "X264-LICENSE.txt",
+                "sizeBytes": 17992,
+                "sha256": "32b1062f7da84967e7019d01ab805935caa7ab7321a7ced0e30ebe75e5df1670"
+              },
+              "zlib": {
+                "fileName": "ZLIB-LICENSE.txt",
+                "sizeBytes": 1002,
+                "sha256": "845efc77857d485d91fb3e0b884aaa929368c717ae8186b66fe1ed2495753243"
+              }
+            },
+            "reviewStatus": "approved"
+          },
+          "approvalEvidence": {
+            "approver": "Anybox project owner (GitHub: fanfan-de)",
+            "approvedAt": "2026-07-15T04:10:24+08:00",
+            "references": [
+              "plugins/Anybox-Plugins/cinema/docs/cinema-media-runtime-owner-risk-acceptance.linux-x64.md",
+              "https://github.com/fanfan-de/anybox/releases/tag/media-runtime-ffmpeg-8ad6288553-linux-x64-r1"
+            ],
+            "immutableMirror": {
+              "reference": "https://github.com/fanfan-de/anybox/releases/tag/media-runtime-ffmpeg-8ad6288553-linux-x64-r1",
+              "sha256": "3a9d46852a6caa2a03d1607d96542e78f9ca6cac5cba7728d7f18c90a01a2111"
+            },
+            "rollbackPlan": {
+              "strategy": "disable-deliver",
+              "capability": "timelineDelivery",
+              "reference": "plugins/Anybox-Plugins/cinema/docs/cinema-media-runtime-owner-risk-acceptance.linux-x64.md#rollback"
+            }
+          },
+          "distribution": {
+            "releaseTag": "media-runtime-ffmpeg-8ad6288553-linux-x64-r1",
+            "ffmpegRevision": "8ad6288553",
+            "fileName": "ffmpeg-anybox-8ad6288553-linux-x64-gpl.tar.gz",
+            "sha256": "3a9d46852a6caa2a03d1607d96542e78f9ca6cac5cba7728d7f18c90a01a2111",
+            "sizeBytes": 44615225,
+            "url": "https://github.com/fanfan-de/anybox/releases/download/media-runtime-ffmpeg-8ad6288553-linux-x64-r1/ffmpeg-anybox-8ad6288553-linux-x64-gpl.tar.gz",
+            "sourceURL": "https://github.com/fanfan-de/anybox/releases/download/media-runtime-ffmpeg-8ad6288553-linux-x64-r1/ffmpeg-source-8ad6288553.tar.gz",
+            "buildSourceURL": "https://github.com/fanfan-de/anybox/releases/download/media-runtime-ffmpeg-8ad6288553-linux-x64-r1/build-media-runtime.sh",
+            "source": {
+              "fileName": "ffmpeg-source-8ad6288553.tar.gz",
+              "sizeBytes": 17382583,
+              "sha256": "b1c34a3697e7459de7536dbb208c9e8de19431c5d4b14b09cdfcc30d266e0b7d"
+            },
+            "buildSource": {
+              "fileName": "build-media-runtime.sh",
+              "sizeBytes": 15555,
+              "sha256": "c426a8abdf0e1f681b2e03ae4a61c45988baf3ffe91a3514f474f68ea574b787"
+            },
+            "componentSources": {
+              "x264": {
+                "revision": "b35605ace3ddf7c1a5d67a2eb553f034aef41d55",
+                "fileName": "x264-source-b35605ace3ddf7c1a5d67a2eb553f034aef41d55.tar.gz",
+                "sizeBytes": 1039951,
+                "sha256": "4f1c35d11c7b09ca1a88affb914e1fc3daee888732786a66e51af4f786962c44",
+                "url": "https://github.com/fanfan-de/anybox/releases/download/media-runtime-ffmpeg-8ad6288553-linux-x64-r1/x264-source-b35605ace3ddf7c1a5d67a2eb553f034aef41d55.tar.gz"
+              },
+              "zlib": {
+                "version": "1.3.1",
+                "fileName": "zlib-source-1.3.1.tar.gz",
+                "sizeBytes": 1512791,
+                "sha256": "9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23",
+                "url": "https://github.com/fanfan-de/anybox/releases/download/media-runtime-ffmpeg-8ad6288553-linux-x64-r1/zlib-source-1.3.1.tar.gz"
+              }
+            }
+          },
+          "executables": {
+            "ffmpeg": "ffmpeg",
+            "ffprobe": "ffprobe"
+          },
+          "binaries": {
+            "ffmpeg": {
+              "sha256": "28e07743481886ef328560013cc65feff4a033d7716b6c41769ccdd5422ed766"
+            },
+            "ffprobe": {
+              "sha256": "b5951a625a717255e1d4baf943fc49dbf2fa78af43c38fb5b17b116a34e92c3e"
+            }
+          },
+          "buildConfigurationPolicy": {
+            "requiredFlags": [
+              "--arch=x86_64",
+              "--target-os=linux",
+              "--enable-version3",
+              "--enable-gpl",
+              "--enable-libx264",
+              "--pkg-config-flags=--static",
+              "--enable-libass",
+              "--enable-zlib",
+              "--disable-libopenh264",
+              "--disable-libx265",
+              "--disable-libfdk-aac",
+              "--disable-nonfree"
+            ],
+            "forbiddenFlags": [
+              "--disable-gpl",
+              "--enable-nonfree",
+              "--enable-libopenh264",
+              "--disable-libx264",
+              "--enable-libx265",
+              "--enable-libfdk-aac",
+              "--disable-zlib"
+            ]
+          },
+          "requiredEncoders": [
+            "libx264",
+            "aac"
+          ],
+          "requiredFilters": [
+            "ass"
+          ],
+          "requiredFonts": [
+            {
+              "fileName": "fonts/NotoSansCJKsc-Regular.otf",
+              "sha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b"
+            }
+          ],
+          "smokeTest": {
+            "durationSeconds": 1,
+            "videoEncoder": "libx264",
+            "audioEncoder": "aac",
+            "expectedVideoCodec": "h264",
+            "expectedAudioCodec": "aac"
+          },
+          "buildEvidence": {
+            "candidateSmoke": {
+              "render": {
+                "durationSeconds": 1,
+                "videoCodec": "h264",
+                "audioCodec": "aac",
+                "output": {
+                  "fileName": "evidence/smoke.mp4",
+                  "sizeBytes": 40402,
+                  "sha256": "f6f7b1ce3d89b9b0f45a4532d5987cbbf08b0b8458b43d6b0c42020e1c38e5a3"
+                },
+                "probe": {
+                  "fileName": "evidence/smoke.ffprobe.json",
+                  "sizeBytes": 4319,
+                  "sha256": "abd81be1994e23913f249f8e555c18a914fc6ab1cf4cdfc9b5df321ae4798fe5"
+                }
+              },
+              "subtitle": {
+                "durationSeconds": 1,
+                "videoCodec": "h264",
+                "renderer": "libass",
+                "fontSha256": "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b",
+                "output": {
+                  "fileName": "evidence/subtitle-smoke.mp4",
+                  "sizeBytes": 3433,
+                  "sha256": "d1ffead343f3caa9f587a27b613bda439fc3e1864b80136392c315dfc11cba24"
+                },
+                "probe": {
+                  "fileName": "evidence/subtitle-smoke.ffprobe.json",
+                  "sizeBytes": 2640,
+                  "sha256": "2ca63d9bd24fd12b89206922f161c9709649c1be89e26ef6ebef94dc1b8375a9"
+                },
+                "script": {
+                  "fileName": "evidence/subtitle-smoke.ass",
+                  "sizeBytes": 589,
+                  "sha256": "593d4d8281db979aaaeba6ef32a02e9e8058649be21424149b090d501aebb5b5"
+                },
+                "frame": {
+                  "fileName": "evidence/subtitle-smoke.png",
+                  "sizeBytes": 4487,
+                  "sha256": "de9873a9bccdf9f11fff2ef1fae755192d56174914a23fc381a6d2c6ee86da1d"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

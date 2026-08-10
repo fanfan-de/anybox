@@ -7,7 +7,6 @@ import * as Config from "#config/config.ts"
 import { getProcessEnvValue } from "#env/compat.ts"
 import PROMPT_ANTHROPIC from "../prompt/anthropic.md" with { type: "text" }
 import PROMPT_BEAST from "../prompt/beast.md" with { type: "text" }
-import PROMPT_CINEMA_TEXT_GENERATION from "../prompt/cinema-text-generation.md" with { type: "text" }
 import PROMPT_CODEX from "../prompt/codex.md" with { type: "text" }
 import PROMPT_CODEXSYSTEM from "../prompt/codexsystem.md" with { type: "text" }
 import PROMPT_CODEXSYSTEM_ZH_HANS from "../prompt/codexsystem.zh-hans.md" with { type: "text" }
@@ -27,7 +26,6 @@ export interface PromptPresetSelection {
   systemPromptPresetID: string
   planModePromptPresetID: string
   gitCommitPromptPresetID: string
-  cinemaTextGenerationPromptPresetID: string
 }
 
 export interface PromptPresetSummary {
@@ -97,7 +95,6 @@ const DEFAULT_PROMPT_PRESET_SELECTION: PromptPresetSelection = {
   systemPromptPresetID: "system-codex",
   planModePromptPresetID: "plan-mode",
   gitCommitPromptPresetID: "git-commit-message",
-  cinemaTextGenerationPromptPresetID: "cinema-text-generation",
 }
 
 const PROMPT_PRESET_DEFINITIONS: PromptPresetDefinition[] = [
@@ -135,13 +132,6 @@ const PROMPT_PRESET_DEFINITIONS: PromptPresetDefinition[] = [
     description: "Instructions used when auto-generating Git commit subjects.",
     sourcePath: "src/session/prompt/git-commit-message.md",
     bundledContent: PROMPT_GIT_COMMIT_MESSAGE,
-  },
-  {
-    id: "cinema-text-generation",
-    label: "Cinema text generation prompt",
-    description: "System instructions used when generating content for Cinema text nodes.",
-    sourcePath: "src/session/prompt/cinema-text-generation.md",
-    bundledContent: PROMPT_CINEMA_TEXT_GENERATION,
   },
   {
     id: "provider-anthropic",
@@ -613,13 +603,11 @@ export async function getPromptPresetSelection(
     selectedSystemPromptPresetID,
     selectedPlanModePromptPresetID,
     selectedGitCommitPromptPresetID,
-    selectedCinemaTextGenerationPromptPresetID,
   ] = await Promise.all([
     listAvailablePromptPresetIDs(configID),
     Config.getSelectedSystemPromptPresetID(configID),
     Config.getSelectedPlanModePromptPresetID(configID),
     Config.getSelectedGitCommitPromptPresetID(configID),
-    Config.getSelectedCinemaTextGenerationPromptPresetID(configID),
   ])
 
   return {
@@ -638,11 +626,6 @@ export async function getPromptPresetSelection(
       availablePresetIDs,
       DEFAULT_PROMPT_PRESET_SELECTION.gitCommitPromptPresetID,
     ),
-    cinemaTextGenerationPromptPresetID: normalizePromptPresetSelectionValue(
-      selectedCinemaTextGenerationPromptPresetID,
-      availablePresetIDs,
-      DEFAULT_PROMPT_PRESET_SELECTION.cinemaTextGenerationPromptPresetID,
-    ),
   }
 }
 
@@ -655,7 +638,6 @@ export async function updatePromptPresetSelection(
     systemPromptPresetID: selection.systemPromptPresetID.trim(),
     planModePromptPresetID: selection.planModePromptPresetID.trim(),
     gitCommitPromptPresetID: selection.gitCommitPromptPresetID.trim(),
-    cinemaTextGenerationPromptPresetID: selection.cinemaTextGenerationPromptPresetID.trim(),
   }
 
   if (!availablePresetIDs.has(normalizedSelection.systemPromptPresetID)) {
@@ -668,10 +650,6 @@ export async function updatePromptPresetSelection(
 
   if (!availablePresetIDs.has(normalizedSelection.gitCommitPromptPresetID)) {
     throw new Error(`Unknown prompt preset '${selection.gitCommitPromptPresetID}'.`)
-  }
-
-  if (!availablePresetIDs.has(normalizedSelection.cinemaTextGenerationPromptPresetID)) {
-    throw new Error(`Unknown prompt preset '${selection.cinemaTextGenerationPromptPresetID}'.`)
   }
 
   return persistPromptPresetSelection(normalizedSelection, configID)
@@ -789,10 +767,6 @@ export async function deletePromptPreset(
       resolvedSelection.gitCommitPromptPresetID === presetID
         ? DEFAULT_PROMPT_PRESET_SELECTION.gitCommitPromptPresetID
         : resolvedSelection.gitCommitPromptPresetID,
-    cinemaTextGenerationPromptPresetID:
-      resolvedSelection.cinemaTextGenerationPromptPresetID === presetID
-        ? DEFAULT_PROMPT_PRESET_SELECTION.cinemaTextGenerationPromptPresetID
-        : resolvedSelection.cinemaTextGenerationPromptPresetID,
   }
 
   return persistPromptPresetSelection(nextSelection, configID)

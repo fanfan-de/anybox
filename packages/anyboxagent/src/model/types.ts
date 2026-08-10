@@ -87,10 +87,10 @@ export const PublicModel = Model.omit({
 })
 export type PublicModel = z.infer<typeof PublicModel>
 
-export const ModelCatalogRuntimeKind = z.enum(["ai-sdk", "cinema-task"])
+export const ModelCatalogRuntimeKind = z.enum(["ai-sdk"])
 export type ModelCatalogRuntimeKind = z.infer<typeof ModelCatalogRuntimeKind>
 
-export const ModelCatalogSource = z.enum(["provider", "cinema"])
+export const ModelCatalogSource = z.enum(["provider"])
 export type ModelCatalogSource = z.infer<typeof ModelCatalogSource>
 
 export const ModelCatalogItemCapabilities = z.object({

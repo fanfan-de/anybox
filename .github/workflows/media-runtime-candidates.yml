@@ -35,15 +35,15 @@ jobs:
       - name: Build locked-policy Windows candidate
         shell: msys2 {0}
         env:
-          ANYBOX_FFMPEG_REVISION: ${{ inputs.ffmpeg_revision }}
-          ANYBOX_MEDIA_RUNTIME_RUN_SMOKE: "1"
+          CINEMA_TOOLCHAIN_FFMPEG_REVISION: ${{ inputs.ffmpeg_revision }}
+          CINEMA_TOOLCHAIN_RUN_SMOKE: "1"
         run: |
-          export ANYBOX_MEDIA_RUNTIME_OUTPUT_DIR="$(cygpath -u "$RUNNER_TEMP")/anybox-media-runtime-win32-x64"
-          bash packages/desktop/scripts/build-media-runtime.sh win32 x64
+          export CINEMA_TOOLCHAIN_OUTPUT_DIR="$(cygpath -u "$RUNNER_TEMP")/cinema-toolchain-win32-x64"
+          bash plugins/Anybox-Plugins/cinema/toolchain/scripts/build-media-runtime.sh win32 x64
       - uses: actions/upload-artifact@v4
         with:
           name: anybox-media-runtime-win32-x64-unapproved
-          path: ${{ runner.temp }}/anybox-media-runtime-win32-x64
+          path: ${{ runner.temp }}/cinema-toolchain-win32-x64
           if-no-files-found: error
 
   macos-arm64:
@@ -56,14 +56,14 @@ jobs:
         run: brew install nasm pkg-config libass freetype fribidi harfbuzz
       - name: Build and smoke macOS candidate
         env:
-          ANYBOX_FFMPEG_REVISION: ${{ inputs.ffmpeg_revision }}
-          ANYBOX_MEDIA_RUNTIME_OUTPUT_DIR: ${{ runner.temp }}/anybox-media-runtime-darwin-arm64
-          ANYBOX_MEDIA_RUNTIME_RUN_SMOKE: "1"
-        run: bash packages/desktop/scripts/build-media-runtime.sh darwin arm64
+          CINEMA_TOOLCHAIN_FFMPEG_REVISION: ${{ inputs.ffmpeg_revision }}
+          CINEMA_TOOLCHAIN_OUTPUT_DIR: ${{ runner.temp }}/cinema-toolchain-darwin-arm64
+          CINEMA_TOOLCHAIN_RUN_SMOKE: "1"
+        run: bash plugins/Anybox-Plugins/cinema/toolchain/scripts/build-media-runtime.sh darwin arm64
       - uses: actions/upload-artifact@v4
         with:
           name: anybox-media-runtime-darwin-arm64-unapproved
-          path: ${{ runner.temp }}/anybox-media-runtime-darwin-arm64
+          path: ${{ runner.temp }}/cinema-toolchain-darwin-arm64
           if-no-files-found: error
 
   linux-x64:
@@ -93,13 +93,13 @@ jobs:
           python -m pip install --disable-pip-version-check meson==1.8.3
       - name: Build pinned GPL Linux candidate
         env:
-          ANYBOX_FFMPEG_REVISION: ${{ inputs.ffmpeg_revision }}
-          ANYBOX_X264_REVISION: b35605ace3ddf7c1a5d67a2eb553f034aef41d55
-          ANYBOX_MEDIA_RUNTIME_OUTPUT_DIR: ${{ runner.temp }}/anybox-media-runtime-linux-x64
-          ANYBOX_MEDIA_RUNTIME_RUN_SMOKE: "1"
-        run: bash packages/desktop/scripts/build-media-runtime.sh linux x64
+          CINEMA_TOOLCHAIN_FFMPEG_REVISION: ${{ inputs.ffmpeg_revision }}
+          CINEMA_TOOLCHAIN_X264_REVISION: b35605ace3ddf7c1a5d67a2eb553f034aef41d55
+          CINEMA_TOOLCHAIN_OUTPUT_DIR: ${{ runner.temp }}/cinema-toolchain-linux-x64
+          CINEMA_TOOLCHAIN_RUN_SMOKE: "1"
+        run: bash plugins/Anybox-Plugins/cinema/toolchain/scripts/build-media-runtime.sh linux x64
       - uses: actions/upload-artifact@v4
         with:
           name: anybox-media-runtime-linux-x64-unapproved
-          path: ${{ runner.temp }}/anybox-media-runtime-linux-x64
+          path: ${{ runner.temp }}/cinema-toolchain-linux-x64
           if-no-files-found: error

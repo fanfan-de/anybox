@@ -138,6 +138,13 @@ schema v3 正式目录中的 ZIP 元数据必须提供固定仓库 `.catalog/pac
 - 拒绝符号链接、不安全路径、超限归档和不匹配的 manifest。
 - 校验后原子切换安装目录。
 
+安装 `platformArtifacts.type = "app-runtime-helper"` 时：
+
+- 只选择与当前 `platform`/`architecture` 精确匹配的 executable；缺失目标时安装失败，不回退到其他平台文件。
+- 在复制前校验 Manifest SHA-256，在版本化受管目录中原子升级，并记录 executable path、digest、ownership ID 与版本。
+- 卸载只清理由 receipt 证明归属于该插件的路径；receipt 或 ownership 不匹配时保留文件并报告冲突。
+- App Runtime 仅通过 `ANYBOX_APP_ARTIFACTS_JSON` 获得已解析 Artifact，不继承任意插件专用或 Agent 私有环境变量。
+
 长期规范中不要复制固定的数值上限；使用前先检查实时常量。
 
 ## 验证流程
@@ -154,6 +161,8 @@ schema v3 正式目录中的 ZIP 元数据必须提供固定仓库 `.catalog/pac
 - 所有已声明路径都位于插件包内；
 - 每个 Skill 根目录的直接子目录都包含 `SKILL.md`；
 - 每个 Runtime Placeholder 都有明确来源；
+- 每个 App Runtime Helper 都有当前平台声明、SHA-256、签名验证记录和安装审查说明；
+- 每个动态网络权限都使用 `user-configured-origin`，并由 Runtime 覆盖 SSRF、DNS 重绑定、同源重定向和 Secret 不跨源测试；
 - Connector 条目包含 `id`、`credential` 和 `runtime`；
 - 源码中没有真实密钥；
 - `critical` 风险是有意设置的。
@@ -188,6 +197,8 @@ bun -e "import * as Plugin from './src/plugin/plugin.ts'; console.log(JSON.strin
 - Connector 连接状态；
 - MCP `initialize`、`tools/list` 和一个安全且有代表性的 `tools/call`；
 - 卸载时清理运行状态，但不触碰来源插件包。
+- App Runtime Helper 原子升级、ownership receipt、当前平台选择和卸载清理。
+- App Runtime 子进程只看见 `ANYBOX_APP_*` 白名单与最小 OS 环境，不能继承 Agent、旧插件或共享 FFmpeg 变量。
 
 除非用户明确授权，不要仅为验证 manifest 而发起真实 OAuth 授权、使用生产密钥或调用破坏性工具。
 
@@ -236,7 +247,7 @@ plugins/Anybox-Plugins/index.json
 packages/anyboxagent/Test/plugin.test.ts
 ```
 
-明确检查 Connector ID、Credential 要求、OAuth 字段、外部组件声明、Interface 本地化、Package 下载类型和 GitHub URL 规范化。
+明确检查 Connector ID、Credential 要求、OAuth 字段、外部组件声明、Interface 本地化、Package 下载类型、App Runtime Helper、动态 Provider Origin、环境白名单和 GitHub URL 规范化。
 
 ## 迁移检查清单
 

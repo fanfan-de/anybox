@@ -1410,12 +1410,12 @@ export interface AgentModelCatalogItem {
   name: string
   providerName: string
   family?: string
-  runtimeKind: "ai-sdk" | "cinema-task"
+  runtimeKind: "ai-sdk"
   selectable: boolean
   available: boolean
   capabilities: AgentModelCatalogItemCapabilities
   status: "alpha" | "beta" | "deprecated" | "active"
-  source: "provider" | "cinema"
+  source: "provider"
   metadata?: Record<string, unknown>
 }
 
@@ -1544,7 +1544,6 @@ export interface AgentPromptPresetSelection {
   systemPromptPresetID: string
   planModePromptPresetID: string
   gitCommitPromptPresetID: string
-  cinemaTextGenerationPromptPresetID: string
 }
 
 export interface AgentPromptPresetSummary {

@@ -1,13 +1,7 @@
 import fs from "node:fs"
 import { spawn, spawnSync } from "node:child_process"
-import { createHash } from "node:crypto"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import {
-  resolveMediaExecutableNames,
-  validateMediaRuntimeLock,
-  verifyMediaRuntime,
-} from "./verify-media-runtime.mjs"
 import {
   IPYTHON_HOST_RUNTIME,
   LINUX_PYTHON_DISTRIBUTION,
@@ -19,7 +13,6 @@ const desktopDir = path.resolve(scriptDir, "..")
 const agentDir = path.resolve(desktopDir, "..", "anyboxagent")
 const runtimeBuildDir = path.join(desktopDir, "build")
 const runtimeDir = resolveRuntimeOutputDirectory()
-const releaseStrict = process.argv.includes("--release-strict")
 const dependenciesDir = path.join(runtimeDir, "dependencies")
 const bunExecutableName = process.platform === "win32" ? "bun.exe" : "bun"
 
@@ -42,26 +35,6 @@ const pythonMajorMinor = LINUX_PYTHON_DISTRIBUTION.version.split(".").slice(0, 2
 const pythonPurelibDir = process.platform === "win32"
   ? path.join(dependenciesDir, "python", "Lib", "site-packages")
   : path.join(dependenciesDir, "python", "lib", `python${pythonMajorMinor}`, "site-packages")
-const mediaLock = validateMediaRuntimeLock(JSON.parse(
-  fs.readFileSync(path.join(desktopDir, "media-runtime.lock.json"), "utf8"),
-))
-const mediaPlatform = mediaLock.platforms[process.platform]
-const mediaTarget = mediaPlatform?.status === "supported"
-  ? mediaPlatform.targets?.[process.arch]
-  : undefined
-const mediaTargetReady = mediaTarget?.artifactStatus !== "pending" && Boolean(mediaTarget?.distribution)
-const mediaExecutableNames = mediaTargetReady
-  ? resolveMediaExecutableNames(mediaTarget, process.platform, process.arch)
-  : undefined
-const bundledMediaTools = mediaTarget && mediaExecutableNames
-  ? [
-      path.join(runtimeDir, "media-tools", mediaExecutableNames.ffmpeg),
-      path.join(runtimeDir, "media-tools", mediaExecutableNames.ffprobe),
-      path.join(runtimeDir, "media-tools", mediaTarget.licensePolicy.licenseFile),
-      path.join(runtimeDir, "media-tools", mediaTarget.licensePolicy.noticesFile),
-      path.join(runtimeDir, "media-tools", "manifest.json"),
-    ]
-  : []
 
 function listFilesRecursively(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -71,60 +44,9 @@ function listFilesRecursively(directory) {
   })
 }
 
-const cinemaProviderManifestsSourceDir = path.join(agentDir, "src", "cinema", "provider-manifests")
-const cinemaProviderManifestSourceFiles = listFilesRecursively(cinemaProviderManifestsSourceDir)
-const bundledCinemaProviderManifests = [
-  path.join(runtimeDir, "provider-manifests.json"),
-  ...cinemaProviderManifestSourceFiles.map((sourcePath) =>
-    path.join(runtimeDir, "provider-manifests", path.relative(cinemaProviderManifestsSourceDir, sourcePath)),
-  ),
-]
-
-async function sha256(filePath) {
-  const hash = createHash("sha256")
-  for await (const chunk of fs.createReadStream(filePath)) hash.update(chunk)
-  return hash.digest("hex")
-}
-
-async function verifyBetaMediaRuntime(mediaToolsDir) {
-  if (!mediaTarget) throw new Error(`Deliver Beta has no runtime target for ${process.platform}/${process.arch}`)
-  const manifestPath = path.join(mediaToolsDir, "manifest.json")
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"))
-  if (manifest.platform !== process.platform || manifest.arch !== process.arch) {
-    throw new Error(`Deliver Beta media target mismatch: ${manifest.platform}/${manifest.arch}`)
-  }
-  if (manifest.origin !== "environment-override") {
-    throw new Error(`Deliver Beta requires a build-supplied media runtime, got ${manifest.origin ?? "unknown"}`)
-  }
-  if (manifest.releaseReadiness?.status !== "blocked") {
-    throw new Error("Deliver Beta must not masquerade as a release-approved runtime")
-  }
-  for (const name of [mediaTarget.executables.ffmpeg, mediaTarget.executables.ffprobe]) {
-    const binaryPath = path.join(mediaToolsDir, name)
-    if (!fs.existsSync(binaryPath)) throw new Error(`Deliver Beta media runtime is missing ${name}`)
-    const digest = await sha256(binaryPath)
-    if (manifest.binaries?.[name]?.sha256 !== digest) {
-      throw new Error(`Deliver Beta media runtime digest mismatch for ${name}`)
-    }
-  }
-  for (const name of [mediaTarget.licensePolicy.licenseFile, mediaTarget.licensePolicy.noticesFile]) {
-    if (!fs.existsSync(path.join(mediaToolsDir, name))) {
-      throw new Error(`Deliver Beta media runtime is missing ${name}`)
-    }
-  }
-  for (const [component, descriptor] of Object.entries(mediaTarget.licensePolicy.componentLicenseFiles ?? {})) {
-    const licensePath = path.join(mediaToolsDir, descriptor.fileName)
-    if (!fs.existsSync(licensePath)) throw new Error(`Deliver Beta media runtime is missing ${component} license ${descriptor.fileName}`)
-    if (await sha256(licensePath) !== descriptor.sha256) {
-      throw new Error(`Deliver Beta media runtime ${component} license digest mismatch`)
-    }
-  }
-}
-
 const requiredFiles = [
   path.join(runtimeDir, "agent-server.js"),
   path.join(runtimeDir, "node-pty-worker.mjs"),
-  ...bundledCinemaProviderManifests,
   path.join(runtimeDir, "connectors", "gmail", "server.js"),
   path.join(runtimeDir, "connectors", "feishu", "server.js"),
   path.join(runtimeDir, "mcp", "node-repl", "server.js"),
@@ -136,7 +58,6 @@ const requiredFiles = [
   pythonExecutable,
   path.join(pythonPurelibDir, IPYTHON_HOST_RUNTIME.module, "__init__.py"),
   path.join(pythonPurelibDir, IPYTHON_HOST_RUNTIME.module, "__main__.py"),
-  ...bundledMediaTools,
 ]
 
 const missing = requiredFiles.filter((filePath) => !fs.existsSync(filePath))
@@ -457,42 +378,6 @@ async function verifyPackagedIpythonHost() {
   })
 }
 
-const cinemaCatalogSource = path.join(agentDir, "src", "cinema", "provider-manifests.json")
-const packagedCinemaFiles = [
-  [cinemaCatalogSource, path.join(runtimeDir, "provider-manifests.json")],
-  ...cinemaProviderManifestSourceFiles.map((sourcePath) => [
-    sourcePath,
-    path.join(runtimeDir, "provider-manifests", path.relative(cinemaProviderManifestsSourceDir, sourcePath)),
-  ]),
-]
-for (const [sourcePath, bundledPath] of packagedCinemaFiles) {
-  if (await sha256(sourcePath) !== await sha256(bundledPath)) {
-    throw new Error(`Bundled Cinema provider file differs from its source: ${path.relative(agentDir, sourcePath)}`)
-  }
-}
-
-const comfyUIProviderRoot = path.join(runtimeDir, "provider-manifests", "comfyui-local")
-const comfyUIProvider = JSON.parse(fs.readFileSync(path.join(comfyUIProviderRoot, "provider.json"), "utf8"))
-if (
-  comfyUIProvider.id !== "comfyui-local"
-  || comfyUIProvider.authType !== "none"
-  || comfyUIProvider.requiresCredential !== false
-  || comfyUIProvider.baseURL !== "http://127.0.0.1:8188"
-  || !Array.isArray(comfyUIProvider.models)
-  || comfyUIProvider.models.length !== 0
-  || comfyUIProvider.capabilities?.workflowDiscovery !== true
-  || comfyUIProvider.capabilities?.appMode !== true
-) {
-  throw new Error("Bundled Local ComfyUI provider manifest is invalid")
-}
-const staticComfyUIArtifacts = listFilesRecursively(comfyUIProviderRoot)
-  .filter((filePath) => !["provider.json", "SOURCE.md"].includes(path.basename(filePath)))
-if (staticComfyUIArtifacts.length > 0) {
-  throw new Error(
-    `Bundled Local ComfyUI must not contain static model or workflow artifacts: ${staticComfyUIArtifacts.join(", ")}`,
-  )
-}
-
 const pluginOwnedRuntimeFiles = [
   path.join(runtimeDir, "ipc-listener-sidecar.mjs"),
   path.join(runtimeDir, "connectors", "browser", "server.js"),
@@ -639,31 +524,5 @@ if (nodeSmoke.status !== 0) {
 }
 
 await verifyPackagedPtyWorker()
-
-try {
-  const mediaToolsDir = path.join(runtimeDir, "media-tools")
-  const deliverBetaBuild = process.env.ANYBOX_DELIVER_BETA_BUILD === "1"
-  if (deliverBetaBuild && fs.existsSync(mediaToolsDir)) {
-    await verifyBetaMediaRuntime(mediaToolsDir)
-    console.log(`[desktop][media] verified build-supplied Deliver Beta runtime for ${process.platform}/${process.arch}`)
-  } else if (mediaTargetReady) {
-    await verifyMediaRuntime({ runtimeDir, releaseStrict })
-  } else if (fs.existsSync(mediaToolsDir)) {
-    throw new Error(
-      `Media runtime files exist without a locked target for ${process.platform}/${process.arch}`,
-    )
-  } else if (releaseStrict || deliverBetaBuild || process.env.ANYBOX_REQUIRE_MEDIA_RUNTIME === "1") {
-    throw new Error(
-      `Media runtime is required but blocked for ${process.platform}/${process.arch}: ${mediaTarget?.releaseReadiness?.reasons?.join(" ") ?? mediaPlatform?.reason ?? "target is not locked"}`,
-    )
-  } else {
-    console.warn(
-      `[desktop][media] runtime remains blocked for ${process.platform}/${process.arch}; Deliver stays unavailable`,
-    )
-  }
-} catch (error) {
-  console.error(`[desktop][build] ${error instanceof Error ? error.message : error}`)
-  process.exit(1)
-}
 
 console.log(`[desktop][build] verified managed agent runtime at ${runtimeDir}`)

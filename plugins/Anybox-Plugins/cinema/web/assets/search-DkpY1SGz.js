@@ -1,0 +1,1 @@
+import{c}from"./index-DLULkAe9.js";const e=[["path",{d:"M5 12h14",key:"1ays0h"}],["path",{d:"M12 5v14",key:"s699le"}]],a=c("plus",e);const o=[["path",{d:"m21 21-4.34-4.34",key:"14j7rj"}],["circle",{cx:"11",cy:"11",r:"8",key:"4ej97u"}]],t=c("search",o);export{a as P,t as S};
