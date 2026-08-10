@@ -70,6 +70,7 @@
 }
 
 .paper-grid,
+.paper-hover,
 .paper-canvas,
 .paper-frame,
 .paper-fibers {
@@ -84,20 +85,33 @@
   background-image:
     linear-gradient(var(--hero-paper-grid) 1px, transparent 1px),
     linear-gradient(90deg, var(--hero-paper-grid) 1px, transparent 1px);
-  background-position: center top;
+  background-position:
+    calc(50% + var(--paper-grid-x, 0px)) var(--paper-grid-y, 0px),
+    calc(50% + var(--paper-grid-x, 0px)) var(--paper-grid-y, 0px);
   background-size: 64px 64px;
   opacity: 0.72;
 }
 
-.paper-canvas {
+.paper-hover {
   z-index: 1;
+  background: radial-gradient(
+    circle 220px at var(--paper-pointer-x, 50%) var(--paper-pointer-y, 50%),
+    var(--hero-paper-glow),
+    transparent 72%
+  );
+  opacity: var(--paper-hover-opacity, 0);
+  will-change: opacity;
+}
+
+.paper-canvas {
+  z-index: 2;
 }
 
 .paper-frame {
   top: 0;
   bottom: 0;
   left: 50%;
-  z-index: 2;
+  z-index: 3;
   width: min(var(--site-width), calc(100% - 48px));
   height: auto;
   border-right: 1px solid var(--hero-stage-border-soft);
@@ -106,7 +120,7 @@
 }
 
 .paper-fibers {
-  z-index: 3;
+  z-index: 4;
   background-image:
     repeating-linear-gradient(7deg, transparent 0 26px, var(--hero-paper-fiber) 27px, transparent 28px 58px),
     repeating-linear-gradient(97deg, transparent 0 58px, var(--hero-paper-fiber) 59px, transparent 60px 116px);

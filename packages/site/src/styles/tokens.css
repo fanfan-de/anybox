@@ -44,6 +44,7 @@
   --hero-paper-ink: #2b625b;
   --hero-paper-accent: #c76e2f;
   --hero-paper-fiber: rgba(83, 77, 64, 0.045);
+  --hero-paper-glow: rgba(47, 111, 104, 0.11);
 
   --semantic-button-hero-primary-surface: #233d36;
   --semantic-button-hero-primary-surface-hover: var(--brand-primary);
@@ -127,6 +128,7 @@
   --hero-paper-ink: #91c5bc;
   --hero-paper-accent: #d58b58;
   --hero-paper-fiber: rgba(235, 228, 208, 0.035);
+  --hero-paper-glow: rgba(118, 184, 173, 0.12);
   --semantic-button-hero-primary-surface: #dbe8df;
   --semantic-button-hero-primary-surface-hover: #ffffff;
   --semantic-button-hero-primary-border: #dbe8df;
