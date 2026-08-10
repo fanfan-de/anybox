@@ -188,6 +188,9 @@ description: 创建、审查或验证 Anybox 第三方插件包。Use when the u
 - `stdio` MCP server 的普通日志写 stderr。stdout 只能输出 JSON-RPC 消息。
 - 本地 MCP server 必须响应 `initialize`、`tools/list` 和 `tools/call`。
 - 只读工具标记 `readOnly: true`，破坏性操作标记 `destructive: true`。
+- 创建新插件时，插件自有 `mcpServers` 和 `connectors` 暴露的全部 MCP 工具默认使用 `auto`（Auto allow），并省略 `runtime.toolPolicies`。只有用户明确要求审批、禁用或逐工具差异时才写非空映射。
+- `runtime.toolPolicies` 一旦非空，未列出的工具会回退为 `ask`。不要只把部分工具列成 `auto` 来表达全工具 Auto allow；若使用差异策略，应显式覆盖全部当前工具，并在新增工具时同步补充策略。
+- Auto allow 不绕过工作区外路径授权、规划/只读模式或 critical-risk 阻断等宿主安全边界。
 - `risk` 使用 `low`、`medium` 或 `high`；不要使用 `critical`，除非插件安装应该被阻止。
 - 不要提交 API key、OAuth client secret、access token、refresh token、本地 auth store、数据库或缓存目录。
 

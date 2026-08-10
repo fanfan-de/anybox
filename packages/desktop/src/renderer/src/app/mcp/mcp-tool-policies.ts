@@ -44,6 +44,12 @@ export function defaultMcpToolPolicyForDraft(
     }
   }
 
+  // The agent treats a non-empty policy map as authoritative and requires
+  // approval for tools that are not explicitly listed in it.
+  if (Object.keys(draft.toolPolicies).length > 0) {
+    return "ask"
+  }
+
   return "auto"
 }
 

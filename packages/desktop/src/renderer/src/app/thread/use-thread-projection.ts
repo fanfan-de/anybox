@@ -385,6 +385,7 @@ export function useThreadProjection({
       answeredQuestionIDs,
       eligibilityLocks,
       messages: displayMessages,
+      pendingPermissionRequests,
       rows: baseDisplayRows,
       turns: activeTurns,
     })
@@ -404,6 +405,7 @@ export function useThreadProjection({
         answeredQuestionIDs,
         eligibilityLocks: migratedEligibilityLocks,
         messages: displayMessages,
+        pendingPermissionRequests,
         rows: baseDisplayRows,
         turns: activeTurns,
       })
@@ -421,7 +423,14 @@ export function useThreadProjection({
     })
     executionGroupReferenceCacheRef.current.set(presentationScopeID, nextScopeCache)
     return { ...result, groupIDAliases, groups }
-  }, [activeTurns, answeredQuestionIDs, baseDisplayRows, displayMessages, presentationScopeID])
+  }, [
+    activeTurns,
+    answeredQuestionIDs,
+    baseDisplayRows,
+    displayMessages,
+    pendingPermissionRequests,
+    presentationScopeID,
+  ])
   const executionGroups = executionGroupsResult.groups
   const executionGroupIDAliases = executionGroupsResult.groupIDAliases
   const canonicalFinalOwnerProjection = useMemo(

@@ -4209,6 +4209,52 @@ describe("ThreadView execution disclosure", () => {
     expect(screen.getByText("apply-patch-recovered")).toBeInTheDocument()
   })
 
+  it("folds a non-actionable historical permission request into the completed process disclosure", () => {
+    const fixture = executionFixture()
+    const request = permissionRequest({
+      approvalID: "approval-history",
+      toolCallID: "tool-call-history",
+    })
+    const assistant = {
+      ...fixture.assistant,
+      items: [
+        ...fixture.assistant.items.slice(0, -1),
+        {
+          id: "permission-history",
+          kind: "system" as const,
+          timestamp: 3_000,
+          label: "Permission",
+          title: "Permission requested",
+          detail: "The tool required approval before it could continue.",
+          status: "pending" as const,
+          approvalID: request.approvalID,
+          toolCallID: request.toolCallID,
+          section: "approvals" as const,
+          visibilityKey: "approvals" as const,
+        },
+        fixture.assistant.items.at(-1)!,
+      ],
+    }
+    const turn = {
+      ...fixture.turn,
+      messages: [fixture.user, assistant],
+    }
+    const { queryByText } = renderThread([fixture.user, assistant], {
+      activeTurns: [turn],
+      pendingPermissionRequests: [],
+    })
+
+    const summary = screen.getByRole("button", {
+      name: "Expand processing details: Processed 14m 4s",
+    })
+    expect(summary).toHaveAttribute("aria-expanded", "false")
+    expect(queryByText("Permission requested")).toBeNull()
+
+    fireEvent.click(summary)
+
+    expect(screen.getByText("Permission requested")).toBeInTheDocument()
+  })
+
   it("keeps an explicit disclosure preference across inactive ThreadView mounts", () => {
     const fixture = executionFixture()
     const { props, rerender } = renderThread(fixture.activeMessages, { activeTurns: [fixture.turn] })

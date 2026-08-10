@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import "@testing-library/jest-dom/vitest"
-import { cleanup, fireEvent, render, screen, type RenderResult } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor, type RenderResult } from "@testing-library/react"
 import type { ReactElement } from "react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { CINEMA_LOCALE_STORAGE_KEY, I18nProvider } from "../../i18n"
@@ -17,6 +17,7 @@ afterEach(() => {
   document.documentElement.lang = ""
   window.localStorage.removeItem("cinema-theme")
   window.localStorage.removeItem(CINEMA_LOCALE_STORAGE_KEY)
+  vi.unstubAllGlobals()
 })
 
 describe("CinemaWorkbenchShell", () => {
@@ -106,6 +107,36 @@ describe("CinemaWorkbenchShell", () => {
     fireEvent.keyDown(document, { key: "Escape" })
     expect(screen.queryByRole("dialog", { name: "Cinema settings" })).not.toBeInTheDocument()
     expect(trigger).toHaveFocus()
+  })
+
+  it("opens the requested provider from a Cinema provider-settings message", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      success: true,
+      data: {},
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    })))
+    renderShell(
+      <CinemaWorkbenchShell
+        projectName="Test Film"
+        activeWorkspace="create"
+        onWorkspaceChange={() => undefined}
+      >
+        <div>Canvas content</div>
+      </CinemaWorkbenchShell>,
+    )
+
+    fireEvent(window, new MessageEvent("message", {
+      data: {
+        type: "anybox:open-cinema-provider-settings",
+        providerID: "comfyui-local",
+      },
+    }))
+
+    expect(screen.getByRole("dialog", { name: "Cinema settings" })).toBeVisible()
+    expect(screen.getByRole("tab", { name: "Providers" })).toHaveAttribute("aria-selected", "true")
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Local ComfyUI" })).toBeVisible())
   })
 
   it("does not emit workspace changes from the active or unavailable tabs", () => {

@@ -1,12 +1,16 @@
 import type {
   AssistantTraceItem,
   AssistantThreadMessage,
+  PermissionRequest,
   ThreadMessage,
   ThreadTurn,
   ThreadTurnStatus,
 } from "../types"
 import { toolCallOutcome, toolCallIsSettled, toolCallIsWaitingApproval } from "../tool-call-view"
-import type { ThreadDisplayRow } from "./thread-display-rows"
+import {
+  permissionRequestMatchesApprovalTraceItem,
+  type ThreadDisplayRow,
+} from "./thread-display-rows"
 import {
   findLastNonemptyAssistantResponseBlock,
 } from "./thread-final-response"
@@ -81,6 +85,7 @@ export interface DeriveThreadExecutionGroupsInput {
   answeredQuestionIDs?: ReadonlySet<string>
   eligibilityLocks?: ReadonlySet<string>
   messages: ThreadMessage[]
+  pendingPermissionRequests: readonly PermissionRequest[]
   rows: ThreadDisplayRow[]
   turns?: ThreadTurn[] | null
 }
@@ -231,14 +236,23 @@ function isQuestionPromptAnswered(
 function isUnresolvedPromptRow(
   row: AtomicAssistantDisplayRow,
   answeredQuestionIDs: ReadonlySet<string>,
+  pendingPermissionRequests: readonly PermissionRequest[],
 ) {
   if (row.kind === "assistant-question-row") {
     if (row.item.questionPrompt) return !isQuestionPromptAnswered(row.item.questionPrompt, answeredQuestionIDs)
     return row.item.status === "pending" || row.item.status === "waiting-approval"
   }
   if (row.kind === "assistant-approval-row") {
-    if (row.item.kind === "tool") return toolCallIsWaitingApproval(row.item.toolCall)
-    return row.item.status === "pending" || row.item.status === "waiting-approval"
+    return pendingPermissionRequests.some((request) => {
+      if (permissionRequestMatchesApprovalTraceItem(request, row.item)) return true
+      if (row.item.kind !== "tool" || !toolCallIsWaitingApproval(row.item.toolCall)) return false
+
+      const toolCall = row.item.toolCall
+      if (!toolCall || toolCall.state.phase !== "waiting-approval") return false
+      return request.approvalID === toolCall.state.approval.id ||
+        request.toolCallID === row.item.toolCallID ||
+        request.toolCallID === toolCall.callID
+    })
   }
   return false
 }
@@ -283,10 +297,11 @@ function isTerminalizedTraceOutcomeRow(
 function isAlwaysOutcomeRow(
   row: AtomicAssistantDisplayRow,
   answeredQuestionIDs: ReadonlySet<string>,
+  pendingPermissionRequests: readonly PermissionRequest[],
 ) {
   return row.kind === "assistant-actions" ||
     row.kind === "assistant-diff-card" ||
-    isUnresolvedPromptRow(row, answeredQuestionIDs)
+    isUnresolvedPromptRow(row, answeredQuestionIDs, pendingPermissionRequests)
 }
 
 function textPartsForTraceItem(item: AssistantTraceItem) {
@@ -770,6 +785,7 @@ function deriveGroup(
   messageIndexByID: ReadonlyMap<string, number>,
   eligibilityLocks: ReadonlySet<string>,
   answeredQuestionIDs: ReadonlySet<string>,
+  pendingPermissionRequests: readonly PermissionRequest[],
 ) {
   const assistantMessageIDSet = new Set(candidate.assistantMessages.map((message) => message.id))
   const assistantMessageOrdinalByID = new Map(candidate.assistantMessages.map((message, index) => [message.id, index] as const))
@@ -781,7 +797,9 @@ function deriveGroup(
   const finalMessageOrdinal = finalMessage ? assistantMessageOrdinalByID.get(finalMessage.id) : undefined
   const responseStartRawItemIndex = finalResolution.responseBlock?.startRawItemIndex
   const protectedRowIDs = new Set(
-    groupRows.filter((row) => isAlwaysOutcomeRow(row, answeredQuestionIDs)).map((row) => row.rowID),
+    groupRows
+      .filter((row) => isAlwaysOutcomeRow(row, answeredQuestionIDs, pendingPermissionRequests))
+      .map((row) => row.rowID),
   )
   const hasResolvedFinalResponse =
     !finalResolution.authoritativeMetadataPending && Boolean(finalResolution.responseBlock)
@@ -849,6 +867,7 @@ export function deriveThreadExecutionGroups({
   answeredQuestionIDs = new Set(),
   eligibilityLocks = new Set(),
   messages,
+  pendingPermissionRequests,
   rows,
   turns,
 }: DeriveThreadExecutionGroupsInput): DeriveThreadExecutionGroupsResult {
@@ -860,7 +879,14 @@ export function deriveThreadExecutionGroups({
     messageIndexByID,
   )
   const groups = candidates.map((candidate) => {
-    const group = deriveGroup(candidate, rows, messageIndexByID, eligibilityLocks, answeredQuestionIDs)
+    const group = deriveGroup(
+      candidate,
+      rows,
+      messageIndexByID,
+      eligibilityLocks,
+      answeredQuestionIDs,
+      pendingPermissionRequests,
+    )
     if (group.thresholdReached && !group.hasInsertedUserBoundary) nextEligibilityLocks.add(group.groupID)
     const { thresholdReached: _thresholdReached, ...publicGroup } = group
     return publicGroup

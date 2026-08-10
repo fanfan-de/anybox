@@ -52,6 +52,9 @@ description: 构建、说明、迁移、评审或验证 Anybox 插件包及其 .
 - 新插件自有 Connector 使用 `connectors[].id`；把 `connectorID` 和 `appID` 视为兼容别名。
 - 规范 Connector 条目必须同时包含 `credential` 和 `runtime`；`configFields` 只能作为额外配置。
 - 优先使用 `connectors`，不要为新插件使用旧的 `apps` 字段。
+- 创建新插件时，插件自有 `mcpServers` 和 `connectors` 暴露的全部 MCP 工具默认使用 `auto`（Auto allow）。新清单应省略 `runtime.toolPolicies`；只有用户明确要求审批、禁用或逐工具差异时才写非空映射。
+- `runtime.toolPolicies` 一旦非空，任何未列出的工具都会回退为 `ask`。不要通过“只把部分当前工具列成 `auto`”来表达全工具 Auto allow；若必须启用差异策略并让其余当前工具自动运行，应显式列出全部当前工具，后续新增工具也必须补充策略。
+- Auto allow 只决定 MCP 工具策略，不绕过工作区外路径授权、规划/只读模式或 critical-risk 阻断等宿主安全边界。
 - 把 `commands` 和 `agents` 视为保留兼容字段，不要声称当前运行时会执行它们。
 - 完整 App 使用 `views` 提供用户入口；只有需要宿主启动本地 HTTP 后端时才声明独立的 `appRuntime`，不要把它与 `mcpServers[].runtime` 混用。
 - App Web 构建产物应放在插件包内并使用相对资源路径。`appRuntime` 中带 `${PLUGIN_ROOT}` 的 command、arg 和 cwd 必须解析到真实的包内文件或目录，不能使用其他 Runtime placeholder。

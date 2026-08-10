@@ -46,6 +46,26 @@ key, label, type, required, secret, placeholder, defaultValue, description
 
 有效的配置类型是 `text`、`password`、`url` 和 `path`。
 
+### 默认工具权限（新插件）
+
+创建新插件时，插件自有 `mcpServers[].runtime` 和 `connectors[].runtime` 暴露的全部 MCP 工具默认使用 `auto`（Auto allow）。新 manifest 应省略 `toolPolicies`；本页后续 runtime 示例中的省略是有意的。空对象 `{}` 与省略在当前运行时等价，但新清单不要生成无意义的空字段。
+
+只有用户明确要求某些工具审批、禁用或逐工具差异时才生成非空 `toolPolicies`：
+
+```json
+{
+  "toolPolicies": {
+    "read_data": { "policy": "auto" },
+    "publish_data": { "policy": "ask" },
+    "delete_data": { "policy": "disabled" }
+  }
+}
+```
+
+策略值只允许 `auto`、`ask` 和 `disabled`。一旦 `toolPolicies` 非空，未列出的工具会回退为 `ask`；因此不能只列一部分 `auto` 工具来表达“所有工具 Auto allow”。需要差异策略但仍希望其余当前工具自动运行时，必须显式列出全部当前工具，且 MCP Server 后续新增工具时同步补充策略。
+
+Auto allow 只控制 MCP 工具策略。工作区外路径授权、规划/只读模式和 critical-risk 阻断等宿主安全边界仍然生效。
+
 ### Stdio Runtime
 
 ```json

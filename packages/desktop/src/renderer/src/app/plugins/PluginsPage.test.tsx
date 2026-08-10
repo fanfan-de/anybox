@@ -1356,6 +1356,11 @@ describe("PluginsPage", () => {
               command: "npx",
               args: ["server-filesystem"],
               enabled: true,
+              toolPolicies: {
+                read_file: {
+                  policy: "auto",
+                },
+              },
             },
           ],
           mcpDiagnostics: {
@@ -1363,8 +1368,8 @@ describe("PluginsPage", () => {
               serverID: "plugin.filesystem",
               enabled: true,
               ok: true,
-              toolCount: 1,
-              toolNames: ["read_file"],
+              toolCount: 2,
+              toolNames: ["read_file", "write_file"],
               tools: [
                 {
                   name: "read_file",
@@ -1375,6 +1380,16 @@ describe("PluginsPage", () => {
                   },
                   riskHint: "read-only",
                   recommendedPolicy: "auto",
+                },
+                {
+                  name: "write_file",
+                  displayName: "Write file",
+                  description: "Write a file.",
+                  annotations: {
+                    destructiveHint: true,
+                  },
+                  riskHint: "destructive",
+                  recommendedPolicy: "ask",
                 },
               ],
             },
@@ -1401,6 +1416,8 @@ describe("PluginsPage", () => {
     expect(onDiagnoseMcpServer).toHaveBeenCalledWith("plugin.filesystem")
 
     expect(screen.getByText("Tool Permissions")).toBeInTheDocument()
+    expect(screen.getByRole("combobox", { name: "Policy for read_file" })).toHaveTextContent("Auto allow")
+    expect(screen.getByRole("combobox", { name: "Policy for write_file" })).toHaveTextContent("Ask every time")
     fireEvent.click(screen.getByRole("combobox", { name: "Policy for read_file" }))
     fireEvent.click(screen.getByRole("option", { name: "Disabled" }))
     expect(onSetInstalledPluginMcpToolPolicy).toHaveBeenCalledWith(

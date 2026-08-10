@@ -302,7 +302,7 @@ Composer 的 `tool-module` 标签用于一次性加载 Anybox 原生能力，不
 
 ### Turn execution disclosure
 
-桌面端长 turn 会在 semantic rows 生成后派生 `ThreadExecutionGroup`。分组边界来自 canonical `ThreadTurn`、`lastMessageID` 和 `finalSegmentID`，而不是相邻 DOM 或 user row。最终 response block 的边界在 trace visibility 过滤前计算；最终 response、response 后置内容、未解决 permission/question 和用户插入内容始终不会进入可折叠前缀。运行期间的所有 text 都是候选输出，可能仍是进度说明或中间 response；即使已经出现非空 response block，也继续完整展示 reasoning、tools 等 process rows，且不生成 execution summary。只有 turn 以 `completed` 完成并解析出最终 response 后，满足长度阈值的前置连续 process prefix 才生成“已处理”summary 并默认折叠。blocked、failed、cancelled、stopped 或 continued-by-user turn 均不把已有 text 推断成最终 response，也不生成 disclosure。response 之前的 error、失败 tool/workflow 属于已完成 turn 内的可恢复执行过程，随 process prefix 折叠；没有可解析最终 response 的 completed turn 同样保持全部内容直接可见。
+桌面端长 turn 会在 semantic rows 生成后派生 `ThreadExecutionGroup`。分组边界来自 canonical `ThreadTurn`、`lastMessageID` 和 `finalSegmentID`，而不是相邻 DOM 或 user row。最终 response block 的边界在 trace visibility 过滤前计算；最终 response、response 后置内容、当前仍能通过 `approvalID` / `toolCallID` 匹配 `pendingPermissionRequests` 的 permission、未解决 question 和用户插入内容始终不会进入可折叠前缀。仅在历史 trace 上保留 `pending` 状态、但已经没有对应活动请求的 `Permission requested` 属于已完成过程，会随 process prefix 折叠。运行期间的所有 text 都是候选输出，可能仍是进度说明或中间 response；即使已经出现非空 response block，也继续完整展示 reasoning、tools 等 process rows，且不生成 execution summary。只有 turn 以 `completed` 完成并解析出最终 response 后，满足长度阈值的前置连续 process prefix 才生成“已处理”summary 并默认折叠。blocked、failed、cancelled、stopped 或 continued-by-user turn 均不把已有 text 推断成最终 response，也不生成 disclosure。response 之前的 error、失败 tool/workflow 属于已完成 turn 内的可恢复执行过程，随 process prefix 折叠；没有可解析最终 response 的 completed turn 同样保持全部内容直接可见。
 
 一个用户可见的连续执行在任一投影帧最多产生一个 execution summary。状态层重建历史时必须把共享 `userMessageID` 的 user row 保留在原始非 resume turn，不能移动到后创建的续跑 turn。投影层只对具有相同 backend/segment/raw-turn 强身份的相邻 canonical wrappers，或“共享 `userMessageID` 且至少一侧明确带有 `resume: true`”的审批续跑链做保守合并；合并后的状态和最终 response 取最新 authoritative turn，过程 rows 仍按原始消息顺序排列，因此最终回复位于整个审批前后 trace 之后。普通 user、steer、stream insertion 或 `continued_by_user` 边界会阻止跨界 disclosure。Legacy candidates 和仅共享 user ID、但没有明确 resume 元数据的两个真实 turn 不自动合并。
 
@@ -707,6 +707,7 @@ assistant response 后方可显示动作行：
 
 - `PermissionRequestInlinePrompt` 只显示当前第一个 pending request。
 - 如果 pending request 能通过 `approvalID` 或 `toolCallID` 匹配到可见的 `approvals` trace row，审批卡片嵌入该 `assistant-approval-row`，不再额外追加独立 `permission-request` row；只有缺少可匹配 trace 时才使用独立 prompt row 作为 fallback。
+- execution disclosure 只把上述仍能匹配活动请求的 approval row 当作 protected outcome；已无活动请求的历史 `Permission requested` 日志在 completed turn 中归入 process prefix。
 - 卡片内有风险 chip、summary、rationale、allow/deny 操作。
 - details 默认折叠，包含 workdir、command、paths、body 等信息。
 - 设计上使用 warning 语义色，强调这是阻塞主 session 的决策点。

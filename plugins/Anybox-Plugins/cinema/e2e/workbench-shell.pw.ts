@@ -67,4 +67,47 @@ test.describe("Cinema workbench shell", () => {
       await page.screenshot({ path: testInfo.outputPath("cinema-workbench-shell-light-narrow.png") })
     }
   })
+
+  test("configures Cinema-owned providers from the settings panel", async ({ page, request }, testInfo) => {
+    const projectResponse = await request.get(`${agentBaseURL}/e2e/project`)
+    expect(projectResponse.ok()).toBe(true)
+    const projectEnvelope = await projectResponse.json() as {
+      data?: { cinemaURL?: string }
+    }
+    const cinemaURL = projectEnvelope.data?.cinemaURL
+    expect(cinemaURL).toBeTruthy()
+
+    const resetResponse = await request.post(`${agentBaseURL}/e2e/reset`)
+    expect(resetResponse.ok()).toBe(true)
+    await page.goto(cinemaURL!)
+
+    await page.getByRole("button", { name: "Open settings" }).click()
+    await page.getByRole("tab", { name: "Providers" }).click()
+
+    const dialog = page.getByRole("dialog", { name: "Cinema settings" })
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByRole("navigation", { name: "Cinema providers" })).toBeVisible()
+    await expect(dialog.getByRole("heading", { name: "Local ComfyUI" })).toBeVisible()
+    await expect(dialog.getByLabel("Base URL")).toHaveValue("http://127.0.0.1:8188")
+    await expect(dialog.getByText("No key required")).toBeVisible()
+
+    const accessibility = await new AxeBuilder({ page }).include("#cinema-settings-panel").analyze()
+    expect(accessibility.violations).toEqual([])
+
+    if (process.env.CINEMA_E2E_CAPTURE === "1") {
+      await page.screenshot({ path: testInfo.outputPath("cinema-provider-settings-dark.png") })
+    }
+
+    await page.setViewportSize({ width: 520, height: 720 })
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByRole("navigation", { name: "Cinema providers" })).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+
+    if (process.env.CINEMA_E2E_CAPTURE === "1") {
+      await page.evaluate(() => {
+        document.documentElement.dataset.theme = "light"
+      })
+      await page.screenshot({ path: testInfo.outputPath("cinema-provider-settings-light-narrow.png") })
+    }
+  })
 })

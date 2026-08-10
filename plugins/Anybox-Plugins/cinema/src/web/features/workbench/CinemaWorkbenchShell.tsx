@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type MouseEventHandler, type ReactNode } from "react"
 import { Moon, Settings2, Sun, X } from "lucide-react"
 import { SUPPORTED_LOCALES, useI18n, type TranslationKey } from "../../i18n"
+import { CinemaProviderSettings } from "./CinemaProviderSettings"
+import { isCinemaProviderID, type CinemaProviderID } from "./cinemaProviderSettingsApi"
 
 export type CinemaWorkspaceID = "create" | "edit" | "deliver"
 type CinemaThemePreference = "light" | "dark"
@@ -38,6 +40,8 @@ function CinemaSettingsControl() {
   const { locale, setLocale, t } = useI18n()
   const [theme, setTheme] = useState<CinemaThemePreference>(readThemePreference)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsView, setSettingsView] = useState<"general" | "providers">("general")
+  const [requestedProviderID, setRequestedProviderID] = useState<CinemaProviderID>("comfyui-local")
   const controlRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
 
@@ -73,6 +77,19 @@ function CinemaSettingsControl() {
     }
   }, [settingsOpen])
 
+  useEffect(() => {
+    function handleProviderSettingsRequest(event: MessageEvent) {
+      const message = event.data as { type?: unknown; providerID?: unknown } | null
+      if (!message || message.type !== "anybox:open-cinema-provider-settings" || !isCinemaProviderID(message.providerID)) return
+      setRequestedProviderID(message.providerID)
+      setSettingsView("providers")
+      setSettingsOpen(true)
+    }
+
+    window.addEventListener("message", handleProviderSettingsRequest)
+    return () => window.removeEventListener("message", handleProviderSettingsRequest)
+  }, [])
+
   return (
     <div className="cinema-settings-control" ref={controlRef}>
       <button
@@ -91,7 +108,7 @@ function CinemaSettingsControl() {
       {settingsOpen ? (
         <section
           id="cinema-settings-panel"
-          className="cinema-settings-panel"
+          className={`cinema-settings-panel ${settingsView === "providers" ? "is-providers" : ""}`}
           role="dialog"
           aria-label={t("settings.dialog")}
         >
@@ -110,50 +127,83 @@ function CinemaSettingsControl() {
               <X size={15} aria-hidden="true" />
             </button>
           </header>
-          <div className="cinema-settings-row">
-            <div className="cinema-settings-row-copy">
-              <strong>{t("settings.appearance")}</strong>
-              <span>{t("settings.appearanceDescription")}</span>
-            </div>
-            <div className="cinema-settings-choice-options" role="radiogroup" aria-label={t("settings.theme")}>
-              {CINEMA_THEME_OPTIONS.map((option) => {
-                const Icon = option.icon
-                return (
-                  <button
-                    key={option.id}
-                    type="button"
-                    role="radio"
-                    className={`cinema-settings-choice-option ${theme === option.id ? "is-active" : ""}`}
-                    aria-checked={theme === option.id}
-                    onClick={() => setTheme(option.id)}
-                  >
-                    <Icon size={15} aria-hidden="true" />
-                    <span>{t(option.labelKey)}</span>
-                  </button>
-                )
-              })}
-            </div>
+          <div className="cinema-settings-tabs" role="tablist" aria-label={t("settings.sections")}>
+            {(["general", "providers"] as const).map((view) => (
+              <button
+                key={view}
+                id={`cinema-settings-${view}-tab`}
+                type="button"
+                role="tab"
+                className={settingsView === view ? "is-active" : ""}
+                aria-controls={`cinema-settings-${view}-panel`}
+                aria-selected={settingsView === view}
+                tabIndex={settingsView === view ? 0 : -1}
+                onClick={() => setSettingsView(view)}
+              >
+                {t(view === "general" ? "settings.section.general" : "settings.section.providers")}
+              </button>
+            ))}
           </div>
-          <div className="cinema-settings-row">
-            <div className="cinema-settings-row-copy">
-              <strong>{t("settings.language")}</strong>
-              <span>{t("settings.languageDescription")}</span>
+          {settingsView === "general" ? (
+            <div
+              id="cinema-settings-general-panel"
+              role="tabpanel"
+              aria-labelledby="cinema-settings-general-tab"
+            >
+              <div className="cinema-settings-row">
+                <div className="cinema-settings-row-copy">
+                  <strong>{t("settings.appearance")}</strong>
+                  <span>{t("settings.appearanceDescription")}</span>
+                </div>
+                <div className="cinema-settings-choice-options" role="radiogroup" aria-label={t("settings.theme")}>
+                  {CINEMA_THEME_OPTIONS.map((option) => {
+                    const Icon = option.icon
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        role="radio"
+                        className={`cinema-settings-choice-option ${theme === option.id ? "is-active" : ""}`}
+                        aria-checked={theme === option.id}
+                        onClick={() => setTheme(option.id)}
+                      >
+                        <Icon size={15} aria-hidden="true" />
+                        <span>{t(option.labelKey)}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+              <div className="cinema-settings-row">
+                <div className="cinema-settings-row-copy">
+                  <strong>{t("settings.language")}</strong>
+                  <span>{t("settings.languageDescription")}</span>
+                </div>
+                <div className="cinema-settings-choice-options" role="radiogroup" aria-label={t("settings.languageOptions")}>
+                  {SUPPORTED_LOCALES.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      role="radio"
+                      className={`cinema-settings-choice-option ${locale === option.id ? "is-active" : ""}`}
+                      aria-checked={locale === option.id}
+                      onClick={() => setLocale(option.id)}
+                    >
+                      <span>{option.nativeLabel}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
-            <div className="cinema-settings-choice-options" role="radiogroup" aria-label={t("settings.languageOptions")}>
-              {SUPPORTED_LOCALES.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  role="radio"
-                  className={`cinema-settings-choice-option ${locale === option.id ? "is-active" : ""}`}
-                  aria-checked={locale === option.id}
-                  onClick={() => setLocale(option.id)}
-                >
-                  <span>{option.nativeLabel}</span>
-                </button>
-              ))}
+          ) : (
+            <div
+              id="cinema-settings-providers-panel"
+              role="tabpanel"
+              aria-labelledby="cinema-settings-providers-tab"
+            >
+              <CinemaProviderSettings initialProviderID={requestedProviderID} />
             </div>
-          </div>
+          )}
         </section>
       ) : null}
     </div>

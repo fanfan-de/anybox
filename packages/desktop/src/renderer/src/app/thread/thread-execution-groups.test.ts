@@ -14,6 +14,7 @@ import type {
   AssistantTraceItem,
   AssistantTraceVisibility,
   AssistantThreadMessage,
+  PermissionRequest,
   SessionSummary,
   ThreadMessage,
   ThreadTurn,
@@ -23,6 +24,30 @@ import type {
 import { DEFAULT_ASSISTANT_TRACE_VISIBILITY } from "../types"
 
 const session = { id: "session-1" } as SessionSummary
+
+function permissionRequest(overrides: Partial<PermissionRequest> = {}): PermissionRequest {
+  return {
+    id: "permission-1",
+    approvalID: "approval-1",
+    sessionID: session.id,
+    messageID: "assistant-approval",
+    toolCallID: "tool-call-1",
+    projectID: "project-1",
+    agent: "default",
+    status: "pending",
+    createdAt: 1,
+    prompt: {
+      title: "Approve the test tool",
+      summary: "Run the test tool.",
+      rationale: "The test tool requires approval.",
+      risk: "high",
+      detailsAvailable: false,
+      allowedDecisions: ["deny", "allow"],
+      recommendedDecision: "allow",
+    },
+    ...overrides,
+  }
+}
 
 type TestThreadTurn = ThreadTurn & {
   finalSegmentID?: string
@@ -252,11 +277,13 @@ function derive(
   rows = buildRows(messages),
   eligibilityLocks?: ReadonlySet<string>,
   answeredQuestionIDs?: ReadonlySet<string>,
+  pendingPermissionRequests: readonly PermissionRequest[] = [],
 ) {
   return deriveThreadExecutionGroups({
     answeredQuestionIDs,
     eligibilityLocks,
     messages,
+    pendingPermissionRequests,
     rows,
     turns,
   })
@@ -1080,6 +1107,52 @@ describe("thread execution groups", () => {
     expect(group.outcomeRowIDs).not.toContain(rowIDForItem(rows, "history-question"))
   })
 
+  it("only protects permission logs that still match an active request", () => {
+    const request = permissionRequest()
+    const message = assistantMessage("assistant-1", [
+      reasoningItem("reasoning-1", "One"),
+      reasoningItem("reasoning-2", "Two"),
+      traceItem("permission-requested", "system", {
+        approvalID: request.approvalID,
+        toolCallID: request.toolCallID,
+        section: "approvals",
+        status: "pending",
+        title: "Permission requested",
+      }),
+      textItem("final-response", "Done."),
+    ])
+    const rows = buildRows([message])
+    const turns = [threadTurn("turn-1", [message], { finalSegmentID: message.segmentID })]
+    const permissionRowID = rowIDForItem(rows, "permission-requested")
+
+    const historicalGroup = derive(
+      [message],
+      turns,
+      rows,
+      undefined,
+      undefined,
+      [],
+    ).groups[0]!
+    expect(historicalGroup.prefixRowIDs).toContain(permissionRowID)
+    expect(historicalGroup.outcomeRowIDs).not.toContain(permissionRowID)
+    expect(projectThreadDisplayRowsWithExecutionGroups({
+      expandedByGroupID: { [historicalGroup.groupID]: false },
+      groups: [historicalGroup],
+      rows,
+    }).some((row) => row.rowID === permissionRowID)).toBe(false)
+
+    const activeGroup = derive(
+      [message],
+      turns,
+      rows,
+      undefined,
+      undefined,
+      [request],
+    ).groups[0]!
+    expect(activeGroup.outcomeRowIDs).toContain(permissionRowID)
+    expect(activeGroup.prefixRowIDs).not.toContain(permissionRowID)
+  })
+
   it("keeps the last failed tool and pending approval outside an abnormal prefix", () => {
     const message = assistantMessage("assistant-1", [
       reasoningItem("reasoning-1", "One"),
@@ -1089,7 +1162,17 @@ describe("thread execution groups", () => {
       toolItem("approval", "waiting-approval", { section: "approvals" }),
     ], { phase: "failed" })
     const rows = buildRows([message])
-    const group = derive([message], [threadTurn("turn-1", [message], { status: "failed" })], rows).groups[0]!
+    const group = derive(
+      [message],
+      [threadTurn("turn-1", [message], { status: "failed" })],
+      rows,
+      undefined,
+      undefined,
+      [permissionRequest({
+        approvalID: "approval-approval",
+        toolCallID: "approval",
+      })],
+    ).groups[0]!
 
     expect(group.prefixRowIDs).toContain(rowIDForItem(rows, "failed-tool-1"))
     expect(group.outcomeRowIDs).toEqual([
