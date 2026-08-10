@@ -108,7 +108,6 @@ interface SidebarProps {
   onProjectCreateAutomation: (workspace: WorkspaceGroup) => void
   onProjectCreateSession: (workspace: WorkspaceGroup, event: MouseEvent<HTMLButtonElement>) => void | Promise<void>
   onProjectCreateWorktree: (workspace: WorkspaceGroup, input: ProjectWorktreeCreateRequest) => boolean | void | Promise<boolean | void>
-  onProjectOpenCinema: (workspace: WorkspaceGroup) => void | Promise<void>
   onProjectOpenInExplorer: (workspace: WorkspaceGroup) => void | Promise<void>
   onProjectPin: (workspace: WorkspaceGroup) => void
   onProjectRemove: (workspace: WorkspaceGroup, event: MouseEvent<HTMLButtonElement>) => void
@@ -217,7 +216,6 @@ interface FolderWorkspaceViewProps {
   onProjectCreateAutomation: (workspace: WorkspaceGroup) => void
   onProjectCreateSession: (workspace: WorkspaceGroup, event: MouseEvent<HTMLButtonElement>) => void | Promise<void>
   onProjectCreateWorktree: (workspace: WorkspaceGroup, input: ProjectWorktreeCreateRequest) => boolean | void | Promise<boolean | void>
-  onProjectOpenCinema: (workspace: WorkspaceGroup) => void | Promise<void>
   onProjectOpenInExplorer: (workspace: WorkspaceGroup) => void | Promise<void>
   onProjectPin: (workspace: WorkspaceGroup) => void
   onProjectRemove: (workspace: WorkspaceGroup, event: MouseEvent<HTMLButtonElement>) => void
@@ -314,7 +312,7 @@ function createWorktreeBranchName(workspace: WorkspaceGroup, workspaces: Workspa
 }
 
 const PROJECT_CONTEXT_MENU_WIDTH = 240
-const PROJECT_CONTEXT_MENU_HEIGHT = 262
+const PROJECT_CONTEXT_MENU_HEIGHT = 228
 const WORKSPACE_BACKGROUND_CONTEXT_MENU_WIDTH = 184
 const WORKSPACE_BACKGROUND_CONTEXT_MENU_HEIGHT = 46
 const SESSION_CONTEXT_MENU_WIDTH = 224
@@ -392,7 +390,6 @@ interface WorkspaceContextMenuProps {
   onProjectArchiveSessions: (workspace: WorkspaceGroup) => void | Promise<void>
   onProjectCreateAutomation: (workspace: WorkspaceGroup) => void
   onProjectCreateWorktree: (workspace: WorkspaceGroup) => void | Promise<void>
-  onProjectOpenCinema: (workspace: WorkspaceGroup) => void | Promise<void>
   onProjectOpenInExplorer: (workspace: WorkspaceGroup) => void | Promise<void>
   onProjectPin: (workspace: WorkspaceGroup) => void
   onProjectRemove: (workspace: WorkspaceGroup, event: MouseEvent<HTMLButtonElement>) => void
@@ -410,7 +407,6 @@ function WorkspaceContextMenu({
   onProjectArchiveSessions,
   onProjectCreateAutomation,
   onProjectCreateWorktree,
-  onProjectOpenCinema,
   onProjectOpenInExplorer,
   onProjectPin,
   onProjectRemove,
@@ -529,20 +525,6 @@ function WorkspaceContextMenu({
       >
         <span className="ui-context-menu__icon" aria-hidden="true"><FolderOpenIcon /></span>
         <span className="ui-context-menu__label">在资源管理器中打开</span>
-      </button>
-      <button
-        className="ui-context-menu__item"
-        role="menuitem"
-        type="button"
-        disabled={isMissingWorkspace}
-        onClick={(event) => {
-          event.stopPropagation()
-          onClose()
-          void onProjectOpenCinema(workspace)
-        }}
-      >
-        <span className="ui-context-menu__icon" aria-hidden="true"><FileTextIcon /></span>
-        <span className="ui-context-menu__label">{t("sidebar.openCinema")}</span>
       </button>
       <button
         className="ui-context-menu__item"
@@ -1078,7 +1060,6 @@ function FolderWorkspaceView({
   onProjectCreateAutomation,
   onProjectCreateSession,
   onProjectCreateWorktree,
-  onProjectOpenCinema,
   onProjectOpenInExplorer,
   onProjectPin,
   onProjectRemove,
@@ -1555,7 +1536,6 @@ function FolderWorkspaceView({
         onProjectArchiveSessions={onProjectArchiveSessions}
         onProjectCreateAutomation={onProjectCreateAutomation}
         onProjectCreateWorktree={openWorktreeCreateDialog}
-        onProjectOpenCinema={onProjectOpenCinema}
         onProjectOpenInExplorer={onProjectOpenInExplorer}
         onProjectPin={onProjectPin}
         onProjectRemove={onProjectRemove}
@@ -1931,7 +1911,6 @@ export function Sidebar({
   onProjectCreateAutomation,
   onProjectCreateSession,
   onProjectCreateWorktree,
-  onProjectOpenCinema,
   onProjectOpenInExplorer,
   onProjectPin,
   onProjectRemove,
@@ -1984,7 +1963,6 @@ export function Sidebar({
             onProjectCreateAutomation={onProjectCreateAutomation}
             onProjectCreateSession={onProjectCreateSession}
             onProjectCreateWorktree={onProjectCreateWorktree}
-            onProjectOpenCinema={onProjectOpenCinema}
             onProjectOpenInExplorer={onProjectOpenInExplorer}
             onProjectPin={onProjectPin}
             onProjectRemove={onProjectRemove}

@@ -57,7 +57,6 @@ const enUS = {
   "connectors.mcp.enableCopy": "Controls whether this connector exposes its tools to the Agent.",
   "connectors.mcp.unregistered": "This runtime has not registered an MCP server.",
   "sidebar.workspaceActions": "Workspace sidebar actions",
-  "sidebar.openCinema": "Open Cinema",
 } as const
 
 type PluginOwnershipTranslations = Record<keyof typeof enUS, string>
@@ -121,7 +120,6 @@ const zhCN: PluginOwnershipTranslations = {
   "connectors.mcp.enableCopy": "控制此连接器是否向 Agent 暴露其工具。",
   "connectors.mcp.unregistered": "此运行时尚未注册 MCP 服务器。",
   "sidebar.workspaceActions": "工作区侧边栏操作",
-  "sidebar.openCinema": "打开 Cinema",
 }
 
 const zhTW: PluginOwnershipTranslations = {
@@ -183,7 +181,6 @@ const zhTW: PluginOwnershipTranslations = {
   "connectors.mcp.enableCopy": "控制此連接器是否向 Agent 提供其工具。",
   "connectors.mcp.unregistered": "此執行階段尚未註冊 MCP 伺服器。",
   "sidebar.workspaceActions": "工作區側邊欄操作",
-  "sidebar.openCinema": "開啟 Cinema",
 }
 
 export const pluginOwnershipTranslations = {

@@ -1911,27 +1911,6 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
     }
   }
 
-  function handleProjectOpenCinema(workspace: WorkspaceGroup) {
-    const projectID = workspace.project.id.trim()
-    if (!projectID) {
-      toast.error("Cinema 需要有效的项目 ID。")
-      return
-    }
-
-    const view = installedPluginViews.find(
-      (candidate) => candidate.pluginID === "cinema" && candidate.viewID === "main",
-    )
-    if (!view) {
-      toast.error(installedPluginsLoaded
-        ? "请先安装并启用 Cinema 插件。"
-        : "Cinema 插件仍在加载，请稍后重试。")
-      return
-    }
-
-    workspaceStore.getState().sessionsActions.setSelectedFolderID(workspace.id)
-    handleOpenRightSidebarPluginView(view)
-  }
-
   async function refreshAppUpdateState() {
     const state = await getAppUpdateState()
     if (state) {
@@ -2791,7 +2770,6 @@ function MainApp({ workbenchContext }: { workbenchContext: WorkbenchWindowContex
               onProjectCreateSession={handleProjectCreateSession}
               onProjectCreateWorktree={handleProjectCreateWorktree}
               onProjectClick={handleProjectClick}
-              onProjectOpenCinema={handleProjectOpenCinema}
               onProjectOpenInExplorer={handleProjectOpenInExplorer}
               onProjectPin={handleProjectPin}
               onProjectRemove={handleProjectRemove}
