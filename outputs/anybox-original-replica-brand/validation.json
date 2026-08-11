@@ -1,0 +1,18 @@
+{
+  "source": "C:\\Projects\\Anybox\\packages\\site\\public\\anybox-box-cat-logo.png",
+  "sourceSize": [
+    1024,
+    1024
+  ],
+  "outputDirectory": "C:\\Projects\\Anybox\\outputs\\anybox-original-replica-brand",
+  "tracedPathCount": 10,
+  "hasEmbeddedRaster": false,
+  "hasLiveText": false,
+  "meanAbsoluteError": 0.7693710327148438,
+  "rootMeanSquareError": 5.109627720360244,
+  "binaryIoU": 0.9906118161049876,
+  "sourcePositive": 119417,
+  "replicaPositive": 119333,
+  "whiteSvgBytes": 6706,
+  "blackSvgBytes": 6706
+}

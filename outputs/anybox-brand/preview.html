@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Anybox · Folded Companion Brand Kit</title>
+  <style>
+    :root { font-family: "Segoe UI Variable Text", "Microsoft YaHei UI", sans-serif; color: #15201b; background: #edf2ef; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 48px 24px 72px; }
+    main { width: min(1180px, 100%); margin: auto; }
+    h1 { margin: 0; font-size: clamp(34px, 6vw, 64px); letter-spacing: -.05em; }
+    .lede { max-width: 760px; color: #5f6b63; line-height: 1.7; }
+    h2 { margin: 36px 0 14px; font-size: 20px; }
+    .hero { display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; border-radius: 24px; border: 1px solid #d8dfda; box-shadow: 0 24px 70px rgba(29,45,35,.08); }
+    .hero > div { min-height: 310px; display: grid; place-items: center; padding: 38px; }
+    .hero .light { background: #fffdf8; }
+    .hero .dark { background: #151817; }
+    .hero img { width: min(470px, 92%); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px,1fr)); gap: 16px; }
+    .tile { min-height: 260px; display: grid; place-items: center; padding: 24px; border: 1px solid #dae1dc; border-radius: 18px; background: #fff; }
+    .tile.dark { background: #151817; }
+    .tile.checker { background-color:#fff; background-image:linear-gradient(45deg,#edf0ed 25%,transparent 25%),linear-gradient(-45deg,#edf0ed 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#edf0ed 75%),linear-gradient(-45deg,transparent 75%,#edf0ed 75%);background-size:24px 24px;background-position:0 0,0 12px,12px -12px,-12px 0; }
+    .mark { width: 160px; height: 160px; }
+    .app { width: 176px; height: 176px; }
+    .sizes { min-height: 200px; display: flex; align-items: flex-end; justify-content: center; gap: 28px; border-radius: 18px; background: #fff; border: 1px solid #dae1dc; padding: 34px; }
+    .sample { display: grid; justify-items: center; gap: 10px; color: #758078; font: 12px ui-monospace, monospace; }
+    .palette { display: grid; grid-template-columns: repeat(auto-fit,minmax(170px,1fr)); gap: 12px; }
+    .swatch { overflow: hidden; border-radius: 14px; border: 1px solid #d8dfda; background: #fff; }
+    .color { height: 92px; background: var(--color); }
+    .swatch p { margin: 0; padding: 13px 14px; font: 13px ui-monospace, monospace; }
+    .social { width: 100%; border-radius: 18px; border: 1px solid #d8dfda; }
+    @media(max-width:720px){.hero{grid-template-columns:1fr}.hero>div{min-height:230px}body{padding:28px 14px 48px}.sizes{gap:18px}}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Folded Companion</h1>
+    <p class="lede">Anybox 的优化标志：保留“猫从开放纸箱中出现”的原始记忆，改为真正的原生 SVG，并针对桌面、移动端、网站导航与 favicon 做了尺寸收敛。</p>
+    <section class="hero"><div class="light"><img src="anybox-full-logo.svg" alt="Anybox full logo on a light background" /></div><div class="dark"><img src="anybox-full-logo-dark.svg" alt="Anybox full logo on a dark background" /></div></section>
+    <h2>标志与 App 图标</h2>
+    <section class="grid">
+      <div class="tile checker"><img class="mark" src="anybox-mark-color.svg" alt="Primary Anybox mark" /></div>
+      <div class="tile dark"><img class="mark" src="anybox-mark-dark.svg" alt="Anybox mark for dark surfaces" /></div>
+      <div class="tile"><img class="app" src="anybox-app-icon.svg" alt="Anybox app icon" /></div>
+    </section>
+    <h2>真实小尺寸</h2>
+    <section class="sizes"><span class="sample"><img src="favicon.svg" width="64" height="64" alt="64 px"/><b>64 px</b></span><span class="sample"><img src="favicon.svg" width="32" height="32" alt="32 px"/><b>32 px</b></span><span class="sample"><img src="favicon.svg" width="16" height="16" alt="16 px"/><b>16 px</b></span></section>
+    <h2>色彩</h2>
+    <section class="palette">
+      <div class="swatch"><div class="color" style="--color:#15201B"></div><p>Ink · #15201B</p></div>
+      <div class="swatch"><div class="color" style="--color:#2F6F68"></div><p>Teal · #2F6F68</p></div>
+      <div class="swatch"><div class="color" style="--color:#151817"></div><p>Night · #151817</p></div>
+      <div class="swatch"><div class="color" style="--color:#76B8AD"></div><p>Night Teal · #76B8AD</p></div>
+      <div class="swatch"><div class="color" style="--color:#F2EFE5"></div><p>Warm Paper · #F2EFE5</p></div>
+    </section>
+    <h2>社交预览</h2>
+    <img class="social" src="social-preview.svg" alt="Anybox social preview" />
+  </main>
+</body>
+</html>

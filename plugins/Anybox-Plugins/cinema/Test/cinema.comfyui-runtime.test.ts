@@ -16,7 +16,9 @@ import {
 import {
   COMFYUI_WORKFLOW_LIMITS,
   convertComfyUIWorkflowBuiltin,
+  getInternalComfyUIWorkflow,
   refreshComfyUIWorkflowCatalog,
+  setConfiguredComfyUIConnectionForTest,
   setComfyUIWorkflowCacheRootForTest,
 } from "#cinema/comfyui-workflows.ts"
 import { ApiError } from "#server/error.ts"
@@ -372,6 +374,46 @@ describe("ComfyUI workflow discovery", () => {
     ]) {
       expect(() => validateComfyUIBaseURL(value)).toThrow()
     }
+  })
+
+  test("rejects a workflow target after the active ComfyUI origin changes", async () => {
+    const root = await temporaryRoot()
+    restoreCacheRoots.push(setComfyUIWorkflowCacheRootForTest(path.join(root, "cache")))
+    const firstEndpoint = comfyServer({
+      files: { "workflow.json": appWorkflow("First origin") },
+      promptCalls: 0,
+      convertCalls: 0,
+    })
+    const secondEndpoint = comfyServer({
+      files: { "workflow.json": appWorkflow("Second origin") },
+      promptCalls: 0,
+      convertCalls: 0,
+    })
+    const firstCatalog = await refreshComfyUIWorkflowCatalog({ baseURL: firstEndpoint, userID: null })
+    const secondCatalog = await refreshComfyUIWorkflowCatalog({ baseURL: secondEndpoint, userID: null })
+    const firstWorkflow = firstCatalog.workflows[0]!
+    const secondWorkflow = secondCatalog.workflows[0]!
+    const firstTarget = firstWorkflow.formSpec!.target
+    const secondTarget = secondWorkflow.formSpec!.target
+    if (firstTarget.kind !== "workflow" || secondTarget.kind !== "workflow") throw new Error("Expected workflow targets")
+    expect(typeof firstTarget.connectionID).toBe("string")
+    expect(typeof secondTarget.connectionID).toBe("string")
+    restoreCacheRoots.push(setConfiguredComfyUIConnectionForTest({ baseURL: secondEndpoint, userID: null }))
+
+    await expect(getInternalComfyUIWorkflow(
+      firstWorkflow.workflowID,
+      firstWorkflow.revision,
+      firstTarget.connectionID,
+    )).rejects.toMatchObject({
+      code: "COMFYUI_CONNECTION_CHANGED",
+      status: 409,
+    })
+    const activeWorkflow = await getInternalComfyUIWorkflow(
+      secondWorkflow.workflowID,
+      secondWorkflow.revision,
+      secondTarget.connectionID,
+    )
+    expect(activeWorkflow).toMatchObject({ endpoint: secondEndpoint, userID: "default" })
   })
 
   test("discovers nested APP workflows without creating prompts and keeps IDs stable across revisions", async () => {
@@ -1505,6 +1547,10 @@ describe("ComfyUI workflow execution", () => {
     expect(result).toMatchObject({
       ok: true,
       status: "ready",
+      userID: "default",
+      workflows: 1,
+      readyWorkflows: 1,
+      connectionID: expect.stringMatching(/^comfy_[0-9a-f]{32}$/),
       diagnostics: {
         service: "reachable",
         workflowDiscovery: "ready",

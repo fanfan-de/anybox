@@ -43364,7 +43364,8 @@ var CinemaGenerationTargetSchema = exports_external.discriminatedUnion("kind", [
   exports_external.object({
     kind: exports_external.literal("workflow"),
     workflowID: exports_external.string().min(1),
-    revision: exports_external.string().min(1)
+    revision: exports_external.string().min(1),
+    connectionID: exports_external.string().min(1).optional()
   }).strict()
 ]);
 function validateLegacyGenerationTarget(value, ctx) {
@@ -50561,6 +50562,7 @@ var MODEL_INPUT_FOLDERS = {
 var catalogPromises = new Map;
 var catalogs = new Map;
 var cacheRootOverride;
+var configuredConnectionOverride;
 function isRecord2(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -50606,6 +50608,8 @@ function validateComfyUIBaseURL(value) {
   return url2.origin;
 }
 async function configuredComfyUIConnection() {
+  if (configuredConnectionOverride)
+    return { ...configuredConnectionOverride };
   const settings = await getCinemaVideoProviderSettings(COMFYUI_PROVIDER_ID);
   return {
     baseURL: validateComfyUIBaseURL(settings.baseURL),
@@ -50705,6 +50709,14 @@ async function optionalComfyUIJSON(baseURL, route, userID, init = {}) {
 }
 function cacheKey(endpoint, userID) {
   return `${endpoint}\x00${userID ?? ""}`;
+}
+function comfyUIConnectionID(endpoint, userID) {
+  const normalizedEndpoint = validateComfyUIBaseURL(endpoint);
+  const normalizedUserID = userID?.trim() || null;
+  return `comfy_${sha2563(cacheKey(normalizedEndpoint, normalizedUserID)).slice(0, 32)}`;
+}
+function requestedUserID(value, fallback) {
+  return value === undefined ? fallback : value?.trim() || null;
 }
 function cachePath(endpoint, userID) {
   const filename = `${sha2563(cacheKey(endpoint, userID))}.json`;
@@ -51788,7 +51800,12 @@ async function convertOneWorkflow(input) {
     bindings
   };
   const revision = `sha256:${sha2563(stableStringify(revisionPayload))}`;
-  const target = { kind: "workflow", workflowID, revision };
+  const target = {
+    kind: "workflow",
+    workflowID,
+    revision,
+    connectionID: comfyUIConnectionID(input.baseURL, input.userID)
+  };
   const supportedOutputKind = output.output?.kind === "image" || output.output?.kind === "video" ? output.output.kind : undefined;
   const formSpec = supportedOutputKind && controls.length === rawInputs.length ? {
     providerID: COMFYUI_PROVIDER_ID,
@@ -51846,11 +51863,11 @@ function disabledLimitWorkflow(input) {
 async function refreshInternal(options) {
   const configured = await configuredComfyUIConnection();
   const endpoint = validateComfyUIBaseURL(options.baseURL ?? configured.baseURL);
-  const requestedUserID = options.userID?.trim() || configured.userID;
+  const selectedUserID = requestedUserID(options.userID, configured.userID);
   const discoveredAt = new Date().toISOString();
   await requestComfyUIJSON(endpoint, "/system_stats", null);
   const users = await discoverUsers(endpoint);
-  const userID = selectUser(users, requestedUserID);
+  const userID = selectUser(users, selectedUserID);
   if (!userID) {
     const catalog2 = {
       providerID: COMFYUI_PROVIDER_ID,
@@ -52035,7 +52052,7 @@ async function refreshInternal(options) {
   await writePublicCatalogCache(endpoint, userID, publicCatalog).catch(() => {
     return;
   });
-  if (!requestedUserID && userID === "default") {
+  if (!selectedUserID && userID === "default") {
     await writePublicCatalogCache(endpoint, null, publicCatalog).catch(() => {
       return;
     });
@@ -52072,7 +52089,7 @@ async function staleCatalogForFailure(endpoint, userID, error48) {
 async function getComfyUIWorkflowCatalog(options = {}) {
   const configured = await configuredComfyUIConnection();
   const endpoint = validateComfyUIBaseURL(options.baseURL ?? configured.baseURL);
-  const userID = options.userID?.trim() || configured.userID;
+  const userID = requestedUserID(options.userID, configured.userID);
   const key = cacheKey(endpoint, userID);
   if (!options.force && catalogs.has(key))
     return catalogs.get(key).publicCatalog;
@@ -52080,6 +52097,7 @@ async function getComfyUIWorkflowCatalog(options = {}) {
     return (await catalogPromises.get(key)).publicCatalog;
   const promise2 = refreshInternal({ ...options, baseURL: endpoint, userID }).catch((error48) => staleCatalogForFailure(endpoint, userID, error48)).then((catalog) => {
     catalogs.set(key, catalog);
+    catalogs.set(cacheKey(catalog.endpoint, catalog.userID), catalog);
     return catalog;
   }).finally(() => catalogPromises.delete(key));
   catalogPromises.set(key, promise2);
@@ -52088,16 +52106,31 @@ async function getComfyUIWorkflowCatalog(options = {}) {
 async function refreshComfyUIWorkflowCatalog(options = {}) {
   return await getComfyUIWorkflowCatalog({ ...options, force: true });
 }
-async function getInternalComfyUIWorkflow(workflowID, revision) {
+async function getInternalComfyUIWorkflow(workflowID, revision, connectionID) {
   const configured = await configuredComfyUIConnection();
   const key = cacheKey(configured.baseURL, configured.userID);
-  let catalog = catalogs.get(key) ?? [...catalogs.values()].find((candidate) => candidate.workflows.has(workflowID));
+  let catalog = catalogs.get(key);
+  if (!catalog && !connectionID) {
+    catalog = [...catalogs.values()].find((candidate) => candidate.workflows.has(workflowID));
+  }
   if (!catalog) {
     await getComfyUIWorkflowCatalog();
     catalog = catalogs.get(key);
   }
   if (!catalog) {
     throw new ApiError(404, "COMFYUI_WORKFLOW_NOT_FOUND", "The selected ComfyUI workflow was not found.");
+  }
+  if (connectionID) {
+    const activeConnectionID = comfyUIConnectionID(catalog.endpoint, catalog.userID);
+    const latest = await configuredComfyUIConnection();
+    if (cacheKey(latest.baseURL, latest.userID) !== key || activeConnectionID !== connectionID) {
+      throw new ApiError(409, "COMFYUI_CONNECTION_CHANGED", "The active ComfyUI connection changed; refresh workflows before submitting.", {
+        requestedConnectionID: connectionID,
+        activeConnectionID,
+        activeBaseURL: latest.baseURL,
+        activeUserID: latest.userID
+      });
+    }
   }
   if (catalog.publicCatalog.status !== "ready") {
     throw new ApiError(409, "COMFYUI_WORKFLOW_CATALOG_STALE", "The ComfyUI workflow catalog is stale; refresh it before submitting.");
@@ -52264,7 +52297,7 @@ async function readWorkflowSnapshot(cinemaRoot3, taskID, submitted = false) {
   } catch {
     throw new ApiError(500, "COMFYUI_WORKFLOW_SNAPSHOT_INVALID", "The task workflow snapshot is missing or invalid.");
   }
-  if (!isRecord3(parsed) || parsed.schemaVersion !== SNAPSHOT_SCHEMA_VERSION || parsed.taskID !== taskID || !stringValue2(parsed.workflowID) || !stringValue2(parsed.revision) || parsed.outputKind !== "image" && parsed.outputKind !== "video" || !Array.isArray(parsed.outputNodeIDs) || !isRecord3(parsed.uiWorkflow) || !isRecord3(parsed.apiPrompt) || !isRecord3(parsed.bindings) || !Array.isArray(parsed.controls) || !isRecord3(parsed.values) || !stringValue2(parsed.digest)) {
+  if (!isRecord3(parsed) || parsed.schemaVersion !== SNAPSHOT_SCHEMA_VERSION || parsed.taskID !== taskID || !stringValue2(parsed.workflowID) || !stringValue2(parsed.revision) || parsed.connectionID !== undefined && !stringValue2(parsed.connectionID) || parsed.outputKind !== "image" && parsed.outputKind !== "video" || !Array.isArray(parsed.outputNodeIDs) || !isRecord3(parsed.uiWorkflow) || !isRecord3(parsed.apiPrompt) || !isRecord3(parsed.bindings) || !Array.isArray(parsed.controls) || !isRecord3(parsed.values) || !stringValue2(parsed.digest)) {
     throw new ApiError(500, "COMFYUI_WORKFLOW_SNAPSHOT_INVALID", "The task workflow snapshot is invalid.");
   }
   const { digest, ...withoutDigest } = parsed;
@@ -52399,7 +52432,7 @@ async function prepareComfyUITask(input) {
   if (input.task.target.kind !== "workflow") {
     throw new ApiError(410, "COMFYUI_LEGACY_WORKFLOW_REMOVED", "The built-in ComfyUI workflow was removed; select a discovered APP mode workflow.");
   }
-  const { workflow, endpoint, userID } = await getInternalComfyUIWorkflow(input.task.target.workflowID, input.task.target.revision);
+  const { workflow, endpoint, userID } = await getInternalComfyUIWorkflow(input.task.target.workflowID, input.task.target.revision, input.task.target.connectionID);
   if (!userID) {
     throw new ApiError(409, "COMFYUI_USER_SELECTION_REQUIRED", "Select a ComfyUI user before submitting.");
   }
@@ -52414,6 +52447,7 @@ async function prepareComfyUITask(input) {
     taskID: input.task.id,
     workflowID: workflow.publicWorkflow.workflowID,
     revision: workflow.publicWorkflow.revision,
+    ...input.task.target.connectionID ? { connectionID: input.task.target.connectionID } : {},
     outputKind: output.kind,
     outputNodeIDs: workflow.outputNodeIDs,
     uiWorkflow: workflow.uiWorkflow,
@@ -52437,6 +52471,7 @@ async function prepareComfyUITask(input) {
       clientID: CLIENT_ID,
       workflowID: workflow.publicWorkflow.workflowID,
       revision: workflow.publicWorkflow.revision,
+      ...input.task.target.connectionID ? { connectionID: input.task.target.connectionID } : {},
       snapshotDigest: snapshot.digest,
       outputKind: output.kind,
       outputNodeIDs: workflow.outputNodeIDs,
@@ -53268,10 +53303,16 @@ async function testComfyUIConnection(input = {}) {
       };
     }
     const ready = catalog.workflows.filter((workflow) => workflow.status === "ready").length;
+    const resolvedUserID = catalog.userID ?? undefined;
     return {
       ok: true,
       status: "ready",
       message: `Local ComfyUI is reachable; discovered ${catalog.workflows.length} workflow(s), ${ready} ready.`,
+      effectiveBaseURL: baseURL,
+      ...resolvedUserID ? { userID: resolvedUserID } : {},
+      ...resolvedUserID ? { connectionID: comfyUIConnectionID(baseURL, resolvedUserID) } : {},
+      workflows: catalog.workflows.length,
+      readyWorkflows: ready,
       diagnostics: {
         service: "reachable",
         userData: "ready",
@@ -55372,8 +55413,7 @@ async function saveCinemaVideoProviderApiKey(providerID, apiKey) {
   await saveProviderApiKey(provider.manifest.credentialProviderID, apiKey);
   return await providerAuthStateFor(provider.manifest);
 }
-async function saveCinemaVideoProviderSettings(providerID, input) {
-  const provider = await getCinemaVideoProvider(providerID);
+async function persistCinemaVideoProviderSettings(provider, input, options = {}) {
   const adapter = providerAdapters[provider.manifest.id];
   const baseURL = input.baseURL?.trim() ? adapter?.validateBaseURL?.(input.baseURL) ?? normalizeBaseURL(input.baseURL) : undefined;
   if (baseURL) {
@@ -55392,10 +55432,23 @@ async function saveCinemaVideoProviderSettings(providerID, input) {
     ...input.baseURL !== undefined && baseURL ? { baseURL } : {},
     ...userID ? { userID } : {}
   });
-  await adapter?.refreshWorkflows?.().catch(() => {
-    return;
-  });
+  if (options.refreshWorkflows !== false) {
+    await adapter?.refreshWorkflows?.().catch(() => {
+      return;
+    });
+  }
   return await videoProviderFor(provider.manifest);
+}
+async function saveCinemaVideoProviderSettings(providerID, input) {
+  const provider = await getCinemaVideoProvider(providerID);
+  if (provider.manifest.id === COMFYUI_PROVIDER_ID) {
+    const result = await connectCinemaVideoProvider(providerID, input);
+    if (!result.ok) {
+      throw new ApiError(422, result.errorCode ?? "COMFYUI_CONNECTION_FAILED", result.message, result.diagnostics);
+    }
+    return await videoProviderFor(provider.manifest);
+  }
+  return await persistCinemaVideoProviderSettings(provider, input);
 }
 function createConnectionTestResult(providerID, result) {
   return {
@@ -55511,7 +55564,7 @@ async function testCinemaVideoProviderConnection(providerID, input = {}) {
   try {
     const adapter = providerAdapters[providerID];
     if (adapter?.testConnection) {
-      const requestedBaseURL = input.baseURL?.trim() ? input.baseURL : runtime?.baseURL ?? manifest.baseURL;
+      const requestedBaseURL = input.baseURL === null ? manifest.baseURL : input.baseURL?.trim() ? input.baseURL : runtime?.baseURL ?? manifest.baseURL;
       const result = await adapter.testConnection({
         baseURL: requestedBaseURL,
         userID: input.userID
@@ -55573,6 +55626,33 @@ async function testCinemaVideoProviderConnection(providerID, input = {}) {
       ...classified
     });
   }
+}
+async function connectCinemaVideoProvider(providerID, input) {
+  const provider = await getCinemaVideoProvider(providerID);
+  if (provider.manifest.id !== COMFYUI_PROVIDER_ID) {
+    throw new ApiError(400, "CINEMA_PROVIDER_CONNECT_UNSUPPORTED", `Cinema provider '${provider.manifest.id}' does not support atomic local-runtime connection.`);
+  }
+  const result = await testCinemaVideoProviderConnection(providerID, input);
+  if (!result.ok)
+    return { ...result, persisted: false };
+  const baseURL = result.effectiveBaseURL;
+  const userID = result.userID?.trim();
+  const connectionID = result.connectionID;
+  if (!baseURL || !userID || !connectionID) {
+    throw new ApiError(500, "COMFYUI_CONNECTION_IDENTITY_MISSING", "ComfyUI passed its readiness check without returning a complete connection identity.");
+  }
+  await assertSafeProviderURL(baseURL);
+  await setCinemaVideoProviderSettings(GLOBAL_CONFIG_ID, provider.manifest.id, {
+    baseURL,
+    userID
+  });
+  return {
+    ...result,
+    effectiveBaseURL: baseURL,
+    userID,
+    connectionID,
+    persisted: true
+  };
 }
 async function hasConnectedCinemaVideoProvider() {
   for (const provider of await listCinemaVideoProviders()) {
@@ -61985,6 +62065,7 @@ var getCinemaVideoProviderAuth2 = getCinemaVideoProviderAuth;
 var saveCinemaVideoProviderApiKey2 = saveCinemaVideoProviderApiKey;
 var saveCinemaVideoProviderSettings2 = saveCinemaVideoProviderSettings;
 var testCinemaVideoProviderConnection2 = testCinemaVideoProviderConnection;
+var connectCinemaVideoProvider2 = connectCinemaVideoProvider;
 async function listCinemaTextModels(projectID) {
   const { cinemaRoot: cinemaRoot3 } = resolveCinemaRoot(projectID);
   await assertCinemaProjectInitialized(cinemaRoot3);
@@ -63116,6 +63197,10 @@ function CinemaRoutes() {
     const payload = await parseJsonBody(c, TestCinemaVideoProviderConnectionBodySchema, "Body must contain optional connection test fields.");
     return ok(c, await testCinemaVideoProviderConnection2(c.req.param("providerID"), payload));
   });
+  app.post("/video-providers/:providerID/connect", async (c) => {
+    const payload = await parseJsonBody(c, UpdateCinemaVideoProviderSettingsBodySchema, "Body must contain optional nullable connection settings.");
+    return ok(c, await connectCinemaVideoProvider2(c.req.param("providerID"), payload));
+  });
   app.get("/projects/:projectID", async (c) => ok(c, await getCinemaProject(c.req.param("projectID"))));
   app.get("/projects/:projectID/canvas", async (c) => ok(c, await getCinemaCanvas(c.req.param("projectID"))));
   app.get("/projects/:projectID/summary", async (c) => ok(c, await getCinemaProjectStateSummary(c.req.param("projectID"))));
@@ -63234,6 +63319,7 @@ var SettingsBody = exports_external.object({
   }).strict()).optional(),
   textGenerationPrompt: exports_external.string().nullable().optional()
 }).strict();
+var ProviderConnectionBody = SettingsBody.pick({ baseURL: true, userID: true });
 function parseProviderID(value) {
   const parsed = ProviderID.safeParse(value);
   if (!parsed.success)
@@ -63285,10 +63371,19 @@ function CinemaManagementRoutes() {
   app.get("/providers/:providerID/settings", async (c) => {
     const providerID = parseProviderID(c.req.param("providerID"));
     if (providerID === "openai-compatible") {
-      const settings = await getSettings();
-      return ok(c, { ...settings.openAICompatible, textGenerationPrompt: settings.prompts.textGeneration ?? null });
+      const settings2 = await getSettings();
+      return ok(c, { ...settings2.openAICompatible, textGenerationPrompt: settings2.prompts.textGeneration ?? null });
     }
-    return ok(c, await getCinemaVideoProviderSettings(providerID));
+    const settings = await getCinemaVideoProviderSettings(providerID);
+    if (providerID !== "comfyui-local")
+      return ok(c, settings);
+    const provider = await getCinemaVideoProvider(providerID);
+    return ok(c, {
+      ...settings,
+      ...provider.runtime?.baseURL ? { baseURL: provider.runtime.baseURL } : {},
+      ...provider.runtime?.userID ? { userID: provider.runtime.userID } : {},
+      ...provider.runtime?.baseURLSource ? { baseURLSource: provider.runtime.baseURLSource } : {}
+    });
   });
   app.put("/providers/:providerID/settings", async (c) => {
     const providerID = parseProviderID(c.req.param("providerID"));
@@ -63332,6 +63427,11 @@ function CinemaManagementRoutes() {
     if (providerID === "openai-compatible")
       return ok(c, { ok: true, models: await openAIModels() });
     return ok(c, await testCinemaVideoProviderConnection(providerID, {}));
+  });
+  app.post("/providers/:providerID/connect", async (c) => {
+    const providerID = parseProviderID(c.req.param("providerID"));
+    const input = await parseJsonBody(c, ProviderConnectionBody, "Provider connection settings are invalid.");
+    return ok(c, await connectCinemaVideoProvider(providerID, input));
   });
   app.post("/providers/openai-compatible/models/discover", async (c) => ok(c, { items: await openAIModels() }));
   app.get("/toolchain/status", async (c) => ok(c, await getToolchainStatus()));

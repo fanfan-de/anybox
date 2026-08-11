@@ -730,6 +730,7 @@ export const CinemaGenerationTargetSchema = z.discriminatedUnion("kind", [
     kind: z.literal("workflow"),
     workflowID: z.string().min(1),
     revision: z.string().min(1),
+    connectionID: z.string().min(1).optional(),
   }).strict(),
 ])
 export type CinemaGenerationTarget = z.infer<typeof CinemaGenerationTargetSchema>

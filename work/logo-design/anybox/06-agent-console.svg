@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-labelledby="title desc">
+  <title id="title">Anybox Agent Console</title>
+  <desc id="desc">A compact console window with cat ears and a command prompt.</desc>
+  <style>:root{color:#15201b;--accent:#76b8ad}</style>
+  <path fill="currentColor" d="M13 31c0-7.7 6.3-14 14-14h8l8-9 7 9 7-9 8 9h8c7.7 0 14 6.3 14 14v44c0 7.7-6.3 14-14 14H27c-7.7 0-14-6.3-14-14Z"/>
+  <path d="m31 44 11 9-11 9M51 63h18" fill="none" stroke="var(--accent)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

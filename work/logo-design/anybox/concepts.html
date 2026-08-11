@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Anybox Logo 优化方向</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: "Segoe UI Variable Text", "Microsoft YaHei UI", sans-serif;
+      background: #eef2ef;
+      color: #19231e;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 48px 28px 72px; }
+    main { width: min(1180px, 100%); margin: 0 auto; }
+    h1 { margin: 0; font-size: clamp(30px, 5vw, 54px); letter-spacing: -0.045em; }
+    .lede { max-width: 760px; margin: 14px 0 32px; color: #58635c; font-size: 16px; line-height: 1.7; }
+    .baseline {
+      display: grid;
+      grid-template-columns: 92px 1fr;
+      gap: 20px;
+      align-items: center;
+      padding: 20px;
+      margin-bottom: 24px;
+      border: 1px solid #d9e0db;
+      border-radius: 18px;
+      background: rgba(255,255,255,.7);
+    }
+    .baseline img { width: 92px; height: 92px; border-radius: 20px; }
+    .baseline strong { display: block; margin-bottom: 5px; }
+    .baseline span { color: #68736c; line-height: 1.55; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+    .card {
+      overflow: hidden;
+      border: 1px solid #d9e0db;
+      border-radius: 20px;
+      background: #fff;
+      box-shadow: 0 18px 50px rgba(29, 45, 35, .06);
+    }
+    .card.recommended { border-color: #2f6f68; box-shadow: 0 20px 64px rgba(47,111,104,.14); }
+    .previews { display: grid; grid-template-columns: 1fr 1fr; }
+    .preview {
+      min-height: 190px;
+      display: grid;
+      place-items: center;
+      position: relative;
+      color: #15201b;
+      --accent: #2f6f68;
+    }
+    .preview.light { background: #f8faf8; }
+    .preview.dark { background: #151817; color: #f4f7f4; --accent: #76b8ad; }
+    .preview::after {
+      content: attr(data-theme);
+      position: absolute;
+      left: 12px;
+      bottom: 10px;
+      color: #7b857e;
+      font-size: 10px;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    .dark.preview::after { color: #879087; }
+    .mark { width: 108px; height: 108px; overflow: visible; }
+    .copy { padding: 19px 20px 22px; border-top: 1px solid #e8ece9; }
+    .title-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    h2 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
+    .tag { flex: none; padding: 5px 8px; border-radius: 999px; background: #e3f0ec; color: #2f6f68; font-size: 11px; font-weight: 700; }
+    .copy p { min-height: 48px; margin: 9px 0 0; color: #667169; font-size: 14px; line-height: 1.6; }
+    .note { margin-top: 26px; padding: 18px 20px; border-left: 4px solid #2f6f68; background: #e3f0ec; line-height: 1.65; }
+    @media (max-width: 560px) {
+      body { padding: 28px 14px 48px; }
+      .baseline { grid-template-columns: 68px 1fr; }
+      .baseline img { width: 68px; height: 68px; border-radius: 14px; }
+      .preview { min-height: 150px; }
+      .mark { width: 86px; height: 86px; }
+    }
+  </style>
+</head>
+<body>
+  <svg width="0" height="0" aria-hidden="true" style="position:absolute">
+    <defs>
+      <mask id="face-cutouts"><rect width="100" height="100" fill="#fff"/><circle cx="41" cy="37" r="3" fill="#000"/><circle cx="59" cy="37" r="3" fill="#000"/><path d="M46.8 44.2Q50 41.6 53.2 44.2L51.3 47.4H48.7Z" fill="#000"/></mask>
+      <mask id="facet-face-cutouts"><rect width="100" height="100" fill="#fff"/><circle cx="41" cy="38" r="3" fill="#000"/><circle cx="59" cy="38" r="3" fill="#000"/></mask>
+      <symbol id="folded-companion" viewBox="0 0 100 100">
+        <path fill="currentColor" mask="url(#face-cutouts)" d="M28 52C24.6 46.8 23 40.4 24 33V16.5c0-3.5 3.7-5.3 6.5-3.2l12 9.2a29 29 0 0 1 15 0l12-9.2c2.8-2.1 6.5-.3 6.5 3.2V33c1 7.4-.6 13.8-4 19l-5.3 8.5H33.3Z"/>
+        <path fill="var(--accent)" d="M7 52.5 34 40l16 14.5L32.5 70 7 59.2ZM93 52.5 66 40 50 54.5 67.5 70 93 59.2Z"/>
+        <path fill="var(--accent)" d="m17 65.5 33 15L83 65.5v18.2L50 98 17 83.7Z"/>
+      </symbol>
+      <symbol id="faceted-familiar" viewBox="0 0 100 100">
+        <path fill="currentColor" mask="url(#facet-face-cutouts)" d="m24 15 16 11 10-3 10 3 16-11-2 31-10 13H36L26 46Z"/>
+        <path fill="var(--accent)" d="M8 52 34 40l16 14-20 15L8 60ZM92 52 66 40 50 54l20 15 22-9Z"/>
+        <path fill="currentColor" d="m18 66 32 15 32-15v17L50 97 18 83Z"/>
+      </symbol>
+      <symbol id="agent-portal" viewBox="0 0 100 100">
+        <path d="m50 13 34 18v38L50 87 16 69V31Z" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"/>
+        <path d="m16 31 34 18 34-18M50 49v38" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path fill="var(--accent)" d="M50 31c2.2 9.3 5.7 12.8 15 15-9.3 2.2-12.8 5.7-15 15-2.2-9.3-5.7-12.8-15-15 9.3-2.2 12.8-5.7 15-15Z"/>
+      </symbol>
+      <symbol id="pixel-familiar" viewBox="0 0 100 100">
+        <path fill="currentColor" fill-rule="evenodd" d="M24 16h12v8h8v-4h12v4h8v-8h12v32h-8v8H32v-8h-8Zm14 18v8h8v-8Zm16 0v8h8v-8Z"/>
+        <path fill="var(--accent)" d="M8 50h24V42h12v8h12v-8h12v8h24v12H80v22H60v8H40v-8H20V62H8Zm20 12v14h16V62Zm28 0v14h16V62Z"/>
+      </symbol>
+      <symbol id="a-in-box" viewBox="0 0 100 100">
+        <path fill="var(--accent)" d="M12 27 50 8l38 19-12 9-26-13-26 13ZM12 41l11 6v30l27 14 27-14V47l11-6v39L50 98 12 80Z"/>
+        <text x="50" y="72" fill="currentColor" font-family="Segoe UI Variable Display,Segoe UI,Arial,sans-serif" font-size="58" font-weight="750" text-anchor="middle">a</text>
+      </symbol>
+      <symbol id="agent-console" viewBox="0 0 100 100">
+        <path fill="currentColor" d="M13 31c0-7.7 6.3-14 14-14h8l8-9 7 9 7-9 8 9h8c7.7 0 14 6.3 14 14v44c0 7.7-6.3 14-14 14H27c-7.7 0-14-6.3-14-14Z"/>
+        <path d="m31 44 11 9-11 9M51 63h18" fill="none" stroke="var(--accent)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
+      <symbol id="anyfold" viewBox="0 0 100 100">
+        <path fill="currentColor" d="M8 31 50 10l42 21-13 8-29-14-29 14ZM8 69l13-8 29 14 29-14 13 8-42 21Z"/>
+        <path fill="var(--accent)" d="m8 43 13-8 29 15 29-15 13 8-42 22Z"/>
+        <circle cx="50" cy="50" r="7" fill="currentColor"/>
+      </symbol>
+    </defs>
+  </svg>
+  <main>
+    <h1>Anybox Logo 优化方向</h1>
+    <p class="lede">目标是保留“猫 + 开放纸箱”的品牌记忆，同时减少路径复杂度、统一几何节奏，并让图形在桌面图标、移动端图标、网站导航和 16 px favicon 中都稳定可辨。</p>
+    <div class="baseline">
+      <img src="../../../packages/mobile-app/assets/icon.png" alt="当前 Anybox Logo" />
+      <div><strong>当前版本</strong><span>亲和、有故事感，但线宽、左右比例和负空间不统一；SVG 还是嵌入位图，放大不够干净，小尺寸也容易丢失尾巴与纸箱结构。</span></div>
+    </div>
+    <section class="grid">
+      <article class="card recommended">
+        <div class="previews"><div class="preview light" data-theme="Light"><svg class="mark"><use href="#folded-companion"/></svg></div><div class="preview dark" data-theme="Dark"><svg class="mark"><use href="#folded-companion"/></svg></div></div>
+        <div class="copy"><div class="title-row"><h2>01 · Folded Companion</h2><span class="tag">推荐</span></div><p>把猫和开箱动作压缩成三块主形，保留原始识别度，同时更像成熟的跨平台 App 图标。</p></div>
+      </article>
+      <article class="card">
+        <div class="previews"><div class="preview light" data-theme="Light"><svg class="mark"><use href="#faceted-familiar"/></svg></div><div class="preview dark" data-theme="Dark"><svg class="mark"><use href="#faceted-familiar"/></svg></div></div>
+        <div class="copy"><div class="title-row"><h2>02 · Faceted Familiar</h2></div><p>更硬朗的折面版本，强调开发工具和结构感，但亲和度会略低于推荐方向。</p></div>
+      </article>
+      <article class="card">
+        <div class="previews"><div class="preview light" data-theme="Light" style="--accent:#c76e2f"><svg class="mark"><use href="#agent-portal"/></svg></div><div class="preview dark" data-theme="Dark" style="--accent:#d58b58"><svg class="mark"><use href="#agent-portal"/></svg></div></div>
+        <div class="copy"><div class="title-row"><h2>03 · Agent Portal</h2></div><p>抽象开放立方体与智能火花，产品感最强，但会牺牲现有猫咪资产的连续性。</p></div>
+      </article>
+      <article class="card">
+        <div class="previews"><div class="preview light" data-theme="Light"><svg class="mark" shape-rendering="crispEdges"><use href="#pixel-familiar"/></svg></div><div class="preview dark" data-theme="Dark"><svg class="mark" shape-rendering="crispEdges"><use href="#pixel-familiar"/></svg></div></div>
+        <div class="copy"><div class="title-row"><h2>04 · Pixel Familiar</h2></div><p>像素化开发者吉祥物，16 px 表现直接，个性鲜明，但不适合所有品牌触点。</p></div>
+      </article>
+      <article class="card">
+        <div class="previews"><div class="preview light" data-theme="Light"><svg class="mark"><use href="#a-in-box"/></svg></div><div class="preview dark" data-theme="Dark"><svg class="mark"><use href="#a-in-box"/></svg></div></div>
+        <div class="copy"><div class="title-row"><h2>05 · A in Box</h2></div><p>字体主导的 a 字母容器，品牌名联想直接，但与现有图形记忆的距离较大。</p></div>
+      </article>
+      <article class="card">
+        <div class="previews"><div class="preview light" data-theme="Light" style="--accent:#d46b63"><svg class="mark"><use href="#agent-console"/></svg></div><div class="preview dark" data-theme="Dark" style="--accent:#fca5a5"><svg class="mark"><use href="#agent-console"/></svg></div></div>
+        <div class="copy"><div class="title-row"><h2>06 · Agent Console</h2></div><p>猫耳终端把 AI Agent 与开发工作台说得更明确，适合子产品或开发者模式。</p></div>
+      </article>
+      <article class="card">
+        <div class="previews"><div class="preview light" data-theme="Light" style="--accent:#c76e2f"><svg class="mark"><use href="#anyfold"/></svg></div><div class="preview dark" data-theme="Dark" style="--accent:#d58b58"><svg class="mark"><use href="#anyfold"/></svg></div></div>
+        <div class="copy"><div class="title-row"><h2>07 · Anyfold</h2></div><p>用交叠折带表达“任意入口、开放组合”，最抽象、最系统化，也最不像吉祥物。</p></div>
+      </article>
+    </section>
+    <div class="note"><strong>建议：</strong>继续精修 01。它保留用户已经认识的猫和箱子，同时把旧稿的手绘噪声、尾巴拥挤和不对称问题一次解决。</div>
+  </main>
+</body>
+</html>

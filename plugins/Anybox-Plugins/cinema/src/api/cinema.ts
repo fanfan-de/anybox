@@ -2427,6 +2427,7 @@ export const getCinemaVideoProviderAuth = CinemaProviderRuntime.getCinemaVideoPr
 export const saveCinemaVideoProviderApiKey = CinemaProviderRuntime.saveCinemaVideoProviderApiKey
 export const saveCinemaVideoProviderSettings = CinemaProviderRuntime.saveCinemaVideoProviderSettings
 export const testCinemaVideoProviderConnection = CinemaProviderRuntime.testCinemaVideoProviderConnection
+export const connectCinemaVideoProvider = CinemaProviderRuntime.connectCinemaVideoProvider
 
 export async function listCinemaTextModels(projectID: string): Promise<CinemaTextModelsResult> {
   const { cinemaRoot } = resolveCinemaRoot(projectID)

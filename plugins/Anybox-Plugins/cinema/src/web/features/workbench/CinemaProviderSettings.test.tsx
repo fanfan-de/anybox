@@ -20,6 +20,91 @@ afterEach(() => {
 })
 
 describe("CinemaProviderSettings", () => {
+  it("tests a ComfyUI candidate before saving and reports the effective origin", async () => {
+    let settings = { baseURL: "http://127.0.0.1:8188" }
+    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(async (input, init) => {
+      const pathname = new URL(String(input)).pathname
+      if (pathname.endsWith("/connect")) {
+        settings = { baseURL: "http://127.0.0.1:8000" }
+        return await jsonResponse({
+          ok: true,
+          status: "ready",
+          persisted: true,
+          effectiveBaseURL: settings.baseURL,
+          userID: "default",
+          connectionID: "comfy_connection_1",
+          workflows: 3,
+          readyWorkflows: 1,
+        })
+      }
+      if (pathname.endsWith("/settings")) return await jsonResponse(settings)
+      throw new Error(`Unexpected request: ${pathname} ${init?.method ?? "GET"}`)
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    render(
+      <I18nProvider locale="en-US">
+        <CinemaProviderSettings initialProviderID="comfyui-local" />
+      </I18nProvider>,
+    )
+
+    const baseURL = await screen.findByLabelText("Base URL")
+    expect(baseURL).toHaveValue("http://127.0.0.1:8188")
+    expect(screen.getAllByRole("button", { name: "Save & test" })).toHaveLength(1)
+    expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument()
+
+    fireEvent.change(baseURL, { target: { value: "http://127.0.0.1:8000" } })
+    fireEvent.click(screen.getByRole("button", { name: "Save & test" }))
+
+    expect(await screen.findByText(
+      "Connected to http://127.0.0.1:8000 as default; 1 of 3 workflows ready.",
+    )).toBeVisible()
+    await waitFor(() => expect(baseURL).toHaveValue("http://127.0.0.1:8000"))
+    const connectCall = fetchMock.mock.calls.find(([input]) => new URL(String(input)).pathname.endsWith("/connect"))
+    expect(JSON.parse(String(connectCall?.[1]?.body))).toEqual({
+      baseURL: "http://127.0.0.1:8000",
+      userID: null,
+    })
+    expect(fetchMock.mock.calls.some(([input, init]) => (
+      new URL(String(input)).pathname.endsWith("/settings") && init?.method === "PUT"
+    ))).toBe(false)
+  })
+
+  it("keeps the previous ComfyUI settings when the candidate connection fails", async () => {
+    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(async (input, init) => {
+      const pathname = new URL(String(input)).pathname
+      if (pathname.endsWith("/connect")) {
+        return await jsonResponse({
+          ok: false,
+          status: "offline",
+          persisted: false,
+          message: "Candidate ComfyUI is offline.",
+        })
+      }
+      if (pathname.endsWith("/settings")) {
+        return await jsonResponse({ baseURL: "http://127.0.0.1:8188", userID: "default" })
+      }
+      throw new Error(`Unexpected request: ${pathname} ${init?.method ?? "GET"}`)
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    render(
+      <I18nProvider locale="en-US">
+        <CinemaProviderSettings initialProviderID="comfyui-local" />
+      </I18nProvider>,
+    )
+
+    const baseURL = await screen.findByLabelText("Base URL")
+    fireEvent.change(baseURL, { target: { value: "http://127.0.0.1:8999" } })
+    fireEvent.click(screen.getByRole("button", { name: "Save & test" }))
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Candidate ComfyUI is offline.")
+    expect(baseURL).toHaveValue("http://127.0.0.1:8999")
+    expect(fetchMock.mock.calls.filter(([input]) => (
+      new URL(String(input)).pathname.endsWith("/settings")
+    ))).toHaveLength(1)
+  })
+
   it("loads OpenAI-compatible settings and saves model configuration without replacing a stored key", async () => {
     const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(async (input, init) => {
       const pathname = new URL(String(input)).pathname

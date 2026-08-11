@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Anybox favicon">
+  <rect x="2" y="2" width="96" height="96" rx="24" fill="#151817"/>
+  <g transform="translate(5 2) scale(.9)">
+    <defs><mask id="favicon-face"><rect width="100" height="100" fill="#fff"/><circle cx="40.5" cy="38" r="3.7" fill="#000"/><circle cx="59.5" cy="38" r="3.7" fill="#000"/></mask></defs>
+    <path fill="#F4F7F4" mask="url(#favicon-face)" d="M28.5 52.5C25 47.2 23.8 41 24.8 34V18c0-3.7 4.1-5.6 7-3.3l10.8 8.6a29.5 29.5 0 0 1 14.8 0l10.8-8.6c2.9-2.3 7-.4 7 3.3v16c1 7-.2 13.2-3.7 18.5l-5.2 8H33.7Z"/>
+    <path fill="#76B8AD" d="M7.5 52.8 34 40.5l16 14.2-17.3 15.1L7.5 59.4ZM92.5 52.8 66 40.5 50 54.7l17.3 15.1 25.2-10.4Z"/>
+    <path fill="#76B8AD" d="m17.5 66 32.5 14.7L82.5 66v17.5L50 97.5 17.5 83.5Z"/>
+  </g>
+</svg>

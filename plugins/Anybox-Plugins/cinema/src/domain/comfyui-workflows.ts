@@ -130,6 +130,7 @@ type CachedCatalogFile = {
 const catalogPromises = new Map<string, Promise<InternalCatalog>>()
 const catalogs = new Map<string, InternalCatalog>()
 let cacheRootOverride: string | undefined
+let configuredConnectionOverride: { baseURL: string; userID: string | null } | undefined
 
 function isRecord(value: unknown): value is JsonRecord {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value)
@@ -195,6 +196,7 @@ export function validateComfyUIBaseURL(value: string | null | undefined) {
 }
 
 export async function configuredComfyUIConnection() {
+  if (configuredConnectionOverride) return { ...configuredConnectionOverride }
   const settings = await Config.getCinemaVideoProviderSettings(COMFYUI_PROVIDER_ID)
   return {
     baseURL: validateComfyUIBaseURL(settings.baseURL),
@@ -323,6 +325,16 @@ async function optionalComfyUIJSON(
 
 function cacheKey(endpoint: string, userID: string | null) {
   return `${endpoint}\0${userID ?? ""}`
+}
+
+export function comfyUIConnectionID(endpoint: string, userID: string | null) {
+  const normalizedEndpoint = validateComfyUIBaseURL(endpoint)
+  const normalizedUserID = userID?.trim() || null
+  return `comfy_${sha256(cacheKey(normalizedEndpoint, normalizedUserID)).slice(0, 32)}`
+}
+
+function requestedUserID(value: string | null | undefined, fallback: string | null) {
+  return value === undefined ? fallback : value?.trim() || null
 }
 
 function cachePath(endpoint: string, userID: string | null) {
@@ -1665,7 +1677,12 @@ async function convertOneWorkflow(input: {
     bindings,
   }
   const revision = `sha256:${sha256(stableStringify(revisionPayload))}`
-  const target = { kind: "workflow" as const, workflowID, revision }
+  const target = {
+    kind: "workflow" as const,
+    workflowID,
+    revision,
+    connectionID: comfyUIConnectionID(input.baseURL, input.userID),
+  }
   const supportedOutputKind: "image" | "video" | undefined =
     output.output?.kind === "image" || output.output?.kind === "video"
       ? output.output.kind
@@ -1740,11 +1757,11 @@ function disabledLimitWorkflow(input: {
 async function refreshInternal(options: RefreshOptions): Promise<InternalCatalog> {
   const configured = await configuredComfyUIConnection()
   const endpoint = validateComfyUIBaseURL(options.baseURL ?? configured.baseURL)
-  const requestedUserID = options.userID?.trim() || configured.userID
+  const selectedUserID = requestedUserID(options.userID, configured.userID)
   const discoveredAt = new Date().toISOString()
   await requestComfyUIJSON(endpoint, "/system_stats", null)
   const users = await discoverUsers(endpoint)
-  const userID = selectUser(users, requestedUserID)
+  const userID = selectUser(users, selectedUserID)
   if (!userID) {
     const catalog: CinemaProviderWorkflowCatalog = {
       providerID: COMFYUI_PROVIDER_ID,
@@ -1984,7 +2001,7 @@ async function refreshInternal(options: RefreshOptions): Promise<InternalCatalog
     userID,
   }
   await writePublicCatalogCache(endpoint, userID, publicCatalog).catch(() => undefined)
-  if (!requestedUserID && userID === "default") {
+  if (!selectedUserID && userID === "default") {
     await writePublicCatalogCache(endpoint, null, publicCatalog).catch(() => undefined)
   }
   return catalog
@@ -2030,7 +2047,7 @@ async function staleCatalogForFailure(
 export async function getComfyUIWorkflowCatalog(options: RefreshOptions = {}) {
   const configured = await configuredComfyUIConnection()
   const endpoint = validateComfyUIBaseURL(options.baseURL ?? configured.baseURL)
-  const userID = options.userID?.trim() || configured.userID
+  const userID = requestedUserID(options.userID, configured.userID)
   const key = cacheKey(endpoint, userID)
   if (!options.force && catalogs.has(key)) return catalogs.get(key)!.publicCatalog
   if (!options.force && catalogPromises.has(key)) return (await catalogPromises.get(key)!).publicCatalog
@@ -2038,6 +2055,7 @@ export async function getComfyUIWorkflowCatalog(options: RefreshOptions = {}) {
     .catch((error) => staleCatalogForFailure(endpoint, userID, error))
     .then((catalog) => {
       catalogs.set(key, catalog)
+      catalogs.set(cacheKey(catalog.endpoint, catalog.userID), catalog)
       return catalog
     })
     .finally(() => catalogPromises.delete(key))
@@ -2052,17 +2070,37 @@ export async function refreshComfyUIWorkflowCatalog(options: RefreshOptions = {}
 export async function getInternalComfyUIWorkflow(
   workflowID: string,
   revision?: string,
+  connectionID?: string,
 ) {
   const configured = await configuredComfyUIConnection()
   const key = cacheKey(configured.baseURL, configured.userID)
   let catalog = catalogs.get(key)
-    ?? [...catalogs.values()].find((candidate) => candidate.workflows.has(workflowID))
+  if (!catalog && !connectionID) {
+    catalog = [...catalogs.values()].find((candidate) => candidate.workflows.has(workflowID))
+  }
   if (!catalog) {
     await getComfyUIWorkflowCatalog()
     catalog = catalogs.get(key)
   }
   if (!catalog) {
     throw new ApiError(404, "COMFYUI_WORKFLOW_NOT_FOUND", "The selected ComfyUI workflow was not found.")
+  }
+  if (connectionID) {
+    const activeConnectionID = comfyUIConnectionID(catalog.endpoint, catalog.userID)
+    const latest = await configuredComfyUIConnection()
+    if (cacheKey(latest.baseURL, latest.userID) !== key || activeConnectionID !== connectionID) {
+      throw new ApiError(
+        409,
+        "COMFYUI_CONNECTION_CHANGED",
+        "The active ComfyUI connection changed; refresh workflows before submitting.",
+        {
+          requestedConnectionID: connectionID,
+          activeConnectionID,
+          activeBaseURL: latest.baseURL,
+          activeUserID: latest.userID,
+        },
+      )
+    }
   }
   if (catalog.publicCatalog.status !== "ready") {
     throw new ApiError(
@@ -2112,5 +2150,20 @@ export function setComfyUIWorkflowCacheRootForTest(root: string | undefined) {
   cacheRootOverride = root
   return () => {
     cacheRootOverride = previous
+  }
+}
+
+export function setConfiguredComfyUIConnectionForTest(
+  connection: { baseURL: string; userID?: string | null } | undefined,
+) {
+  const previous = configuredConnectionOverride
+  configuredConnectionOverride = connection
+    ? {
+      baseURL: validateComfyUIBaseURL(connection.baseURL),
+      userID: connection.userID?.trim() || null,
+    }
+    : undefined
+  return () => {
+    configuredConnectionOverride = previous
   }
 }

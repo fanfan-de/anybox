@@ -233,6 +233,15 @@ export function CinemaRoutes() {
     return ok(c, await CinemaUseCase.testCinemaVideoProviderConnection(c.req.param("providerID"), payload))
   })
 
+  app.post("/video-providers/:providerID/connect", async (c) => {
+    const payload = await parseJsonBody(
+      c,
+      UpdateCinemaVideoProviderSettingsBodySchema,
+      "Body must contain optional nullable connection settings.",
+    )
+    return ok(c, await CinemaUseCase.connectCinemaVideoProvider(c.req.param("providerID"), payload))
+  })
+
   app.get("/projects/:projectID", async (c) =>
     ok(c, await CinemaUseCase.getCinemaProject(c.req.param("projectID")))
   )

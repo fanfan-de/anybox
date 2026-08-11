@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-labelledby="title desc">
+  <title id="title">Anybox Folded Companion — Airy</title>
+  <desc id="desc">A narrower cat leaves more air around the open-box flaps.</desc>
+  <style>:root{color:#15201b;--accent:#2f6f68}</style>
+  <defs><mask id="face"><rect width="100" height="100" fill="#fff"/><circle cx="42" cy="38" r="2.8" fill="#000"/><circle cx="58" cy="38" r="2.8" fill="#000"/><path d="M47.2 45Q50 42.8 52.8 45L51.1 47.8H48.9Z" fill="#000"/></mask></defs>
+  <path fill="currentColor" mask="url(#face)" d="M31 53c-3.2-5-4.3-11.5-3.4-18V18c0-3.2 3.4-4.8 5.9-2.9l10.2 8.2a26 26 0 0 1 12.6 0l10.2-8.2c2.5-1.9 5.9-.3 5.9 2.9v17c.9 6.5-.2 13-3.4 18l-4.4 7.5H35.4Z"/>
+  <path fill="var(--accent)" d="M7 52.5 34 40l16 14.5L32.5 70 7 59.2ZM93 52.5 66 40 50 54.5 67.5 70 93 59.2Z"/>
+  <path fill="var(--accent)" d="m17 65.5 33 15L83 65.5v18.2L50 98 17 83.7Z"/>
+</svg>

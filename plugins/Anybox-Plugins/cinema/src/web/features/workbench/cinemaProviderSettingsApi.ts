@@ -19,6 +19,7 @@ export type CinemaProviderModelSettings = {
 
 export type CinemaProviderSettings = {
   baseURL?: string
+  baseURLSource?: "settings" | "environment" | "default"
   userID?: string
   defaultModel?: string
   models: CinemaProviderModelSettings[]
@@ -43,6 +44,12 @@ export type CinemaProviderConnectionTest = {
   status?: string
   message?: string
   models: CinemaProviderModelSettings[]
+  persisted?: boolean
+  effectiveBaseURL?: string
+  userID?: string
+  connectionID?: string
+  workflows?: number
+  readyWorkflows?: number
 }
 
 export class CinemaProviderSettingsApiError extends Error {
@@ -65,6 +72,10 @@ function isRecord(value: unknown): value is JsonRecord {
 
 function stringValue(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined
+}
+
+function nonnegativeInteger(value: unknown) {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : undefined
 }
 
 function normalizeModels(value: unknown): CinemaProviderModelSettings[] {
@@ -114,6 +125,11 @@ function normalizeSettings(value: unknown): CinemaProviderSettings {
   const settings = isRecord(value) ? value : {}
   return {
     ...(stringValue(settings.baseURL) ? { baseURL: stringValue(settings.baseURL) } : {}),
+    ...(settings.baseURLSource === "settings"
+      || settings.baseURLSource === "environment"
+      || settings.baseURLSource === "default"
+      ? { baseURLSource: settings.baseURLSource }
+      : {}),
     ...(stringValue(settings.userID) ? { userID: stringValue(settings.userID) } : {}),
     ...(stringValue(settings.defaultModel) ? { defaultModel: stringValue(settings.defaultModel) } : {}),
     models: normalizeModels(settings.models),
@@ -138,6 +154,14 @@ function normalizeConnectionTest(value: unknown): CinemaProviderConnectionTest {
     status: stringValue(result.status),
     message: stringValue(result.message),
     models: normalizeModels(result.models),
+    ...(typeof result.persisted === "boolean" ? { persisted: result.persisted } : {}),
+    ...(stringValue(result.effectiveBaseURL) ? { effectiveBaseURL: stringValue(result.effectiveBaseURL) } : {}),
+    ...(stringValue(result.userID) ? { userID: stringValue(result.userID) } : {}),
+    ...(stringValue(result.connectionID) ? { connectionID: stringValue(result.connectionID) } : {}),
+    ...(nonnegativeInteger(result.workflows) !== undefined ? { workflows: nonnegativeInteger(result.workflows) } : {}),
+    ...(nonnegativeInteger(result.readyWorkflows) !== undefined
+      ? { readyWorkflows: nonnegativeInteger(result.readyWorkflows) }
+      : {}),
   }
 }
 
@@ -156,6 +180,10 @@ export type CinemaProviderSettingsApi = {
   ): Promise<CinemaProviderCredential>
   removeCredential(providerID: CinemaProviderID): Promise<void>
   testConnection(providerID: CinemaProviderID): Promise<CinemaProviderConnectionTest>
+  connectProvider(
+    providerID: CinemaProviderID,
+    input: Pick<CinemaProviderSettingsInput, "baseURL" | "userID">,
+  ): Promise<CinemaProviderConnectionTest>
   discoverOpenAIModels(): Promise<CinemaProviderModelSettings[]>
 }
 
@@ -194,6 +222,11 @@ export function createCinemaProviderSettingsApi(baseURL: string): CinemaProvider
       baseURL,
       providerPath(providerID, "test"),
       jsonRequest("POST"),
+    )),
+    connectProvider: async (providerID, input) => normalizeConnectionTest(await requestData<unknown>(
+      baseURL,
+      providerPath(providerID, "connect"),
+      jsonRequest("POST", input),
     )),
     discoverOpenAIModels: async () => {
       const result = await requestData<unknown>(

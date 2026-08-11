@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Anybox Folded Companion 变体</title>
+  <style>
+    :root { font-family: "Segoe UI Variable Text", "Microsoft YaHei UI", sans-serif; color: #19231e; background: #eef2ef; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 44px 28px 70px; }
+    main { width: min(1160px, 100%); margin: auto; }
+    h1 { margin: 0; font-size: 42px; letter-spacing: -.04em; }
+    .lede { max-width: 760px; margin: 12px 0 28px; color: #657068; line-height: 1.7; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 18px; }
+    .card { overflow: hidden; border: 1px solid #d7dfd9; border-radius: 20px; background: #fff; box-shadow: 0 18px 52px rgba(29,45,35,.07); }
+    .card[data-choice="recommended"] { border: 2px solid #2f6f68; }
+    .stage { display: grid; grid-template-columns: 1fr 1fr; min-height: 240px; }
+    .theme { display: grid; place-items: center; position: relative; padding: 24px 12px; }
+    .theme.light { background: #f8faf8; }
+    .theme.dark { background: #151817; }
+    .theme::after { position: absolute; left: 12px; bottom: 10px; color: #7f8a82; font-size: 10px; letter-spacing: .12em; content: attr(data-label); }
+    .sizes { display: flex; align-items: flex-end; justify-content: center; gap: 18px; min-height: 96px; }
+    .sample { display: grid; justify-items: center; gap: 8px; color: #8a948d; font: 10px ui-monospace, monospace; }
+    .sample img { display: block; }
+    .theme.dark img { filter: grayscale(1) brightness(0) invert(1); }
+    .copy { padding: 18px 20px 22px; border-top: 1px solid #e8ece9; }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+    h2 { margin: 0; font-size: 19px; }
+    .tag { padding: 5px 9px; border-radius: 999px; color: #2f6f68; background: #e3f0ec; font-size: 11px; font-weight: 700; }
+    p { margin: 8px 0 0; color: #667169; line-height: 1.6; }
+    @media(max-width:760px){.grid{grid-template-columns:1fr}.stage{min-height:210px}.sizes{gap:12px}body{padding:28px 14px 48px}h1{font-size:32px}}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Folded Companion · 精修对比</h1>
+    <p class="lede">每个变体都保持“猫 + 开箱”结构不变，只调整比例与边角。下方按真实 CSS 尺寸显示 64、32、16 px，深色区域同时验证单色反白。</p>
+    <section class="grid">
+      <article class="card">
+        <div class="stage">
+          <div class="theme light" data-label="LIGHT"><div class="sizes"><span class="sample"><img src="variations/a-balanced.svg" width="64" height="64" alt="Balanced 64 px"/><b>64</b></span><span class="sample"><img src="variations/a-balanced.svg" width="32" height="32" alt="Balanced 32 px"/><b>32</b></span><span class="sample"><img src="variations/a-balanced.svg" width="16" height="16" alt="Balanced 16 px"/><b>16</b></span></div></div>
+          <div class="theme dark" data-label="DARK / MONO"><div class="sizes"><span class="sample"><img src="variations/a-balanced.svg" width="64" height="64" alt="Balanced dark 64 px"/><b>64</b></span><span class="sample"><img src="variations/a-balanced.svg" width="32" height="32" alt="Balanced dark 32 px"/><b>32</b></span><span class="sample"><img src="variations/a-balanced.svg" width="16" height="16" alt="Balanced dark 16 px"/><b>16</b></span></div></div>
+        </div>
+        <div class="copy"><div class="row"><h2>A · Balanced</h2></div><p>原始优化方向，猫与箱子各占约一半，识别直接。</p></div>
+      </article>
+      <article class="card">
+        <div class="stage">
+          <div class="theme light" data-label="LIGHT"><div class="sizes"><span class="sample"><img src="variations/b-airy.svg" width="64" height="64" alt="Airy 64 px"/><b>64</b></span><span class="sample"><img src="variations/b-airy.svg" width="32" height="32" alt="Airy 32 px"/><b>32</b></span><span class="sample"><img src="variations/b-airy.svg" width="16" height="16" alt="Airy 16 px"/><b>16</b></span></div></div>
+          <div class="theme dark" data-label="DARK / MONO"><div class="sizes"><span class="sample"><img src="variations/b-airy.svg" width="64" height="64" alt="Airy dark 64 px"/><b>64</b></span><span class="sample"><img src="variations/b-airy.svg" width="32" height="32" alt="Airy dark 32 px"/><b>32</b></span><span class="sample"><img src="variations/b-airy.svg" width="16" height="16" alt="Airy dark 16 px"/><b>16</b></span></div></div>
+        </div>
+        <div class="copy"><div class="row"><h2>B · Airy</h2></div><p>猫头收窄，纸箱开口更通透，适合较大的品牌展示。</p></div>
+      </article>
+      <article class="card" data-choice="recommended">
+        <div class="stage">
+          <div class="theme light" data-label="LIGHT"><div class="sizes"><span class="sample"><img src="variations/c-friendly.svg" width="64" height="64" alt="Friendly 64 px"/><b>64</b></span><span class="sample"><img src="variations/c-friendly.svg" width="32" height="32" alt="Friendly 32 px"/><b>32</b></span><span class="sample"><img src="variations/c-friendly.svg" width="16" height="16" alt="Friendly 16 px"/><b>16</b></span></div></div>
+          <div class="theme dark" data-label="DARK / MONO"><div class="sizes"><span class="sample"><img src="variations/c-friendly.svg" width="64" height="64" alt="Friendly dark 64 px"/><b>64</b></span><span class="sample"><img src="variations/c-friendly.svg" width="32" height="32" alt="Friendly dark 32 px"/><b>32</b></span><span class="sample"><img src="variations/c-friendly.svg" width="16" height="16" alt="Friendly dark 16 px"/><b>16</b></span></div></div>
+        </div>
+        <div class="copy"><div class="row"><h2>C · Friendly</h2><span class="tag">推荐候选</span></div><p>耳尖更柔和、脸更宽，兼顾品牌亲和力和小尺寸稳定性。</p></div>
+      </article>
+      <article class="card">
+        <div class="stage">
+          <div class="theme light" data-label="LIGHT"><div class="sizes"><span class="sample"><img src="variations/d-bold.svg" width="64" height="64" alt="Bold 64 px"/><b>64</b></span><span class="sample"><img src="variations/d-bold.svg" width="32" height="32" alt="Bold 32 px"/><b>32</b></span><span class="sample"><img src="variations/d-bold.svg" width="16" height="16" alt="Bold 16 px"/><b>16</b></span></div></div>
+          <div class="theme dark" data-label="DARK / MONO"><div class="sizes"><span class="sample"><img src="variations/d-bold.svg" width="64" height="64" alt="Bold dark 64 px"/><b>64</b></span><span class="sample"><img src="variations/d-bold.svg" width="32" height="32" alt="Bold dark 32 px"/><b>32</b></span><span class="sample"><img src="variations/d-bold.svg" width="16" height="16" alt="Bold dark 16 px"/><b>16</b></span></div></div>
+        </div>
+        <div class="copy"><div class="row"><h2>D · Bold</h2></div><p>图形占满率最高，16 px 最强，但大尺寸下略显拥挤。</p></div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

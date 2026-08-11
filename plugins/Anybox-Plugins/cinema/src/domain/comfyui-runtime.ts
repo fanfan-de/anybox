@@ -28,6 +28,7 @@ import {
   COMFYUI_PROVIDER_ID,
   assertComfyUIEndpointResolvesToLoopback,
   clearComfyUIWorkflowCatalogForTest,
+  comfyUIConnectionID,
   configuredComfyUIConnection,
   fetchComfyUI,
   getComfyUIWorkflowCatalog,
@@ -103,6 +104,7 @@ type WorkflowSnapshot = {
   taskID: string
   workflowID: string
   revision: string
+  connectionID?: string
   outputKind: "image" | "video"
   outputNodeIDs: string[]
   uiWorkflow: Record<string, unknown>
@@ -271,6 +273,7 @@ async function readWorkflowSnapshot(cinemaRoot: string, taskID: string, submitte
     || parsed.taskID !== taskID
     || !stringValue(parsed.workflowID)
     || !stringValue(parsed.revision)
+    || (parsed.connectionID !== undefined && !stringValue(parsed.connectionID))
     || (parsed.outputKind !== "image" && parsed.outputKind !== "video")
     || !Array.isArray(parsed.outputNodeIDs)
     || !isRecord(parsed.uiWorkflow)
@@ -453,6 +456,7 @@ async function prepareComfyUITask(input: AdapterInput) {
   const { workflow, endpoint, userID } = await getInternalComfyUIWorkflow(
     input.task.target.workflowID,
     input.task.target.revision,
+    input.task.target.connectionID,
   )
   if (!userID) {
     throw new ApiError(409, "COMFYUI_USER_SELECTION_REQUIRED", "Select a ComfyUI user before submitting.")
@@ -468,6 +472,7 @@ async function prepareComfyUITask(input: AdapterInput) {
     taskID: input.task.id,
     workflowID: workflow.publicWorkflow.workflowID,
     revision: workflow.publicWorkflow.revision,
+    ...(input.task.target.connectionID ? { connectionID: input.task.target.connectionID } : {}),
     outputKind: output.kind,
     outputNodeIDs: workflow.outputNodeIDs,
     uiWorkflow: workflow.uiWorkflow,
@@ -491,6 +496,7 @@ async function prepareComfyUITask(input: AdapterInput) {
       clientID: CLIENT_ID,
       workflowID: workflow.publicWorkflow.workflowID,
       revision: workflow.publicWorkflow.revision,
+      ...(input.task.target.connectionID ? { connectionID: input.task.target.connectionID } : {}),
       snapshotDigest: snapshot.digest,
       outputKind: output.kind,
       outputNodeIDs: workflow.outputNodeIDs,
@@ -1355,6 +1361,11 @@ export type ComfyUIConnectionTestResult = {
   message: string
   errorCode?: string
   diagnostics?: Record<string, unknown>
+  effectiveBaseURL?: string
+  userID?: string
+  connectionID?: string
+  workflows?: number
+  readyWorkflows?: number
 }
 
 export async function testComfyUIConnection(
@@ -1405,10 +1416,16 @@ export async function testComfyUIConnection(
       }
     }
     const ready = catalog.workflows.filter((workflow) => workflow.status === "ready").length
+    const resolvedUserID = catalog.userID ?? undefined
     return {
       ok: true,
       status: "ready",
       message: `Local ComfyUI is reachable; discovered ${catalog.workflows.length} workflow(s), ${ready} ready.`,
+      effectiveBaseURL: baseURL,
+      ...(resolvedUserID ? { userID: resolvedUserID } : {}),
+      ...(resolvedUserID ? { connectionID: comfyUIConnectionID(baseURL, resolvedUserID) } : {}),
+      workflows: catalog.workflows.length,
+      readyWorkflows: ready,
       diagnostics: {
         service: "reachable",
         userData: "ready",

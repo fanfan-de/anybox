@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-labelledby="title desc">
+  <title id="title">Anybox Anyfold</title>
+  <desc id="desc">Interlocking folded ribbons suggest openness, choice, and a box.</desc>
+  <style>:root{color:#15201b;--accent:#c76e2f}</style>
+  <path fill="currentColor" d="M8 31 50 10l42 21-13 8-29-14-29 14ZM8 69l13-8 29 14 29-14 13 8-42 21Z"/>
+  <path fill="var(--accent)" d="m8 43 13-8 29 15 29-15 13 8-42 22Z"/>
+  <circle cx="50" cy="50" r="7" fill="currentColor"/>
+</svg>

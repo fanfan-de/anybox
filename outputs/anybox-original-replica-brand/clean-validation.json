@@ -1,0 +1,28 @@
+{
+  "anchorCounts": {
+    "totalBefore": 148,
+    "totalAfter": 110,
+    "boxBefore": 64,
+    "boxAfter": 26
+  },
+  "sourceToClean": {
+    "meanAbsoluteError": 1.3737497329711914,
+    "rootMeanSquareError": 12.424438711034021,
+    "binaryIoU": 0.9696127093743256,
+    "referencePositive": 119417,
+    "candidatePositive": 117878
+  },
+  "originalVectorToClean": {
+    "meanAbsoluteError": 0.7380819320678711,
+    "rootMeanSquareError": 11.995970327574032,
+    "binaryIoU": 0.9748986371167151,
+    "referencePositive": 119333,
+    "candidatePositive": 117878
+  },
+  "svg": {
+    "pathTags": 1,
+    "hasEmbeddedRaster": false,
+    "hasLiveText": false,
+    "bytes": 4603
+  }
+}

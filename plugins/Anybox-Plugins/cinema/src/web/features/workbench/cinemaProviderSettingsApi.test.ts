@@ -84,6 +84,46 @@ describe("cinemaProviderSettingsApi", () => {
     expect(requestInit?.method).toBe("POST")
   })
 
+  it("connects a transient ComfyUI candidate and returns its effective identity", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({
+      ok: true,
+      status: "ready",
+      persisted: true,
+      effectiveBaseURL: " http://127.0.0.1:8000 ",
+      userID: " default ",
+      connectionID: " comfy_connection_1 ",
+      workflows: 3,
+      readyWorkflows: 1,
+    }))
+    vi.stubGlobal("fetch", fetchMock)
+    const api = createCinemaProviderSettingsApi("http://127.0.0.1:4096")
+
+    await expect(api.connectProvider("comfyui-local", {
+      baseURL: "http://127.0.0.1:8000",
+      userID: null,
+    })).resolves.toEqual({
+      ok: true,
+      status: "ready",
+      models: [],
+      persisted: true,
+      effectiveBaseURL: "http://127.0.0.1:8000",
+      userID: "default",
+      connectionID: "comfy_connection_1",
+      workflows: 3,
+      readyWorkflows: 1,
+    })
+
+    const [requestURL, requestInit] = fetchMock.mock.calls[0]!
+    expect(String(requestURL)).toBe(
+      "http://127.0.0.1:4096/api/cinema/providers/comfyui-local/connect",
+    )
+    expect(requestInit?.method).toBe("POST")
+    expect(JSON.parse(String(requestInit?.body))).toEqual({
+      baseURL: "http://127.0.0.1:8000",
+      userID: null,
+    })
+  })
+
   it("preserves management API errors for actionable UI feedback", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
       success: false,

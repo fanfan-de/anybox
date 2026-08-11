@@ -119,6 +119,11 @@ export type ProviderAdapterConnectionTestResult = {
   message: string
   errorCode?: string
   diagnostics?: Record<string, unknown>
+  effectiveBaseURL?: string
+  userID?: string
+  connectionID?: string
+  workflows?: number
+  readyWorkflows?: number
 }
 
 export type ProviderAdapter = {
@@ -279,6 +284,10 @@ type RawCatalogInput = z.input<typeof RawCatalogSchema>
 type CinemaVideoProviderConnectionTestResult = ProviderAdapterConnectionTestResult & {
   providerID: string
   checkedAt: number
+}
+
+type CinemaVideoProviderConnectResult = CinemaVideoProviderConnectionTestResult & {
+  persisted: boolean
 }
 
 const LocalProviderManifestInlineCatalogSchema = z.union([
@@ -3025,11 +3034,11 @@ export async function saveCinemaVideoProviderApiKey(providerID: string, apiKey: 
   return await providerAuthStateFor(provider.manifest)
 }
 
-export async function saveCinemaVideoProviderSettings(
-  providerID: string,
+async function persistCinemaVideoProviderSettings(
+  provider: CinemaVideoProvider,
   input: { baseURL?: string | null; userID?: string | null },
+  options: { refreshWorkflows?: boolean } = {},
 ): Promise<CinemaVideoProvider> {
-  const provider = await getCinemaVideoProvider(providerID)
   const adapter = providerAdapters[provider.manifest.id]
   const baseURL = input.baseURL?.trim()
     ? adapter?.validateBaseURL?.(input.baseURL) ?? normalizeBaseURL(input.baseURL)
@@ -3054,8 +3063,30 @@ export async function saveCinemaVideoProviderSettings(
     ...(input.baseURL !== undefined && baseURL ? { baseURL } : {}),
     ...(userID ? { userID } : {}),
   })
-  await adapter?.refreshWorkflows?.().catch(() => undefined)
+  if (options.refreshWorkflows !== false) {
+    await adapter?.refreshWorkflows?.().catch(() => undefined)
+  }
   return await videoProviderFor(provider.manifest)
+}
+
+export async function saveCinemaVideoProviderSettings(
+  providerID: string,
+  input: { baseURL?: string | null; userID?: string | null },
+): Promise<CinemaVideoProvider> {
+  const provider = await getCinemaVideoProvider(providerID)
+  if (provider.manifest.id === COMFYUI_PROVIDER_ID) {
+    const result = await connectCinemaVideoProvider(providerID, input)
+    if (!result.ok) {
+      throw new ApiError(
+        422,
+        result.errorCode ?? "COMFYUI_CONNECTION_FAILED",
+        result.message,
+        result.diagnostics,
+      )
+    }
+    return await videoProviderFor(provider.manifest)
+  }
+  return await persistCinemaVideoProviderSettings(provider, input)
 }
 
 function createConnectionTestResult(
@@ -3200,9 +3231,11 @@ export async function testCinemaVideoProviderConnection(
   try {
     const adapter = providerAdapters[providerID]
     if (adapter?.testConnection) {
-      const requestedBaseURL = input.baseURL?.trim()
-        ? input.baseURL
-        : runtime?.baseURL ?? manifest.baseURL
+      const requestedBaseURL = input.baseURL === null
+        ? manifest.baseURL
+        : input.baseURL?.trim()
+          ? input.baseURL
+          : runtime?.baseURL ?? manifest.baseURL
       const result = await adapter.testConnection({
         baseURL: requestedBaseURL,
         userID: input.userID,
@@ -3271,6 +3304,46 @@ export async function testCinemaVideoProviderConnection(
       ok: false,
       ...classified,
     })
+  }
+}
+
+export async function connectCinemaVideoProvider(
+  providerID: string,
+  input: { baseURL?: string | null; userID?: string | null },
+): Promise<CinemaVideoProviderConnectResult> {
+  const provider = await getCinemaVideoProvider(providerID)
+  if (provider.manifest.id !== COMFYUI_PROVIDER_ID) {
+    throw new ApiError(
+      400,
+      "CINEMA_PROVIDER_CONNECT_UNSUPPORTED",
+      `Cinema provider '${provider.manifest.id}' does not support atomic local-runtime connection.`,
+    )
+  }
+
+  const result = await testCinemaVideoProviderConnection(providerID, input)
+  if (!result.ok) return { ...result, persisted: false }
+
+  const baseURL = result.effectiveBaseURL
+  const userID = result.userID?.trim()
+  const connectionID = result.connectionID
+  if (!baseURL || !userID || !connectionID) {
+    throw new ApiError(
+      500,
+      "COMFYUI_CONNECTION_IDENTITY_MISSING",
+      "ComfyUI passed its readiness check without returning a complete connection identity.",
+    )
+  }
+  await assertSafeProviderURL(baseURL)
+  await Config.setCinemaVideoProviderSettings(Config.GLOBAL_CONFIG_ID, provider.manifest.id, {
+    baseURL,
+    userID,
+  })
+  return {
+    ...result,
+    effectiveBaseURL: baseURL,
+    userID,
+    connectionID,
+    persisted: true,
   }
 }
 

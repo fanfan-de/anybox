@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-labelledby="title desc">
+  <title id="title">Anybox Folded Companion — Bold</title>
+  <desc id="desc">A larger cat and heavier box are tuned for very small sizes.</desc>
+  <style>:root{color:#15201b;--accent:#2f6f68}</style>
+  <defs><mask id="face"><rect width="100" height="100" fill="#fff"/><circle cx="40" cy="37" r="3.5" fill="#000"/><circle cx="60" cy="37" r="3.5" fill="#000"/><path d="M46 44Q50 40.8 54 44L51.5 48H48.5Z" fill="#000"/></mask></defs>
+  <path fill="currentColor" mask="url(#face)" d="M25.5 53C21.8 47.4 20.5 40.6 21.7 32.5V14.7c0-3.8 4.2-5.7 7.2-3.3L42 21.3a32 32 0 0 1 16 0l13.1-9.9c3-2.4 7.2-.5 7.2 3.3v17.8c1.2 8.1-.1 14.9-3.8 20.5l-5.4 8.5H30.9Z"/>
+  <path fill="var(--accent)" d="M5 52 34 38.8l16 15.7L31.8 71.5 5 60ZM95 52 66 38.8 50 54.5l18.2 17L95 60Z"/>
+  <path fill="var(--accent)" d="m15 66 35 16 35-16v19L50 99 15 85Z"/>
+</svg>

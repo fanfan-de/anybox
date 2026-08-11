@@ -6,8 +6,12 @@ import { createServerApp } from "#server/server.ts"
 import { ApiError } from "#server/error.ts"
 import * as Global from "#global/global.ts"
 import { clearSessionCredentials } from "#auth/provider-auth.ts"
-import { clearSettingsCacheForTest } from "#config/config.ts"
+import {
+  clearSettingsCacheForTest,
+  getCinemaVideoProviderSettings,
+} from "#config/config.ts"
 import { resetProjectsForTest } from "#project/project.ts"
+import { clearComfyUIProfileCacheForTest } from "#cinema/comfyui-runtime.ts"
 import { setNativeHelperCallForTest } from "../src/platform/native-helper.ts"
 
 const originalPaths = { ...Global.Path }
@@ -39,6 +43,7 @@ afterEach(async () => {
   servers.splice(0).forEach((server) => server.stop(true))
   while (restores.length) restores.pop()?.()
   clearSessionCredentials()
+  clearComfyUIProfileCacheForTest()
   clearSettingsCacheForTest()
   resetProjectsForTest()
   Global.configureRuntimePaths({ data: originalPaths.data, cache: originalPaths.cache, log: originalPaths.log })
@@ -46,6 +51,87 @@ afterEach(async () => {
 })
 
 describe("Cinema Runtime management API", () => {
+  test("persists a ComfyUI origin only after readiness succeeds", async () => {
+    await isolatedRuntime()
+    const readyComfyUI = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch(request) {
+        const pathname = new URL(request.url).pathname
+        if (pathname === "/system_stats") return Response.json({ system: { comfyui_version: "0.4.0" } })
+        if (pathname === "/users") return Response.json({ storage: "server", migrated: true })
+        if (pathname === "/object_info") return Response.json({})
+        if (pathname === "/userdata") return Response.json([])
+        return new Response("missing", { status: 404 })
+      },
+    })
+    const incompatibleComfyUI = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      fetch() {
+        return new Response("not ComfyUI", { status: 503 })
+      },
+    })
+    servers.push(readyComfyUI, incompatibleComfyUI)
+    const app = createServerApp({ mode: "test" })
+    const settingsURL = "http://localhost/api/cinema/providers/comfyui-local/settings"
+    const connectURL = "http://localhost/api/cinema/providers/comfyui-local/connect"
+    const readyBaseURL = `http://127.0.0.1:${readyComfyUI.port}`
+    const incompatibleBaseURL = `http://127.0.0.1:${incompatibleComfyUI.port}`
+
+    expect((await json(await app.request(settingsURL))).data).toMatchObject({
+      baseURL: "http://127.0.0.1:8188",
+      baseURLSource: "default",
+    })
+
+    const connected = await json(await app.request(connectURL, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ baseURL: `${readyBaseURL}/`, userID: null }),
+    }))
+    expect(connected.data).toMatchObject({
+      ok: true,
+      status: "ready",
+      persisted: true,
+      effectiveBaseURL: readyBaseURL,
+      userID: "default",
+      workflows: 0,
+      readyWorkflows: 0,
+    })
+    expect(connected.data.connectionID).toMatch(/^comfy_[0-9a-f]{32}$/)
+    expect(await getCinemaVideoProviderSettings("comfyui-local")).toEqual({
+      baseURL: readyBaseURL,
+      userID: "default",
+    })
+    expect((await json(await app.request(settingsURL))).data).toMatchObject({
+      baseURL: readyBaseURL,
+      userID: "default",
+      baseURLSource: "settings",
+    })
+
+    const rejected = await json(await app.request(connectURL, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ baseURL: incompatibleBaseURL, userID: "other" }),
+    }))
+    expect(rejected.data).toMatchObject({ ok: false, persisted: false })
+    expect(await getCinemaVideoProviderSettings("comfyui-local")).toEqual({
+      baseURL: readyBaseURL,
+      userID: "default",
+    })
+
+    const rejectedSave = await app.request(settingsURL, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ baseURL: incompatibleBaseURL, userID: "other" }),
+    })
+    expect(rejectedSave.status).toBe(422)
+    expect(await getCinemaVideoProviderSettings("comfyui-local")).toEqual({
+      baseURL: readyBaseURL,
+      userID: "default",
+    })
+  })
+
   test("keeps the public project/provider/toolchain routes and response envelope stable", async () => {
     const { root } = await isolatedRuntime()
     const projectRoot = path.join(root, "project")

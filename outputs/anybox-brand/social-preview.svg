@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">Anybox social preview</title>
+  <desc id="desc">Anybox logo and product descriptor on a warm paper background.</desc>
+  <rect width="1200" height="630" fill="#F2EFE5"/>
+  <circle cx="1060" cy="90" r="220" fill="#E3F0EC"/>
+  <path d="m920 480 280-140v290H830Z" fill="#E7DED0"/>
+  <rect x="78" y="84" width="1044" height="462" rx="44" fill="#FFFDF8" stroke="#D8DED8" stroke-width="2"/>
+  <g transform="translate(130 167) scale(2.9)">
+    <rect x="2" y="2" width="96" height="96" rx="24" fill="#151817"/>
+    <g transform="translate(5 2) scale(.9)">
+      <defs><mask id="social-face"><rect width="100" height="100" fill="#fff"/><circle cx="40.5" cy="38" r="3.2" fill="#000"/><circle cx="59.5" cy="38" r="3.2" fill="#000"/><path d="M46.5 45Q50 42 53.5 45L51.4 48.2H48.6Z" fill="#000"/></mask></defs>
+      <path fill="#F4F7F4" mask="url(#social-face)" d="M28.5 52.5C25 47.2 23.8 41 24.8 34V18c0-3.7 4.1-5.6 7-3.3l10.8 8.6a29.5 29.5 0 0 1 14.8 0l10.8-8.6c2.9-2.3 7-.4 7 3.3v16c1 7-.2 13.2-3.7 18.5l-5.2 8H33.7Z"/>
+      <path fill="#76B8AD" d="M7.5 52.8 34 40.5l16 14.2-17.3 15.1L7.5 59.4ZM92.5 52.8 66 40.5 50 54.7l17.3 15.1 25.2-10.4Z"/>
+      <path fill="#76B8AD" d="m17.5 66 32.5 14.7L82.5 66v17.5L50 97.5 17.5 83.5Z"/>
+    </g>
+  </g>
+  <text x="480" y="278" fill="#15201B" font-family="Segoe UI Variable Display,Segoe UI,Arial,sans-serif" font-size="92" font-weight="700" letter-spacing="-4">Anybox</text>
+  <text x="486" y="336" fill="#526158" font-family="Segoe UI Variable Text,Segoe UI,Arial,sans-serif" font-size="25" font-weight="500">Open-source desktop workspace for local AI agents.</text>
+  <rect x="486" y="382" width="164" height="46" rx="23" fill="#E3F0EC"/>
+  <text x="568" y="412" fill="#2F6F68" font-family="Segoe UI Variable Text,Segoe UI,Arial,sans-serif" font-size="18" font-weight="650" text-anchor="middle">Local-first</text>
+  <rect x="664" y="382" width="172" height="46" rx="23" fill="#F2E4D8"/>
+  <text x="750" y="412" fill="#9A5428" font-family="Segoe UI Variable Text,Segoe UI,Arial,sans-serif" font-size="18" font-weight="650" text-anchor="middle">Open source</text>
+</svg>

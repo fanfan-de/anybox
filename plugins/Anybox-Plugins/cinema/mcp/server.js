@@ -15205,7 +15205,8 @@ var CinemaGenerationTargetSchema = exports_external.discriminatedUnion("kind", [
   exports_external.object({
     kind: exports_external.literal("workflow"),
     workflowID: exports_external.string().min(1),
-    revision: exports_external.string().min(1)
+    revision: exports_external.string().min(1),
+    connectionID: exports_external.string().min(1).optional()
   }).strict()
 ]);
 function validateLegacyGenerationTarget(value, ctx) {
@@ -17296,6 +17297,7 @@ var MODEL_INPUT_FOLDERS = {
 var catalogPromises = new Map;
 var catalogs = new Map;
 var cacheRootOverride;
+var configuredConnectionOverride;
 function isRecord(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -17341,6 +17343,8 @@ function validateComfyUIBaseURL(value) {
   return url2.origin;
 }
 async function configuredComfyUIConnection() {
+  if (configuredConnectionOverride)
+    return { ...configuredConnectionOverride };
   const settings = await getCinemaVideoProviderSettings(COMFYUI_PROVIDER_ID);
   return {
     baseURL: validateComfyUIBaseURL(settings.baseURL),
@@ -17440,6 +17444,14 @@ async function optionalComfyUIJSON(baseURL, route, userID, init = {}) {
 }
 function cacheKey(endpoint, userID) {
   return `${endpoint}\x00${userID ?? ""}`;
+}
+function comfyUIConnectionID(endpoint, userID) {
+  const normalizedEndpoint = validateComfyUIBaseURL(endpoint);
+  const normalizedUserID = userID?.trim() || null;
+  return `comfy_${sha256(cacheKey(normalizedEndpoint, normalizedUserID)).slice(0, 32)}`;
+}
+function requestedUserID(value, fallback) {
+  return value === undefined ? fallback : value?.trim() || null;
 }
 function cachePath(endpoint, userID) {
   const filename = `${sha256(cacheKey(endpoint, userID))}.json`;
@@ -18523,7 +18535,12 @@ async function convertOneWorkflow(input) {
     bindings
   };
   const revision = `sha256:${sha256(stableStringify(revisionPayload))}`;
-  const target = { kind: "workflow", workflowID, revision };
+  const target = {
+    kind: "workflow",
+    workflowID,
+    revision,
+    connectionID: comfyUIConnectionID(input.baseURL, input.userID)
+  };
   const supportedOutputKind = output.output?.kind === "image" || output.output?.kind === "video" ? output.output.kind : undefined;
   const formSpec = supportedOutputKind && controls.length === rawInputs.length ? {
     providerID: COMFYUI_PROVIDER_ID,
@@ -18581,11 +18598,11 @@ function disabledLimitWorkflow(input) {
 async function refreshInternal(options) {
   const configured = await configuredComfyUIConnection();
   const endpoint = validateComfyUIBaseURL(options.baseURL ?? configured.baseURL);
-  const requestedUserID = options.userID?.trim() || configured.userID;
+  const selectedUserID = requestedUserID(options.userID, configured.userID);
   const discoveredAt = new Date().toISOString();
   await requestComfyUIJSON(endpoint, "/system_stats", null);
   const users = await discoverUsers(endpoint);
-  const userID = selectUser(users, requestedUserID);
+  const userID = selectUser(users, selectedUserID);
   if (!userID) {
     const catalog2 = {
       providerID: COMFYUI_PROVIDER_ID,
@@ -18770,7 +18787,7 @@ async function refreshInternal(options) {
   await writePublicCatalogCache(endpoint, userID, publicCatalog).catch(() => {
     return;
   });
-  if (!requestedUserID && userID === "default") {
+  if (!selectedUserID && userID === "default") {
     await writePublicCatalogCache(endpoint, null, publicCatalog).catch(() => {
       return;
     });
@@ -18807,7 +18824,7 @@ async function staleCatalogForFailure(endpoint, userID, error48) {
 async function getComfyUIWorkflowCatalog(options = {}) {
   const configured = await configuredComfyUIConnection();
   const endpoint = validateComfyUIBaseURL(options.baseURL ?? configured.baseURL);
-  const userID = options.userID?.trim() || configured.userID;
+  const userID = requestedUserID(options.userID, configured.userID);
   const key = cacheKey(endpoint, userID);
   if (!options.force && catalogs.has(key))
     return catalogs.get(key).publicCatalog;
@@ -18815,6 +18832,7 @@ async function getComfyUIWorkflowCatalog(options = {}) {
     return (await catalogPromises.get(key)).publicCatalog;
   const promise2 = refreshInternal({ ...options, baseURL: endpoint, userID }).catch((error48) => staleCatalogForFailure(endpoint, userID, error48)).then((catalog) => {
     catalogs.set(key, catalog);
+    catalogs.set(cacheKey(catalog.endpoint, catalog.userID), catalog);
     return catalog;
   }).finally(() => catalogPromises.delete(key));
   catalogPromises.set(key, promise2);
@@ -18823,16 +18841,31 @@ async function getComfyUIWorkflowCatalog(options = {}) {
 async function refreshComfyUIWorkflowCatalog(options = {}) {
   return await getComfyUIWorkflowCatalog({ ...options, force: true });
 }
-async function getInternalComfyUIWorkflow(workflowID, revision) {
+async function getInternalComfyUIWorkflow(workflowID, revision, connectionID) {
   const configured = await configuredComfyUIConnection();
   const key = cacheKey(configured.baseURL, configured.userID);
-  let catalog = catalogs.get(key) ?? [...catalogs.values()].find((candidate) => candidate.workflows.has(workflowID));
+  let catalog = catalogs.get(key);
+  if (!catalog && !connectionID) {
+    catalog = [...catalogs.values()].find((candidate) => candidate.workflows.has(workflowID));
+  }
   if (!catalog) {
     await getComfyUIWorkflowCatalog();
     catalog = catalogs.get(key);
   }
   if (!catalog) {
     throw new ApiError(404, "COMFYUI_WORKFLOW_NOT_FOUND", "The selected ComfyUI workflow was not found.");
+  }
+  if (connectionID) {
+    const activeConnectionID = comfyUIConnectionID(catalog.endpoint, catalog.userID);
+    const latest = await configuredComfyUIConnection();
+    if (cacheKey(latest.baseURL, latest.userID) !== key || activeConnectionID !== connectionID) {
+      throw new ApiError(409, "COMFYUI_CONNECTION_CHANGED", "The active ComfyUI connection changed; refresh workflows before submitting.", {
+        requestedConnectionID: connectionID,
+        activeConnectionID,
+        activeBaseURL: latest.baseURL,
+        activeUserID: latest.userID
+      });
+    }
   }
   if (catalog.publicCatalog.status !== "ready") {
     throw new ApiError(409, "COMFYUI_WORKFLOW_CATALOG_STALE", "The ComfyUI workflow catalog is stale; refresh it before submitting.");
@@ -18999,7 +19032,7 @@ async function readWorkflowSnapshot(cinemaRoot, taskID, submitted = false) {
   } catch {
     throw new ApiError(500, "COMFYUI_WORKFLOW_SNAPSHOT_INVALID", "The task workflow snapshot is missing or invalid.");
   }
-  if (!isRecord2(parsed) || parsed.schemaVersion !== SNAPSHOT_SCHEMA_VERSION || parsed.taskID !== taskID || !stringValue2(parsed.workflowID) || !stringValue2(parsed.revision) || parsed.outputKind !== "image" && parsed.outputKind !== "video" || !Array.isArray(parsed.outputNodeIDs) || !isRecord2(parsed.uiWorkflow) || !isRecord2(parsed.apiPrompt) || !isRecord2(parsed.bindings) || !Array.isArray(parsed.controls) || !isRecord2(parsed.values) || !stringValue2(parsed.digest)) {
+  if (!isRecord2(parsed) || parsed.schemaVersion !== SNAPSHOT_SCHEMA_VERSION || parsed.taskID !== taskID || !stringValue2(parsed.workflowID) || !stringValue2(parsed.revision) || parsed.connectionID !== undefined && !stringValue2(parsed.connectionID) || parsed.outputKind !== "image" && parsed.outputKind !== "video" || !Array.isArray(parsed.outputNodeIDs) || !isRecord2(parsed.uiWorkflow) || !isRecord2(parsed.apiPrompt) || !isRecord2(parsed.bindings) || !Array.isArray(parsed.controls) || !isRecord2(parsed.values) || !stringValue2(parsed.digest)) {
     throw new ApiError(500, "COMFYUI_WORKFLOW_SNAPSHOT_INVALID", "The task workflow snapshot is invalid.");
   }
   const { digest, ...withoutDigest } = parsed;
@@ -19134,7 +19167,7 @@ async function prepareComfyUITask(input) {
   if (input.task.target.kind !== "workflow") {
     throw new ApiError(410, "COMFYUI_LEGACY_WORKFLOW_REMOVED", "The built-in ComfyUI workflow was removed; select a discovered APP mode workflow.");
   }
-  const { workflow, endpoint, userID } = await getInternalComfyUIWorkflow(input.task.target.workflowID, input.task.target.revision);
+  const { workflow, endpoint, userID } = await getInternalComfyUIWorkflow(input.task.target.workflowID, input.task.target.revision, input.task.target.connectionID);
   if (!userID) {
     throw new ApiError(409, "COMFYUI_USER_SELECTION_REQUIRED", "Select a ComfyUI user before submitting.");
   }
@@ -19149,6 +19182,7 @@ async function prepareComfyUITask(input) {
     taskID: input.task.id,
     workflowID: workflow.publicWorkflow.workflowID,
     revision: workflow.publicWorkflow.revision,
+    ...input.task.target.connectionID ? { connectionID: input.task.target.connectionID } : {},
     outputKind: output.kind,
     outputNodeIDs: workflow.outputNodeIDs,
     uiWorkflow: workflow.uiWorkflow,
@@ -19172,6 +19206,7 @@ async function prepareComfyUITask(input) {
       clientID: CLIENT_ID,
       workflowID: workflow.publicWorkflow.workflowID,
       revision: workflow.publicWorkflow.revision,
+      ...input.task.target.connectionID ? { connectionID: input.task.target.connectionID } : {},
       snapshotDigest: snapshot.digest,
       outputKind: output.kind,
       outputNodeIDs: workflow.outputNodeIDs,
@@ -20003,10 +20038,16 @@ async function testComfyUIConnection(input = {}) {
       };
     }
     const ready = catalog.workflows.filter((workflow) => workflow.status === "ready").length;
+    const resolvedUserID = catalog.userID ?? undefined;
     return {
       ok: true,
       status: "ready",
       message: `Local ComfyUI is reachable; discovered ${catalog.workflows.length} workflow(s), ${ready} ready.`,
+      effectiveBaseURL: baseURL,
+      ...resolvedUserID ? { userID: resolvedUserID } : {},
+      ...resolvedUserID ? { connectionID: comfyUIConnectionID(baseURL, resolvedUserID) } : {},
+      workflows: catalog.workflows.length,
+      readyWorkflows: ready,
       diagnostics: {
         service: "reachable",
         userData: "ready",

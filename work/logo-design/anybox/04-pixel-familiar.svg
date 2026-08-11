@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-labelledby="title desc" shape-rendering="crispEdges">
+  <title id="title">Anybox Pixel Familiar</title>
+  <desc id="desc">A pixel-native cat and open box for a developer-facing identity.</desc>
+  <style>:root{color:#15201b;--accent:#2f6f68}</style>
+  <path fill="currentColor" fill-rule="evenodd" d="M24 16h12v8h8v-4h12v4h8v-8h12v32h-8v8H32v-8h-8Zm14 18v8h8v-8Zm16 0v8h8v-8Z"/>
+  <path fill="var(--accent)" d="M8 50h24V42h12v8h12v-8h12v8h24v12H80v22H60v8H40v-8H20V62H8Zm20 12v14h16V62Zm28 0v14h16V62Z"/>
+</svg>

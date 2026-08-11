@@ -59,7 +59,7 @@
     "preview": "vite preview",
     "start:standalone": "bun ./runtime/server.js --standalone",
     "test": "bun test ./Test ./src/**/*.test.ts",
-    "test:web": "vitest run",
+    "test:web": "vitest run src/web",
     "test:e2e": "playwright test",
     "test:toolchain": "node --test ./toolchain/scripts/verify-media-runtime.test.mjs ./toolchain/scripts/media-runtime-candidate.test.mjs",
     "toolchain:verify": "node ./toolchain/scripts/verify-media-runtime.mjs",

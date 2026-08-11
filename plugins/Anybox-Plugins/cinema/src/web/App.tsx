@@ -2033,6 +2033,7 @@ const GENERATION_ERROR_TRANSLATION_KEYS: Partial<Record<string, TranslationKey>>
   COMFYUI_NODES_MISSING: "video.error.comfyuiNodesMissing",
   COMFYUI_MODELS_MISSING: "video.error.comfyuiModelsMissing",
   COMFYUI_WORKFLOW_INCOMPATIBLE: "video.error.comfyuiWorkflowInvalid",
+  COMFYUI_CONNECTION_CHANGED: "video.error.comfyuiConnectionChanged",
   COMFYUI_PROFILE_INVALID: "video.error.comfyuiWorkflowInvalid",
   COMFYUI_PROFILE_DIGEST_MISMATCH: "video.error.comfyuiWorkflowInvalid",
   COMFYUI_EXECUTION_FAILED: "video.error.comfyuiExecutionFailed",
@@ -2079,6 +2080,7 @@ const COMFYUI_SETTINGS_ERROR_CODES = new Set([
   "COMFYUI_NODES_MISSING",
   "COMFYUI_MODELS_MISSING",
   "COMFYUI_WORKFLOW_INCOMPATIBLE",
+  "COMFYUI_CONNECTION_CHANGED",
 ])
 
 function requestDesktopCinemaProviderSettings(providerID: string) {

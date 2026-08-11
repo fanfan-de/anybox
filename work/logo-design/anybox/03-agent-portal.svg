@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-labelledby="title desc">
+  <title id="title">Anybox Agent Portal</title>
+  <desc id="desc">An abstract open cube with an active spark at its center.</desc>
+  <style>:root{color:#15201b;--accent:#c76e2f}</style>
+  <path d="m50 13 34 18v38L50 87 16 69V31Z" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round"/>
+  <path d="m16 31 34 18 34-18M50 49v38" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <path fill="var(--accent)" d="M50 31c2.2 9.3 5.7 12.8 15 15-9.3 2.2-12.8 5.7-15 15-2.2-9.3-5.7-12.8-15-15 9.3-2.2 12.8-5.7 15-15Z"/>
+</svg>

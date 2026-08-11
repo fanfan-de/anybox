@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 120" role="img" aria-labelledby="title desc">
+  <title id="title">Anybox full logo</title>
+  <desc id="desc">Anybox Folded Companion mark, wordmark, and product descriptor.</desc>
+  <defs><mask id="full-face"><rect width="100" height="100" fill="#fff"/><circle cx="40.5" cy="38" r="3.2" fill="#000"/><circle cx="59.5" cy="38" r="3.2" fill="#000"/><path d="M46.5 45Q50 42 53.5 45L51.4 48.2H48.6Z" fill="#000"/></mask></defs>
+  <g id="icon" transform="translate(10 10)">
+    <path fill="#15201B" mask="url(#full-face)" d="M28.5 52.5C25 47.2 23.8 41 24.8 34V18c0-3.7 4.1-5.6 7-3.3l10.8 8.6a29.5 29.5 0 0 1 14.8 0l10.8-8.6c2.9-2.3 7-.4 7 3.3v16c1 7-.2 13.2-3.7 18.5l-5.2 8H33.7Z"/>
+    <path fill="#2F6F68" d="M7.5 52.8 34 40.5l16 14.2-17.3 15.1L7.5 59.4ZM92.5 52.8 66 40.5 50 54.7l17.3 15.1 25.2-10.4Z"/>
+    <path fill="#2F6F68" d="m17.5 66 32.5 14.7L82.5 66v17.5L50 97.5 17.5 83.5Z"/>
+  </g>
+  <text x="132" y="65" fill="#15201B" font-family="Segoe UI Variable Display,Segoe UI,Arial,sans-serif" font-size="54" font-weight="700" letter-spacing="-2">Anybox</text>
+  <text x="134" y="91" fill="#5F6B63" font-family="Segoe UI Variable Text,Segoe UI,Arial,sans-serif" font-size="15" font-weight="500" letter-spacing=".25">Open-source desktop workspace for local AI agents.</text>
+</svg>

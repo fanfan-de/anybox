@@ -29,6 +29,7 @@ const SettingsBody = z.object({
   }).strict()).optional(),
   textGenerationPrompt: z.string().nullable().optional(),
 }).strict()
+const ProviderConnectionBody = SettingsBody.pick({ baseURL: true, userID: true })
 
 function parseProviderID(value: string) {
   const parsed = ProviderID.safeParse(value)
@@ -86,7 +87,15 @@ export function CinemaManagementRoutes() {
       const settings = await Settings.getSettings()
       return ok(c, { ...settings.openAICompatible, textGenerationPrompt: settings.prompts.textGeneration ?? null })
     }
-    return ok(c, await Settings.getCinemaVideoProviderSettings(providerID))
+    const settings = await Settings.getCinemaVideoProviderSettings(providerID)
+    if (providerID !== "comfyui-local") return ok(c, settings)
+    const provider = await Providers.getCinemaVideoProvider(providerID)
+    return ok(c, {
+      ...settings,
+      ...(provider.runtime?.baseURL ? { baseURL: provider.runtime.baseURL } : {}),
+      ...(provider.runtime?.userID ? { userID: provider.runtime.userID } : {}),
+      ...(provider.runtime?.baseURLSource ? { baseURLSource: provider.runtime.baseURLSource } : {}),
+    })
   })
   app.put("/providers/:providerID/settings", async (c) => {
     const providerID = parseProviderID(c.req.param("providerID"))
@@ -133,6 +142,11 @@ export function CinemaManagementRoutes() {
     const providerID = parseProviderID(c.req.param("providerID"))
     if (providerID === "openai-compatible") return ok(c, { ok: true, models: await openAIModels() })
     return ok(c, await Providers.testCinemaVideoProviderConnection(providerID, {}))
+  })
+  app.post("/providers/:providerID/connect", async (c) => {
+    const providerID = parseProviderID(c.req.param("providerID"))
+    const input = await parseJsonBody(c, ProviderConnectionBody, "Provider connection settings are invalid.")
+    return ok(c, await Providers.connectCinemaVideoProvider(providerID, input))
   })
   app.post("/providers/openai-compatible/models/discover", async (c) => ok(c, { items: await openAIModels() }))
 

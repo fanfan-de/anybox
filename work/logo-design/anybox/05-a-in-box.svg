@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-labelledby="title desc">
+  <title id="title">Anybox A in Box</title>
+  <desc id="desc">A typography-led lowercase a set inside an open container.</desc>
+  <style>:root{color:#15201b;--accent:#2f6f68}</style>
+  <path fill="var(--accent)" d="M12 27 50 8l38 19-12 9-26-13-26 13ZM12 41l11 6v30l27 14 27-14V47l11-6v39L50 98 12 80Z"/>
+  <text x="50" y="72" fill="currentColor" font-family="Segoe UI Variable Display,Segoe UI,Arial,sans-serif" font-size="58" font-weight="750" text-anchor="middle">a</text>
+</svg>

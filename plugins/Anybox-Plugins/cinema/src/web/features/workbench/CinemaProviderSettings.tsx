@@ -16,7 +16,7 @@ type ProviderDefinition = {
   id: CinemaProviderID
   nameKey: TranslationKey
   descriptionKey: TranslationKey
-  endpoint: string
+  endpoint?: string
   requiresCredential: boolean
   credentialLabelKey?: TranslationKey
   credentialPlaceholderKey?: TranslationKey
@@ -28,7 +28,6 @@ const PROVIDERS: ReadonlyArray<ProviderDefinition> = [
     id: "comfyui-local",
     nameKey: "settings.provider.comfyui.name",
     descriptionKey: "settings.provider.comfyui.description",
-    endpoint: "http://127.0.0.1:8188",
     requiresCredential: false,
     icon: Server,
   },
@@ -88,7 +87,7 @@ function providerDefinition(providerID: CinemaProviderID) {
 function formFromSettings(providerID: CinemaProviderID, settings: CinemaProviderSettings): ProviderFormState {
   const definition = providerDefinition(providerID)
   return {
-    baseURL: settings.baseURL ?? definition.endpoint,
+    baseURL: settings.baseURL ?? definition.endpoint ?? "",
     userID: settings.userID ?? "",
     defaultModel: settings.defaultModel ?? "",
     models: settings.models.map((model) => model.id).join("\n"),
@@ -247,13 +246,35 @@ export function CinemaProviderSettings({
     setPendingAction("testing")
     setFeedback(null)
     try {
-      await persistCurrentProvider()
-      const result = await api.testConnection(activeProviderID)
+      const result = activeProviderID === "comfyui-local"
+        ? await (() => {
+          const input = settingsInput()
+          if (!input || input.baseURL === null) throw new Error(t("settings.provider.baseURLRequired"))
+          return api.connectProvider(activeProviderID, input)
+        })()
+        : await (async () => {
+          await persistCurrentProvider()
+          return await api.testConnection(activeProviderID)
+      })()
+      if (activeProviderID === "comfyui-local" && result.ok) await refreshCurrentProvider()
+      const message = activeProviderID === "comfyui-local"
+        && result.ok
+        && result.effectiveBaseURL !== undefined
+        && result.userID !== undefined
+        && result.workflows !== undefined
+        && result.readyWorkflows !== undefined
+        ? t("settings.provider.comfyui.connected", {
+          origin: result.effectiveBaseURL,
+          user: result.userID,
+          ready: result.readyWorkflows,
+          total: result.workflows,
+        })
+        : result.message || t(result.ok
+          ? "settings.provider.testSucceeded"
+          : "settings.provider.testFailed")
       setFeedback({
         kind: result.ok ? "success" : result.status === "unsupported" ? "info" : "error",
-        message: result.message || t(result.ok
-          ? "settings.provider.testSucceeded"
-          : "settings.provider.testFailed"),
+        message,
       })
     } catch (error) {
       setFeedback({
@@ -361,7 +382,7 @@ export function CinemaProviderSettings({
             className="cinema-provider-form"
             onSubmit={(event) => {
               event.preventDefault()
-              void saveProvider()
+              void (activeProviderID === "comfyui-local" ? testProvider() : saveProvider())
             }}
           >
             <fieldset disabled={pending}>
@@ -543,19 +564,25 @@ export function CinemaProviderSettings({
                         : t("settings.provider.discoverModels")}
                     </button>
                   ) : null}
-                  <button
-                    type="button"
-                    className="cinema-provider-action is-secondary"
-                    onClick={() => void testProvider()}
-                  >
-                    {pendingAction === "testing"
-                      ? t("settings.provider.testing")
-                      : t("settings.provider.saveAndTest")}
-                  </button>
+                  {activeProviderID !== "comfyui-local" ? (
+                    <button
+                      type="button"
+                      className="cinema-provider-action is-secondary"
+                      onClick={() => void testProvider()}
+                    >
+                      {pendingAction === "testing"
+                        ? t("settings.provider.testing")
+                        : t("settings.provider.saveAndTest")}
+                    </button>
+                  ) : null}
                   <button type="submit" className="cinema-provider-action is-primary">
-                    {pendingAction === "saving"
-                      ? t("settings.provider.saving")
-                      : t("settings.provider.save")}
+                    {activeProviderID === "comfyui-local"
+                      ? pendingAction === "testing"
+                        ? t("settings.provider.testing")
+                        : t("settings.provider.saveAndTest")
+                      : pendingAction === "saving"
+                        ? t("settings.provider.saving")
+                        : t("settings.provider.save")}
                   </button>
                 </div>
               </div>

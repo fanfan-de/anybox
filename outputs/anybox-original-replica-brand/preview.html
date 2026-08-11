@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Anybox 原版 Logo 矢量复刻</title>
+  <style>
+    :root { color-scheme: dark; font-family: "Segoe UI Variable Text", "Microsoft YaHei UI", sans-serif; background: #0b0d0c; color: #f5f7f5; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 48px 24px 72px; }
+    main { width: min(1120px, 100%); margin: auto; }
+    h1 { margin: 0 0 8px; font-size: clamp(30px, 5vw, 54px); letter-spacing: -.04em; }
+    p { margin: 0; color: #aeb6b0; line-height: 1.7; }
+    .comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 32px; }
+    figure { margin: 0; overflow: hidden; border: 1px solid #252a27; border-radius: 20px; background: #000; }
+    figure img { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; }
+    figcaption { padding: 14px 16px; border-top: 1px solid #252a27; color: #cbd1cd; }
+    .light { margin-top: 16px; padding: 42px; display: grid; place-items: center; border-radius: 20px; background: #f7f7f4; }
+    .light img { width: min(420px, 85%); }
+    .sizes { margin-top: 16px; min-height: 180px; display: flex; align-items: center; justify-content: center; gap: 36px; border: 1px solid #252a27; border-radius: 20px; background: #000; }
+    .sample { display: grid; justify-items: center; gap: 10px; color: #8f9892; font: 12px ui-monospace, monospace; }
+    @media (max-width: 700px) { .comparison { grid-template-columns: 1fr; } body { padding: 28px 14px 48px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Anybox 原版 Logo · 矢量复刻</h1>
+    <p>左侧是仓库中用户确认的原始 PNG，右侧是 Illustrator Image Trace 后整理出的透明复合路径。轮廓重合度 99.06%，无内嵌位图。</p>
+    <section class="comparison">
+      <figure><img src="../../packages/site/public/anybox-box-cat-logo.png" alt="Anybox 原始 PNG Logo" /><figcaption>原版 PNG · 1024 × 1024</figcaption></figure>
+      <figure><img src="anybox-original-logo-white.svg" alt="Anybox 矢量复刻 Logo" /><figcaption>复刻 SVG · 纯矢量复合路径</figcaption></figure>
+    </section>
+    <section class="light"><img src="anybox-original-logo-black.svg" alt="Anybox 黑色矢量复刻 Logo" /></section>
+    <section class="sizes">
+      <span class="sample"><img src="anybox-original-logo-white.svg" width="64" height="64" alt="64 像素" /><b>64 px</b></span>
+      <span class="sample"><img src="anybox-original-logo-white.svg" width="32" height="32" alt="32 像素" /><b>32 px</b></span>
+      <span class="sample"><img src="anybox-original-logo-white.svg" width="16" height="16" alt="16 像素" /><b>16 px</b></span>
+    </section>
+  </main>
+</body>
+</html>
