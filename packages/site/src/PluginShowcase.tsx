@@ -35,27 +35,19 @@ function MotionToggleIcon({ paused }: { paused: boolean }) {
   )
 }
 
-function PluginCard({ example, index }: { example: PluginExample; index: number }) {
+function PluginCard({ example }: { example: PluginExample }) {
   return (
     <li className="plugin-conveyor-card">
-      <div className="plugin-conveyor-card-topline">
-        <span className="plugin-conveyor-icon">
-          <img
-            alt=""
-            decoding="async"
-            height="42"
-            src={pluginIcons[example.id]}
-            width="42"
-          />
-        </span>
-        <span className="plugin-conveyor-index">
-          {String(index + 1).padStart(2, "0")}
-        </span>
-      </div>
-      <p className="plugin-conveyor-category">{example.category}</p>
-      <h3>{example.name}</h3>
-      <p className="plugin-conveyor-description">{example.description}</p>
-      <p className="plugin-conveyor-capability">{example.capability}</p>
+      <span className="plugin-conveyor-icon">
+        <img
+          alt=""
+          decoding="async"
+          height="42"
+          src={pluginIcons[example.id]}
+          width="42"
+        />
+      </span>
+      <span className="plugin-conveyor-name">{example.name}</span>
     </li>
   )
 }
@@ -67,14 +59,19 @@ type PluginShowcaseProps = {
 
 export function PluginShowcase({ content, language }: PluginShowcaseProps) {
   const [isPaused, setIsPaused] = useState(false)
+  const rowBreak = Math.ceil(content.examples.length / 2)
+  const pluginRows = [
+    content.examples.slice(0, rowBreak),
+    content.examples.slice(rowBreak),
+  ]
   const pauseLabel = language === "zh" ? "暂停插件动态" : "Pause plugin motion"
   const resumeLabel = language === "zh" ? "继续插件动态" : "Resume plugin motion"
   const controlLabel = isPaused ? resumeLabel : pauseLabel
   const featuredLabel = language === "zh"
-    ? `${content.examples.length} 个精选插件`
-    : `${content.examples.length} featured plugins`
+    ? `${content.examples.length} 个插件`
+    : `${content.examples.length} plugins`
   const motionStatus = isPaused
-    ? language === "zh" ? "展示已暂停" : "Showcase paused"
+    ? language === "zh" ? "已暂停" : "Paused"
     : featuredLabel
 
   return (
@@ -100,7 +97,7 @@ export function PluginShowcase({ content, language }: PluginShowcaseProps) {
           <div className="plugin-conveyor-toolbar">
             <p>
               <span aria-hidden="true" className="plugin-conveyor-status-dot" />
-              {language === "zh" ? "插件工作台" : "Plugin workbench"}
+              {language === "zh" ? "插件库" : "Plugin library"}
             </p>
             <div className="plugin-conveyor-controls">
               <span aria-live="polite">{motionStatus}</span>
@@ -117,20 +114,30 @@ export function PluginShowcase({ content, language }: PluginShowcaseProps) {
             </div>
           </div>
 
-          <div className="plugin-conveyor-viewport" aria-hidden="true">
-            <div className={isPaused ? "plugin-conveyor-track is-paused" : "plugin-conveyor-track"}>
-              {[false, true].map((isDuplicate) => (
-                <ul
-                  aria-hidden={isDuplicate ? "true" : undefined}
-                  className="plugin-conveyor-group"
-                  key={isDuplicate ? "duplicate" : "primary"}
+          <div className="plugin-conveyor-rows" aria-hidden="true">
+            {pluginRows.map((examples, rowIndex) => (
+              <div className="plugin-conveyor-viewport" key={rowIndex === 0 ? "top" : "bottom"}>
+                <div
+                  className={[
+                    "plugin-conveyor-track",
+                    rowIndex === 0 ? "is-forward" : "is-reverse",
+                    isPaused ? "is-paused" : "",
+                  ].filter(Boolean).join(" ")}
                 >
-                  {content.examples.map((example, index) => (
-                    <PluginCard example={example} index={index} key={example.id} />
+                  {[false, true].map((isDuplicate) => (
+                    <ul
+                      aria-hidden={isDuplicate ? "true" : undefined}
+                      className="plugin-conveyor-group"
+                      key={isDuplicate ? "duplicate" : "primary"}
+                    >
+                      {examples.map((example) => (
+                        <PluginCard example={example} key={example.id} />
+                      ))}
+                    </ul>
                   ))}
-                </ul>
-              ))}
-            </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -148,9 +155,7 @@ export function PluginShowcase({ content, language }: PluginShowcaseProps) {
 
         <ul className="plugin-showcase-accessible-list">
           {content.examples.map((example) => (
-            <li key={example.id}>
-              <strong>{example.name}</strong>: {example.description}
-            </li>
+            <li key={example.id}>{example.name}</li>
           ))}
         </ul>
       </div>

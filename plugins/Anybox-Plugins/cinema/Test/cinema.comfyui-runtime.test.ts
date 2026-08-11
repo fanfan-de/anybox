@@ -448,6 +448,81 @@ describe("ComfyUI workflow discovery", () => {
     expect(state.promptCalls).toBe(0)
   })
 
+  test("uses object_info widgetType for union-typed APP controls", async () => {
+    const root = await temporaryRoot()
+    restoreCacheRoots.push(setComfyUIWorkflowCacheRootForTest(path.join(root, "cache")))
+    const workflow = appWorkflow()
+    workflow.nodes.push({
+      id: 7,
+      type: "UnionWidget",
+      mode: 0,
+      inputs: [],
+      outputs: [],
+      widgets_values: [25],
+    })
+    workflow.nodes.push({
+      id: 8,
+      type: "Painter",
+      mode: 0,
+      inputs: [],
+      outputs: [],
+      widgets_values: ["mask-data"],
+    })
+    workflow.extra.linearData.inputs.push(
+      ["graph:7:frame_rate", "Frame rate"],
+      ["graph:8:mask", "Mask"],
+    )
+    const state: MockState = {
+      files: { "union-widget.json": workflow },
+      objectInfo: {
+        ...objectInfo(),
+        UnionWidget: {
+          input: {
+            required: {
+              frame_rate: ["FLOAT,INT", {
+                widgetType: "FLOAT",
+                default: 24,
+                min: 1,
+                max: 120,
+                step: 1,
+              }],
+            },
+          },
+          output: [],
+        },
+        Painter: {
+          input: {
+            required: {
+              mask: ["STRING", { widgetType: "PAINTER", default: "" }],
+            },
+          },
+          output: [],
+        },
+      },
+      promptCalls: 0,
+      convertCalls: 0,
+    }
+
+    const catalog = await refreshComfyUIWorkflowCatalog({ baseURL: comfyServer(state) })
+
+    expect(catalog.workflows[0]?.status).toBe("ready")
+    expect(catalog.workflows[0]?.formSpec?.controls.find((control) => control.label === "Frame rate"))
+      .toMatchObject({
+        type: "number",
+        integer: false,
+        defaultValue: 25,
+        min: 1,
+        max: 120,
+        step: 1,
+      })
+    expect(catalog.workflows[0]?.formSpec?.controls.find((control) => control.label === "Mask"))
+      .toMatchObject({
+        type: "text",
+        multiline: false,
+        defaultValue: "mask-data",
+      })
+  })
+
   test("keeps the last successful catalog but blocks submission after an offline refresh", async () => {
     const root = await temporaryRoot()
     const cinemaRoot = path.join(root, ".anybox", "cinema")
@@ -854,6 +929,105 @@ describe("ComfyUI built-in conversion", () => {
     expect(converted["2"]).toBeUndefined()
     expect(converted["3"]).toBeUndefined()
     expect(converted["4"]).toBeUndefined()
+  })
+
+  test("keeps widget values aligned for object_info union widget types", () => {
+    const workflow = {
+      version: 0.4,
+      nodes: [
+        {
+          id: 1,
+          type: "Source",
+          mode: 0,
+          inputs: [],
+          outputs: [{ name: "FLOAT", type: "FLOAT", links: [1] }],
+        },
+        {
+          id: 2,
+          type: "LTXVEmptyLatentAudio",
+          mode: 0,
+          inputs: [
+            { name: "frames_number", type: "INT", widget: { name: "frames_number" }, link: null },
+            { name: "frame_rate", type: "INT", widget: { name: "frame_rate" }, link: 1 },
+            { name: "batch_size", type: "INT", widget: { name: "batch_size" }, link: null },
+          ],
+          outputs: [],
+          widgets_values: [97, 25, 1],
+        },
+      ],
+      links: [[1, 1, 0, 2, 1, "FLOAT"]],
+    }
+    const info = {
+      Source: { input: {}, output: ["FLOAT"] },
+      LTXVEmptyLatentAudio: {
+        input: {
+          required: {
+            batch_size: ["INT", { default: 1 }],
+            frame_rate: ["FLOAT,INT", { default: 25, widgetType: "FLOAT" }],
+            frames_number: ["INT", { default: 97 }],
+          },
+        },
+        input_order: {
+          required: ["frames_number", "frame_rate", "batch_size"],
+        },
+        output: ["LATENT"],
+      },
+    }
+
+    expect(convertComfyUIWorkflowBuiltin(workflow, info).prompt["2"]?.inputs).toEqual({
+      frames_number: 97,
+      frame_rate: ["1", 0],
+      batch_size: 1,
+    })
+  })
+
+  test("does not consume widget values for socket-only union or forced inputs", () => {
+    for (const inputSpec of [
+      ["FLOAT,INT", {}],
+      ["FLOAT", { widgetType: "FLOAT", forceInput: true }],
+    ]) {
+      const workflow = {
+        version: 0.4,
+        nodes: [
+          {
+            id: 1,
+            type: "Source",
+            mode: 0,
+            inputs: [],
+            outputs: [{ name: "FLOAT", type: "FLOAT", links: [1] }],
+          },
+          {
+            id: 2,
+            type: "Target",
+            mode: 0,
+            inputs: [
+              { name: "value", type: "FLOAT", link: 1 },
+              { name: "batch_size", type: "INT", widget: { name: "batch_size" }, link: null },
+            ],
+            outputs: [],
+            widgets_values: [1],
+          },
+        ],
+        links: [[1, 1, 0, 2, 0, "FLOAT"]],
+      }
+      const info = {
+        Source: { input: {}, output: ["FLOAT"] },
+        Target: {
+          input: {
+            required: {
+              value: inputSpec,
+              batch_size: ["INT", { default: 7 }],
+            },
+          },
+          output: [],
+        },
+      }
+
+      expect(convertComfyUIWorkflowBuiltin(workflow, info).prompt["2"]?.inputs).toEqual({
+        value: ["1", 0],
+        batch_size: 1,
+      })
+    }
   })
 
   test("serializes V3 DynamicCombo widgets into flattened API prompt inputs", () => {

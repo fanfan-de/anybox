@@ -1427,16 +1427,32 @@
   height: 17px;
 }
 
+.plugin-conveyor-rows {
+  display: grid;
+  gap: 12px;
+  overflow: hidden;
+  padding: 18px 0 20px;
+}
+
 .plugin-conveyor-viewport {
   overflow: hidden;
-  padding: 22px 0 24px;
 }
 
 .plugin-conveyor-track {
   display: flex;
   width: max-content;
-  animation: plugin-conveyor-scroll 48s linear infinite;
+  animation-duration: 32s;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
   will-change: transform;
+}
+
+.plugin-conveyor-track.is-forward {
+  animation-name: plugin-conveyor-scroll-left;
+}
+
+.plugin-conveyor-track.is-reverse {
+  animation-name: plugin-conveyor-scroll-right;
 }
 
 .plugin-conveyor-shell:hover .plugin-conveyor-track,
@@ -1447,35 +1463,29 @@
 .plugin-conveyor-group {
   display: flex;
   flex: none;
-  gap: 14px;
+  gap: 12px;
   margin: 0;
-  padding: 0 7px;
+  padding: 0 6px;
   list-style: none;
 }
 
 .plugin-conveyor-card {
   display: flex;
-  width: 282px;
-  min-height: 238px;
+  width: 226px;
+  min-height: 80px;
   flex: none;
-  flex-direction: column;
-  padding: 18px;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-panel);
+  border-radius: 8px;
   background: var(--surface-primary);
-}
-
-.plugin-conveyor-card-topline {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
 }
 
 .plugin-conveyor-icon {
   display: grid;
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   flex: 0 0 auto;
   place-items: center;
   overflow: hidden;
@@ -1485,54 +1495,22 @@
 }
 
 .plugin-conveyor-icon img {
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   object-fit: contain;
 }
 
-.plugin-conveyor-index {
-  color: var(--text-tertiary);
-  font-family: "Cascadia Code", "Consolas", monospace;
-  font-size: 0.7rem;
-  font-weight: 700;
-}
-
-.plugin-conveyor-category {
-  margin: 20px 0 0;
-  color: var(--brand-primary);
-  font-size: 0.74rem;
-  font-weight: 760;
-}
-
-.plugin-conveyor-card h3 {
-  margin: 7px 0 0;
+.plugin-conveyor-name {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
   color: var(--text-primary);
   font-family: var(--font-display);
-  font-size: 1.25rem;
-  line-height: 1.25;
+  font-size: 1rem;
+  line-height: 1.3;
   letter-spacing: -0.01em;
-}
-
-.plugin-conveyor-description {
-  display: -webkit-box;
-  min-height: 3.1em;
-  margin: 11px 0 0;
-  overflow: hidden;
-  color: var(--text-secondary);
-  font-size: 0.86rem;
-  line-height: 1.55;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.plugin-conveyor-capability {
-  margin: auto 0 0;
-  padding-top: 16px;
-  border-top: 1px solid var(--border-subtle);
-  color: var(--text-tertiary);
-  font-family: "Cascadia Code", "Consolas", monospace;
-  font-size: 0.7rem;
-  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .plugin-showcase-stages {
@@ -1588,9 +1566,23 @@
   white-space: nowrap;
 }
 
-@keyframes plugin-conveyor-scroll {
+@keyframes plugin-conveyor-scroll-left {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+
   to {
     transform: translate3d(-50%, 0, 0);
+  }
+}
+
+@keyframes plugin-conveyor-scroll-right {
+  from {
+    transform: translate3d(-50%, 0, 0);
+  }
+
+  to {
+    transform: translate3d(0, 0, 0);
   }
 }
 
@@ -2078,14 +2070,25 @@
     display: none;
   }
 
-  .plugin-conveyor-viewport {
-    padding: 16px 0 18px;
+  .plugin-conveyor-rows {
+    gap: 10px;
+    padding: 14px 0 16px;
   }
 
   .plugin-conveyor-card {
-    width: 248px;
-    min-height: 228px;
-    padding: 16px;
+    width: 196px;
+    min-height: 72px;
+    padding: 12px 14px;
+  }
+
+  .plugin-conveyor-icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .plugin-conveyor-icon img {
+    width: 30px;
+    height: 30px;
   }
 
   .plugin-showcase-stages {

@@ -23,7 +23,7 @@ import {
 
 export const COMFYUI_PROVIDER_ID = "comfyui-local"
 export const COMFYUI_DEFAULT_BASE_URL = "http://127.0.0.1:8188"
-export const COMFYUI_WORKFLOW_CONVERTER_VERSION = "anybox-comfyui-ui-to-api/4"
+export const COMFYUI_WORKFLOW_CONVERTER_VERSION = "anybox-comfyui-ui-to-api/5"
 export const COMFYUI_WORKFLOW_LIMITS = {
   maxWorkflows: 500,
   maxFileBytes: 8 * 1024 * 1024,
@@ -627,12 +627,17 @@ function expandSubgraphs(
 function objectInfoInputs(objectInfo: JsonRecord, nodeType: string) {
   const node = isRecord(objectInfo[nodeType]) ? objectInfo[nodeType] : undefined
   const input = node && isRecord(node.input) ? node.input : undefined
+  const inputOrder = node && isRecord(node.input_order) ? node.input_order : undefined
   const result: Array<{ name: string; spec: unknown; required: boolean }> = []
   for (const section of ["required", "optional"] as const) {
     const values = input && isRecord(input[section]) ? input[section] : undefined
     if (!values) continue
-    for (const [name, spec] of Object.entries(values)) {
-      result.push({ name, spec, required: section === "required" })
+    const orderedNames = Array.isArray(inputOrder?.[section])
+      ? inputOrder[section].filter((name): name is string => typeof name === "string" && name in values)
+      : []
+    const names = [...new Set([...orderedNames, ...Object.keys(values)])]
+    for (const name of names) {
+      result.push({ name, spec: values[name], required: section === "required" })
     }
   }
   return result
@@ -644,6 +649,13 @@ function inputSpecType(spec: unknown) {
 
 function inputSpecOptions(spec: unknown) {
   return Array.isArray(spec) && isRecord(spec[1]) ? spec[1] : {}
+}
+
+function controlInputSpecType(spec: unknown) {
+  const declaredWidgetType = stringValue(inputSpecOptions(spec).widgetType)?.toUpperCase()
+  return declaredWidgetType && BASIC_WIDGET_TYPES.has(declaredWidgetType)
+    ? declaredWidgetType
+    : inputSpecType(spec)
 }
 
 function comboOptions(spec: unknown, selected?: unknown) {
@@ -666,6 +678,10 @@ function comboOptions(spec: unknown, selected?: unknown) {
 }
 
 function isWidgetSpec(spec: unknown) {
+  const options = inputSpecOptions(spec)
+  if (options.forceInput === true) return false
+  const declaredWidgetType = stringValue(options.widgetType)
+  if (declaredWidgetType) return true
   const type = inputSpecType(spec)
   if (Array.isArray(type)) return true
   if (typeof type !== "string") return false
@@ -1098,7 +1114,7 @@ function controlForBinding(
   const definition = promptInputDefinitions(objectInfo, node)
     .find((input) => input.name === binding.inputName)
   if (!definition) return undefined
-  const type = inputSpecType(definition.spec)
+  const type = controlInputSpecType(definition.spec)
   const options = inputSpecOptions(definition.spec)
   const value = node.inputs[binding.inputName]
   const description = stringValue(config.description) ?? stringValue(options.tooltip)

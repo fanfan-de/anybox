@@ -1,6 +1,6 @@
 {
   "name": "cinema",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "description": "A complete local AI filmmaking Web App packaged with its own Cinema runtime.",
   "author": {
     "name": "Anybox"
@@ -161,7 +161,7 @@
         "cwd": "${PLUGIN_ROOT}",
         "env": {
           "ANYBOX_APP_ID": "cinema",
-          "ANYBOX_APP_VERSION": "1.0.1",
+          "ANYBOX_APP_VERSION": "1.0.3",
           "ANYBOX_APP_DATA_DIR": "${PLUGIN_APP_DATA_DIR}",
           "ANYBOX_APP_CACHE_DIR": "${PLUGIN_APP_CACHE_DIR}",
           "ANYBOX_APP_LOG_DIR": "${PLUGIN_APP_LOG_DIR}"

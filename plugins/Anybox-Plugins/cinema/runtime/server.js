@@ -50661,7 +50661,7 @@ import { mkdir as mkdir8, readFile as readFile9, rename as rename5, writeFile as
 import path12 from "path";
 var COMFYUI_PROVIDER_ID = "comfyui-local";
 var COMFYUI_DEFAULT_BASE_URL = "http://127.0.0.1:8188";
-var COMFYUI_WORKFLOW_CONVERTER_VERSION = "anybox-comfyui-ui-to-api/4";
+var COMFYUI_WORKFLOW_CONVERTER_VERSION = "anybox-comfyui-ui-to-api/5";
 var COMFYUI_WORKFLOW_LIMITS = {
   maxWorkflows: 500,
   maxFileBytes: 8 * 1024 * 1024,
@@ -51101,13 +51101,16 @@ function expandSubgraphs(root, originalNodes, originalLinks) {
 function objectInfoInputs(objectInfo, nodeType) {
   const node = isRecord2(objectInfo[nodeType]) ? objectInfo[nodeType] : undefined;
   const input = node && isRecord2(node.input) ? node.input : undefined;
+  const inputOrder = node && isRecord2(node.input_order) ? node.input_order : undefined;
   const result = [];
   for (const section of ["required", "optional"]) {
     const values = input && isRecord2(input[section]) ? input[section] : undefined;
     if (!values)
       continue;
-    for (const [name, spec] of Object.entries(values)) {
-      result.push({ name, spec, required: section === "required" });
+    const orderedNames = Array.isArray(inputOrder?.[section]) ? inputOrder[section].filter((name) => typeof name === "string" && (name in values)) : [];
+    const names = [...new Set([...orderedNames, ...Object.keys(values)])];
+    for (const name of names) {
+      result.push({ name, spec: values[name], required: section === "required" });
     }
   }
   return result;
@@ -51117,6 +51120,10 @@ function inputSpecType(spec) {
 }
 function inputSpecOptions(spec) {
   return Array.isArray(spec) && isRecord2(spec[1]) ? spec[1] : {};
+}
+function controlInputSpecType(spec) {
+  const declaredWidgetType = stringValue(inputSpecOptions(spec).widgetType)?.toUpperCase();
+  return declaredWidgetType && BASIC_WIDGET_TYPES.has(declaredWidgetType) ? declaredWidgetType : inputSpecType(spec);
 }
 function comboOptions(spec, selected) {
   const type = inputSpecType(spec);
@@ -51140,6 +51147,12 @@ function comboOptions(spec, selected) {
   return selected !== undefined && ["string", "number", "boolean"].includes(typeof selected) ? [selected] : [];
 }
 function isWidgetSpec(spec) {
+  const options = inputSpecOptions(spec);
+  if (options.forceInput === true)
+    return false;
+  const declaredWidgetType = stringValue(options.widgetType);
+  if (declaredWidgetType)
+    return true;
   const type = inputSpecType(spec);
   if (Array.isArray(type))
     return true;
@@ -51491,7 +51504,7 @@ function controlForBinding(key, label, binding, prompt, objectInfo, config2) {
   const definition = promptInputDefinitions(objectInfo, node).find((input) => input.name === binding.inputName);
   if (!definition)
     return;
-  const type = inputSpecType(definition.spec);
+  const type = controlInputSpecType(definition.spec);
   const options = inputSpecOptions(definition.spec);
   const value = node.inputs[binding.inputName];
   const description = stringValue(config2.description) ?? stringValue(options.tooltip);
@@ -63460,7 +63473,7 @@ function CinemaRoutes() {
 }
 // src/version.json
 var version_default = {
-  version: "1.0.1"
+  version: "1.0.3"
 };
 
 // src/api/management-routes.ts
