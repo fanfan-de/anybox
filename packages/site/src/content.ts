@@ -72,10 +72,9 @@ export type SiteContent = {
 export const siteContent = {
   zh: {
     hero: {
-      eyebrow: "桌面端永久免费开源 · MIT License",
-      title: "开源的本地 AI Agent 工作台，把代码、能力与工作流握在自己手中。",
-      description:
-        "源码、Issue、发行版本与更新记录公开可查。把本地项目、模型、工具和插件放进同一个可检查的工作空间，从第一次请求一直做到结果交付。",
+      eyebrow: "开源桌面端永久免费开源 · MIT License",
+      title: "",
+      description: "",
       githubLabel: "在 GitHub 查看源码",
       note: "支持 Windows x64、macOS Apple Silicon、Linux x64 与 Android。",
     },

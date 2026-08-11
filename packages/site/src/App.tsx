@@ -70,7 +70,9 @@ function useHomeMetadata(language: "zh" | "en") {
     const title = language === "zh"
       ? "Anybox｜开源的本地 AI Agent 工作台"
       : "Anybox | Open-source local AI agent workspace"
-    const description = content.hero.description
+    const description = content.hero.description || (language === "zh"
+      ? "Anybox 开源本地 AI Agent 工作台。"
+      : "Anybox open-source local AI agent workspace.")
     const setMeta = (selector: string, value: string) => {
       document.querySelector<HTMLMetaElement>(selector)?.setAttribute("content", value)
     }
@@ -136,6 +138,7 @@ function FaqList({ items }: { items: FaqItem[] }) {
 export function App() {
   const { language } = useSiteLanguage()
   const content = siteContent[language]
+  const hasHeroTitle = content.hero.title.length > 0
   const repository = useRepositorySummary()
   const releaseDate = repository.publishedAt
     ? new Intl.DateTimeFormat(language === "zh" ? "zh-CN" : "en", {
@@ -149,15 +152,21 @@ export function App() {
     <main className="page-shell home-page-shell" id="top">
       <SiteHeader currentPage="home" />
 
-      <section className="home-hero" aria-labelledby="hero-title">
+      <section
+        aria-label={hasHeroTitle ? undefined : "Anybox"}
+        aria-labelledby={hasHeroTitle ? "hero-title" : undefined}
+        className="home-hero"
+      >
         <PaperBackground />
         <div className="home-hero-inner">
           <div className="home-hero-stage">
             <div className="home-hero-copy">
               <p className="home-hero-wordmark" aria-hidden="true">Anybox</p>
               <p className="home-hero-open-source">{content.hero.eyebrow}</p>
-              <h1 id="hero-title">{content.hero.title}</h1>
-              <p className="home-hero-summary">{content.hero.description}</p>
+              {hasHeroTitle ? <h1 id="hero-title">{content.hero.title}</h1> : null}
+              {content.hero.description
+                ? <p className="home-hero-summary">{content.hero.description}</p>
+                : null}
               <div className="home-hero-actions">
                 <DownloadCta placement="hero" />
                 <a

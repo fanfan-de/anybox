@@ -12,10 +12,16 @@ describe("site content", () => {
     expect(siteContent.zh.faq.items).toHaveLength(siteContent.en.faq.items.length)
   })
 
-  it("provides meaningful hero and download copy in both languages", () => {
+  it("provides the intended hero and download copy in both languages", () => {
+    expect(siteContent.zh.hero).toMatchObject({
+      description: "",
+      eyebrow: "开源桌面端永久免费开源 · MIT License",
+      title: "",
+    })
+    expect(siteContent.en.hero.title.length).toBeGreaterThan(12)
+    expect(siteContent.en.hero.description.length).toBeGreaterThan(40)
+
     for (const content of Object.values(siteContent)) {
-      expect(content.hero.title.length).toBeGreaterThan(12)
-      expect(content.hero.description.length).toBeGreaterThan(40)
       expect(content.hero.eyebrow.toLowerCase()).toMatch(/开源|open-source/)
       expect(content.finalCta.docsLabel).not.toBe("")
       expect(content.useCases.items.every((item) => item.imageSrc.startsWith("/"))).toBe(true)
