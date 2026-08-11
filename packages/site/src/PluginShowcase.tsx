@@ -67,12 +67,6 @@ export function PluginShowcase({ content, language }: PluginShowcaseProps) {
   const pauseLabel = language === "zh" ? "暂停插件动态" : "Pause plugin motion"
   const resumeLabel = language === "zh" ? "继续插件动态" : "Resume plugin motion"
   const controlLabel = isPaused ? resumeLabel : pauseLabel
-  const featuredLabel = language === "zh"
-    ? `${content.examples.length} 个插件`
-    : `${content.examples.length} plugins`
-  const motionStatus = isPaused
-    ? language === "zh" ? "已暂停" : "Paused"
-    : featuredLabel
 
   return (
     <section
@@ -81,37 +75,18 @@ export function PluginShowcase({ content, language }: PluginShowcaseProps) {
       aria-labelledby="plugin-title"
     >
       <div className="plugin-showcase-inner">
-        <div className="plugin-showcase-heading">
-          <p className="section-kicker">{content.eyebrow}</p>
-          <div className="plugin-showcase-copy">
-            <h2 id="plugin-title">{content.title}</h2>
-            <p>{content.description}</p>
-          </div>
-          <a className="plugin-docs-link" href="/docs/?doc=plugin-development">
-            {content.docsLabel}
-            <span aria-hidden="true">↗</span>
-          </a>
-        </div>
-
-        <div className="plugin-conveyor-shell">
-          <div className="plugin-conveyor-toolbar">
-            <p>
-              <span aria-hidden="true" className="plugin-conveyor-status-dot" />
-              {language === "zh" ? "插件库" : "Plugin library"}
-            </p>
-            <div className="plugin-conveyor-controls">
-              <span aria-live="polite">{motionStatus}</span>
-              <button
-                aria-label={controlLabel}
-                aria-pressed={isPaused}
-                className="plugin-conveyor-toggle"
-                onClick={() => setIsPaused((paused) => !paused)}
-                title={controlLabel}
-                type="button"
-              >
-                <MotionToggleIcon paused={isPaused} />
-              </button>
-            </div>
+        <div className="plugin-conveyor-stage">
+          <div className="plugin-conveyor-actions">
+            <button
+              aria-label={controlLabel}
+              aria-pressed={isPaused}
+              className="plugin-conveyor-toggle"
+              onClick={() => setIsPaused((paused) => !paused)}
+              title={controlLabel}
+              type="button"
+            >
+              <MotionToggleIcon paused={isPaused} />
+            </button>
           </div>
 
           <div className="plugin-conveyor-rows" aria-hidden="true">
@@ -139,6 +114,18 @@ export function PluginShowcase({ content, language }: PluginShowcaseProps) {
               </div>
             ))}
           </div>
+        </div>
+
+        <div className="plugin-showcase-heading">
+          <p className="section-kicker">{content.eyebrow}</p>
+          <div className="plugin-showcase-copy">
+            <h2 id="plugin-title">{content.title}</h2>
+            <p>{content.description}</p>
+          </div>
+          <a className="plugin-docs-link" href="/docs/?doc=plugin-development">
+            {content.docsLabel}
+            <span aria-hidden="true">↗</span>
+          </a>
         </div>
 
         <ol className="plugin-showcase-stages">

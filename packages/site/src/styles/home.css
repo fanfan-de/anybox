@@ -1290,6 +1290,7 @@
   grid-template-columns: 150px minmax(0, 1fr) auto;
   gap: 42px;
   align-items: start;
+  margin-top: clamp(48px, 7svh, 72px);
 }
 
 .plugin-showcase-copy {
@@ -1346,53 +1347,16 @@
   outline-offset: 4px;
 }
 
-.plugin-conveyor-shell {
+.plugin-conveyor-stage {
+  min-width: 0;
   overflow: hidden;
-  margin-top: clamp(42px, 6svh, 64px);
-  border: 1px solid var(--border-strong);
-  border-radius: 12px;
-  background: var(--surface-page);
 }
 
-.plugin-conveyor-toolbar {
+.plugin-conveyor-actions {
   display: flex;
-  min-height: 48px;
   align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 0 10px 0 18px;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--surface-primary);
-}
-
-.plugin-conveyor-toolbar > p {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  margin: 0;
-  color: var(--text-primary);
-  font-family: "Cascadia Code", "Consolas", monospace;
-  font-size: 0.76rem;
-  font-weight: 720;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.plugin-conveyor-status-dot {
-  width: 7px;
-  height: 7px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: var(--brand-primary);
-}
-
-.plugin-conveyor-controls {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--text-secondary);
-  font-size: 0.78rem;
-  font-weight: 680;
+  justify-content: flex-end;
+  margin-bottom: 10px;
 }
 
 .plugin-conveyor-toggle {
@@ -1431,7 +1395,6 @@
   display: grid;
   gap: 12px;
   overflow: hidden;
-  padding: 18px 0 20px;
 }
 
 .plugin-conveyor-viewport {
@@ -1455,7 +1418,7 @@
   animation-name: plugin-conveyor-scroll-right;
 }
 
-.plugin-conveyor-shell:hover .plugin-conveyor-track,
+.plugin-conveyor-stage:hover .plugin-conveyor-track,
 .plugin-conveyor-track.is-paused {
   animation-play-state: paused;
 }
@@ -2056,23 +2019,12 @@
     padding: 76px 0;
   }
 
-  .plugin-conveyor-shell {
-    margin-top: 38px;
-    border-radius: 9px;
-  }
-
-  .plugin-conveyor-toolbar {
-    padding-right: 8px;
-    padding-left: 12px;
-  }
-
-  .plugin-conveyor-controls > span {
-    display: none;
+  .plugin-showcase-heading {
+    margin-top: 46px;
   }
 
   .plugin-conveyor-rows {
     gap: 10px;
-    padding: 14px 0 16px;
   }
 
   .plugin-conveyor-card {

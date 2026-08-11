@@ -43,7 +43,17 @@ describe("App", () => {
     expect(container.querySelector(".home-hero")?.nextElementSibling).toBe(pluginSection)
     expect(pluginSection?.compareDocumentPosition(container.querySelector("#open-source")!))
       .toBe(Node.DOCUMENT_POSITION_FOLLOWING)
-    expect(pluginSection?.querySelector(".plugin-conveyor-rows")).toHaveAttribute("aria-hidden", "true")
+    const conveyorStage = pluginSection!.querySelector(".plugin-conveyor-stage")!
+    const conveyorRows = pluginSection!.querySelector(".plugin-conveyor-rows")!
+    const pluginHeading = pluginSection!.querySelector(".plugin-showcase-heading")!
+    expect(pluginSection!.querySelector(".plugin-showcase-inner")?.firstElementChild)
+      .toBe(conveyorStage)
+    expect(conveyorStage.compareDocumentPosition(pluginHeading))
+      .toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(conveyorRows).toHaveAttribute("aria-hidden", "true")
+    expect(pluginSection!.querySelector(".plugin-conveyor-shell")).not.toBeInTheDocument()
+    expect(pluginSection!.querySelector(".plugin-conveyor-toolbar")).not.toBeInTheDocument()
+    expect(screen.queryByText("插件库")).not.toBeInTheDocument()
 
     const pluginTracks = Array.from(
       pluginSection!.querySelectorAll<HTMLElement>(".plugin-conveyor-track"),
@@ -100,8 +110,14 @@ describe("App", () => {
       "aria-pressed",
       "true",
     )
-    expect(screen.getByText("已暂停")).toBeInTheDocument()
     expect(pluginSection!.querySelectorAll(".plugin-conveyor-track.is-paused")).toHaveLength(2)
+    const pluginMotionResume = screen.getByRole("button", { name: "继续插件动态" })
+    fireEvent.click(pluginMotionResume)
+    expect(screen.getByRole("button", { name: "暂停插件动态" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    )
+    expect(pluginSection!.querySelectorAll(".plugin-conveyor-track.is-paused")).toHaveLength(0)
 
     const faqItems = Array.from(container.querySelectorAll<HTMLDetailsElement>(".faq-item"))
     expect(faqItems).toHaveLength(6)
