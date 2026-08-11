@@ -163,7 +163,7 @@
   margin: var(--home-hero-heading-gap) auto 0;
   color: var(--hero-paper-ink);
   font-family: "Cascadia Code", "Consolas", monospace;
-  font-size: clamp(0.82rem, 1.2vw, 0.94rem);
+  font-size: clamp(0.9rem, 1.3vw, 1.02rem);
   font-weight: 760;
   line-height: 1.45;
 }
@@ -989,7 +989,7 @@
   .home-hero-open-source {
     max-width: 100%;
     margin-top: 26px;
-    font-size: 0.8rem;
+    font-size: 0.88rem;
     text-align: left;
   }
 
@@ -1662,7 +1662,7 @@
   .home-hero-open-source {
     max-width: 100%;
     margin-top: 26px;
-    font-size: 0.8rem;
+    font-size: 0.88rem;
     text-align: left;
   }
 
