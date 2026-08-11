@@ -265,20 +265,66 @@ async function recoverInterruptedMigration(root: string) {
   return rolledBack
 }
 
-async function ensureMappingEvent(root: string, marker: MigrationMarker) {
-  const eventsPath = path.join(cinemaRoot(root), "events.jsonl")
-  const existing = await readFile(eventsPath, "utf8").catch(() => "")
-  if (!existing.includes(`\"migrationID\":\"${marker.migrationID}\"`)) {
-    await appendFile(eventsPath, `${JSON.stringify({
-      time: marker.completedAt,
-      type: "project.runtime-migrated",
-      actor: "cinema-runtime",
+function migrationMappingEvent(root: string, marker: MigrationMarker) {
+  return {
+    time: marker.completedAt ?? marker.startedAt,
+    type: "project.runtime-migrated",
+    actor: "cinema-runtime",
+    message: `Migrated Cinema project metadata to '${marker.targetProjectID}'.`,
+    data: {
       migrationID: marker.migrationID,
       fromProjectIDs: marker.sourceProjectIDs,
       projectID: marker.targetProjectID,
       unresolvedAssetReferences: marker.unresolvedAssetReferences,
       backupDirectory: path.relative(root, marker.backupDirectory),
-    })}\n`, "utf8")
+    },
+  }
+}
+
+function isMigrationMappingEvent(line: string, migrationID: string) {
+  const marker = `\"migrationID\":\"${migrationID}\"`
+  if (!line.includes(marker)) return false
+  try {
+    const event = JSON.parse(line) as unknown
+    if (!isRecord(event)) return false
+    if (event.migrationID === migrationID) return true
+    return isRecord(event.data) && event.data.migrationID === migrationID
+  } catch {
+    // A partially written legacy mapping event should not keep the project
+    // unreadable forever when its migration marker can reconstruct it.
+    return true
+  }
+}
+
+async function ensureMappingEvent(root: string, marker: MigrationMarker) {
+  const eventsPath = path.join(cinemaRoot(root), "events.jsonl")
+  const existing = await readFile(eventsPath, "utf8").catch(() => "")
+  const canonicalEvent = migrationMappingEvent(root, marker)
+  const canonicalLine = JSON.stringify(canonicalEvent)
+  const lines = existing.split(/\r?\n/)
+  const repaired: string[] = []
+  let found = false
+  let changed = false
+
+  for (const line of lines) {
+    if (!isMigrationMappingEvent(line, marker.migrationID)) {
+      repaired.push(line)
+      continue
+    }
+    if (!found) {
+      repaired.push(canonicalLine)
+      found = true
+      changed ||= line !== canonicalLine
+    } else {
+      changed = true
+    }
+  }
+
+  if (!found) {
+    await appendFile(eventsPath, `${canonicalLine}\n`, "utf8")
+  } else if (changed) {
+    const content = repaired.join("\n")
+    await atomicWriteFile(eventsPath, content.endsWith("\n") ? content : `${content}\n`)
   }
   if (!marker.eventAppended) {
     await atomicWriteJson(markerPath(root), { ...marker, eventAppended: true })

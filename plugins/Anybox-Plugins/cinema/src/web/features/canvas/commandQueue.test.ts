@@ -115,4 +115,43 @@ describe("CinemaCommandQueue", () => {
     expect(queue.getSnapshot().status).toBe("idle")
     expect(snapshots.some((snapshot) => snapshot.status === "error")).toBe(true)
   })
+
+  it("rejects every pending caller when the queue is blocked by a failed command", async () => {
+    const failure = new Error("metadata invalid")
+    let online = false
+    let releaseFailure: (() => void) | undefined
+    const failureGate = new Promise<void>((resolve) => { releaseFailure = resolve })
+    const sent: string[] = []
+    const send = vi.fn(async (command: CinemaCommand) => {
+      sent.push(command.id)
+      if (!online) {
+        await failureGate
+        throw failure
+      }
+      return result(command.baseRevision + 1)
+    })
+    const queue = new CinemaCommandQueue({
+      send,
+      fetchLatestCanvas: async () => canvas(0),
+      isRevisionConflict: () => false,
+      retryDelaysMs: [],
+    })
+
+    const first = queue.enqueue(viewportCommand("blocked-head"))
+    const second = queue.enqueue(viewportCommand("waiting-generation"))
+    releaseFailure?.()
+
+    expect(await Promise.allSettled([first, second])).toEqual([
+      { status: "rejected", reason: failure },
+      { status: "rejected", reason: failure },
+    ])
+    expect(queue.hasPendingCommands()).toBe(true)
+    expect(queue.getSnapshot()).toEqual({ status: "error", pendingCount: 2, error: failure })
+
+    online = true
+    queue.retry()
+    await vi.waitFor(() => expect(queue.hasPendingCommands()).toBe(false))
+    expect(sent).toEqual(["blocked-head", "blocked-head", "waiting-generation"])
+    expect(queue.getSnapshot()).toEqual({ status: "idle", pendingCount: 0, error: null })
+  })
 })

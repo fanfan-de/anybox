@@ -22263,21 +22263,67 @@ async function recoverInterruptedMigration(root) {
   await atomicWriteJson(markerPath(root), rolledBack);
   return rolledBack;
 }
-async function ensureMappingEvent(root, marker) {
-  const eventsPath = path9.join(cinemaRoot(root), "events.jsonl");
-  const existing = await readFile6(eventsPath, "utf8").catch(() => "");
-  if (!existing.includes(`"migrationID":"${marker.migrationID}"`)) {
-    await appendFile(eventsPath, `${JSON.stringify({
-      time: marker.completedAt,
-      type: "project.runtime-migrated",
-      actor: "cinema-runtime",
+function migrationMappingEvent(root, marker) {
+  return {
+    time: marker.completedAt ?? marker.startedAt,
+    type: "project.runtime-migrated",
+    actor: "cinema-runtime",
+    message: `Migrated Cinema project metadata to '${marker.targetProjectID}'.`,
+    data: {
       migrationID: marker.migrationID,
       fromProjectIDs: marker.sourceProjectIDs,
       projectID: marker.targetProjectID,
       unresolvedAssetReferences: marker.unresolvedAssetReferences,
       backupDirectory: path9.relative(root, marker.backupDirectory)
-    })}
+    }
+  };
+}
+function isMigrationMappingEvent(line, migrationID) {
+  const marker = `"migrationID":"${migrationID}"`;
+  if (!line.includes(marker))
+    return false;
+  try {
+    const event = JSON.parse(line);
+    if (!isRecord4(event))
+      return false;
+    if (event.migrationID === migrationID)
+      return true;
+    return isRecord4(event.data) && event.data.migrationID === migrationID;
+  } catch {
+    return true;
+  }
+}
+async function ensureMappingEvent(root, marker) {
+  const eventsPath = path9.join(cinemaRoot(root), "events.jsonl");
+  const existing = await readFile6(eventsPath, "utf8").catch(() => "");
+  const canonicalEvent = migrationMappingEvent(root, marker);
+  const canonicalLine = JSON.stringify(canonicalEvent);
+  const lines = existing.split(/\r?\n/);
+  const repaired = [];
+  let found = false;
+  let changed = false;
+  for (const line of lines) {
+    if (!isMigrationMappingEvent(line, marker.migrationID)) {
+      repaired.push(line);
+      continue;
+    }
+    if (!found) {
+      repaired.push(canonicalLine);
+      found = true;
+      changed ||= line !== canonicalLine;
+    } else {
+      changed = true;
+    }
+  }
+  if (!found) {
+    await appendFile(eventsPath, `${canonicalLine}
 `, "utf8");
+  } else if (changed) {
+    const content = repaired.join(`
+`);
+    await atomicWriteFile(eventsPath, content.endsWith(`
+`) ? content : `${content}
+`);
   }
   if (!marker.eventAppended) {
     await atomicWriteJson(markerPath(root), { ...marker, eventAppended: true });

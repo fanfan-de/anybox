@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { ApiError } from "#server/error.ts"
 import * as Global from "#global/global.ts"
+import { CinemaProjectEventSchema } from "../src/contracts/cinema.ts"
 import {
   initializeCinemaProject,
   listRecentProjects,
@@ -123,7 +124,13 @@ describe("Cinema Runtime project ownership", () => {
     await writeFile(path.join(cinema, "timelines", "main.json"), JSON.stringify({ projectID: "agent-project-id" }))
     await writeFile(path.join(cinema, "tasks", "task.json"), JSON.stringify({ projectId: "agent-project-id" }))
     await writeFile(path.join(root, "assets", "record.json"), JSON.stringify({ projectID: "agent-project-id" }))
-    const historical = `${JSON.stringify({ type: "legacy.event", projectID: "agent-project-id" })}\n`
+    const historical = `${JSON.stringify({
+      time: "2026-07-10T00:00:00.000Z",
+      type: "legacy.event",
+      actor: "legacy-runtime",
+      message: "Preserved legacy project event.",
+      data: { projectID: "agent-project-id" },
+    })}\n`
     await writeFile(path.join(cinema, "events.jsonl"), historical)
 
     let required: ApiError | undefined
@@ -149,13 +156,31 @@ describe("Cinema Runtime project ownership", () => {
     const events = await readFile(path.join(cinema, "events.jsonl"), "utf8")
     expect(events.startsWith(historical)).toBe(true)
     expect(events.match(/project\.runtime-migrated/g)).toHaveLength(1)
+    const migrationEvent = JSON.parse(events.trim().split(/\r?\n/).at(-1)!)
+    expect(CinemaProjectEventSchema.parse(migrationEvent)).toEqual(migrationEvent)
+    expect(migrationEvent.message).toContain("Migrated Cinema project metadata")
+    expect(migrationEvent.data).toMatchObject({
+      projectID: "legacy-project",
+      fromProjectIDs: expect.arrayContaining(["agent-project-id"]),
+    })
     const marker = await json(path.join(cinema, "migrations", "runtime-v1.json"))
     const backup = String(marker.backupDirectory)
     expect((await json(path.join(backup, ".anybox-cinema", "canvas.json"))).projectID).toBe("agent-project-id")
 
+    const legacyMappingEvent = {
+      time: migrationEvent.time,
+      type: migrationEvent.type,
+      actor: migrationEvent.actor,
+      ...migrationEvent.data,
+    }
+    await writeFile(path.join(cinema, "events.jsonl"), `${historical}${JSON.stringify(legacyMappingEvent)}\n`)
     const replay = await runProjectMigration("legacy-project")
     expect(replay.migration.state).toBe("completed")
-    expect((await readFile(path.join(cinema, "events.jsonl"), "utf8")).match(/project\.runtime-migrated/g)).toHaveLength(1)
+    const repairedEvents = await readFile(path.join(cinema, "events.jsonl"), "utf8")
+    expect(repairedEvents.match(/project\.runtime-migrated/g)).toHaveLength(1)
+    for (const line of repairedEvents.trim().split(/\r?\n/)) {
+      expect(CinemaProjectEventSchema.safeParse(JSON.parse(line)).success).toBe(true)
+    }
   })
 
   test("rolls every changed file back when a migration write fails", async () => {

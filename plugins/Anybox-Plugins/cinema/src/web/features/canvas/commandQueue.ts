@@ -145,9 +145,14 @@ export class CinemaCommandQueue {
             continue
           }
 
-          if (!item.settled) {
-            item.settled = true
-            item.reject(error)
+          // Retain every command for the explicit save retry, but reject all
+          // callers currently waiting behind the failed head item. Otherwise
+          // an operation such as generation submission can remain pending
+          // forever even though the queue has already entered its error state.
+          for (const pending of this.items) {
+            if (pending.settled) continue
+            pending.settled = true
+            pending.reject(error)
           }
           this.emit("error", error)
           return
