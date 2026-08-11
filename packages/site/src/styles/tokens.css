@@ -17,6 +17,7 @@
   --brand-primary: #2f6f68;
   --brand-soft: #e3f0ec;
   --shadow-overlay: 0 18px 48px rgba(25, 31, 27, 0.12);
+  --semantic-plugin-logo-surface: #ffffff;
 
   --semantic-docs-code-surface-light: #101820;
   --semantic-docs-code-surface-dark: #0b0e0d;
@@ -110,6 +111,7 @@
   --brand-primary: #76b8ad;
   --brand-soft: #203a35;
   --shadow-overlay: 0 18px 48px rgba(0, 0, 0, 0.28);
+  --semantic-plugin-logo-surface: #ffffff;
   --semantic-docs-code-surface: var(--semantic-docs-code-surface-dark);
   --semantic-docs-code-border: var(--semantic-docs-code-border-dark);
   --semantic-docs-code-text: var(--semantic-docs-code-text-dark);

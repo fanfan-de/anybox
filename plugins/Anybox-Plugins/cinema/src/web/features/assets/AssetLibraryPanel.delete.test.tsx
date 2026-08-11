@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { AssetLibraryPanel } from "./AssetLibraryPanel"
+import { I18nProvider } from "../../i18n"
 
 type TestEntry =
   | { entryType: "asset"; asset: ReturnType<typeof audioAsset> }
@@ -196,13 +197,15 @@ function renderPanel(fetchMock: ReturnType<typeof createFetchHarness>["fetchMock
   })
   return render(
     <QueryClientProvider client={queryClient}>
-      <AssetLibraryPanel
-        agentBaseURL="http://127.0.0.1:4096"
-        projectID="project-delete"
-        initialScope={initialScope}
-        onClose={() => undefined}
-        onAddToCanvas={() => undefined}
-      />
+      <I18nProvider locale="zh-CN">
+        <AssetLibraryPanel
+          agentBaseURL="http://127.0.0.1:4096"
+          projectID="project-delete"
+          initialScope={initialScope}
+          onClose={() => undefined}
+          onAddToCanvas={() => undefined}
+        />
+      </I18nProvider>
     </QueryClientProvider>,
   )
 }

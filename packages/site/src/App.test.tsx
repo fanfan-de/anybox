@@ -38,9 +38,25 @@ describe("App", () => {
     expect(screen.getByText("MIT", { selector: "dd" })).toBeInTheDocument()
     expect(screen.getByRole("heading", { name: "你的智能本地 Agent 工作台" })).toBeInTheDocument()
     expect(container.querySelector("#product")).toBeInTheDocument()
-    expect(container.querySelector("#plugins")).toBeInTheDocument()
+    const pluginSection = container.querySelector("#plugins")
+    expect(pluginSection).toBeInTheDocument()
+    expect(container.querySelector(".home-hero")?.nextElementSibling).toBe(pluginSection)
+    expect(pluginSection?.compareDocumentPosition(container.querySelector("#open-source")!))
+      .toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(container.querySelectorAll(".plugin-conveyor-card")).toHaveLength(24)
+    expect(container.querySelectorAll(".plugin-showcase-accessible-list li")).toHaveLength(12)
+    expect(container.querySelectorAll('.plugin-conveyor-group[aria-hidden="true"]')).toHaveLength(1)
     expect(container.querySelector("#scenarios")).toBeInTheDocument()
     expect(container.querySelectorAll(".scenario-story-media img")).toHaveLength(3)
+
+    const pluginMotionToggle = screen.getByRole("button", { name: "暂停插件动态" })
+    expect(pluginMotionToggle).toHaveAttribute("aria-pressed", "false")
+    fireEvent.click(pluginMotionToggle)
+    expect(screen.getByRole("button", { name: "继续插件动态" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    )
+    expect(screen.getByText("展示已暂停")).toBeInTheDocument()
 
     const faqItems = Array.from(container.querySelectorAll<HTMLDetailsElement>(".faq-item"))
     expect(faqItems).toHaveLength(6)

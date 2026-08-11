@@ -2537,6 +2537,7 @@ export async function readCinemaAssetBinary(
   assetID: string,
   variant: CinemaAssetBinaryVariant,
   rangeHeader?: string | null,
+  expectedContentRevision?: number,
 ) {
   const paths = resolveLibraryPaths(scope)
   if (!maintainedLibraryScopes.has(paths.scopeKey) || !(await pathExists(paths.catalogPath))) {
@@ -2548,6 +2549,9 @@ export async function readCinemaAssetBinary(
   if (!asset) throw new ApiError(404, "CINEMA_LIBRARY_ASSET_NOT_FOUND", `Asset '${assetID}' was not found.`)
   if (asset.status === "missing") {
     throw new ApiError(404, "CINEMA_LIBRARY_ASSET_MISSING", "Asset file is missing.")
+  }
+  if (expectedContentRevision !== undefined && asset.contentRevision !== expectedContentRevision) {
+    throw new ApiError(409, "CINEMA_ASSET_REVISION_STALE", "The requested asset revision is no longer current.")
   }
   if (variant === "thumbnail" && !asset.thumbnailPath && asset.kind !== "image") {
     const body = mediaPlaceholder(asset.kind)

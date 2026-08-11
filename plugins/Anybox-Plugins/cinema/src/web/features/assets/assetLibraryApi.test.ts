@@ -11,6 +11,22 @@ function jsonResponse(data: unknown) {
 describe("assetLibraryApi mutations", () => {
   afterEach(() => vi.unstubAllGlobals())
 
+  it("versions every binary asset URL by content revision", () => {
+    const api = createAssetLibraryApi(
+      "http://127.0.0.1:4096",
+      "project-1",
+      { type: "project", projectID: "project-1" },
+    )
+
+    const content = new URL(api.assetContentURL("asset-1", 7))
+    const thumbnail = new URL(api.assetThumbnailURL("asset-1", 7))
+    const preview = new URL(api.assetPreviewURL("asset-1", 8))
+    expect(content.pathname).toBe("/api/cinema/projects/project-1/library/assets/asset-1/content")
+    expect(thumbnail.searchParams.get("v")).toBe("7")
+    expect(preview.searchParams.get("v")).toBe("8")
+    expect(api.requestKey).toBe("http://127.0.0.1:4096/api/cinema/projects/project-1/library")
+  })
+
   it("posts a full reconcile with revision and operation identity", async () => {
     const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(async () => jsonResponse({
       scope: { type: "project", projectID: "project-1" },

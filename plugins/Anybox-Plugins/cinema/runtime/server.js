@@ -47794,7 +47794,7 @@ function mediaPlaceholder(kind) {
   const label = kind === "video" ? "VIDEO" : "AUDIO";
   return `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="288" viewBox="0 0 512 288"><rect width="512" height="288" rx="24" fill="#242424"/><text x="256" y="154" text-anchor="middle" fill="#b8b8b8" font-family="system-ui,sans-serif" font-size="28">${label}</text></svg>`;
 }
-async function readCinemaAssetBinary(scope, assetID, variant, rangeHeader) {
+async function readCinemaAssetBinary(scope, assetID, variant, rangeHeader, expectedContentRevision) {
   let __stack = [];
   try {
     const paths = resolveLibraryPaths(scope);
@@ -47808,6 +47808,9 @@ async function readCinemaAssetBinary(scope, assetID, variant, rangeHeader) {
       throw new ApiError(404, "CINEMA_LIBRARY_ASSET_NOT_FOUND", `Asset '${assetID}' was not found.`);
     if (asset.status === "missing") {
       throw new ApiError(404, "CINEMA_LIBRARY_ASSET_MISSING", "Asset file is missing.");
+    }
+    if (expectedContentRevision !== undefined && asset.contentRevision !== expectedContentRevision) {
+      throw new ApiError(409, "CINEMA_ASSET_REVISION_STALE", "The requested asset revision is no longer current.");
     }
     if (variant === "thumbnail" && !asset.thumbnailPath && asset.kind !== "image") {
       const body2 = mediaPlaceholder(asset.kind);
@@ -49130,10 +49133,18 @@ function ScopeAssetLibraryRoutes(resolveScope, migrationProjectID) {
     return ok(c, await updateCinemaAsset(resolveScope(c), c.req.param("assetID"), input));
   });
   async function binaryResponse(c, variant) {
-    const binary = await readCinemaAssetBinary(resolveScope(c), c.req.param("assetID"), variant, variant === "thumbnail" ? undefined : c.req.header("range"));
+    const requestedRevisionText = c.req.query("v");
+    let requestedRevision;
+    if (requestedRevisionText !== undefined) {
+      requestedRevision = Number(requestedRevisionText);
+      if (!/^\d+$/.test(requestedRevisionText) || !Number.isSafeInteger(requestedRevision)) {
+        throw new ApiError(400, "CINEMA_ASSET_REVISION_INVALID", "Asset revision must be a non-negative integer.");
+      }
+    }
+    const binary = await readCinemaAssetBinary(resolveScope(c), c.req.param("assetID"), variant, variant === "thumbnail" ? undefined : c.req.header("range"), requestedRevision);
     const headers = {
       "accept-ranges": "bytes",
-      "cache-control": "private, max-age=3600",
+      "cache-control": requestedRevision === undefined ? "private, no-cache" : "private, max-age=31536000, immutable",
       "content-length": String(binary.contentLength),
       "content-type": binary.mimeType,
       etag: `"asset-${binary.contentRevision}"`,

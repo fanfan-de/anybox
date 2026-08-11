@@ -86,6 +86,11 @@ export function writeCinemaTimelineUiSnapshot(
   timelineID: string,
   snapshot: CinemaTimelineUiSnapshot,
 ) {
-  if (typeof localStorage === "undefined") return
-  localStorage.setItem(storageKey(projectID, timelineID), JSON.stringify(snapshot))
+  if (typeof localStorage === "undefined") return false
+  try {
+    localStorage.setItem(storageKey(projectID, timelineID), JSON.stringify(snapshot))
+    return true
+  } catch {
+    return false
+  }
 }

@@ -26,6 +26,7 @@ import {
 } from "../model/renderPresets"
 import { isRenderActive } from "../model/renderStatus"
 import { isCinemaPluginRuntimeBaseURL } from "../../../runtimeUrl"
+import { useI18n } from "../../../i18n"
 import "../deliver.css"
 
 function retentionExecutionAuthorizedFor(agentBaseURL: string) {
@@ -58,6 +59,7 @@ export function DeliverWorkbench({
   technicalPreview?: boolean
   onShowAssetInLibrary?: (assetRef: NonNullable<CinemaRenderJob["outputAssetRef"]>) => void
 }) {
+  const { t } = useI18n()
   const queryClient = useQueryClient()
   const api = useMemo(() => createRenderApi(agentBaseURL, projectID), [agentBaseURL, projectID])
   const retentionExecutionAuthorized = useMemo(
@@ -210,20 +212,20 @@ export function DeliverWorkbench({
       await queryClient.invalidateQueries({ queryKey: ["cinema-deliver-jobs", agentBaseURL, projectID, timeline.id] })
     } catch (error) {
       if (error instanceof CinemaRenderApiError && error.code === "CINEMA_TIMELINE_REVISION_CONFLICT") {
-        setActionError(`Timeline changed to revision ${error.latestRevision ?? "a newer revision"}. Readiness was refreshed; review and try again.`)
+        setActionError(t("deliver.timelineChanged", { revision: error.latestRevision ?? t("deliver.newerRevision") }))
         await timelinesQuery.refetch()
         await queryClient.invalidateQueries({ queryKey: ["cinema-deliver-preflight", agentBaseURL, projectID] })
       } else if (error instanceof CinemaRenderApiError && error.code === "CINEMA_RENDER_PREFLIGHT_BLOCKED" && error.data) {
-        setActionError("Preflight changed while starting the render. Review the issues and try again.")
+        setActionError(t("deliver.preflightChanged"))
       } else if (error instanceof Error) {
         setActionError(error.message)
       } else {
-        setActionError("The render job could not be created.")
+        setActionError(t("deliver.createFailed"))
       }
     } finally {
       setCreatePending(false)
     }
-  }, [agentBaseURL, api, cacheReturnedJob, createPending, localSettingsValid, preflight?.ready, projectID, queryClient, settings, timeline, timelinesQuery])
+  }, [agentBaseURL, api, cacheReturnedJob, createPending, localSettingsValid, preflight?.ready, projectID, queryClient, settings, t, timeline, timelinesQuery])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -253,11 +255,11 @@ export function DeliverWorkbench({
       await api.cancelJob(selectedJob.id)
       await queryClient.invalidateQueries({ queryKey: ["cinema-deliver-jobs", agentBaseURL, projectID, selectedJob.timelineID] })
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "The render could not be canceled.")
+      setActionError(error instanceof Error ? error.message : t("deliver.cancelFailed"))
     } finally {
       setActionPending(false)
     }
-  }, [actionPending, agentBaseURL, api, projectID, queryClient, selectedJob])
+  }, [actionPending, agentBaseURL, api, projectID, queryClient, selectedJob, t])
 
   const retryJob = useCallback(async (job: CinemaRenderJob) => {
     if (actionPending) return
@@ -273,11 +275,11 @@ export function DeliverWorkbench({
       setSelectedJobID(retry.id)
       await queryClient.invalidateQueries({ queryKey: ["cinema-deliver-jobs", agentBaseURL, projectID, job.timelineID] })
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "The render could not be retried.")
+      setActionError(error instanceof Error ? error.message : t("deliver.retryFailed"))
     } finally {
       setActionPending(false)
     }
-  }, [actionPending, agentBaseURL, api, cacheReturnedJob, projectID, queryClient])
+  }, [actionPending, agentBaseURL, api, cacheReturnedJob, projectID, queryClient, t])
 
   const refresh = useCallback(() => {
     void Promise.all([
@@ -297,11 +299,11 @@ export function DeliverWorkbench({
       else await api.importToolchain()
       await Promise.all([toolchainQuery.refetch(), runtimeQuery.refetch(), preflightQuery.refetch()])
     } catch (error) {
-      setToolchainError(error instanceof Error ? error.message : "Cinema media tools could not be prepared.")
+      setToolchainError(error instanceof Error ? error.message : t("deliver.toolchainPrepareFailed"))
     } finally {
       setToolchainPending(null)
     }
-  }, [api, preflightQuery, runtimeQuery, toolchainQuery])
+  }, [api, preflightQuery, runtimeQuery, t, toolchainQuery])
 
   const presetID: RenderPresetID = settings ? presetForSettings(settings) : "balanced"
   const choosePreset = (next: RenderPresetID) => {
@@ -309,10 +311,10 @@ export function DeliverWorkbench({
   }
 
   if (timelinesQuery.isLoading) {
-    return <div className="cinema-deliver-loading" role="status">Loading Timelines…</div>
+    return <div className="cinema-deliver-loading" role="status">{t("deliver.loadingTimelines")}</div>
   }
   if (timelinesQuery.error) {
-    return <div className="cinema-deliver-loading is-error" role="alert">{timelinesQuery.error instanceof Error ? timelinesQuery.error.message : "Could not load Timelines."}</div>
+    return <div className="cinema-deliver-loading is-error" role="alert">{timelinesQuery.error instanceof Error ? timelinesQuery.error.message : t("deliver.loadTimelinesFailed")}</div>
   }
 
   return (
@@ -369,38 +371,38 @@ export function DeliverWorkbench({
         />
         <RenderHistory jobs={jobs} selectedJobID={selectedJob?.id} onSelect={(job) => setSelectedJobID(job.id)} />
       </div>
-      {preflightQuery.isFetching ? <div className="cinema-deliver-inline-status" role="status">Checking delivery readiness…</div> : null}
-      {preflightQuery.error ? <div className="cinema-deliver-alert" role="alert">{preflightQuery.error instanceof Error ? preflightQuery.error.message : "Preflight could not be completed."}</div> : null}
+      {preflightQuery.isFetching ? <div className="cinema-deliver-inline-status" role="status">{t("deliver.checkingReadiness")}</div> : null}
+      {preflightQuery.error ? <div className="cinema-deliver-alert" role="alert">{preflightQuery.error instanceof Error ? preflightQuery.error.message : t("deliver.preflightFailed")}</div> : null}
       {!runtimeReady && toolchainQuery.data?.status === "not_installed" ? (
         <section className="cinema-toolchain-prompt" aria-busy={toolchainPending !== null}>
           <div>
-            <strong>Install the reviewed Cinema media tools</strong>
+            <strong>{t("deliver.toolchainTitle")}</strong>
             <span>
-              FFmpeg is not included in this plugin. Cinema will download the pinned {Math.ceil(toolchainQuery.data.download.sizeBytes / 1024 / 1024)} MB archive and verify the archive plus every executable before activation.
+              {t("deliver.toolchainDescription", { size: Math.ceil(toolchainQuery.data.download.sizeBytes / 1024 / 1024) })}
             </span>
           </div>
           <button type="button" disabled={toolchainPending !== null} onClick={() => void prepareToolchain("install")}>
-            {toolchainPending === "install" ? "Downloading…" : "Download and install"}
+            {t(toolchainPending === "install" ? "deliver.downloading" : "deliver.downloadInstall")}
           </button>
           <button type="button" disabled={toolchainPending !== null} onClick={() => void prepareToolchain("import")}>
-            {toolchainPending === "import" ? "Selecting…" : "Import offline archive"}
+            {t(toolchainPending === "import" ? "deliver.selectingArchive" : "deliver.importArchive")}
           </button>
           {toolchainPending === "install" ? (
-            <button type="button" onClick={() => void api.cancelToolchainInstall()}>Cancel download</button>
+            <button type="button" onClick={() => void api.cancelToolchainInstall()}>{t("deliver.cancelDownload")}</button>
           ) : null}
         </section>
       ) : null}
-      {runtimeQuery.data?.issue ? <div className="cinema-deliver-alert" role="alert">FFmpeg runtime: {runtimeQuery.data.issue}</div> : null}
-      {runtimeQuery.error ? <div className="cinema-deliver-alert" role="alert">FFmpeg runtime status could not be checked.</div> : null}
+      {runtimeQuery.data?.issue ? <div className="cinema-deliver-alert" role="alert">{t("deliver.runtimeIssue", { issue: runtimeQuery.data.issue })}</div> : null}
+      {runtimeQuery.error ? <div className="cinema-deliver-alert" role="alert">{t("deliver.runtimeCheckFailed")}</div> : null}
       {toolchainError ? <div className="cinema-deliver-alert" role="alert">{toolchainError}</div> : null}
       {actionError ? <div className="cinema-deliver-alert" role="alert">{actionError}</div> : null}
       {preflight && preflight.issues.length > 0 ? (
-        <section className="cinema-deliver-issues" aria-label="Preflight issues">
-          <strong>{preflight.ready ? "Preflight notes" : "Resolve before rendering"}</strong>
+        <section className="cinema-deliver-issues" aria-label={t("deliver.preflightIssuesLabel")}>
+          <strong>{t(preflight.ready ? "deliver.preflightNotes" : "deliver.resolveBeforeRender")}</strong>
           <ul>{preflight.issues.map((issue, index) => <li key={`${issue.code}-${issue.clipID ?? "all"}-${index}`} className={`is-${issue.severity}`}>{issue.message}</li>)}</ul>
         </section>
       ) : null}
-      <div className="cinema-deliver-narrow-guard" role="status"><strong>Deliver needs a wider desktop window</strong><span>Increase the window width to at least 760px to review delivery settings.</span></div>
+      <div className="cinema-deliver-narrow-guard" role="status"><strong>{t("deliver.narrowTitle")}</strong><span>{t("deliver.narrowDescription")}</span></div>
     </section>
   )
 }

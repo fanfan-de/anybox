@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { DownloadCta } from "./DownloadCta"
 import { HomeDemoShowcases } from "./HomeDemoVideo"
 import { PaperBackground } from "./PaperBackground"
+import { PluginShowcase } from "./PluginShowcase"
 import { SiteFooter, SiteHeader } from "./SiteChrome"
 import { siteContent } from "./content"
 import { useSiteLanguage } from "./language"
@@ -190,6 +191,8 @@ export function App() {
         </div>
       </section>
 
+      <PluginShowcase content={content.plugins} language={language} />
+
       <section className="home-section trust-section" id="open-source" aria-labelledby="trust-title">
         <div className="trust-copy">
           <p className="section-kicker">{content.trust.eyebrow}</p>
@@ -277,37 +280,6 @@ export function App() {
       </section>
 
       <HomeDemoShowcases language={language} />
-
-      <section className="home-section plugin-section" id="plugins" aria-labelledby="plugin-title">
-        <div className="home-section-heading">
-          <p className="section-kicker">{content.plugins.eyebrow}</p>
-          <h2 id="plugin-title">{content.plugins.title}</h2>
-          <p>{content.plugins.description}</p>
-        </div>
-
-        <ol className="plugin-stages">
-          {content.plugins.stages.map((stage, index) => (
-            <li key={stage.title}>
-              <span>{String(index + 1).padStart(2, "0")}</span>
-              <h3>{stage.title}</h3>
-              <p>{stage.description}</p>
-            </li>
-          ))}
-        </ol>
-
-        <div className="plugin-examples">
-          {content.plugins.examples.map((example) => (
-            <a href={example.href} key={example.name}>
-              <strong>{example.name}</strong>
-              <span>{example.description}</span>
-            </a>
-          ))}
-        </div>
-
-        <a className="plugin-docs-link" href="/docs/?doc=plugin-development">
-          {content.plugins.docsLabel}
-        </a>
-      </section>
 
       <section className="scenario-story-section" id="scenarios" aria-labelledby="scenario-title">
         <div className="scenario-story-inner">

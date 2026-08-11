@@ -1,9 +1,10 @@
 /** @vitest-environment jsdom */
 
-import { beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { readCinemaTimelineUiSnapshot, writeCinemaTimelineUiSnapshot } from "./timelineUiStore"
 
 beforeEach(() => localStorage.clear())
+afterEach(() => vi.restoreAllMocks())
 
 describe("timeline UI snapshots", () => {
   it("isolates and restores local UI state by project and Timeline", () => {
@@ -58,5 +59,27 @@ describe("timeline UI snapshots", () => {
       trackHeightsPx: { valid: 96 },
       collapsedTrackIDs: ["a"],
     })
+  })
+
+  it("does not surface storage quota or privacy-mode failures", () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("Storage is unavailable", "QuotaExceededError")
+    })
+
+    expect(writeCinemaTimelineUiSnapshot("p", "t", {
+      playheadUs: 0,
+      pixelsPerSecond: 48,
+      previewPercent: 42,
+      mediaOpen: true,
+      inspectorOpen: true,
+      snapEnabled: true,
+      selectedClipIDs: [],
+      scrollLeftPx: 0,
+      scrollTopPx: 0,
+      trackHeightsPx: {},
+      collapsedTrackIDs: [],
+      followPlayhead: true,
+      activeSubtitleTrackID: null,
+    })).toBe(false)
   })
 })

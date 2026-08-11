@@ -148,6 +148,7 @@ export function EditWorkbench({
   const [followPlayhead, setFollowPlayhead] = useState(true)
   const [snapEnabled, setSnapEnabled] = useState(true)
   const [interactionError, setInteractionError] = useState<string | null>(null)
+  const [switchingTimelineID, setSwitchingTimelineID] = useState<string | null>(null)
   const [playing, setPlaying] = useState(false)
   const [playbackDirection, setPlaybackDirection] = useState<-1 | 1>(1)
   const [previewMuted, setPreviewMuted] = useState(false)
@@ -391,11 +392,21 @@ export function EditWorkbench({
   })
 
   const selectTimeline = (timelineID: string) => {
+    if (timelineID === selectedTimelineID || switchingTimelineID !== null) return
     const switchTimeline = async () => {
-      await queue?.flush().catch(() => undefined)
-      setSelectedTimelineID(timelineID)
-      setSelectedClipIDs([])
-      setPlayheadUs(0)
+      setSwitchingTimelineID(timelineID)
+      try {
+        await queue?.flush()
+        setSelectedTimelineID(timelineID)
+        setSelectedClipIDs([])
+        setPlayheadUs(0)
+        setInteractionError(null)
+      } catch (error) {
+        const detail = error instanceof Error ? ` ${error.message}` : ""
+        setInteractionError(`${t("timeline.switchSaveFailed")}${detail}`)
+      } finally {
+        setSwitchingTimelineID(null)
+      }
     }
     void switchTimeline()
   }
@@ -682,9 +693,9 @@ export function EditWorkbench({
 
   const trimClip = (clip: CinemaTimelineClip, next: { timelineStartUs: number; durationUs: number; sourceInUs: number; sourceDurationUs: number }) => {
     const current = timelineDocumentRef.current
-    if (!current || clip.kind === "text") return
+    if (!current) return
     if (current.tracks.find((track) => track.id === clip.trackID)?.locked) return setInteractionError("Unlock the track before trimming this clip.")
-    if (clip.kind === "subtitle") {
+    if (clip.kind === "text" || clip.kind === "subtitle") {
       executeCommand({
         id: commandID("trim-timed-clip"),
         timelineID: current.id,
@@ -1133,6 +1144,7 @@ export function EditWorkbench({
             timelines={timelines}
             selectedTimelineID={selectedTimelineID}
             creating={createMutation.isPending}
+            switchingTimelineID={switchingTimelineID}
             onCreate={() => createMutation.mutate()}
             onSelectTimeline={selectTimeline}
             onDeleteTimeline={(target) => {
@@ -1304,7 +1316,6 @@ export function EditWorkbench({
             clip={selectedMediaClip}
             onClose={() => setInspectorOpen(false)}
             onUpdate={updateSelectedClip}
-            onMove={(timelineStartUs) => moveClip(selectedMediaClip, selectedMediaClip.trackID, timelineStartUs)}
             onTrim={(next) => trimClip(selectedMediaClip, next)}
             assetStatus={isTimelineAssetClip(selectedMediaClip) ? assetStatuses.get(selectedMediaClip.assetRef.assetID) : undefined}
             onRequestReplacement={() => {

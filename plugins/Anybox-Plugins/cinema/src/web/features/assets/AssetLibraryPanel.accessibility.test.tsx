@@ -6,6 +6,7 @@ import axe from "axe-core"
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { AssetLibraryPanel } from "./AssetLibraryPanel"
+import { I18nProvider } from "../../i18n"
 
 function envelope(data: unknown) {
   return new Response(JSON.stringify({ success: true, data }), {
@@ -62,13 +63,15 @@ describe("AssetLibraryPanel accessibility", () => {
 
     const view = render(
       <QueryClientProvider client={queryClient}>
-        <AssetLibraryPanel
-          agentBaseURL="http://127.0.0.1:4096"
-          projectID="project-a11y"
-          initialScope="personal"
-          onClose={() => undefined}
-          onAddToCanvas={() => undefined}
-        />
+        <I18nProvider locale="zh-CN">
+          <AssetLibraryPanel
+            agentBaseURL="http://127.0.0.1:4096"
+            projectID="project-a11y"
+            initialScope="personal"
+            onClose={() => undefined}
+            onAddToCanvas={() => undefined}
+          />
+        </I18nProvider>
       </QueryClientProvider>,
     )
 
@@ -174,13 +177,15 @@ describe("AssetLibraryPanel accessibility", () => {
     })
     const view = render(
       <QueryClientProvider client={queryClient}>
-        <AssetLibraryPanel
-          agentBaseURL="http://127.0.0.1:4096"
-          projectID="project-upload"
-          initialScope="personal"
-          onClose={() => undefined}
-          onAddToCanvas={() => undefined}
-        />
+        <I18nProvider locale="zh-CN">
+          <AssetLibraryPanel
+            agentBaseURL="http://127.0.0.1:4096"
+            projectID="project-upload"
+            initialScope="personal"
+            onClose={() => undefined}
+            onAddToCanvas={() => undefined}
+          />
+        </I18nProvider>
       </QueryClientProvider>,
     )
 

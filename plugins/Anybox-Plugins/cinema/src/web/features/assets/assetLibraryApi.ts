@@ -324,6 +324,7 @@ function jsonRequest(method: string, body: string): RequestInit {
 export interface AssetLibraryApi {
   readonly scope: CinemaAssetScope
   readonly scopeKey: string
+  readonly requestKey: string
   getState(signal?: AbortSignal): Promise<AssetLibraryState>
   getMigration(signal?: AbortSignal): Promise<CinemaAssetMigrationStatusResult | null>
   startMigration(options: {
@@ -349,9 +350,9 @@ export interface AssetLibraryApi {
   retryProcessing(options: { assetID: string; operationID: string; baseRevision: number }): Promise<{ revision: number; asset: CinemaAssetRecord }>
   reconcile(options: { full: boolean; operationID: string; baseRevision: number }): Promise<AssetLibraryMutationResult>
   upload(options: AssetLibraryUploadOptions): Promise<AssetLibraryUploadResult>
-  assetContentURL(assetID: string): string
-  assetThumbnailURL(assetID: string): string
-  assetPreviewURL(assetID: string): string
+  assetContentURL(assetID: string, contentRevision: number): string
+  assetThumbnailURL(assetID: string, contentRevision: number): string
+  assetPreviewURL(assetID: string, contentRevision: number): string
 }
 
 export function createAssetLibraryApi(
@@ -365,10 +366,16 @@ export function createAssetLibraryApi(
     : `/api/cinema/projects/${encodeURIComponent(scopedProjectID)}/library`
   const url = (pathname: string) => resolveCinemaRuntimeURL(agentBaseURL, `${prefix}${pathname}`)
   const data = <T>(pathname: string, init?: RequestInit) => requestData<T>(agentBaseURL, `${prefix}${pathname}`, init)
+  const versionedURL = (pathname: string, contentRevision: number) => {
+    const target = new URL(url(pathname))
+    target.searchParams.set("v", String(contentRevision))
+    return target.toString()
+  }
 
   return {
     scope,
     scopeKey: assetLibraryScopeKey(scope),
+    requestKey: url(""),
     getState: async (signal) => normalizeState(await data<unknown>("/state", { signal }), scope),
     getMigration: async (signal) => scope.type === "project"
       ? normalizeMigrationStatus(await data<unknown>("/migration", { signal }))
@@ -454,9 +461,9 @@ export function createAssetLibraryApi(
       jsonRequest("POST", mutationBody(baseRevision, operationID, { full })),
     ), scope),
     upload: (options) => uploadAsset(url("/uploads"), options),
-    assetContentURL: (assetID) => url(`/assets/${encodeURIComponent(assetID)}/content`),
-    assetThumbnailURL: (assetID) => url(`/assets/${encodeURIComponent(assetID)}/thumbnail`),
-    assetPreviewURL: (assetID) => url(`/assets/${encodeURIComponent(assetID)}/preview`),
+    assetContentURL: (assetID, contentRevision) => versionedURL(`/assets/${encodeURIComponent(assetID)}/content`, contentRevision),
+    assetThumbnailURL: (assetID, contentRevision) => versionedURL(`/assets/${encodeURIComponent(assetID)}/thumbnail`, contentRevision),
+    assetPreviewURL: (assetID, contentRevision) => versionedURL(`/assets/${encodeURIComponent(assetID)}/preview`, contentRevision),
   }
 }
 

@@ -66,7 +66,6 @@ export function TimelineInspector({
   clip,
   onClose,
   onUpdate,
-  onMove,
   onTrim,
   assetStatus,
   onRequestReplacement,
@@ -74,7 +73,6 @@ export function TimelineInspector({
   clip: CinemaTimelineMediaClip
   onClose: () => void
   onUpdate: (patch: CinemaTimelineClipPatch) => void
-  onMove: (timelineStartUs: number) => void
   onTrim: (next: { timelineStartUs: number; durationUs: number; sourceInUs: number; sourceDurationUs: number }) => void
   assetStatus?: CinemaAssetStatus | "unresolved"
   onRequestReplacement: () => void
@@ -124,13 +122,18 @@ export function TimelineInspector({
       || transform.anchorY > 1
     )) return setError(t("inspector.error.transform"))
 
-    if (timelineStartUs !== clip.timelineStartUs && durationUs === clip.durationUs) onMove(timelineStartUs)
-    if (clip.kind !== "text" && sourceInUs !== null && sourceDurationUs !== null && (
-      timelineStartUs !== clip.timelineStartUs
+    const timingChanged = timelineStartUs !== clip.timelineStartUs
       || durationUs !== clip.durationUs
-      || sourceInUs !== clip.sourceInUs
-      || sourceDurationUs !== clip.sourceDurationUs
-    )) onTrim({ timelineStartUs, durationUs, sourceInUs, sourceDurationUs })
+      || (clip.kind !== "text" && sourceInUs !== clip.sourceInUs)
+      || (clip.kind !== "text" && sourceDurationUs !== clip.sourceDurationUs)
+    if (timingChanged) {
+      onTrim({
+        timelineStartUs,
+        durationUs,
+        sourceInUs: clip.kind === "text" ? 0 : sourceInUs!,
+        sourceDurationUs: clip.kind === "text" ? durationUs : sourceDurationUs!,
+      })
+    }
     const patch: CinemaTimelineClipPatch = {}
     if (draft.title.trim() !== clip.title) patch.title = draft.title.trim()
     if (volume !== clip.volume) patch.volume = volume

@@ -26,7 +26,7 @@ export function TimelineFilmstrip({
     agentBaseURL,
     projectID,
     clip.assetRef.scope,
-  ).assetThumbnailURL(clip.assetRef.assetID), [agentBaseURL, clip.assetRef.assetID, clip.assetRef.scope, projectID])
+  ).assetThumbnailURL(clip.assetRef.assetID, clip.assetRef.contentRevision), [agentBaseURL, clip.assetRef.assetID, clip.assetRef.contentRevision, clip.assetRef.scope, projectID])
   const [failedURL, setFailedURL] = useState<string | null>(null)
   useEffect(() => setFailedURL(null), [thumbnailURL])
   const cells = useMemo(() => timelineFilmstripCells({

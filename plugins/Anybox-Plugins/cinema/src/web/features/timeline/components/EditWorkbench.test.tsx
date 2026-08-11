@@ -54,6 +54,12 @@ const timelineWithTextClip: CinemaTimelineDocument = {
   }],
 }
 
+const secondTimeline: CinemaTimelineDocument = {
+  ...timeline,
+  id: "timeline-2",
+  title: "Timeline 2",
+}
+
 function createTimelineFetchMock(initialTimeline: CinemaTimelineDocument) {
   let current = initialTimeline
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -175,5 +181,39 @@ describe("EditWorkbench", () => {
     fireEvent.click(screen.getByRole("button", { name: "Toggle media bin" }))
     expect(await screen.findByRole("complementary", { name: "Media bin" })).toBeVisible()
     expect(screen.queryByRole("complementary", { name: "Timeline inspector" })).not.toBeInTheDocument()
+  })
+
+  it("keeps the current Timeline selected when its pending save fails", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith("/commands") && init?.method === "POST") {
+        return new Response(JSON.stringify({
+          success: false,
+          error: { code: "CINEMA_TIMELINE_SAVE_FAILED", message: "Synthetic save failure" },
+        }), { status: 500, headers: { "content-type": "application/json" } })
+      }
+      return new Response(JSON.stringify({
+        success: true,
+        data: { timelines: [timelineWithTextClip, secondTimeline] },
+      }), { status: 200, headers: { "content-type": "application/json" } })
+    })
+    vi.stubGlobal("fetch", fetchMock)
+    renderWorkbench()
+
+    fireEvent.keyDown(await screen.findByRole("button", { name: "Title card, Text" }), { key: "Enter" })
+    fireEvent.change(screen.getByLabelText("Duration (seconds)"), { target: { value: "3" } })
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }))
+    const timelineRows = Array.from(document.querySelectorAll<HTMLButtonElement>(".cinema-timeline-list-row"))
+    const firstTimelineRow = timelineRows.find((row) => row.textContent?.includes("Timeline 1"))!
+    const secondTimelineRow = timelineRows.find((row) => row.textContent?.includes("Timeline 2"))!
+    fireEvent.click(secondTimelineRow)
+
+    expect(await screen.findByText(
+      /Could not switch timelines because the current timeline failed to save/,
+      {},
+      { timeout: 3_000 },
+    )).toBeVisible()
+    expect(firstTimelineRow).toHaveAttribute("aria-current", "page")
+    expect(secondTimelineRow).not.toHaveAttribute("aria-current")
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(3)
   })
 })

@@ -116,15 +116,24 @@ function ScopeAssetLibraryRoutes(
   })
 
   async function binaryResponse(c: Context<AppEnv>, variant: "content" | "preview" | "thumbnail") {
+    const requestedRevisionText = c.req.query("v")
+    let requestedRevision: number | undefined
+    if (requestedRevisionText !== undefined) {
+      requestedRevision = Number(requestedRevisionText)
+      if (!/^\d+$/.test(requestedRevisionText) || !Number.isSafeInteger(requestedRevision)) {
+        throw new ApiError(400, "CINEMA_ASSET_REVISION_INVALID", "Asset revision must be a non-negative integer.")
+      }
+    }
     const binary = await AssetLibrary.readCinemaAssetBinary(
       resolveScope(c),
       c.req.param("assetID")!,
       variant,
       variant === "thumbnail" ? undefined : c.req.header("range"),
+      requestedRevision,
     )
     const headers: Record<string, string> = {
       "accept-ranges": "bytes",
-      "cache-control": "private, max-age=3600",
+      "cache-control": requestedRevision === undefined ? "private, no-cache" : "private, max-age=31536000, immutable",
       "content-length": String(binary.contentLength),
       "content-type": binary.mimeType,
       "etag": `"asset-${binary.contentRevision}"`,

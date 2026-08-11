@@ -29,7 +29,13 @@ export type SiteContent = {
     description: string
     docsLabel: string
     eyebrow: string
-    examples: Array<{ description: string; href: string; name: string }>
+    examples: Array<{
+      capability: string
+      category: string
+      description: string
+      id: string
+      name: string
+    }>
     stages: Array<{ description: string; title: string }>
     title: string
   }
@@ -90,8 +96,8 @@ export const siteContent = {
       ],
     },
     plugins: {
-      eyebrow: "插件架构",
-      title: "同一个 Agent，用插件进入不同工作现场",
+      eyebrow: "插件生态",
+      title: "同一个 Agent，\n用插件进入不同工作现场",
       description: "Anybox 保留统一的会话、模型、权限和工具调用；领域插件负责补充技能、MCP 服务、专属界面与工作流。",
       stages: [
         { title: "通用 Agent", description: "统一承接会话、模型、权限和工具调用。" },
@@ -100,22 +106,91 @@ export const siteContent = {
       ],
       examples: [
         {
-          name: "Build Web Apps",
-          description: "从需求到可运行网页，把实现、预览与迭代放在同一条工作流里。",
-          href: "/docs/?doc=build-web-apps",
+          id: "build-web-apps",
+          name: "构建 Web 应用",
+          category: "开发",
+          description: "使用生成资产、浏览器测试、支付和数据库构建前端 Web 应用。",
+          capability: "Skills · Browser",
         },
         {
-          name: "Chrome 与 Computer Use",
-          description: "在浏览器和桌面应用中执行可见、可检查的多步操作。",
-          href: "/docs/?doc=chrome",
+          id: "game-studio",
+          name: "游戏工作室",
+          category: "游戏开发",
+          description: "设计、原型制作并发布可以直接游玩的浏览器游戏。",
+          capability: "Skills · Assets",
         },
         {
-          name: "Cinema",
-          description: "组织素材、生成内容，并把创作过程带入可继续编辑的工作台。",
-          href: "/docs/?doc=cinema",
+          id: "chrome",
+          name: "Chrome",
+          category: "浏览器",
+          description: "在真实浏览器中执行可见、可检查的多步操作。",
+          capability: "Browser · MCP",
+        },
+        {
+          id: "gmail",
+          name: "Gmail",
+          category: "沟通",
+          description: "阅读、整理和管理 Gmail 邮件与会话。",
+          capability: "App · MCP",
+        },
+        {
+          id: "google-drive",
+          name: "Google Drive",
+          category: "文档",
+          description: "跨 Drive、Docs、Sheets 和 Slides 处理工作内容。",
+          capability: "App · Skills",
+        },
+        {
+          id: "notion",
+          name: "Notion",
+          category: "知识",
+          description: "把规格、研究、会议和知识沉淀接入 Agent 工作流。",
+          capability: "App · Skills",
+        },
+        {
+          id: "slack",
+          name: "Slack",
+          category: "协作",
+          description: "阅读频道、整理消息并继续团队协作。",
+          capability: "App · MCP",
+        },
+        {
+          id: "canva",
+          name: "Canva",
+          category: "设计",
+          description: "搜索、创建、编辑并适配多种尺寸的设计内容。",
+          capability: "App · Skills",
+        },
+        {
+          id: "cloudflare",
+          name: "Cloudflare",
+          category: "部署",
+          description: "使用官方 MCP 获取平台配置与开发指导。",
+          capability: "MCP · Skills",
+        },
+        {
+          id: "linear",
+          name: "Linear",
+          category: "项目",
+          description: "查找、引用并推进 Issue 与项目任务。",
+          capability: "App · MCP",
+        },
+        {
+          id: "supabase",
+          name: "Supabase",
+          category: "数据",
+          description: "连接数据库能力、项目上下文与开发工具。",
+          capability: "MCP · Database",
+        },
+        {
+          id: "vercel",
+          name: "Vercel",
+          category: "交付",
+          description: "构建、预览并部署 Web 应用与 Agent。",
+          capability: "App · Deploy",
         },
       ],
-      docsLabel: "阅读插件开发文档",
+      docsLabel: "探索插件开发",
     },
     useCases: {
       eyebrow: "真实工作场景",
@@ -233,8 +308,8 @@ export const siteContent = {
       ],
     },
     plugins: {
-      eyebrow: "Plugin architecture",
-      title: "One agent, extended for different fields of work",
+      eyebrow: "Plugin ecosystem",
+      title: "One agent,\nextended for different fields of work",
       description: "Anybox keeps conversations, models, permissions, and tool calls consistent. Domain plugins add skills, MCP services, dedicated UI, and workflows.",
       stages: [
         { title: "General agent", description: "A shared layer for conversations, models, permissions, and tools." },
@@ -243,22 +318,91 @@ export const siteContent = {
       ],
       examples: [
         {
+          id: "build-web-apps",
           name: "Build Web Apps",
-          description: "Move from a request to a running website with implementation, preview, and iteration in one flow.",
-          href: "/docs/?doc=build-web-apps",
+          category: "Development",
+          description: "Build frontend apps with generated assets, browser testing, payments, and databases.",
+          capability: "Skills · Browser",
         },
         {
-          name: "Chrome and Computer Use",
-          description: "Carry out visible, inspectable multi-step work in browsers and desktop applications.",
-          href: "/docs/?doc=chrome",
+          id: "game-studio",
+          name: "Game Studio",
+          category: "Game development",
+          description: "Design, prototype, and ship browser games that are ready to play.",
+          capability: "Skills · Assets",
         },
         {
-          name: "Cinema",
-          description: "Organize assets, generate content, and continue the creative process in an editable workbench.",
-          href: "/docs/?doc=cinema",
+          id: "chrome",
+          name: "Chrome",
+          category: "Browser",
+          description: "Carry out visible, inspectable multi-step work in a real browser.",
+          capability: "Browser · MCP",
+        },
+        {
+          id: "gmail",
+          name: "Gmail",
+          category: "Communication",
+          description: "Read, organize, and manage Gmail messages and conversations.",
+          capability: "App · MCP",
+        },
+        {
+          id: "google-drive",
+          name: "Google Drive",
+          category: "Documents",
+          description: "Work across Drive, Docs, Sheets, and Slides in one flow.",
+          capability: "App · Skills",
+        },
+        {
+          id: "notion",
+          name: "Notion",
+          category: "Knowledge",
+          description: "Bring specs, research, meetings, and knowledge into agent workflows.",
+          capability: "App · Skills",
+        },
+        {
+          id: "slack",
+          name: "Slack",
+          category: "Collaboration",
+          description: "Read channels, organize messages, and continue team collaboration.",
+          capability: "App · MCP",
+        },
+        {
+          id: "canva",
+          name: "Canva",
+          category: "Design",
+          description: "Search, create, edit, and resize design content.",
+          capability: "App · Skills",
+        },
+        {
+          id: "cloudflare",
+          name: "Cloudflare",
+          category: "Deployment",
+          description: "Use official MCP tools for platform guidance and configuration.",
+          capability: "MCP · Skills",
+        },
+        {
+          id: "linear",
+          name: "Linear",
+          category: "Projects",
+          description: "Find, reference, and move issues and project work forward.",
+          capability: "App · MCP",
+        },
+        {
+          id: "supabase",
+          name: "Supabase",
+          category: "Data",
+          description: "Connect database capabilities, project context, and developer tools.",
+          capability: "MCP · Database",
+        },
+        {
+          id: "vercel",
+          name: "Vercel",
+          category: "Delivery",
+          description: "Build, preview, and deploy web applications and agents.",
+          capability: "App · Deploy",
         },
       ],
-      docsLabel: "Read the plugin development guide",
+      docsLabel: "Explore plugin development",
     },
     useCases: {
       eyebrow: "Real work scenarios",

@@ -4,6 +4,7 @@ import type { CinemaAssetStatus } from "@anybox/cinema-plugin/contracts"
 import type {
   CinemaTimelineClip,
   CinemaTimelineDocument,
+  CinemaTimelineAudioClip,
   CinemaTimelineImageClip,
   CinemaTimelineTextClip,
   CinemaTimelineSubtitleTrack,
@@ -16,7 +17,7 @@ import { useI18n } from "../../../i18n"
 
 function sourceURL(agentBaseURL: string, projectID: string, clip: CinemaTimelineClip | undefined) {
   if (!clip || clip.kind === "text" || clip.kind === "subtitle") return undefined
-  return createAssetLibraryApi(agentBaseURL, projectID, clip.assetRef.scope).assetPreviewURL(clip.assetRef.assetID)
+  return createAssetLibraryApi(agentBaseURL, projectID, clip.assetRef.scope).assetPreviewURL(clip.assetRef.assetID, clip.assetRef.contentRevision)
 }
 
 function mediaKey(clip: CinemaTimelineClip | undefined) {
@@ -128,6 +129,58 @@ export function timelineAudioFadeGain(clip: Extract<CinemaTimelineClip, { kind: 
   return Math.max(0, Math.min(fadeInGain, fadeOutGain))
 }
 
+export function TimelineAudioClipPlayer({
+  agentBaseURL,
+  projectID,
+  clip,
+  playheadUs,
+  playing,
+  playbackDirection,
+  muted,
+  trackMuted,
+  onError,
+}: {
+  agentBaseURL: string
+  projectID: string
+  clip: CinemaTimelineAudioClip
+  playheadUs: number
+  playing: boolean
+  playbackDirection: -1 | 1
+  muted: boolean
+  trackMuted: boolean
+  onError: () => void
+}) {
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const desiredSeconds = (clip.sourceInUs + (playheadUs - clip.timelineStartUs) * clip.playbackRate) / 1_000_000
+  useCoalescedMediaSeek(audioRef, desiredSeconds, playing)
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+    audio.playbackRate = clip.playbackRate
+    if (playing && playbackDirection > 0) void audio.play().catch(() => undefined)
+    else audio.pause()
+  }, [clip.playbackRate, playbackDirection, playing])
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+    audio.volume = Math.max(0, Math.min(1, clip.volume * timelineAudioFadeGain(clip, playheadUs)))
+    audio.muted = muted || trackMuted
+  }, [clip, muted, playheadUs, trackMuted])
+
+  return (
+    <audio
+      ref={audioRef}
+      src={sourceURL(agentBaseURL, projectID, clip)}
+      preload="auto"
+      data-cinema-audio-clip-id={clip.id}
+      aria-hidden="true"
+      onError={onError}
+    />
+  )
+}
+
 export function TimelinePreviewStage({
   agentBaseURL,
   projectID,
@@ -161,7 +214,6 @@ export function TimelinePreviewStage({
 }) {
   const { t } = useI18n()
   const videoRef = useRef<HTMLVideoElement>(null)
-  const audioRef = useRef<HTMLAudioElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const [stageHeight, setStageHeight] = useState(0)
   const [failedMediaKeys, setFailedMediaKeys] = useState<ReadonlySet<string>>(() => new Set())
@@ -177,8 +229,7 @@ export function TimelinePreviewStage({
   }
   const videoClip = availableClip(active.video) as typeof active.video
   const videoURL = sourceURL(agentBaseURL, projectID, videoClip)
-  const audioClip = availableClip(active.audio[0]) as typeof active.audio[0]
-  const audioURL = sourceURL(agentBaseURL, projectID, audioClip)
+  const audioClips = active.audio.filter((clip) => availableClip(clip) !== undefined)
   const nextVideoURL = sourceURL(agentBaseURL, projectID, availableClip(nextVideo))
   const previousVideoURL = sourceURL(agentBaseURL, projectID, availableClip(previousVideo))
   const availableOverlays = active.overlays.filter((clip) => availableClip(clip) !== undefined)
@@ -209,11 +260,7 @@ export function TimelinePreviewStage({
   const videoDesiredSeconds = videoClip
     ? (videoClip.sourceInUs + (playheadUs - videoClip.timelineStartUs) * videoClip.playbackRate) / 1_000_000
     : null
-  const audioDesiredSeconds = audioClip
-    ? (audioClip.sourceInUs + (playheadUs - audioClip.timelineStartUs) * audioClip.playbackRate) / 1_000_000
-    : null
   useCoalescedMediaSeek(videoRef, videoDesiredSeconds, playing)
-  useCoalescedMediaSeek(audioRef, audioDesiredSeconds, playing)
 
   useEffect(() => {
     const video = videoRef.current
@@ -226,17 +273,6 @@ export function TimelinePreviewStage({
     if (playing && playbackDirection > 0) void video.play().catch(() => undefined)
     else video.pause()
   }, [muted, playbackDirection, playing, timeline.tracks, videoClip])
-
-  useEffect(() => {
-    const audio = audioRef.current
-    if (!audio || !audioClip) return
-    audio.playbackRate = audioClip.playbackRate
-    audio.volume = Math.min(1, audioClip.volume * timelineAudioFadeGain(audioClip, playheadUs))
-    const track = timeline.tracks.find((candidate) => candidate.id === audioClip.trackID)
-    audio.muted = muted || (track?.kind !== "subtitle" && track?.muted === true)
-    if (playing && playbackDirection > 0) void audio.play().catch(() => undefined)
-    else audio.pause()
-  }, [audioClip, muted, playbackDirection, playing, timeline.tracks])
 
   return (
     <section className="cinema-timeline-preview" aria-label={t("timeline.preview")}>
@@ -287,7 +323,21 @@ export function TimelinePreviewStage({
             <button type="button" className="cinema-edit-primary-button" onClick={onBrowseAssets}>{t("timeline.browseAssets")}</button>
           </div>
         ) : <p>{t("timeline.noActiveVisual")}</p> : null}
-        {audioURL ? <audio ref={audioRef} key={audioURL} src={audioURL} preload="auto" onError={() => failMedia(audioClip)} /> : null}
+        {audioClips.map((clip) => {
+          const track = timeline.tracks.find((candidate) => candidate.id === clip.trackID)
+          return <TimelineAudioClipPlayer
+            key={`${clip.id}:${clip.assetRef.contentRevision}`}
+            agentBaseURL={agentBaseURL}
+            projectID={projectID}
+            clip={clip}
+            playheadUs={playheadUs}
+            playing={playing}
+            playbackDirection={playbackDirection}
+            muted={muted}
+            trackMuted={track?.kind !== "subtitle" && track?.muted === true}
+            onError={() => failMedia(clip)}
+          />
+        })}
         {previousVideoURL ? <video className="cinema-timeline-preload-video" src={previousVideoURL} muted preload="metadata" aria-hidden="true" /> : null}
         {nextVideoURL ? <video className="cinema-timeline-preload-video" src={nextVideoURL} muted preload="auto" aria-hidden="true" /> : null}
       </div>

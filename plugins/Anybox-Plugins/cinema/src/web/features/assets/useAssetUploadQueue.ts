@@ -10,6 +10,7 @@ export type AssetUploadQueueStatus = "queued" | "uploading" | "succeeded" | "fai
 export interface AssetUploadQueueItem {
   id: string
   operationID: string
+  contextKey: string
   file: File
   folderID: string
   status: AssetUploadQueueStatus
@@ -33,6 +34,7 @@ export interface UseAssetUploadQueueOptions {
   concurrency?: number
   onRevision(revision: number): void
   onUploaded?(asset: CinemaAssetRecord): void
+  formatError?(error: unknown): string
 }
 
 function createID(prefix: string): string {
@@ -43,8 +45,8 @@ function createID(prefix: string): string {
 }
 
 function uploadErrorMessage(error: unknown): string {
-  if (error instanceof DOMException && error.name === "AbortError") return "上传已取消"
-  return error instanceof Error ? error.message : "上传失败"
+  if (error instanceof DOMException && error.name === "AbortError") return "Upload canceled"
+  return error instanceof Error ? error.message : "Upload failed"
 }
 
 export function useAssetUploadQueue({
@@ -53,18 +55,23 @@ export function useAssetUploadQueue({
   concurrency = 3,
   onRevision,
   onUploaded,
+  formatError,
 }: UseAssetUploadQueueOptions): AssetUploadQueueController {
   const [items, setItems] = useState<AssetUploadQueueItem[]>([])
   const itemsRef = useRef(items)
   const latestRevisionRef = useRef(revision)
   const activeRef = useRef(new Map<string, AbortController>())
+  const contextKeyRef = useRef(api.requestKey)
   const onRevisionRef = useRef(onRevision)
   const onUploadedRef = useRef(onUploaded)
+  const formatErrorRef = useRef(formatError)
 
   itemsRef.current = items
+  contextKeyRef.current = api.requestKey
   latestRevisionRef.current = Math.max(latestRevisionRef.current, revision)
   onRevisionRef.current = onRevision
   onUploadedRef.current = onUploaded
+  formatErrorRef.current = formatError
 
   useEffect(() => {
     const active = activeRef.current
@@ -74,14 +81,17 @@ export function useAssetUploadQueue({
       for (const controller of active.values()) controller.abort()
       active.clear()
     }
-  }, [api.scopeKey])
+  }, [api.requestKey])
 
   useEffect(() => {
     const maxConcurrency = Math.min(3, Math.max(1, concurrency))
     const available = maxConcurrency - activeRef.current.size
     if (available <= 0) return
-    const pending = items.filter((item) => item.status === "queued").slice(0, available)
+    const pending = items
+      .filter((item) => item.status === "queued" && item.contextKey === api.requestKey)
+      .slice(0, available)
     for (const item of pending) {
+      const isCurrentContext = () => contextKeyRef.current === item.contextKey
       const controller = new AbortController()
       activeRef.current.set(item.id, controller)
       setItems((current) => current.map((candidate) => candidate.id === item.id
@@ -94,10 +104,14 @@ export function useAssetUploadQueue({
         operationID: item.operationID,
         baseRevision: latestRevisionRef.current,
         signal: controller.signal,
-        onProgress: (progress) => setItems((current) => current.map((candidate) => candidate.id === item.id
+        onProgress: (progress) => {
+          if (!isCurrentContext()) return
+          setItems((current) => current.map((candidate) => candidate.id === item.id && candidate.contextKey === item.contextKey
           ? { ...candidate, progress }
-          : candidate)),
+          : candidate))
+        },
       }).then((result) => {
+        if (!isCurrentContext()) return
         latestRevisionRef.current = Math.max(latestRevisionRef.current, result.revision)
         onRevisionRef.current(result.revision)
         onUploadedRef.current?.(result.asset)
@@ -105,6 +119,7 @@ export function useAssetUploadQueue({
           ? { ...candidate, status: "succeeded", progress: 1, asset: result.asset, error: undefined }
           : candidate))
       }).catch(async (error: unknown) => {
+        if (!isCurrentContext()) return
         if (error instanceof DOMException && error.name === "AbortError") {
           setItems((current) => current.map((candidate) => candidate.id === item.id
             ? { ...candidate, status: "canceled", error: undefined }
@@ -117,6 +132,7 @@ export function useAssetUploadQueue({
         if (error instanceof AssetLibraryApiError && error.status === 409 && attempts <= 5) {
           try {
             const state = await api.getState(controller.signal)
+            if (!isCurrentContext()) return
             latestRevisionRef.current = Math.max(latestRevisionRef.current, state.revision)
             onRevisionRef.current(state.revision)
             setItems((current) => current.map((candidate) => candidate.id === item.id
@@ -129,11 +145,11 @@ export function useAssetUploadQueue({
         }
 
         setItems((current) => current.map((candidate) => candidate.id === item.id
-          ? { ...candidate, status: "failed", attempts, error: uploadErrorMessage(error) }
+          ? { ...candidate, status: "failed", attempts, error: formatErrorRef.current?.(error) ?? uploadErrorMessage(error) }
           : candidate))
       }).finally(() => {
         activeRef.current.delete(item.id)
-        setItems((current) => [...current])
+        if (isCurrentContext()) setItems((current) => [...current])
       })
     }
   }, [api, concurrency, items])
@@ -142,6 +158,7 @@ export function useAssetUploadQueue({
     const nextItems = Array.from(files, (file): AssetUploadQueueItem => ({
       id: createID("upload"),
       operationID: createID("asset-upload"),
+      contextKey: contextKeyRef.current,
       file,
       folderID,
       status: "queued",
@@ -164,6 +181,7 @@ export function useAssetUploadQueue({
       ? {
           ...item,
           operationID: createID("asset-upload"),
+          contextKey: contextKeyRef.current,
           status: "queued",
           progress: 0,
           attempts: 0,

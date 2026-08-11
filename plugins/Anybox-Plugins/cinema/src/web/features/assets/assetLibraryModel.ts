@@ -263,11 +263,11 @@ export function formatAssetLibraryDuration(durationSeconds: number | undefined):
     : `${minutes}:${String(seconds).padStart(2, "0")}`
 }
 
-export function formatAssetLibraryTimestamp(value: string | undefined): string {
+export function formatAssetLibraryTimestamp(value: string | undefined, locale?: string): string {
   if (!value) return ""
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ""
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(locale, {
     year: "numeric",
     month: "short",
     day: "numeric",

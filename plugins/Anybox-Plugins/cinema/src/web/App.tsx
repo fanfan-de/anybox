@@ -150,6 +150,7 @@ import {
   useI18n,
   type TranslationKey,
 } from "./i18n"
+import { createNonOverlappingPoll, refreshGenerationTasksIndependently } from "./backgroundPolling"
 import { AssetLibraryApiError, createAssetLibraryApi } from "./features/assets/assetLibraryApi"
 import type {
   AssetLibraryAddRequest,
@@ -7583,6 +7584,7 @@ function CinemaProjectLauncher({
   agentBaseURL: string
   onOpen: (project: CinemaRecentProject) => void
 }) {
+  const { t } = useI18n()
   const projectsQuery = useQuery({
     queryKey: ["cinema-projects", agentBaseURL],
     queryFn: () => requestJson<CinemaRecentProject[]>(agentBaseURL, "/api/cinema/projects"),
@@ -7638,13 +7640,13 @@ function CinemaProjectLauncher({
         <header>
           <Film size={28} aria-hidden="true" />
           <div>
-            <h1>Cinema projects</h1>
-            <p>Open an existing Cinema project, or initialize a folder you choose.</p>
+            <h1>{t("launcher.title")}</h1>
+            <p>{t("launcher.description")}</p>
           </div>
         </header>
         <div className="cinema-project-launcher-actions">
-          <button type="button" disabled={pending} onClick={() => void pick(false)}>Open project folder</button>
-          <button type="button" disabled={pending} onClick={() => void pick(true)}>Initialize folder</button>
+          <button type="button" disabled={pending} onClick={() => void pick(false)}>{t("launcher.openFolder")}</button>
+          <button type="button" disabled={pending} onClick={() => void pick(true)}>{t("launcher.initializeFolder")}</button>
         </div>
         {error ? (
           <div className="cinema-project-launcher-error" role="alert">
@@ -7663,17 +7665,17 @@ function CinemaProjectLauncher({
                   return result.project
                 })}
               >
-                {error.code === "PROJECT_ID_CONFLICT" ? "Clone with a new project ID" : "Back up and migrate project"}
+                {t(error.code === "PROJECT_ID_CONFLICT" ? "launcher.cloneProject" : "launcher.migrateProject")}
               </button>
             ) : null}
           </div>
         ) : null}
         <div className="cinema-project-recent">
-          <h2>Recent projects</h2>
+          <h2>{t("launcher.recent")}</h2>
           {projectsQuery.isLoading ? (
-            <p>Loading projects…</p>
+            <p>{t("launcher.loading")}</p>
           ) : projectsQuery.error ? (
-            <p role="alert">{projectsQuery.error instanceof Error ? projectsQuery.error.message : "Could not load projects."}</p>
+            <p role="alert">{projectsQuery.error instanceof Error ? projectsQuery.error.message : t("launcher.loadFailed")}</p>
           ) : projectsQuery.data?.length ? (
             projectsQuery.data.map((project) => (
               <article key={project.id}>
@@ -7693,7 +7695,7 @@ function CinemaProjectLauncher({
                 <button
                   type="button"
                   className="cinema-project-remove"
-                  aria-label={`Remove ${project.name} from recent projects`}
+                  aria-label={t("launcher.removeRecent", { name: project.name })}
                   disabled={pending}
                   onClick={() => void run(async () => {
                     await requestJson(agentBaseURL, `/api/cinema/projects/${encodeURIComponent(project.id)}/recent`, { method: "DELETE" })
@@ -7705,7 +7707,7 @@ function CinemaProjectLauncher({
               </article>
             ))
           ) : (
-            <p>No recent Cinema projects.</p>
+            <p>{t("launcher.empty")}</p>
           )}
         </div>
       </section>
@@ -8801,7 +8803,7 @@ function CinemaProjectApp({ projectID, agentBaseURL }: { projectID: string; agen
     let cancelled = false
     let intervalID: number | null = null
 
-    async function pollEvents() {
+    const pollEvents = createNonOverlappingPoll(async () => {
       if (
         cancelled ||
         editingNodeIDsRef.current.size > 0 ||
@@ -8835,7 +8837,7 @@ function CinemaProjectApp({ projectID, agentBaseURL }: { projectID: string; agen
       } catch {
         // Keep the canvas usable if the lightweight sync poll misses once.
       }
-    }
+    })
 
     void pollEvents()
     intervalID = window.setInterval(() => void pollEvents(), 2400)
@@ -8873,14 +8875,11 @@ function CinemaProjectApp({ projectID, agentBaseURL }: { projectID: string; agen
       setAutoRefreshingTaskIDs(activeGenerationTaskIDs)
 
       try {
-        for (const taskID of activeGenerationTaskIDs) {
-          if (cancelled) break
-          await requestJson<CinemaGenerationTask>(
-            agentBaseURL,
-            `/api/cinema/projects/${encodeURIComponent(projectID)}/generation-tasks/${encodeURIComponent(taskID)}/refresh`,
-            { method: "POST" },
-          )
-        }
+        await refreshGenerationTasksIndependently(activeGenerationTaskIDs, (taskID) => requestJson<CinemaGenerationTask>(
+          agentBaseURL,
+          `/api/cinema/projects/${encodeURIComponent(projectID)}/generation-tasks/${encodeURIComponent(taskID)}/refresh`,
+          { method: "POST" },
+        ))
         if (!cancelled) await refetchRuntimeState()
       } catch {
         // Ignore transient background refresh errors; the next poll will retry.

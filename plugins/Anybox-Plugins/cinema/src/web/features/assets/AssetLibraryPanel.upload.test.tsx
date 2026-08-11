@@ -23,6 +23,7 @@ vi.mock("./useAssetUploadQueue", () => ({
 }))
 
 import { AssetLibraryPanel } from "./AssetLibraryPanel"
+import { I18nProvider } from "../../i18n"
 
 const targetFolder = {
   id: "folder-scenes",
@@ -95,13 +96,15 @@ function renderPanel() {
   })
   const view = render(
     <QueryClientProvider client={queryClient}>
-      <AssetLibraryPanel
-        agentBaseURL="http://127.0.0.1:4096"
-        projectID={`project-upload-${renderSequence += 1}`}
-        initialScope="personal"
-        onClose={() => undefined}
-        onAddToCanvas={() => undefined}
-      />
+      <I18nProvider locale="zh-CN">
+        <AssetLibraryPanel
+          agentBaseURL="http://127.0.0.1:4096"
+          projectID={`project-upload-${renderSequence += 1}`}
+          initialScope="personal"
+          onClose={() => undefined}
+          onAddToCanvas={() => undefined}
+        />
+      </I18nProvider>
     </QueryClientProvider>,
   )
   const uploadButton = view.container.querySelector<HTMLButtonElement>(

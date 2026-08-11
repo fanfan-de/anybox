@@ -280,7 +280,7 @@ describe("cinema asset library api", () => {
     })
     const upload = await json<{
       revision: number
-      items: Array<{ success: true; asset: { id: string; status: string; relativePath: string } }>
+      items: Array<{ success: true; asset: { id: string; status: string; relativePath: string; contentRevision: number } }>
     }>(uploadResponse)
     expect(uploadResponse.status).toBe(201)
     expect(upload.data!.revision).toBe(2)
@@ -291,8 +291,25 @@ describe("cinema asset library api", () => {
       headers: { range: "bytes=0-7" },
     })
     expect(rangeResponse.status).toBe(206)
+    expect(rangeResponse.headers.get("cache-control")).toBe("private, no-cache")
     expect(rangeResponse.headers.get("content-range")).toBe(`bytes 0-7/${pngBytes().byteLength}`)
     expect(new Uint8Array(await rangeResponse.arrayBuffer())).toEqual(pngBytes().slice(0, 8))
+
+    const versionedResponse = await app.request(projectLibraryURL(
+      projectID,
+      `/assets/${asset.id}/content?v=${asset.contentRevision}`,
+    ))
+    expect(versionedResponse.status).toBe(200)
+    expect(versionedResponse.headers.get("cache-control")).toBe("private, max-age=31536000, immutable")
+    expect(new Uint8Array(await versionedResponse.arrayBuffer())).toEqual(pngBytes())
+    expect((await app.request(projectLibraryURL(
+      projectID,
+      `/assets/${asset.id}/content?v=${asset.contentRevision + 1}`,
+    ))).status).toBe(409)
+    expect((await app.request(projectLibraryURL(
+      projectID,
+      `/assets/${asset.id}/content?v=-1`,
+    ))).status).toBe(400)
 
     const renameResponse = await app.request(projectLibraryURL(projectID, `/assets/${asset.id}`), {
       method: "PATCH",

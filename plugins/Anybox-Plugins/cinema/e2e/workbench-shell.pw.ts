@@ -8,7 +8,7 @@ const agentBaseURL = `http://127.0.0.1:${managedAgentPort}`
 test.describe("Cinema workbench shell", () => {
   test.skip(Boolean(externalCinemaURL), "Workbench shell assertions use the isolated managed Agent fixture.")
 
-  test("keeps Create active, enables Edit from the project capability, and keeps Deliver unavailable", async ({ page, request }, testInfo) => {
+  test("keeps Create active and exposes the project Edit and Deliver capabilities", async ({ page, request }, testInfo) => {
     const projectResponse = await request.get(`${agentBaseURL}/e2e/project`)
     expect(projectResponse.ok()).toBe(true)
     const projectEnvelope = await projectResponse.json() as {
@@ -31,7 +31,7 @@ test.describe("Cinema workbench shell", () => {
     expect(resetResponse.ok()).toBe(true)
     await page.goto(cinemaURL!)
 
-    const tablist = page.getByRole("tablist", { name: "Cinema 工作台" })
+    const tablist = page.getByRole("tablist", { name: "Cinema workspaces" })
     const createTab = tablist.getByRole("tab", { name: "Create" })
     const editTab = tablist.getByRole("tab", { name: /^Edit/ })
     const deliverTab = tablist.getByRole("tab", { name: /^Deliver/ })
@@ -40,7 +40,7 @@ test.describe("Cinema workbench shell", () => {
     await expect(createTab).toHaveAttribute("aria-selected", "true")
     await expect(createTab).toBeEnabled()
     await expect(editTab).toBeEnabled()
-    await expect(deliverTab).toBeDisabled()
+    await expect(deliverTab).toBeEnabled()
     await expect(page.getByRole("tabpanel", { name: "Create" })).toContainText("Story Brief")
     await expect(page.locator(".react-flow")).toBeVisible()
     const accessibility = await new AxeBuilder({ page }).include(".cinema-workbench-header").analyze()

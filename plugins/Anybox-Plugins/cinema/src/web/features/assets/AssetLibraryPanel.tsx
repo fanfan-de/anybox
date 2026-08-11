@@ -81,6 +81,7 @@ import {
 } from "./assetLibraryModel"
 import { clampContextMenuPosition } from "../canvas/contextMenuPosition"
 import { useAssetUploadQueue, type AssetUploadQueueItem } from "./useAssetUploadQueue"
+import { useI18n } from "../../i18n"
 import "./asset-library.css"
 
 const PANEL_ID = "cinema-asset-library"
@@ -200,13 +201,13 @@ function createOperationID(prefix: string): string {
   return `${prefix}-${suffix}`
 }
 
-function errorMessage(error: unknown, fallback = "操作失败"): string {
+function errorMessage(error: unknown, fallback = "Operation failed"): string {
   return error instanceof Error && error.message ? error.message : fallback
 }
 
-function assetLibraryErrorMessage(error: unknown, fallback = "操作失败"): string {
+function assetLibraryErrorMessage(error: unknown, fallback: string, referenceBlocked: string): string {
   if (error instanceof AssetLibraryApiError && error.code === "CINEMA_LIBRARY_ASSET_REFERENCED") {
-    return "仍被画布、时间线或任务引用，无法删除"
+    return referenceBlocked
   }
   return errorMessage(error, fallback)
 }
@@ -222,6 +223,10 @@ function useDebouncedValue<T>(value: T, delay: number): T {
 
 interface AssetLibraryErrorBoundaryProps {
   onClose(): void
+  label: string
+  failedMessage: string
+  retryLabel: string
+  closeLabel: string
   children: ReactNode
 }
 
@@ -243,17 +248,17 @@ class AssetLibraryErrorBoundary extends Component<AssetLibraryErrorBoundaryProps
   render() {
     if (!this.state.error) return this.props.children
     return (
-      <aside id={PANEL_ID} className="cinema-asset-library is-fallback" aria-label="素材库">
+      <aside id={PANEL_ID} className="cinema-asset-library is-fallback" aria-label={this.props.label}>
         <div className="cinema-asset-library-fallback" role="alert">
           <AlertCircle size={20} aria-hidden="true" />
-          <strong>素材库暂时无法显示</strong>
+          <strong>{this.props.failedMessage}</strong>
           <span>{this.state.error.message}</span>
           <div className="cinema-asset-library-fallback-actions">
             <button type="button" className="cinema-library-secondary-button" onClick={() => this.setState({ error: null })}>
-              重试
+              {this.props.retryLabel}
             </button>
             <button type="button" className="cinema-library-secondary-button" onClick={this.props.onClose}>
-              关闭
+              {this.props.closeLabel}
             </button>
           </div>
         </div>
@@ -263,8 +268,15 @@ class AssetLibraryErrorBoundary extends Component<AssetLibraryErrorBoundaryProps
 }
 
 export function AssetLibraryPanel(props: AssetLibraryPanelProps) {
+  const { t } = useI18n()
   return (
-    <AssetLibraryErrorBoundary onClose={props.onClose}>
+    <AssetLibraryErrorBoundary
+      onClose={props.onClose}
+      label={t("library.title")}
+      failedMessage={t("library.renderFailed")}
+      retryLabel={t("common.retry")}
+      closeLabel={t("common.close")}
+    >
       <AssetLibraryPanelContent {...props} />
     </AssetLibraryErrorBoundary>
   )
@@ -281,6 +293,7 @@ function AssetLibraryPanelContent({
   revealRequest,
   onRevealRequestHandled,
 }: AssetLibraryPanelProps) {
+  const { t } = useI18n()
   const queryClient = useQueryClient()
   const initialSession = useMemo(() => loadPanelSession(projectID, initialScope), [initialScope, projectID])
   const [scopeType, setScopeType] = useState(initialSession.scopeType)
@@ -379,10 +392,10 @@ function AssetLibraryPanelContent({
     setPendingAssetReveal(null)
     setGridRevealRequest(null)
     setActionError(null)
-    setAnnouncement("正在定位素材")
+    setAnnouncement(t("library.locating"))
 
     if (request.assetRef.scope.type === "project" && request.assetRef.scope.projectID !== projectID) {
-      setActionError("无法定位不属于当前项目的素材")
+      setActionError(t("library.revealWrongProject"))
       setAnnouncement("")
       onRevealRequestHandled?.(request.requestID)
       return
@@ -395,7 +408,7 @@ function AssetLibraryPanelContent({
       if (!active) return
       const targetScopeType = request.assetRef.scope.type
       if (asset.status === "trashed") {
-        setActionError("素材正在删除，当前无法在素材库中定位")
+        setActionError(t("library.revealDeleting"))
         setAnnouncement("")
         onRevealRequestHandled?.(request.requestID)
         return
@@ -421,14 +434,14 @@ function AssetLibraryPanelContent({
         assetID: asset.id,
         displayName: asset.displayName,
       })
-      setAnnouncement(`正在定位 ${asset.displayName}`)
+      setAnnouncement(t("library.locatingNamed", { name: asset.displayName }))
       void queryClient.invalidateQueries({
         queryKey: ["cinema-asset-library", agentBaseURL, assetLibraryScopeKey(request.assetRef.scope), "entries"],
       })
       onRevealRequestHandled?.(request.requestID)
     }).catch((error) => {
       if (!active) return
-      setActionError(errorMessage(error, "无法定位素材"))
+      setActionError(errorMessage(error, t("library.revealFailed")))
       setAnnouncement("")
       onRevealRequestHandled?.(request.requestID)
     })
@@ -436,7 +449,7 @@ function AssetLibraryPanelContent({
       active = false
       controller.abort()
     }
-  }, [agentBaseURL, onRevealRequestHandled, projectID, queryClient, revealRequest?.requestID])
+  }, [agentBaseURL, onRevealRequestHandled, projectID, queryClient, revealRequest?.requestID, t])
 
   useEffect(() => {
     if (skipSessionSaveRef.current) {
@@ -529,22 +542,22 @@ function AssetLibraryPanelContent({
     if (assets.some((asset) => asset.id === target.assetID)) {
       setGridRevealRequest({ requestID: target.requestID, assetID: target.assetID })
       setPendingAssetReveal(null)
-      setAnnouncement(`${target.displayName} 已在素材库中选中`)
+      setAnnouncement(t("library.selectedNamed", { name: target.displayName }))
       return
     }
     if (!listingQuery.isSuccess || listingQuery.isLoading || listingQuery.isFetchingNextPage) return
     if (listingQuery.hasNextPage) {
       void listingQuery.fetchNextPage().catch((error) => {
         setPendingAssetReveal(null)
-        setActionError(errorMessage(error, "无法加载素材所在位置"))
+        setActionError(errorMessage(error, t("library.locationLoadFailed")))
         setAnnouncement("")
       })
       return
     }
     setPendingAssetReveal(null)
-    setActionError("已打开素材所在文件夹，但未找到该素材")
+    setActionError(t("library.assetNotFoundInFolder"))
     setAnnouncement("")
-  }, [assets, listingQuery, pendingAssetReveal, scopeType])
+  }, [assets, listingQuery, pendingAssetReveal, scopeType, t])
 
   const commitRevision = useCallback((nextRevision: number) => {
     if (!Number.isFinite(nextRevision)) return
@@ -591,18 +604,19 @@ function AssetLibraryPanelContent({
     revision,
     onRevision: commitRevision,
     onUploaded: (asset) => {
-      setAnnouncement(`${asset.displayName} 已上传`)
+      setAnnouncement(t("library.uploadedNamed", { name: asset.displayName }))
       void refreshLibrary()
     },
+    formatError: (error) => error instanceof Error ? error.message : t("library.uploadFailed"),
   })
 
   const handleActionError = useCallback((error: unknown) => {
     if (error instanceof AssetLibraryApiError && error.latestRevision !== undefined) {
       commitRevision(error.latestRevision)
     }
-    setActionError(assetLibraryErrorMessage(error))
+    setActionError(assetLibraryErrorMessage(error, t("library.operationFailed"), t("library.referenceDeleteBlocked")))
     if (error instanceof AssetLibraryApiError && error.status === 409) void refreshLibrary()
-  }, [commitRevision, refreshLibrary])
+  }, [commitRevision, refreshLibrary, t])
 
   const createFolderMutation = useMutation({
     mutationFn: ({ name, parentFolderID }: { name: string; parentFolderID: string }) => api.createFolder({
@@ -614,7 +628,7 @@ function AssetLibraryPanelContent({
     onSuccess: (result) => {
       commitRevision(result.revision)
       setCreateFolderParentID(null)
-      setAnnouncement(`已创建文件夹 ${result.folder.name}`)
+      setAnnouncement(t("library.createdFolder", { name: result.folder.name }))
       void refreshLibrary()
     },
   })
@@ -629,7 +643,7 @@ function AssetLibraryPanelContent({
     onSuccess: (result) => {
       commitRevision(result.revision)
       setRenameTarget(null)
-      setAnnouncement(`已重命名为 ${result.folder.name}`)
+      setAnnouncement(t("library.renamedTo", { name: result.folder.name }))
       void refreshLibrary()
     },
   })
@@ -644,7 +658,7 @@ function AssetLibraryPanelContent({
     onSuccess: (result) => {
       commitRevision(result.revision)
       setRenameTarget(null)
-      setAnnouncement(`已重命名为 ${result.asset.displayName}`)
+      setAnnouncement(t("library.renamedTo", { name: result.asset.displayName }))
       void refreshLibrary()
     },
   })
@@ -660,7 +674,7 @@ function AssetLibraryPanelContent({
       commitRevision(result.revision)
       updateCurrentSession({ selectedKeys: [], anchorKey: null })
       setMoveEntries(null)
-      setAnnouncement("素材已移动")
+      setAnnouncement(t("library.moved"))
       void refreshLibrary()
     },
   })
@@ -704,7 +718,7 @@ function AssetLibraryPanelContent({
         count: request.entries.length,
         undoUntil: result.undoUntil,
       }])
-      setAnnouncement(`已删除 ${request.entries.length} 项，可在 10 秒内撤销`)
+      setAnnouncement(t("library.deletedUndoable", { count: request.entries.length }))
       void queryClient.invalidateQueries({
         queryKey: ["cinema-asset-library", agentBaseURL, request.deleteScopeKey],
       })
@@ -771,7 +785,7 @@ function AssetLibraryPanelContent({
       }))
       if (pendingDelete.scopeKey === api.scopeKey) commitRevision(result.revision)
       setPendingDeletes((current) => current.filter((item) => item.operationID !== pendingDelete.operationID))
-      setAnnouncement(`已撤销删除 ${pendingDelete.count} 项`)
+      setAnnouncement(t("library.restoredCount", { count: pendingDelete.count }))
       await queryClient.invalidateQueries({
         queryKey: ["cinema-asset-library", agentBaseURL, pendingDelete.scopeKey],
       })
@@ -780,7 +794,7 @@ function AssetLibraryPanelContent({
     } finally {
       setPendingDeleteAction(pendingDelete.operationID, false)
     }
-  }, [agentBaseURL, api.scopeKey, commitRevision, handleActionError, projectID, queryClient, runWithRevisionRetry, setPendingDeleteAction])
+  }, [agentBaseURL, api.scopeKey, commitRevision, handleActionError, projectID, queryClient, runWithRevisionRetry, setPendingDeleteAction, t])
 
   useEffect(() => {
     const timers = pendingDeletes.map((pendingDelete) => window.setTimeout(
@@ -798,7 +812,7 @@ function AssetLibraryPanelContent({
     }),
     onSuccess: (result) => {
       commitRevision(result.revision)
-      setAnnouncement(`${result.asset.displayName} 正在重新处理`)
+      setAnnouncement(t("library.reprocessingNamed", { name: result.asset.displayName }))
       void refreshLibrary()
     },
   })
@@ -811,7 +825,7 @@ function AssetLibraryPanelContent({
     }),
     onSuccess: (result) => {
       commitRevision(result.revision)
-      setAnnouncement("素材库已重新扫描")
+      setAnnouncement(t("library.rescanned"))
       void refreshLibrary()
     },
   })
@@ -826,7 +840,7 @@ function AssetLibraryPanelContent({
     }),
     onSuccess: (result) => {
       commitRevision(result.revision)
-      setAnnouncement(`已迁移 ${result.migratedAssetIDs.length} 个旧素材`)
+      setAnnouncement(t("library.migratedCount", { count: result.migratedAssetIDs.length }))
       void refreshLibrary()
     },
   })
@@ -889,14 +903,14 @@ function AssetLibraryPanelContent({
     try {
       await onAddToCanvas({ scope, asset })
       setAnnouncement(mode === "relink"
-        ? `已重新关联到 ${asset.displayName}`
-        : `${asset.displayName} 已添加到画布`)
+        ? t("library.relinkedNamed", { name: asset.displayName })
+        : t("library.addedToCanvas", { name: asset.displayName }))
     } catch (error) {
       handleActionError(error)
     } finally {
       setAddingAssetID(null)
     }
-  }, [acceptKind, addingAssetID, handleActionError, mode, onAddToCanvas, scope])
+  }, [acceptKind, addingAssetID, handleActionError, mode, onAddToCanvas, scope, t])
 
   const selectedTargets = useMemo(
     () => selectedEntries
@@ -928,8 +942,8 @@ function AssetLibraryPanelContent({
     const list = Array.from(files)
     if (list.length === 0) return
     uploadQueue.enqueue(list, folderID)
-    setAnnouncement(`已加入 ${list.length} 个上传任务`)
-  }, [isReadOnly, uploadQueue])
+    setAnnouncement(t("library.uploadQueuedCount", { count: list.length }))
+  }, [isReadOnly, t, uploadQueue])
 
   const requestUpload = useCallback((folderID?: string) => {
     if (isReadOnly) return
@@ -955,7 +969,7 @@ function AssetLibraryPanelContent({
       return entry?.isDirectory === true
     })
     if (hasDirectory) {
-      setActionError("暂不支持导入整个文件夹，请选择文件")
+      setActionError(t("library.folderUploadUnsupported"))
       return
     }
     const files = Array.from(event.dataTransfer.files)
@@ -964,7 +978,7 @@ function AssetLibraryPanelContent({
     } else {
       setPendingUploadDestination({ files, initialFolderID: currentSession.folderID })
     }
-  }, [currentSession.folderID, handleFiles, isSearching, rootFolderID])
+  }, [currentSession.folderID, handleFiles, isSearching, rootFolderID, t])
 
   const moveEntriesToFolder = useCallback((targets: AssetLibraryEntryRef[], destinationFolderID: string) => {
     if (isReadOnly || targets.length === 0) return
@@ -1049,7 +1063,7 @@ function AssetLibraryPanelContent({
     <aside
       id={PANEL_ID}
       className="cinema-asset-library"
-      aria-label="素材库"
+      aria-label={t("library.title")}
       onClick={(event) => event.stopPropagation()}
       onKeyDown={handlePanelKeyDown}
       onDragOver={(event) => {
@@ -1059,8 +1073,8 @@ function AssetLibraryPanelContent({
     >
       <header className="cinema-asset-library-header">
         <div className="cinema-asset-library-title">
-          <span>{scopeType === "project" ? "当前项目" : "本机"}</span>
-          <strong>素材库</strong>
+          <span>{t(scopeType === "project" ? "library.currentProject" : "library.thisDevice")}</span>
+          <strong>{t("library.title")}</strong>
         </div>
         <div className="cinema-asset-library-header-actions">
           <input
@@ -1079,14 +1093,14 @@ function AssetLibraryPanelContent({
             }}
           />
           <LibraryIconButton
-            label="上传素材"
+            label={t("library.upload")}
             disabled={isReadOnly || stateQuery.isLoading}
             onClick={() => requestUpload()}
           >
             <Upload size={15} aria-hidden="true" />
           </LibraryIconButton>
           <LibraryIconButton
-            label="刷新素材库"
+            label={t("library.refresh")}
             disabled={stateQuery.isLoading || migrationBlocksLibrary || reconcileMutation.isPending}
             onClick={() => {
               setActionError(null)
@@ -1097,13 +1111,13 @@ function AssetLibraryPanelContent({
               ? <Loader2 size={15} aria-hidden="true" className="is-spinning" />
               : <RefreshCw size={15} aria-hidden="true" />}
           </LibraryIconButton>
-          <LibraryIconButton label="关闭素材库" onClick={onClose}>
+          <LibraryIconButton label={t("library.close")} onClick={onClose}>
             <X size={15} aria-hidden="true" />
           </LibraryIconButton>
         </div>
       </header>
 
-      <div className="cinema-asset-library-tabs" role="tablist" aria-label="素材库范围">
+      <div className="cinema-asset-library-tabs" role="tablist" aria-label={t("library.scopeLabel")}>
         {(["project", "personal"] as const).map((tabScope) => (
           <button
             key={tabScope}
@@ -1125,26 +1139,26 @@ function AssetLibraryPanelContent({
               })
             }}
           >
-            {tabScope === "project" ? "项目" : "个人"}
+            {t(tabScope === "project" ? "library.scope.project" : "library.scope.personal")}
           </button>
         ))}
       </div>
 
       <label className="cinema-asset-library-search">
         <Search size={14} aria-hidden="true" />
-        <span className="cinema-library-visually-hidden">搜索当前素材库</span>
+        <span className="cinema-library-visually-hidden">{t("library.searchLabel")}</span>
         <input
           type="search"
           value={currentSession.search}
           disabled={migrationBlocksLibrary}
-          placeholder="搜索素材和文件夹"
+          placeholder={t("library.searchPlaceholder")}
           onChange={(event) => updateCurrentSession({ search: event.target.value, selectedKeys: [], anchorKey: null })}
         />
         {currentSession.search ? (
           <button
             type="button"
-            aria-label="清空搜索"
-            title="清空搜索"
+            aria-label={t("library.clearSearch")}
+            title={t("library.clearSearch")}
             disabled={migrationBlocksLibrary}
             onClick={() => updateCurrentSession({ search: "", selectedKeys: [], anchorKey: null })}
           >
@@ -1153,15 +1167,15 @@ function AssetLibraryPanelContent({
         ) : null}
       </label>
 
-      <nav className="cinema-asset-library-breadcrumbs" aria-label="素材文件夹路径">
+      <nav className="cinema-asset-library-breadcrumbs" aria-label={t("library.folderPath")}>
         <button
           type="button"
-          title="素材库根目录"
+          title={t("library.rootTitle")}
           disabled={migrationBlocksLibrary}
           aria-current={currentSession.folderID === rootFolderID ? "location" : undefined}
           onClick={() => openFolder(rootFolderID)}
         >
-          素材库
+          {t("library.title")}
         </button>
         {(listing?.breadcrumbs ?? [])
           .filter((breadcrumb) => breadcrumb.id !== rootFolderID)
@@ -1182,14 +1196,14 @@ function AssetLibraryPanelContent({
       {stateQuery.data?.status === "recovery-required" ? (
         <div className="cinema-asset-library-banner is-error" role="alert">
           <AlertCircle size={14} aria-hidden="true" />
-          <span>素材库需要恢复，当前仅可浏览。</span>
+          <span>{t("library.recoveryRequired")}</span>
         </div>
       ) : null}
 
       {scopeType === "personal" ? (
         <div className="cinema-asset-library-banner">
           <AlertCircle size={14} aria-hidden="true" />
-          <span>个人素材不会随项目迁移到其他设备。</span>
+          <span>{t("library.personalDeviceHint")}</span>
         </div>
       ) : null}
 
@@ -1229,15 +1243,15 @@ function AssetLibraryPanelContent({
           <LibraryState
             icon={<Loader2 size={18} aria-hidden="true" className="is-spinning" />}
             label={scopeType === "project" && migrationQuery.isLoading
-              ? "正在检查旧项目素材"
-              : "正在加载素材库"}
+              ? t("library.checkingLegacy")
+              : t("library.loading")}
           />
         ) : queryError ? (
           <LibraryState
             error
             icon={<AlertCircle size={18} aria-hidden="true" />}
-            label={errorMessage(queryError, "无法加载素材库")}
-            action={<button type="button" className="cinema-library-secondary-button" onClick={() => void refreshLibrary()}>重试</button>}
+            label={errorMessage(queryError, t("library.loadFailed"))}
+            action={<button type="button" className="cinema-library-secondary-button" onClick={() => void refreshLibrary()}>{t("common.retry")}</button>}
           />
         ) : migrationBlocksLibrary && migrationStatus ? (
           <AssetMigrationGuide
@@ -1252,16 +1266,16 @@ function AssetLibraryPanelContent({
         ) : entries.length === 0 ? (
           <LibraryState
             icon={debouncedSearch ? <Search size={18} aria-hidden="true" /> : <Folder size={18} aria-hidden="true" />}
-            label={debouncedSearch ? "没有匹配的素材" : "此文件夹为空"}
-            detail={debouncedSearch ? "尝试其他关键词" : "上传图片、视频或音频开始使用"}
+            label={t(debouncedSearch ? "library.noMatches" : "library.emptyFolder")}
+            detail={t(debouncedSearch ? "library.tryAnotherSearch" : "library.emptyFolderHint")}
             action={!debouncedSearch && !isReadOnly
-              ? <button type="button" className="cinema-library-secondary-button" onClick={() => requestUpload()}>上传素材</button>
+              ? <button type="button" className="cinema-library-secondary-button" onClick={() => requestUpload()}>{t("library.upload")}</button>
               : undefined}
           />
         ) : (
           <>
             {folders.length > 0 ? (
-              <section className="cinema-asset-library-folders" aria-label="文件夹">
+              <section className="cinema-asset-library-folders" aria-label={t("library.folders")}>
                 {folders.map((entry) => {
                   if (entry.entryType !== "folder") return null
                   const key = assetLibraryEntryKey(entry)
@@ -1313,7 +1327,7 @@ function AssetLibraryPanelContent({
                             return droppedEntry?.isDirectory === true
                           })
                           if (hasDirectory) {
-                            setActionError("暂不支持导入整个文件夹，请选择文件")
+                            setActionError(t("library.folderUploadUnsupported"))
                             return
                           }
                           handleFiles(event.dataTransfer.files, entry.folder.id)
@@ -1326,7 +1340,7 @@ function AssetLibraryPanelContent({
                           event.preventDefault()
                           event.stopPropagation()
                           if (assetLibraryScopeKey(internalPayload.scope) !== api.scopeKey) {
-                            setActionError("不能跨项目与个人素材库移动")
+                            setActionError(t("library.crossScopeMove"))
                             return
                           }
                           moveEntriesToFolder(internalPayload.entries, entry.folder.id)
@@ -1338,11 +1352,11 @@ function AssetLibraryPanelContent({
                         event.stopPropagation()
                         const payload = parseAssetLibraryDragPayload(raw)
                         if (!payload) {
-                          setActionError("无法识别拖入的素材")
+                          setActionError(t("library.unrecognizedDrop"))
                           return
                         }
                         if (assetLibraryScopeKey(payload.scope) !== api.scopeKey) {
-                          setActionError("不能跨项目与个人素材库移动")
+                          setActionError(t("library.crossScopeMove"))
                           return
                         }
                         moveEntriesToFolder([{ entryType: "asset", assetID: payload.assetID }], entry.folder.id)
@@ -1352,8 +1366,8 @@ function AssetLibraryPanelContent({
                       <span>{entry.folder.name}</span>
                       {debouncedSearch
                         ? <small title={entry.folder.relativePath}>{entry.folder.relativePath}</small>
-                        : entry.folder.system ? <small>系统</small> : null}
-                      {selectedKeySet.has(key) ? <Check size={14} aria-label="已选择" /> : null}
+                        : entry.folder.system ? <small>{t("library.system")}</small> : null}
+                      {selectedKeySet.has(key) ? <Check size={14} aria-label={t("library.selected")} /> : null}
                     </button>
                   )
                 })}
@@ -1387,7 +1401,7 @@ function AssetLibraryPanelContent({
                 disabled={listingQuery.isFetchingNextPage}
                 onClick={() => void listingQuery.fetchNextPage()}
               >
-                {listingQuery.isFetchingNextPage ? "正在加载…" : "加载更多"}
+                {t(listingQuery.isFetchingNextPage ? "library.loadingMore" : "library.loadMore")}
               </button>
             ) : null}
           </>
@@ -1395,8 +1409,8 @@ function AssetLibraryPanelContent({
       </div>
 
       {migrationBlocksLibrary ? null : selectedEntries.length > 1 ? (
-        <div className="cinema-asset-library-batch-bar" aria-label="批量操作">
-          <strong>已选择 {selectedEntries.length} 项</strong>
+        <div className="cinema-asset-library-batch-bar" aria-label={t("library.batchActions")}>
+          <strong>{t("library.selectedCount", { count: selectedEntries.length })}</strong>
           <div>
             <button
               type="button"
@@ -1405,7 +1419,7 @@ function AssetLibraryPanelContent({
               onClick={() => setMoveEntries(selectedTargets)}
             >
               <Move size={14} aria-hidden="true" />
-              移动到
+              {t("library.moveTo")}
             </button>
             <button
               type="button"
@@ -1414,7 +1428,7 @@ function AssetLibraryPanelContent({
               onClick={() => requestDelete(selectedTargets)}
             >
               <Trash2 size={14} aria-hidden="true" />
-              删除
+              {t("common.delete")}
             </button>
           </div>
         </div>
@@ -1450,17 +1464,17 @@ function AssetLibraryPanelContent({
         <div className="cinema-asset-library-action-error" role="alert">
           <AlertCircle size={14} aria-hidden="true" />
           <span>{actionError}</span>
-          <button type="button" aria-label="关闭错误提示" title="关闭" onClick={() => setActionError(null)}>
+          <button type="button" aria-label={t("library.closeError")} title={t("common.close")} onClick={() => setActionError(null)}>
             <X size={13} aria-hidden="true" />
           </button>
         </div>
       ) : null}
 
       {pendingDeletes.length > 0 ? (
-        <div className={`cinema-asset-library-toast-stack ${actionError ? "has-action-error" : ""}`} aria-label="待完成的删除">
+        <div className={`cinema-asset-library-toast-stack ${actionError ? "has-action-error" : ""}`} aria-label={t("library.pendingDeletes")}>
           {pendingDeletes.map((pendingDelete) => (
             <div key={pendingDelete.operationID} className="cinema-asset-library-toast" role="status">
-              <span>已删除 {pendingDelete.count} 项</span>
+              <span>{t("library.deletedCount", { count: pendingDelete.count })}</span>
               <button
                 type="button"
                 disabled={pendingDeleteActionIDs.has(pendingDelete.operationID)}
@@ -1469,7 +1483,7 @@ function AssetLibraryPanelContent({
                 {pendingDeleteActionIDs.has(pendingDelete.operationID)
                   ? <Loader2 size={13} aria-hidden="true" className="is-spinning" />
                   : <RotateCcw size={13} aria-hidden="true" />}
-                撤销
+                {t("common.undo")}
               </button>
             </div>
           ))}
@@ -1478,8 +1492,8 @@ function AssetLibraryPanelContent({
 
       {createFolderParentID ? (
         <NameDialog
-          title="新建文件夹"
-          confirmLabel="创建"
+          title={t("library.newFolder")}
+          confirmLabel={t("common.create")}
           pending={createFolderMutation.isPending}
           maxLength={80}
           onClose={() => setCreateFolderParentID(null)}
@@ -1498,8 +1512,8 @@ function AssetLibraryPanelContent({
       {renameTarget ? (
         <NameDialog
           key={assetLibraryEntryKey(renameTarget)}
-          title={renameTarget.entryType === "folder" ? "重命名文件夹" : "重命名素材"}
-          confirmLabel="保存"
+          title={t(renameTarget.entryType === "folder" ? "library.renameFolder" : "library.renameAsset")}
+          confirmLabel={t("common.save")}
           initialName={renameTarget.entryType === "folder"
             ? renameTarget.folder.name
             : assetRenameParts(renameTarget.asset).baseName}
@@ -1530,8 +1544,8 @@ function AssetLibraryPanelContent({
           api={api}
           rootFolderID={rootFolderID}
           initialFolderID={rootFolderID}
-          title="移动到文件夹"
-          confirmLabel="移动到这里"
+          title={t("library.moveToFolder")}
+          confirmLabel={t("library.moveHere")}
           pending={moveMutation.isPending}
           onClose={() => setMoveEntries(null)}
           onChoose={(destinationFolderID) => {
@@ -1547,8 +1561,8 @@ function AssetLibraryPanelContent({
           api={api}
           rootFolderID={rootFolderID}
           initialFolderID={pendingUploadDestination.initialFolderID}
-          title="选择上传位置"
-          confirmLabel="上传到这里"
+          title={t("library.chooseUploadLocation")}
+          confirmLabel={t("library.uploadHere")}
           pending={false}
           onClose={() => setPendingUploadDestination(null)}
           onChoose={(destinationFolderID) => {
@@ -1623,23 +1637,24 @@ function AssetMigrationGuide({
   onStart(): void
   onRefresh(): void
 }) {
+  const { t } = useI18n()
   const canContinue = status.phase === "running" && !pending
   const isRollingBack = status.phase === "rolling-back"
   const isRunning = pending || status.phase === "running" || isRollingBack
   const canStart = status.phase === "required" || status.phase === "ready"
   const needsRecovery = status.phase === "failed" || status.phase === "recovery-required"
   const title = needsRecovery
-    ? "旧素材迁移需要处理"
+    ? t("library.migration.needsAttention")
     : isRollingBack
-      ? "正在回滚旧素材迁移"
+      ? t("library.migration.rollingBack")
     : isRunning
-      ? "正在迁移旧项目素材"
-      : "需要整理旧项目素材"
+      ? t("library.migration.running")
+      : t("library.migration.required")
   const detail = needsRecovery
-    ? status.error ?? "迁移没有安全完成，请刷新状态后再继续。"
+    ? status.error ?? t("library.migration.failedDetail")
     : isRunning
-      ? "素材正在登记并更新项目引用。Canvas 可以继续使用，请勿关闭应用。"
-      : "开始后会先备份项目元数据，再把已识别素材纳入项目素材库。"
+      ? t("library.migration.runningDetail")
+      : t("library.migration.startDetail")
 
   return (
     <section
@@ -1657,23 +1672,23 @@ function AssetMigrationGuide({
         </div>
       </div>
 
-      <dl className="cinema-asset-library-migration-stats" aria-label="待迁移素材统计">
+      <dl className="cinema-asset-library-migration-stats" aria-label={t("library.migration.statsLabel")}>
         <div>
-          <dt>已识别</dt>
-          <dd>{status.candidateCount} 项</dd>
+          <dt>{t("library.migration.recognized")}</dt>
+          <dd>{t("library.itemCount", { count: status.candidateCount })}</dd>
         </div>
         <div>
-          <dt>总大小</dt>
+          <dt>{t("library.totalSize")}</dt>
           <dd>{formatAssetLibrarySize(status.totalBytes)}</dd>
         </div>
         <div>
-          <dt>未识别</dt>
-          <dd>{status.unrecognizedCount} 项</dd>
+          <dt>{t("library.migration.unrecognized")}</dt>
+          <dd>{t("library.itemCount", { count: status.unrecognizedCount })}</dd>
         </div>
       </dl>
 
       {!needsRecovery ? (
-        <p>未识别或未选中的文件会保留在原位置，不会被删除。</p>
+        <p>{t("library.migration.keepFiles")}</p>
       ) : null}
 
       <div className="cinema-asset-library-migration-actions">
@@ -1685,7 +1700,7 @@ function AssetMigrationGuide({
             onClick={onStart}
           >
             {pending ? <Loader2 size={14} aria-hidden="true" className="is-spinning" /> : null}
-            {pending ? "正在迁移" : canContinue ? "继续迁移" : "开始迁移"}
+            {t(pending ? "library.migration.migrating" : canContinue ? "library.migration.continue" : "library.migration.start")}
           </button>
         ) : null}
         {isRunning || needsRecovery ? (
@@ -1695,7 +1710,7 @@ function AssetMigrationGuide({
             disabled={pending}
             onClick={onRefresh}
           >
-            刷新状态
+            {t("library.refreshStatus")}
           </button>
         ) : null}
       </div>
@@ -1736,6 +1751,7 @@ function AssetLibraryGrid({
   onOpenContextMenuAt(entry: AssetLibraryEntry, x: number, y: number, returnFocus: HTMLElement | null): void
   onAdd(asset: CinemaAssetRecord): void | Promise<void>
 }) {
+  const { t } = useI18n()
   const gridRef = useRef<HTMLElement>(null)
   const assetButtonRefs = useRef<Array<HTMLButtonElement | null>>([])
   const pendingFocusIndexRef = useRef<number | null>(null)
@@ -1811,7 +1827,7 @@ function AssetLibraryGrid({
         aria-rowindex={Math.floor(index / CINEMA_ASSET_LIBRARY_GRID_COLUMNS) + 1}
         aria-selected={selected}
         aria-disabled={!kindAccepted || undefined}
-        title={`${asset.displayName}\n${assetLibraryEntryPath(entry)}${kindAccepted ? "" : "\n类型不匹配"}`}
+        title={`${asset.displayName}\n${assetLibraryEntryPath(entry)}${kindAccepted ? "" : `\n${t("library.kindMismatch")}`}`}
         draggable={allowDragAndAdd}
         onClick={(event) => onSelect(entry, event)}
         onContextMenu={(event) => onContextMenu(entry, event)}
@@ -1862,10 +1878,10 @@ function AssetLibraryGrid({
       >
         <span className="cinema-asset-library-card-preview">
           {asset.kind === "image" ? (
-            <img src={api.assetThumbnailURL(asset.id)} alt="" loading="lazy" draggable={false} />
+            <img src={api.assetThumbnailURL(asset.id, asset.contentRevision)} alt="" loading="lazy" draggable={false} />
           ) : asset.kind === "video" ? (
             <>
-              <img src={api.assetThumbnailURL(asset.id)} alt="" loading="lazy" draggable={false} />
+              <img src={api.assetThumbnailURL(asset.id, asset.contentRevision)} alt="" loading="lazy" draggable={false} />
               <Video size={16} aria-hidden="true" className="cinema-asset-library-kind-icon" />
             </>
           ) : (
@@ -1873,7 +1889,7 @@ function AssetLibraryGrid({
           )}
           {asset.status !== "ready" ? (
             <span className={`cinema-asset-library-status is-${asset.status}`}>
-              {assetStatusLabel(asset.status)}
+              {assetStatusLabel(asset.status, t)}
             </span>
           ) : null}
           {selected ? <span className="cinema-asset-library-card-check"><Check size={12} aria-hidden="true" /></span> : null}
@@ -1890,7 +1906,7 @@ function AssetLibraryGrid({
       <section
         ref={gridRef}
         className="cinema-asset-library-assets"
-        aria-label="素材"
+        aria-label={t("library.assets")}
         role="grid"
         aria-colcount={CINEMA_ASSET_LIBRARY_GRID_COLUMNS}
         aria-rowcount={rowCount}
@@ -1904,7 +1920,7 @@ function AssetLibraryGrid({
     <section
       ref={gridRef}
       className="cinema-asset-library-assets is-virtualized"
-      aria-label="素材"
+      aria-label={t("library.assets")}
       role="grid"
       aria-colcount={CINEMA_ASSET_LIBRARY_GRID_COLUMNS}
       aria-rowcount={rowCount}
@@ -1989,14 +2005,14 @@ function LibraryState({
   )
 }
 
-function assetStatusLabel(status: CinemaAssetRecord["status"]): string {
+function assetStatusLabel(status: CinemaAssetRecord["status"], t: ReturnType<typeof useI18n>["t"]): string {
   switch (status) {
-    case "uploading": return "上传中"
-    case "processing": return "处理中"
-    case "failed": return "处理失败"
-    case "missing": return "文件缺失"
-    case "trashed": return "正在删除"
-    default: return "可用"
+    case "uploading": return t("library.status.uploading")
+    case "processing": return t("library.status.processing")
+    case "failed": return t("library.status.failed")
+    case "missing": return t("library.status.missing")
+    case "trashed": return t("library.status.deleting")
+    default: return t("library.status.ready")
   }
 }
 
@@ -2017,30 +2033,31 @@ function AssetUploadQueue({
   onRetry(itemID: string): void
   onClear(): void
 }) {
+  const { t } = useI18n()
   const hasSettled = items.some((item) => item.status === "succeeded" || item.status === "canceled")
   return (
-    <section className="cinema-asset-upload-queue" aria-label="上传队列">
+    <section className="cinema-asset-upload-queue" aria-label={t("library.uploadQueue")}>
       <header>
-        <strong>上传队列</strong>
-        <span>{items.filter((item) => item.status === "uploading" || item.status === "queued").length} 项进行中</span>
-        {hasSettled ? <button type="button" onClick={onClear}>清理已完成</button> : null}
+        <strong>{t("library.uploadQueue")}</strong>
+        <span>{t("library.inProgressCount", { count: items.filter((item) => item.status === "uploading" || item.status === "queued").length })}</span>
+        {hasSettled ? <button type="button" onClick={onClear}>{t("library.clearCompleted")}</button> : null}
       </header>
       <div>
         {items.map((item) => (
           <div key={item.id} className={`cinema-asset-upload-item is-${item.status}`}>
             <File size={14} aria-hidden="true" />
             <span title={item.file.name}>{item.file.name}</span>
-            <small>{uploadStatusLabel(item)}</small>
+            <small>{uploadStatusLabel(item, t)}</small>
             {item.status === "uploading" ? (
-              <button type="button" aria-label={`取消上传 ${item.file.name}`} title="取消上传" onClick={() => onCancel(item.id)}>
+              <button type="button" aria-label={t("library.cancelUploadNamed", { name: item.file.name })} title={t("library.cancelUpload")} onClick={() => onCancel(item.id)}>
                 <X size={13} aria-hidden="true" />
               </button>
             ) : item.status === "failed" || item.status === "canceled" ? (
-              <button type="button" aria-label={`重试上传 ${item.file.name}`} title="重试上传" onClick={() => onRetry(item.id)}>
+              <button type="button" aria-label={t("library.retryUploadNamed", { name: item.file.name })} title={t("library.retryUpload")} onClick={() => onRetry(item.id)}>
                 <RotateCcw size={13} aria-hidden="true" />
               </button>
             ) : <span aria-hidden="true" />}
-            <progress value={item.progress} max={1} aria-label={`${item.file.name} 上传进度`} />
+            <progress value={item.progress} max={1} aria-label={t("library.uploadProgressNamed", { name: item.file.name })} />
           </div>
         ))}
       </div>
@@ -2048,13 +2065,13 @@ function AssetUploadQueue({
   )
 }
 
-function uploadStatusLabel(item: AssetUploadQueueItem): string {
+function uploadStatusLabel(item: AssetUploadQueueItem, t: ReturnType<typeof useI18n>["t"]): string {
   switch (item.status) {
-    case "queued": return "等待中"
+    case "queued": return t("library.status.queued")
     case "uploading": return `${Math.round(item.progress * 100)}%`
-    case "succeeded": return item.asset?.status === "processing" ? "处理中" : "已上传"
-    case "canceled": return "已取消"
-    case "failed": return item.error ?? "失败"
+    case "succeeded": return t(item.asset?.status === "processing" ? "library.status.processing" : "library.status.uploaded")
+    case "canceled": return t("library.status.canceled")
+    case "failed": return item.error ?? t("library.status.failure")
   }
 }
 
@@ -2085,48 +2102,49 @@ function AssetDetail({
   onMove(asset: CinemaAssetRecord): void
   onDelete(asset: CinemaAssetRecord): void
 }) {
+  const { locale, t } = useI18n()
   if (!asset) {
     return (
-      <section className="cinema-asset-library-detail is-empty" aria-label="素材详情">
+      <section className="cinema-asset-library-detail is-empty" aria-label={t("library.assetDetails")}>
         <Image size={18} aria-hidden="true" />
-        <span>{mode === "relink" ? "选择素材以重新关联" : "选择素材以预览"}</span>
+        <span>{t(mode === "relink" ? "library.selectToRelink" : "library.selectToPreview")}</span>
       </section>
     )
   }
 
   const metadata = [
-    ["路径", asset.relativePath],
-    ["来源", scopeType === "personal" ? "个人素材" : "项目素材"],
-    ["类型", asset.kind === "image" ? "图片" : asset.kind === "video" ? "视频" : "音频"],
-    ["尺寸", asset.width && asset.height ? `${asset.width} × ${asset.height}` : ""],
-    ["时长", formatAssetLibraryDuration(asset.durationSeconds)],
-    ["大小", formatAssetLibrarySize(asset.sizeBytes)],
-    ["创建时间", formatAssetLibraryTimestamp(asset.createdAt)],
+    [t("library.path"), asset.relativePath],
+    [t("library.source"), t(scopeType === "personal" ? "library.personalAsset" : "library.projectAsset")],
+    [t("library.type"), t(asset.kind === "image" ? "library.kind.image" : asset.kind === "video" ? "library.kind.video" : "library.kind.audio")],
+    [t("library.dimensions"), asset.width && asset.height ? `${asset.width} × ${asset.height}` : ""],
+    [t("library.duration"), formatAssetLibraryDuration(asset.durationSeconds)],
+    [t("library.size"), formatAssetLibrarySize(asset.sizeBytes)],
+    [t("library.createdAt"), formatAssetLibraryTimestamp(asset.createdAt, locale)],
   ].filter((row): row is [string, string] => Boolean(row[1]))
   const kindAccepted = !acceptKind || asset.kind === acceptKind
 
   return (
-    <section className="cinema-asset-library-detail" aria-label="素材详情">
+    <section className="cinema-asset-library-detail" aria-label={t("library.assetDetails")}>
       <div className="cinema-asset-library-detail-preview">
         {asset.status === "missing" ? (
           <div className="cinema-asset-library-detail-placeholder">
             <AlertCircle size={18} aria-hidden="true" />
-            <span>引用文件不可用</span>
+            <span>{t("library.referenceUnavailable")}</span>
           </div>
         ) : asset.kind === "image" ? (
-          <img src={api.assetPreviewURL(asset.id)} alt={asset.displayName} draggable={false} />
+          <img src={api.assetPreviewURL(asset.id, asset.contentRevision)} alt={asset.displayName} draggable={false} />
         ) : asset.kind === "video" ? (
-          <video src={api.assetPreviewURL(asset.id)} controls preload="metadata" aria-label={asset.displayName} />
+          <video src={api.assetPreviewURL(asset.id, asset.contentRevision)} controls preload="metadata" aria-label={asset.displayName} />
         ) : (
           <div className="cinema-asset-library-audio-preview">
             <Music size={20} aria-hidden="true" />
-            <audio src={api.assetPreviewURL(asset.id)} controls preload="metadata" aria-label={asset.displayName} />
+            <audio src={api.assetPreviewURL(asset.id, asset.contentRevision)} controls preload="metadata" aria-label={asset.displayName} />
           </div>
         )}
       </div>
       <div className="cinema-asset-library-detail-heading">
         <strong title={asset.displayName}>{asset.displayName}</strong>
-        <span>{kindAccepted ? assetStatusLabel(asset.status) : "类型不匹配"}</span>
+        <span>{kindAccepted ? assetStatusLabel(asset.status, t) : t("library.kindMismatch")}</span>
       </div>
       <dl>
         {metadata.map(([label, value]) => (
@@ -2140,7 +2158,7 @@ function AssetDetail({
         {asset.status === "failed" ? (
           <button type="button" className="cinema-library-secondary-button is-main" disabled={isReadOnly} onClick={() => onRetry(asset.id)}>
             <RotateCcw size={14} aria-hidden="true" />
-            重新处理
+            {t("library.reprocess")}
           </button>
         ) : (
           <button
@@ -2150,16 +2168,16 @@ function AssetDetail({
             onClick={() => void onAdd(asset)}
           >
             {isAdding ? <Loader2 size={14} aria-hidden="true" className="is-spinning" /> : <Plus size={14} aria-hidden="true" />}
-            {isAdding ? "正在处理" : mode === "relink" ? "重新关联" : "添加到画布"}
+            {t(isAdding ? "library.processing" : mode === "relink" ? "library.relink" : "library.addToCanvas")}
           </button>
         )}
-        <DetailActionButton label={`重命名 ${asset.displayName}`} disabled={isReadOnly} onClick={() => onRename(asset)}>
+        <DetailActionButton label={t("library.renameNamed", { name: asset.displayName })} disabled={isReadOnly} onClick={() => onRename(asset)}>
           <PencilLine size={14} aria-hidden="true" />
         </DetailActionButton>
-        <DetailActionButton label={`移动 ${asset.displayName}`} disabled={isReadOnly} onClick={() => onMove(asset)}>
+        <DetailActionButton label={t("library.moveNamed", { name: asset.displayName })} disabled={isReadOnly} onClick={() => onMove(asset)}>
           <Move size={14} aria-hidden="true" />
         </DetailActionButton>
-        <DetailActionButton danger label={`删除 ${asset.displayName}`} disabled={isReadOnly} onClick={() => onDelete(asset)}>
+        <DetailActionButton danger label={t("library.deleteNamed", { name: asset.displayName })} disabled={isReadOnly} onClick={() => onDelete(asset)}>
           <Trash2 size={14} aria-hidden="true" />
         </DetailActionButton>
       </div>
@@ -2180,35 +2198,36 @@ function FolderDetail({
   onMove(folder: Extract<AssetLibraryEntry, { entryType: "folder" }>["folder"]): void
   onDelete(folder: Extract<AssetLibraryEntry, { entryType: "folder" }>["folder"]): void
 }) {
+  const { locale, t } = useI18n()
   const actionsDisabled = isReadOnly || folder.system
   return (
-    <section className="cinema-asset-library-detail is-folder" aria-label="文件夹详情">
+    <section className="cinema-asset-library-detail is-folder" aria-label={t("library.folderDetails")}>
       <div className="cinema-asset-library-detail-preview">
         <Folder size={28} aria-hidden="true" />
       </div>
       <div className="cinema-asset-library-detail-heading">
         <strong title={folder.name}>{folder.name}</strong>
-        <span>{folder.system ? "系统目录" : "文件夹"}</span>
+        <span>{t(folder.system ? "library.systemFolder" : "library.folder")}</span>
       </div>
       <dl>
         <div>
-          <dt>路径</dt>
-          <dd title={folder.relativePath}>{folder.relativePath || "素材库"}</dd>
+          <dt>{t("library.path")}</dt>
+          <dd title={folder.relativePath}>{folder.relativePath || t("library.title")}</dd>
         </div>
         <div>
-          <dt>创建时间</dt>
-          <dd>{formatAssetLibraryTimestamp(folder.createdAt)}</dd>
+          <dt>{t("library.createdAt")}</dt>
+          <dd>{formatAssetLibraryTimestamp(folder.createdAt, locale)}</dd>
         </div>
       </dl>
       <div className="cinema-asset-library-detail-actions">
         <button type="button" className="cinema-library-secondary-button is-main" disabled={actionsDisabled} onClick={() => onRename(folder)}>
           <PencilLine size={14} aria-hidden="true" />
-          重命名
+          {t("common.rename")}
         </button>
-        <DetailActionButton label={`移动文件夹 ${folder.name}`} disabled={actionsDisabled} onClick={() => onMove(folder)}>
+        <DetailActionButton label={t("library.moveFolderNamed", { name: folder.name })} disabled={actionsDisabled} onClick={() => onMove(folder)}>
           <Move size={14} aria-hidden="true" />
         </DetailActionButton>
-        <DetailActionButton danger label={`删除文件夹 ${folder.name}`} disabled={actionsDisabled} onClick={() => onDelete(folder)}>
+        <DetailActionButton danger label={t("library.deleteFolderNamed", { name: folder.name })} disabled={actionsDisabled} onClick={() => onDelete(folder)}>
           <Trash2 size={14} aria-hidden="true" />
         </DetailActionButton>
       </div>
@@ -2278,6 +2297,7 @@ function AssetLibraryContextMenu({
   onMove(entries: AssetLibraryEntryRef[]): void
   onDelete(entries: AssetLibraryEntryRef[], sourceEntries: AssetLibraryEntry[]): void
 }) {
+  const { t } = useI18n()
   const menuRef = useRef<HTMLDivElement>(null)
   const [position, setPosition] = useState({ x: menu.x, y: menu.y })
   const items = useMemo<AssetLibraryContextMenuItem[]>(() => {
@@ -2289,14 +2309,14 @@ function AssetLibraryContextMenu({
     if (menu.entries.length === 0) {
       const backgroundItems: AssetLibraryContextMenuItem[] = [mutate({
         id: "upload",
-        label: "上传到这里",
+        label: t("library.uploadHere"),
         icon: <Upload size={14} aria-hidden="true" />,
         action: () => onUpload(),
       })]
       if (!searching) {
         backgroundItems.push(mutate({
           id: "create-folder",
-          label: "新建文件夹",
+          label: t("library.newFolder"),
           icon: <FolderPlus size={14} aria-hidden="true" />,
           action: () => onCreateFolder(currentFolderID),
         }))
@@ -2309,7 +2329,7 @@ function AssetLibraryContextMenu({
         {
           ...mutate({
             id: "move",
-            label: "移动",
+            label: t("common.move"),
             icon: <Move size={14} aria-hidden="true" />,
             action: () => onMove(menu.targets),
           }),
@@ -2318,7 +2338,7 @@ function AssetLibraryContextMenu({
         {
           ...mutate({
             id: "delete",
-            label: "删除",
+            label: t("common.delete"),
             icon: <Trash2 size={14} aria-hidden="true" />,
             danger: true,
             action: () => onDelete(menu.targets, menu.entries),
@@ -2333,19 +2353,19 @@ function AssetLibraryContextMenu({
       const folderItems: AssetLibraryContextMenuItem[] = [
         {
           id: "open",
-          label: "打开",
+          label: t("common.open"),
           icon: <Folder size={14} aria-hidden="true" />,
           action: () => onOpenFolder(entry.folder.id),
         },
         mutate({
           id: "upload",
-          label: "上传到这里",
+          label: t("library.uploadHere"),
           icon: <Upload size={14} aria-hidden="true" />,
           action: () => onUpload(entry.folder.id),
         }),
         mutate({
           id: "create-subfolder",
-          label: "新建子文件夹",
+          label: t("library.newSubfolder"),
           icon: <FolderPlus size={14} aria-hidden="true" />,
           action: () => onCreateFolder(entry.folder.id),
         }),
@@ -2354,20 +2374,20 @@ function AssetLibraryContextMenu({
         folderItems.push(
           mutate({
             id: "rename",
-            label: "重命名",
+            label: t("common.rename"),
             icon: <PencilLine size={14} aria-hidden="true" />,
             separatorBefore: true,
             action: () => onRename(entry),
           }),
           mutate({
             id: "move",
-            label: "移动",
+            label: t("common.move"),
             icon: <Move size={14} aria-hidden="true" />,
             action: () => onMove(menu.targets),
           }),
           mutate({
             id: "delete",
-            label: "删除",
+            label: t("common.delete"),
             icon: <Trash2 size={14} aria-hidden="true" />,
             danger: true,
             action: () => onDelete(menu.targets, menu.entries),
@@ -2380,25 +2400,25 @@ function AssetLibraryContextMenu({
     return [
       mutate({
         id: "rename",
-        label: "重命名",
+        label: t("common.rename"),
         icon: <PencilLine size={14} aria-hidden="true" />,
         action: () => onRename(entry),
       }),
       mutate({
         id: "move",
-        label: "移动",
+        label: t("common.move"),
         icon: <Move size={14} aria-hidden="true" />,
         action: () => onMove(menu.targets),
       }),
       mutate({
         id: "delete",
-        label: "删除",
+        label: t("common.delete"),
         icon: <Trash2 size={14} aria-hidden="true" />,
         danger: true,
         action: () => onDelete(menu.targets, menu.entries),
       }),
     ]
-  }, [currentFolderID, isReadOnly, menu.entries, menu.targets, onCreateFolder, onDelete, onMove, onOpenFolder, onRename, onUpload, searching])
+  }, [currentFolderID, isReadOnly, menu.entries, menu.targets, onCreateFolder, onDelete, onMove, onOpenFolder, onRename, onUpload, searching, t])
 
   useLayoutEffect(() => {
     const element = menuRef.current
@@ -2449,7 +2469,7 @@ function AssetLibraryContextMenu({
       ref={menuRef}
       className="cinema-asset-library-context-menu"
       role="menu"
-      aria-label="素材库操作"
+      aria-label={t("library.actions")}
       style={{ left: position.x, top: position.y }}
       onContextMenu={(event) => event.preventDefault()}
       onKeyDown={(event) => {
@@ -2504,6 +2524,7 @@ function DeleteConfirmationDialog({
   onClose(): void
   onConfirm(): Promise<void>
 }) {
+  const { t } = useI18n()
   const [error, setError] = useState<string | null>(null)
   const dialogRef = useRef<HTMLElement>(null)
   const summary = useMemo(() => summarizeAssetLibrarySelection(entries), [entries])
@@ -2515,7 +2536,7 @@ function DeleteConfirmationDialog({
     try {
       await onConfirm()
     } catch (confirmError) {
-      setError(assetLibraryErrorMessage(confirmError, "删除失败"))
+      setError(assetLibraryErrorMessage(confirmError, t("library.deleteFailed"), t("library.referenceDeleteBlocked")))
     }
   }
 
@@ -2540,9 +2561,9 @@ function DeleteConfirmationDialog({
       >
         <header>
           <strong id="cinema-asset-library-delete-dialog-title">
-            删除所选内容
+            {t("library.deleteSelected")}
           </strong>
-          <LibraryIconButton label="关闭" disabled={pending} onClick={onClose}>
+          <LibraryIconButton label={t("common.close")} disabled={pending} onClick={onClose}>
             <X size={14} aria-hidden="true" />
           </LibraryIconButton>
         </header>
@@ -2550,11 +2571,11 @@ function DeleteConfirmationDialog({
           <AlertCircle size={18} aria-hidden="true" />
           <div>
             <strong>
-              {`${summary.count} 项（${summary.folderCount} 个文件夹，${summary.assetCount} 个素材）`}
+              {t("library.deleteSummary", { count: summary.count, folders: summary.folderCount, assets: summary.assetCount })}
             </strong>
             <span>
-              {summary.knownSizeBytes > 0 ? `已知素材大小 ${formatAssetLibrarySize(summary.knownSizeBytes)}。` : ""}
-              删除后可在 10 秒内撤销。仍被画布、时间线或任务引用的素材不会被删除。
+              {summary.knownSizeBytes > 0 ? t("library.knownSize", { size: formatAssetLibrarySize(summary.knownSizeBytes) }) : ""}
+              {t("library.deleteHint")}
             </span>
           </div>
         </div>
@@ -2566,11 +2587,11 @@ function DeleteConfirmationDialog({
         ) : null}
         <footer>
           <button type="button" className="cinema-library-secondary-button" disabled={pending} onClick={onClose}>
-            取消
+            {t("common.cancel")}
           </button>
           <button type="button" className="cinema-library-danger-button" disabled={pending} onClick={() => void submit()}>
             {pending ? <Loader2 size={14} aria-hidden="true" className="is-spinning" /> : <Trash2 size={14} aria-hidden="true" />}
-            {pending ? "正在删除" : "删除"}
+            {t(pending ? "library.deleting" : "common.delete")}
           </button>
         </footer>
       </section>
@@ -2597,6 +2618,7 @@ function NameDialog({
   onClose(): void
   onSubmit(name: string): Promise<void>
 }) {
+  const { t } = useI18n()
   const [name, setName] = useState(initialName)
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -2607,14 +2629,14 @@ function NameDialog({
     event.preventDefault()
     const normalized = name.normalize("NFC").trim()
     if (!normalized) {
-      setError("请输入名称")
+      setError(t("library.nameRequired"))
       return
     }
     setError(null)
     try {
       await onSubmit(normalized)
     } catch (submitError) {
-      setError(errorMessage(submitError))
+      setError(errorMessage(submitError, t("library.operationFailed")))
     }
   }
 
@@ -2637,20 +2659,20 @@ function NameDialog({
       >
         <header>
           <strong id="cinema-asset-library-name-dialog-title">{title}</strong>
-          <LibraryIconButton label="关闭" onClick={onClose}><X size={14} aria-hidden="true" /></LibraryIconButton>
+          <LibraryIconButton label={t("common.close")} onClick={onClose}><X size={14} aria-hidden="true" /></LibraryIconButton>
         </header>
         <label>
-          <span>名称</span>
+          <span>{t("library.name")}</span>
           <span className="cinema-asset-library-name-input">
             <input ref={inputRef} value={name} maxLength={maxLength} onChange={(event) => setName(event.target.value)} />
-            {suffix ? <span aria-label={`扩展名 ${suffix}`}>{suffix}</span> : null}
+            {suffix ? <span aria-label={t("library.extensionNamed", { extension: suffix })}>{suffix}</span> : null}
           </span>
         </label>
         {error ? <p role="alert">{error}</p> : null}
         <footer>
-          <button type="button" className="cinema-library-secondary-button" onClick={onClose}>取消</button>
+          <button type="button" className="cinema-library-secondary-button" onClick={onClose}>{t("common.cancel")}</button>
           <button type="submit" className="cinema-library-primary-button" disabled={pending || !name.trim()}>
-            {pending ? `${confirmLabel}中…` : confirmLabel}
+            {pending ? t("library.actionPending", { action: confirmLabel }) : confirmLabel}
           </button>
         </footer>
       </form>
@@ -2677,6 +2699,7 @@ function FolderPickerDialog({
   onClose(): void
   onChoose(folderID: string): void
 }) {
+  const { t } = useI18n()
   const [folderID, setFolderID] = useState(initialFolderID)
   const dialogRef = useRef<HTMLElement>(null)
   const folderQuery = useQuery({
@@ -2707,21 +2730,21 @@ function FolderPickerDialog({
       >
         <header>
           <strong id="cinema-asset-library-folder-picker-title">{title}</strong>
-          <LibraryIconButton label="关闭" onClick={onClose}><X size={14} aria-hidden="true" /></LibraryIconButton>
+          <LibraryIconButton label={t("common.close")} onClick={onClose}><X size={14} aria-hidden="true" /></LibraryIconButton>
         </header>
-        <nav className="cinema-asset-library-breadcrumbs" aria-label="目标文件夹路径">
-          <button type="button" onClick={() => setFolderID(rootFolderID)}>素材库</button>
+        <nav className="cinema-asset-library-breadcrumbs" aria-label={t("library.targetFolderPath")}>
+          <button type="button" onClick={() => setFolderID(rootFolderID)}>{t("library.title")}</button>
           {folderQuery.data?.breadcrumbs.filter((folder) => folder.id !== rootFolderID).map((folder) => (
             <button key={folder.id} type="button" onClick={() => setFolderID(folder.id)}>{folder.name}</button>
           ))}
         </nav>
         <div className="cinema-asset-library-folder-picker-list" aria-busy={folderQuery.isLoading}>
           {folderQuery.isLoading ? (
-            <LibraryState icon={<Loader2 size={16} aria-hidden="true" className="is-spinning" />} label="正在加载文件夹" />
+            <LibraryState icon={<Loader2 size={16} aria-hidden="true" className="is-spinning" />} label={t("library.loadingFolders")} />
           ) : folderQuery.error ? (
-            <LibraryState error icon={<AlertCircle size={16} aria-hidden="true" />} label={errorMessage(folderQuery.error)} />
+            <LibraryState error icon={<AlertCircle size={16} aria-hidden="true" />} label={errorMessage(folderQuery.error, t("library.operationFailed"))} />
           ) : folders.length === 0 ? (
-            <LibraryState icon={<Folder size={16} aria-hidden="true" />} label="没有子文件夹" />
+            <LibraryState icon={<Folder size={16} aria-hidden="true" />} label={t("library.noSubfolders")} />
           ) : folders.map((entry) => entry.entryType === "folder" ? (
             <button key={entry.folder.id} type="button" onClick={() => setFolderID(entry.folder.id)}>
               <Folder size={14} aria-hidden="true" />
@@ -2730,9 +2753,9 @@ function FolderPickerDialog({
           ) : null)}
         </div>
         <footer>
-          <button type="button" className="cinema-library-secondary-button" onClick={onClose}>取消</button>
+          <button type="button" className="cinema-library-secondary-button" onClick={onClose}>{t("common.cancel")}</button>
           <button type="button" className="cinema-library-primary-button" disabled={pending} onClick={() => onChoose(folderID)}>
-            {pending ? "正在处理" : confirmLabel}
+            {pending ? t("library.processing") : confirmLabel}
           </button>
         </footer>
       </section>

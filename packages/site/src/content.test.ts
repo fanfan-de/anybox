@@ -7,6 +7,8 @@ describe("site content", () => {
     expect(siteContent.zh.overview.steps).toHaveLength(siteContent.en.overview.steps.length)
     expect(siteContent.zh.plugins.stages).toHaveLength(siteContent.en.plugins.stages.length)
     expect(siteContent.zh.plugins.examples).toHaveLength(siteContent.en.plugins.examples.length)
+    expect(siteContent.zh.plugins.examples).toHaveLength(12)
+    expect(new Set(siteContent.zh.plugins.examples.map((plugin) => plugin.id)).size).toBe(12)
     expect(siteContent.zh.useCases.items).toHaveLength(siteContent.en.useCases.items.length)
     expect(siteContent.zh.safety.items).toHaveLength(siteContent.en.safety.items.length)
     expect(siteContent.zh.faq.items).toHaveLength(siteContent.en.faq.items.length)

@@ -15,6 +15,7 @@ export function TimelineMediaBin({
   timelines,
   selectedTimelineID,
   creating,
+  switchingTimelineID,
   onCreate,
   onSelectTimeline,
   onDeleteTimeline,
@@ -30,6 +31,7 @@ export function TimelineMediaBin({
   timelines: CinemaTimelineDocument[]
   selectedTimelineID: string | null
   creating: boolean
+  switchingTimelineID?: string | null
   onCreate: () => void
   onSelectTimeline: (timelineID: string) => void
   onDeleteTimeline: (timeline: CinemaTimelineDocument) => void
@@ -143,16 +145,16 @@ export function TimelineMediaBin({
         <div className="cinema-timeline-list">
           <div className="cinema-timeline-bin-heading">
             <strong>{t("deliver.timelines")}</strong>
-            <button type="button" aria-label={t("timeline.new")} title={t("timeline.new")} disabled={creating} onClick={onCreate}><Plus aria-hidden="true" /></button>
+            <button type="button" aria-label={t("timeline.new")} title={t("timeline.new")} disabled={creating || switchingTimelineID !== null} onClick={onCreate}><Plus aria-hidden="true" /></button>
           </div>
           <div className="cinema-timeline-bin-scroll">
             {timelines.map((timeline) => (
               <div key={timeline.id} className={`cinema-timeline-list-item ${selectedTimelineID === timeline.id ? "is-current" : ""}`}>
-                <button type="button" className="cinema-timeline-list-row" aria-current={selectedTimelineID === timeline.id ? "page" : undefined} onClick={() => onSelectTimeline(timeline.id)}>
+                <button type="button" className="cinema-timeline-list-row" aria-current={selectedTimelineID === timeline.id ? "page" : undefined} disabled={switchingTimelineID !== null} onClick={() => onSelectTimeline(timeline.id)}>
                   <Film aria-hidden="true" />
                   <span><strong>{timeline.title}</strong><small>{t("timeline.clipCount", { count: timeline.clips.length, revision: timeline.revision })}</small></span>
                 </button>
-                <button type="button" className="cinema-timeline-list-delete" aria-label={t("timeline.deleteNamed", { name: timeline.title })} title={t("timeline.delete")} onClick={() => onDeleteTimeline(timeline)}><Trash2 aria-hidden="true" /></button>
+                <button type="button" className="cinema-timeline-list-delete" aria-label={t("timeline.deleteNamed", { name: timeline.title })} title={t("timeline.delete")} disabled={switchingTimelineID !== null} onClick={() => onDeleteTimeline(timeline)}><Trash2 aria-hidden="true" /></button>
               </div>
             ))}
             {timelines.length === 0 ? <p className="cinema-timeline-bin-empty">{t("timeline.none")}</p> : null}
