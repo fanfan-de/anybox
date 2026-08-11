@@ -147,13 +147,34 @@
 
 .home-hero h1 {
   max-width: 1060px;
-  margin: var(--home-hero-heading-gap) auto 0;
+  margin: 18px auto 0;
   color: var(--hero-stage-text);
   font-family: var(--font-display);
   font-size: clamp(2rem, 3.45vw, 3.1rem);
   font-weight: 730;
   line-height: 1.12;
   letter-spacing: -0.025em;
+}
+
+.home-hero-open-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: var(--home-hero-heading-gap) auto 0;
+  color: var(--hero-paper-ink);
+  font-family: "Cascadia Code", "Consolas", monospace;
+  font-size: clamp(0.82rem, 1.2vw, 0.94rem);
+  font-weight: 760;
+  line-height: 1.45;
+}
+
+.home-hero-open-source::before {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--hero-paper-accent);
+  content: "";
 }
 
 .home-hero-title-formula,
@@ -242,6 +263,10 @@
 .home-hero .button {
   min-height: 46px;
   border-radius: var(--radius-control);
+}
+
+.home-hero-github {
+  white-space: nowrap;
 }
 
 .home-hero .button-primary {
@@ -781,7 +806,7 @@
 
 .trust-stats {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: 0;
   border-top: 1px solid var(--border-strong);
 }
@@ -950,7 +975,7 @@
   }
 
   .home-hero h1 {
-    margin-top: 24px;
+    margin-top: 16px;
     font-size: clamp(1.82rem, 8.8vw, 2.72rem);
     letter-spacing: -0.03em;
   }
@@ -959,6 +984,13 @@
     margin-bottom: 0.5em;
     font-size: clamp(0.88rem, 3.8vw, 1rem);
     white-space: nowrap;
+  }
+
+  .home-hero-open-source {
+    max-width: 100%;
+    margin-top: 26px;
+    font-size: 0.8rem;
+    text-align: left;
   }
 
   .home-hero-title-rest {
@@ -996,6 +1028,10 @@
 
   .download-primary {
     min-width: 0;
+  }
+
+  .download-primary .button-version {
+    display: none;
   }
 
   .home-hero-actions > .button,
@@ -1612,7 +1648,7 @@
   }
 
   .home-hero h1 {
-    margin-top: 24px;
+    margin-top: 16px;
     font-size: clamp(1.82rem, 8.8vw, 2.72rem);
     letter-spacing: -0.03em;
   }
@@ -1621,6 +1657,13 @@
     margin-bottom: 0.5em;
     font-size: clamp(0.88rem, 3.8vw, 1rem);
     white-space: normal;
+  }
+
+  .home-hero-open-source {
+    max-width: 100%;
+    margin-top: 26px;
+    font-size: 0.8rem;
+    text-align: left;
   }
 
   .home-hero-title-rest {

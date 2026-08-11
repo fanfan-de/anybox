@@ -155,28 +155,72 @@ export function App() {
           <div className="home-hero-stage">
             <div className="home-hero-copy">
               <p className="home-hero-wordmark" aria-hidden="true">Anybox</p>
-              <h1 id="hero-title">
-                {language === "zh" ? (
-                  <>
-                    <span className="home-hero-title-kicker">面向 AI builder 的通用 Agent 工作台</span>
-                    <span className="home-hero-title-formula">
-                      <span className="home-hero-title-term">通用 Agent</span>
-                      <span className="home-hero-title-plus">+</span>
-                      <span className="home-hero-title-term">领域化插件</span>
-                      <span>架构，</span>
-                    </span>
-                    <span className="home-hero-title-rest">让 Anybox 可以适用于任何任务场景。</span>
-                  </>
-                ) : content.hero.title}
-              </h1>
+              <p className="home-hero-open-source">{content.hero.eyebrow}</p>
+              <h1 id="hero-title">{content.hero.title}</h1>
               <p className="home-hero-summary">{content.hero.description}</p>
               <div className="home-hero-actions">
                 <DownloadCta placement="hero" />
+                <a
+                  className="button button-secondary home-hero-github"
+                  href={repositoryUrl}
+                  rel="noreferrer"
+                  target="_blank"
+                  onClick={() => trackSiteEvent({
+                    destination: "github",
+                    language,
+                    name: "navigation_click",
+                    placement: "hero",
+                  })}
+                >
+                  {content.hero.githubLabel}
+                </a>
               </div>
               <p className="home-hero-note">{content.hero.note}</p>
             </div>
           </div>
         </div>
+      </section>
+
+      <section className="home-section trust-section" id="open-source" aria-labelledby="trust-title">
+        <div className="trust-copy">
+          <p className="section-kicker">{content.trust.eyebrow}</p>
+          <h2 id="trust-title">{content.trust.title}</h2>
+          <p>{content.trust.description}</p>
+          <div className="trust-links">
+            <a
+              href={repositoryUrl}
+              rel="noreferrer"
+              target="_blank"
+              onClick={() => trackSiteEvent({
+                destination: "github",
+                language,
+                name: "navigation_click",
+                placement: "trust",
+              })}
+            >
+              {content.trust.githubLabel}
+            </a>
+            <a
+              href={releasesUrl}
+              rel="noreferrer"
+              target="_blank"
+              onClick={() => trackSiteEvent({
+                destination: "releases",
+                language,
+                name: "navigation_click",
+                placement: "trust",
+              })}
+            >
+              {content.trust.releasesLabel}
+            </a>
+          </div>
+        </div>
+        <dl className="trust-stats">
+          <div><dt>{content.trust.licenseLabel}</dt><dd>MIT</dd></div>
+          <div><dt>{content.trust.starsLabel}</dt><dd>{formatStars(repository.stars)}</dd></div>
+          <div><dt>{content.trust.versionLabel}</dt><dd>{repository.latestRelease ?? "—"}</dd></div>
+          <div><dt>{content.trust.updatedLabel}</dt><dd>{releaseDate}</dd></div>
+        </dl>
       </section>
 
       <section className="home-overview-section" id="product" aria-labelledby="overview-title">
@@ -320,47 +364,6 @@ export function App() {
             </li>
           ))}
         </ol>
-      </section>
-
-      <section className="home-section trust-section" aria-labelledby="trust-title">
-        <div className="trust-copy">
-          <p className="section-kicker">{content.trust.eyebrow}</p>
-          <h2 id="trust-title">{content.trust.title}</h2>
-          <p>{content.trust.description}</p>
-          <div className="trust-links">
-            <a
-              href={repositoryUrl}
-              rel="noreferrer"
-              target="_blank"
-              onClick={() => trackSiteEvent({
-                destination: "github",
-                language,
-                name: "navigation_click",
-                placement: "trust",
-              })}
-            >
-              {content.trust.githubLabel}
-            </a>
-            <a
-              href={releasesUrl}
-              rel="noreferrer"
-              target="_blank"
-              onClick={() => trackSiteEvent({
-                destination: "releases",
-                language,
-                name: "navigation_click",
-                placement: "trust",
-              })}
-            >
-              {content.trust.releasesLabel}
-            </a>
-          </div>
-        </div>
-        <dl className="trust-stats">
-          <div><dt>{content.trust.starsLabel}</dt><dd>{formatStars(repository.stars)}</dd></div>
-          <div><dt>{content.trust.versionLabel}</dt><dd>{repository.latestRelease ?? "—"}</dd></div>
-          <div><dt>{content.trust.updatedLabel}</dt><dd>{releaseDate}</dd></div>
-        </dl>
       </section>
 
       <section className="home-final-cta" aria-labelledby="final-cta-title">

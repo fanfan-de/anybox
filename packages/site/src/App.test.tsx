@@ -24,6 +24,14 @@ describe("App", () => {
       </LanguageProvider>,
     )
 
+    expect(screen.getByRole("heading", {
+      name: "开源的本地 AI Agent 工作台，把代码、能力与工作流握在自己手中。",
+    })).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "在 GitHub 查看源码" })).toHaveAttribute(
+      "href",
+      "https://github.com/fanfan-de/anybox",
+    )
+    expect(screen.getByText("MIT", { selector: "dd" })).toBeInTheDocument()
     expect(screen.getByRole("heading", { name: "你的智能本地 Agent 工作台" })).toBeInTheDocument()
     expect(container.querySelector("#product")).toBeInTheDocument()
     expect(container.querySelector("#plugins")).toBeInTheDocument()

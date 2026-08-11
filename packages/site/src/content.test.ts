@@ -16,6 +16,7 @@ describe("site content", () => {
     for (const content of Object.values(siteContent)) {
       expect(content.hero.title.length).toBeGreaterThan(12)
       expect(content.hero.description.length).toBeGreaterThan(40)
+      expect(content.hero.eyebrow.toLowerCase()).toMatch(/开源|open-source/)
       expect(content.finalCta.docsLabel).not.toBe("")
       expect(content.useCases.items.every((item) => item.imageSrc.startsWith("/"))).toBe(true)
     }

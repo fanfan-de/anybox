@@ -68,7 +68,7 @@ export function DownloadCta({ placement }: { placement: DownloadPlacement }) {
         }}
         type="button"
       >
-        {language === "zh" ? "其他平台" : "Other platforms"}
+        {language === "zh" ? "其他平台" : "Platforms"}
       </button>
       {isMenuOpen ? (
         <div className="download-platform-menu" id={menuId} role="menu">

@@ -14,6 +14,7 @@ export type SiteContent = {
   }
   hero: {
     description: string
+    eyebrow: string
     githubLabel: string
     note: string
     title: string
@@ -45,6 +46,7 @@ export type SiteContent = {
     description: string
     eyebrow: string
     githubLabel: string
+    licenseLabel: string
     releasesLabel: string
     starsLabel: string
     title: string
@@ -70,10 +72,11 @@ export type SiteContent = {
 export const siteContent = {
   zh: {
     hero: {
-      title: "通用 Agent + 领域化插件架构，让 Anybox 可以适用于任何任务场景。",
+      eyebrow: "桌面端永久免费开源 · MIT License",
+      title: "开源的本地 AI Agent 工作台，把代码、能力与工作流握在自己手中。",
       description:
-        "把本地项目、模型、工具和插件放进同一个可检查的工作台，让 Agent 从理解任务一直参与到结果交付。",
-      githubLabel: "查看 GitHub",
+        "源码、Issue、发行版本与更新记录公开可查。把本地项目、模型、工具和插件放进同一个可检查的工作空间，从第一次请求一直做到结果交付。",
+      githubLabel: "在 GitHub 查看源码",
       note: "支持 Windows x64、macOS Apple Silicon、Linux x64 与 Android。",
     },
     signals: ["开源", "本地项目", "多模型", "权限确认", "可审计工具调用"],
@@ -163,9 +166,10 @@ export const siteContent = {
       privacyLabel: "阅读隐私政策",
     },
     trust: {
-      eyebrow: "开源与持续发布",
-      title: "代码、版本和更新记录都公开可查",
-      description: "从源代码到发行版本都托管在 GitHub。你可以先检查实现，再决定如何把 Anybox 放进工作流。",
+      eyebrow: "开源，不只是一个标签",
+      title: "从源码到发行版本，每一步都公开可查",
+      description: "Anybox 桌面端采用 MIT License。你可以审阅实现、提交 Issue、参与贡献，也可以直接下载公开发行版本。",
+      licenseLabel: "开源许可证",
       starsLabel: "GitHub Stars",
       versionLabel: "最新版本",
       updatedLabel: "最近发布",
@@ -211,10 +215,11 @@ export const siteContent = {
   },
   en: {
     hero: {
-      title: "A general agent and domain plugins for work of every kind",
+      eyebrow: "Free and open-source desktop app · MIT licensed",
+      title: "An open-source local AI agent workspace you can inspect, extend, and own.",
       description:
-        "Bring local projects, models, tools, and plugins into one inspectable workspace, from first request to final delivery.",
-      githubLabel: "View on GitHub",
+        "Source, issues, releases, and update history are public. Bring local projects, models, tools, and plugins into one inspectable workspace, from first request to final delivery.",
+      githubLabel: "View the source on GitHub",
       note: "Available for Windows x64, macOS Apple Silicon, Linux x64, and Android.",
     },
     signals: ["Open source", "Local projects", "Multiple models", "Permission control", "Auditable tool calls"],
@@ -304,9 +309,10 @@ export const siteContent = {
       privacyLabel: "Read the privacy policy",
     },
     trust: {
-      eyebrow: "Open source and actively released",
-      title: "Inspect the code, versions, and release history",
-      description: "Source code and releases are public on GitHub, so you can understand the product before bringing it into your workflow.",
+      eyebrow: "Open source is more than a label",
+      title: "Inspect every step, from source to release",
+      description: "The Anybox desktop app is MIT licensed. Review the implementation, open an issue, contribute, or download a public release.",
+      licenseLabel: "Open-source license",
       starsLabel: "GitHub stars",
       versionLabel: "Latest version",
       updatedLabel: "Latest release",
