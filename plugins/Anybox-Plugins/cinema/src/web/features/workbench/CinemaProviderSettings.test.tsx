@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { I18nProvider } from "../../i18n"
 import { CinemaProviderSettings } from "./CinemaProviderSettings"
 
+const AGENT_BASE_URL = "http://runtime.example:8765"
+
 function jsonResponse(data: unknown) {
   return Promise.resolve(new Response(JSON.stringify({ success: true, data }), {
     status: 200,
@@ -44,7 +46,7 @@ describe("CinemaProviderSettings", () => {
 
     render(
       <I18nProvider locale="en-US">
-        <CinemaProviderSettings initialProviderID="comfyui-local" />
+        <CinemaProviderSettings initialProviderID="comfyui-local" agentBaseURL={AGENT_BASE_URL} />
       </I18nProvider>,
     )
 
@@ -90,7 +92,7 @@ describe("CinemaProviderSettings", () => {
 
     render(
       <I18nProvider locale="en-US">
-        <CinemaProviderSettings initialProviderID="comfyui-local" />
+        <CinemaProviderSettings initialProviderID="comfyui-local" agentBaseURL={AGENT_BASE_URL} />
       </I18nProvider>,
     )
 
@@ -106,12 +108,13 @@ describe("CinemaProviderSettings", () => {
   })
 
   it("loads OpenAI-compatible settings and saves model configuration without replacing a stored key", async () => {
+    const onConfigurationChanged = vi.fn()
     const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(async (input, init) => {
       const pathname = new URL(String(input)).pathname
       if (pathname.endsWith("/credential")) {
         return await jsonResponse({ configured: true, persistence: "system-keychain" })
       }
-      if (pathname.endsWith("/settings") && init?.method === "PUT") return await jsonResponse({})
+      if (pathname.endsWith("/configuration") && init?.method === "PUT") return await jsonResponse({})
       if (pathname.endsWith("/settings")) {
         return await jsonResponse({
           baseURL: "https://api.example.com/v1",
@@ -126,7 +129,11 @@ describe("CinemaProviderSettings", () => {
 
     render(
       <I18nProvider locale="en-US">
-        <CinemaProviderSettings initialProviderID="openai-compatible" />
+        <CinemaProviderSettings
+          initialProviderID="openai-compatible"
+          agentBaseURL={AGENT_BASE_URL}
+          onConfigurationChanged={onConfigurationChanged}
+        />
       </I18nProvider>,
     )
 
@@ -140,18 +147,23 @@ describe("CinemaProviderSettings", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save" }))
 
     expect(await screen.findByText("Provider settings saved.")).toBeVisible()
-    const settingsWrite = fetchMock.mock.calls.find(([input, init]) => (
-      new URL(String(input)).pathname.endsWith("/settings") && init?.method === "PUT"
+    const configurationWrite = fetchMock.mock.calls.find(([input, init]) => (
+      new URL(String(input)).pathname.endsWith("/configuration") && init?.method === "PUT"
     ))
-    expect(settingsWrite).toBeDefined()
-    expect(JSON.parse(String(settingsWrite?.[1]?.body))).toEqual({
-      baseURL: "https://new.example.com/v1",
-      defaultModel: "model-b",
-      models: [{ id: "model-b" }, { id: "model-a" }, { id: "model-c" }],
-      textGenerationPrompt: "Keep shots concise.",
+    expect(configurationWrite).toBeDefined()
+    expect(JSON.parse(String(configurationWrite?.[1]?.body))).toEqual({
+      settings: {
+        baseURL: "https://new.example.com/v1",
+        defaultModel: "model-b",
+        models: [{ id: "model-b" }, { id: "model-a" }, { id: "model-c" }],
+        textGenerationPrompt: "Keep shots concise.",
+      },
     })
+    expect(onConfigurationChanged).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls.every(([input]) => new URL(String(input)).origin === AGENT_BASE_URL)).toBe(true)
     expect(fetchMock.mock.calls.some(([input, init]) => (
-      new URL(String(input)).pathname.endsWith("/credential") && init?.method === "PUT"
+      ["/settings", "/credential"].some((suffix) => new URL(String(input)).pathname.endsWith(suffix))
+      && init?.method === "PUT"
     ))).toBe(false)
   })
 
@@ -161,10 +173,11 @@ describe("CinemaProviderSettings", () => {
     const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(async (input, init) => {
       const pathname = new URL(String(input)).pathname
       if (pathname.endsWith("/settings")) return await jsonResponse({})
-      if (pathname.endsWith("/credential") && init?.method === "PUT") {
+      if (pathname.endsWith("/configuration") && init?.method === "PUT") {
+        const body = JSON.parse(String(init.body))
         configured = true
-        persistence = JSON.parse(String(init.body)).persistence
-        return await jsonResponse({ configured, persistence })
+        persistence = body.credential.persistence
+        return await jsonResponse({ credential: { configured, persistence } })
       }
       if (pathname.endsWith("/credential")) return await jsonResponse({ configured, persistence })
       if (pathname.endsWith("/test")) {
@@ -176,7 +189,7 @@ describe("CinemaProviderSettings", () => {
 
     render(
       <I18nProvider locale="en-US">
-        <CinemaProviderSettings initialProviderID="google-ai-sdk" />
+        <CinemaProviderSettings initialProviderID="google-ai-sdk" agentBaseURL={AGENT_BASE_URL} />
       </I18nProvider>,
     )
 
@@ -188,12 +201,14 @@ describe("CinemaProviderSettings", () => {
     expect(await screen.findByText("Connection test succeeded.")).toBeVisible()
     expect(screen.getByText("Connected · This session")).toBeVisible()
     expect(keyInput).toHaveValue("")
-    const credentialWrite = fetchMock.mock.calls.find(([input, init]) => (
-      new URL(String(input)).pathname.endsWith("/credential") && init?.method === "PUT"
+    const configurationWrite = fetchMock.mock.calls.find(([input, init]) => (
+      new URL(String(input)).pathname.endsWith("/configuration") && init?.method === "PUT"
     ))
-    expect(JSON.parse(String(credentialWrite?.[1]?.body))).toEqual({
-      apiKey: "google-secret",
-      persistence: "session",
+    expect(JSON.parse(String(configurationWrite?.[1]?.body))).toEqual({
+      credential: {
+        apiKey: "google-secret",
+        persistence: "session",
+      },
     })
     expect(fetchMock.mock.calls.some(([input, init]) => (
       new URL(String(input)).pathname.endsWith("/test") && init?.method === "POST"
@@ -210,7 +225,7 @@ describe("CinemaProviderSettings", () => {
 
     render(
       <I18nProvider locale="en-US">
-        <CinemaProviderSettings initialProviderID="klingai-cn" />
+        <CinemaProviderSettings initialProviderID="klingai-cn" agentBaseURL={AGENT_BASE_URL} />
       </I18nProvider>,
     )
 
@@ -227,7 +242,7 @@ describe("CinemaProviderSettings", () => {
 
     render(
       <I18nProvider locale="en-US">
-        <CinemaProviderSettings />
+        <CinemaProviderSettings agentBaseURL={AGENT_BASE_URL} />
       </I18nProvider>,
     )
 
@@ -246,7 +261,7 @@ describe("CinemaProviderSettings", () => {
 
     const { container } = render(
       <I18nProvider locale="en-US">
-        <CinemaProviderSettings initialProviderID="openai-compatible" />
+        <CinemaProviderSettings initialProviderID="openai-compatible" agentBaseURL={AGENT_BASE_URL} />
       </I18nProvider>,
     )
 

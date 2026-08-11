@@ -2,6 +2,7 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 import { ApiError } from "#server/error.ts"
 import { readProviderApiKey } from "#auth/provider-auth.ts"
 import { getSettings } from "#config/config.ts"
+import { safeProviderFetch } from "./network-policy.ts"
 
 export type PublicModel = {
   id: string
@@ -16,6 +17,17 @@ export type PublicModel = {
 }
 
 class ModelNotFoundError extends Error {}
+
+export function createCinemaOpenAICompatibleProvider(input: { baseURL: string; apiKey: string }) {
+  return createOpenAICompatible({
+    name: "cinema-openai-compatible",
+    baseURL: input.baseURL,
+    apiKey: input.apiKey,
+    // Bun augments global fetch with a non-standard preconnect property; the
+    // SDK consumes only the standard callable Fetch API represented here.
+    fetch: safeProviderFetch as typeof fetch,
+  })
+}
 
 function publicModel(id: string, label: string | undefined, image: boolean, available: boolean): PublicModel {
   return {
@@ -59,8 +71,7 @@ export async function getLanguage(model: PublicModel, _projectID?: string) {
   const settings = await getSettings()
   const credential = await readProviderApiKey("openai-compatible")
   if (!credential) throw new ApiError(400, "CINEMA_PROVIDER_NOT_CONNECTED", "OpenAI Compatible API key is not configured.")
-  const provider = createOpenAICompatible({
-    name: "cinema-openai-compatible",
+  const provider = createCinemaOpenAICompatibleProvider({
     baseURL: settings.openAICompatible.baseURL,
     apiKey: credential.value,
   })

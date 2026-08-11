@@ -641,8 +641,40 @@ button {
   background: var(--cinema-workbench-chrome-surface);
 }
 
+.cinema-workbench-leading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  justify-self: stretch;
+}
+
+.cinema-workbench-identity {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--cinema-text-2);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.cinema-workbench-identity > svg {
+  flex: 0 0 auto;
+  color: var(--cinema-text-3);
+}
+
+.cinema-workbench-identity > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .cinema-settings-control {
   position: relative;
+  flex: 0 0 auto;
   min-width: 0;
   justify-self: start;
   -webkit-app-region: no-drag;

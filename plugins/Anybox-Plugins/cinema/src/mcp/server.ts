@@ -1,6 +1,7 @@
 import path from "node:path"
 import readline from "node:readline"
 import { z } from "zod"
+import cinemaVersion from "../version.json"
 import {
   CinemaCommandSchema,
   type CinemaCanvasDocument,
@@ -271,7 +272,7 @@ lines.on("line", (line) => {
         result: {
           protocolVersion: "2025-06-18",
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: "anybox-cinema", version: "1.0.0" },
+          serverInfo: { name: "anybox-cinema", version: cinemaVersion.version },
         },
       })
       return

@@ -1,5 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState, type MouseEventHandler, type ReactNode } from "react"
-import { Moon, Settings2, Sun, X } from "lucide-react"
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEventHandler, type ReactNode } from "react"
+import { Film, Moon, Settings2, Sun, X } from "lucide-react"
 import { SUPPORTED_LOCALES, useI18n, type TranslationKey } from "../../i18n"
 import { CinemaProviderSettings } from "./CinemaProviderSettings"
 import { isCinemaProviderID, type CinemaProviderID } from "./cinemaProviderSettingsApi"
@@ -27,6 +27,8 @@ const CINEMA_WORKSPACES: ReadonlyArray<{
   { id: "deliver", labelKey: "workspace.deliver" },
 ]
 
+const CINEMA_SETTINGS_VIEWS = ["general", "providers"] as const
+
 function readThemePreference(): CinemaThemePreference {
   try {
     const stored = window.localStorage.getItem(CINEMA_THEME_STORAGE_KEY)
@@ -36,7 +38,13 @@ function readThemePreference(): CinemaThemePreference {
   }
 }
 
-function CinemaSettingsControl() {
+function CinemaSettingsControl({
+  agentBaseURL,
+  onProviderConfigurationChanged,
+}: {
+  agentBaseURL: string
+  onProviderConfigurationChanged?: () => void | Promise<void>
+}) {
   const { locale, setLocale, t } = useI18n()
   const [theme, setTheme] = useState<CinemaThemePreference>(readThemePreference)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -44,6 +52,27 @@ function CinemaSettingsControl() {
   const [requestedProviderID, setRequestedProviderID] = useState<CinemaProviderID>("comfyui-local")
   const controlRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
+
+  function handleSettingsTabKeyDown(
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+    currentView: typeof CINEMA_SETTINGS_VIEWS[number],
+  ) {
+    const currentIndex = CINEMA_SETTINGS_VIEWS.indexOf(currentView)
+    const nextIndex = event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? CINEMA_SETTINGS_VIEWS.length - 1
+        : event.key === "ArrowRight"
+          ? (currentIndex + 1) % CINEMA_SETTINGS_VIEWS.length
+          : event.key === "ArrowLeft"
+            ? (currentIndex - 1 + CINEMA_SETTINGS_VIEWS.length) % CINEMA_SETTINGS_VIEWS.length
+            : -1
+    if (nextIndex < 0) return
+    event.preventDefault()
+    const nextView = CINEMA_SETTINGS_VIEWS[nextIndex]!
+    setSettingsView(nextView)
+    document.getElementById(`cinema-settings-${nextView}-tab`)?.focus()
+  }
 
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -128,7 +157,7 @@ function CinemaSettingsControl() {
             </button>
           </header>
           <div className="cinema-settings-tabs" role="tablist" aria-label={t("settings.sections")}>
-            {(["general", "providers"] as const).map((view) => (
+            {CINEMA_SETTINGS_VIEWS.map((view) => (
               <button
                 key={view}
                 id={`cinema-settings-${view}-tab`}
@@ -139,6 +168,7 @@ function CinemaSettingsControl() {
                 aria-selected={settingsView === view}
                 tabIndex={settingsView === view ? 0 : -1}
                 onClick={() => setSettingsView(view)}
+                onKeyDown={(event) => handleSettingsTabKeyDown(event, view)}
               >
                 {t(view === "general" ? "settings.section.general" : "settings.section.providers")}
               </button>
@@ -201,7 +231,11 @@ function CinemaSettingsControl() {
               role="tabpanel"
               aria-labelledby="cinema-settings-providers-tab"
             >
-              <CinemaProviderSettings initialProviderID={requestedProviderID} />
+              <CinemaProviderSettings
+                initialProviderID={requestedProviderID}
+                agentBaseURL={agentBaseURL}
+                onConfigurationChanged={onProviderConfigurationChanged}
+              />
             </div>
           )}
         </section>
@@ -212,16 +246,20 @@ function CinemaSettingsControl() {
 
 export function CinemaWorkbenchShell({
   projectName,
+  agentBaseURL,
   activeWorkspace,
   onWorkspaceChange,
   availableWorkspaces,
+  onProviderConfigurationChanged,
   onClick,
   children,
 }: {
   projectName: string
+  agentBaseURL: string
   activeWorkspace: CinemaWorkspaceID
   onWorkspaceChange: (workspace: CinemaWorkspaceID) => void
   availableWorkspaces?: Partial<Record<CinemaWorkspaceID, boolean>>
+  onProviderConfigurationChanged?: () => void | Promise<void>
   onClick?: MouseEventHandler<HTMLElement>
   children: ReactNode
 }) {
@@ -229,10 +267,44 @@ export function CinemaWorkbenchShell({
   const activeDefinition = CINEMA_WORKSPACES.find((workspace) => workspace.id === activeWorkspace)
     ?? CINEMA_WORKSPACES[0]
 
+  function handleWorkspaceTabKeyDown(
+    event: ReactKeyboardEvent<HTMLButtonElement>,
+    currentWorkspace: CinemaWorkspaceID,
+  ) {
+    const availableDefinitions = CINEMA_WORKSPACES.filter((workspace) => (
+      workspace.id === "create" || availableWorkspaces?.[workspace.id] === true
+    ))
+    const currentIndex = availableDefinitions.findIndex((workspace) => workspace.id === currentWorkspace)
+    if (currentIndex < 0 || availableDefinitions.length === 0) return
+    const nextIndex = event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? availableDefinitions.length - 1
+        : event.key === "ArrowRight"
+          ? (currentIndex + 1) % availableDefinitions.length
+          : event.key === "ArrowLeft"
+            ? (currentIndex - 1 + availableDefinitions.length) % availableDefinitions.length
+            : -1
+    if (nextIndex < 0) return
+    event.preventDefault()
+    const nextWorkspace = availableDefinitions[nextIndex]!
+    if (nextWorkspace.id !== currentWorkspace) onWorkspaceChange(nextWorkspace.id)
+    document.getElementById(`cinema-workbench-${nextWorkspace.id}-tab`)?.focus()
+  }
+
   return (
     <main className="cinema-shell is-workbench" onClick={onClick}>
       <header className="cinema-workbench-header">
-        <CinemaSettingsControl />
+        <div className="cinema-workbench-leading">
+          <CinemaSettingsControl
+            agentBaseURL={agentBaseURL}
+            onProviderConfigurationChanged={onProviderConfigurationChanged}
+          />
+          <div className="cinema-workbench-identity" title={projectName}>
+            <Film size={14} aria-hidden="true" />
+            <span>{projectName}</span>
+          </div>
+        </div>
         <nav className="cinema-workbench-tabs" role="tablist" aria-label={t("workspace.navigation")}>
           {CINEMA_WORKSPACES.map((workspace) => {
             const available = workspace.id === "create" || availableWorkspaces?.[workspace.id] === true
@@ -256,6 +328,7 @@ export function CinemaWorkbenchShell({
                 onClick={() => {
                   if (available && !selected) onWorkspaceChange(workspace.id)
                 }}
+                onKeyDown={(event) => handleWorkspaceTabKeyDown(event, workspace.id)}
               >
                 <span>{workspaceLabel}</span>
                 {!available ? <small>{t("workspace.soon")}</small> : null}

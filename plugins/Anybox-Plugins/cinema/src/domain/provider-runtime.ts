@@ -3025,12 +3025,16 @@ export async function getCinemaVideoProviderAuth(providerID: string): Promise<Ci
   return (await getCinemaVideoProvider(providerID)).auth
 }
 
-export async function saveCinemaVideoProviderApiKey(providerID: string, apiKey: string | null | undefined): Promise<CinemaProviderAuthState> {
+export async function saveCinemaVideoProviderApiKey(
+  providerID: string,
+  apiKey: string | null | undefined,
+  options: { allowSession?: boolean } = {},
+): Promise<CinemaProviderAuthState> {
   const provider = await getCinemaVideoProvider(providerID)
   if (!provider.manifest.requiresCredential || !provider.manifest.credentialProviderID) {
     throw new ApiError(400, "CINEMA_PROVIDER_CREDENTIAL_UNSUPPORTED", `Cinema provider '${providerID}' does not use API key credentials.`)
   }
-  await ProviderAuth.saveProviderApiKey(provider.manifest.credentialProviderID, apiKey)
+  await ProviderAuth.saveProviderApiKey(provider.manifest.credentialProviderID, apiKey, options)
   return await providerAuthStateFor(provider.manifest)
 }
 

@@ -40,7 +40,8 @@ const CinemaDirectoryQuerySchema = z.object({
 
 const CinemaProviderApiKeyBodySchema = z.object({
   apiKey: z.string().nullable().optional(),
-})
+  persistence: z.enum(["system-keychain", "session"]).default("system-keychain"),
+}).strict()
 
 const CinemaTimelineEventsQuerySchema = z.object({
   after: z.coerce.number().int().min(0).optional(),
@@ -212,7 +213,11 @@ export function CinemaRoutes() {
       CinemaProviderApiKeyBodySchema,
       "Body must contain an optional nullable 'apiKey' field.",
     )
-    return ok(c, await CinemaUseCase.saveCinemaVideoProviderApiKey(c.req.param("providerID"), payload.apiKey))
+    return ok(c, await CinemaUseCase.saveCinemaVideoProviderApiKey(
+      c.req.param("providerID"),
+      payload.apiKey,
+      { allowSession: payload.persistence === "session" },
+    ))
   })
 
   app.put("/video-providers/:providerID/settings", async (c) => {

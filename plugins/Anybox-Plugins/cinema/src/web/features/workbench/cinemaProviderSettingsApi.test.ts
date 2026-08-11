@@ -66,6 +66,35 @@ describe("cinemaProviderSettingsApi", () => {
     })
   })
 
+  it("sends settings and credentials through one configuration request", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({}))
+    vi.stubGlobal("fetch", fetchMock)
+    const api = createCinemaProviderSettingsApi("http://runtime.example:8765")
+
+    await expect(api.saveConfiguration("openai-compatible", {
+      settings: {
+        baseURL: "https://api.example.com/v1",
+        defaultModel: "model-a",
+        models: [{ id: "model-a" }],
+      },
+      credential: { apiKey: "secret-value", persistence: "session" },
+    })).resolves.toBeUndefined()
+
+    const [requestURL, requestInit] = fetchMock.mock.calls[0]!
+    expect(String(requestURL)).toBe(
+      "http://runtime.example:8765/api/cinema/providers/openai-compatible/configuration",
+    )
+    expect(requestInit?.method).toBe("PUT")
+    expect(JSON.parse(String(requestInit?.body))).toEqual({
+      settings: {
+        baseURL: "https://api.example.com/v1",
+        defaultModel: "model-a",
+        models: [{ id: "model-a" }],
+      },
+      credential: { apiKey: "secret-value", persistence: "session" },
+    })
+  })
+
   it("discovers and deduplicates OpenAI-compatible models", async () => {
     const fetchMock = vi.fn(async () => jsonResponse({
       items: [{ id: "model-b" }, { id: "model-a", label: "Model A" }, { id: "model-b" }],

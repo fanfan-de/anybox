@@ -42,23 +42,25 @@ let verification
 if (allowUnsignedValidation) {
   verification = { status: "unsigned-validation", method: "explicit-ci-validation-bypass" }
 } else if (process.platform === "win32") {
+  const expected = process.env.CINEMA_HELPER_WINDOWS_SIGNER_THUMBPRINT?.replaceAll(/\s/g, "").toUpperCase()
+  if (!expected) throw new Error("CINEMA_HELPER_WINDOWS_SIGNER_THUMBPRINT is required to verify the Windows helper.")
   const script = [
     `$signature = Get-AuthenticodeSignature -LiteralPath '${artifactPath.replaceAll("'", "''")}'`,
     "if ($signature.Status -ne 'Valid') { throw \"Authenticode status: $($signature.Status)\" }",
     "$signature | Select-Object Status,@{n='thumbprint';e={$_.SignerCertificate.Thumbprint}} | ConvertTo-Json -Compress",
   ].join("; ")
   const result = JSON.parse(run("powershell", ["-NoProfile", "-NonInteractive", "-Command", script]))
-  const expected = process.env.CINEMA_HELPER_WINDOWS_SIGNER_THUMBPRINT?.replaceAll(/\s/g, "").toUpperCase()
   const actual = String(result.thumbprint ?? "").replaceAll(/\s/g, "").toUpperCase()
-  if (!actual || (expected && actual !== expected)) throw new Error("Cinema Windows helper signer thumbprint is missing or unexpected.")
+  if (!actual || actual !== expected) throw new Error("Cinema Windows helper signer thumbprint is missing or unexpected.")
   verification = { status: "verified", method: "windows-authenticode", signer: actual }
 } else if (process.platform === "darwin") {
+  const expected = process.env.CINEMA_HELPER_APPLE_TEAM_ID?.trim()
+  if (!expected) throw new Error("CINEMA_HELPER_APPLE_TEAM_ID is required to verify the macOS helper.")
   run("codesign", ["--verify", "--strict", "--verbose=2", artifactPath])
   const details = spawnSync("codesign", ["-d", "--verbose=4", artifactPath], { encoding: "utf8" })
   const output = `${details.stdout}\n${details.stderr}`
   const teamID = /^TeamIdentifier=(.+)$/m.exec(output)?.[1]?.trim()
-  const expected = process.env.CINEMA_HELPER_APPLE_TEAM_ID?.trim()
-  if (!teamID || (expected && teamID !== expected)) throw new Error("Cinema macOS helper TeamIdentifier is missing or unexpected.")
+  if (!teamID || teamID !== expected) throw new Error("Cinema macOS helper TeamIdentifier is missing or unexpected.")
   verification = { status: "verified", method: "apple-codesign", signer: teamID }
 } else {
   const signaturePath = `${artifactPath}.minisig`

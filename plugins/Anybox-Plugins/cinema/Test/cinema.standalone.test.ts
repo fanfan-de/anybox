@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { access, mkdtemp, rm } from "node:fs/promises"
+import { access, mkdtemp, readFile, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
 const pluginRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const runtimePath = path.join(pluginRoot, "runtime", "server.js")
+const pluginManifest = JSON.parse(await readFile(path.join(pluginRoot, ".anybox-plugin", "plugin.json"), "utf8"))
+const expectedVersion = String(pluginManifest.version)
 const roots: string[] = []
 const children: Array<ReturnType<typeof Bun.spawn>> = []
 
@@ -98,7 +100,7 @@ describe("Cinema Runtime process modes", () => {
     expect(status.status).toBe(200)
     expect((await status.json()).data).toMatchObject({
       mode: "standalone",
-      version: "1.0.0",
+      version: expectedVersion,
       providers: ["klingai-cn", "google-ai-sdk", "comfyui-local", "openai-compatible"],
     })
 
@@ -133,6 +135,11 @@ describe("Cinema Runtime process modes", () => {
     const port = reservation.port
     reservation.stop(true)
     const token = crypto.randomUUID()
+    const executable = pluginManifest.platformArtifacts
+      ?.find((artifact: any) => artifact.id === "cinema-platform-helper")
+      ?.executables?.find((entry: any) => entry.platform === process.platform && entry.architecture === process.arch)
+    expect(executable?.path).toBeString()
+    expect(executable?.sha256).toBeString()
     const child = Bun.spawn([process.execPath, runtimePath], {
       cwd: pluginRoot,
       stdout: "pipe",
@@ -140,12 +147,19 @@ describe("Cinema Runtime process modes", () => {
       env: {
         ...process.env,
         ANYBOX_APP_ID: "cinema",
-        ANYBOX_APP_VERSION: "1.0.0",
+        ANYBOX_APP_VERSION: expectedVersion,
         ANYBOX_APP_PORT: String(port),
         ANYBOX_APP_TOKEN: token,
         ANYBOX_APP_DATA_DIR: path.join(root, "data"),
         ANYBOX_APP_CACHE_DIR: path.join(root, "cache"),
         ANYBOX_APP_LOG_DIR: path.join(root, "log"),
+        ANYBOX_APP_ARTIFACTS_JSON: JSON.stringify({
+          "cinema-platform-helper": {
+            type: "app-runtime-helper",
+            path: path.resolve(pluginRoot, ...String(executable.path).split("/")),
+            sha256: executable.sha256,
+          },
+        }),
       },
     })
     children.push(child)

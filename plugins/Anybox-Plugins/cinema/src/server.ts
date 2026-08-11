@@ -10,6 +10,7 @@ import { ApiError } from "./api/error.ts"
 import type { AppEnv } from "./api/types.ts"
 import { cinemaRenderQueue } from "./domain/render-queue.ts"
 import * as Global from "./platform/global.ts"
+import { configureNativeHelper } from "./platform/native-helper.ts"
 import { clearSessionCredentials } from "./platform/provider-auth.ts"
 import { initializeProjectRegistry } from "./storage/projects.ts"
 
@@ -78,6 +79,10 @@ function runtimeConfiguration() {
 
 const config = runtimeConfiguration()
 Global.configureRuntimePaths(config)
+await configureNativeHelper({
+  mode: config.mode,
+  artifactsJSON: process.env.ANYBOX_APP_ARTIFACTS_JSON,
+})
 await initializeProjectRegistry()
 
 const sessionToken = randomBytes(32).toString("base64url")

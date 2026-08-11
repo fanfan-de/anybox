@@ -39,6 +39,14 @@ export type CinemaProviderCredential = {
   persistence: CinemaCredentialPersistence
 }
 
+export type CinemaProviderConfigurationInput = {
+  settings?: CinemaProviderSettingsInput
+  credential?: {
+    apiKey: string
+    persistence: Exclude<CinemaCredentialPersistence, "none">
+  }
+}
+
 export type CinemaProviderConnectionTest = {
   ok: boolean
   status?: string
@@ -178,6 +186,10 @@ export type CinemaProviderSettingsApi = {
     apiKey: string,
     persistence: Exclude<CinemaCredentialPersistence, "none">,
   ): Promise<CinemaProviderCredential>
+  saveConfiguration(
+    providerID: CinemaProviderID,
+    input: CinemaProviderConfigurationInput,
+  ): Promise<void>
   removeCredential(providerID: CinemaProviderID): Promise<void>
   testConnection(providerID: CinemaProviderID): Promise<CinemaProviderConnectionTest>
   connectProvider(
@@ -215,6 +227,13 @@ export function createCinemaProviderSettingsApi(baseURL: string): CinemaProvider
       providerPath(providerID, "credential"),
       jsonRequest("PUT", { apiKey, persistence }),
     )),
+    saveConfiguration: async (providerID, input) => {
+      await requestData(
+        baseURL,
+        providerPath(providerID, "configuration"),
+        jsonRequest("PUT", input),
+      )
+    },
     removeCredential: async (providerID) => {
       await requestData(baseURL, providerPath(providerID, "credential"), { method: "DELETE" })
     },

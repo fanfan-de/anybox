@@ -22226,7 +22226,7 @@ var require_auth_config = __commonJS((exports, module) => {
     writeAuthConfig: () => writeAuthConfig
   });
   module.exports = __toCommonJS(auth_config_exports);
-  var fs2 = __toESM2(__require("fs"));
+  var fs3 = __toESM2(__require("fs"));
   var path23 = __toESM2(__require("path"));
   var import_token_util = require_token_util();
   function getAuthConfigPath() {
@@ -22239,10 +22239,10 @@ var require_auth_config = __commonJS((exports, module) => {
   function readAuthConfig() {
     try {
       const authPath = getAuthConfigPath();
-      if (!fs2.existsSync(authPath)) {
+      if (!fs3.existsSync(authPath)) {
         return null;
       }
-      const content = fs2.readFileSync(authPath, "utf8");
+      const content = fs3.readFileSync(authPath, "utf8");
       if (!content) {
         return null;
       }
@@ -22254,10 +22254,10 @@ var require_auth_config = __commonJS((exports, module) => {
   function writeAuthConfig(config2) {
     const authPath = getAuthConfigPath();
     const authDir = path23.dirname(authPath);
-    if (!fs2.existsSync(authDir)) {
-      fs2.mkdirSync(authDir, { mode: 504, recursive: true });
+    if (!fs3.existsSync(authDir)) {
+      fs3.mkdirSync(authDir, { mode: 504, recursive: true });
     }
-    fs2.writeFileSync(authPath, JSON.stringify(config2, null, 2), { mode: 384 });
+    fs3.writeFileSync(authPath, JSON.stringify(config2, null, 2), { mode: 384 });
   }
   function isValidAccessToken(authConfig, expirationBufferMs = 0) {
     if (!authConfig.token)
@@ -22433,7 +22433,7 @@ var require_token_util = __commonJS((exports, module) => {
   });
   module.exports = __toCommonJS(token_util_exports);
   var path23 = __toESM2(__require("path"));
-  var fs2 = __toESM2(__require("fs"));
+  var fs3 = __toESM2(__require("fs"));
   var import_token_error = require_token_error();
   var import_token_io = require_token_io();
   var import_auth_config = require_auth_config();
@@ -22514,10 +22514,10 @@ var require_token_util = __commonJS((exports, module) => {
       throw new import_token_error.VercelOidcTokenError("Unable to find project root directory. Have you linked your project with `vc link?`");
     }
     const prjPath = path23.join(dir, ".vercel", "project.json");
-    if (!fs2.existsSync(prjPath)) {
+    if (!fs3.existsSync(prjPath)) {
       throw new import_token_error.VercelOidcTokenError("project.json not found, have you linked your project with `vc link?`");
     }
-    const prj = JSON.parse(fs2.readFileSync(prjPath, "utf8"));
+    const prj = JSON.parse(fs3.readFileSync(prjPath, "utf8"));
     if (typeof prj.projectId !== "string" && typeof prj.orgId !== "string") {
       throw new TypeError("Expected a string-valued projectId property. Try running `vc link` to re-link your project.");
     }
@@ -22530,9 +22530,9 @@ var require_token_util = __commonJS((exports, module) => {
     }
     const tokenPath = path23.join(dir, "com.vercel.token", `${projectId}.json`);
     const tokenJson = JSON.stringify(token);
-    fs2.mkdirSync(path23.dirname(tokenPath), { mode: 504, recursive: true });
-    fs2.writeFileSync(tokenPath, tokenJson);
-    fs2.chmodSync(tokenPath, 432);
+    fs3.mkdirSync(path23.dirname(tokenPath), { mode: 504, recursive: true });
+    fs3.writeFileSync(tokenPath, tokenJson);
+    fs3.chmodSync(tokenPath, 432);
     return;
   }
   function loadToken(projectId) {
@@ -22541,10 +22541,10 @@ var require_token_util = __commonJS((exports, module) => {
       throw new import_token_error.VercelOidcTokenError("Unable to find user data directory. Please reach out to Vercel support.");
     }
     const tokenPath = path23.join(dir, "com.vercel.token", `${projectId}.json`);
-    if (!fs2.existsSync(tokenPath)) {
+    if (!fs3.existsSync(tokenPath)) {
       return null;
     }
-    const token = JSON.parse(fs2.readFileSync(tokenPath, "utf8"));
+    const token = JSON.parse(fs3.readFileSync(tokenPath, "utf8"));
     assertVercelOidcTokenResponse(token);
     return token;
   }
@@ -41237,7 +41237,7 @@ var init_dist6 = __esm(() => {
 
 // src/server.ts
 import { randomBytes, timingSafeEqual } from "crypto";
-import { readFile as readFile17, stat as stat11 } from "fs/promises";
+import { readFile as readFile18, stat as stat11 } from "fs/promises";
 import os2 from "os";
 import path24 from "path";
 import { fileURLToPath as fileURLToPath4 } from "url";
@@ -49173,8 +49173,8 @@ function CinemaAssetLibraryRoutes() {
 }
 
 // src/api/cinema.ts
-import { createHash as createHash10, randomUUID as randomUUID15 } from "crypto";
-import { appendFile as appendFile3, mkdir as mkdir16, readFile as readFile16, readdir as readdir9, rename as rename11, stat as stat10, writeFile as writeFile8 } from "fs/promises";
+import { createHash as createHash11, randomUUID as randomUUID15 } from "crypto";
+import { appendFile as appendFile3, mkdir as mkdir16, readFile as readFile17, readdir as readdir9, rename as rename11, stat as stat10, writeFile as writeFile8 } from "fs/promises";
 import path23 from "path";
 import { isDeepStrictEqual } from "util";
 
@@ -50136,37 +50136,99 @@ function getCinemaRenderV1Support(trackKind, clipKind) {
 
 // src/domain/provider-runtime.ts
 import { createHmac } from "crypto";
-import { mkdir as mkdir10, readFile as readFile10, stat as stat8, writeFile as writeFile6 } from "fs/promises";
+import { mkdir as mkdir10, readFile as readFile11, stat as stat8, writeFile as writeFile6 } from "fs/promises";
 import path14 from "path";
 import { fileURLToPath as fileURLToPath3 } from "url";
 
 // src/platform/native-helper.ts
 import { spawn as spawn2 } from "child_process";
+import { createHash as createHash6 } from "crypto";
+import fs2 from "fs";
+import { lstat as lstat3, readFile as readFile8 } from "fs/promises";
 import path10 from "path";
 import { fileURLToPath as fileURLToPath2 } from "url";
 var helperOverride;
 var callOverride;
-function artifactHelperPath() {
-  const raw2 = process.env.ANYBOX_APP_ARTIFACTS_JSON?.trim();
-  if (!raw2)
-    return;
-  try {
-    const value = JSON.parse(raw2);
-    const candidate = value["cinema-platform-helper"]?.path;
-    return typeof candidate === "string" && candidate.trim() ? candidate : undefined;
-  } catch {
-    return;
-  }
+var configuredHelperPath;
+var HELPER_ARTIFACT_ID = "cinema-platform-helper";
+var SHA256_PATTERN = /^[a-f0-9]{64}$/i;
+function configurationError(message) {
+  return new ApiError(503, "NATIVE_HELPER_CONFIGURATION_INVALID", message);
 }
-function bundledHelperPath() {
+function pluginRootPath() {
   const moduleDirectory = path10.dirname(fileURLToPath2(import.meta.url));
-  const target = `${process.platform}-${process.arch}`;
-  const executable = process.platform === "win32" ? "cinema-platform-helper.exe" : "cinema-platform-helper";
-  const pluginRoot = path10.basename(moduleDirectory) === "runtime" ? path10.resolve(moduleDirectory, "..") : path10.resolve(moduleDirectory, "..", "..");
-  return path10.join(pluginRoot, "native", "artifacts", target, executable);
+  return path10.basename(moduleDirectory) === "runtime" ? path10.resolve(moduleDirectory, "..") : path10.resolve(moduleDirectory, "..", "..");
+}
+function managedHelper(raw2) {
+  if (!raw2?.trim())
+    throw configurationError("Anybox did not provide the managed Cinema helper artifact map.");
+  let value;
+  try {
+    value = JSON.parse(raw2);
+  } catch {
+    throw configurationError("Anybox provided an invalid Cinema helper artifact map.");
+  }
+  const record2 = value && typeof value === "object" && !Array.isArray(value) ? value[HELPER_ARTIFACT_ID] : undefined;
+  const candidate = typeof record2?.path === "string" ? record2.path.trim() : "";
+  const digest = typeof record2?.sha256 === "string" ? record2.sha256.trim().toLowerCase() : "";
+  if (record2?.type !== "app-runtime-helper" || !candidate || !path10.isAbsolute(candidate) || !SHA256_PATTERN.test(digest)) {
+    throw configurationError("Anybox did not provide complete managed Cinema helper metadata.");
+  }
+  return { path: path10.resolve(candidate), sha256: digest };
+}
+async function bundledHelper() {
+  const pluginRoot = pluginRootPath();
+  const manifestPath = path10.join(pluginRoot, ".anybox-plugin", "plugin.json");
+  let manifest;
+  try {
+    manifest = JSON.parse(await readFile8(manifestPath, "utf8"));
+  } catch {
+    throw configurationError("The Cinema plugin manifest could not be read for standalone helper verification.");
+  }
+  const artifact = manifest.platformArtifacts?.find((entry) => entry.id === HELPER_ARTIFACT_ID);
+  const executable = artifact?.executables?.find((entry) => entry.platform === process.platform && entry.architecture === process.arch);
+  const relativePath = typeof executable?.path === "string" ? executable.path.trim() : "";
+  const digest = typeof executable?.sha256 === "string" ? executable.sha256.trim().toLowerCase() : "";
+  if (artifact?.type !== "app-runtime-helper" || !relativePath || !SHA256_PATTERN.test(digest)) {
+    throw configurationError(`The Cinema plugin does not declare a helper for ${process.platform}-${process.arch}.`);
+  }
+  const candidate = path10.resolve(pluginRoot, ...relativePath.replaceAll("\\", "/").split("/"));
+  const relative = path10.relative(pluginRoot, candidate);
+  if (!relative || relative.startsWith("..") || path10.isAbsolute(relative)) {
+    throw configurationError("The standalone Cinema helper path escapes the plugin package.");
+  }
+  return { path: candidate, sha256: digest };
+}
+async function sha2563(filePath) {
+  const hash2 = createHash6("sha256");
+  for await (const chunk of fs2.createReadStream(filePath))
+    hash2.update(chunk);
+  return hash2.digest("hex");
+}
+async function verifyHelper(candidate) {
+  const info = await lstat3(candidate.path).catch(() => {
+    return;
+  });
+  if (!info?.isFile() || info.isSymbolicLink()) {
+    throw configurationError("The configured Cinema helper is missing or is not a regular file.");
+  }
+  if (await sha2563(candidate.path) !== candidate.sha256) {
+    throw configurationError("The configured Cinema helper failed SHA-256 verification.");
+  }
+  return candidate.path;
+}
+async function configureNativeHelper(input) {
+  configuredHelperPath = undefined;
+  const candidate = input.mode === "anybox" ? managedHelper(input.artifactsJSON) : await bundledHelper();
+  configuredHelperPath = await verifyHelper(candidate);
+  return configuredHelperPath;
 }
 function nativeHelperPath() {
-  return helperOverride ?? artifactHelperPath() ?? bundledHelperPath();
+  const configured = helperOverride ?? configuredHelperPath;
+  if (!configured) {
+    throw new ApiError(503, "KEYCHAIN_UNAVAILABLE", "The Cinema helper was not configured before use.");
+  }
+  return configured;
 }
 async function callNativeHelper(method, params = {}) {
   if (callOverride)
@@ -50316,9 +50378,10 @@ async function getSettings() {
   return cached2;
 }
 async function saveSettings(next) {
-  cached2 = normalizeSettings(next);
-  await atomicWriteJson(settingsPath(), cached2);
-  return cached2;
+  const normalized = normalizeSettings(next);
+  await atomicWriteJson(settingsPath(), normalized);
+  cached2 = normalized;
+  return normalized;
 }
 async function updateSettings(update) {
   return await saveSettings(await update(structuredClone(await getSettings())));
@@ -50374,13 +50437,13 @@ function create(tags = {}) {
 var Default = create({ service: "cinema" });
 
 // src/domain/comfyui-runtime.ts
-import { createHash as createHash7, randomUUID as randomUUID8 } from "crypto";
+import { createHash as createHash8, randomUUID as randomUUID8 } from "crypto";
 import { createWriteStream, openAsBlob } from "fs";
 import {
-  lstat as lstat3,
+  lstat as lstat4,
   mkdir as mkdir9,
   open as open5,
-  readFile as readFile9,
+  readFile as readFile10,
   realpath as realpath4,
   rename as rename6,
   rm as rm5,
@@ -50569,10 +50632,21 @@ async function sameOriginFetch(url2, init = {}, maxRedirects = 3) {
   }
   throw new ApiError(502, "PROVIDER_REDIRECT_REJECTED", "Provider returned too many redirects.");
 }
+async function safeProviderFetch(input, init) {
+  const request = new Request(input, init);
+  const method = request.method.toUpperCase();
+  const body = request.body && method !== "GET" && method !== "HEAD" ? new Uint8Array(await request.arrayBuffer()) : undefined;
+  return await sameOriginFetch(request.url, {
+    method,
+    headers: request.headers,
+    body,
+    signal: request.signal
+  });
+}
 
 // src/domain/comfyui-workflows.ts
-import { createHash as createHash6, randomUUID as randomUUID7 } from "crypto";
-import { mkdir as mkdir8, readFile as readFile8, rename as rename5, writeFile as writeFile4 } from "fs/promises";
+import { createHash as createHash7, randomUUID as randomUUID7 } from "crypto";
+import { mkdir as mkdir8, readFile as readFile9, rename as rename5, writeFile as writeFile4 } from "fs/promises";
 import path12 from "path";
 var COMFYUI_PROVIDER_ID = "comfyui-local";
 var COMFYUI_DEFAULT_BASE_URL = "http://127.0.0.1:8188";
@@ -50621,8 +50695,8 @@ function finiteNumber(value) {
 function integerValue(value) {
   return typeof value === "number" && Number.isInteger(value) ? value : undefined;
 }
-function sha2563(value) {
-  return createHash6("sha256").update(value).digest("hex");
+function sha2564(value) {
+  return createHash7("sha256").update(value).digest("hex");
 }
 function stableStringify(value) {
   if (Array.isArray(value))
@@ -50759,13 +50833,13 @@ function cacheKey(endpoint, userID) {
 function comfyUIConnectionID(endpoint, userID) {
   const normalizedEndpoint = validateComfyUIBaseURL(endpoint);
   const normalizedUserID = userID?.trim() || null;
-  return `comfy_${sha2563(cacheKey(normalizedEndpoint, normalizedUserID)).slice(0, 32)}`;
+  return `comfy_${sha2564(cacheKey(normalizedEndpoint, normalizedUserID)).slice(0, 32)}`;
 }
 function requestedUserID(value, fallback) {
   return value === undefined ? fallback : value?.trim() || null;
 }
 function cachePath(endpoint, userID) {
-  const filename = `${sha2563(cacheKey(endpoint, userID))}.json`;
+  const filename = `${sha2564(cacheKey(endpoint, userID))}.json`;
   return path12.join(cacheRootOverride ?? path12.join(Path.data, "cinema", "comfyui-workflows"), filename);
 }
 async function writePublicCatalogCache(endpoint, userID, catalog) {
@@ -50780,7 +50854,7 @@ async function writePublicCatalogCache(endpoint, userID, catalog) {
 }
 async function readPublicCatalogCache(endpoint, userID) {
   try {
-    const parsed = JSON.parse(await readFile8(cachePath(endpoint, userID), "utf8"));
+    const parsed = JSON.parse(await readFile9(cachePath(endpoint, userID), "utf8"));
     if (parsed.schemaVersion !== CACHE_SCHEMA_VERSION)
       return;
     return CinemaProviderWorkflowCatalogSchema.parse(parsed.catalog);
@@ -51382,7 +51456,7 @@ function findPromptBindings(prompt, candidates, storedID, widgetName) {
 function controlKeyFor(storedID, widgetName) {
   const reference = parseWidgetReference(storedID, widgetName);
   const readable = reference.inputName.trim().replace(/[^A-Za-z0-9_-]+/g, "_").replace(/^_+|_+$/g, "") || "input";
-  return `${readable}_${sha2563(`${String(storedID)}\x00${reference.inputName}`).slice(0, 10)}`;
+  return `${readable}_${sha2564(`${String(storedID)}\x00${reference.inputName}`).slice(0, 10)}`;
 }
 function nestedDynamicInputDefinitions(spec, promptInputs, prefix) {
   const selected = promptInputs[prefix];
@@ -51701,7 +51775,7 @@ async function tryServerConversion(baseURL, userID, workflow) {
   return value === undefined ? undefined : unwrapApiPrompt(value);
 }
 async function convertOneWorkflow(input) {
-  const workflowID = `wf_${sha2563(`${input.baseURL}\x00${input.userID}\x00${input.file.path}`).slice(0, 32)}`;
+  const workflowID = `wf_${sha2564(`${input.baseURL}\x00${input.userID}\x00${input.file.path}`).slice(0, 32)}`;
   const baseSource = {
     userID: input.userID,
     path: input.file.path,
@@ -51717,7 +51791,7 @@ async function convertOneWorkflow(input) {
   } catch {
     const publicWorkflow2 = {
       workflowID,
-      revision: `sha256:${sha2563(input.text)}`,
+      revision: `sha256:${sha2564(input.text)}`,
       name: fileNameForWorkflow(input.file.path),
       status: "disabled",
       issues: [workflowIssue("COMFYUI_WORKFLOW_JSON_INVALID", "Workflow file is not valid JSON.")],
@@ -51745,7 +51819,7 @@ async function convertOneWorkflow(input) {
     const message = error48 instanceof Error ? error48.message : "Workflow conversion failed.";
     const publicWorkflow2 = {
       workflowID,
-      revision: `sha256:${sha2563(`${input.text}\x00${COMFYUI_WORKFLOW_CONVERTER_VERSION}\x00failed`)}`,
+      revision: `sha256:${sha2564(`${input.text}\x00${COMFYUI_WORKFLOW_CONVERTER_VERSION}\x00failed`)}`,
       name: stringValue(workflow.title) ?? fileNameForWorkflow(input.file.path),
       status: "disabled",
       issues: [...issues, workflowIssue("COMFYUI_WORKFLOW_CONVERSION_FAILED", message)],
@@ -51838,14 +51912,14 @@ async function convertOneWorkflow(input) {
   issues.push(...validateComboValues(prompt, input.objectInfo));
   const dependencies = [...nodes.dependencies, ...models.dependencies];
   const revisionPayload = {
-    source: sha2563(input.text),
+    source: sha2564(input.text),
     objectInfo: relevantObjectInfo(prompt, input.objectInfo),
     converterVersion: COMFYUI_WORKFLOW_CONVERTER_VERSION,
     converter,
     prompt,
     bindings
   };
-  const revision = `sha256:${sha2563(stableStringify(revisionPayload))}`;
+  const revision = `sha256:${sha2564(stableStringify(revisionPayload))}`;
   const target = {
     kind: "workflow",
     workflowID,
@@ -51886,10 +51960,10 @@ async function convertOneWorkflow(input) {
   };
 }
 function disabledLimitWorkflow(input) {
-  const workflowID = `wf_${sha2563(`${input.endpoint}\x00${input.userID}\x00${input.file.path}`).slice(0, 32)}`;
+  const workflowID = `wf_${sha2564(`${input.endpoint}\x00${input.userID}\x00${input.file.path}`).slice(0, 32)}`;
   const publicWorkflow = {
     workflowID,
-    revision: `sha256:${sha2563(`${input.file.path}\x00${input.file.size}\x00${input.file.modified ?? 0}\x00${input.issue.code}`)}`,
+    revision: `sha256:${sha2564(`${input.file.path}\x00${input.file.size}\x00${input.file.modified ?? 0}\x00${input.issue.code}`)}`,
     name: fileNameForWorkflow(input.file.path),
     status: "disabled",
     issues: [input.issue],
@@ -52317,7 +52391,7 @@ function snapshotPath(cinemaRoot3, taskID, submitted = false) {
   return path13.join(cinemaRoot3, "state", "comfyui-workflows", `${taskID}${suffix}`);
 }
 function snapshotDigest(snapshot) {
-  return `sha256:${createHash7("sha256").update(JSON.stringify(snapshot)).digest("hex")}`;
+  return `sha256:${createHash8("sha256").update(JSON.stringify(snapshot)).digest("hex")}`;
 }
 async function writeImmutableSnapshot(cinemaRoot3, taskID, snapshot, submitted = false) {
   const filepath = snapshotPath(cinemaRoot3, taskID, submitted);
@@ -52339,7 +52413,7 @@ async function writeImmutableSnapshot(cinemaRoot3, taskID, snapshot, submitted =
 async function readWorkflowSnapshot(cinemaRoot3, taskID, submitted = false) {
   let parsed;
   try {
-    parsed = JSON.parse(await readFile9(snapshotPath(cinemaRoot3, taskID, submitted), "utf8"));
+    parsed = JSON.parse(await readFile10(snapshotPath(cinemaRoot3, taskID, submitted), "utf8"));
   } catch {
     throw new ApiError(500, "COMFYUI_WORKFLOW_SNAPSHOT_INVALID", "The task workflow snapshot is missing or invalid.");
   }
@@ -52567,7 +52641,7 @@ function sniffMime(header) {
 }
 async function inspectProjectMedia(root, relativePath, control) {
   const { resolvedRoot, resolved } = safeProjectFile(root, relativePath);
-  const info = await lstat3(resolved).catch(() => {
+  const info = await lstat4(resolved).catch(() => {
     return;
   });
   if (!info?.isFile()) {
@@ -52849,7 +52923,7 @@ function allowedBytes(kind) {
   return kind === "image" ? COMFYUI_IMAGE_MAX_BYTES : COMFYUI_VIDEO_MAX_BYTES;
 }
 async function existingOutputAsset(root, filepath, kind, mimeType, id) {
-  const info = await lstat3(filepath).catch(() => {
+  const info = await lstat4(filepath).catch(() => {
     return;
   });
   if (!info)
@@ -53606,7 +53680,7 @@ function resolveProviderManifestIncludePath(source, includePath) {
 async function readLocalManifestJsonFile(filepath, readFilepaths) {
   const resolved = path14.resolve(filepath);
   readFilepaths.add(resolved);
-  const text = await readFile10(resolved, "utf8");
+  const text = await readFile11(resolved, "utf8");
   return JSON.parse(text);
 }
 function providerModelFromLocalCatalogInput(value, source) {
@@ -54839,7 +54913,7 @@ async function klingAIImageInput(root, parameters, input) {
   if (fileStat.size > 25 * 1024 * 1024) {
     throw new ApiError(413, "CINEMA_KLINGAI_SOURCE_IMAGE_TOO_LARGE", input.tooLargeMessage);
   }
-  return Buffer.from(await readFile10(filePath)).toString("base64");
+  return Buffer.from(await readFile11(filePath)).toString("base64");
 }
 async function klingAISourceImageInput(root, parameters) {
   return await klingAIImageInput(root, parameters, {
@@ -55200,7 +55274,7 @@ async function geminiInlineImageParts(root, parameters) {
     parts.push({
       inlineData: {
         mimeType: geminiInputMime(filePath),
-        data: (await readFile10(filePath)).toString("base64")
+        data: (await readFile11(filePath)).toString("base64")
       }
     });
   }
@@ -55451,12 +55525,12 @@ async function refreshCinemaProviderWorkflows(providerID) {
 async function getCinemaVideoProviderAuth(providerID) {
   return (await getCinemaVideoProvider(providerID)).auth;
 }
-async function saveCinemaVideoProviderApiKey(providerID, apiKey) {
+async function saveCinemaVideoProviderApiKey(providerID, apiKey, options = {}) {
   const provider = await getCinemaVideoProvider(providerID);
   if (!provider.manifest.requiresCredential || !provider.manifest.credentialProviderID) {
     throw new ApiError(400, "CINEMA_PROVIDER_CREDENTIAL_UNSUPPORTED", `Cinema provider '${providerID}' does not use API key credentials.`);
   }
-  await saveProviderApiKey(provider.manifest.credentialProviderID, apiKey);
+  await saveProviderApiKey(provider.manifest.credentialProviderID, apiKey, options);
   return await providerAuthStateFor(provider.manifest);
 }
 async function persistCinemaVideoProviderSettings(provider, input, options = {}) {
@@ -55715,7 +55789,7 @@ import { randomUUID as randomUUID9 } from "crypto";
 import {
   mkdir as mkdir11,
   open as open6,
-  readFile as readFile11,
+  readFile as readFile12,
   readdir as readdir4,
   rename as rename7,
   rm as rm6
@@ -55755,7 +55829,7 @@ function getCinemaTimelineStoragePaths(cinemaRoot3, timelineID) {
 }
 async function readCinemaTimelineDocument(cinemaRoot3, timelineID) {
   const { documentPath } = getCinemaTimelineStoragePaths(cinemaRoot3, timelineID);
-  const raw2 = await readFile11(documentPath, "utf8").catch((error48) => {
+  const raw2 = await readFile12(documentPath, "utf8").catch((error48) => {
     if (isMissingFileError(error48))
       return;
     throw error48;
@@ -55828,7 +55902,7 @@ async function appendCinemaTimelineEvent(cinemaRoot3, event) {
 }
 async function readCinemaTimelineEvents(cinemaRoot3, timelineID) {
   const { eventsPath } = getCinemaTimelineStoragePaths(cinemaRoot3, timelineID);
-  const raw2 = await readFile11(eventsPath, "utf8").catch((error48) => {
+  const raw2 = await readFile12(eventsPath, "utf8").catch((error48) => {
     if (isMissingFileError(error48))
       return "";
     throw error48;
@@ -55840,8 +55914,8 @@ async function readCinemaTimelineEvents(cinemaRoot3, timelineID) {
 import { statfs } from "fs/promises";
 
 // src/domain/render-runtime.ts
-import { createHash as createHash8 } from "crypto";
-import { readFile as readFile12 } from "fs/promises";
+import { createHash as createHash9 } from "crypto";
+import { readFile as readFile13 } from "fs/promises";
 var RUNTIME_PROBE_TIMEOUT_MS = 1e4;
 var RUNTIME_PROBE_OUTPUT_LIMIT_BYTES = 2 * 1024 * 1024;
 var SUBTITLE_FONT_SHA256 = "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b";
@@ -55902,7 +55976,7 @@ ${encoderList.stderr}`;
   const encoders = parseCinemaRenderEncoders(encoderOutput);
   const version2 = parseCinemaFFmpegVersion(`${ffmpegVersion.stdout}
 ${ffmpegVersion.stderr}`);
-  const fontDigest = tools.subtitleFontPath ? createHash8("sha256").update(await readFile12(tools.subtitleFontPath)).digest("hex") : null;
+  const fontDigest = tools.subtitleFontPath ? createHash9("sha256").update(await readFile13(tools.subtitleFontPath)).digest("hex") : null;
   const subtitleRenderer = parseCinemaSubtitleRenderer(`${filterList.stdout}
 ${filterList.stderr}`) === "libass" && fontDigest === SUBTITLE_FONT_SHA256 ? "libass" : null;
   const status = CinemaRenderRuntimeStatusSchema.parse({
@@ -55926,7 +56000,7 @@ function chooseCinemaRenderVideoEncoder(runtime) {
   return runtime.videoEncoders[0];
 }
 function runtimeIDDigest(value) {
-  return createHash8("sha256").update(value).digest("hex").slice(0, 20);
+  return createHash9("sha256").update(value).digest("hex").slice(0, 20);
 }
 function resolveCinemaRenderRuntimeID(toolchainRuntimeID, platform, ffmpegVersion) {
   const configured = toolchainRuntimeID?.trim();
@@ -56209,7 +56283,7 @@ async function preflightCinemaRender(input) {
 
 // src/domain/render-retention.ts
 import {
-  lstat as lstat5,
+  lstat as lstat6,
   readdir as readdir6,
   realpath as realpath6,
   rmdir,
@@ -56220,10 +56294,10 @@ import path17 from "path";
 // src/domain/render-storage.ts
 import { randomUUID as randomUUID10 } from "crypto";
 import {
-  lstat as lstat4,
+  lstat as lstat5,
   mkdir as mkdir12,
   open as open7,
-  readFile as readFile13,
+  readFile as readFile14,
   readdir as readdir5,
   realpath as realpath5,
   rename as rename8,
@@ -56247,7 +56321,7 @@ function assertPathInside2(parent, candidate) {
   }
 }
 async function assertDirectoryIsSafe(parent, candidate) {
-  const stats = await lstat4(candidate);
+  const stats = await lstat5(candidate);
   if (!stats.isDirectory() || stats.isSymbolicLink()) {
     throw new Error("Render job storage directory must be a physical directory");
   }
@@ -56258,7 +56332,7 @@ async function assertDirectoryIsSafe(parent, candidate) {
   assertPathInside2(resolvedParent, resolvedCandidate);
 }
 async function assertFileIsNotSymlink(filePath) {
-  const stats = await lstat4(filePath).catch((error48) => {
+  const stats = await lstat5(filePath).catch((error48) => {
     if (isMissingFileError2(error48))
       return;
     throw error48;
@@ -56285,7 +56359,7 @@ async function ensureRenderJobDirectory(cinemaRoot3, jobID) {
 }
 async function existingRenderJobDirectory(cinemaRoot3, jobID) {
   const paths = getCinemaRenderJobStoragePaths(cinemaRoot3, jobID);
-  const exists = await lstat4(paths.jobDirectory).catch((error48) => {
+  const exists = await lstat5(paths.jobDirectory).catch((error48) => {
     if (isMissingFileError2(error48))
       return;
     throw error48;
@@ -56360,7 +56434,7 @@ function getCinemaRenderQueuePath(cinemaRoot3) {
 async function readCinemaRenderQueueState(cinemaRoot3) {
   const queuePath = getCinemaRenderQueuePath(cinemaRoot3);
   await assertFileIsNotSymlink(queuePath);
-  const raw2 = await readFile13(queuePath, "utf8").catch((error48) => {
+  const raw2 = await readFile14(queuePath, "utf8").catch((error48) => {
     if (isMissingFileError2(error48))
       return;
     throw error48;
@@ -56379,7 +56453,7 @@ async function readCinemaRenderJob(cinemaRoot3, jobID) {
   if (!paths)
     return;
   await assertFileIsNotSymlink(paths.jobPath);
-  const raw2 = await readFile13(paths.jobPath, "utf8").catch((error48) => {
+  const raw2 = await readFile14(paths.jobPath, "utf8").catch((error48) => {
     if (isMissingFileError2(error48))
       return;
     throw error48;
@@ -56439,7 +56513,7 @@ async function readCinemaRenderJobEvents(cinemaRoot3, jobID) {
   if (!paths)
     return [];
   await assertFileIsNotSymlink(paths.eventsPath);
-  const raw2 = await readFile13(paths.eventsPath, "utf8").catch((error48) => {
+  const raw2 = await readFile14(paths.eventsPath, "utf8").catch((error48) => {
     if (isMissingFileError2(error48))
       return "";
     throw error48;
@@ -56498,7 +56572,7 @@ function assertCanonicallyInside(parent, candidate) {
   }
 }
 async function physicalDirectoryCanonicalPath(parentCanonical, directoryPath) {
-  const info = await lstat5(directoryPath);
+  const info = await lstat6(directoryPath);
   if (!info.isDirectory() || info.isSymbolicLink()) {
     throw new UnsafeRetentionPathError("Retention storage must use physical directories");
   }
@@ -56514,7 +56588,7 @@ function reclaimableFileBytes(info) {
 }
 async function inspectPhysicalTree(sandboxCanonicalPath, candidatePath, nodes = [], signal) {
   throwIfRetentionAborted(signal);
-  const info = await lstat5(candidatePath);
+  const info = await lstat6(candidatePath);
   if (info.isSymbolicLink() || !info.isFile() && !info.isDirectory()) {
     throw new UnsafeRetentionPathError("Retention candidates must be physical files or directories");
   }
@@ -56556,7 +56630,7 @@ async function removeValidatedNodes(sandboxCanonicalPath, nodes) {
   };
   for (const node of nodes) {
     try {
-      const info = await lstat5(node.path);
+      const info = await lstat6(node.path);
       if (!sameNode(info, node))
         throw new UnsafeRetentionPathError("Retention candidate changed");
       const canonicalPath = await realpath6(node.path);
@@ -56588,7 +56662,7 @@ function addRemoved(left, right) {
 async function inspectCandidate(input) {
   throwIfRetentionAborted(input.signal);
   assertLexicallyInside(input.sandboxPath, input.candidatePath);
-  const exists = await lstat5(input.candidatePath).catch((error48) => {
+  const exists = await lstat6(input.candidatePath).catch((error48) => {
     if (isMissingFileError3(error48))
       return;
     throw error48;
@@ -56630,12 +56704,12 @@ async function cleanupCinemaRenderJobRetention(cinemaRoot3, options) {
   throwIfRetentionAborted(signal);
   const result = emptyResult(dryRun);
   const renderJobsDirectory = path17.join(cinemaRoot3, "render-jobs");
-  const rootInfo = await lstat5(cinemaRoot3).catch((error48) => {
+  const rootInfo = await lstat6(cinemaRoot3).catch((error48) => {
     if (isMissingFileError3(error48))
       return;
     throw error48;
   });
-  const renderJobsInfo = await lstat5(renderJobsDirectory).catch((error48) => {
+  const renderJobsInfo = await lstat6(renderJobsDirectory).catch((error48) => {
     if (isMissingFileError3(error48))
       return;
     throw error48;
@@ -57503,10 +57577,10 @@ import { constants as fsConstants } from "fs";
 import {
   copyFile as copyFile4,
   link,
-  lstat as lstat6,
+  lstat as lstat7,
   mkdir as mkdir13,
   open as open8,
-  readFile as readFile14,
+  readFile as readFile15,
   readdir as readdir8,
   rename as rename9,
   rm as rm10
@@ -57525,7 +57599,7 @@ function isAlreadyExistsError(error48) {
   return Boolean(error48 && typeof error48 === "object" && "code" in error48 && error48.code === "EEXIST");
 }
 async function assertPhysicalFile(filePath, label) {
-  const info = await lstat6(filePath).catch((error48) => {
+  const info = await lstat7(filePath).catch((error48) => {
     if (isMissingFileError4(error48))
       return;
     throw error48;
@@ -57630,7 +57704,7 @@ async function readCinemaRenderTimelineSnapshot(cinemaRoot3, jobID) {
   if (!job)
     return;
   const { timelineSnapshotPath } = getCinemaRenderJobStoragePaths(cinemaRoot3, jobID);
-  const raw2 = await readFile14(timelineSnapshotPath, "utf8").catch((error48) => {
+  const raw2 = await readFile15(timelineSnapshotPath, "utf8").catch((error48) => {
     if (isMissingFileError4(error48))
       return;
     throw error48;
@@ -57679,7 +57753,7 @@ async function snapshotCinemaRenderInputs(cinemaRoot3, jobID, dependencies = def
   if (!timeline)
     throw new Error("Render job Timeline snapshot does not exist");
   const paths = getCinemaRenderJobStoragePaths(cinemaRoot3, jobID);
-  const existingInputs = await lstat6(paths.inputsDirectory).catch((error48) => {
+  const existingInputs = await lstat7(paths.inputsDirectory).catch((error48) => {
     if (isMissingFileError4(error48))
       return;
     throw error48;
@@ -57715,7 +57789,7 @@ async function resolveCinemaRenderSnapshotInputs(cinemaRoot3, jobID) {
   if (!timeline)
     throw new Error("Render job Timeline snapshot does not exist");
   const paths = getCinemaRenderJobStoragePaths(cinemaRoot3, jobID);
-  const inputsInfo = await lstat6(paths.inputsDirectory).catch((error48) => {
+  const inputsInfo = await lstat7(paths.inputsDirectory).catch((error48) => {
     if (isMissingFileError4(error48))
       return;
     throw error48;
@@ -57743,7 +57817,7 @@ async function cloneCinemaRenderInputs(cinemaRoot3, sourceJobID, targetJobID) {
   const sourceInputs = await resolveCinemaRenderSnapshotInputs(cinemaRoot3, sourceJobID);
   await requireRenderJob(cinemaRoot3, targetJobID);
   const targetPaths = getCinemaRenderJobStoragePaths(cinemaRoot3, targetJobID);
-  const existing = await lstat6(targetPaths.inputsDirectory).catch((error48) => {
+  const existing = await lstat7(targetPaths.inputsDirectory).catch((error48) => {
     if (isMissingFileError4(error48))
       return;
     throw error48;
@@ -58168,6 +58242,26 @@ class CinemaRenderQueue {
       return;
     });
   }
+  async waitForIdleForTesting() {
+    while (true) {
+      let activeCompletion;
+      let hasPending = false;
+      await this.serialize(async () => {
+        activeCompletion = this.active?.completion;
+        hasPending = this.pending.length > 0;
+      });
+      if (!activeCompletion && !hasPending)
+        return;
+      if (activeCompletion) {
+        await activeCompletion.catch(() => {
+          return;
+        });
+      } else {
+        this.schedule();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+    }
+  }
   snapshot() {
     return {
       activeJobID: this.active?.entry.jobID,
@@ -58548,13 +58642,13 @@ function applyCinemaTimelineCommandToDocument(document, command, timestamp = new
 }
 
 // src/domain/timeline-waveform.ts
-import { createHash as createHash9, randomUUID as randomUUID14 } from "crypto";
-import { mkdir as mkdir15, open as open9, readFile as readFile15, rename as rename10, rm as rm12 } from "fs/promises";
+import { createHash as createHash10, randomUUID as randomUUID14 } from "crypto";
+import { mkdir as mkdir15, open as open9, readFile as readFile16, rename as rename10, rm as rm12 } from "fs/promises";
 import path21 from "path";
 function clipCacheKey(clip) {
   const assetScope = clip.kind === "text" || clip.kind === "subtitle" ? clip.kind : JSON.stringify(clip.assetRef.scope);
   const assetID = clip.kind === "text" || clip.kind === "subtitle" ? clip.kind : clip.assetRef.assetID;
-  return createHash9("sha256").update(`${clip.id}\x00${assetScope}\x00${assetID}`).digest("hex").slice(0, 24);
+  return createHash10("sha256").update(`${clip.id}\x00${assetScope}\x00${assetID}`).digest("hex").slice(0, 24);
 }
 function missingFile(error48) {
   return Boolean(error48 && typeof error48 === "object" && "code" in error48 && error48.code === "ENOENT");
@@ -58575,7 +58669,7 @@ async function getCinemaTimelineClipWaveform(options) {
     const waveformDirectory = path21.join(paths.timelineCacheDirectory, "waveforms");
     const cachePath2 = path21.join(waveformDirectory, `waveform_${clipCacheKey(clip)}_${clip.assetRef.contentRevision}.json`);
     const _lock = __using(__stack, await write(`cinema-timeline-waveform:${cachePath2}`), 0);
-    const cached3 = await readFile15(cachePath2, "utf8").catch((error48) => {
+    const cached3 = await readFile16(cachePath2, "utf8").catch((error48) => {
       if (missingFile(error48))
         return;
       throw error48;
@@ -60216,6 +60310,14 @@ function createOpenAICompatible(options) {
 // src/providers/openai-compatible.ts
 class ModelNotFoundError extends Error {
 }
+function createCinemaOpenAICompatibleProvider(input) {
+  return createOpenAICompatible({
+    name: "cinema-openai-compatible",
+    baseURL: input.baseURL,
+    apiKey: input.apiKey,
+    fetch: safeProviderFetch
+  });
+}
 function publicModel(id, label, image, available) {
   return {
     id,
@@ -60256,8 +60358,7 @@ async function getLanguage(model, _projectID) {
   const credential = await readProviderApiKey("openai-compatible");
   if (!credential)
     throw new ApiError(400, "CINEMA_PROVIDER_NOT_CONNECTED", "OpenAI Compatible API key is not configured.");
-  const provider = createOpenAICompatible({
-    name: "cinema-openai-compatible",
+  const provider = createCinemaOpenAICompatibleProvider({
     baseURL: settings.openAICompatible.baseURL,
     apiKey: credential.value
   });
@@ -60469,7 +60570,7 @@ function resolveCinemaRoot(projectID) {
   };
 }
 async function readOptionalJson(filePath) {
-  const raw2 = await readFile16(filePath, "utf8").catch((error48) => {
+  const raw2 = await readFile17(filePath, "utf8").catch((error48) => {
     if (error48 && typeof error48 === "object" && "code" in error48 && error48.code === "ENOENT")
       return null;
     throw error48;
@@ -60612,7 +60713,7 @@ async function readCinemaCanvasFromRoot(cinemaRoot3) {
   const canvasPath = path23.join(cinemaRoot3, CANVAS_FILE2);
   let raw2;
   try {
-    raw2 = await readFile16(canvasPath, "utf8");
+    raw2 = await readFile17(canvasPath, "utf8");
   } catch (error48) {
     if (error48 && typeof error48 === "object" && "code" in error48 && error48.code === "ENOENT") {
       throw new ApiError(404, "CINEMA_PROJECT_NOT_INITIALIZED", "This project has not been initialized for anybox for cinema yet.");
@@ -60683,7 +60784,7 @@ async function writeGenerationTask(cinemaRoot3, task) {
   return parsed;
 }
 async function readGenerationTaskFromRoot(cinemaRoot3, taskID) {
-  const raw2 = await readFile16(taskPath(cinemaRoot3, taskID), "utf8").catch((error48) => {
+  const raw2 = await readFile17(taskPath(cinemaRoot3, taskID), "utf8").catch((error48) => {
     if (error48 && typeof error48 === "object" && "code" in error48 && error48.code === "ENOENT") {
       throw new ApiError(404, "CINEMA_TASK_NOT_FOUND", `Cinema generation task '${taskID}' was not found.`);
     }
@@ -61017,7 +61118,7 @@ async function readCinemaSourceImage(root, sourceImagePath, messages) {
     throw new ApiError(413, messages.tooLargeCode, messages.tooLargeMessage);
   }
   return {
-    data: await readFile16(filePath),
+    data: await readFile17(filePath),
     mediaType: mimeType,
     path: projectRelativePath4(root, filePath)
   };
@@ -61186,7 +61287,7 @@ function applyCommandToCanvas(canvas, command) {
   }
 }
 async function readCinemaEventsFromRoot(cinemaRoot3, options = {}) {
-  const raw2 = await readFile16(path23.join(cinemaRoot3, EVENTS_FILE), "utf8").catch((error48) => {
+  const raw2 = await readFile17(path23.join(cinemaRoot3, EVENTS_FILE), "utf8").catch((error48) => {
     if (error48 && typeof error48 === "object" && "code" in error48 && error48.code === "ENOENT")
       return "";
     throw error48;
@@ -61760,7 +61861,7 @@ async function retryCinemaRenderJob(projectID, jobID, input) {
 }
 var CINEMA_RENDER_RETENTION_OPERATION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 function cinemaRenderRetentionJournalPath(cinemaRoot3, operationID) {
-  const digest = createHash10("sha256").update(operationID).digest("hex").slice(0, 32);
+  const digest = createHash11("sha256").update(operationID).digest("hex").slice(0, 32);
   return path23.join(cinemaRoot3, `.render-retention-operation-${digest}.json`);
 }
 function parseCinemaRenderRetentionJournal(value) {
@@ -63114,8 +63215,9 @@ var CinemaDirectoryQuerySchema = exports_external.object({
   path: exports_external.string().optional()
 });
 var CinemaProviderApiKeyBodySchema = exports_external.object({
-  apiKey: exports_external.string().nullable().optional()
-});
+  apiKey: exports_external.string().nullable().optional(),
+  persistence: exports_external.enum(["system-keychain", "session"]).default("system-keychain")
+}).strict();
 var CinemaTimelineEventsQuerySchema = exports_external.object({
   after: exports_external.coerce.number().int().min(0).optional(),
   limit: exports_external.coerce.number().int().min(1).max(200).optional()
@@ -63233,7 +63335,7 @@ function CinemaRoutes() {
   app.get("/video-providers/:providerID/auth/api-key", async (c) => ok(c, await getCinemaVideoProviderAuth2(c.req.param("providerID"))));
   app.put("/video-providers/:providerID/auth/api-key", async (c) => {
     const payload = await parseJsonBody(c, CinemaProviderApiKeyBodySchema, "Body must contain an optional nullable 'apiKey' field.");
-    return ok(c, await saveCinemaVideoProviderApiKey2(c.req.param("providerID"), payload.apiKey));
+    return ok(c, await saveCinemaVideoProviderApiKey2(c.req.param("providerID"), payload.apiKey, { allowSession: payload.persistence === "session" }));
   });
   app.put("/video-providers/:providerID/settings", async (c) => {
     const payload = await parseJsonBody(c, UpdateCinemaVideoProviderSettingsBodySchema, "Body must contain an optional nullable 'baseURL' field.");
@@ -63345,6 +63447,10 @@ function CinemaRoutes() {
   });
   return app;
 }
+// src/version.json
+var version_default = {
+  version: "1.0.1"
+};
 
 // src/api/management-routes.ts
 var PROVIDERS = ["klingai-cn", "google-ai-sdk", "comfyui-local", "openai-compatible"];
@@ -63366,6 +63472,11 @@ var SettingsBody = exports_external.object({
   textGenerationPrompt: exports_external.string().nullable().optional()
 }).strict();
 var ProviderConnectionBody = SettingsBody.pick({ baseURL: true, userID: true });
+var PROVIDER_CONFIGURATION_LOCK_KEY = "cinema-provider-configuration";
+var ProviderConfigurationBody = exports_external.object({
+  settings: SettingsBody.optional(),
+  credential: CredentialBody.optional()
+}).strict().refine((input) => input.settings !== undefined || input.credential !== undefined, { message: "Provider configuration must include settings or a credential." });
 function parseProviderID(value) {
   const parsed = ProviderID.safeParse(value);
   if (!parsed.success)
@@ -63378,6 +63489,44 @@ function credentialProviderID(providerID) {
   if (providerID === "google-ai-sdk")
     return "google";
   return providerID;
+}
+async function readProviderSettings(providerID) {
+  if (providerID === "openai-compatible") {
+    const settings2 = await getSettings();
+    return { ...settings2.openAICompatible, textGenerationPrompt: settings2.prompts.textGeneration ?? null };
+  }
+  const settings = await getCinemaVideoProviderSettings(providerID);
+  if (providerID !== "comfyui-local")
+    return settings;
+  const provider = await getCinemaVideoProvider(providerID);
+  return {
+    ...settings,
+    ...provider.runtime?.baseURL ? { baseURL: provider.runtime.baseURL } : {},
+    ...provider.runtime?.userID ? { userID: provider.runtime.userID } : {},
+    ...provider.runtime?.baseURLSource ? { baseURLSource: provider.runtime.baseURLSource } : {}
+  };
+}
+async function persistProviderSettings(providerID, input) {
+  if (providerID === "openai-compatible") {
+    await updateSettings((current) => ({
+      ...current,
+      openAICompatible: {
+        baseURL: input.baseURL === null ? "https://api.openai.com/v1" : input.baseURL ?? current.openAICompatible.baseURL,
+        ...input.defaultModel === null ? {} : { defaultModel: input.defaultModel ?? current.openAICompatible.defaultModel },
+        models: input.models ?? current.openAICompatible.models
+      },
+      prompts: {
+        ...input.textGenerationPrompt === null ? {} : { textGeneration: input.textGenerationPrompt ?? current.prompts.textGeneration }
+      }
+    }));
+    return await readProviderSettings(providerID);
+  }
+  await saveCinemaVideoProviderSettings(providerID, { baseURL: input.baseURL, userID: input.userID });
+  return await readProviderSettings(providerID);
+}
+async function readCredentialState(providerID) {
+  const auth = await resolveProviderRuntimeAuth(credentialProviderID(providerID));
+  return { configured: Boolean(auth.apiKey), persistence: auth.credentialSource };
 }
 async function openAIModels() {
   const settings = await getSettings();
@@ -63395,7 +63544,7 @@ async function openAIModels() {
 function CinemaManagementRoutes() {
   const app = new Hono2;
   app.get("/runtime/status", async (c) => ok(c, {
-    version: process.env.ANYBOX_APP_VERSION?.trim() || "1.0.0",
+    version: process.env.ANYBOX_APP_VERSION?.trim() || version_default.version,
     mode: c.get("runtimeMode"),
     providers: [...PROVIDERS],
     projects: (await listRecentProjects()).length,
@@ -63416,57 +63565,95 @@ function CinemaManagementRoutes() {
   app.post("/projects/:projectID/migration", async (c) => ok(c, await runProjectMigration(c.req.param("projectID"))));
   app.get("/providers/:providerID/settings", async (c) => {
     const providerID = parseProviderID(c.req.param("providerID"));
-    if (providerID === "openai-compatible") {
-      const settings2 = await getSettings();
-      return ok(c, { ...settings2.openAICompatible, textGenerationPrompt: settings2.prompts.textGeneration ?? null });
-    }
-    const settings = await getCinemaVideoProviderSettings(providerID);
-    if (providerID !== "comfyui-local")
-      return ok(c, settings);
-    const provider = await getCinemaVideoProvider(providerID);
-    return ok(c, {
-      ...settings,
-      ...provider.runtime?.baseURL ? { baseURL: provider.runtime.baseURL } : {},
-      ...provider.runtime?.userID ? { userID: provider.runtime.userID } : {},
-      ...provider.runtime?.baseURLSource ? { baseURLSource: provider.runtime.baseURLSource } : {}
-    });
+    return ok(c, await readProviderSettings(providerID));
   });
   app.put("/providers/:providerID/settings", async (c) => {
-    const providerID = parseProviderID(c.req.param("providerID"));
-    const input = await parseJsonBody(c, SettingsBody, "Provider settings are invalid.");
-    if (input.baseURL)
-      await assertSafeProviderURL(input.baseURL);
-    if (providerID === "openai-compatible") {
-      const next = await updateSettings((current) => ({
-        ...current,
-        openAICompatible: {
-          baseURL: input.baseURL === null ? "https://api.openai.com/v1" : input.baseURL ?? current.openAICompatible.baseURL,
-          ...input.defaultModel === null ? {} : { defaultModel: input.defaultModel ?? current.openAICompatible.defaultModel },
-          models: input.models ?? current.openAICompatible.models
-        },
-        prompts: {
-          ...input.textGenerationPrompt === null ? {} : { textGeneration: input.textGenerationPrompt ?? current.prompts.textGeneration }
-        }
-      }));
-      return ok(c, next.openAICompatible);
+    let __stack = [];
+    try {
+      const providerID = parseProviderID(c.req.param("providerID"));
+      const input = await parseJsonBody(c, SettingsBody, "Provider settings are invalid.");
+      if (input.baseURL)
+        await assertSafeProviderURL(input.baseURL);
+      const _configurationLock = __using(__stack, await write(PROVIDER_CONFIGURATION_LOCK_KEY), 0);
+      return ok(c, await persistProviderSettings(providerID, input));
+    } catch (_catch3) {
+      var _err = _catch3, _hasErr = 1;
+    } finally {
+      __callDispose(__stack, _err, _hasErr);
     }
-    return ok(c, await saveCinemaVideoProviderSettings(providerID, { baseURL: input.baseURL, userID: input.userID }));
   });
   app.get("/providers/:providerID/credential", async (c) => {
     const providerID = parseProviderID(c.req.param("providerID"));
-    const auth = await resolveProviderRuntimeAuth(credentialProviderID(providerID));
-    return ok(c, { configured: Boolean(auth.apiKey), persistence: auth.credentialSource });
+    return ok(c, await readCredentialState(providerID));
   });
   app.put("/providers/:providerID/credential", async (c) => {
-    const providerID = parseProviderID(c.req.param("providerID"));
-    const input = await parseJsonBody(c, CredentialBody, "Provider credential is invalid.");
-    const result = await saveProviderApiKey(credentialProviderID(providerID), input.apiKey, { allowSession: input.persistence === "session" });
-    return ok(c, { configured: true, ...result });
+    let __stack = [];
+    try {
+      const providerID = parseProviderID(c.req.param("providerID"));
+      const input = await parseJsonBody(c, CredentialBody, "Provider credential is invalid.");
+      const _configurationLock = __using(__stack, await write(PROVIDER_CONFIGURATION_LOCK_KEY), 0);
+      const result = await saveProviderApiKey(credentialProviderID(providerID), input.apiKey, { allowSession: input.persistence === "session" });
+      return ok(c, { configured: true, ...result });
+    } catch (_catch3) {
+      var _err = _catch3, _hasErr = 1;
+    } finally {
+      __callDispose(__stack, _err, _hasErr);
+    }
+  });
+  app.put("/providers/:providerID/configuration", async (c) => {
+    let __stack = [];
+    try {
+      const providerID = parseProviderID(c.req.param("providerID"));
+      const input = await parseJsonBody(c, ProviderConfigurationBody, "Provider configuration is invalid.");
+      if (input.settings?.baseURL)
+        await assertSafeProviderURL(input.settings.baseURL);
+      const _configurationLock = __using(__stack, await write(PROVIDER_CONFIGURATION_LOCK_KEY), 0);
+      const previousSettings = input.settings ? structuredClone(await getSettings()) : undefined;
+      let settingsChanged = false;
+      try {
+        if (input.settings) {
+          await persistProviderSettings(providerID, input.settings);
+          settingsChanged = true;
+        }
+        const credential = input.credential ? {
+          configured: true,
+          ...await saveProviderApiKey(credentialProviderID(providerID), input.credential.apiKey, { allowSession: input.credential.persistence === "session" })
+        } : await readCredentialState(providerID);
+        return ok(c, {
+          settings: await readProviderSettings(providerID),
+          credential
+        });
+      } catch (error48) {
+        if (settingsChanged && previousSettings) {
+          try {
+            await saveSettings(previousSettings);
+          } catch (rollbackError) {
+            throw new ApiError(500, "CINEMA_PROVIDER_CONFIGURATION_RECOVERY_REQUIRED", "Provider settings could not be restored after credential persistence failed.", {
+              cause: error48 instanceof Error ? error48.message : String(error48),
+              rollback: rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
+            });
+          }
+        }
+        throw error48;
+      }
+    } catch (_catch3) {
+      var _err = _catch3, _hasErr = 1;
+    } finally {
+      __callDispose(__stack, _err, _hasErr);
+    }
   });
   app.delete("/providers/:providerID/credential", async (c) => {
-    const providerID = parseProviderID(c.req.param("providerID"));
-    await saveProviderApiKey(credentialProviderID(providerID), null);
-    return ok(c, { configured: false, persistence: "none" });
+    let __stack = [];
+    try {
+      const providerID = parseProviderID(c.req.param("providerID"));
+      const _configurationLock = __using(__stack, await write(PROVIDER_CONFIGURATION_LOCK_KEY), 0);
+      await saveProviderApiKey(credentialProviderID(providerID), null);
+      return ok(c, { configured: false, persistence: "none" });
+    } catch (_catch3) {
+      var _err = _catch3, _hasErr = 1;
+    } finally {
+      __callDispose(__stack, _err, _hasErr);
+    }
   });
   app.post("/providers/:providerID/test", async (c) => {
     const providerID = parseProviderID(c.req.param("providerID"));
@@ -63516,7 +63703,7 @@ function createServerApp(options = {}) {
   app.get("/health", (c) => c.json({
     ready: true,
     appID: process.env.ANYBOX_APP_ID?.trim() || "cinema",
-    version: process.env.ANYBOX_APP_VERSION?.trim() || "1.0.0",
+    version: process.env.ANYBOX_APP_VERSION?.trim() || version_default.version,
     mode
   }));
   app.route("/api/cinema", CinemaManagementRoutes());
@@ -63597,6 +63784,10 @@ function runtimeConfiguration() {
 }
 var config2 = runtimeConfiguration();
 configureRuntimePaths(config2);
+await configureNativeHelper({
+  mode: config2.mode,
+  artifactsJSON: process.env.ANYBOX_APP_ARTIFACTS_JSON
+});
 await initializeProjectRegistry();
 var sessionToken = randomBytes(32).toString("base64url");
 var csrfToken = randomBytes(24).toString("base64url");
@@ -63663,7 +63854,7 @@ async function standaloneStaticResponse(request) {
   });
   if (!info?.isFile())
     candidate = path24.join(webRoot, "index.html");
-  const body = await readFile17(candidate);
+  const body = await readFile18(candidate);
   return new Response(body, {
     headers: {
       "content-type": CONTENT_TYPES[path24.extname(candidate).toLowerCase()] || "application/octet-stream",

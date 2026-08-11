@@ -25,6 +25,7 @@ describe("CinemaWorkbenchShell", () => {
     renderShell(
       <CinemaWorkbenchShell
         projectName="Test Film"
+        agentBaseURL="http://runtime.example:8765"
         activeWorkspace="create"
         onWorkspaceChange={() => undefined}
       >
@@ -32,8 +33,8 @@ describe("CinemaWorkbenchShell", () => {
       </CinemaWorkbenchShell>,
     )
 
-    expect(screen.queryByText("Cinema")).not.toBeInTheDocument()
-    expect(screen.queryByText("Test Film")).not.toBeInTheDocument()
+    expect(screen.getByText("Test Film")).toBeVisible()
+    expect(document.querySelector(".cinema-workbench-identity")).toHaveTextContent("Test Film")
     expect(screen.getByRole("button", { name: "Open settings" })).toHaveAttribute("aria-expanded", "false")
     expect(document.documentElement).toHaveAttribute("data-theme", "dark")
     expect(screen.getByRole("tab", { name: "Create" })).toHaveAttribute("aria-selected", "true")
@@ -47,6 +48,7 @@ describe("CinemaWorkbenchShell", () => {
     renderShell(
       <CinemaWorkbenchShell
         projectName="Test Film"
+        agentBaseURL="http://runtime.example:8765"
         activeWorkspace="create"
         onWorkspaceChange={() => undefined}
       >
@@ -70,6 +72,7 @@ describe("CinemaWorkbenchShell", () => {
     renderShell(
       <CinemaWorkbenchShell
         projectName="Test Film"
+        agentBaseURL="http://runtime.example:8765"
         activeWorkspace="create"
         onWorkspaceChange={() => undefined}
       >
@@ -91,10 +94,41 @@ describe("CinemaWorkbenchShell", () => {
     expect(window.localStorage.getItem(CINEMA_LOCALE_STORAGE_KEY)).toBe("en-US")
   })
 
+  it("moves between settings tabs with Arrow, Home, and End keys", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ success: true, data: {} }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    })))
+    renderShell(
+      <CinemaWorkbenchShell
+        projectName="Test Film"
+        agentBaseURL="http://runtime.example:8765"
+        activeWorkspace="create"
+        onWorkspaceChange={() => undefined}
+      >
+        <div>Canvas content</div>
+      </CinemaWorkbenchShell>,
+    )
+
+    fireEvent.click(screen.getByRole("button", { name: "Open settings" }))
+    const general = screen.getByRole("tab", { name: "General" })
+    general.focus()
+    fireEvent.keyDown(general, { key: "ArrowRight" })
+    const providers = screen.getByRole("tab", { name: "Providers" })
+    expect(providers).toHaveFocus()
+    expect(providers).toHaveAttribute("aria-selected", "true")
+    await screen.findByRole("heading", { name: "Local ComfyUI" })
+
+    fireEvent.keyDown(providers, { key: "Home" })
+    expect(general).toHaveFocus()
+    expect(general).toHaveAttribute("aria-selected", "true")
+  })
+
   it("closes settings with Escape and returns focus to the trigger", () => {
     renderShell(
       <CinemaWorkbenchShell
         projectName="Test Film"
+        agentBaseURL="http://runtime.example:8765"
         activeWorkspace="create"
         onWorkspaceChange={() => undefined}
       >
@@ -120,6 +154,7 @@ describe("CinemaWorkbenchShell", () => {
     renderShell(
       <CinemaWorkbenchShell
         projectName="Test Film"
+        agentBaseURL="http://runtime.example:8765"
         activeWorkspace="create"
         onWorkspaceChange={() => undefined}
       >
@@ -144,6 +179,7 @@ describe("CinemaWorkbenchShell", () => {
     renderShell(
       <CinemaWorkbenchShell
         projectName="Test Film"
+        agentBaseURL="http://runtime.example:8765"
         activeWorkspace="create"
         onWorkspaceChange={onWorkspaceChange}
       >
@@ -162,6 +198,7 @@ describe("CinemaWorkbenchShell", () => {
     renderShell(
       <CinemaWorkbenchShell
         projectName="Test Film"
+        agentBaseURL="http://runtime.example:8765"
         activeWorkspace="create"
         availableWorkspaces={{ edit: true }}
         onWorkspaceChange={onWorkspaceChange}
@@ -180,6 +217,7 @@ describe("CinemaWorkbenchShell", () => {
     renderShell(
       <CinemaWorkbenchShell
         projectName="Test Film"
+        agentBaseURL="http://runtime.example:8765"
         activeWorkspace="create"
         availableWorkspaces={{ edit: true, deliver: true }}
         onWorkspaceChange={onWorkspaceChange}
@@ -190,5 +228,31 @@ describe("CinemaWorkbenchShell", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "Deliver" }))
     expect(onWorkspaceChange).toHaveBeenCalledWith("deliver")
+  })
+
+  it("moves workspace focus with arrow keys while skipping unavailable tabs", () => {
+    const onWorkspaceChange = vi.fn()
+    renderShell(
+      <CinemaWorkbenchShell
+        projectName="Test Film"
+        agentBaseURL="http://runtime.example:8765"
+        activeWorkspace="create"
+        availableWorkspaces={{ deliver: true }}
+        onWorkspaceChange={onWorkspaceChange}
+      >
+        <div>Canvas content</div>
+      </CinemaWorkbenchShell>,
+    )
+
+    const create = screen.getByRole("tab", { name: "Create" })
+    create.focus()
+    fireEvent.keyDown(create, { key: "ArrowRight" })
+    const deliver = screen.getByRole("tab", { name: "Deliver" })
+    expect(deliver).toHaveFocus()
+    expect(onWorkspaceChange).toHaveBeenLastCalledWith("deliver")
+
+    fireEvent.keyDown(deliver, { key: "Home" })
+    expect(create).toHaveFocus()
+    expect(onWorkspaceChange).toHaveBeenLastCalledWith("create")
   })
 })

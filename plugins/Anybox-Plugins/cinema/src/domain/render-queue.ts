@@ -550,6 +550,25 @@ export class CinemaRenderQueue {
     await activeCompletion?.catch(() => undefined)
   }
 
+  /** Waits until queued executor work and its completion bookkeeping settle. */
+  async waitForIdleForTesting() {
+    while (true) {
+      let activeCompletion: Promise<void> | undefined
+      let hasPending = false
+      await this.serialize(async () => {
+        activeCompletion = this.active?.completion
+        hasPending = this.pending.length > 0
+      })
+      if (!activeCompletion && !hasPending) return
+      if (activeCompletion) {
+        await activeCompletion.catch(() => undefined)
+      } else {
+        this.schedule()
+        await new Promise<void>((resolve) => setTimeout(resolve, 0))
+      }
+    }
+  }
+
   snapshot() {
     return {
       activeJobID: this.active?.entry.jobID,

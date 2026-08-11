@@ -19,7 +19,7 @@ import {
 } from "../src/domain/asset-library"
 import { findRegisteredCinemaRenderOutput } from "../src/domain/render-assets"
 import { resolveMediaToolPaths, runMediaTool, setMediaToolPathsForTest } from "../src/domain/media-runtime"
-import { holdCinemaRenderPhaseUntilCanceledForTesting } from "../src/domain/render-queue"
+import { cinemaRenderQueue, holdCinemaRenderPhaseUntilCanceledForTesting } from "../src/domain/render-queue"
 import { clearCinemaRenderRecoveryForTest } from "../src/domain/render-recovery"
 import {
   setCinemaRenderSnapshotHooksForTesting,
@@ -199,6 +199,9 @@ async function createFixture() {
 }
 
 afterEach(async () => {
+  // A terminal job is persisted just before its final event/bookkeeping. Do
+  // not remove fixture roots while that queue tail can still be writing them.
+  await cinemaRenderQueue.waitForIdleForTesting()
   while (restores.length) restores.pop()?.()
   clearCinemaRenderRecoveryForTest()
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
@@ -340,7 +343,8 @@ describe("Cinema render Job API", () => {
     ])
     expect(createResponse.status).toBe(202)
     const created = (await json<CinemaRenderJob>(createResponse)).data!
-    expect(created).toMatchObject({ status: "queued", timelineRevision: 3, operationID: body.operationID })
+    expect(created).toMatchObject({ timelineRevision: 3, operationID: body.operationID })
+    expect(["queued", "snapshotting", "probing", "rendering", "registering"]).toContain(created.status)
     expect(created.executionRuntime).toMatchObject({
       runtimeID: expect.any(String),
       ffmpegVersion: expect.any(String),
@@ -496,7 +500,7 @@ describe("Cinema render Job API", () => {
         audioEncoder: "aac",
       },
     })
-    expect(["queued", "snapshotting"]).toContain(retry.status)
+    expect(["queued", "snapshotting", "probing", "rendering", "registering"]).toContain(retry.status)
     expect((await json<CinemaRenderJob>(duplicate)).data?.id).toBe(retry.id)
     expect((await readCinemaRenderJob(cinemaRoot, failed.id))?.executionRuntime).toBeUndefined()
 

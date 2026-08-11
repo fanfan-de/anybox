@@ -5,6 +5,7 @@ import { CinemaRoutes } from "./cinema-routes.ts"
 import { CinemaManagementRoutes } from "./management-routes.ts"
 import { isApiError } from "./error.ts"
 import type { AppEnv } from "./types.ts"
+import cinemaVersion from "../version.json"
 
 type Authorize = (context: Context<AppEnv>) => Promise<Response | void> | Response | void
 
@@ -42,7 +43,7 @@ export function createServerApp(options: {
   app.get("/health", (c) => c.json({
     ready: true,
     appID: process.env.ANYBOX_APP_ID?.trim() || "cinema",
-    version: process.env.ANYBOX_APP_VERSION?.trim() || "1.0.0",
+    version: process.env.ANYBOX_APP_VERSION?.trim() || cinemaVersion.version,
     mode,
   }))
 

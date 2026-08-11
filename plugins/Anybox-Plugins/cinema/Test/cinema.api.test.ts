@@ -2996,6 +2996,7 @@ describe("cinema api", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           apiKey: "test-video-key",
+          persistence: "session",
         }),
       })
       const savedKeyBody = await readJson<CinemaVideoProvider["auth"]>(savedKeyResponse)
@@ -3293,6 +3294,7 @@ describe("cinema api", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           apiKey: "legacy-kling-key",
+          persistence: "session",
         }),
       })
       expect(savedKeyResponse.status).toBe(200)
@@ -3865,6 +3867,7 @@ describe("cinema api", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           apiKey: "Access Key ID: unit-ak\nAccess Key Secret: unit-sk",
+          persistence: "session",
         }),
       })
       expect(keyResponse.status).toBe(200)
@@ -4102,6 +4105,7 @@ describe("cinema api", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           apiKey: "Access Key ID: unit-ak\nAccess Key Secret: unit-sk",
+          persistence: "session",
         }),
       })
       expect(keyResponse.status).toBe(200)
@@ -4223,6 +4227,7 @@ describe("cinema api", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           apiKey: "Access Key ID: unit-ak\nAccess Key Secret: unit-sk",
+          persistence: "session",
         }),
       })
       expect(keyResponse.status).toBe(200)
@@ -4315,6 +4320,7 @@ describe("cinema api", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           apiKey: "Access Key ID: unit-ak\nAccess Key Secret: unit-sk",
+          persistence: "session",
         }),
       })
       expect(keyResponse.status).toBe(200)

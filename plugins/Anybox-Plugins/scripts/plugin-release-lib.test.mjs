@@ -7,6 +7,7 @@ import { join } from "node:path"
 import test from "node:test"
 import {
   buildPluginRelease,
+  createDeterministicZip,
   PLUGIN_CATALOG_ID,
   PLUGIN_CATALOG_MANIFEST_FILENAME,
   PLUGIN_CATALOG_PACKAGES_DIRECTORY,
@@ -331,6 +332,85 @@ test("prepares the repository catalog locally and refuses to overwrite a version
       preparePluginCatalogRepository(input),
       /already exists with different bytes; bump the plugin version/,
     )
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true })
+  }
+})
+
+test("uses an opt-in gated release archive and reuses its immutable catalog copy", async () => {
+  const fixture = await createFixtureRepository(["alpha"])
+  try {
+    const pluginRoot = join(fixture.pluginsRoot, "alpha")
+    await writeFile(join(pluginRoot, "package.json"), `${JSON.stringify({
+      name: "alpha-release-builder",
+      private: true,
+      anyboxCatalog: {
+        releaseArchive: "dist/alpha-{version}.zip",
+        releaseAttestation: ".anybox-plugin/release-attestation.json",
+      },
+    }, null, 2)}\n`)
+    await writeFile(join(pluginRoot, ".gitignore"), "dist/\n")
+    git(fixture.root, ["add", "-f", "--", "."])
+    git(fixture.root, ["commit", "--quiet", "-m", "add gated archive contract"])
+    fixture.sourceCommit = git(fixture.root, ["rev-parse", "HEAD"])
+
+    const manifestPath = join(pluginRoot, ".anybox-plugin", "plugin.json")
+    const archivePath = join(pluginRoot, "dist", "alpha-1.0.0.zip")
+    await mkdir(join(pluginRoot, "dist"), { recursive: true })
+    const manifestBytes = await readFile(manifestPath)
+    const attestationPath = join(pluginRoot, "dist", "release-attestation.json")
+    const createArchive = async (releaseType) => {
+      await writeFile(attestationPath, `${JSON.stringify({
+        schemaVersion: 1,
+        pluginID: "alpha",
+        pluginVersion: "1.0.0",
+        releaseType,
+        manifestSha256: createHash("sha256").update(manifestBytes).digest("hex"),
+        artifacts: [],
+      }, null, 2)}\n`)
+      const bytes = await createDeterministicZip([
+        {
+          absolutePath: manifestPath,
+          archivePath: "alpha/.anybox-plugin/plugin.json",
+          mode: 0o100644,
+        },
+        {
+          absolutePath: attestationPath,
+          archivePath: "alpha/.anybox-plugin/release-attestation.json",
+          mode: 0o100644,
+        },
+      ])
+      await writeFile(archivePath, bytes)
+      return bytes
+    }
+
+    await createArchive("validation")
+    await assert.rejects(buildPluginRelease({
+      repoRoot: fixture.root,
+      pluginsRoot: fixture.pluginsRoot,
+      outputDirectory: join(fixture.root, "validation-release"),
+      sourceCommit: fixture.sourceCommit,
+      expectedPluginCount: 1,
+    }), /not production-approved/)
+    const archiveBytes = await createArchive("production")
+
+    const catalogDirectory = join(fixture.root, PLUGIN_CATALOG_REPOSITORY_PATH)
+    const input = {
+      repoRoot: fixture.root,
+      pluginsRoot: fixture.pluginsRoot,
+      catalogDirectory,
+      sourceCommit: fixture.sourceCommit,
+      expectedPluginCount: 1,
+    }
+    const first = await preparePluginCatalogRepository(input)
+    const assetPath = join(catalogDirectory, PLUGIN_CATALOG_PACKAGES_DIRECTORY, first.releaseManifest.assets[0].name)
+    assert.deepEqual(await readFile(assetPath), archiveBytes)
+
+    await rm(join(pluginRoot, "dist"), { recursive: true, force: true })
+    const second = await preparePluginCatalogRepository(input)
+    assert.equal(second.newAssets.length, 0)
+    assert.equal(second.reusedAssets.length, 1)
+    assert.deepEqual(await readFile(assetPath), archiveBytes)
   } finally {
     await rm(fixture.root, { recursive: true, force: true })
   }

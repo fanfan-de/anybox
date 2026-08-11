@@ -12,7 +12,9 @@ import { fileURLToPath } from "node:url"
 import { unzipSync } from "fflate"
 
 const pluginRoot = path.dirname(fileURLToPath(import.meta.url))
-const archivePath = path.resolve(pluginRoot, process.env.CINEMA_PACKAGE_PATH ?? "dist/cinema-1.0.0.anybox-plugin.zip")
+const sourceManifest = JSON.parse(await readFile(path.join(pluginRoot, ".anybox-plugin", "plugin.json"), "utf8"))
+const expectedVersion = String(sourceManifest.version)
+const archivePath = path.resolve(pluginRoot, process.env.CINEMA_PACKAGE_PATH ?? `dist/cinema-${expectedVersion}.anybox-plugin.zip`)
 const bunBinary = [
   process.env.ANYBOX_BUN_BINARY?.trim(),
   process.env.BUN_INSTALL ? path.join(process.env.BUN_INSTALL, "bin", process.platform === "win32" ? "bun.exe" : "bun") : undefined,
@@ -25,6 +27,7 @@ const bunBinary = [
 ].find((candidate) => candidate && existsSync(candidate)) ?? "bun"
 let temporaryRoot = ""
 let extractedRoot = ""
+let managedHelper: { type: "app-runtime-helper"; path: string; sha256: string }
 const children: ChildProcessWithoutNullStreams[] = []
 const servers: Server[] = []
 
@@ -99,6 +102,16 @@ test.beforeAll(async () => {
     await writeFile(destination, bytes)
   }
   extractedRoot = path.join(temporaryRoot, "cinema")
+  const manifest = JSON.parse(await readFile(path.join(extractedRoot, ".anybox-plugin", "plugin.json"), "utf8"))
+  const executable = manifest.platformArtifacts
+    ?.find((artifact: any) => artifact.id === "cinema-platform-helper")
+    ?.executables?.find((entry: any) => entry.platform === process.platform && entry.architecture === process.arch)
+  if (!executable?.path || !executable?.sha256) throw new Error("Packaged Playwright smoke is missing its platform helper.")
+  managedHelper = {
+    type: "app-runtime-helper",
+    path: path.resolve(extractedRoot, ...String(executable.path).split("/")),
+    sha256: String(executable.sha256),
+  }
 })
 
 test.afterAll(async () => {
@@ -143,12 +156,13 @@ test("runs the installed ZIP behind an Anybox-style Runtime Gateway", async ({ p
   const anyboxRuntime = runtimeProcess([runtimePath], {
     ...process.env,
     ANYBOX_APP_ID: "cinema",
-    ANYBOX_APP_VERSION: "1.0.0",
+    ANYBOX_APP_VERSION: expectedVersion,
     ANYBOX_APP_PORT: String(runtimePort),
     ANYBOX_APP_TOKEN: runtimeToken,
     ANYBOX_APP_DATA_DIR: path.join(temporaryRoot, "anybox-data"),
     ANYBOX_APP_CACHE_DIR: path.join(temporaryRoot, "anybox-cache"),
     ANYBOX_APP_LOG_DIR: path.join(temporaryRoot, "anybox-log"),
+    ANYBOX_APP_ARTIFACTS_JSON: JSON.stringify({ "cinema-platform-helper": managedHelper }),
   })
   await waitForLine(anyboxRuntime, "[cinema-runtime] ready ")
 

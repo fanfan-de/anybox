@@ -21,6 +21,46 @@ async function sha256(filePath) {
   return hash.digest("hex")
 }
 
+function requiredEnvironment(name, label) {
+  const value = process.env[name]?.trim()
+  if (!value) throw new Error(`${name} is required to approve the ${label} helper for release.`)
+  return value
+}
+
+function expectedVerification(target) {
+  if (target === "win32-x64") {
+    return {
+      method: "windows-authenticode",
+      signer: requiredEnvironment("CINEMA_HELPER_WINDOWS_SIGNER_THUMBPRINT", "Windows")
+        .replaceAll(/\s/g, "").toUpperCase(),
+    }
+  }
+  if (target === "darwin-arm64") {
+    return {
+      method: "apple-codesign",
+      signer: requiredEnvironment("CINEMA_HELPER_APPLE_TEAM_ID", "macOS"),
+    }
+  }
+  const publicKey = requiredEnvironment("CINEMA_HELPER_MINISIGN_PUBLIC_KEY", "Linux")
+  return {
+    method: "linux-minisign",
+    signer: createHash("sha256").update(publicKey).digest("hex"),
+  }
+}
+
+function approvedProvenance(provenance, target, digest) {
+  if (provenance?.schemaVersion !== 1 || provenance?.target !== target || provenance?.sha256 !== digest) return false
+  if (provenance.status === "unsigned-validation") {
+    return allowUnsignedValidation && provenance.method === "explicit-ci-validation-bypass"
+  }
+  if (provenance.status !== "verified") return false
+  const expected = expectedVerification(target)
+  const signer = target === "win32-x64"
+    ? String(provenance.signer ?? "").replaceAll(/\s/g, "").toUpperCase()
+    : String(provenance.signer ?? "")
+  return provenance.method === expected.method && signer === expected.signer
+}
+
 const executables = []
 for (const target of targets) {
   const targetKey = `${target.platform}-${target.architecture}`
@@ -33,13 +73,7 @@ for (const target of targets) {
   const provenance = await fsp.readFile(provenancePath, "utf8")
     .then((text) => JSON.parse(text))
     .catch(() => undefined)
-  const allowedStatus = allowUnsignedValidation ? ["verified", "unsigned-validation"] : ["verified"]
-  if (
-    provenance?.schemaVersion !== 1
-    || provenance?.target !== targetKey
-    || provenance?.sha256 !== digest
-    || !allowedStatus.includes(provenance?.status)
-  ) {
+  if (!approvedProvenance(provenance, targetKey, digest)) {
     throw new Error(`Cinema helper signature verification is missing, stale, or not release-approved: ${targetKey}`)
   }
   executables.push({

@@ -251,6 +251,8 @@ pnpm plugins:catalog:prepare
 pnpm plugins:catalog:verify
 ```
 
+需要先通过插件专属生产门禁（例如原生 helper 签名）的插件，可在 `package.json` 同时声明 `anyboxCatalog.releaseArchive`（路径可使用 `{version}`）和 `anyboxCatalog.releaseAttestation`。先生成并验证该 ZIP，再准备目录。目录工具不会执行插件构建脚本，并会校验 ZIP 的安全路径、内嵌 manifest 与 production attestation；validation/unsigned 产物会被拒绝。
+
 发布前确认：
 
 - 未提交密钥、Token、`.env`、本地数据库或认证缓存。

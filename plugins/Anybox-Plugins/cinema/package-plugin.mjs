@@ -64,9 +64,26 @@ async function regularFiles(root, prefix) {
   return result
 }
 
+if (allowUnsignedValidation && !release) throw new Error("--allow-unsigned-validation is valid only with --release.")
 if (!skipBuild) run(resolveBunExecutable(), ["run", "build.mjs"])
+if (release) run(process.execPath, [
+  "./native/assemble-helper-manifest.mjs",
+  "--check",
+  ...(allowUnsignedValidation ? ["--allow-unsigned-validation"] : []),
+])
 const manifest = JSON.parse(await fsp.readFile(manifestPath, "utf8"))
-if (manifest.name !== "cinema" || manifest.version !== "1.0.0") throw new Error("Cinema package manifest must identify cinema 1.0.0.")
+const packageMetadata = JSON.parse(await fsp.readFile(path.join(pluginRoot, "package.json"), "utf8"))
+const sourceVersion = JSON.parse(await fsp.readFile(path.join(pluginRoot, "src", "version.json"), "utf8"))
+if (
+  manifest.name !== "cinema"
+  || manifest.version !== packageMetadata.version
+  || manifest.version !== sourceVersion.version
+) {
+  throw new Error("Cinema package, source, and plugin manifest versions must match.")
+}
+const mcpVersion = manifest.mcpServers?.find((server) => server.id === "cinema")
+  ?.runtime?.env?.ANYBOX_APP_VERSION
+if (mcpVersion !== manifest.version) throw new Error("Cinema MCP Runtime version must match the plugin manifest.")
 
 const helper = manifest.platformArtifacts?.find((item) => item.id === "cinema-platform-helper" && item.type === "app-runtime-helper")
 if (!helper) throw new Error("Cinema package is missing the native app-runtime-helper declaration.")
@@ -82,6 +99,7 @@ const files = [
   ...await regularFiles(path.join(pluginRoot, "mcp"), "mcp"),
   ...await regularFiles(path.join(pluginRoot, "skills"), "skills"),
 ]
+const helperVerification = []
 for (const executable of helper.executables) {
   const absolute = path.resolve(pluginRoot, ...executable.path.split("/"))
   const safeRoot = `${path.resolve(pluginRoot)}${path.sep}`
@@ -103,6 +121,14 @@ for (const executable of helper.executables) {
       || provenance?.sha256 !== digest
       || !allowedStatus.includes(provenance?.status)
     ) throw new Error(`Cinema release helper is not signature-verified: ${target}`)
+    helperVerification.push({
+      target,
+      path: executable.path,
+      sha256: digest,
+      status: provenance.status,
+      method: provenance.method,
+      signer: provenance.signer ?? null,
+    })
   }
   files.push({ absolute, relative: executable.path })
 }
@@ -114,6 +140,7 @@ if (files.some((item) => /(^|\/)(?:ffmpeg|ffprobe)(?:\.exe)?$/i.test(item.relati
 }
 
 const archiveEntries = {}
+const deterministicTimestamp = new Date(1980, 0, 1)
 for (const file of files) {
   const bytes = new Uint8Array(await fsp.readFile(file.absolute))
   if (textExtensions.has(path.extname(file.relative).toLowerCase())) {
@@ -125,7 +152,27 @@ for (const file of files) {
       throw new Error(`Cinema package contains a build-machine absolute path in ${file.relative}.`)
     }
   }
-  archiveEntries[`${manifest.name}/${file.relative}`] = bytes
+  archiveEntries[`${manifest.name}/${file.relative}`] = [bytes, {
+    mtime: deterministicTimestamp,
+    os: 3,
+    attrs: (0o100644 << 16) >>> 0,
+  }]
+}
+if (release) {
+  const manifestBytes = await fsp.readFile(manifestPath)
+  const attestation = new TextEncoder().encode(`${JSON.stringify({
+    schemaVersion: 1,
+    pluginID: manifest.name,
+    pluginVersion: manifest.version,
+    releaseType: allowUnsignedValidation ? "validation" : "production",
+    manifestSha256: createHash("sha256").update(manifestBytes).digest("hex"),
+    artifacts: helperVerification.sort((left, right) => left.target.localeCompare(right.target)),
+  }, null, 2)}\n`)
+  archiveEntries[`${manifest.name}/.anybox-plugin/release-attestation.json`] = [attestation, {
+    mtime: deterministicTimestamp,
+    os: 3,
+    attrs: (0o100644 << 16) >>> 0,
+  }]
 }
 
 const outputDirectory = path.join(pluginRoot, "dist")
@@ -133,4 +180,10 @@ const outputPath = path.join(outputDirectory, `cinema-${manifest.version}.anybox
 await fsp.mkdir(outputDirectory, { recursive: true })
 const archive = zipSync(archiveEntries, { level: 9 })
 await fsp.writeFile(outputPath, archive)
-console.log(JSON.stringify({ outputPath, sizeBytes: archive.byteLength, files: files.length, release, allowUnsignedValidation }))
+console.log(JSON.stringify({
+  outputPath,
+  sizeBytes: archive.byteLength,
+  files: files.length + (release ? 1 : 0),
+  release,
+  allowUnsignedValidation,
+}))

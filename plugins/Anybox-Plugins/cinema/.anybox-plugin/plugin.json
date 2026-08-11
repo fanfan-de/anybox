@@ -1,6 +1,6 @@
 {
   "name": "cinema",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A complete local AI filmmaking Web App packaged with its own Cinema runtime.",
   "author": {
     "name": "Anybox"
@@ -75,7 +75,7 @@
           "platform": "win32",
           "architecture": "x64",
           "path": "native/artifacts/win32-x64/cinema-platform-helper.exe",
-          "sha256": "b03eb6610927e07e72c413bede249dac7cac4d95159688dff921474209e1d33f"
+          "sha256": "2466730c8ca0355bea146f6743c818ba2550a35a40562de0570427e9f75c7553"
         }
       ]
     }
@@ -106,7 +106,9 @@
         "allowLoopbackHttp": true
       }
     ],
-    "system": []
+    "system": [
+      "file-picker"
+    ]
   },
   "installReview": [
     "Runs the Cinema Web/API Runtime locally and stores only Cinema-owned state beneath the App Runtime data, cache, and log directories.",
@@ -159,7 +161,7 @@
         "cwd": "${PLUGIN_ROOT}",
         "env": {
           "ANYBOX_APP_ID": "cinema",
-          "ANYBOX_APP_VERSION": "1.0.0",
+          "ANYBOX_APP_VERSION": "1.0.1",
           "ANYBOX_APP_DATA_DIR": "${PLUGIN_APP_DATA_DIR}",
           "ANYBOX_APP_CACHE_DIR": "${PLUGIN_APP_CACHE_DIR}",
           "ANYBOX_APP_LOG_DIR": "${PLUGIN_APP_LOG_DIR}"

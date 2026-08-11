@@ -14651,12 +14651,16 @@ var require_fuzzysort = __commonJS((exports, module) => {
 });
 
 // src/mcp/server.ts
-import path19 from "path";
+import path18 from "path";
 import readline from "readline";
 
 // ../../../node_modules/.pnpm/zod@4.3.6/node_modules/zod/index.js
 init_external();
 init_external();
+// src/version.json
+var version_default = {
+  version: "1.0.1"
+};
 
 // src/contracts/cinema.ts
 var CinemaNodeTypeSchema = exports_external.enum([
@@ -15697,7 +15701,7 @@ var CinemaProjectStateSummarySchema = exports_external.object({
 
 // src/api/cinema.ts
 import { appendFile as appendFile3, mkdir as mkdir13, readFile as readFile13, readdir as readdir6, rename as rename8, stat as stat9, writeFile as writeFile8 } from "fs/promises";
-import path18 from "path";
+import path17 from "path";
 
 // src/platform/workspace-uri.ts
 function isSshWorkspaceUri(value) {
@@ -16660,8 +16664,8 @@ function getCinemaRenderV1Support(trackKind, clipKind) {
 // src/domain/provider-runtime.ts
 import { createHmac } from "crypto";
 import { mkdir as mkdir5, readFile as readFile5, stat as stat3, writeFile as writeFile5 } from "fs/promises";
-import path8 from "path";
-import { fileURLToPath as fileURLToPath2 } from "url";
+import path7 from "path";
+import { fileURLToPath } from "url";
 
 // src/api/error.ts
 class ApiError extends Error {
@@ -16679,31 +16683,15 @@ class ApiError extends Error {
 
 // src/platform/native-helper.ts
 import { spawn } from "child_process";
-import path from "path";
-import { fileURLToPath } from "url";
 var helperOverride;
 var callOverride;
-function artifactHelperPath() {
-  const raw = process.env.ANYBOX_APP_ARTIFACTS_JSON?.trim();
-  if (!raw)
-    return;
-  try {
-    const value = JSON.parse(raw);
-    const candidate = value["cinema-platform-helper"]?.path;
-    return typeof candidate === "string" && candidate.trim() ? candidate : undefined;
-  } catch {
-    return;
-  }
-}
-function bundledHelperPath() {
-  const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
-  const target = `${process.platform}-${process.arch}`;
-  const executable = process.platform === "win32" ? "cinema-platform-helper.exe" : "cinema-platform-helper";
-  const pluginRoot = path.basename(moduleDirectory) === "runtime" ? path.resolve(moduleDirectory, "..") : path.resolve(moduleDirectory, "..", "..");
-  return path.join(pluginRoot, "native", "artifacts", target, executable);
-}
+var configuredHelperPath;
 function nativeHelperPath() {
-  return helperOverride ?? artifactHelperPath() ?? bundledHelperPath();
+  const configured = helperOverride ?? configuredHelperPath;
+  if (!configured) {
+    throw new ApiError(503, "KEYCHAIN_UNAVAILABLE", "The Cinema helper was not configured before use.");
+  }
+  return configured;
 }
 async function callNativeHelper(method, params = {}) {
   if (callOverride)
@@ -16781,37 +16769,37 @@ async function resolveProviderRuntimeAuth(providerID, _settings, _options) {
 }
 
 // src/storage/settings.ts
-import path4 from "path";
+import path3 from "path";
 
 // src/platform/global.ts
 import os from "os";
-import path2 from "path";
+import path from "path";
 function defaultDataRoot() {
   if (process.platform === "win32") {
-    return path2.join(process.env.LOCALAPPDATA || path2.join(os.homedir(), "AppData", "Local"), "AnyboxCinema");
+    return path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local"), "AnyboxCinema");
   }
   if (process.platform === "darwin")
-    return path2.join(os.homedir(), "Library", "Application Support", "AnyboxCinema");
-  return path2.join(process.env.XDG_DATA_HOME || path2.join(os.homedir(), ".local", "share"), "anybox-cinema");
+    return path.join(os.homedir(), "Library", "Application Support", "AnyboxCinema");
+  return path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), ".local", "share"), "anybox-cinema");
 }
 var initialData = process.env.ANYBOX_APP_DATA_DIR?.trim() || defaultDataRoot();
 var Path = {
   data: initialData,
-  state: path2.join(initialData, "state"),
-  cache: process.env.ANYBOX_APP_CACHE_DIR?.trim() || path2.join(initialData, "cache"),
-  log: process.env.ANYBOX_APP_LOG_DIR?.trim() || path2.join(initialData, "logs")
+  state: path.join(initialData, "state"),
+  cache: process.env.ANYBOX_APP_CACHE_DIR?.trim() || path.join(initialData, "cache"),
+  log: process.env.ANYBOX_APP_LOG_DIR?.trim() || path.join(initialData, "logs")
 };
 
 // src/storage/atomic.ts
 import { mkdir, readFile, rename, writeFile } from "fs/promises";
-import path3 from "path";
+import path2 from "path";
 import { randomUUID } from "crypto";
 async function readJsonFile(file2) {
   return JSON.parse(await readFile(file2, "utf8"));
 }
 async function atomicWriteFile(file2, content) {
-  await mkdir(path3.dirname(file2), { recursive: true });
-  const temporary = path3.join(path3.dirname(file2), `.${path3.basename(file2)}.${process.pid}.${randomUUID()}.tmp`);
+  await mkdir(path2.dirname(file2), { recursive: true });
+  const temporary = path2.join(path2.dirname(file2), `.${path2.basename(file2)}.${process.pid}.${randomUUID()}.tmp`);
   await writeFile(temporary, content);
   await rename(temporary, file2);
 }
@@ -16832,7 +16820,7 @@ var DEFAULT_SETTINGS = {
 };
 var cached2;
 function settingsPath() {
-  return path4.join(Path.data, "settings.json");
+  return path3.join(Path.data, "settings.json");
 }
 function normalizeSettings(value) {
   return {
@@ -16971,7 +16959,7 @@ import {
   stat as stat2,
   writeFile as writeFile4
 } from "fs/promises";
-import path7 from "path";
+import path6 from "path";
 import { Readable as Readable2, Transform } from "stream";
 import { pipeline } from "stream/promises";
 
@@ -16979,7 +16967,7 @@ import { pipeline } from "stream/promises";
 import { createHash, randomUUID as randomUUID2 } from "crypto";
 import { mkdir as mkdir2, readFile as readFile2, rm, stat, utimes, writeFile as writeFile2 } from "fs/promises";
 import { readFileSync, rmSync } from "fs";
-import path5 from "path";
+import path4 from "path";
 var STALE_AFTER_MS = 30000;
 var ACQUIRE_TIMEOUT_MS = 30000;
 var HEARTBEAT_MS = 5000;
@@ -16988,8 +16976,8 @@ function sleep(ms) {
 }
 function lockPathFor(key) {
   const digest = createHash("sha256").update(key).digest("hex");
-  const normalizedKey = key.replaceAll("/", path5.sep);
-  const projectMarker = `${path5.sep}.anybox-cinema`;
+  const normalizedKey = key.replaceAll("/", path4.sep);
+  const projectMarker = `${path4.sep}.anybox-cinema`;
   const markerIndex = normalizedKey.toLowerCase().indexOf(projectMarker.toLowerCase());
   const throughMarker = markerIndex >= 0 ? normalizedKey.slice(0, markerIndex + projectMarker.length) : undefined;
   const absoluteStart = throughMarker === undefined ? -1 : process.platform === "win32" ? (() => {
@@ -16997,10 +16985,10 @@ function lockPathFor(key) {
     if (drive >= 0)
       return drive;
     return throughMarker.indexOf("\\\\");
-  })() : throughMarker.indexOf(path5.sep);
+  })() : throughMarker.indexOf(path4.sep);
   const projectMetadataRoot = throughMarker && absoluteStart >= 0 ? throughMarker.slice(absoluteStart) : undefined;
-  const lockRoot = projectMetadataRoot && path5.isAbsolute(projectMetadataRoot) ? path5.join(projectMetadataRoot, ".locks") : path5.join(Path.state, ".locks");
-  return { digest, lockPath: path5.join(lockRoot, `${digest}.lock`) };
+  const lockRoot = projectMetadataRoot && path4.isAbsolute(projectMetadataRoot) ? path4.join(projectMetadataRoot, ".locks") : path4.join(Path.state, ".locks");
+  return { digest, lockPath: path4.join(lockRoot, `${digest}.lock`) };
 }
 function processAlive(pid) {
   if (!Number.isInteger(pid) || pid <= 0)
@@ -17018,7 +17006,7 @@ async function recoverStaleLock(lockPath) {
   });
   if (!info || Date.now() - info.mtimeMs <= STALE_AFTER_MS)
     return false;
-  const owner = await readFile2(path5.join(lockPath, "owner.json"), "utf8").then((text) => JSON.parse(text)).catch(() => {
+  const owner = await readFile2(path4.join(lockPath, "owner.json"), "utf8").then((text) => JSON.parse(text)).catch(() => {
     return;
   });
   if (owner?.pid && processAlive(owner.pid))
@@ -17028,13 +17016,13 @@ async function recoverStaleLock(lockPath) {
 }
 async function acquire(key) {
   const { digest, lockPath } = lockPathFor(key);
-  await mkdir2(path5.dirname(lockPath), { recursive: true });
+  await mkdir2(path4.dirname(lockPath), { recursive: true });
   const deadline = Date.now() + ACQUIRE_TIMEOUT_MS;
   const owner = { token: randomUUID2(), pid: process.pid, startedAt: Date.now(), keyHash: digest };
   while (true) {
     try {
       await mkdir2(lockPath);
-      await writeFile2(path5.join(lockPath, "owner.json"), `${JSON.stringify(owner)}
+      await writeFile2(path4.join(lockPath, "owner.json"), `${JSON.stringify(owner)}
 `, { flag: "wx" });
       break;
     } catch (error48) {
@@ -17066,7 +17054,7 @@ async function acquire(key) {
       released = true;
       clearInterval(heartbeat);
       try {
-        const current = JSON.parse(readFileSync(path5.join(lockPath, "owner.json"), "utf8"));
+        const current = JSON.parse(readFileSync(path4.join(lockPath, "owner.json"), "utf8"));
         if (current.token === owner.token)
           rmSync(lockPath, { recursive: true, force: true });
       } catch {}
@@ -17262,7 +17250,7 @@ async function sameOriginFetch(url2, init = {}, maxRedirects = 3) {
 // src/domain/comfyui-workflows.ts
 import { createHash as createHash2, randomUUID as randomUUID3 } from "crypto";
 import { mkdir as mkdir3, readFile as readFile3, rename as rename2, writeFile as writeFile3 } from "fs/promises";
-import path6 from "path";
+import path5 from "path";
 var COMFYUI_PROVIDER_ID = "comfyui-local";
 var COMFYUI_DEFAULT_BASE_URL = "http://127.0.0.1:8188";
 var COMFYUI_WORKFLOW_CONVERTER_VERSION = "anybox-comfyui-ui-to-api/4";
@@ -17455,11 +17443,11 @@ function requestedUserID(value, fallback) {
 }
 function cachePath(endpoint, userID) {
   const filename = `${sha256(cacheKey(endpoint, userID))}.json`;
-  return path6.join(cacheRootOverride ?? path6.join(Path.data, "cinema", "comfyui-workflows"), filename);
+  return path5.join(cacheRootOverride ?? path5.join(Path.data, "cinema", "comfyui-workflows"), filename);
 }
 async function writePublicCatalogCache(endpoint, userID, catalog) {
   const destination = cachePath(endpoint, userID);
-  await mkdir3(path6.dirname(destination), { recursive: true });
+  await mkdir3(path5.dirname(destination), { recursive: true });
   const temporary = `${destination}.${randomUUID3()}.tmp`;
   await writeFile3(temporary, JSON.stringify({
     schemaVersion: CACHE_SCHEMA_VERSION,
@@ -18341,7 +18329,7 @@ function validateModelDependencies(workflow, prompt, objectInfo, availableModels
   };
   for (const declared of declaredModels(workflow)) {
     const folders = declared.folder ? [availableModels.get(declared.folder)].filter((value) => Boolean(value)) : [...availableModels.values()];
-    const available = folders.some((names) => names.has(declared.name) || [...names].some((name) => path6.basename(name) === path6.basename(declared.name)));
+    const available = folders.some((names) => names.has(declared.name) || [...names].some((name) => path5.basename(name) === path5.basename(declared.name)));
     add(declared.name, declared.folder, available);
   }
   for (const [nodeID, node] of Object.entries(prompt)) {
@@ -18359,7 +18347,7 @@ function validateModelDependencies(workflow, prompt, objectInfo, availableModels
       if (!folder)
         continue;
       const liveFolder = availableModels.get(folder);
-      const available = options.has(value) || Boolean(liveFolder?.has(value)) || Boolean(liveFolder && [...liveFolder].some((name) => path6.basename(name) === path6.basename(value)));
+      const available = options.has(value) || Boolean(liveFolder?.has(value)) || Boolean(liveFolder && [...liveFolder].some((name) => path5.basename(name) === path5.basename(value)));
       add(value, folder, available, nodeID);
     }
   }
@@ -18378,7 +18366,7 @@ function nodeDependencies(prompt, objectInfo) {
   return { dependencies, issues };
 }
 function fileNameForWorkflow(filePath) {
-  const name = path6.posix.basename(filePath, path6.posix.extname(filePath)).trim();
+  const name = path5.posix.basename(filePath, path5.posix.extname(filePath)).trim();
   return name || filePath;
 }
 async function tryServerConversion(baseURL, userID, workflow) {
@@ -19003,7 +18991,7 @@ function clonePrompt(prompt) {
 }
 function snapshotPath(cinemaRoot, taskID, submitted = false) {
   const suffix = submitted ? ".submitted.json" : ".json";
-  return path7.join(cinemaRoot, "state", "comfyui-workflows", `${taskID}${suffix}`);
+  return path6.join(cinemaRoot, "state", "comfyui-workflows", `${taskID}${suffix}`);
 }
 function snapshotDigest(snapshot) {
   return `sha256:${createHash3("sha256").update(JSON.stringify(snapshot)).digest("hex")}`;
@@ -19011,7 +18999,7 @@ function snapshotDigest(snapshot) {
 async function writeImmutableSnapshot(cinemaRoot, taskID, snapshot, submitted = false) {
   const filepath = snapshotPath(cinemaRoot, taskID, submitted);
   const complete = { ...snapshot, digest: snapshotDigest(snapshot) };
-  await mkdir4(path7.dirname(filepath), { recursive: true });
+  await mkdir4(path6.dirname(filepath), { recursive: true });
   try {
     await writeFile4(filepath, JSON.stringify(complete), { encoding: "utf8", flag: "wx" });
   } catch (error48) {
@@ -19217,13 +19205,13 @@ async function prepareComfyUITask(input) {
   });
 }
 function safeProjectFile(root, relativePath) {
-  if (!relativePath.trim() || path7.isAbsolute(relativePath)) {
+  if (!relativePath.trim() || path6.isAbsolute(relativePath)) {
     throw new ApiError(400, "COMFYUI_WORKFLOW_MEDIA_INVALID", "Workflow media must be a project-relative file.");
   }
-  const resolvedRoot = path7.resolve(root);
-  const resolved = path7.resolve(resolvedRoot, relativePath);
-  const relative = path7.relative(resolvedRoot, resolved);
-  if (!relative || relative.startsWith("..") || path7.isAbsolute(relative)) {
+  const resolvedRoot = path6.resolve(root);
+  const resolved = path6.resolve(resolvedRoot, relativePath);
+  const relative = path6.relative(resolvedRoot, resolved);
+  if (!relative || relative.startsWith("..") || path6.isAbsolute(relative)) {
     throw new ApiError(400, "COMFYUI_WORKFLOW_MEDIA_INVALID", "Workflow media must stay inside the project.");
   }
   return { resolvedRoot, resolved };
@@ -19263,8 +19251,8 @@ async function inspectProjectMedia(root, relativePath, control) {
     throw new ApiError(400, "COMFYUI_WORKFLOW_MEDIA_INVALID", `'${control.label}' is not a project file.`);
   }
   const [realRoot, realFile] = await Promise.all([realpath(resolvedRoot), realpath(resolved)]);
-  const realRelative = path7.relative(realRoot, realFile);
-  if (!realRelative || realRelative.startsWith("..") || path7.isAbsolute(realRelative)) {
+  const realRelative = path6.relative(realRoot, realFile);
+  if (!realRelative || realRelative.startsWith("..") || path6.isAbsolute(realRelative)) {
     throw new ApiError(400, "COMFYUI_WORKFLOW_MEDIA_INVALID", "Workflow media resolves outside the project.");
   }
   const maxBytes = Math.floor((control.maxFileSizeMB ?? 256) * 1024 * 1024);
@@ -19286,7 +19274,7 @@ async function inspectProjectMedia(root, relativePath, control) {
   const supported = control.type === "image-list" ? control.supportedFormats : control.supportedMimeTypes;
   if (supported?.length && !supported.some((value) => {
     const normalized = value.toLowerCase();
-    return normalized === mimeType || normalized.replace(/^\./, "") === path7.extname(realFile).slice(1).toLowerCase();
+    return normalized === mimeType || normalized.replace(/^\./, "") === path6.extname(realFile).slice(1).toLowerCase();
   })) {
     throw new ApiError(415, "COMFYUI_WORKFLOW_MEDIA_UNSUPPORTED", `'${control.label}' has an unsupported media type.`);
   }
@@ -19522,17 +19510,17 @@ async function ensureOutputDirectory(root, kind, nodeID) {
   const rootInfo = await stat2(root);
   if (!rootInfo.isDirectory())
     throw new ApiError(500, "COMFYUI_OUTPUT_PATH_INVALID", "Project root is invalid.");
-  const directory = path7.join(root, "generated", `${kind}s`, safeFileSegment(nodeID));
+  const directory = path6.join(root, "generated", `${kind}s`, safeFileSegment(nodeID));
   await mkdir4(directory, { recursive: true });
   const [realRoot, realDirectory] = await Promise.all([realpath(root), realpath(directory)]);
-  const relative = path7.relative(realRoot, realDirectory);
-  if (!relative || relative.startsWith("..") || path7.isAbsolute(relative)) {
+  const relative = path6.relative(realRoot, realDirectory);
+  if (!relative || relative.startsWith("..") || path6.isAbsolute(relative)) {
     throw new ApiError(500, "COMFYUI_OUTPUT_PATH_INVALID", "Output directory must stay inside the project.");
   }
   return directory;
 }
 function projectRelativePath(root, filepath) {
-  return path7.relative(root, filepath).split(path7.sep).join("/");
+  return path6.relative(root, filepath).split(path6.sep).join("/");
 }
 function allowedBytes(kind) {
   return kind === "image" ? COMFYUI_IMAGE_MAX_BYTES : COMFYUI_VIDEO_MAX_BYTES;
@@ -19556,14 +19544,14 @@ async function existingOutputAsset(root, filepath, kind, mimeType, id) {
 }
 async function downloadOutput(input, descriptor, outputKind, index) {
   const { endpoint, userID, promptID } = referenceForTask(input.task);
-  const declaredMime = MIME_BY_EXTENSION[path7.extname(descriptor.filename).toLowerCase()];
+  const declaredMime = MIME_BY_EXTENSION[path6.extname(descriptor.filename).toLowerCase()];
   if (!declaredMime || !declaredMime.startsWith(`${outputKind}/`)) {
     throw new ApiError(415, "COMFYUI_OUTPUT_INVALID", `ComfyUI returned a file that is not a supported ${outputKind}.`);
   }
   const directory = await ensureOutputDirectory(input.root, outputKind, input.task.taskNodeID || input.task.id);
   const extension = EXTENSION_BY_MIME[declaredMime];
   const assetID = `comfyui-${safeFileSegment(promptID)}-${index + 1}`;
-  const finalPath = path7.join(directory, `${safeFileSegment(promptID)}-${index + 1}${extension}`);
+  const finalPath = path6.join(directory, `${safeFileSegment(promptID)}-${index + 1}${extension}`);
   const existing = await existingOutputAsset(input.root, finalPath, outputKind, declaredMime, assetID);
   if (existing)
     return existing;
@@ -19599,7 +19587,7 @@ async function downloadOutput(input, descriptor, outputKind, index) {
   }
   if (!response.body)
     throw new ApiError(502, "COMFYUI_OUTPUT_EMPTY", "ComfyUI returned an empty output.");
-  const temporaryPath = path7.join(directory, `.${safeFileSegment(promptID)}-${index + 1}.part`);
+  const temporaryPath = path6.join(directory, `.${safeFileSegment(promptID)}-${index + 1}.part`);
   await rm2(temporaryPath, { force: true }).catch(() => {
     return;
   });
@@ -20250,7 +20238,7 @@ var loadedManifestSignature;
 var loadedManifestFilepaths = [];
 var manifestFilePathOverride;
 function defaultProviderManifestFilePath() {
-  return fileURLToPath2(new URL("./provider-manifests.json", import.meta.url));
+  return fileURLToPath(new URL("./provider-manifests.json", import.meta.url));
 }
 function providerManifestFilePath() {
   return manifestFilePathOverride ?? defaultProviderManifestFilePath();
@@ -20290,10 +20278,10 @@ async function localManifestFilesSignature(filepaths) {
   return signatures.join("|");
 }
 function resolveProviderManifestIncludePath(source, includePath) {
-  return path8.resolve(path8.dirname(source), includePath);
+  return path7.resolve(path7.dirname(source), includePath);
 }
 async function readLocalManifestJsonFile(filepath, readFilepaths) {
-  const resolved = path8.resolve(filepath);
+  const resolved = path7.resolve(filepath);
   readFilepaths.add(resolved);
   const text = await readFile5(resolved, "utf8");
   return JSON.parse(text);
@@ -20353,7 +20341,7 @@ async function providerManifestsFromLocalCatalogFile(value, source, readFilepath
   return providerManifestsFromLocalCatalog(value, source);
 }
 async function readLocalProviderManifestCatalog() {
-  const filepath = path8.resolve(providerManifestFilePath());
+  const filepath = path7.resolve(providerManifestFilePath());
   const readFilepaths = new Set;
   try {
     const catalog = await readLocalManifestJsonFile(filepath, readFilepaths);
@@ -20372,7 +20360,7 @@ async function readLocalProviderManifestCatalog() {
 async function invalidateIfProviderManifestFileChanged() {
   if (!loadedManifestSignature)
     return;
-  const filepaths = loadedManifestFilepaths.length > 0 ? loadedManifestFilepaths : [path8.resolve(providerManifestFilePath())];
+  const filepaths = loadedManifestFilepaths.length > 0 ? loadedManifestFilepaths : [path7.resolve(providerManifestFilePath())];
   const currentSignature = await localManifestFilesSignature(filepaths);
   if (currentSignature === loadedManifestSignature)
     return;
@@ -21037,17 +21025,17 @@ function safeKlingAISegment(value) {
   return readable || "kling-video";
 }
 function projectRelativePath2(root, filePath) {
-  return path8.relative(root, filePath).split(path8.sep).join("/");
+  return path7.relative(root, filePath).split(path7.sep).join("/");
 }
 function resolveProjectRelativeFile(root, relativePath) {
   const normalizedInput = relativePath.replace(/\\/g, "/").replace(/^\/+/, "");
-  if (!normalizedInput || normalizedInput.includes("\x00") || path8.isAbsolute(relativePath) || normalizedInput.split("/").includes("..")) {
+  if (!normalizedInput || normalizedInput.includes("\x00") || path7.isAbsolute(relativePath) || normalizedInput.split("/").includes("..")) {
     throw new ApiError(400, "CINEMA_ASSET_PATH_INVALID", "Asset path must be a project-relative path.");
   }
-  const resolvedRoot = path8.resolve(root);
-  const resolvedPath = path8.resolve(root, normalizedInput);
-  const relative = path8.relative(resolvedRoot, resolvedPath);
-  if (relative === "" || relative.startsWith("..") || path8.isAbsolute(relative)) {
+  const resolvedRoot = path7.resolve(root);
+  const resolvedPath = path7.resolve(root, normalizedInput);
+  const relative = path7.relative(resolvedRoot, resolvedPath);
+  if (relative === "" || relative.startsWith("..") || path7.isAbsolute(relative)) {
     throw new ApiError(400, "CINEMA_ASSET_PATH_INVALID", "Asset path must stay inside the current project.");
   }
   return resolvedPath;
@@ -21060,7 +21048,7 @@ function imageMimeAndExtensionFromResponse(response, sourceURL) {
       extension: IMAGE_EXTENSION_BY_MIME2[contentType]
     };
   }
-  const extension = path8.extname(new URL(sourceURL).pathname).toLowerCase();
+  const extension = path7.extname(new URL(sourceURL).pathname).toLowerCase();
   const mimeType = IMAGE_MIME_BY_EXTENSION[extension];
   if (mimeType && isSupportedImageMime(mimeType)) {
     return {
@@ -21081,7 +21069,7 @@ function videoMimeAndExtensionFromResponse(response, sourceURL) {
       extension: VIDEO_EXTENSION_BY_MIME[contentType]
     };
   }
-  const extension = path8.extname(new URL(sourceURL).pathname).toLowerCase();
+  const extension = path7.extname(new URL(sourceURL).pathname).toLowerCase();
   const mimeType = VIDEO_MIME_BY_EXTENSION[extension];
   if (mimeType) {
     return {
@@ -21097,7 +21085,7 @@ function videoMimeAndExtensionFromResponse(response, sourceURL) {
 async function downloadKlingAIImageAssets(input) {
   const taskSegment = safeKlingAISegment(input.task.taskNodeID ?? input.task.id);
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const outputDirectory = path8.join(input.root, "generated", "images", taskSegment);
+  const outputDirectory = path7.join(input.root, "generated", "images", taskSegment);
   await mkdir5(outputDirectory, { recursive: true });
   const assets = [];
   for (const [index, image] of input.images.entries()) {
@@ -21128,7 +21116,7 @@ async function downloadKlingAIImageAssets(input) {
       throw new ApiError(413, "CINEMA_KLINGAI_OUTPUT_TOO_LARGE", "KlingAI image output is too large to save locally.");
     }
     const { mimeType, extension } = imageMimeAndExtensionFromResponse(response, sourceURL.toString());
-    const filePath = path8.join(outputDirectory, `${timestamp}-${index + 1}${extension}`);
+    const filePath = path7.join(outputDirectory, `${timestamp}-${index + 1}${extension}`);
     await writeFile5(filePath, bytes);
     const dimensions = readImageDimensions(bytes, mimeType);
     assets.push({
@@ -21146,7 +21134,7 @@ async function downloadKlingAIImageAssets(input) {
 async function downloadKlingAIVideoAssets(input) {
   const taskSegment = safeKlingAISegment(input.task.taskNodeID ?? input.task.id);
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const outputDirectory = path8.join(input.root, "generated", "videos", taskSegment);
+  const outputDirectory = path7.join(input.root, "generated", "videos", taskSegment);
   await mkdir5(outputDirectory, { recursive: true });
   const assets = [];
   for (const [index, video] of input.videos.entries()) {
@@ -21177,7 +21165,7 @@ async function downloadKlingAIVideoAssets(input) {
       throw new ApiError(413, "CINEMA_KLINGAI_OUTPUT_TOO_LARGE", "KlingAI video output is too large to save locally.");
     }
     const { mimeType, extension } = videoMimeAndExtensionFromResponse(response, sourceURL.toString());
-    const filePath = path8.join(outputDirectory, `${timestamp}-${index + 1}${extension}`);
+    const filePath = path7.join(outputDirectory, `${timestamp}-${index + 1}${extension}`);
     await writeFile5(filePath, bytes);
     assets.push({
       id: video.id ?? `video-${timestamp}-${index + 1}`,
@@ -21812,7 +21800,7 @@ function geminiProjectImageInputs(parameters) {
   return parameterStringList(parameters, "sourceImagePaths", "sourceImagePath", "imagePaths", "imagePath");
 }
 function geminiInputMime(filePath) {
-  const mimeType = IMAGE_MIME_BY_EXTENSION[path8.extname(filePath).toLowerCase()];
+  const mimeType = IMAGE_MIME_BY_EXTENSION[path7.extname(filePath).toLowerCase()];
   if (!mimeType || !isSupportedImageMime(mimeType)) {
     throw new ApiError(415, "CINEMA_GEMINI_IMAGE_INPUT_UNSUPPORTED", "Gemini source images must use PNG, JPEG, WebP, GIF, BMP, AVIF, or APNG.");
   }
@@ -21866,14 +21854,14 @@ function decodeGeminiImages(payload) {
 async function saveGeminiImageOutputs(input) {
   const taskSegment = safeKlingAISegment(input.task.taskNodeID ?? input.task.id);
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const outputDirectory = path8.join(input.root, "generated", "images", taskSegment);
+  const outputDirectory = path7.join(input.root, "generated", "images", taskSegment);
   await mkdir5(outputDirectory, { recursive: true });
   const assets = [];
   for (const [index, image] of input.images.entries()) {
     const extension = IMAGE_EXTENSION_BY_MIME2[image.mimeType];
     if (!extension)
       throw new ApiError(415, "CINEMA_GEMINI_OUTPUT_INVALID", "Gemini returned an unsupported image MIME type.");
-    const filePath = path8.join(outputDirectory, `${timestamp}-${index + 1}${extension}`);
+    const filePath = path7.join(outputDirectory, `${timestamp}-${index + 1}${extension}`);
     await writeFile5(filePath, image.bytes);
     assets.push({
       id: `gemini-image-${timestamp}-${index + 1}`,
@@ -22062,29 +22050,29 @@ import {
   rm as rm4,
   stat as stat7
 } from "fs/promises";
-import path13 from "path";
+import path12 from "path";
 
 // src/storage/projects.ts
 import { randomUUID as randomUUID5 } from "crypto";
 import { appendFile as appendFile2, mkdir as mkdir7, realpath as realpath3, stat as stat5 } from "fs/promises";
-import path10 from "path";
+import path9 from "path";
 
 // src/migrations/project-v1.ts
 import { appendFile, copyFile, mkdir as mkdir6, readFile as readFile6, readdir, realpath as realpath2, stat as stat4 } from "fs/promises";
-import path9 from "path";
+import path8 from "path";
 var MIGRATION_ID = "runtime-v1";
 var PROJECT_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 var MAX_JSON_FILES = 50000;
 var MAX_JSON_BYTES = 256 * 1024 * 1024;
 var PROJECT_DATA_DIRECTORIES = ["assets", "references", "prompts", "generated", "renders", "exports"];
 function cinemaRoot(root) {
-  return path9.join(root, ".anybox-cinema");
+  return path8.join(root, ".anybox-cinema");
 }
 function markerPath(root) {
-  return path9.join(cinemaRoot(root), "migrations", `${MIGRATION_ID}.json`);
+  return path8.join(cinemaRoot(root), "migrations", `${MIGRATION_ID}.json`);
 }
 function backupRoot(root) {
-  return path9.join(cinemaRoot(root), "backups");
+  return path8.join(cinemaRoot(root), "backups");
 }
 function isRecord4(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -22093,14 +22081,14 @@ function validProjectID(value) {
   return typeof value === "string" && PROJECT_ID.test(value);
 }
 function safeRelative(root, file2) {
-  const relative = path9.relative(root, file2);
-  if (!relative || relative.startsWith("..") || path9.isAbsolute(relative)) {
+  const relative = path8.relative(root, file2);
+  if (!relative || relative.startsWith("..") || path8.isAbsolute(relative)) {
     throw new ApiError(400, "PROJECT_MIGRATION_INVALID_PATH", "Cinema migration encountered a path outside the project.");
   }
   return relative;
 }
 async function collectJsonFiles(root) {
-  const candidates = [cinemaRoot(root), ...PROJECT_DATA_DIRECTORIES.map((name) => path9.join(root, name))];
+  const candidates = [cinemaRoot(root), ...PROJECT_DATA_DIRECTORIES.map((name) => path8.join(root, name))];
   const files = [];
   let totalBytes = 0;
   async function visit(directory) {
@@ -22108,14 +22096,14 @@ async function collectJsonFiles(root) {
     for (const entry of entries) {
       if (entry.isSymbolicLink())
         continue;
-      const absolute = path9.join(directory, entry.name);
+      const absolute = path8.join(directory, entry.name);
       if (entry.isDirectory()) {
         if (directory === cinemaRoot(root) && (entry.name === "backups" || entry.name === "migrations" || entry.name === "migration-backups"))
           continue;
         await visit(absolute);
         continue;
       }
-      if (!entry.isFile() || path9.extname(entry.name).toLowerCase() !== ".json")
+      if (!entry.isFile() || path8.extname(entry.name).toLowerCase() !== ".json")
         continue;
       const info = await stat4(absolute);
       totalBytes += info.size;
@@ -22179,7 +22167,7 @@ async function inspectFiles(root, targetProjectID) {
   const sourceProjectIDs = new Set;
   const issues = [];
   const unresolvedAssetReferences = [];
-  const projectFile = path9.join(cinemaRoot(root), "project.json");
+  const projectFile = path8.join(cinemaRoot(root), "project.json");
   for (const absolutePath of await collectJsonFiles(root)) {
     const relativePath = safeRelative(root, absolutePath);
     let value;
@@ -22202,7 +22190,7 @@ async function inspectFiles(root, targetProjectID) {
       file: relativePath,
       ...reference
     })));
-    if (path9.resolve(absolutePath) === path9.resolve(projectFile)) {
+    if (path8.resolve(absolutePath) === path8.resolve(projectFile)) {
       if (!isRecord4(next)) {
         issues.push({ path: relativePath, code: "INVALID_PROJECT_METADATA", message: "project.json must contain an object." });
         continue;
@@ -22231,17 +22219,17 @@ async function inspectFiles(root, targetProjectID) {
   };
 }
 function isSafeBackupDirectory(root, directory) {
-  const expectedRoot = path9.resolve(backupRoot(root));
-  const resolved = path9.resolve(directory);
-  return resolved.startsWith(`${expectedRoot}${path9.sep}`);
+  const expectedRoot = path8.resolve(backupRoot(root));
+  const resolved = path8.resolve(directory);
+  return resolved.startsWith(`${expectedRoot}${path8.sep}`);
 }
 async function restoreFromMarker(root, marker) {
   if (!isSafeBackupDirectory(root, marker.backupDirectory)) {
     throw new ApiError(500, "PROJECT_MIGRATION_ROLLBACK_FAILED", "Cinema migration backup path is unsafe.");
   }
   for (const relativePath of marker.files) {
-    const destination = path9.resolve(root, relativePath);
-    const backup = path9.resolve(marker.backupDirectory, relativePath);
+    const destination = path8.resolve(root, relativePath);
+    const backup = path8.resolve(marker.backupDirectory, relativePath);
     safeRelative(root, destination);
     safeRelative(marker.backupDirectory, backup);
     await atomicWriteFile(destination, await readFile6(backup));
@@ -22274,7 +22262,7 @@ function migrationMappingEvent(root, marker) {
       fromProjectIDs: marker.sourceProjectIDs,
       projectID: marker.targetProjectID,
       unresolvedAssetReferences: marker.unresolvedAssetReferences,
-      backupDirectory: path9.relative(root, marker.backupDirectory)
+      backupDirectory: path8.relative(root, marker.backupDirectory)
     }
   };
 }
@@ -22294,7 +22282,7 @@ function isMigrationMappingEvent(line, migrationID) {
   }
 }
 async function ensureMappingEvent(root, marker) {
-  const eventsPath = path9.join(cinemaRoot(root), "events.jsonl");
+  const eventsPath = path8.join(cinemaRoot(root), "events.jsonl");
   const existing = await readFile6(eventsPath, "utf8").catch(() => "");
   const canonicalEvent = migrationMappingEvent(root, marker);
   const canonicalLine = JSON.stringify(canonicalEvent);
@@ -22356,7 +22344,7 @@ var projects = new Map;
 var pendingMigrations = new Map;
 var loaded = false;
 function registryPath() {
-  return path10.join(Path.state, "projects.json");
+  return path9.join(Path.state, "projects.json");
 }
 async function persistRegistry() {
   const registry2 = {
@@ -22371,7 +22359,7 @@ async function initializeProjectRegistry() {
   loaded = true;
   const registry2 = await readJsonFile(registryPath()).catch(() => ({ schemaVersion: 1, projects: [] }));
   for (const item of registry2.projects ?? []) {
-    if (item && PROJECT_ID2.test(item.id) && path10.isAbsolute(item.worktree))
+    if (item && PROJECT_ID2.test(item.id) && path9.isAbsolute(item.worktree))
       projects.set(item.id, item);
   }
 }
@@ -22384,7 +22372,7 @@ function getRepositoryRoot(project) {
   return project.worktree;
 }
 function cinemaRoot2(root) {
-  return path10.join(root, ".anybox-cinema");
+  return path9.join(root, ".anybox-cinema");
 }
 async function assertDirectory(root) {
   const info = await stat5(root).catch(() => {
@@ -22395,9 +22383,9 @@ async function assertDirectory(root) {
 }
 async function openProjectRoot(rootInput) {
   await initializeProjectRegistry();
-  const root = await realpath3(path10.resolve(rootInput));
+  const root = await realpath3(path9.resolve(rootInput));
   await assertDirectory(root);
-  const projectFile = path10.join(cinemaRoot2(root), "project.json");
+  const projectFile = path9.join(cinemaRoot2(root), "project.json");
   const exists = await stat5(projectFile).then((item) => item.isFile()).catch(() => false);
   if (!exists)
     throw new ApiError(409, "PROJECT_INITIALIZATION_REQUIRED", "The selected directory is not a Cinema project.");
@@ -22405,13 +22393,13 @@ async function openProjectRoot(rootInput) {
   const metadataID = metadata.id && PROJECT_ID2.test(metadata.id) ? metadata.id : undefined;
   let id = metadataID ?? `cin_${randomUUID5()}`;
   const existing = projects.get(id);
-  if (existing && path10.resolve(existing.worktree) !== path10.resolve(root)) {
+  if (existing && path9.resolve(existing.worktree) !== path9.resolve(root)) {
     const oldExists = await stat5(existing.worktree).then((item) => item.isDirectory()).catch(() => false);
     if (oldExists) {
       const cloneProjectID = `cin_${randomUUID5()}`;
       pendingMigrations.set(cloneProjectID, {
         id: cloneProjectID,
-        name: metadata.name?.trim() || path10.basename(root) || cloneProjectID,
+        name: metadata.name?.trim() || path9.basename(root) || cloneProjectID,
         worktree: root,
         directory: root,
         lastOpenedAt: new Date().toISOString()
@@ -22425,7 +22413,7 @@ async function openProjectRoot(rootInput) {
   }
   const entry = {
     id,
-    name: metadata.name?.trim() || path10.basename(root) || id,
+    name: metadata.name?.trim() || path9.basename(root) || id,
     worktree: root,
     directory: root,
     lastOpenedAt: new Date().toISOString()
@@ -22556,21 +22544,21 @@ class StreamingMultipartReader {
 // src/domain/media-runtime.ts
 import { spawn as spawn2 } from "child_process";
 import fs from "fs";
-import path12 from "path";
+import path11 from "path";
 
 // src/platform/toolchain.ts
 import { createHash as createHash4 } from "crypto";
 import { access, chmod, mkdir as mkdir8, open as open2, readFile as readFile8, realpath as realpath4, rename as rename4, rm as rm3, stat as stat6 } from "fs/promises";
-import path11 from "path";
-import { fileURLToPath as fileURLToPath3 } from "url";
+import path10 from "path";
+import { fileURLToPath as fileURLToPath2 } from "url";
 var lockPathOverride;
 var MAX_UNPACKED_BYTES = 2 * 1024 * 1024 * 1024;
 var MAX_ENTRY_BYTES = 1024 * 1024 * 1024;
 function lockPath() {
   if (lockPathOverride)
     return lockPathOverride;
-  const moduleDirectory = path11.dirname(fileURLToPath3(import.meta.url));
-  return path11.basename(moduleDirectory) === "runtime" ? path11.join(moduleDirectory, "toolchain.lock.json") : path11.resolve(moduleDirectory, "..", "..", "toolchain.lock.json");
+  const moduleDirectory = path10.dirname(fileURLToPath2(import.meta.url));
+  return path10.basename(moduleDirectory) === "runtime" ? path10.join(moduleDirectory, "toolchain.lock.json") : path10.resolve(moduleDirectory, "..", "..", "toolchain.lock.json");
 }
 async function targetForCurrentPlatform() {
   const lock = JSON.parse(await readFile8(lockPath(), "utf8"));
@@ -22580,7 +22568,7 @@ async function targetForCurrentPlatform() {
   return target;
 }
 function runtimeRoot(target) {
-  return path11.join(Path.data, "toolchains", target.runtimeID);
+  return path10.join(Path.data, "toolchains", target.runtimeID);
 }
 async function sha2562(file2) {
   const bytes = await readFile8(file2);
@@ -22611,14 +22599,14 @@ async function validateInstalled(target, root) {
   const resolvedRoot = await realpath4(root);
   const resolvedFFmpeg = await realpath4(ffmpeg);
   const resolvedFFprobe = await realpath4(ffprobe);
-  if (!resolvedFFmpeg.startsWith(`${resolvedRoot}${path11.sep}`) || !resolvedFFprobe.startsWith(`${resolvedRoot}${path11.sep}`))
+  if (!resolvedFFmpeg.startsWith(`${resolvedRoot}${path10.sep}`) || !resolvedFFprobe.startsWith(`${resolvedRoot}${path10.sep}`))
     return;
-  let fontsDirectory = path11.join(path11.dirname(resolvedFFmpeg), "fonts");
+  let fontsDirectory = path10.join(path10.dirname(resolvedFFmpeg), "fonts");
   for (const font of target.requiredFonts ?? []) {
     const matches = await findFiles(root, font.fileName);
     if (matches.length !== 1 || await sha2562(matches[0]) !== font.sha256)
       return;
-    fontsDirectory = path11.dirname(await realpath4(matches[0]));
+    fontsDirectory = path10.dirname(await realpath4(matches[0]));
   }
   return {
     runtimeID: target.runtimeID,
@@ -22694,7 +22682,7 @@ function parseFFprobeDocument(document, expectedKind, inputPath) {
     throw new Error("ffprobe did not find an audio stream");
   const videoPlayable = !videoCodec || CHROMIUM_VIDEO_CODECS.has(videoCodec);
   const audioPlayable = !audioCodec || CHROMIUM_AUDIO_CODECS.has(audioCodec);
-  const containerPlayable = expectedKind !== "video" || path12.extname(inputPath ?? "").toLowerCase() !== ".mkv";
+  const containerPlayable = expectedKind !== "video" || path11.extname(inputPath ?? "").toLowerCase() !== ".mkv";
   return {
     ...durationSeconds ? { durationSeconds } : {},
     ...width ? { width } : {},
@@ -22711,7 +22699,7 @@ async function resolveMediaToolPaths(_env = process.env) {
   if (mediaToolPathsOverride)
     return mediaToolPathsOverride;
   const installed = await resolveInstalledToolchain();
-  const fontCandidate = path12.join(installed.fontsDirectory, "NotoSansCJKsc-Regular.otf");
+  const fontCandidate = path11.join(installed.fontsDirectory, "NotoSansCJKsc-Regular.otf");
   return {
     ffmpeg: installed.ffmpeg,
     ffprobe: installed.ffprobe,
@@ -22826,7 +22814,7 @@ async function probeMediaFile(inputPath, expectedKind, options = {}) {
   return parseFFprobeDocument(document, expectedKind, inputPath);
 }
 function ensureParent(outputPath) {
-  return fs.promises.mkdir(path12.dirname(outputPath), { recursive: true });
+  return fs.promises.mkdir(path11.dirname(outputPath), { recursive: true });
 }
 async function createVideoThumbnail(inputPath, outputPath, durationSeconds, options = {}) {
   await ensureParent(outputPath);
@@ -22955,16 +22943,16 @@ function safeReadProject(projectID) {
   return project;
 }
 function assertInside(parent, child) {
-  const relative = path13.relative(path13.resolve(parent), path13.resolve(child));
-  if (relative === "" || !relative.startsWith("..") && !path13.isAbsolute(relative))
+  const relative = path12.relative(path12.resolve(parent), path12.resolve(child));
+  if (relative === "" || !relative.startsWith("..") && !path12.isAbsolute(relative))
     return;
   throw new ApiError(400, "CINEMA_LIBRARY_PATH_INVALID", "Resolved path is outside the managed asset library.");
 }
 function toRelativePath(...segments) {
-  return path13.posix.join(...segments.map((segment) => segment.replace(/\\/g, "/")));
+  return path12.posix.join(...segments.map((segment) => segment.replace(/\\/g, "/")));
 }
 function physicalPath(paths, relativePath) {
-  const resolved = path13.resolve(paths.filesRoot, ...relativePath.split("/").filter(Boolean));
+  const resolved = path12.resolve(paths.filesRoot, ...relativePath.split("/").filter(Boolean));
   assertInside(paths.filesRoot, resolved);
   return resolved;
 }
@@ -22977,7 +22965,7 @@ async function pathExists(input) {
 }
 async function assertNoSymlinkBelowRoot(root, target) {
   assertInside(root, target);
-  const rootInfo = await lstat2(path13.resolve(root)).catch((error48) => {
+  const rootInfo = await lstat2(path12.resolve(root)).catch((error48) => {
     if (error48 && typeof error48 === "object" && "code" in error48 && error48.code === "ENOENT")
       return;
     throw error48;
@@ -22985,10 +22973,10 @@ async function assertNoSymlinkBelowRoot(root, target) {
   if (rootInfo?.isSymbolicLink()) {
     throw new ApiError(400, "CINEMA_LIBRARY_SYMLINK_REJECTED", "Symbolic links and junctions are not supported.");
   }
-  const relative = path13.relative(path13.resolve(root), path13.resolve(target));
-  let current = path13.resolve(root);
-  for (const segment of relative.split(path13.sep).filter(Boolean)) {
-    current = path13.join(current, segment);
+  const relative = path12.relative(path12.resolve(root), path12.resolve(target));
+  let current = path12.resolve(root);
+  for (const segment of relative.split(path12.sep).filter(Boolean)) {
+    current = path12.join(current, segment);
     const info = await lstat2(current).catch((error48) => {
       if (error48 && typeof error48 === "object" && "code" in error48 && error48.code === "ENOENT")
         return;
@@ -23009,14 +22997,14 @@ async function assertRealDirectory(input) {
 }
 function resolveLibraryPaths(scope) {
   if (scope.type === "personal") {
-    const managedRoot = path13.resolve(personalLibraryRootOverride ?? path13.join(Path.data, "cinema-library"));
+    const managedRoot = path12.resolve(personalLibraryRootOverride ?? path12.join(Path.data, "cinema-library"));
     return {
       scope,
       scopeKey: "cinema-library:personal",
       managedRoot,
-      filesRoot: path13.join(managedRoot, "files"),
-      catalogPath: path13.join(managedRoot, "catalog.json"),
-      operationsRoot: path13.join(managedRoot, "operations")
+      filesRoot: path12.join(managedRoot, "files"),
+      catalogPath: path12.join(managedRoot, "catalog.json"),
+      operationsRoot: path12.join(managedRoot, "operations")
     };
   }
   const project = safeReadProject(scope.projectID);
@@ -23024,15 +23012,15 @@ function resolveLibraryPaths(scope) {
   if (isSshWorkspaceUri(root)) {
     throw new ApiError(409, "CINEMA_UNAVAILABLE_FOR_SSH", "Cinema asset libraries are not available for SSH workspaces yet.");
   }
-  const resolvedRoot = path13.resolve(root);
-  const cinemaRoot3 = path13.join(resolvedRoot, PROJECT_CINEMA_DIRECTORY);
+  const resolvedRoot = path12.resolve(root);
+  const cinemaRoot3 = path12.join(resolvedRoot, PROJECT_CINEMA_DIRECTORY);
   return {
     scope,
     scopeKey: `cinema-library:project:${cinemaRoot3}`,
     managedRoot: cinemaRoot3,
-    filesRoot: path13.join(resolvedRoot, ...PROJECT_LIBRARY_RELATIVE_ROOT.split("/")),
-    catalogPath: path13.join(cinemaRoot3, PROJECT_CATALOG_FILE),
-    operationsRoot: path13.join(cinemaRoot3, "asset-ops")
+    filesRoot: path12.join(resolvedRoot, ...PROJECT_LIBRARY_RELATIVE_ROOT.split("/")),
+    catalogPath: path12.join(cinemaRoot3, PROJECT_CATALOG_FILE),
+    operationsRoot: path12.join(cinemaRoot3, "asset-ops")
   };
 }
 function defaultFolderDefinitions(scope) {
@@ -23149,7 +23137,7 @@ async function readCatalog(paths) {
   }
 }
 async function readCatalogAssetIndex(paths) {
-  const key = path13.resolve(paths.catalogPath);
+  const key = path12.resolve(paths.catalogPath);
   const info = await lstat2(paths.catalogPath);
   if (info.isSymbolicLink() || !info.isFile()) {
     throw new ApiError(400, "CINEMA_LIBRARY_SYMLINK_REJECTED", "The asset library catalog must be a real file.");
@@ -23173,7 +23161,7 @@ async function catalogWithJournalHealth(paths, catalog) {
     if (!entry.isFile() || !entry.name.endsWith(".json"))
       continue;
     try {
-      const journal = JSON.parse(await readFile9(path13.join(paths.operationsRoot, entry.name), "utf8"));
+      const journal = JSON.parse(await readFile9(path12.join(paths.operationsRoot, entry.name), "utf8"));
       if (journal.status !== "pending" && journal.status !== "recovery-required")
         continue;
       if (typeof journal.operationID === "string" && catalog.completedOperationIDs.includes(journal.operationID))
@@ -23186,10 +23174,10 @@ async function catalogWithJournalHealth(paths, catalog) {
   return catalog;
 }
 async function cleanupAbandonedStaging(paths) {
-  const stagingRoot = path13.join(paths.filesRoot, ".staging");
+  const stagingRoot = path12.join(paths.filesRoot, ".staging");
   const cutoff = Date.now() - 24 * 60 * 60 * 1000;
   for (const entry of await readdir2(stagingRoot, { withFileTypes: true }).catch(() => [])) {
-    const candidate = path13.join(stagingRoot, entry.name);
+    const candidate = path12.join(stagingRoot, entry.name);
     assertInside(stagingRoot, candidate);
     const info = await stat7(candidate).catch(() => {
       return;
@@ -23205,7 +23193,7 @@ async function atomicWriteJson2(filePath, input, backups = true) {
     failNextCatalogWriteForTest = false;
     throw new Error("Synthetic catalog write failure for asset-library rollback testing.");
   }
-  await mkdir9(path13.dirname(filePath), { recursive: true });
+  await mkdir9(path12.dirname(filePath), { recursive: true });
   const temporaryPath = `${filePath}.${randomUUID6()}.tmp`;
   const handle = await open3(temporaryPath, "wx");
   try {
@@ -23223,7 +23211,7 @@ async function atomicWriteJson2(filePath, input, backups = true) {
       await copyFile2(filePath, `${filePath}.bak1`);
     }
     await rename5(temporaryPath, filePath);
-    catalogAssetReadCache.delete(path13.resolve(filePath));
+    catalogAssetReadCache.delete(path12.resolve(filePath));
   } catch (error48) {
     await rm4(temporaryPath, { force: true }).catch(() => {
       return;
@@ -23232,12 +23220,12 @@ async function atomicWriteJson2(filePath, input, backups = true) {
   }
 }
 async function ensureInitializedUnlocked(paths) {
-  const safetyBoundary = path13.dirname(paths.managedRoot);
+  const safetyBoundary = path12.dirname(paths.managedRoot);
   await assertNoSymlinkBelowRoot(safetyBoundary, paths.managedRoot);
   await assertNoSymlinkBelowRoot(safetyBoundary, paths.filesRoot);
   await assertNoSymlinkBelowRoot(safetyBoundary, paths.operationsRoot);
   if (paths.scope.type === "project") {
-    const marker = path13.join(paths.managedRoot, PROJECT_MARKER_FILE);
+    const marker = path12.join(paths.managedRoot, PROJECT_MARKER_FILE);
     await assertNoSymlinkBelowRoot(safetyBoundary, marker);
     if (!await pathExists(marker)) {
       throw new ApiError(404, "CINEMA_PROJECT_NOT_INITIALIZED", "This project has not been initialized for anybox for cinema yet.");
@@ -23246,17 +23234,17 @@ async function ensureInitializedUnlocked(paths) {
   await Promise.all([
     mkdir9(paths.filesRoot, { recursive: true }),
     mkdir9(paths.operationsRoot, { recursive: true }),
-    mkdir9(path13.join(paths.filesRoot, ".staging"), { recursive: true }),
-    mkdir9(path13.join(paths.filesRoot, ".derived"), { recursive: true }),
-    mkdir9(path13.join(paths.filesRoot, ".trash"), { recursive: true })
+    mkdir9(path12.join(paths.filesRoot, ".staging"), { recursive: true }),
+    mkdir9(path12.join(paths.filesRoot, ".derived"), { recursive: true }),
+    mkdir9(path12.join(paths.filesRoot, ".trash"), { recursive: true })
   ]);
   await Promise.all([
     assertRealDirectory(paths.managedRoot),
     assertRealDirectory(paths.filesRoot),
     assertRealDirectory(paths.operationsRoot),
-    assertRealDirectory(path13.join(paths.filesRoot, ".staging")),
-    assertRealDirectory(path13.join(paths.filesRoot, ".derived")),
-    assertRealDirectory(path13.join(paths.filesRoot, ".trash"))
+    assertRealDirectory(path12.join(paths.filesRoot, ".staging")),
+    assertRealDirectory(path12.join(paths.filesRoot, ".derived")),
+    assertRealDirectory(path12.join(paths.filesRoot, ".trash"))
   ]);
   const catalogInfo = await lstat2(paths.catalogPath).catch((error48) => {
     if (error48 && typeof error48 === "object" && "code" in error48 && error48.code === "ENOENT")
@@ -23440,7 +23428,7 @@ async function mutateLibrary(scope, input, type, action) {
     if (catalog.revision !== input.baseRevision) {
       throw new ApiError(409, "CINEMA_LIBRARY_REVISION_CONFLICT", `Asset library revision conflict; latest revision is ${catalog.revision}.`, { latestRevision: catalog.revision });
     }
-    const journalPath = path13.join(paths.operationsRoot, `${Buffer.from(input.operationID, "utf8").toString("base64url")}.json`);
+    const journalPath = path12.join(paths.operationsRoot, `${Buffer.from(input.operationID, "utf8").toString("base64url")}.json`);
     assertInside(paths.operationsRoot, journalPath);
     const startedAt = nowISO();
     await atomicWriteJson2(journalPath, {
@@ -23659,7 +23647,7 @@ async function restoreCinemaAssetEntriesAction(catalog, paths, entries) {
       parent ??= findInbox(catalog);
       await assertNoSymlinkBelowRoot(paths.filesRoot, physicalPath(paths, folder.relativePath));
       await assertNoSymlinkBelowRoot(paths.filesRoot, physicalPath(paths, parent.relativePath));
-      const originalName = path13.posix.basename(folder.trash.originalRelativePath);
+      const originalName = path12.posix.basename(folder.trash.originalRelativePath);
       const name = await uniqueFolderName(physicalPath(paths, parent.relativePath), originalName);
       const nextRelativePath = toRelativePath(parent.relativePath, name);
       if (folderDepth(nextRelativePath) + descendantFolderDepth(catalog, folder) > CINEMA_ASSET_LIBRARY_MAX_FOLDER_DEPTH) {
@@ -23676,9 +23664,9 @@ async function restoreCinemaAssetEntriesAction(catalog, paths, entries) {
       const parent = catalog.folders.find((item) => item.id === asset.trash.originalFolderID && item.status === "active") ?? findInbox(catalog);
       await assertNoSymlinkBelowRoot(paths.filesRoot, physicalPath(paths, asset.relativePath));
       await assertNoSymlinkBelowRoot(paths.filesRoot, physicalPath(paths, parent.relativePath));
-      const originalFilename = path13.posix.basename(asset.trash.originalRelativePath);
-      const extension = path13.posix.extname(originalFilename);
-      const originalName = path13.posix.basename(originalFilename, extension);
+      const originalFilename = path12.posix.basename(asset.trash.originalRelativePath);
+      const extension = path12.posix.extname(originalFilename);
+      const originalName = path12.posix.basename(originalFilename, extension);
       const filename = await uniqueFilename(physicalPath(paths, parent.relativePath), originalName, extension);
       moves.push({
         source: asset.relativePath,
@@ -23712,7 +23700,7 @@ async function restoreCinemaAssetEntriesAction(catalog, paths, entries) {
       const folder = findFolder(catalog, entry.folderID, true);
       const oldPrefix = folder.relativePath;
       const related = entriesUnderFolders(catalog, [oldPrefix]);
-      const parentRelativePath = path13.posix.dirname(move.destination) === "." ? "" : path13.posix.dirname(move.destination);
+      const parentRelativePath = path12.posix.dirname(move.destination) === "." ? "" : path12.posix.dirname(move.destination);
       const nextParent = parentRelativePath === "" ? rootFolder() : catalog.folders.find((item) => item.status === "active" && item.relativePath === parentRelativePath) ?? findInbox(catalog);
       for (const child of catalog.folders.filter((item) => related.folderIDs.has(item.id))) {
         const suffix = child.relativePath.slice(oldPrefix.length).replace(/^\//, "");
@@ -23721,7 +23709,7 @@ async function restoreCinemaAssetEntriesAction(catalog, paths, entries) {
         child.status = "active";
         if (child.id === folder.id) {
           child.parentID = nextParent.id;
-          child.name = path13.posix.basename(move.destination);
+          child.name = path12.posix.basename(move.destination);
         }
         child.trash = undefined;
         child.updatedAt = timestamp;
@@ -23735,7 +23723,7 @@ async function restoreCinemaAssetEntriesAction(catalog, paths, entries) {
       }
     } else {
       const asset = findAsset(catalog, entry.assetID);
-      const parentRelativePath = path13.posix.dirname(move.destination) === "." ? "" : path13.posix.dirname(move.destination);
+      const parentRelativePath = path12.posix.dirname(move.destination) === "." ? "" : path12.posix.dirname(move.destination);
       const parent = catalog.folders.find((item) => item.status === "active" && item.relativePath === parentRelativePath) ?? findInbox(catalog);
       asset.folderID = parent.id;
       asset.relativePath = move.destination;
@@ -23758,11 +23746,11 @@ async function assetIDsReferenced(paths, assetIDs) {
     return new Set;
   const referenced = new Set;
   const files = paths.scope.type === "project" ? [
-    path13.join(paths.managedRoot, "canvas.json"),
-    path13.join(paths.managedRoot, "timelines"),
-    path13.join(paths.managedRoot, "tasks.jsonl"),
-    path13.join(paths.managedRoot, "tasks")
-  ] : [path13.join(paths.managedRoot, "references.json")];
+    path12.join(paths.managedRoot, "canvas.json"),
+    path12.join(paths.managedRoot, "timelines"),
+    path12.join(paths.managedRoot, "tasks.jsonl"),
+    path12.join(paths.managedRoot, "tasks")
+  ] : [path12.join(paths.managedRoot, "references.json")];
   async function scan(inputPath) {
     const info = await stat7(inputPath).catch(() => {
       return;
@@ -23772,7 +23760,7 @@ async function assetIDsReferenced(paths, assetIDs) {
     if (info.isDirectory()) {
       for (const entry of await readdir2(inputPath, { withFileTypes: true })) {
         if (entry.isFile() && entry.name.endsWith(".json"))
-          await scan(path13.join(inputPath, entry.name));
+          await scan(path12.join(inputPath, entry.name));
       }
       return;
     }
@@ -23966,7 +23954,7 @@ async function maintainPendingCinemaAssetDeletes(paths, catalog) {
     return catalog;
   const operationID = `pending-delete-maintenance-${randomUUID6()}`;
   const baseRevision = catalog.revision;
-  const journalPath = path13.join(paths.operationsRoot, `${Buffer.from(operationID, "utf8").toString("base64url")}.json`);
+  const journalPath = path12.join(paths.operationsRoot, `${Buffer.from(operationID, "utf8").toString("base64url")}.json`);
   assertInside(paths.operationsRoot, journalPath);
   const startedAt = nowISO();
   await atomicWriteJson2(journalPath, {
@@ -24120,7 +24108,7 @@ function startsWithBytes(bytes, expected) {
   return expected.every((value, index) => bytes[index] === value);
 }
 function sniffUploadedMedia(filename, claimedMimeType, bytes) {
-  const extension = path13.extname(filename).toLowerCase();
+  const extension = path12.extname(filename).toLowerCase();
   const isPng = startsWithBytes(bytes, [137, 80, 78, 71, 13, 10, 26, 10]);
   const isJpeg = startsWithBytes(bytes, [255, 216, 255]);
   const isGif = ascii(bytes, 0, 6) === "GIF87a" || ascii(bytes, 0, 6) === "GIF89a";
@@ -24267,8 +24255,8 @@ async function registerCinemaGeneratedAsset(projectID, input) {
   if (previous)
     return previous;
   const { paths } = await initializeCinemaAssetLibrary(scope);
-  const projectRoot = path13.dirname(paths.managedRoot);
-  const sourcePath = path13.isAbsolute(input.sourcePath) ? path13.resolve(input.sourcePath) : path13.resolve(projectRoot, input.sourcePath);
+  const projectRoot = path12.dirname(paths.managedRoot);
+  const sourcePath = path12.isAbsolute(input.sourcePath) ? path12.resolve(input.sourcePath) : path12.resolve(projectRoot, input.sourcePath);
   assertInside(projectRoot, sourcePath);
   await assertNoSymlinkBelowRoot(projectRoot, sourcePath);
   const sourceInfo = await stat7(sourcePath).catch(() => {
@@ -24278,7 +24266,7 @@ async function registerCinemaGeneratedAsset(projectID, input) {
     throw new ApiError(404, "CINEMA_LIBRARY_GENERATED_FILE_MISSING", "Generated asset file was not found.");
   }
   const headBytes = await readFileHead(sourcePath);
-  const detected = sniffUploadedMedia(path13.basename(sourcePath), input.mimeType ?? "application/octet-stream", headBytes);
+  const detected = sniffUploadedMedia(path12.basename(sourcePath), input.mimeType ?? "application/octet-stream", headBytes);
   if (detected.kind !== input.kind) {
     throw new ApiError(415, "CINEMA_LIBRARY_MEDIA_TYPE_MISMATCH", "Generated file does not match the declared media kind.");
   }
@@ -24294,7 +24282,7 @@ async function registerCinemaGeneratedAsset(projectID, input) {
         throw new ApiError(409, "CINEMA_LIBRARY_ASSET_ALREADY_REGISTERED", "Generated file is already registered.");
       }
       const folder = findFolder(catalog, input.destinationFolderID ?? generatedFolderID);
-      const requestedName = input.displayName ? normalizeAssetName(input.displayName) : normalizeAssetName(path13.basename(sourcePath, path13.extname(sourcePath)));
+      const requestedName = input.displayName ? normalizeAssetName(input.displayName) : normalizeAssetName(path12.basename(sourcePath, path12.extname(sourcePath)));
       const directory = physicalPath(mutationPaths, folder.relativePath);
       await assertNoSymlinkBelowRoot(mutationPaths.filesRoot, directory);
       const filename = await uniqueFilename(directory, requestedName, detected.extension);
@@ -24308,7 +24296,7 @@ async function registerCinemaGeneratedAsset(projectID, input) {
         id: assetID,
         folderID: folder.id,
         relativePath,
-        displayName: path13.posix.basename(filename, detected.extension),
+        displayName: path12.posix.basename(filename, detected.extension),
         kind: detected.kind,
         source: input.source ?? "generation",
         status: processing.status,
@@ -24359,7 +24347,7 @@ async function readFileHead(filePath, maxBytes = 64 * 1024) {
 }
 var RECONCILE_EXCLUDED_DIRECTORIES = new Set([".staging", ".derived", ".trash"]);
 async function readPersonalAssetReferences(paths) {
-  const filePath = path13.join(paths.managedRoot, "references.json");
+  const filePath = path12.join(paths.managedRoot, "references.json");
   const raw = await readFile9(filePath, "utf8").catch((error48) => {
     if (error48 && typeof error48 === "object" && "code" in error48 && error48.code === "ENOENT")
       return "";
@@ -24397,7 +24385,7 @@ async function addCinemaPersonalAssetReference(assetID, projectID, nodeID) {
       { projectID, nodeID, updatedAt: timestamp }
     ];
     references.updatedAt = timestamp;
-    await atomicWriteJson2(path13.join(paths.managedRoot, "references.json"), references);
+    await atomicWriteJson2(path12.join(paths.managedRoot, "references.json"), references);
     return { assetID, projectID, nodeID };
   } catch (_catch3) {
     var _err = _catch3, _hasErr = 1;
@@ -24419,7 +24407,7 @@ async function removeCinemaPersonalAssetReference(assetID, projectID, nodeID) {
     else
       delete references.assets[assetID];
     references.updatedAt = nowISO();
-    await atomicWriteJson2(path13.join(paths.managedRoot, "references.json"), references);
+    await atomicWriteJson2(path12.join(paths.managedRoot, "references.json"), references);
     return { assetID, projectID, nodeID };
   } catch (_catch3) {
     var _err = _catch3, _hasErr = 1;
@@ -24563,7 +24551,7 @@ import {
   rename as rename6,
   rm as rm5
 } from "fs/promises";
-import path14 from "path";
+import path13 from "path";
 var CinemaRenderQueueStateSchema = exports_external.object({
   schemaVersion: exports_external.literal(1),
   pendingJobIDs: exports_external.array(CinemaRenderJobIDSchema).max(1e4),
@@ -24573,8 +24561,8 @@ function isMissingFileError(error48) {
   return Boolean(error48 && typeof error48 === "object" && "code" in error48 && error48.code === "ENOENT");
 }
 function assertPathInside(parent, candidate) {
-  const relative = path14.relative(path14.resolve(parent), path14.resolve(candidate));
-  if (!relative || relative.startsWith("..") || path14.isAbsolute(relative)) {
+  const relative = path13.relative(path13.resolve(parent), path13.resolve(candidate));
+  if (!relative || relative.startsWith("..") || path13.isAbsolute(relative)) {
     if (!relative)
       return;
     throw new Error("Render job path resolves outside the Cinema project directory");
@@ -24605,7 +24593,7 @@ async function assertFileIsNotSymlink(filePath) {
   }
 }
 async function ensureRenderJobsDirectory(cinemaRoot3) {
-  const renderJobsDirectory = path14.join(cinemaRoot3, "render-jobs");
+  const renderJobsDirectory = path13.join(cinemaRoot3, "render-jobs");
   await mkdir10(renderJobsDirectory, { recursive: true });
   await assertDirectoryIsSafe(cinemaRoot3, renderJobsDirectory);
   return renderJobsDirectory;
@@ -24631,10 +24619,10 @@ async function existingRenderJobDirectory(cinemaRoot3, jobID) {
   return paths;
 }
 async function atomicWriteJson3(filePath, value) {
-  const directory = path14.dirname(filePath);
-  await assertDirectoryIsSafe(path14.dirname(directory), directory);
+  const directory = path13.dirname(filePath);
+  await assertDirectoryIsSafe(path13.dirname(directory), directory);
   await assertFileIsNotSymlink(filePath);
-  const temporaryPath = path14.join(directory, `.${path14.basename(filePath)}.${randomUUID7()}.tmp`);
+  const temporaryPath = path13.join(directory, `.${path13.basename(filePath)}.${randomUUID7()}.tmp`);
   assertPathInside(directory, temporaryPath);
   const handle = await open4(temporaryPath, "wx");
   try {
@@ -24658,13 +24646,13 @@ function assertCinemaRenderJobID(jobID) {
 }
 function getCinemaRenderJobStoragePaths(cinemaRoot3, jobID) {
   assertCinemaRenderJobID(jobID);
-  const renderJobsDirectory = path14.join(cinemaRoot3, "render-jobs");
-  const jobDirectory = path14.join(renderJobsDirectory, `job_${jobID}`);
-  const jobPath = path14.join(jobDirectory, "job.json");
-  const timelineSnapshotPath = path14.join(jobDirectory, "timeline.json");
-  const eventsPath = path14.join(jobDirectory, "events.jsonl");
-  const inputsDirectory = path14.join(jobDirectory, "inputs");
-  const temporaryOutputPath = path14.join(jobDirectory, "output.tmp.mp4");
+  const renderJobsDirectory = path13.join(cinemaRoot3, "render-jobs");
+  const jobDirectory = path13.join(renderJobsDirectory, `job_${jobID}`);
+  const jobPath = path13.join(jobDirectory, "job.json");
+  const timelineSnapshotPath = path13.join(jobDirectory, "timeline.json");
+  const eventsPath = path13.join(jobDirectory, "events.jsonl");
+  const inputsDirectory = path13.join(jobDirectory, "inputs");
+  const temporaryOutputPath = path13.join(jobDirectory, "output.tmp.mp4");
   for (const candidate of [
     renderJobsDirectory,
     jobDirectory,
@@ -24687,7 +24675,7 @@ function getCinemaRenderJobStoragePaths(cinemaRoot3, jobID) {
   };
 }
 function getCinemaRenderQueuePath(cinemaRoot3) {
-  const queuePath = path14.join(cinemaRoot3, "render-queue.json");
+  const queuePath = path13.join(cinemaRoot3, "render-queue.json");
   assertPathInside(cinemaRoot3, queuePath);
   return queuePath;
 }
@@ -24728,7 +24716,7 @@ async function writeCinemaRenderJob(cinemaRoot3, job) {
   await atomicWriteJson3(paths.jobPath, parsed);
 }
 async function listCinemaRenderJobs(cinemaRoot3) {
-  const renderJobsDirectory = path14.join(cinemaRoot3, "render-jobs");
+  const renderJobsDirectory = path13.join(cinemaRoot3, "render-jobs");
   const entries = await readdir3(renderJobsDirectory, { withFileTypes: true }).catch((error48) => {
     if (isMissingFileError(error48))
       return [];
@@ -24772,7 +24760,7 @@ async function appendCinemaRenderJobEvent(cinemaRoot3, event) {
 // src/domain/render-recovery.ts
 import { randomUUID as randomUUID8 } from "crypto";
 import { readdir as readdir4, rm as rm6 } from "fs/promises";
-import path15 from "path";
+import path14 from "path";
 
 // src/domain/render-assets.ts
 function cinemaRenderAssetRef(projectID, asset) {
@@ -24844,7 +24832,7 @@ async function cleanInterruptedJobFiles(cinemaRoot3, jobID) {
     return;
   });
   const entries = await readdir4(paths.jobDirectory, { withFileTypes: true }).catch(() => []);
-  await Promise.all(entries.filter((entry) => entry.isDirectory() && /^\.inputs\.[A-Za-z0-9-]+\.tmp$/.test(entry.name)).map((entry) => rm6(path15.join(paths.jobDirectory, entry.name), { recursive: true, force: true })));
+  await Promise.all(entries.filter((entry) => entry.isDirectory() && /^\.inputs\.[A-Za-z0-9-]+\.tmp$/.test(entry.name)).map((entry) => rm6(path14.join(paths.jobDirectory, entry.name), { recursive: true, force: true })));
 }
 async function recoverCinemaRenderJobs(cinemaRoot3, now = new Date().toISOString()) {
   const jobs = await listCinemaRenderJobs(cinemaRoot3);
@@ -24935,7 +24923,7 @@ function recoverCinemaRenderJobsOnce(cinemaRoot3) {
 // src/domain/render-queue.ts
 import { randomUUID as randomUUID10 } from "crypto";
 import { copyFile as copyFile4, mkdir as mkdir12, rm as rm9, writeFile as writeFile7 } from "fs/promises";
-import path17 from "path";
+import path16 from "path";
 
 // src/domain/render-graph.ts
 function assetKey(ref) {
@@ -25444,7 +25432,7 @@ import {
   rename as rename7,
   rm as rm8
 } from "fs/promises";
-import path16 from "path";
+import path15 from "path";
 var defaultDependencies2 = {
   getCinemaAssetFilePath,
   createHardLink: link,
@@ -25495,7 +25483,7 @@ function timelineAssetRefs(timeline) {
   return [...unique.values()];
 }
 function safeSnapshotExtension(filePath) {
-  const extension = path16.extname(filePath).toLowerCase();
+  const extension = path15.extname(filePath).toLowerCase();
   return /^\.[a-z0-9]{1,16}$/.test(extension) ? extension : ".bin";
 }
 function snapshotFileName(assetRef, sourcePath) {
@@ -25541,7 +25529,7 @@ async function snapshotOneInput(job, assetRef, stagingDirectory, dependencies) {
   assertAssetMatchesReference(job, assetRef, resolved.asset);
   const sourceInfo = await assertPhysicalFile(resolved.filePath, "Render input source");
   const fileName = snapshotFileName(assetRef, resolved.filePath);
-  const destinationPath = path16.join(stagingDirectory, fileName);
+  const destinationPath = path15.join(stagingDirectory, fileName);
   let method = "copy";
   if (assetRef.scope.type === "project") {
     try {
@@ -25585,7 +25573,7 @@ async function snapshotCinemaRenderInputs(cinemaRoot3, jobID, dependencies = def
     jobID,
     inputsDirectory: paths.inputsDirectory
   });
-  const stagingDirectory = path16.join(paths.jobDirectory, `.inputs.${randomUUID9()}.tmp`);
+  const stagingDirectory = path15.join(paths.jobDirectory, `.inputs.${randomUUID9()}.tmp`);
   await mkdir11(stagingDirectory);
   try {
     const snapshots = [];
@@ -25627,7 +25615,7 @@ async function resolveCinemaRenderSnapshotInputs(cinemaRoot3, jobID) {
       throw new Error(`Render input snapshot is missing or ambiguous for asset '${assetID}'`);
     }
     const fileName = matches[0].name;
-    const filePath = path16.join(paths.inputsDirectory, fileName);
+    const filePath = path15.join(paths.inputsDirectory, fileName);
     const info = await assertPhysicalFile(filePath, "Render input snapshot");
     stored.push({ assetRef, fileName, filePath, sizeBytes: info.size });
   }
@@ -25826,9 +25814,9 @@ async function executeCinemaRenderJob(entry, signal) {
     if (burnIn) {
       if (!tools.subtitleFontPath)
         throw new Error("The reviewed subtitle font is unavailable");
-      await writeFile7(path17.join(paths.jobDirectory, "subtitle.ass"), generateCinemaSubtitleAss({ timeline, settings: job.settings, trackID: burnIn.trackID }), "utf8");
-      await mkdir12(path17.join(paths.jobDirectory, "fonts"), { recursive: true });
-      await copyFile4(tools.subtitleFontPath, path17.join(paths.jobDirectory, "fonts", "NotoSansCJKsc-Regular.otf"));
+      await writeFile7(path16.join(paths.jobDirectory, "subtitle.ass"), generateCinemaSubtitleAss({ timeline, settings: job.settings, trackID: burnIn.trackID }), "utf8");
+      await mkdir12(path16.join(paths.jobDirectory, "fonts"), { recursive: true });
+      await copyFile4(tools.subtitleFontPath, path16.join(paths.jobDirectory, "fonts", "NotoSansCJKsc-Regular.otf"));
     }
     const plan = buildCinemaRenderPlan({
       timeline,
@@ -26028,6 +26016,26 @@ class CinemaRenderQueue {
       return;
     });
   }
+  async waitForIdleForTesting() {
+    while (true) {
+      let activeCompletion;
+      let hasPending = false;
+      await this.serialize(async () => {
+        activeCompletion = this.active?.completion;
+        hasPending = this.pending.length > 0;
+      });
+      if (!activeCompletion && !hasPending)
+        return;
+      if (activeCompletion) {
+        await activeCompletion.catch(() => {
+          return;
+        });
+      } else {
+        this.schedule();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+    }
+  }
   snapshot() {
     return {
       activeJobID: this.active?.entry.jobID,
@@ -26112,7 +26120,7 @@ function resolveCinemaRoot(projectID) {
   return {
     project,
     root,
-    cinemaRoot: path18.join(root, CINEMA_DIRECTORY)
+    cinemaRoot: path17.join(root, CINEMA_DIRECTORY)
   };
 }
 async function readOptionalJson(filePath) {
@@ -26137,7 +26145,7 @@ function createInvalidJsonError(fileLabel, error48) {
   return new ApiError(409, "CINEMA_METADATA_INVALID", `${fileLabel} is invalid: ${message}`);
 }
 async function assertCinemaProjectInitialized(cinemaRoot3) {
-  const projectPath = path18.join(cinemaRoot3, PROJECT_FILE);
+  const projectPath = path17.join(cinemaRoot3, PROJECT_FILE);
   if (!await pathExists2(projectPath)) {
     throw new ApiError(404, "CINEMA_PROJECT_NOT_INITIALIZED", "This project has not been initialized for anybox for cinema yet.");
   }
@@ -26256,7 +26264,7 @@ function normalizeCinemaCanvasInput(input) {
   };
 }
 async function readCinemaCanvasFromRoot(cinemaRoot3) {
-  const canvasPath = path18.join(cinemaRoot3, CANVAS_FILE);
+  const canvasPath = path17.join(cinemaRoot3, CANVAS_FILE);
   let raw;
   try {
     raw = await readFile13(canvasPath, "utf8");
@@ -26275,8 +26283,8 @@ async function readCinemaCanvasFromRoot(cinemaRoot3) {
 async function writeCinemaCanvas(cinemaRoot3, canvas) {
   const parsed = CinemaCanvasDocumentSchema.parse(normalizeCinemaCanvasInput(canvas));
   await mkdir13(cinemaRoot3, { recursive: true });
-  const canvasPath = path18.join(cinemaRoot3, CANVAS_FILE);
-  const tempPath = path18.join(cinemaRoot3, `${CANVAS_FILE}.${process.pid}.${Date.now()}.tmp`);
+  const canvasPath = path17.join(cinemaRoot3, CANVAS_FILE);
+  const tempPath = path17.join(cinemaRoot3, `${CANVAS_FILE}.${process.pid}.${Date.now()}.tmp`);
   await writeFile8(tempPath, `${JSON.stringify(parsed, null, 2)}
 `, "utf8");
   await rename8(tempPath, canvasPath);
@@ -26304,25 +26312,25 @@ async function mutateCinemaCanvasFromRoot(cinemaRoot3, mutate) {
   }
 }
 async function writeJsonAtomic(filePath, value) {
-  await mkdir13(path18.dirname(filePath), { recursive: true });
-  const tempPath = path18.join(path18.dirname(filePath), `${path18.basename(filePath)}.${process.pid}.${Date.now()}.tmp`);
+  await mkdir13(path17.dirname(filePath), { recursive: true });
+  const tempPath = path17.join(path17.dirname(filePath), `${path17.basename(filePath)}.${process.pid}.${Date.now()}.tmp`);
   await writeFile8(tempPath, `${JSON.stringify(value, null, 2)}
 `, "utf8");
   await rename8(tempPath, filePath);
 }
 async function appendCinemaEvent(cinemaRoot3, event) {
   const parsed = CinemaProjectEventSchema.parse(event);
-  await appendFile3(path18.join(cinemaRoot3, EVENTS_FILE), `${JSON.stringify(parsed)}
+  await appendFile3(path17.join(cinemaRoot3, EVENTS_FILE), `${JSON.stringify(parsed)}
 `, "utf8");
   return parsed;
 }
 async function appendTaskAuditEvent(cinemaRoot3, event) {
-  await appendFile3(path18.join(cinemaRoot3, TASKS_FILE), `${JSON.stringify(event)}
+  await appendFile3(path17.join(cinemaRoot3, TASKS_FILE), `${JSON.stringify(event)}
 `, "utf8");
   return event;
 }
 function taskPath(cinemaRoot3, taskID) {
-  return path18.join(cinemaRoot3, TASKS_DIRECTORY, `${taskID}.json`);
+  return path17.join(cinemaRoot3, TASKS_DIRECTORY, `${taskID}.json`);
 }
 async function writeGenerationTask(cinemaRoot3, task) {
   const parsed = CinemaGenerationTaskSchema.parse(task);
@@ -26343,7 +26351,7 @@ async function readGenerationTaskFromRoot(cinemaRoot3, taskID) {
   }
 }
 async function readGenerationTasksFromRoot(cinemaRoot3) {
-  const entries = await readdir6(path18.join(cinemaRoot3, TASKS_DIRECTORY), { withFileTypes: true }).catch((error48) => {
+  const entries = await readdir6(path17.join(cinemaRoot3, TASKS_DIRECTORY), { withFileTypes: true }).catch((error48) => {
     if (error48 && typeof error48 === "object" && "code" in error48 && error48.code === "ENOENT")
       return [];
     throw error48;
@@ -26500,7 +26508,7 @@ function applyCommandToCanvas(canvas, command) {
   }
 }
 async function readCinemaEventsFromRoot(cinemaRoot3, options = {}) {
-  const raw = await readFile13(path18.join(cinemaRoot3, EVENTS_FILE), "utf8").catch((error48) => {
+  const raw = await readFile13(path17.join(cinemaRoot3, EVENTS_FILE), "utf8").catch((error48) => {
     if (error48 && typeof error48 === "object" && "code" in error48 && error48.code === "ENOENT")
       return "";
     throw error48;
@@ -26519,7 +26527,7 @@ async function readCinemaEventsFromRoot(cinemaRoot3, options = {}) {
   }
 }
 async function summarizeProjectDirectory(root, directory) {
-  const entries = await readdir6(path18.join(root, directory), { withFileTypes: true }).catch((error48) => {
+  const entries = await readdir6(path17.join(root, directory), { withFileTypes: true }).catch((error48) => {
     if (error48 && typeof error48 === "object" && "code" in error48 && error48.code === "ENOENT")
       return null;
     throw error48;
@@ -26541,7 +26549,7 @@ async function summarizeProjectDirectory(root, directory) {
   };
 }
 async function hasConfiguredProvider(cinemaRoot3) {
-  const providers = await readOptionalJson(path18.join(cinemaRoot3, PROVIDERS_FILE)).catch((error48) => {
+  const providers = await readOptionalJson(path17.join(cinemaRoot3, PROVIDERS_FILE)).catch((error48) => {
     throw createInvalidJsonError(PROVIDERS_FILE, error48);
   });
   if (Array.isArray(providers?.providers) && providers.providers.length > 0)
@@ -26678,9 +26686,9 @@ async function registerCompletedGenerationAssets(projectID, projectRoot, task) {
       outputAssets.push(output);
       continue;
     }
-    const sourcePath = path18.isAbsolute(output.path) ? path18.resolve(output.path) : path18.resolve(projectRoot, output.path);
-    const relativeToProject = path18.relative(projectRoot, sourcePath);
-    const sourceInfo = relativeToProject.startsWith("..") || path18.isAbsolute(relativeToProject) ? undefined : await stat9(sourcePath).catch(() => {
+    const sourcePath = path17.isAbsolute(output.path) ? path17.resolve(output.path) : path17.resolve(projectRoot, output.path);
+    const relativeToProject = path17.relative(projectRoot, sourcePath);
+    const sourceInfo = relativeToProject.startsWith("..") || path17.isAbsolute(relativeToProject) ? undefined : await stat9(sourcePath).catch(() => {
       return;
     });
     if (!sourceInfo?.isFile()) {
@@ -26693,7 +26701,7 @@ async function registerCompletedGenerationAssets(projectID, projectRoot, task) {
       sourcePath,
       kind: output.kind,
       mimeType: output.mimeType,
-      displayName: path18.basename(sourcePath, path18.extname(sourcePath)),
+      displayName: path17.basename(sourcePath, path17.extname(sourcePath)),
       source: "generation"
     });
     revision = registered.revision;
@@ -26701,7 +26709,7 @@ async function registerCompletedGenerationAssets(projectID, projectRoot, task) {
     outputAssets.push({
       ...output,
       id: registered.asset.id,
-      path: path18.posix.join("assets/library", registered.asset.relativePath.replace(/\\/g, "/")),
+      path: path17.posix.join("assets/library", registered.asset.relativePath.replace(/\\/g, "/")),
       mimeType: registered.asset.mimeType,
       sizeBytes: registered.asset.sizeBytes,
       width: registered.asset.width,
@@ -26764,7 +26772,7 @@ function recoverActiveComfyUIGenerationTasksOnce(projectID, cinemaRoot3) {
 }
 async function getCinemaProject(projectID) {
   const { project, root, cinemaRoot: cinemaRoot3 } = resolveCinemaRoot(projectID);
-  const projectPath = path18.join(cinemaRoot3, PROJECT_FILE);
+  const projectPath = path17.join(cinemaRoot3, PROJECT_FILE);
   const initialized = await pathExists2(projectPath);
   let metadata;
   if (initialized) {
@@ -26784,10 +26792,10 @@ async function getCinemaProject(projectID) {
   }
   return {
     projectID: project.id,
-    name: project.name?.trim() || path18.basename(root) || project.id,
+    name: project.name?.trim() || path17.basename(root) || project.id,
     root,
     initialized,
-    metadataPath: path18.join(CINEMA_DIRECTORY, PROJECT_FILE),
+    metadataPath: path17.join(CINEMA_DIRECTORY, PROJECT_FILE),
     ...metadata ? { project: metadata } : {},
     capabilities: {
       assetLibrary: true,
@@ -27179,7 +27187,7 @@ function errorResult(error48) {
   };
 }
 async function openProject(projectRoot) {
-  if (!path19.isAbsolute(projectRoot))
+  if (!path18.isAbsolute(projectRoot))
     throw new Error("projectRoot must be an absolute local directory.");
   return await openProjectRoot(projectRoot);
 }
@@ -27297,7 +27305,7 @@ lines.on("line", (line) => {
         result: {
           protocolVersion: "2025-06-18",
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: "anybox-cinema", version: "1.0.0" }
+          serverInfo: { name: "anybox-cinema", version: version_default.version }
         }
       });
       return;

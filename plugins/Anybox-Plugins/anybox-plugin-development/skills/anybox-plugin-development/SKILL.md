@@ -220,6 +220,8 @@ bun test Test/plugin.test.ts
 
 准备正式仓库目录时，先提交插件源码，再在仓库根目录运行 `pnpm plugins:catalog:prepare` 和 `pnpm plugins:catalog:verify`。随后只需把 `.catalog/` 作为普通 Git 变更提交并推送；不要调用 GitHub Actions、Release 或 API。
 
+若插件有独立的生产打包门禁，可在自身 `package.json` 同时声明 `anyboxCatalog.releaseArchive`（支持 `{version}`）与 `anyboxCatalog.releaseAttestation`，先产出经过验证的 ZIP。目录工具只读取并验证该 ZIP，不会执行插件自带构建脚本；内嵌 manifest 必须与源码一致，且 production attestation 必须覆盖每个声明的原生 helper。validation/unsigned 包会被拒绝。
+
 ## 常见失败
 
 - 插件没有出现在 catalog：检查 `ANYBOX_PLUGIN_LOCAL_DIR`、目录结构、JSON 合法性、支持的顶层字段，以及必填的 `name`、`version`、`description`。只有验证下载/安装根目录时才检查 `ANYBOX_PLUGIN_INSTALL_DIR`。

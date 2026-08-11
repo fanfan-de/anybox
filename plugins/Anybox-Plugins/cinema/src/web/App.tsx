@@ -23,7 +23,7 @@ import {
   type OnSelectionChangeParams,
   type ReactFlowInstance,
 } from "@xyflow/react"
-import { useMutation, useQueries, useQuery } from "@tanstack/react-query"
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query"
 import { create } from "zustand"
 import {
   ArrowLeft,
@@ -7629,6 +7629,7 @@ function CinemaProjectLauncher({
   return (
     <CinemaWorkbenchShell
       projectName="Cinema"
+      agentBaseURL={agentBaseURL}
       activeWorkspace="create"
       onWorkspaceChange={() => undefined}
       availableWorkspaces={{ edit: false, deliver: false }}
@@ -7728,6 +7729,7 @@ export function App() {
 
 function CinemaProjectApp({ projectID, agentBaseURL }: { projectID: string; agentBaseURL: string }) {
   const { t } = useI18n()
+  const queryClient = useQueryClient()
   const activeNodeID = useUiStore((state) => state.activeNodeID)
   const setActiveNodeID = useUiStore((state) => state.setActiveNodeID)
   const reactFlow = useReactFlow<CinemaFlowNode, Edge>()
@@ -7735,6 +7737,14 @@ function CinemaProjectApp({ projectID, agentBaseURL }: { projectID: string; agen
   const [activeWorkspace, setActiveWorkspace] = useState<CinemaWorkspaceID>("create")
   const [deliverTimelineID, setDeliverTimelineID] = useState<string | null>(null)
   const editFlushRef = useRef<(() => Promise<void>) | null>(null)
+  const handleProviderConfigurationChanged = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["cinema-video-providers", agentBaseURL, projectID] }),
+      queryClient.invalidateQueries({ queryKey: ["cinema-text-models", agentBaseURL, projectID] }),
+      queryClient.invalidateQueries({ queryKey: ["cinema-image-models", agentBaseURL, projectID] }),
+      queryClient.invalidateQueries({ queryKey: ["cinema-provider-workflows", agentBaseURL] }),
+    ])
+  }, [agentBaseURL, projectID, queryClient])
   const changeWorkspace = useCallback((workspace: CinemaWorkspaceID) => {
     if (workspace === activeWorkspace) return
     if (activeWorkspace !== "edit") {
@@ -9687,7 +9697,14 @@ function CinemaProjectApp({ projectID, agentBaseURL }: { projectID: string; agen
 
   if (!projectID) {
     return (
-      <CinemaWorkbenchShell projectName="Cinema" activeWorkspace={activeWorkspace} onWorkspaceChange={changeWorkspace} availableWorkspaces={availableWorkspaces}>
+      <CinemaWorkbenchShell
+        projectName="Cinema"
+        agentBaseURL={agentBaseURL}
+        activeWorkspace={activeWorkspace}
+        onWorkspaceChange={changeWorkspace}
+        availableWorkspaces={availableWorkspaces}
+        onProviderConfigurationChanged={handleProviderConfigurationChanged}
+      >
         <div className="cinema-empty-state">
           <h1>{t("app.missingProject")}</h1>
           <p>{t("app.missingProjectDescription")}</p>
@@ -9698,7 +9715,14 @@ function CinemaProjectApp({ projectID, agentBaseURL }: { projectID: string; agen
 
   if (projectQuery.isLoading || (projectQuery.data?.initialized && canvasQuery.isLoading)) {
     return (
-      <CinemaWorkbenchShell projectName={projectQuery.data?.name ?? "Cinema"} activeWorkspace={activeWorkspace} onWorkspaceChange={changeWorkspace} availableWorkspaces={availableWorkspaces}>
+      <CinemaWorkbenchShell
+        projectName={projectQuery.data?.name ?? "Cinema"}
+        agentBaseURL={agentBaseURL}
+        activeWorkspace={activeWorkspace}
+        onWorkspaceChange={changeWorkspace}
+        availableWorkspaces={availableWorkspaces}
+        onProviderConfigurationChanged={handleProviderConfigurationChanged}
+      >
         <div className="cinema-empty-state">
           <Loader2 className="is-spinning" aria-hidden="true" />
           <h1>{t("app.opening")}</h1>
@@ -9711,7 +9735,14 @@ function CinemaProjectApp({ projectID, agentBaseURL }: { projectID: string; agen
   if (projectQuery.error || canvasQuery.error || providersQuery.error || textModelsQuery.error || imageModelsQuery.error || tasksQuery.error) {
     const error = projectQuery.error ?? canvasQuery.error ?? providersQuery.error ?? textModelsQuery.error ?? imageModelsQuery.error ?? tasksQuery.error
     return (
-      <CinemaWorkbenchShell projectName={projectQuery.data?.name ?? "Cinema"} activeWorkspace={activeWorkspace} onWorkspaceChange={changeWorkspace} availableWorkspaces={availableWorkspaces}>
+      <CinemaWorkbenchShell
+        projectName={projectQuery.data?.name ?? "Cinema"}
+        agentBaseURL={agentBaseURL}
+        activeWorkspace={activeWorkspace}
+        onWorkspaceChange={changeWorkspace}
+        availableWorkspaces={availableWorkspaces}
+        onProviderConfigurationChanged={handleProviderConfigurationChanged}
+      >
         <div className="cinema-empty-state is-error">
           <h1>{t("app.openFailed")}</h1>
           <p>{error instanceof Error ? error.message : t("app.unknownError")}</p>
@@ -9722,7 +9753,14 @@ function CinemaProjectApp({ projectID, agentBaseURL }: { projectID: string; agen
 
   if (projectQuery.data && !projectQuery.data.initialized) {
     return (
-      <CinemaWorkbenchShell projectName={projectQuery.data.name} activeWorkspace={activeWorkspace} onWorkspaceChange={changeWorkspace} availableWorkspaces={availableWorkspaces}>
+      <CinemaWorkbenchShell
+        projectName={projectQuery.data.name}
+        agentBaseURL={agentBaseURL}
+        activeWorkspace={activeWorkspace}
+        onWorkspaceChange={changeWorkspace}
+        availableWorkspaces={availableWorkspaces}
+        onProviderConfigurationChanged={handleProviderConfigurationChanged}
+      >
         <div className="cinema-empty-state">
           <Film aria-hidden="true" />
           <h1>{t("app.initialize")}</h1>
@@ -9736,9 +9774,11 @@ function CinemaProjectApp({ projectID, agentBaseURL }: { projectID: string; agen
     return (
       <CinemaWorkbenchShell
         projectName={projectQuery.data?.name ?? "Cinema"}
+        agentBaseURL={agentBaseURL}
         activeWorkspace={activeWorkspace}
         onWorkspaceChange={changeWorkspace}
         availableWorkspaces={availableWorkspaces}
+        onProviderConfigurationChanged={handleProviderConfigurationChanged}
       >
         <Suspense fallback={<div className="cinema-timeline-empty" role="status"><p>{t("app.loadingEdit")}</p></div>}>
           <EditWorkbench
@@ -9756,9 +9796,11 @@ function CinemaProjectApp({ projectID, agentBaseURL }: { projectID: string; agen
     return (
       <CinemaWorkbenchShell
         projectName={projectQuery.data?.name ?? "Cinema"}
+        agentBaseURL={agentBaseURL}
         activeWorkspace={activeWorkspace}
         onWorkspaceChange={changeWorkspace}
         availableWorkspaces={availableWorkspaces}
+        onProviderConfigurationChanged={handleProviderConfigurationChanged}
       >
         <Suspense fallback={<div className="cinema-empty-state" role="status"><p>{t("app.loadingDeliver")}</p></div>}>
           <DeliverWorkbench
@@ -9776,9 +9818,11 @@ function CinemaProjectApp({ projectID, agentBaseURL }: { projectID: string; agen
   return (
     <CinemaWorkbenchShell
       projectName={projectQuery.data?.name ?? "Cinema"}
+      agentBaseURL={agentBaseURL}
       activeWorkspace={activeWorkspace}
       onWorkspaceChange={changeWorkspace}
       availableWorkspaces={availableWorkspaces}
+      onProviderConfigurationChanged={handleProviderConfigurationChanged}
       onClick={() => {
         setContextMenu(null)
         setNodeContextMenu(null)

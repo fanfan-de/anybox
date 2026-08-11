@@ -1,8 +1,12 @@
 {
   "name": "@anybox/cinema-plugin",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
+  "anyboxCatalog": {
+    "releaseArchive": "dist/cinema-{version}.anybox-plugin.zip",
+    "releaseAttestation": ".anybox-plugin/release-attestation.json"
+  },
   "exports": {
     "./contracts": "./src/contracts/cinema.ts",
     "./contracts/timeline": "./src/contracts/cinema-timeline.ts",
@@ -58,7 +62,7 @@
     "dev": "vite",
     "preview": "vite preview",
     "start:standalone": "bun ./runtime/server.js --standalone",
-    "test": "bun test ./Test ./src/**/*.test.ts",
+    "test": "bun test --max-concurrency 1 ./Test && vitest run src/web",
     "test:web": "vitest run src/web",
     "test:e2e": "playwright test",
     "test:toolchain": "node --test ./toolchain/scripts/verify-media-runtime.test.mjs ./toolchain/scripts/media-runtime-candidate.test.mjs",

@@ -251,6 +251,8 @@ pnpm plugins:catalog:prepare
 pnpm plugins:catalog:verify
 ```
 
+Plugins that require a product-specific release gate first, such as native-helper signing, may declare both `anyboxCatalog.releaseArchive` (with an optional `{version}` placeholder) and `anyboxCatalog.releaseAttestation` in `package.json`. Build and verify that ZIP before preparing the catalog. The catalog tool does not execute plugin build scripts; it validates safe ZIP paths, an embedded manifest identical to the source, and a production attestation covering every declared native helper. Validation or unsigned packages are rejected.
+
 Before release, confirm:
 
 - No keys, tokens, `.env` files, local databases, or authentication caches are committed.

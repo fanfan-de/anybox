@@ -8,8 +8,10 @@ import * as Settings from "#config/config.ts"
 import * as ProviderAuth from "#auth/provider-auth.ts"
 import * as Providers from "#cinema/provider-runtime.ts"
 import { pickDirectory, pickFile } from "#platform/native-helper.ts"
+import * as Lock from "#util/lock.ts"
 import { assertSafeProviderURL, sameOriginFetch } from "../providers/network-policy.ts"
 import { cancelToolchainInstall, getToolchainStatus, importToolchainArchive, installToolchain } from "#platform/toolchain.ts"
+import cinemaVersion from "../version.json"
 
 const PROVIDERS = ["klingai-cn", "google-ai-sdk", "comfyui-local", "openai-compatible"] as const
 const ProviderID = z.enum(PROVIDERS)
@@ -30,6 +32,17 @@ const SettingsBody = z.object({
   textGenerationPrompt: z.string().nullable().optional(),
 }).strict()
 const ProviderConnectionBody = SettingsBody.pick({ baseURL: true, userID: true })
+const PROVIDER_CONFIGURATION_LOCK_KEY = "cinema-provider-configuration"
+const ProviderConfigurationBody = z.object({
+  settings: SettingsBody.optional(),
+  credential: CredentialBody.optional(),
+}).strict().refine(
+  (input) => input.settings !== undefined || input.credential !== undefined,
+  { message: "Provider configuration must include settings or a credential." },
+)
+
+type ProviderID = typeof PROVIDERS[number]
+type ProviderSettingsInput = z.infer<typeof SettingsBody>
 
 function parseProviderID(value: string) {
   const parsed = ProviderID.safeParse(value)
@@ -37,10 +50,50 @@ function parseProviderID(value: string) {
   return parsed.data
 }
 
-function credentialProviderID(providerID: typeof PROVIDERS[number]) {
+function credentialProviderID(providerID: ProviderID) {
   if (providerID === "klingai-cn") return "cinema-klingai-cn"
   if (providerID === "google-ai-sdk") return "google"
   return providerID
+}
+
+async function readProviderSettings(providerID: ProviderID) {
+  if (providerID === "openai-compatible") {
+    const settings = await Settings.getSettings()
+    return { ...settings.openAICompatible, textGenerationPrompt: settings.prompts.textGeneration ?? null }
+  }
+  const settings = await Settings.getCinemaVideoProviderSettings(providerID)
+  if (providerID !== "comfyui-local") return settings
+  const provider = await Providers.getCinemaVideoProvider(providerID)
+  return {
+    ...settings,
+    ...(provider.runtime?.baseURL ? { baseURL: provider.runtime.baseURL } : {}),
+    ...(provider.runtime?.userID ? { userID: provider.runtime.userID } : {}),
+    ...(provider.runtime?.baseURLSource ? { baseURLSource: provider.runtime.baseURLSource } : {}),
+  }
+}
+
+async function persistProviderSettings(providerID: ProviderID, input: ProviderSettingsInput) {
+  if (providerID === "openai-compatible") {
+    await Settings.updateSettings((current) => ({
+      ...current,
+      openAICompatible: {
+        baseURL: input.baseURL === null ? "https://api.openai.com/v1" : input.baseURL ?? current.openAICompatible.baseURL,
+        ...(input.defaultModel === null ? {} : { defaultModel: input.defaultModel ?? current.openAICompatible.defaultModel }),
+        models: input.models ?? current.openAICompatible.models,
+      },
+      prompts: {
+        ...(input.textGenerationPrompt === null ? {} : { textGeneration: input.textGenerationPrompt ?? current.prompts.textGeneration }),
+      },
+    }))
+    return await readProviderSettings(providerID)
+  }
+  await Providers.saveCinemaVideoProviderSettings(providerID, { baseURL: input.baseURL, userID: input.userID })
+  return await readProviderSettings(providerID)
+}
+
+async function readCredentialState(providerID: ProviderID) {
+  const auth = await ProviderAuth.resolveProviderRuntimeAuth(credentialProviderID(providerID))
+  return { configured: Boolean(auth.apiKey), persistence: auth.credentialSource }
 }
 
 async function openAIModels() {
@@ -59,7 +112,7 @@ export function CinemaManagementRoutes() {
   const app = new Hono<AppEnv>()
 
   app.get("/runtime/status", async (c) => ok(c, {
-    version: process.env.ANYBOX_APP_VERSION?.trim() || "1.0.0",
+    version: process.env.ANYBOX_APP_VERSION?.trim() || cinemaVersion.version,
     mode: c.get("runtimeMode"),
     providers: [...PROVIDERS],
     projects: (await Projects.listRecentProjects()).length,
@@ -83,49 +136,24 @@ export function CinemaManagementRoutes() {
 
   app.get("/providers/:providerID/settings", async (c) => {
     const providerID = parseProviderID(c.req.param("providerID"))
-    if (providerID === "openai-compatible") {
-      const settings = await Settings.getSettings()
-      return ok(c, { ...settings.openAICompatible, textGenerationPrompt: settings.prompts.textGeneration ?? null })
-    }
-    const settings = await Settings.getCinemaVideoProviderSettings(providerID)
-    if (providerID !== "comfyui-local") return ok(c, settings)
-    const provider = await Providers.getCinemaVideoProvider(providerID)
-    return ok(c, {
-      ...settings,
-      ...(provider.runtime?.baseURL ? { baseURL: provider.runtime.baseURL } : {}),
-      ...(provider.runtime?.userID ? { userID: provider.runtime.userID } : {}),
-      ...(provider.runtime?.baseURLSource ? { baseURLSource: provider.runtime.baseURLSource } : {}),
-    })
+    return ok(c, await readProviderSettings(providerID))
   })
   app.put("/providers/:providerID/settings", async (c) => {
     const providerID = parseProviderID(c.req.param("providerID"))
     const input = await parseJsonBody(c, SettingsBody, "Provider settings are invalid.")
     if (input.baseURL) await assertSafeProviderURL(input.baseURL)
-    if (providerID === "openai-compatible") {
-      const next = await Settings.updateSettings((current) => ({
-        ...current,
-        openAICompatible: {
-          baseURL: input.baseURL === null ? "https://api.openai.com/v1" : input.baseURL ?? current.openAICompatible.baseURL,
-          ...(input.defaultModel === null ? {} : { defaultModel: input.defaultModel ?? current.openAICompatible.defaultModel }),
-          models: input.models ?? current.openAICompatible.models,
-        },
-        prompts: {
-          ...(input.textGenerationPrompt === null ? {} : { textGeneration: input.textGenerationPrompt ?? current.prompts.textGeneration }),
-        },
-      }))
-      return ok(c, next.openAICompatible)
-    }
-    return ok(c, await Providers.saveCinemaVideoProviderSettings(providerID, { baseURL: input.baseURL, userID: input.userID }))
+    using _configurationLock = await Lock.write(PROVIDER_CONFIGURATION_LOCK_KEY)
+    return ok(c, await persistProviderSettings(providerID, input))
   })
 
   app.get("/providers/:providerID/credential", async (c) => {
     const providerID = parseProviderID(c.req.param("providerID"))
-    const auth = await ProviderAuth.resolveProviderRuntimeAuth(credentialProviderID(providerID))
-    return ok(c, { configured: Boolean(auth.apiKey), persistence: auth.credentialSource })
+    return ok(c, await readCredentialState(providerID))
   })
   app.put("/providers/:providerID/credential", async (c) => {
     const providerID = parseProviderID(c.req.param("providerID"))
     const input = await parseJsonBody(c, CredentialBody, "Provider credential is invalid.")
+    using _configurationLock = await Lock.write(PROVIDER_CONFIGURATION_LOCK_KEY)
     const result = await ProviderAuth.saveProviderApiKey(
       credentialProviderID(providerID),
       input.apiKey,
@@ -133,8 +161,55 @@ export function CinemaManagementRoutes() {
     )
     return ok(c, { configured: true, ...result })
   })
+  app.put("/providers/:providerID/configuration", async (c) => {
+    const providerID = parseProviderID(c.req.param("providerID"))
+    const input = await parseJsonBody(c, ProviderConfigurationBody, "Provider configuration is invalid.")
+    if (input.settings?.baseURL) await assertSafeProviderURL(input.settings.baseURL)
+
+    using _configurationLock = await Lock.write(PROVIDER_CONFIGURATION_LOCK_KEY)
+    const previousSettings = input.settings ? structuredClone(await Settings.getSettings()) : undefined
+    let settingsChanged = false
+    try {
+      if (input.settings) {
+        await persistProviderSettings(providerID, input.settings)
+        settingsChanged = true
+      }
+      const credential = input.credential
+        ? {
+            configured: true,
+            ...await ProviderAuth.saveProviderApiKey(
+              credentialProviderID(providerID),
+              input.credential.apiKey,
+              { allowSession: input.credential.persistence === "session" },
+            ),
+          }
+        : await readCredentialState(providerID)
+      return ok(c, {
+        settings: await readProviderSettings(providerID),
+        credential,
+      })
+    } catch (error) {
+      if (settingsChanged && previousSettings) {
+        try {
+          await Settings.saveSettings(previousSettings)
+        } catch (rollbackError) {
+          throw new ApiError(
+            500,
+            "CINEMA_PROVIDER_CONFIGURATION_RECOVERY_REQUIRED",
+            "Provider settings could not be restored after credential persistence failed.",
+            {
+              cause: error instanceof Error ? error.message : String(error),
+              rollback: rollbackError instanceof Error ? rollbackError.message : String(rollbackError),
+            },
+          )
+        }
+      }
+      throw error
+    }
+  })
   app.delete("/providers/:providerID/credential", async (c) => {
     const providerID = parseProviderID(c.req.param("providerID"))
+    using _configurationLock = await Lock.write(PROVIDER_CONFIGURATION_LOCK_KEY)
     await ProviderAuth.saveProviderApiKey(credentialProviderID(providerID), null)
     return ok(c, { configured: false, persistence: "none" })
   })

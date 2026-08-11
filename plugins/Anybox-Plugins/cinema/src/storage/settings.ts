@@ -78,9 +78,10 @@ export async function getSettings() {
 }
 
 export async function saveSettings(next: CinemaSettings) {
-  cached = normalizeSettings(next)
-  await atomicWriteJson(settingsPath(), cached)
-  return cached
+  const normalized = normalizeSettings(next)
+  await atomicWriteJson(settingsPath(), normalized)
+  cached = normalized
+  return normalized
 }
 
 export async function updateSettings(update: (current: CinemaSettings) => CinemaSettings | Promise<CinemaSettings>) {

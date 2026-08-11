@@ -1,6 +1,6 @@
 [package]
 name = "cinema-platform-helper"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2024"
 license = "MIT"
 description = "Native keychain and file-dialog helper for the Anybox Cinema plugin"

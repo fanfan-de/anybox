@@ -12,7 +12,7 @@ import {
   resolve,
   sep,
 } from "node:path"
-import { deflateRawSync } from "node:zlib"
+import { deflateRawSync, inflateRawSync } from "node:zlib"
 
 export const PLUGIN_CATALOG_ID = "anybox-plugins"
 export const PLUGIN_CATALOG_REPOSITORY_REF = "master"
@@ -378,6 +378,203 @@ function collectPluginFiles(repoRoot, plugin, allowDirty) {
   })
 }
 
+function resolveCatalogPackageArchive(plugin, pluginVersion, pluginsRoot) {
+  const packageMetadataPath = join(plugin.root, "package.json")
+  if (!existsSync(packageMetadataPath)) return
+  const packageMetadata = readJSON(packageMetadataPath, `Plugin '${plugin.id}' package metadata`)
+  if (packageMetadata.anyboxCatalog === undefined) return
+  const catalog = assertRecord(packageMetadata.anyboxCatalog, `Plugin '${plugin.id}' anyboxCatalog`)
+  invariant(
+    typeof catalog.releaseArchive === "string" && catalog.releaseArchive.trim(),
+    `Plugin '${plugin.id}' anyboxCatalog.releaseArchive must be a package-relative path.`,
+  )
+  invariant(
+    typeof catalog.releaseAttestation === "string" && catalog.releaseAttestation.trim(),
+    `Plugin '${plugin.id}' anyboxCatalog.releaseAttestation must be a package-relative path.`,
+  )
+  const attestationReference = normalizeRepositoryPath(catalog.releaseAttestation.trim())
+  invariant(
+    attestationReference
+    && !isAbsolute(attestationReference)
+    && !attestationReference.startsWith("/")
+    && !attestationReference.split("/").includes("..")
+    && !/^[a-z][a-z0-9+.-]*:/i.test(attestationReference),
+    `Plugin '${plugin.id}' release attestation path is unsafe.`,
+  )
+  const reference = catalog.releaseArchive.replaceAll("{version}", pluginVersion)
+  const target = resolve(plugin.root, reference)
+  const relativePath = relative(resolve(plugin.root), target)
+  invariant(
+    relativePath && !relativePath.startsWith("..") && !isAbsolute(relativePath),
+    `Plugin '${plugin.id}' release archive must stay inside the plugin source directory.`,
+  )
+  const existingCatalogArchive = join(
+    pluginsRoot,
+    ".catalog",
+    PLUGIN_CATALOG_PACKAGES_DIRECTORY,
+    releaseAssetName(plugin.id, pluginVersion),
+  )
+  const archivePath = existsSync(target) ? target : existingCatalogArchive
+  invariant(
+    existsSync(archivePath),
+    `Plugin '${plugin.id}' requires its gated release archive at '${normalizeRepositoryPath(reference)}'; build and verify it before preparing the catalog.`,
+  )
+  const info = lstatSync(archivePath)
+  invariant(info.isFile() && !info.isSymbolicLink(), `Plugin '${plugin.id}' release archive must be a regular file.`)
+  return {
+    archivePath,
+    attestationPath: `${plugin.id}/${attestationReference}`,
+  }
+}
+
+function findZipEnd(bytes) {
+  const minimumOffset = Math.max(0, bytes.length - 65_557)
+  for (let offset = bytes.length - 22; offset >= minimumOffset; offset -= 1) {
+    if (bytes.readUInt32LE(offset) === ZIP_END_OF_CENTRAL_DIRECTORY_SIGNATURE) return offset
+  }
+  throw new Error("Prebuilt plugin ZIP is missing its end-of-central-directory record.")
+}
+
+function inspectPrebuiltPluginZip(bytes, plugin, sourceManifest, attestationPath) {
+  invariant(bytes.length >= 22, `Plugin '${plugin.id}' release archive is not a valid ZIP.`)
+  const endOffset = findZipEnd(bytes)
+  const commentLength = bytes.readUInt16LE(endOffset + 20)
+  invariant(
+    bytes.readUInt16LE(endOffset + 4) === 0
+    && bytes.readUInt16LE(endOffset + 6) === 0
+    && bytes.readUInt16LE(endOffset + 8) === bytes.readUInt16LE(endOffset + 10)
+    && endOffset + 22 + commentLength === bytes.length,
+    `Plugin '${plugin.id}' release archive must be a complete single-disk ZIP.`,
+  )
+  const entryCount = bytes.readUInt16LE(endOffset + 10)
+  const centralSize = bytes.readUInt32LE(endOffset + 12)
+  const centralOffset = bytes.readUInt32LE(endOffset + 16)
+  invariant(entryCount > 0 && entryCount < 0xffff, `Plugin '${plugin.id}' release archive has an invalid entry count.`)
+  invariant(
+    centralOffset + centralSize <= endOffset,
+    `Plugin '${plugin.id}' release archive has an invalid central directory.`,
+  )
+
+  const canonicalManifest = `${plugin.id}/${PLUGIN_MANIFEST_PATH}`
+  const extractedPaths = new Set([canonicalManifest, attestationPath])
+  const names = new Set()
+  const extracted = new Map()
+  let offset = centralOffset
+  for (let index = 0; index < entryCount; index += 1) {
+    invariant(
+      offset + 46 <= bytes.length && bytes.readUInt32LE(offset) === ZIP_CENTRAL_DIRECTORY_SIGNATURE,
+      `Plugin '${plugin.id}' release archive has an invalid central-directory entry.`,
+    )
+    const flags = bytes.readUInt16LE(offset + 8)
+    const method = bytes.readUInt16LE(offset + 10)
+    const checksum = bytes.readUInt32LE(offset + 16)
+    const compressedSize = bytes.readUInt32LE(offset + 20)
+    const uncompressedSize = bytes.readUInt32LE(offset + 24)
+    const nameLength = bytes.readUInt16LE(offset + 28)
+    const extraLength = bytes.readUInt16LE(offset + 30)
+    const commentLength = bytes.readUInt16LE(offset + 32)
+    const originSystem = bytes.readUInt16LE(offset + 4) >>> 8
+    const externalAttributes = bytes.readUInt32LE(offset + 38)
+    const localOffset = bytes.readUInt32LE(offset + 42)
+    const nameStart = offset + 46
+    const nextOffset = nameStart + nameLength + extraLength + commentLength
+    invariant(nextOffset <= bytes.length, `Plugin '${plugin.id}' release archive contains a truncated filename.`)
+    const name = bytes.subarray(nameStart, nameStart + nameLength).toString("utf8")
+    invariant(
+      name.startsWith(`${plugin.id}/`)
+      && !name.includes("\\")
+      && !name.includes("\0")
+      && !name.split("/").includes(".."),
+      `Plugin '${plugin.id}' release archive contains an unsafe path '${name}'.`,
+    )
+    invariant(!names.has(name), `Plugin '${plugin.id}' release archive contains duplicate path '${name}'.`)
+    names.add(name)
+    invariant(!isSensitivePackagePath(name), `Plugin '${plugin.id}' release archive contains a sensitive file: ${name}`)
+    const unixFileType = originSystem === 3 ? (externalAttributes >>> 16) & 0o170000 : 0
+    invariant(unixFileType !== 0o120000, `Plugin '${plugin.id}' release archive contains a symbolic link: ${name}`)
+    invariant((flags & 1) === 0, `Plugin '${plugin.id}' release archive must not encrypt entries.`)
+    invariant(method === 0 || method === ZIP_METHOD_DEFLATE, `Plugin '${plugin.id}' release archive uses an unsupported compression method.`)
+
+    if (extractedPaths.has(name)) {
+      invariant(localOffset + 30 <= bytes.length && bytes.readUInt32LE(localOffset) === ZIP_LOCAL_FILE_HEADER_SIGNATURE,
+        `Plugin '${plugin.id}' release archive has an invalid gated metadata entry.`)
+      const localNameLength = bytes.readUInt16LE(localOffset + 26)
+      const localExtraLength = bytes.readUInt16LE(localOffset + 28)
+      const dataStart = localOffset + 30 + localNameLength + localExtraLength
+      const dataEnd = dataStart + compressedSize
+      const localName = bytes.subarray(localOffset + 30, localOffset + 30 + localNameLength).toString("utf8")
+      invariant(
+        bytes.readUInt16LE(localOffset + 8) === method && localName === name,
+        `Plugin '${plugin.id}' release archive metadata headers disagree.`,
+      )
+      invariant(dataEnd <= centralOffset && uncompressedSize <= 1024 * 1024,
+        `Plugin '${plugin.id}' release metadata is truncated or too large.`)
+      const compressed = bytes.subarray(dataStart, dataEnd)
+      const extractedBytes = method === 0 ? Buffer.from(compressed) : inflateRawSync(compressed)
+      invariant(extractedBytes.length === uncompressedSize,
+        `Plugin '${plugin.id}' release metadata size does not match its ZIP metadata.`)
+      invariant(crc32(extractedBytes) === checksum,
+        `Plugin '${plugin.id}' release metadata checksum does not match its ZIP metadata.`)
+      extracted.set(name, extractedBytes)
+    }
+    offset = nextOffset
+  }
+  invariant(offset === centralOffset + centralSize, `Plugin '${plugin.id}' release archive central directory size does not match.`)
+  const manifestBytes = extracted.get(canonicalManifest)
+  const attestationBytes = extracted.get(attestationPath)
+  invariant(manifestBytes, `Plugin '${plugin.id}' release archive is missing ${PLUGIN_MANIFEST_PATH}.`)
+  invariant(attestationBytes, `Plugin '${plugin.id}' release archive is missing its production release attestation.`)
+  const embeddedManifest = JSON.parse(manifestBytes.toString("utf8"))
+  invariant(
+    embeddedManifest.name === plugin.id && embeddedManifest.version === sourceManifest.version,
+    `Plugin '${plugin.id}' release archive manifest identity or version does not match its source manifest.`,
+  )
+  invariant(
+    JSON.stringify(embeddedManifest) === JSON.stringify(sourceManifest),
+    `Plugin '${plugin.id}' release archive manifest is stale or differs from its source manifest.`,
+  )
+  const attestation = JSON.parse(attestationBytes.toString("utf8"))
+  invariant(
+    attestation.schemaVersion === 1
+    && attestation.pluginID === plugin.id
+    && attestation.pluginVersion === sourceManifest.version
+    && attestation.releaseType === "production"
+    && attestation.manifestSha256 === sha256(manifestBytes),
+    `Plugin '${plugin.id}' release attestation is missing, stale, or not production-approved.`,
+  )
+  const expectedArtifacts = (sourceManifest.platformArtifacts ?? [])
+    .filter((artifact) => artifact.type === "app-runtime-helper")
+    .flatMap((artifact) => (artifact.executables ?? []).map((executable) => ({
+      target: `${executable.platform}-${executable.architecture}`,
+      path: executable.path,
+      sha256: executable.sha256,
+    })))
+    .sort((left, right) => left.target.localeCompare(right.target))
+  invariant(Array.isArray(attestation.artifacts), `Plugin '${plugin.id}' release attestation has no artifact evidence.`)
+  const attestedArtifacts = attestation.artifacts
+    .map((artifact) => ({
+      target: artifact?.target,
+      path: artifact?.path,
+      sha256: artifact?.sha256,
+      status: artifact?.status,
+      method: artifact?.method,
+      signer: artifact?.signer,
+    }))
+    .sort((left, right) => String(left.target).localeCompare(String(right.target)))
+  invariant(
+    attestedArtifacts.length === expectedArtifacts.length
+    && attestedArtifacts.every((artifact, index) => (
+      artifact.target === expectedArtifacts[index].target
+      && artifact.path === expectedArtifacts[index].path
+      && artifact.sha256 === expectedArtifacts[index].sha256
+      && artifact.status === "verified"
+      && typeof artifact.method === "string" && artifact.method.length > 0
+      && typeof artifact.signer === "string" && artifact.signer.length > 0
+    )),
+    `Plugin '${plugin.id}' release attestation does not verify every declared native helper.`,
+  )
+}
+
 function crc32Table() {
   const table = new Uint32Array(256)
   for (let index = 0; index < table.length; index += 1) {
@@ -730,8 +927,11 @@ export async function buildPluginRelease({
         plugin.id,
         sourceCommitLower,
       )
-      const files = collectPluginFiles(resolvedRepoRoot, plugin, allowDirty)
-      const zipBytes = await createDeterministicZip(files)
+      const releasePackage = resolveCatalogPackageArchive(plugin, registryManifest.version, resolvedPluginsRoot)
+      const zipBytes = releasePackage
+        ? await readFile(releasePackage.archivePath)
+        : await createDeterministicZip(collectPluginFiles(resolvedRepoRoot, plugin, allowDirty))
+      if (releasePackage) inspectPrebuiltPluginZip(zipBytes, plugin, sourceManifest, releasePackage.attestationPath)
       invariant(
         zipBytes.length <= maxPluginPackageBytes,
         `Plugin '${plugin.id}' ZIP is ${zipBytes.length} bytes; the limit is ${maxPluginPackageBytes}.`,

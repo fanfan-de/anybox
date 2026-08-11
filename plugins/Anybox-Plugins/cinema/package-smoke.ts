@@ -6,6 +6,8 @@ import { unzipSync } from "fflate"
 
 const pluginRoot = path.dirname(fileURLToPath(import.meta.url))
 const repositoryRoot = path.resolve(pluginRoot, "..", "..", "..")
+const sourceManifest = JSON.parse(await readFile(path.join(pluginRoot, ".anybox-plugin", "plugin.json"), "utf8"))
+const expectedVersion = String(sourceManifest.version)
 
 async function runAnyboxChild(extractedRoot: string, stateRoot: string) {
   process.env.ANYBOX_AGENT_DATA_DIR = path.join(stateRoot, "agent-data")
@@ -20,7 +22,9 @@ async function runAnyboxChild(extractedRoot: string, stateRoot: string) {
   try {
     const catalog = await Plugin.listCatalog()
     const cinema = catalog.find((item) => item.id === "cinema")
-    if (!cinema || cinema.version !== "1.0.0" || !cinema.installable) throw new Error("Generic Anybox catalog did not load packaged Cinema 1.0.0.")
+    if (!cinema || cinema.version !== expectedVersion || !cinema.installable) {
+      throw new Error(`Generic Anybox catalog did not load packaged Cinema ${expectedVersion}.`)
+    }
     const record = await Plugin.install("cinema", { enabled: true })
     installed = true
     if (record.platformArtifactReceipts.length !== 1) throw new Error("Generic Anybox install did not install the Cinema platform helper.")
@@ -58,7 +62,7 @@ if (process.argv[2] === "--anybox-child") {
   process.exit(0)
 }
 
-const archivePath = path.resolve(pluginRoot, process.argv[2] ?? "dist/cinema-1.0.0.anybox-plugin.zip")
+const archivePath = path.resolve(pluginRoot, process.argv[2] ?? `dist/cinema-${expectedVersion}.anybox-plugin.zip`)
 const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "cinema-package-smoke-"))
 let standalone: ReturnType<typeof Bun.spawn> | undefined
 

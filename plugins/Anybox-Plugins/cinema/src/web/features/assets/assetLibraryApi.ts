@@ -22,7 +22,7 @@ import {
   sortAssetLibraryEntries,
 } from "./assetLibraryModel"
 import { resolveCinemaRuntimeURL } from "../../runtimeUrl"
-import { cinemaRuntimeFetch } from "../../runtimeFetch"
+import { applyCinemaRuntimeXHRHeaders, cinemaRuntimeFetch } from "../../runtimeFetch"
 
 export interface AssetLibraryState {
   scope: CinemaAssetScope
@@ -474,6 +474,7 @@ function uploadAsset(url: string, options: AssetLibraryUploadOptions): Promise<A
     const abort = () => xhr.abort()
     options.signal?.addEventListener("abort", abort, { once: true })
     xhr.open("POST", url)
+    applyCinemaRuntimeXHRHeaders(xhr, "POST")
     xhr.responseType = "json"
     xhr.upload.addEventListener("progress", (event) => {
       if (event.lengthComputable) options.onProgress?.(Math.min(1, event.loaded / event.total))

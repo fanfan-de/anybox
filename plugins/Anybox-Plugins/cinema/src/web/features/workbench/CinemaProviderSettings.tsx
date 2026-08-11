@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { Bot, Cloud, KeyRound, Loader2, Server } from "lucide-react"
 import { useI18n, type TranslationKey } from "../../i18n"
-import { resolveCinemaRuntimeBaseURL } from "../../runtimeUrl"
 import {
   createCinemaProviderSettingsApi,
   type CinemaCredentialPersistence,
@@ -121,13 +120,15 @@ function statusText(
 
 export function CinemaProviderSettings({
   initialProviderID = "comfyui-local",
+  agentBaseURL,
+  onConfigurationChanged,
 }: {
   initialProviderID?: CinemaProviderID
+  agentBaseURL: string
+  onConfigurationChanged?: () => void | Promise<void>
 }) {
   const { t } = useI18n()
-  const api = useMemo(() => createCinemaProviderSettingsApi(resolveCinemaRuntimeBaseURL({
-    location: window.location,
-  })), [])
+  const api = useMemo(() => createCinemaProviderSettingsApi(agentBaseURL), [agentBaseURL])
   const [activeProviderID, setActiveProviderID] = useState<CinemaProviderID>(initialProviderID)
   const [settings, setSettings] = useState<CinemaProviderSettings>({ models: [] })
   const [credential, setCredential] = useState<CinemaProviderCredential>(EMPTY_CREDENTIAL)
@@ -138,6 +139,14 @@ export function CinemaProviderSettings({
   const [feedback, setFeedback] = useState<Feedback | null>(null)
   const activeProvider = providerDefinition(activeProviderID)
   const pending = pendingAction !== null
+
+  function notifyConfigurationChanged() {
+    try {
+      void Promise.resolve(onConfigurationChanged?.()).catch(() => undefined)
+    } catch {
+      // Saving succeeded; a consumer refresh failure must not report it as a save failure.
+    }
+  }
 
   useEffect(() => {
     setActiveProviderID(initialProviderID)
@@ -217,12 +226,16 @@ export function CinemaProviderSettings({
     if (activeProvider.requiresCredential && !credential.configured && !newCredential) {
       throw new Error(t("settings.provider.credentialRequired"))
     }
-    await Promise.all([
-      input ? api.saveSettings(activeProviderID, input) : Promise.resolve(),
-      activeProvider.requiresCredential && newCredential
-        ? api.saveCredential(activeProviderID, newCredential, credentialPersistence)
-        : Promise.resolve(credential),
-    ])
+    const credentialUpdate = activeProvider.requiresCredential && newCredential
+      ? { apiKey: newCredential, persistence: credentialPersistence }
+      : undefined
+    if (input || credentialUpdate) {
+      await api.saveConfiguration(activeProviderID, {
+        ...(input ? { settings: input } : {}),
+        ...(credentialUpdate ? { credential: credentialUpdate } : {}),
+      })
+      notifyConfigurationChanged()
+    }
     return await refreshCurrentProvider()
   }
 
@@ -256,7 +269,10 @@ export function CinemaProviderSettings({
           await persistCurrentProvider()
           return await api.testConnection(activeProviderID)
       })()
-      if (activeProviderID === "comfyui-local" && result.ok) await refreshCurrentProvider()
+      if (activeProviderID === "comfyui-local" && result.ok) {
+        notifyConfigurationChanged()
+        await refreshCurrentProvider()
+      }
       const message = activeProviderID === "comfyui-local"
         && result.ok
         && result.effectiveBaseURL !== undefined
@@ -294,12 +310,15 @@ export function CinemaProviderSettings({
       const models = await api.discoverOpenAIModels()
       if (models.length === 0) throw new Error(t("settings.provider.noModelsDiscovered"))
       const defaultModel = form.defaultModel.trim() || models[0]!.id
-      await api.saveSettings("openai-compatible", {
-        baseURL: persisted.settings.baseURL ?? activeProvider.endpoint,
-        defaultModel,
-        models,
-        textGenerationPrompt: persisted.settings.textGenerationPrompt ?? null,
+      await api.saveConfiguration("openai-compatible", {
+        settings: {
+          baseURL: persisted.settings.baseURL ?? activeProvider.endpoint,
+          defaultModel,
+          models,
+          textGenerationPrompt: persisted.settings.textGenerationPrompt ?? null,
+        },
       })
+      notifyConfigurationChanged()
       await refreshCurrentProvider()
       setFeedback({
         kind: "success",
@@ -321,6 +340,7 @@ export function CinemaProviderSettings({
     setFeedback(null)
     try {
       await api.removeCredential(activeProviderID)
+      notifyConfigurationChanged()
       await refreshCurrentProvider()
       setFeedback({ kind: "success", message: t("settings.provider.keyRemoved") })
     } catch (error) {

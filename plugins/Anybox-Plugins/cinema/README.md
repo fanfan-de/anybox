@@ -69,11 +69,13 @@ bun run package:smoke
 bun run package:playwright-smoke
 ```
 
-`package` builds a local package for the current declared helper set. Production assembly requires signed and reviewed helpers for Windows x64, macOS arm64, and Linux x64. Run `helper:verify-signature` on each native platform first (Authenticode, Apple codesign, or a detached Linux minisign signature), aggregate the three artifact directories, then run:
+`package` builds a local package for the current declared helper set. Production assembly requires signed and reviewed helpers for Windows x64, macOS arm64, and Linux x64. Run `helper:verify-signature` on each native platform first (Authenticode, Apple codesign, or a detached Linux minisign signature). Verification requires the expected public identity in `CINEMA_HELPER_WINDOWS_SIGNER_THUMBPRINT`, `CINEMA_HELPER_APPLE_TEAM_ID`, or `CINEMA_HELPER_MINISIGN_PUBLIC_KEY`. Aggregate the three artifact directories, keep those identity variables set, then run:
 
 ```powershell
 bun run helpers:assemble
 bun run package:release
 ```
+
+The production package contains a manifest-bound release attestation for all three verified helpers. The repository Catalog accepts this attested package through `anyboxCatalog`; local or `unsigned-validation` packages cannot be promoted. Run `pnpm plugins:catalog:prepare` only after the production package succeeds.
 
 The GitHub matrix workflow is validation-only. It does not publish a production release. Production signing and publication remain under the repository's local release authority.

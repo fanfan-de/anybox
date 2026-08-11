@@ -3,9 +3,11 @@ import {
   assertSafeProviderURL,
   isBlockedProviderAddress,
   normalizeProviderBaseURL,
+  safeProviderFetch,
   sameOriginFetch,
   setProviderNetworkLookupForTest,
 } from "../src/providers/network-policy.ts"
+import { createCinemaOpenAICompatibleProvider } from "../src/providers/openai-compatible.ts"
 
 const servers: Array<ReturnType<typeof Bun.serve>> = []
 
@@ -85,5 +87,44 @@ describe("Cinema provider network policy", () => {
     await expect(sameOriginFetch(new URL(`${origin}/cross-origin`), {
       headers: { authorization: "Bearer must-not-cross" },
     })).rejects.toMatchObject({ code: "PROVIDER_REDIRECT_REJECTED" })
+  })
+
+  test("adapts SDK Request inputs without bypassing the pinned transport", async () => {
+    const server = Bun.serve({
+      hostname: "127.0.0.1",
+      port: 0,
+      async fetch(request) {
+        return Response.json({
+          body: await request.json(),
+          authorization: request.headers.get("authorization"),
+        })
+      },
+    })
+    servers.push(server)
+    const request = new Request(`http://127.0.0.1:${server.port}/v1/chat/completions`, {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sdk-secret",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ model: "cinema-model", stream: true }),
+    })
+
+    const response = await safeProviderFetch(request)
+    expect(await response.json()).toEqual({
+      body: { model: "cinema-model", stream: true },
+      authorization: "Bearer sdk-secret",
+    })
+  })
+
+  test("wires the OpenAI-compatible SDK to the safe provider transport", () => {
+    const provider = createCinemaOpenAICompatibleProvider({
+      baseURL: "https://provider.example/v1",
+      apiKey: "test-key",
+    })
+    const model = provider.languageModel("cinema-model") as unknown as {
+      config?: { fetch?: unknown }
+    }
+    expect(model.config?.fetch).toBe(safeProviderFetch)
   })
 })

@@ -95,6 +95,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: cinema-plugin-validation-only
-          path: plugins/Anybox-Plugins/cinema/dist/cinema-1.0.0.anybox-plugin.zip
+          path: plugins/Anybox-Plugins/cinema/dist/cinema-*.anybox-plugin.zip
           if-no-files-found: error
           retention-days: 7

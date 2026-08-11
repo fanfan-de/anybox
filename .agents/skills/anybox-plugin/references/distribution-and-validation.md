@@ -224,6 +224,8 @@ pnpm plugins:catalog:verify
 
 命令从已提交的插件源码和当前 Git HEAD 生成恰好 66 个 `anybox-plugin-<id>-<version>.zip`，写入 `plugins/Anybox-Plugins/.catalog/packages/`，同时更新 `anybox-plugin-registry.json` 与 `anybox-plugin-catalog-manifest.json`。同名 ZIP 已存在时必须逐字节一致，否则命令失败并要求插件升版；旧版本 ZIP 不自动删除。命令不会调用 GitHub API、Actions、Release，也不会自动执行 `git add`、commit 或 push。
 
+如果插件必须先经过自己的生产门禁（例如多平台原生 helper 的签名校验），可在插件 `package.json` 中同时声明 `anyboxCatalog.releaseArchive`（路径支持 `{version}`）与 `anyboxCatalog.releaseAttestation`。先运行插件自己的正式打包命令；目录脚本不会执行插件构建代码，只读取该 ZIP，并验证唯一顶层目录、路径安全、内嵌 manifest 与源码完全一致，以及 production attestation 已覆盖每个声明的原生 helper。validation/unsigned 产物不能进入目录。正式 ZIP 已进入不可变 `.catalog/packages/` 后，后续目录构建可直接复用它。
+
 `plugins:catalog:prepare` 会用同目录中的文件安装一个代表性 ZIP；也可以单独复验：
 
 ```powershell
@@ -231,7 +233,7 @@ bun run packages/anyboxagent/scripts/smoke-plugin-release-install.ts `
   <anybox-plugin-registry.json> context7
 ```
 
-该 smoke 必须读取完整 65 项目录、只加载一次本地 ZIP，并拒绝访问 `api.github.com`。确认无误后，将 `.catalog/` 作为普通 Git 变更提交并执行普通 `git push`；插件目录发布与桌面候选版、RC 和公开桌面 Release 相互独立。
+该 smoke 必须读取完整 66 项目录、只加载一次本地 ZIP，并拒绝访问 `api.github.com`。确认无误后，将 `.catalog/` 作为普通 Git 变更提交并执行普通 `git push`；插件目录发布与桌面候选版、RC 和公开桌面 Release 相互独立。
 
 如果只修改插件包，优先执行有针对性的目录加载和安装验证。当插件包覆盖了新修改的解析器路径，或风险足以证明有必要时，再运行完整回归测试文件。
 

@@ -13,6 +13,7 @@ import {
 import { resetProjectsForTest } from "#project/project.ts"
 import { clearComfyUIProfileCacheForTest } from "#cinema/comfyui-runtime.ts"
 import { setNativeHelperCallForTest } from "../src/platform/native-helper.ts"
+import cinemaVersion from "../src/version.json"
 
 const originalPaths = { ...Global.Path }
 const roots: string[] = []
@@ -150,7 +151,7 @@ describe("Cinema Runtime management API", () => {
     expect(status).toMatchObject({
       success: true,
       data: {
-        version: "1.0.0",
+        version: cinemaVersion.version,
         mode: "test",
         providers: ["klingai-cn", "google-ai-sdk", "comfyui-local", "openai-compatible"],
         projects: 0,
@@ -261,5 +262,98 @@ describe("Cinema Runtime management API", () => {
     expect(persisted).toContain("manual-model")
     expect(persisted).toContain("Cinema-owned prompt override")
     expect(persisted).not.toContain("session-discovery-secret")
+  })
+
+  test("saves provider settings and credentials as one compensated configuration command", async () => {
+    await isolatedRuntime()
+    const app = createServerApp({ mode: "test" })
+    const settingsURL = "http://localhost/api/cinema/providers/openai-compatible/settings"
+    const configurationURL = "http://localhost/api/cinema/providers/openai-compatible/configuration"
+    const credentialURL = "http://localhost/api/cinema/providers/openai-compatible/credential"
+
+    const initial = await app.request(settingsURL, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        baseURL: "http://127.0.0.1:4101/v1",
+        defaultModel: "old-model",
+        models: [{ id: "old-model" }],
+      }),
+    })
+    expect(initial.status).toBe(200)
+
+    let credentialSetCalls = 0
+    restores.push(setNativeHelperCallForTest(async (method) => {
+      if (method === "credential.get") return { value: null }
+      if (method === "credential.set") {
+        credentialSetCalls += 1
+        throw new ApiError(503, "KEYCHAIN_UNAVAILABLE", "Unavailable in the test runtime.")
+      }
+      if (method === "credential.delete") return {}
+      throw new Error(`Unexpected helper method '${method}'.`)
+    }))
+
+    const keychainFailure = await app.request(configurationURL, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        settings: {
+          baseURL: "http://127.0.0.1:4102/v1",
+          defaultModel: "must-roll-back",
+          models: [{ id: "must-roll-back" }],
+        },
+        credential: { apiKey: "must-not-leak", persistence: "system-keychain" },
+      }),
+    })
+    expect(keychainFailure.status).toBe(503)
+    expect(await keychainFailure.text()).not.toContain("must-not-leak")
+    expect((await json(await app.request(settingsURL))).data).toMatchObject({
+      baseURL: "http://127.0.0.1:4101/v1",
+      defaultModel: "old-model",
+      models: [{ id: "old-model" }],
+    })
+    expect(credentialSetCalls).toBe(1)
+
+    const unsafeSettings = await app.request(configurationURL, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        settings: { baseURL: "http://169.254.169.254/latest" },
+        credential: { apiKey: "must-not-be-stored", persistence: "session" },
+      }),
+    })
+    expect(unsafeSettings.status).toBe(400)
+    expect(credentialSetCalls).toBe(1)
+    expect((await json(await app.request(credentialURL))).data).toEqual({
+      configured: false,
+      persistence: "none",
+    })
+
+    const sessionSuccess = await app.request(configurationURL, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        settings: {
+          baseURL: "http://127.0.0.1:4103/v1",
+          defaultModel: "session-model",
+          models: [{ id: "session-model" }],
+        },
+        credential: { apiKey: "session-secret", persistence: "session" },
+      }),
+    })
+    expect(sessionSuccess.status).toBe(200)
+    const successText = await sessionSuccess.text()
+    expect(successText).not.toContain("session-secret")
+    expect(JSON.parse(successText).data).toMatchObject({
+      settings: {
+        baseURL: "http://127.0.0.1:4103/v1",
+        defaultModel: "session-model",
+      },
+      credential: { configured: true, persistence: "session" },
+    })
+    expect((await json(await app.request(credentialURL))).data).toEqual({
+      configured: true,
+      persistence: "session",
+    })
   })
 })

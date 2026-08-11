@@ -184,6 +184,24 @@ export async function sameOriginFetch(url: URL | string, init: RequestInit = {},
   throw new ApiError(502, "PROVIDER_REDIRECT_REJECTED", "Provider returned too many redirects.")
 }
 
+/**
+ * Fetch implementation for provider SDKs. It normalizes Request inputs, buffers
+ * their body once, and then uses Cinema's DNS-pinned, same-origin redirect path.
+ */
+export async function safeProviderFetch(input: RequestInfo | URL, init?: RequestInit) {
+  const request = new Request(input, init)
+  const method = request.method.toUpperCase()
+  const body = request.body && method !== "GET" && method !== "HEAD"
+    ? new Uint8Array(await request.arrayBuffer())
+    : undefined
+  return await sameOriginFetch(request.url, {
+    method,
+    headers: request.headers,
+    body,
+    signal: request.signal,
+  })
+}
+
 export function setProviderNetworkLookupForTest(value: Lookup | undefined) {
   lookupHost = value ?? systemLookup as Lookup
 }
