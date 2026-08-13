@@ -1808,7 +1808,7 @@ const server = Bun.serve({
     if (url.pathname === "/health") return Response.json({ ready: true })
     if (url.pathname === "/environment") return Response.json({
       appEnvironment: Object.fromEntries(Object.entries(process.env).filter(([key]) => key.startsWith("ANYBOX_APP_"))),
-      leaked: Object.keys(process.env).filter((key) => key.startsWith("ANYBOX_AGENT_") || key.startsWith("ANYBOX_CINEMA_") || key.startsWith("ANYBOX_FFMPEG_")),
+      leaked: Object.keys(process.env).filter((key) => key.startsWith("ANYBOX_AGENT_") || key.startsWith("ANYBOX_PLUGIN_PRIVATE_") || key.startsWith("ANYBOX_FFMPEG_")),
     })
     return Response.json({
       appID: process.env.ANYBOX_APP_ID,
@@ -1868,7 +1868,7 @@ await new Promise(() => undefined)
     })
 
     process.env.ANYBOX_AGENT_PRIVATE_TEST = "must-not-leak"
-    process.env.ANYBOX_CINEMA_LEGACY_TEST = "must-not-leak"
+    process.env.ANYBOX_PLUGIN_PRIVATE_TEST = "must-not-leak"
     process.env.ANYBOX_FFMPEG_BINARY = "must-not-leak"
     const [runtimeResponse, concurrentRuntimeResponse, environmentResponse] = await Promise.all([
       AppRuntime.proxyRequest(
@@ -1888,7 +1888,7 @@ await new Promise(() => undefined)
       ),
     ]).finally(() => {
       delete process.env.ANYBOX_AGENT_PRIVATE_TEST
-      delete process.env.ANYBOX_CINEMA_LEGACY_TEST
+      delete process.env.ANYBOX_PLUGIN_PRIVATE_TEST
       delete process.env.ANYBOX_FFMPEG_BINARY
     })
     expect(runtimeResponse.status).toBe(200)

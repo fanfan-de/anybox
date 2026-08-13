@@ -405,7 +405,7 @@
   - 插件 framed protocol/policy/state/client：23/23 tests；
   - supply-chain 生成、交叉摘要、篡改检测、未签名 strict-release 阻断：2/2 tests；
   - Desktop TypeScript typecheck 与 `git diff --check` 通过；
-  - Agent TypeScript 全项目检查仍只有 3 个开发前已存在的测试类型错误（Cinema summary 2 个、server fixture 1 个），Computer Use 源码无新增错误。
+  - Agent TypeScript 全项目检查仍只有 3 个开发前已存在的测试类型错误（summary 2 个、server fixture 1 个），Computer Use 源码无新增错误。
 - 使用最新源码重新生成独立 runtime `packages/desktop/build/agent-runtime-computer-use-final`：
   - 15 个 Computer Use artifact 摘要、SBOM、provenance 普通验证通过，状态为 `Authenticode=NotSigned`；
   - bundle 内确认包含 `ANYBOX_COMPUTER_USE_REQUIRE_SIGNATURE` 和 publisher signature rejection；
@@ -552,7 +552,7 @@
 - 插件 package verifier 通过：plugin `0.3.0`、helper `0.2.0`、protocol `1`、SHA-256、plugin-owned named-pipe handshake、WGC、UIA 与 physical-input epoch 均正常。
 - 隔离重建 `build/agent-runtime-m8-verify` 成功；runtime verifier 与 smoke 通过：仅注册 `anybox.node-repl` 的 `js/js_reset/js_add_node_module_dir` 三个通用工具，无旧 capability bridge marker，产物文件中没有 Computer Use artifact。
 - 四组真实 Windows smoke 全部通过：WGC 遮挡/负坐标/最小化、UIA 与一次性 state、应用目录/受控启动、physical input epoch/integrity/point ownership/密码/剪贴板。
-- `git diff --check` 通过；Agent 源码类型错误已清零，完整 Agent typecheck 只剩开发前既有的 Cinema/server 三处测试类型错误；i18n audit 仍报告仓库既有的非本次 Computer Use 文案项。
+- `git diff --check` 通过；Agent 源码类型错误已清零，完整 Agent typecheck 只剩开发前既有的三处测试类型错误；i18n audit 仍报告仓库既有的非本次 Computer Use 文案项。
 - M8 工程实现与本机验收关闭。剩余外部发布条件：正式 Authenticode 证书、clean-checkout 复现，以及 125/150/200% DPI、锁屏和 device-loss 独立矩阵。
 
 ### 2026-07-22 — 审批策略改为仅高影响动作确认

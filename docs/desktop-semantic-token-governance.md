@@ -496,7 +496,7 @@ derivation / `color-mix()` 生成。调整面板色、品牌色或基础边框�
 4. Composer、menu、picker 和 utility controls。
 5. Settings 基础控件。
 6. Providers、Models、Plugins、Connectors、MCP、Skills。
-7. Calendar、Automations、Cinema 和其他业务页面。
+7. Calendar、Automations 和其他业务页面。
 8. Button、Switch、Tag、badge、icon button、leading icon 等共享组件。
 
 ### 11.2 每个组件的检查顺序

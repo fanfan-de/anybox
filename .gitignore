@@ -54,13 +54,6 @@ agent_local_data.db*
 
 # Local debug outputs and generated exports
 artifacts/
-!plugins/Anybox-Plugins/cinema/native/artifacts/
-!plugins/Anybox-Plugins/cinema/native/artifacts/**/
-!plugins/Anybox-Plugins/cinema/native/artifacts/**/cinema-platform-helper
-!plugins/Anybox-Plugins/cinema/native/artifacts/**/cinema-platform-helper.exe
-plugins/Anybox-Plugins/cinema/native/artifacts/**/signature-verification.json
-plugins/Anybox-Plugins/cinema/native/cinema-platform-helper/target/
-plugins/Anybox-Plugins/cinema/test-results/
 packages/**/Test/.tmp/
 packages/mobile-app/.expo/
 packages/**/package-lock.json

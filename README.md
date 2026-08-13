@@ -67,7 +67,7 @@ Installers are published from GitHub Releases:
 | --- | --- | --- |
 | Windows x64 | Early access | Primary desktop target |
 | macOS Apple Silicon | Early access | Primary macOS target |
-| Linux x64 | Early access | AppImage and Debian package; Cinema/Deliver included |
+| Linux x64 | Early access | AppImage and Debian packages |
 | Android | In development | Companion app package lives in `packages/mobile-app` |
 
 ## Quick Start

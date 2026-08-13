@@ -4,11 +4,11 @@
   "repositoryRef": "master",
   "catalogPath": "plugins/Anybox-Plugins/.catalog",
   "sourceCommit": "edb4f8558338b287dea7aaa035d446e6584f0c50",
-  "pluginCount": 65,
+  "pluginCount": 64,
   "registry": {
     "name": "anybox-plugin-registry.json",
-    "sha256": "2911f90436ff878d25a9784c6402539d0741772d3e97998842e37f028e50041c",
-    "size": 439950
+    "sha256": "8e43af35fc9ff1ab7a11575679a1094a91cea738ecf96e4be13a8c0573be34c8",
+    "size": 431339
   },
   "assets": [
     {
@@ -73,13 +73,6 @@
       "name": "anybox-plugin-chrome-0.15.2.zip",
       "sha256": "16bb9c576619afb49b0af50788cb0d07baf41d4a59d0148361716464d6de8894",
       "size": 863147
-    },
-    {
-      "pluginID": "cinema",
-      "pluginVersion": "1.0.0",
-      "name": "anybox-plugin-cinema-1.0.0.zip",
-      "sha256": "ae053e2364e88dc2e044771d989b3d3b981fd35254f412a0f38f95f94a2f3d13",
-      "size": 3019380
     },
     {
       "pluginID": "circleci",

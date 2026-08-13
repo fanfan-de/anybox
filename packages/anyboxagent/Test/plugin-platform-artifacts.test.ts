@@ -61,9 +61,9 @@ function artifact() {
 
 function appRuntimeHelper(sha256: string) {
   return PluginPlatformArtifact.parse({
-    id: "cinema-platform-helper",
+    id: "example-app-platform-helper",
     type: "app-runtime-helper",
-    description: "Cinema keychain and file picker helper.",
+    description: "Example App keychain and file picker helper.",
     executables: [{
       platform: "linux",
       architecture: "x64",
@@ -86,7 +86,7 @@ describe("declarative plugin platform artifacts", () => {
     const input = await fixture()
     const digest = createHash("sha256").update("native-host-v1").digest("hex")
     const [receipt] = await installPlatformArtifacts({
-      pluginID: "cinema",
+      pluginID: "example-app",
       pluginVersion: "1.0.0",
       packageRoot: input.packageRoot,
       artifacts: [appRuntimeHelper(digest)],
@@ -100,21 +100,21 @@ describe("declarative plugin platform artifacts", () => {
 
     expect(receipt).toMatchObject({
       type: "app-runtime-helper",
-      artifactID: "cinema-platform-helper",
+      artifactID: "example-app-platform-helper",
       executableSha256: digest,
       manifestPaths: [],
       registryKeys: [],
     })
     expect(await readFile(receipt!.executablePath, "utf8")).toBe("native-host-v1")
     await expect(removePlatformArtifacts({
-      pluginID: "cinema",
+      pluginID: "example-app",
       receipts: [receipt!],
       dataDir: input.dataDir,
-    })).resolves.toEqual({ removed: ["cinema-platform-helper"], skipped: [], pending: [] })
+    })).resolves.toEqual({ removed: ["example-app-platform-helper"], skipped: [], pending: [] })
     await expect(access(receipt!.managedRoot)).rejects.toBeDefined()
 
     await expect(installPlatformArtifacts({
-      pluginID: "cinema",
+      pluginID: "example-app",
       pluginVersion: "1.0.0",
       packageRoot: input.packageRoot,
       artifacts: [appRuntimeHelper("0".repeat(64))],

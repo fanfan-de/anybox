@@ -1,14 +1,11 @@
 # Anybox App Plugin 设计框架
 
 > 状态：目标设计草案 v0.3；Local App Runtime 纵向切片已落地
-> 日期：2026-08-10  
+> 日期：2026-08-13
 > 范围：定义“完整 Web App 安装到 Anybox，安装后出现在 Right Sidebar，并在 Tools Surface 中进入业务界面”的产品与技术边界。
 
 > [!IMPORTANT]
 > `views`、`appRuntime` 与 `appPermissions` 已进入实时严格 Schema；宿主已经具备按需启动的 Local HTTP Runtime、健康检查、同源 Gateway、隔离日志以及更新/禁用/卸载停止能力。本文其余内容仍是目标架构，不能据此假设 Remote Origin 授权、完整 Workspace Grant、Host SDK、OS 级进程 Sandbox、后台 Lease 或 WebSocket Gateway 已经实现。
-
-> [!WARNING]
-> Cinema 0.3.0 是验证该方向的过渡实现：插件已经携带 `web/` 与可启动的 `runtime/`，桌面和 Agent 不再构建或挂载 Cinema 静态站点；但 Runtime 构建时仍复用 `packages/anyboxagent/src/cinema` 的领域源码，并兼容读取现有 Agent 数据目录。Cinema 专用 Route、Use Case、Provider 和持久化源码尚未从 Anybox Core 物理迁出，因此还不满足“删除插件后核心不含 Cinema 业务知识”的最终验收标准。
 
 ## 1. 核心结论
 
@@ -63,7 +60,7 @@ Anybox 是 App Plugin 的安装器、入口管理器、Web 容器和通用系统
 2. 安装到 Anybox 后，App 必须通过 `right-sidebar` View 获得入口，并在同一个 Tools Surface 中打开完整业务界面。
 3. App 的业务能力由 App 自己实现；App Web 调用 App 自己的 API，不把每个业务操作翻译成 Anybox Bridge 或 MCP Tool。
 4. Anybox 只提供通用安装、入口、Web 容器、布局、启动、隔离、代理、权限和系统集成能力。
-5. Anybox 核心不得包含 Cinema、Timeline、Storyboard、Render Job 等某个 App 专属的业务知识。
+5. Anybox 核心不得包含任何特定 App 的领域模型、业务 Route 或任务状态机。
 6. MCP、Skill 和 Connector 是 App 的可选 Agent 集成，不是 App Web 正常运行的前提。
 
 ## 2. App Plugin 与能力插件的区别
@@ -75,7 +72,7 @@ Anybox 插件系统可以同时承载两类插件，但不能混淆它们的运�
 | 能力插件 | 给 Agent 增加工具、Skill、Connector | MCP、Skill、Connector | 否 | 通常是 |
 | App Plugin | 在 Anybox 中安装一个完整 Web 产品 | `right-sidebar` View / Tools Surface | 是 | 否 |
 
-一个 App Plugin 可以同时声明 MCP、Skill 或 Connector。例如 Cinema 可以独立运行，同时向 Agent 暴露“创建分镜”“读取项目摘要”等工具。但即使用户关闭 Agent 功能，Cinema App 本身仍应能够正常打开和工作。
+一个 App Plugin 可以同时声明 MCP、Skill 或 Connector。例如文档 App 可以独立运行，同时向 Agent 暴露“创建文档”“读取摘要”等工具。但即使用户关闭 Agent 功能，App 本身仍应能够正常打开和工作。
 
 ### 2.1 不采用的模型
 
@@ -83,8 +80,8 @@ Anybox 插件系统可以同时承载两类插件，但不能混淆它们的运�
 
 ```text
 App Web
-  → window.anyboxPlugin.call("cinema_start_generation")
-  → Anybox 解释 Cinema 业务调用
+  → window.anyboxPlugin.call("app_start_export")
+  → Anybox 解释 App 业务调用
   → MCP Runtime
 ```
 
@@ -388,10 +385,10 @@ interface AnyboxAppHost {
 SDK 中不应出现下面的接口：
 
 ```text
-startCinemaGeneration
-createStoryboard
-renderTimeline
-listCinemaAssets
+createDocument
+exportDocument
+rebuildSearchIndex
+listDocumentAssets
 ```
 
 这些都是 App 自己的业务 API。
@@ -440,13 +437,13 @@ SDK 必须由 Anybox 自有 Preload 注入，插件不能声明或替换 Preload
 
 ```json
 {
-  "name": "cinema",
+  "name": "local-notes",
   "version": "1.0.0",
-  "description": "A complete AI filmmaking application.",
+  "description": "A complete local notes application.",
   "views": [
     {
       "id": "main",
-      "title": "Cinema",
+      "title": "Local Notes",
       "location": "right-sidebar",
       "entry": "./web/index.html"
     }
@@ -575,98 +572,7 @@ stateDiagram-v2
 - Runtime 的 stderr/stdout 进入按 App 隔离的诊断日志。
 - 崩溃循环必须有限流和用户可见的错误状态。
 
-## 13. Cinema Web 的目标映射
-
-### 13.1 当前过渡状态
-
-Cinema 已形成可安装、可扫描、带真实 Web 与 Local Runtime 的 App Plugin 纵向切片：
-
-- `plugins/Anybox-Plugins/cinema/.anybox-plugin/plugin.json` 0.3.0 声明 `right-sidebar` View、`appRuntime`、`appPermissions`、Skill 与可选 MCP helper。
-- `packages/cinema-web` 的同一套前端既保留独立模式，也能构建到插件 `web/`；插件构建使用相对资源路径。
-- 插件模式下 Web 通过 `/__anybox_runtime__/api/cinema/*` 调用同源 Gateway，不再依赖宿主公开的 Cinema 静态站点。
-- `plugins/Anybox-Plugins/cinema/runtime/server.js` 随包分发并可由通用 Supervisor 启动；宿主 Gateway 不解析 Cinema URL 或 JSON。
-- 桌面项目菜单直接打开已安装的 Cinema View；只有声明 Workspace 请求的 View 才会得到过渡性的所选项目 ID 参数。
-
-仍未完成的核心抽离：
-
-- Runtime bundle 在构建时仍引用 `packages/anyboxagent/src/cinema`、Cinema Route 与 Use Case 源码，并兼容现有 Agent 数据目录。
-- Anybox Agent 仍挂载 Cinema 专用 API 作为兼容路径；Provider、Render、Storage 与数据迁移源码尚未移动到插件源码树。
-- 当前项目 ID query 只是过渡上下文，不是通用 Workspace Grant。
-- 大媒体和普通 HTTP 流可经过 Gateway，但 WebSocket、后台 Lease、崩溃退避与权限变更 UI 尚未完成。
-
-因此当前已经验证“插件拥有分发产物与运行进程、宿主提供通用容器/监督/代理”的方向，但 Anybox Core 仍然理解大量 Cinema 业务知识。
-
-### 13.2 完全插件化后的结构
-
-```text
-plugins/Anybox-Plugins/cinema/
-├── .anybox-plugin/plugin.json
-├── web/                         # 原 packages/cinema-web 构建产物
-├── runtime/
-│   ├── server.js
-│   ├── canvas/
-│   ├── timeline/
-│   ├── assets/
-│   ├── generation/
-│   ├── providers/
-│   ├── render/
-│   └── storage/
-├── shared/
-├── skills/
-├── mcp/                         # 可选 Agent Adapter
-└── assets/
-```
-
-### 13.3 请求链路
-
-Cinema Web 当前已经使用 `agentBaseURL + fetch()` 调用 `/api/cinema/*`。迁移时不需要把这些调用全部改造成 MCP Tool；可以把 `agentBaseURL` 改为 App Runtime Gateway 的 Base URL，并尽量保留现有 HTTP API：
-
-```text
-Cinema Web
-  → /__anybox_runtime__/api/cinema/projects/:id
-  → Cinema Runtime
-  → Cinema 自己的 Canvas、Timeline、Provider、Render 和 Storage
-```
-
-Anybox Gateway 只转发请求，不知道 `/api/cinema/projects` 代表什么。
-
-Cinema 迁移还需要满足通用 App Plugin 的产品入口：
-
-```text
-安装 Cinema App Plugin
-  → Right Sidebar 出现 Cinema
-  → 点击 Cinema
-  → Tools Surface 打开 Cinema Web
-  → 用户可把 Tools Surface 切换到中间 Primary 布局
-```
-
-Cinema Web 的独立启动入口继续保留。构建产物需要改为插件包兼容的相对资源路径；当前依赖 Anybox `projectID` 的路径解析应迁移为 Cinema 自己的项目上下文或通用 Workspace Grant，不能把 Anybox 项目注册表变成 App Plugin 的隐藏业务依赖。
-
-### 13.4 Cinema 与宿主的最终边界
-
-Cinema 插件拥有：
-
-- Cinema Web；
-- Canvas 和 Timeline；
-- Asset Library；
-- Generation Task；
-- Kling、ComfyUI 等 Provider；
-- Render Runtime；
-- Cinema 项目和私有数据格式；
-- Cinema 数据迁移；
-- 可选 Cinema MCP 和 Skill。
-
-Anybox 保留：
-
-- 插件安装和更新；
-- Right Sidebar 和居中布局；
-- App Runtime Supervisor；
-- Runtime Gateway；
-- Webview Sandbox；
-- 用户授权的 Workspace、文件选择器和安全资源传输；
-- 通用凭据保险箱与安装权限审查。
-
-## 14. 当前实现与目标设计的差距
+## 13. 当前实现与目标设计的差距
 
 | 能力 | 当前状态 | 目标 |
 |---|---|---|
@@ -684,13 +590,12 @@ Anybox 保留：
 | 大文件/媒体 Range | Gateway 透传 Range 与流式 body | 完成大文件、断点和并发回归 |
 | SSE/WebSocket | App View 未支持 | Gateway 支持长任务事件 |
 | 最小宿主 SDK | 未支持 | 只提供通用桌面能力 |
-| Cinema 独立 Runtime | 插件已携带进程产物，但构建源码仍在 Agent | 将领域源码和数据所有权完全移入插件 |
 
 实时 Parser、测试、第三方开发指南与 `anybox-plugin` Skill 已同步 `views`、`appRuntime` 和 `appPermissions`；后续扩展这些字段时仍须在同一变更中同步四者。
 
-## 15. 推荐实现顺序
+## 14. 推荐实现顺序
 
-截至 2026-08-10：Phase 1 的安装、入口与正式包运行链路已具备；Phase 2 只完成 View 隔离和同源内部网络，Remote Origin/Host SDK/签名仍未完成；Phase 3 已完成 Schema、按需进程、Token、Healthcheck、日志和 HTTP Gateway 的首个纵向切片；Phase 4 已完成 Web 产物、Gateway Base URL 与插件 Runtime 包装，领域源码和数据所有权迁移仍待继续。
+截至 2026-08-13：Phase 1 的安装、入口与正式包运行链路已具备；Phase 2 只完成 View 隔离和同源内部网络，Remote Origin/Host SDK/签名仍未完成；Phase 3 已完成 Schema、按需进程、Token、Healthcheck、日志和 HTTP Gateway 的首个纵向切片。
 
 ### Phase 1：完成 App Plugin 产品闭环
 
@@ -725,20 +630,9 @@ Anybox 保留：
 6. 保持插件 Webview 无 Node 权限和无插件自定义 Preload。
 7. 可选增加 MCP Adapter，证明 Agent 集成与 App 主链路解耦。
 
-### Phase 4：Cinema 迁移
+## 15. 验收标准
 
-1. 让 Cinema Web 独立启动与插件内启动复用同一套产品代码。
-2. 把 Cinema Web 构建产物改为包内相对资源并移入插件。
-3. 把 Cinema HTTP API、业务 Runtime 和业务契约抽离 Anybox Core。
-4. 将 Anybox `projectID` 隐式依赖改为 Cinema 项目上下文或通用 Workspace Grant。
-5. 将 `agentBaseURL` 指向 App Runtime Gateway，并尽量保留现有 HTTP API。
-6. 移出 Anybox Agent 中的 Cinema 专用 Route、Use Case 和 Runtime。
-7. 保留必要的兼容迁移和项目数据升级。
-8. 完成大媒体、渲染、Provider、重启和升级回归。
-
-## 16. 验收标准
-
-### 16.1 核心产品验收
+### 15.1 核心产品验收
 
 App Plugin 产品闭环必须同时满足：
 
@@ -752,7 +646,7 @@ App Plugin 产品闭环必须同时满足：
 8. 禁用或卸载 App 后，入口同步消失；重新启用或安装后恢复。
 9. 正式安装包在关闭源码扫描时仍能在 Anybox 内完整运行。
 
-### 16.2 第三方 Web App 平台验收
+### 15.2 第三方 Web App 平台验收
 
 1. 不同 App 的 Web Session、存储、导航和授权网络相互隔离。
 2. App 只能使用已声明并获得授权的 Remote Origin 和 Host SDK 能力。
@@ -760,7 +654,7 @@ App Plugin 产品闭环必须同时满足：
 4. 安装与更新能够展示发布者、权限和权限变化。
 5. 未声明 Local Runtime 的 Web App 不获得 Node.js 或任意本机文件访问能力。
 
-### 16.3 Local Runtime 附加验收
+### 15.3 Local Runtime 附加验收
 
 只有实现 Local Runtime 能力时，才要求：
 
@@ -770,11 +664,7 @@ App Plugin 产品闭环必须同时满足：
 4. Gateway 支持该 App 声明需要的上传、Range、SSE 或 WebSocket 能力。
 5. 后台任务通过通用 Lease 或恢复契约处理，不依赖宿主理解业务状态。
 
-Cinema 完全迁移后的最终验收标准是：
-
-> 删除 Cinema 插件后，Anybox 核心仍完整运行且不包含 Cinema 业务知识；重新安装 Cinema 插件后，Cinema 产品能力全部恢复。
-
-## 17. 暂不阻塞架构的待定项
+## 16. 暂不阻塞架构的待定项
 
 以下问题不阻塞 Phase 1 的“独立 Web App + Right Sidebar 入口 + Tools Surface 业务界面”产品闭环，但必须在对应高级能力实现前定稿：
 
@@ -785,4 +675,4 @@ Cinema 完全迁移后的最终验收标准是：
 - 原生二进制、GPU Runtime 和 FFmpeg 采用插件包、平台 Artifact 还是共享宿主依赖。
 - 未签名第三方 Local Runtime 的安装确认级别和发布者信任策略。
 
-这些决策应保持通用，不得因为 Cinema 的特殊需求在 Anybox 核心中增加 Cinema 专用协议，也不得让普通第三方 Web App 被迫采用 Local Runtime。
+这些决策应保持通用，不得因某个 App 的特殊需求在 Anybox 核心中增加业务专用协议，也不得让普通第三方 Web App 被迫采用 Local Runtime。

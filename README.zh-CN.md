@@ -67,7 +67,7 @@ anybox的核心理念是让build成为一种乐趣，遵循无黑盒，用户自
 | --- | --- | --- |
 | Windows x64 | 早期访问 | 主要桌面目标平台 |
 | macOS Apple Silicon | 早期访问 | 主要 macOS 目标平台 |
-| Linux x64 | 早期访问 | 提供 AppImage 和 Debian 包，包含完整 Cinema/Deliver |
+| Linux x64 | 早期访问 | 提供 AppImage 和 Debian 包 |
 | Android | 开发中 | 配套移动端包位于 `packages/mobile-app` |
 
 ## 快速开始

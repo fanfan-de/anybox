@@ -1,8 +1,6 @@
 import type { SiteLanguage } from "../language"
 import buildWebAppsEn from "./content/build-web-apps.en.md?raw"
 import buildWebAppsZh from "./content/build-web-apps.md?raw"
-import cinemaEn from "./content/cinema.en.md?raw"
-import cinemaZh from "./content/cinema.md?raw"
 import chromeEn from "./content/chrome.en.md?raw"
 import chromeZh from "./content/chrome.md?raw"
 import computerUseWindowsEn from "./content/computer-use-windows.en.md?raw"
@@ -136,12 +134,6 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
           title: "Windows 电脑控制",
         },
         {
-          content: cinemaZh,
-          description: "以四类节点初始化和管理本地 AI 影视项目。",
-          slug: "cinema",
-          title: "anybox for cinema",
-        },
-        {
           content: buildWebAppsZh,
           description: "用专业工作流实现、测试并优化 Web 应用。",
           slug: "build-web-apps",
@@ -267,12 +259,6 @@ export const docsSectionsByLanguage: Record<SiteLanguage, DocsSection[]> = {
           description: "Safely observe and operate one selected Windows application window.",
           slug: "computer-use-windows",
           title: "Computer Use Windows",
-        },
-        {
-          content: cinemaEn,
-          description: "Manage local AI film projects with four supported node types.",
-          slug: "cinema",
-          title: "anybox for cinema",
         },
         {
           content: buildWebAppsEn,
